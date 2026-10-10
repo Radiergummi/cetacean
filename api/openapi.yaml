@@ -2361,6 +2361,119 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /nodes/{id}/drain-impact:
+    get:
+      operationId: getNodeDrainImpact
+      tags: [Nodes]
+      summary: What draining a node would move
+      description: |
+        Assesses a drain before it happens: every service with a task on the
+        node, and whether another node could take it. `movable` services are
+        joined by an edge to each node that satisfies their placement
+        constraints and per-node replica cap; a `stranded` service has no
+        edge, and its `detail` names what blocked it. A `global` service
+        stops on the node rather than moving. Candidates are the other ready,
+        active nodes the caller may read; when grants hide any, `note` says
+        so. The same assessment as the MCP `get_topology` drain-impact view.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "200":
+          description: Drain-impact graph
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    required: [view, nodes, edges]
+                    properties:
+                      view:
+                        type: string
+                        enum: [drain-impact]
+                      subject:
+                        type: string
+                        description: Hostname of the node assessed
+                      note:
+                        type: string
+                        description: Present when grants hid nodes from the assessment
+                      nodes:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, label, type]
+                          properties:
+                            id:
+                              type: string
+                            label:
+                              type: string
+                            type:
+                              type: string
+                              enum: [service, node]
+                            group:
+                              type: string
+                              description: Stack namespace, for a service
+                            detail:
+                              type: string
+                              description: >-
+                                For a service, how many tasks it has here and
+                                where they can go, or what strands them; for a
+                                node, its role.
+                            state:
+                              type: string
+                              description: >-
+                                `movable`, `stranded` or `global` for a
+                                service; the node state for a node.
+                      edges:
+                        type: array
+                        items:
+                          type: object
+                          required: [source, target]
+                          properties:
+                            source:
+                              type: string
+                              description: Service ID
+                            target:
+                              type: string
+                              description: ID of a node that can host it
+                            label:
+                              type: string
+              example:
+                "@context": /api/context.jsonld
+                "@id": /nodes/qz7k3v9xm2p4/drain-impact
+                "@type": DrainImpact
+                view: drain-impact
+                subject: node-1
+                nodes:
+                  - id: wv2l8p1sn6c4
+                    label: node-2
+                    type: node
+                    detail: worker
+                    state: ready
+                  - id: r8m2x5nk3p7q
+                    label: webapp
+                    type: service
+                    detail: "1 task(s) here; 1 node(s) can take them"
+                    state: movable
+                  - id: t9n3y6ol4q8r
+                    label: gpu-worker
+                    type: service
+                    detail: node.labels.gpu==true
+                    state: stranded
+                edges:
+                  - source: r8m2x5nk3p7q
+                    target: wv2l8p1sn6c4
+                    label: can host
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /nodes/{id}/availability:
     put:
       operationId: updateNodeAvailability

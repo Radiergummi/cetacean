@@ -415,6 +415,10 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 		"GET /nodes/{id}/tasks",
 		contentNegotiated(h.HandleNodeTasks, feedHandlers{csv: true}, spa),
 	)
+	mux.HandleFunc(
+		"GET /nodes/{id}/drain-impact",
+		contentNegotiated(h.HandleNodeDrainImpact, feedHandlers{}, spa),
+	)
 
 	// Recommendations
 	mux.HandleFunc(

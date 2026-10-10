@@ -359,6 +359,22 @@ export const nodeRoleSchema = z.looseObject({
   managerCount: z.number(),
 });
 
+export const drainImpactSchema = z.looseObject({
+  view: z.literal("drain-impact"),
+  subject: z.string().optional(),
+  note: z.string().optional(),
+  nodes: z.array(
+    z.looseObject({
+      id: z.string(),
+      label: z.string(),
+      type: z.string(),
+      detail: z.string().optional(),
+      state: z.string().optional(),
+    }),
+  ),
+  edges: z.array(z.looseObject({ source: z.string(), target: z.string() })),
+});
+
 export const unlockKeySchema = z.looseObject({ unlockKey: z.string() });
 export const metricsLabelsSchema = z.looseObject({ data: z.array(z.string()) });
 export const dockerVersionSchema = z.looseObject({ version: z.string(), url: z.string() });

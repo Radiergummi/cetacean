@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `oauth.token_operations_level` holds a token-authenticated caller of the web API below the tier the deployment runs at, so a token left on a device can read the cluster without changing it
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A stack's page and a service's Traefik labels are each drawn as a graph
+- `GET /nodes/{id}/drain-impact` says which services a drain would move and which it would strand, and why; the dashboard's drain confirmations show it
 - Each protected resource names itself in its discovery document, so a client's consent screen can show `Cetacean MCP` instead of a URL
 
 ### Changed

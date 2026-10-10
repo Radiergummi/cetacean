@@ -635,7 +635,7 @@ turned away together aren't told to come back together; none is told less than 5
 | Area | Endpoints |
 |---|---|
 | Entry point | `/`, `/index` |
-| Nodes | `/nodes`, `/nodes/{id}`, `/nodes/{id}/tasks`, `/nodes/{id}/labels`, `/nodes/{id}/role` |
+| Nodes | `/nodes`, `/nodes/{id}`, `/nodes/{id}/tasks`, `/nodes/{id}/labels`, `/nodes/{id}/role`, `/nodes/{id}/drain-impact` |
 | Services | `/services`, `/services/{id}`, `/services/{id}/tasks`, `/services/{id}/logs` |
 | Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
 | Tasks | `/tasks`, `/tasks/{id}`, `/tasks/{id}/logs` |
@@ -654,6 +654,10 @@ turned away together aren't told to come back together; none is told less than 5
 returns up to 1000). `POST /-/resync` forces a full refetch from the Docker socket; unlike the other
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
 but it isn't gated on the operations level—it re-reads the cluster and never changes it.
+
+`GET /nodes/{id}/drain-impact` assesses a drain before you make it: each service with a task on the node is
+`movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
+It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
 
 `GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
 `connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last

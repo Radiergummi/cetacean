@@ -6,6 +6,7 @@ import type {
   ConfigDetail,
   ContainerConfig,
   DiskUsageSummary,
+  DrainImpact,
   Healthcheck,
   HistoryEntry,
   Identity,
@@ -876,6 +877,10 @@ export const api = {
       signal,
       schema.nodeRoleSchema,
     ).then(({ data }) => data),
+  nodeDrainImpact: (id: string, signal?: AbortSignal) =>
+    fetchJSON<DrainImpact>(`/nodes/${id}/drain-impact`, signal, schema.drainImpactSchema).then(
+      ({ data }) => data,
+    ),
   serviceLabels: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ labels: Record<string, string> }>(
       `/services/${id}/labels`,
