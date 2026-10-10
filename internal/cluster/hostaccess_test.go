@@ -15,6 +15,12 @@ func hostAccessService() swarm.Service {
 		ContainerSpec: &swarm.ContainerSpec{
 			Mounts: []mount.Mount{
 				{Type: mount.TypeBind, Source: "/srv/data", Target: "/data"},
+				{
+					Type:        mount.TypeBind,
+					Source:      "/srv/logs",
+					Target:      "/logs",
+					BindOptions: &mount.BindOptions{},
+				},
 			},
 			CapabilityAdd: []string{"NET_ADMIN"},
 		},
@@ -30,6 +36,21 @@ func TestCheckMounts(t *testing.T) {
 	existing := mount.Mount{Type: mount.TypeBind, Source: "/srv/data", Target: "/data"}
 	widened := mount.Mount{Type: mount.TypeBind, Source: "/", Target: "/data"}
 	volume := mount.Mount{Type: mount.TypeVolume, Source: "cache", Target: "/cache"}
+	pipe := mount.Mount{
+		Type:   mount.TypeNamedPipe,
+		Source: `\\.\pipe\docker_engine`,
+		Target: `\\.\pipe\docker_engine`,
+	}
+	boundVolume := mount.Mount{
+		Type:   mount.TypeVolume,
+		Source: "root",
+		Target: "/host",
+		VolumeOptions: &mount.VolumeOptions{DriverConfig: &mount.Driver{
+			Name:    "local",
+			Options: map[string]string{"type": "none", "o": "bind", "device": "/"},
+		}},
+	}
+	optionless := mount.Mount{Type: mount.TypeBind, Source: "/srv/logs", Target: "/logs"}
 
 	cases := []struct {
 		name    string
@@ -47,6 +68,15 @@ func TestCheckMounts(t *testing.T) {
 			false,
 		},
 		{"bind removed at tier 2", nil, config.OpsConfiguration, false},
+		{"named pipe at tier 2", []mount.Mount{pipe}, config.OpsConfiguration, true},
+		{
+			"volume with a driver at tier 2",
+			[]mount.Mount{boundVolume},
+			config.OpsConfiguration,
+			true,
+		},
+		{"volume with a driver at tier 3", []mount.Mount{boundVolume}, config.OpsImpactful, false},
+		{"bind sent without options", []mount.Mount{optionless}, config.OpsConfiguration, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

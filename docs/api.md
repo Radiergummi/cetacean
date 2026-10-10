@@ -741,6 +741,10 @@ passes the per-resource [write grant][authorization] check.
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
+Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a bind, named-pipe, or
+driver-configured volume mount the service doesn't already have, and `PATCH /services/{id}/container-config` a
+capability added to `capabilityAdd`.
+
 ### Preconditions
 
 Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request
