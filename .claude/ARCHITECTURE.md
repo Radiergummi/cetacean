@@ -103,6 +103,9 @@ Each of these looks like a simplification and is not.
 - **mcp-go only cleans up a task when the client supplied a TTL**, so a hook
   fills one in; without it every mutation leaks a result for the process
   lifetime.
+- **mcp-go isolates tasks by session, and a stateless request has none**, so
+  ownership by identity is tracked beside it; without that, any caller holding
+  a task ID could read or cancel it.
 - **The task wait detaches the context**, because mcp-go runs the task on a
   goroutine holding the already-cancelled request context. A cancel therefore
   cannot interrupt the wait; the timeout is the real bound.
