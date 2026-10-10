@@ -78,3 +78,20 @@ func TestProbeReadyOverTLS(t *testing.T) {
 		t.Errorf("probe over TLS: %v", err)
 	}
 }
+
+// In tsnet mode only the meta listener sits on server.listen_addr, so it must
+// answer where the probe asks once a base path is set.
+func TestHealthcheckReachesTheTsnetMetaListener(t *testing.T) {
+	ok := func(http.ResponseWriter, *http.Request) {}
+	server := httptest.NewServer(newMetaMux("/cetacean", ok, ok))
+	t.Cleanup(server.Close)
+
+	target, err := healthcheckURL(server.Listener.Addr().String(), "/cetacean", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := probeReady(target, false); err != nil {
+		t.Errorf("probe: %v", err)
+	}
+}
