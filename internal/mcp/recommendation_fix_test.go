@@ -24,12 +24,6 @@ func TestRecommendationFixNamesATool(t *testing.T) {
 			wantTool:  "scale_service",
 		},
 		{
-			name:        "availability is a section of update_node",
-			fixAction:   "PUT /nodes/{id}/availability",
-			wantTool:    "update_node",
-			wantSection: "availability",
-		},
-		{
 			name:        "resources is a section of update_service",
 			fixAction:   "PATCH /services/{id}/resources",
 			wantTool:    "update_service",
@@ -128,5 +122,21 @@ func TestRecommendationWithAnUnmappedFixDropsIt(t *testing.T) {
 
 	if got[0].Fix != nil {
 		t.Errorf("Fix = %+v, want nil for a route with no tool behind it", got[0].Fix)
+	}
+}
+
+// The finding names no target availability, and the dashboard offers no
+// button for it, so an agent handed update_node would be left to guess one.
+func TestManagerAvailabilityFindingNamesNoTool(t *testing.T) {
+	action := "PUT /nodes/{id}/availability"
+
+	got := projectRecommendations([]recommendations.Recommendation{{
+		Category:  recommendations.CategoryManagerHasWorkloads,
+		TargetID:  "node1",
+		FixAction: &action,
+	}})
+
+	if got[0].Fix != nil {
+		t.Errorf("Fix = %+v, want nil for a finding with no suggested value", got[0].Fix)
 	}
 }
