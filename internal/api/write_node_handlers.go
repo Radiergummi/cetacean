@@ -7,6 +7,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 type updateAvailabilityRequest struct {
@@ -95,7 +96,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	err := h.nodeWriter.RemoveNode(r.Context(), id, force)
 	if err != nil {
-		if isRemovalConflict(err, "node") {
+		if cluster.IsRemovalConflict(err, "node") {
 			writeRemovalConflict(w, r, err, "NOD001", "node", id)
 			return
 		}

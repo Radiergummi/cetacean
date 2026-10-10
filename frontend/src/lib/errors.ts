@@ -118,7 +118,8 @@ const errorDictionary: Record<string, ErrorInfo> = {
   },
   NOD001: {
     title: "Node not down",
-    suggestion: "Drain the node and wait for it to reach the down state, or use force removal.",
+    suggestion:
+      "Demote the node if it is a manager. Otherwise drain it and wait for it to reach the down state, or use force removal.",
     action: "force-remove",
   },
   NOD002: {

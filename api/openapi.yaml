@@ -2278,14 +2278,15 @@ paths:
       tags: [Nodes]
       summary: Remove a node
       description: |
-        Removes a node from the swarm. The node must be drained or down.
-        Use `?force=true` to force removal even if the node is not in a
-        removable state. Requires operations level 3.
+        Removes a node from the swarm. The node must be down, and a manager must first be demoted
+        to worker; otherwise the removal is refused with `409 NOD001`. `?force=true` removes a
+        node that is still up, but does not override the refusal for a manager.
+        Requires operations level 3.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - name: force
           in: query
-          description: Force removal even if the node is not drained or down
+          description: Remove the node even if it is not down. Does not override the refusal for a manager.
           schema:
             type: boolean
             default: false
