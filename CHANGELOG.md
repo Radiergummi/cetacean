@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
+- One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
+- An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
 - A detail page reached by name, like `/services/shop_web`, shows its activity and updates live instead of sitting empty

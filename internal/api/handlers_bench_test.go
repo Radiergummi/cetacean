@@ -866,7 +866,7 @@ func BenchmarkWriteBatch(b *testing.B) {
 	b.Run("single", func(b *testing.B) {
 		events := []cache.Event{realisticServiceEvent()}
 		for b.Loop() {
-			sse.WriteBatch(io.Discard, discardFlusher{}, events, "")
+			sse.WriteBatch(io.Discard, discardFlusher{}, events, "", "")
 		}
 	})
 	for _, n := range []int{5, 20} {
@@ -881,7 +881,7 @@ func BenchmarkWriteBatch(b *testing.B) {
 				}
 			}
 			for b.Loop() {
-				sse.WriteBatch(io.Discard, discardFlusher{}, events, "")
+				sse.WriteBatch(io.Discard, discardFlusher{}, events, "", "")
 			}
 		})
 	}

@@ -231,9 +231,9 @@ func TestListStreamEmitsTheDeclaredNames(t *testing.T) {
 func TestAgedOutCursorEmitsSync(t *testing.T) {
 	t.Parallel()
 
-	router, _, _ := resourceStreamRouter(t)
+	router, _, broadcaster := resourceStreamRouter(t)
 
-	frames := streamUntilIdle(t, router, "/services", "999999", nil)
+	frames := streamUntilIdle(t, router, "/services", broadcaster.EventID(999999), nil)
 
 	if len(frames) == 0 {
 		t.Fatal("no frames — an aged-out cursor must be answered, not ignored")
@@ -263,7 +263,7 @@ func TestAgedOutCursorEmitsSync(t *testing.T) {
 func TestReplayedFrameOmitsResource(t *testing.T) {
 	t.Parallel()
 
-	router, c, _ := resourceStreamRouter(t)
+	router, c, broadcaster := resourceStreamRouter(t)
 
 	c.History().Append(cache.HistoryEntry{
 		Type:       cache.EventService,
@@ -273,7 +273,7 @@ func TestReplayedFrameOmitsResource(t *testing.T) {
 		Timestamp:  time.Now(),
 	})
 
-	frames := streamUntilIdle(t, router, "/services", "0", nil)
+	frames := streamUntilIdle(t, router, "/services", broadcaster.EventID(0), nil)
 
 	if len(frames) == 0 {
 		t.Fatal("no frames — a replayable cursor must replay")
@@ -304,7 +304,7 @@ func TestReplayedFrameOmitsResource(t *testing.T) {
 func TestDetailStreamNeverReplays(t *testing.T) {
 	t.Parallel()
 
-	router, c, _ := resourceStreamRouter(t)
+	router, c, broadcaster := resourceStreamRouter(t)
 
 	c.History().Append(cache.HistoryEntry{
 		Type:       cache.EventService,
@@ -314,7 +314,7 @@ func TestDetailStreamNeverReplays(t *testing.T) {
 		Timestamp:  time.Now(),
 	})
 
-	frames := streamUntilIdle(t, router, "/services/svc1", "0", nil)
+	frames := streamUntilIdle(t, router, "/services/svc1", broadcaster.EventID(0), nil)
 
 	if len(frames) == 0 {
 		t.Fatal("no frames")

@@ -14,11 +14,13 @@ info:
     Three cursor dialects appear below, and all three reach a client as
     `Last-Event-ID`:
 
-    - The sixteen resource channels and `/events` write a monotonic history id.
-      Reconnecting with one replays the events in between from a 10,000-entry
-      ring. A cursor the ring no longer holds gets a `sync` message instead,
-      and so does every detail channel, always — they are ineligible for replay
-      because a cross-resource matcher cannot be reconstructed from history.
+    - The sixteen resource channels and `/events` write an opaque history
+      cursor, valid only against the process that wrote it. Reconnecting with
+      one replays the events in between from a 10,000-entry ring. A cursor the
+      ring no longer holds, or one from before a restart, gets a `sync` message
+      instead, and so does every detail channel, always — they are ineligible
+      for replay because a cross-resource matcher cannot be reconstructed from
+      history.
     - The two log channels write an RFC 3339 timestamp, and only ever move it
       forward: Docker interleaves a service's tasks, so a line can arrive
       carrying an older timestamp than one already sent, and a cursor that
@@ -554,9 +556,10 @@ components:
       summary: The stream could not be replayed from your cursor. Refetch.
       description: |
         Sent when a reconnecting client's `Last-Event-ID` is older than the
-        change-history ring still holds, and unconditionally on every detail
-        channel, which is ineligible for replay. The frame's `id` is the
-        current history count, so the next reconnect resumes from there. The
+        change-history ring still holds or was written before a restart, and
+        unconditionally on every detail channel, which is ineligible for
+        replay. The frame's `id` is the current history position, so the next
+        reconnect resumes from there. The
         payload carries no `@id`, no `@type`, an empty `id` and no `resource`.
       payload:
         type: object

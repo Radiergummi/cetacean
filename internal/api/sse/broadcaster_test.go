@@ -2,6 +2,7 @@ package sse
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -426,11 +428,11 @@ func TestSSE_WriteBatch_UsesHistoryID(t *testing.T) {
 	events := []cache.Event{
 		{Type: "service", Action: "update", ID: "s1", HistoryID: 42},
 	}
-	WriteBatch(&buf, f, events, "")
+	WriteBatch(&buf, f, events, "", "e")
 
 	output := buf.String()
-	if !strings.Contains(output, "id: 42\n") {
-		t.Errorf("expected id: 42, got %q", output)
+	if !strings.Contains(output, "id: e-42\n") {
+		t.Errorf("expected id: e-42, got %q", output)
 	}
 }
 
@@ -443,7 +445,7 @@ func TestSSE_WriteBatch_IdentifiersCarryTheBasePath(t *testing.T) {
 
 	WriteBatch(&buf, f, []cache.Event{
 		{Type: "service", Action: "update", ID: "s1", HistoryID: 1},
-	}, "/cetacean")
+	}, "/cetacean", "e")
 
 	if !strings.Contains(buf.String(), `"@id":"/cetacean/services/s1"`) {
 		t.Errorf("event @id does not carry the base path: %q", buf.String())
@@ -457,7 +459,7 @@ func TestSSE_WriteBatch_SyncCarriesNoIdentifier(t *testing.T) {
 
 	WriteBatch(&buf, f, []cache.Event{
 		{Type: cache.EventSync, Action: "full_sync", HistoryID: 1},
-	}, "/cetacean")
+	}, "/cetacean", "e")
 
 	if strings.Contains(buf.String(), "@id") {
 		t.Errorf("sync event grew an identifier: %q", buf.String())
@@ -473,11 +475,11 @@ func TestSSE_WriteBatch_BatchUsesMaxHistoryID(t *testing.T) {
 		{Type: "service", Action: "update", ID: "s2", HistoryID: 12},
 		{Type: "node", Action: "update", ID: "n1", HistoryID: 11},
 	}
-	WriteBatch(&buf, f, events, "")
+	WriteBatch(&buf, f, events, "", "e")
 
 	output := buf.String()
-	if !strings.Contains(output, "id: 12\n") {
-		t.Errorf("expected id: 12 (max), got %q", output)
+	if !strings.Contains(output, "id: e-12\n") {
+		t.Errorf("expected id: e-12 (max), got %q", output)
 	}
 }
 
@@ -488,11 +490,11 @@ func TestSSE_WriteBatch_SyncUsesHistoryID(t *testing.T) {
 	events := []cache.Event{
 		{Type: "sync", Action: "full_sync", HistoryID: 500},
 	}
-	WriteBatch(&buf, f, events, "")
+	WriteBatch(&buf, f, events, "", "e")
 
 	output := buf.String()
-	if !strings.Contains(output, "id: 500\n") {
-		t.Errorf("expected id: 500, got %q", output)
+	if !strings.Contains(output, "id: e-500\n") {
+		t.Errorf("expected id: e-500, got %q", output)
 	}
 }
 
@@ -511,7 +513,7 @@ func TestSSE_ReplayOnReconnect(t *testing.T) {
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
-	req.Header.Set("Last-Event-ID", "2")
+	req.Header.Set("Last-Event-ID", b.epoch+"-2")
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -549,7 +551,7 @@ func TestSSE_ReplayTooOld_SendsSync(t *testing.T) {
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
-	req.Header.Set("Last-Event-ID", "1")
+	req.Header.Set("Last-Event-ID", b.epoch+"-1")
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -568,7 +570,7 @@ func TestSSE_ReplayTooOld_SendsSync(t *testing.T) {
 	if !strings.Contains(body, `"action":"full_sync"`) {
 		t.Errorf("expected sync event, got: %s", body)
 	}
-	if !strings.Contains(body, "id: 10\n") {
+	if !strings.Contains(body, "id: "+b.epoch+"-10\n") {
 		t.Errorf("expected sync id: 10, got: %s", body)
 	}
 }
@@ -581,7 +583,7 @@ func TestSSE_ReplayIneligible_SendsSync(t *testing.T) {
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
-	req.Header.Set("Last-Event-ID", "0")
+	req.Header.Set("Last-Event-ID", b.epoch+"-0")
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -651,7 +653,7 @@ func TestSSE_ReplayNoMatchingType_DoesNotDropLiveEvents(t *testing.T) {
 	// but none match "service", so replay should be empty and live events
 	// must NOT be suppressed.
 	req := httptest.NewRequest("GET", "/services", nil)
-	req.Header.Set("Last-Event-ID", "0")
+	req.Header.Set("Last-Event-ID", b.epoch+"-0")
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
@@ -697,7 +699,7 @@ func TestSSE_EndToEnd_ReplayThenLive(t *testing.T) {
 
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 	req := httptest.NewRequest("GET", "/services", nil)
-	req.Header.Set("Last-Event-ID", "3") // Should replay IDs 4, 5 (svc-3, svc-4)
+	req.Header.Set("Last-Event-ID", b.epoch+"-3") // Should replay IDs 4, 5 (svc-3, svc-4)
 
 	done := make(chan struct{})
 	go func() {
@@ -744,6 +746,121 @@ func (f *flushRecorder) bodyString() string {
 }
 
 func (f *flushRecorder) Flush() {}
+
+// One caller cannot take every slot: past its share it is refused, while a
+// different caller still gets in.
+func TestSSE_429PastOneOwnersShare(t *testing.T) {
+	var recorded recordedError
+
+	b := NewBroadcaster(10*time.Millisecond, recordingErrorWriter(&recorded), nil)
+	defer b.Close()
+
+	// Bounded, so a stream that is wrongly admitted ends instead of hanging.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	hog := httptest.NewRequestWithContext(ctx, "GET", "/events", nil)
+
+	b.mu.Lock()
+	for range MaxClientsPerOwner {
+		b.clients[&sseClient{done: make(chan struct{}), owner: ownerOf(hog)}] = struct{}{}
+	}
+	b.owners[ownerOf(hog)] = MaxClientsPerOwner
+	b.mu.Unlock()
+
+	w := httptest.NewRecorder()
+	b.ServeHTTP(&flushRecorder{ResponseRecorder: w}, hog)
+
+	if w.Code != http.StatusTooManyRequests || recorded.code != "SSE001" {
+		t.Fatalf("status = %d, code = %q; want 429 SSE001", w.Code, recorded.code)
+	}
+
+	assertRetryAfter(t, w.Header().Get("Retry-After"))
+
+	other := httptest.NewRequest("GET", "/events", nil)
+	other.RemoteAddr = "198.51.100.7:4321"
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeHTTP(&flushRecorder{ResponseRecorder: httptest.NewRecorder()}, other)
+		close(done)
+	}()
+
+	waitForClients(t, b, MaxClientsPerOwner+1)
+	b.Close()
+	<-done
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	if _, held := b.owners[ownerOf(other)]; held {
+		t.Error("a closed stream still counts against its owner's share")
+	}
+}
+
+func TestOwnerOf(t *testing.T) {
+	request := func(addr string, id *auth.Identity) *http.Request {
+		r := httptest.NewRequest("GET", "/events", nil)
+		r.RemoteAddr = addr
+
+		return r.WithContext(auth.ContextWithIdentity(r.Context(), id))
+	}
+	anonymous := &auth.Identity{Subject: "anonymous", Provider: "none"}
+	alice := &auth.Identity{Subject: "alice", Provider: "oidc"}
+	bob := &auth.Identity{Subject: "bob", Provider: "oidc"}
+
+	if ownerOf(request("192.0.2.1:1", anonymous)) == ownerOf(request("192.0.2.2:1", anonymous)) {
+		t.Error("under auth none, two addresses share one owner")
+	}
+	if ownerOf(request("192.0.2.1:1", anonymous)) != ownerOf(request("192.0.2.1:2", anonymous)) {
+		t.Error("two connections from one address are different owners")
+	}
+	if ownerOf(request("192.0.2.1:1", alice)) != ownerOf(request("192.0.2.2:1", alice)) {
+		t.Error("one identity on two addresses is two owners")
+	}
+	if ownerOf(request("192.0.2.1:1", alice)) == ownerOf(request("192.0.2.1:1", bob)) {
+		t.Error("two identities behind one address share one owner")
+	}
+}
+
+// A cursor from before a restart names a position in a counter that started
+// over, so it must not be read as one: the client is told to refetch instead.
+func TestSSE_ForeignCursorSendsSync(t *testing.T) {
+	h := cache.NewHistory(100)
+	for _, id := range []string{"s0", "s1", "s2"} {
+		h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: id})
+	}
+
+	previous := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	previous.Close()
+
+	for _, lastID := range []string{"1", previous.EventID(1)} {
+		b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+
+		req := httptest.NewRequest("GET", "/services", nil)
+		req.Header.Set("Last-Event-ID", lastID)
+		w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+		done := make(chan struct{})
+		go func() {
+			b.ServeSSE(w, req, nil, cache.EventService)
+			close(done)
+		}()
+
+		waitForClients(t, b, 1)
+		waitForBody(t, w, "event: sync")
+		b.Close()
+		<-done
+
+		body := w.bodyString()
+		if strings.Contains(body, `"s2"`) {
+			t.Errorf("Last-Event-ID %q was replayed as this process's cursor", lastID)
+		}
+		if !strings.Contains(body, "id: "+b.EventID(3)+"\n") {
+			t.Errorf("the sync does not carry this process's cursor: %s", body)
+		}
+	}
+}
 
 // Ensure flushRecorder implements http.Flusher.
 var _ http.Flusher = (*flushRecorder)(nil)

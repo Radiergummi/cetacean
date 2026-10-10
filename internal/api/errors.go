@@ -296,7 +296,7 @@ var errorRegistry = map[string]ErrorDef{
 		Code:        "SSE001",
 		Title:       "Too Many SSE Connections",
 		Status:      http.StatusTooManyRequests,
-		Description: "The maximum number of concurrent SSE connections has been reached.",
+		Description: "The maximum number of concurrent SSE connections has been reached, for the server or for this caller.",
 		Suggestion:  "Close an existing SSE connection before opening a new one.",
 	},
 
