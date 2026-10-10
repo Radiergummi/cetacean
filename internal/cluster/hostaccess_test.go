@@ -139,6 +139,14 @@ func TestCheckMountsNamesTheReason(t *testing.T) {
 			},
 			"a volume mount of root with driver options requires operations level 3",
 		},
+		{
+			mount.Mount{
+				Type:          mount.TypeVolume,
+				Target:        "/host",
+				VolumeOptions: &mount.VolumeOptions{DriverConfig: &mount.Driver{Name: "local"}},
+			},
+			"an anonymous volume mount with driver options requires operations level 3",
+		},
 	}
 	for _, tc := range cases {
 		err := CheckMounts(hostAccessService(), []mount.Mount{tc.mount}, config.OpsConfiguration)
