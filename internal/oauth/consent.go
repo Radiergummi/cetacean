@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -154,15 +153,8 @@ func renderErrorPage(w http.ResponseWriter, status int, message string) {
 // would replay to a different user.
 func setConsentHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "DENY")
-	// Added to the global policy rather than replacing it.
-	policy := w.Header().Get("Content-Security-Policy")
-	if !strings.Contains(policy, "frame-ancestors") {
-		if policy != "" {
-			policy += "; "
-		}
-		policy += "frame-ancestors 'none'"
-	}
-	w.Header().Set("Content-Security-Policy", policy)
+	// A second policy beside the global one: a browser enforces both.
+	w.Header().Add("Content-Security-Policy", "frame-ancestors 'none'")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 }
