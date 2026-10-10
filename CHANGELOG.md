@@ -125,7 +125,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Metrics errors no longer name Prometheus's address, and relay its message only for a rejected query. When it's unreachable, fails, or times out, the banner, `GET /metrics/status`, the metrics stream, and MCP `get_metrics` say only that; the cause is logged
 - `GET /metrics` and `GET /metrics/labels` answer while Docker is unreachable
 - `manager-has-workloads` is raised only when a ready, active worker could take the manager's tasks, and `get_recommendations` no longer offers `update_node` as its fix
-- Plain log reads are capped at 32 in flight (`429 LOG009`), and past 32 concurrent `Prefer: wait` writes a write is answered as `respond-async` with a `Retry-After`
 - JSON log reads are capped like log streams (`429 LOG009`), and a `Prefer: wait` past its cap is answered as `respond-async` with a `Retry-After`
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
