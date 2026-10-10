@@ -38,7 +38,19 @@ know refuses startup and names it.
 </ConfigParam>
 
 <ConfigParam name="docker.host" flag="-docker-host" env="CETACEAN_DOCKER_HOST" default="unix:///var/run/docker.sock">
-  Docker Engine API endpoint. Supports Unix sockets (`unix:///path`), TCP (`tcp://host:port`), and SSH (`ssh://user@host`).
+  Docker Engine API endpoint: a Unix socket (`unix:///path`) or TCP (`tcp://host:port`). Over TCP, set [`docker.tls.ca`][docker.tls.ca] and a client certificate; without them nothing is encrypted, and anyone who can reach the port controls the engine. SSH (`ssh://`) isn't supported and refuses startup. To reach an engine over SSH, forward its socket with `ssh -L` and point this at the forwarded end.
+</ConfigParam>
+
+<ConfigParam name="docker.tls.ca" flag="-docker-tls-ca" env="CETACEAN_DOCKER_TLS_CA">
+  Path to a PEM-encoded CA bundle the engine's certificate must be signed by, replacing the system roots. Setting any `docker.tls.*` setting connects over TLS, which requires a `tcp://` [`docker.host`][docker.host].
+</ConfigParam>
+
+<ConfigParam name="docker.tls.cert" flag="-docker-tls-cert" env="CETACEAN_DOCKER_TLS_CERT">
+  Path to the PEM-encoded client certificate presented to an engine started with `--tlsverify`. Set it together with [`docker.tls.key`][docker.tls.key] or not at all.
+</ConfigParam>
+
+<ConfigParam name="docker.tls.key" flag="-docker-tls-key" env="CETACEAN_DOCKER_TLS_KEY">
+  Path to the PEM-encoded private key matching [`docker.tls.cert`][docker.tls.cert].
 </ConfigParam>
 
 <ConfigParam name="prometheus.url" flag="-prometheus-url" env="CETACEAN_PROMETHEUS_URL">
@@ -439,6 +451,10 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [client-certificates]: #client-certificates
 [config-file]: #config-file
 [dashboard]: dashboard
+[docker.host]: #docker.host
+[docker.tls.ca]: #docker.tls.ca
+[docker.tls.cert]: #docker.tls.cert
+[docker.tls.key]: #docker.tls.key
 [interaction-with-operations-level]: authorization#interaction-with-operations-level
 [mcp]: mcp
 [mcp.auth_bypass]: #mcp.auth_bypass

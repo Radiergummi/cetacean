@@ -242,7 +242,11 @@ func main() {
 	})
 
 	// Docker client + watcher
-	dockerClient, err := docker.NewClient(cfg.DockerHost)
+	dockerClient, err := docker.NewClient(cfg.DockerHost, docker.TLS{
+		CA:   cfg.DockerTLS.CA,
+		Cert: cfg.DockerTLS.Cert,
+		Key:  cfg.DockerTLS.Key,
+	})
 	if err != nil {
 		slog.Error("docker client failed", "error", err)
 		os.Exit(1) //nolint:gocritic // defers are trivial cleanup; OS reclaims on exit

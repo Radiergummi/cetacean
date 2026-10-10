@@ -137,7 +137,14 @@ type fileSSE struct {
 }
 
 type fileDocker struct {
-	Host *string `toml:"host"`
+	Host *string        `toml:"host"`
+	TLS  *fileDockerTLS `toml:"tls"`
+}
+
+type fileDockerTLS struct {
+	CA   *string `toml:"ca"`
+	Cert *string `toml:"cert"`
+	Key  *string `toml:"key"`
 }
 
 type fileProm struct {

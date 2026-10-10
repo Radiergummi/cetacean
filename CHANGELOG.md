@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `docker.tls.ca`, `docker.tls.cert` and `docker.tls.key` connect to a `tcp://` Docker Engine over TLS, with a client certificate for one started with `--tlsverify`
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document—the channels, the messages each carries, and which cursor dialect its `id:` uses. Sixteen streams were previously described nowhere
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Each protected resource names itself in its discovery document, so a client's consent screen can show `Cetacean MCP` instead of a URL
 
 ### Changed
+- **Breaking:** an `ssh://` `docker.host` refuses startup instead of failing on DNS; it never connected. Forward the engine's socket over SSH, or use `tcp://` with `docker.tls`
 - **Breaking:** MCP's `remove_task` needs operations level 3, matching `DELETE /tasks/{id}`; it was available from level 1
 - **Breaking:** the OAuth authorization server is opt-in—set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
