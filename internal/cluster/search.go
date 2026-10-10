@@ -41,13 +41,17 @@ type SearchResults struct {
 	Total  int                       `json:"total"`
 }
 
-// Search returns matches across all swarm resource types.
-//
-// Each per-type slice in Hits is capped at limit (0 means up to 1000), while
-// Counts always reports the pre-cap total so callers can show "X matches" even
-// when displaying a small subset. Secret data is never returned; RedactSecret
-// is applied where applicable.
-func Search(ctx context.Context, c *cache.Cache, query string, limit int) SearchResults {
+// Search returns the matches canRead admits across every resource type; a nil
+// canRead admits all. Hits are capped per type at limit (0 means 1000), while
+// Counts is the readable pre-cap total, for "X matches" affordances. Secret
+// data is never returned.
+func Search(
+	ctx context.Context,
+	c *cache.Cache,
+	query string,
+	limit int,
+	canRead func(resource string) bool,
+) SearchResults {
 	if limit == 0 || limit > 1000 {
 		limit = 1000
 	}
@@ -67,6 +71,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 
 					return hit || labelsMatch(s.Spec.Labels, ql)
 				},
+				canRead,
+				func(s swarm.Service) string { return "service:" + s.Spec.Name },
 				func(s swarm.Service) SearchResult {
 					detail := ""
 					if s.Spec.TaskTemplate.ContainerSpec != nil {
@@ -91,6 +97,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 		func() (typeResults, bool) {
 			return searchType(ctx, "stacks", limit, slices.Values(c.ListStacks()),
 				func(s cache.Stack) bool { return ContainsFold(s.Name, ql) },
+				canRead,
+				func(s cache.Stack) string { return "stack:" + s.Name },
 				func(s cache.Stack) SearchResult {
 					return SearchResult{
 						Type:   "stacks",
@@ -108,6 +116,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 						ContainsFold(n.Status.Addr, ql) ||
 						labelsMatch(n.Spec.Labels, ql)
 				},
+				canRead,
+				func(n swarm.Node) string { return "node:" + NodeACLName(n) },
 				func(n swarm.Node) SearchResult {
 					return SearchResult{
 						Type:   "nodes",
@@ -130,41 +140,66 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				return true
 			})
 
-			return searchType(ctx, "tasks", limit, c.EachTask,
-				func(t swarm.Task) bool {
-					hit := ContainsFold(svcNames[t.ServiceID], ql)
-					if !hit && t.Spec.ContainerSpec != nil {
-						hit = ContainsFold(t.Spec.ContainerSpec.Image, ql) ||
-							labelsMatch(t.Spec.ContainerSpec.Labels, ql)
-					}
+			// IDs rather than tasks: every match is held until the read filter has
+			// run, and a broad query matches most of the task table.
+			var ids []string
+			c.EachTask(func(t swarm.Task) bool {
+				if ctx.Err() != nil {
+					return false
+				}
+				hit := ContainsFold(svcNames[t.ServiceID], ql)
+				if !hit && t.Spec.ContainerSpec != nil {
+					hit = ContainsFold(t.Spec.ContainerSpec.Image, ql) ||
+						labelsMatch(t.Spec.ContainerSpec.Labels, ql)
+				}
+				if hit {
+					ids = append(ids, t.ID)
+				}
 
-					return hit
-				},
-				func(t swarm.Task) SearchResult {
-					var svc *swarm.Service
-					if s, ok := c.GetService(t.ServiceID); ok {
-						svc = &s
-					}
-					detail := ""
-					if t.Spec.ContainerSpec != nil {
-						detail = StripImageDigest(t.Spec.ContainerSpec.Image)
-					}
+				return true
+			})
+			if ctx.Err() != nil {
+				return typeResults{}, false
+			}
 
-					return SearchResult{
-						Type:   "tasks",
-						ID:     t.ID,
-						Name:   TaskName(t, svc),
-						Detail: detail,
-						State:  string(t.Status.State),
-					}
-				},
+			ids, count := readable(
+				ids,
+				canRead,
+				limit,
+				func(id string) string { return "task:" + id },
 			)
+			results := make([]SearchResult, 0, len(ids))
+			for _, id := range ids {
+				t, ok := c.GetTask(id)
+				if !ok {
+					continue
+				}
+				var svc *swarm.Service
+				if s, ok := c.GetService(t.ServiceID); ok {
+					svc = &s
+				}
+				detail := ""
+				if t.Spec.ContainerSpec != nil {
+					detail = StripImageDigest(t.Spec.ContainerSpec.Image)
+				}
+				results = append(results, SearchResult{
+					Type:   "tasks",
+					ID:     t.ID,
+					Name:   TaskName(t, svc),
+					Detail: detail,
+					State:  string(t.Status.State),
+				})
+			}
+
+			return typeResults{"tasks", results, count}, true
 		},
 		func() (typeResults, bool) {
 			return searchType(ctx, "configs", limit, c.EachConfig,
 				func(cfg swarm.Config) bool {
 					return ContainsFold(cfg.Spec.Name, ql) || labelsMatch(cfg.Spec.Labels, ql)
 				},
+				canRead,
+				func(cfg swarm.Config) string { return "config:" + cfg.Spec.Name },
 				func(cfg swarm.Config) SearchResult {
 					return SearchResult{
 						Type:   "configs",
@@ -184,6 +219,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				func(s swarm.Secret) bool {
 					return ContainsFold(s.Spec.Name, ql) || labelsMatch(s.Spec.Labels, ql)
 				},
+				canRead,
+				func(s swarm.Secret) string { return "secret:" + s.Spec.Name },
 				func(s swarm.Secret) SearchResult {
 					return SearchResult{
 						Type:   "secrets",
@@ -199,6 +236,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				func(n network.Summary) bool {
 					return ContainsFold(n.Name, ql) || labelsMatch(n.Labels, ql)
 				},
+				canRead,
+				func(n network.Summary) string { return "network:" + n.Name },
 				func(n network.Summary) SearchResult {
 					return SearchResult{Type: "networks", ID: n.ID, Name: n.Name, Detail: n.Driver}
 				},
@@ -209,6 +248,8 @@ func Search(ctx context.Context, c *cache.Cache, query string, limit int) Search
 				func(v volume.Volume) bool {
 					return ContainsFold(v.Name, ql) || labelsMatch(v.Labels, ql)
 				},
+				canRead,
+				func(v volume.Volume) string { return "volume:" + v.Name },
 				func(v volume.Volume) SearchResult {
 					return SearchResult{Type: "volumes", ID: v.Name, Name: v.Name, Detail: v.Driver}
 				},
@@ -251,29 +292,26 @@ type typeResults struct {
 	count   int
 }
 
-// searchType counts every item of each that matches and builds a result for
-// the first limit of them. It reports false when ctx ended mid-scan, since a
-// partial count published as the whole one would understate the total. build
-// runs after the scan, which holds the cache's read lock that builders take.
+// searchType keeps the items of each that match and that canRead admits, and
+// builds a result for the first limit of them. It reports false when ctx ended
+// mid-scan, since a partial count published as the whole one would understate
+// the total. Filtering and build run after the scan, which holds the read lock.
 func searchType[T any](
 	ctx context.Context,
 	key string,
 	limit int,
 	each iter.Seq[T],
 	match func(T) bool,
+	canRead func(resource string) bool,
+	resource func(T) string,
 	build func(T) SearchResult,
 ) (typeResults, bool) {
 	var hits []T
-	count := 0
 	each(func(item T) bool {
 		if ctx.Err() != nil {
 			return false
 		}
-		if !match(item) {
-			return true
-		}
-		count++
-		if len(hits) < limit {
+		if match(item) {
 			hits = append(hits, item)
 		}
 
@@ -283,12 +321,35 @@ func searchType[T any](
 		return typeResults{}, false
 	}
 
+	hits, count := readable(hits, canRead, limit, resource)
 	results := make([]SearchResult, 0, len(hits))
 	for _, item := range hits {
 		results = append(results, build(item))
 	}
 
 	return typeResults{key, results, count}, true
+}
+
+// readable keeps the hits canRead admits, returning at most limit of them and
+// how many there were. It runs after a scan, never inside one: the ACL resolver
+// reads the cache, whose read lock the scan holds.
+func readable[T any](
+	hits []T,
+	canRead func(resource string) bool,
+	limit int,
+	resource func(T) string,
+) ([]T, int) {
+	if canRead != nil {
+		kept := hits[:0]
+		for _, hit := range hits {
+			if canRead(resource(hit)) {
+				kept = append(kept, hit)
+			}
+		}
+		hits = kept
+	}
+
+	return hits[:min(len(hits), limit)], len(hits)
 }
 
 // ContainsFold reports whether s contains substr using case-insensitive

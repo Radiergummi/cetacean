@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/radiergummi/cetacean/internal/acl"
-	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -44,6 +42,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		Type:       cache.EventType(resourceType),
 		ResourceID: resourceID,
 		Limit:      limit,
+		Visible:    h.readableHistory(r),
 	}
 
 	// The type names what resourceId is, and a service's timeline holds its
@@ -58,15 +57,6 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		entries = []cache.HistoryEntry{}
 	}
 
-	// Filter, not a Can per entry: it collects the caller's grants once, and a
-	// CSV asks for the whole ring.
-	entries = acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
-		entries,
-		func(e cache.HistoryEntry) string { return string(e.Type) + ":" + e.Name },
-	)
 	entries = cluster.NameHistoryTasks(h.cache, entries)
 
 	if wantCSV {

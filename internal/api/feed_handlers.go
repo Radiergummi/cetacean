@@ -62,8 +62,9 @@ func (h *Handlers) feedListHandler(
 			Type:     eventType,
 			BeforeID: beforeID,
 			Limit:    limit,
+			Visible:  h.readableHistory(r),
 		})
-		entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
+		entries = cluster.NameHistoryTasks(h.cache, entries)
 
 		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
 	}
@@ -90,8 +91,9 @@ func (h *Handlers) feedDetailHandler(
 			ResourceID: resourceID,
 			BeforeID:   beforeID,
 			Limit:      limit,
+			Visible:    h.readableHistory(r),
 		})
-		entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
+		entries = cluster.NameHistoryTasks(h.cache, entries)
 
 		render(w, r, historyFeedData(r, nameFunc(resourceID), entries, beforeID, limit))
 	}
@@ -111,8 +113,9 @@ func (h *Handlers) handleFeedHistory(
 	entries := h.cache.History().List(cache.HistoryQuery{
 		BeforeID: beforeID,
 		Limit:    limit,
+		Visible:  h.readableHistory(r),
 	})
-	entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
+	entries = cluster.NameHistoryTasks(h.cache, entries)
 
 	render(w, r, historyFeedData(r, "History", entries, beforeID, limit))
 }
@@ -144,8 +147,9 @@ func (h *Handlers) handleFeedSearch(
 		BeforeID:     beforeID,
 		NameContains: q,
 		Limit:        limit,
+		Visible:      h.readableHistory(r),
 	})
-	entries = cluster.NameHistoryTasks(h.cache, h.filterHistoryACL(r, entries))
+	entries = cluster.NameHistoryTasks(h.cache, entries)
 
 	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
 	// the same BREACH shape HandleSearch opts out of, so it opts out too.
@@ -389,25 +393,11 @@ func resourcePath(typ cache.EventType, id string) string {
 	}
 }
 
-// filterHistoryACL filters history entries by ACL read permission.
-// If no ACL evaluator is configured, returns entries unchanged.
-func (h *Handlers) filterHistoryACL(
-	r *http.Request,
-	entries []cache.HistoryEntry,
-) []cache.HistoryEntry {
-	if h.acl == nil {
-		return entries
-	}
-
-	id := auth.IdentityFromContext(r.Context())
-	filtered := entries[:0:0]
-	for _, e := range entries {
-		if h.acl.Can(id, "read", string(e.Type)+":"+e.Name) {
-			filtered = append(filtered, e)
-		}
-	}
-
-	return filtered
+// readableHistory admits the history entries the caller of r may read.
+func (h *Handlers) readableHistory(r *http.Request) func(cache.HistoryEntry) bool {
+	return cluster.HistoryReadable(
+		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
+	)
 }
 
 // feedID builds a tag URI (RFC 4151) for the feed: tag:{host},{year}:{path}.

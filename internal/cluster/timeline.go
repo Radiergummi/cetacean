@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // TimelineEntry is one thing that happened, whether Cetacean observed it as a
@@ -62,4 +64,12 @@ func SortTimeline(entries []TimelineEntry) {
 
 		return strings.Compare(a.Message, b.Message)
 	})
+}
+
+// HistoryReadable adapts canRead to a cache.HistoryQuery's Visible, keyed on
+// the entry's type and the name it recorded — a task's is its ID.
+func HistoryReadable(canRead func(resource string) bool) func(cache.HistoryEntry) bool {
+	return func(e cache.HistoryEntry) bool {
+		return canRead(string(e.Type) + ":" + e.Name)
+	}
 }

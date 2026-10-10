@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/docker/docker/api/types/network"
@@ -14,41 +15,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
-
-// filterSearchResults runs cluster.Search through ACL. The returned
-// SearchResults reflect post-filter Hits and per-type Counts (adjusted by the
-// observed denial rate, matching REST behaviour).
-func (s *Server) filterSearchResults(
-	ctx context.Context,
-	raw cluster.SearchResults,
-) cluster.SearchResults {
-	if s.acl == nil {
-		return raw
-	}
-	identity := auth.IdentityFromContext(ctx)
-	out := cluster.SearchResults{
-		Hits:   make(map[string][]cluster.SearchResult, len(raw.Hits)),
-		Counts: make(map[string]int, len(raw.Counts)),
-	}
-	for resourceType, count := range raw.Counts {
-		hits := raw.Hits[resourceType]
-		filtered := acl.Filter(s.acl, identity, "read", hits, func(sr cluster.SearchResult) string {
-			return cluster.SearchResultACLResource(resourceType, sr)
-		})
-		// Adjust the pre-cap count by the number of visible-page denials. We
-		// assume the visible-page ACL rate generalizes to the pre-cap set; this
-		// is the same approximation api/search_handlers.go uses.
-		removed := len(hits) - len(filtered)
-		visible := count - removed
-		if visible <= 0 {
-			continue
-		}
-		out.Hits[resourceType] = filtered
-		out.Counts[resourceType] = visible
-		out.Total += visible
-	}
-	return out
-}
 
 // checkRead enforces the "read" permission on resourceType:resourceName for
 // the identity in ctx. Returns nil if ACL is disabled or no identity is on the
@@ -76,6 +42,16 @@ func (s *Server) readPredicate(ctx context.Context) func(resource string) bool {
 	return func(resource string) bool {
 		return identity == nil || s.canRead(identity, resource)
 	}
+}
+
+// requireAnyGrant refuses a caller holding no grant at all, the gate REST puts
+// in front of the cluster-wide aggregates that no per-resource filter covers.
+func (s *Server) requireAnyGrant(ctx context.Context) error {
+	identity := auth.IdentityFromContext(ctx)
+	if s.acl == nil || identity == nil || s.acl.HasAnyGrant(identity) {
+		return nil
+	}
+	return errors.New("no grants found for this identity")
 }
 
 func (s *Server) filterNodes(ctx context.Context, items []swarm.Node) []swarm.Node {
@@ -222,25 +198,6 @@ func recommendationACLResource(rec recommendations.Recommendation) string {
 	}
 }
 
-// filterHistory mirrors api/history_handlers.go: drop entries whose resource
-// the identity can't read.
-func (s *Server) filterHistory(
-	ctx context.Context,
-	entries []cache.HistoryEntry,
-) []cache.HistoryEntry {
-	if s.acl == nil {
-		return entries
-	}
-	identity := auth.IdentityFromContext(ctx)
-	filtered := entries[:0]
-	for _, e := range entries {
-		if s.acl.Can(identity, "read", string(e.Type)+":"+e.Name) {
-			filtered = append(filtered, e)
-		}
-	}
-	return filtered
-}
-
 // readableEnrichedTasks filters tasks to the ones the caller may read, then
 // names their parents from the services and nodes they may read too. The
 // enrichment has to be ACL-aware: cluster.EnrichTasks resolves straight out of
@@ -382,10 +339,10 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !ok || s.checkRead(ctx, "service", svc.Spec.Name) != nil {
 		return fmt.Errorf("service %q not found", id)
 	}
-	return s.checkRead(ctx, "service", svc.Spec.Name)
+	return nil
 }
 
 // checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
@@ -393,5 +350,8 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 // acl.grantMatchesResource already resolves a task through its service and
 // stack — and every other task read passes this same key.
 func (s *Server) checkTaskRead(ctx context.Context, id string) error {
-	return s.checkRead(ctx, "task", id)
+	if s.checkRead(ctx, "task", id) != nil {
+		return fmt.Errorf("task %q not found", id)
+	}
+	return nil
 }
