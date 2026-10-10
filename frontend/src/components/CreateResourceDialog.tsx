@@ -38,6 +38,7 @@ export default function CreateResourceDialog({
   function handleOpenChange(next: boolean) {
     if (!next) {
       onReset();
+      action.reset();
     }
 
     setOpen(next);
@@ -91,6 +92,15 @@ export default function CreateResourceDialog({
           }}
         >
           {children}
+
+          {action.error && (
+            <p
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {action.error}
+            </p>
+          )}
 
           <DialogFooter>
             <DialogClose
