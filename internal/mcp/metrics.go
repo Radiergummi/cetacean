@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 
@@ -391,7 +392,7 @@ func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, str
 		return "", "", fmt.Errorf("node %q not found", id)
 	}
 
-	if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
+	if err := s.checkRead(ctx, "node", cluster.NodeACLName(node)); err != nil {
 		return "", "", err
 	}
 
@@ -403,7 +404,7 @@ func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, str
 		)
 	}
 
-	return nodeACLName(node), selector, nil
+	return cluster.NodeACLName(node), selector, nil
 }
 
 // instanceSelector matches a node against node-exporter's `instance` label,

@@ -14,6 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/metrics"
 	"github.com/radiergummi/cetacean/internal/prometheus"
@@ -212,7 +213,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			func(s swarm.Service) string { return s.Spec.Name },
 		),
 	)
-	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, nodeHostnameOrID))
+	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, cluster.NodeACLName))
 	taskACL := h.requireWriteACL(h.taskServiceResource)
 	stackACL := h.requireWriteACL(pathResource("stack", "name"))
 	cfgACL := h.requireWriteACL(

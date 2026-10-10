@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+	"gopkg.in/yaml.v3"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -512,75 +515,111 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	}
 }
 
-// restTierParity names every tool whose operation REST also exposes, with the
-// tier both transports must gate it at: the operations level has to mean one
-// thing whichever transport an operator reaches for. update_node is here
-// without a REST counterpart because it is why update_node_labels is separate.
-var restTierParity = map[string]config.OperationsLevel{
-	"scale_service":          config.OpsOperational,
-	"update_service_image":   config.OpsOperational,
-	"rollback_service":       config.OpsOperational,
-	"restart_service":        config.OpsOperational,
-	"create_secret":          config.OpsConfiguration,
-	"create_config":          config.OpsConfiguration,
-	"update_service":         config.OpsConfiguration,
-	"update_service_secrets": config.OpsConfiguration,
-	"update_service_configs": config.OpsConfiguration,
-	"update_service_mounts":  config.OpsConfiguration,
-	"update_node_labels":     config.OpsConfiguration,
-	"update_node":            config.OpsImpactful,
-	"remove_service":         config.OpsImpactful,
-	"remove_task":            config.OpsImpactful,
-	"remove_config":          config.OpsImpactful,
-	"remove_secret":          config.OpsImpactful,
-	"remove_network":         config.OpsImpactful,
-	"remove_volume":          config.OpsImpactful,
+// restOperations names, for every write tool, the REST operations that make the
+// same change. Their tier is read from the operations-level badges in
+// api/openapi.yaml, which internal/api holds to the tier the router enforces —
+// so a REST tier change reaches this comparison without an edit here.
+var restOperations = map[string][]string{
+	"scale_service":        {"PUT /services/{id}/scale"},
+	"update_service_image": {"PUT /services/{id}/image"},
+	"rollback_service":     {"POST /services/{id}/rollback"},
+	"restart_service":      {"POST /services/{id}/restart"},
+	"create_secret":        {"POST /secrets"},
+	"create_config":        {"POST /configs"},
+	"update_service": {
+		"PATCH /services/{id}/env",
+		"PATCH /services/{id}/labels",
+		"PATCH /services/{id}/resources",
+		"PUT /services/{id}/placement",
+		"PATCH /services/{id}/ports",
+		"PATCH /services/{id}/update-policy",
+		"PATCH /services/{id}/rollback-policy",
+		"PATCH /services/{id}/log-driver",
+		"PUT /services/{id}/healthcheck",
+		"PATCH /services/{id}/healthcheck",
+		"PATCH /services/{id}/container-config",
+	},
+	"update_service_secrets": {"PATCH /services/{id}/secrets"},
+	"update_service_configs": {"PATCH /services/{id}/configs"},
+	"update_service_mounts":  {"PATCH /services/{id}/mounts"},
+	"update_node_labels":     {"PATCH /nodes/{id}/labels"},
+	"update_node":            {"PUT /nodes/{id}/availability", "PUT /nodes/{id}/role"},
+	"remove_service":         {"DELETE /services/{id}"},
+	"remove_task":            {"DELETE /tasks/{id}"},
+	"remove_config":          {"DELETE /configs/{id}"},
+	"remove_secret":          {"DELETE /secrets/{id}"},
+	"remove_network":         {"DELETE /networks/{id}"},
+	"remove_volume":          {"DELETE /volumes/{name}"},
 }
 
 // restTierMismatches records a tool whose tier is known to differ from REST's
-// for the same operation. Listed rather than left out of restTierParity so the
+// for the same operation. Listed rather than left out of restOperations so the
 // debt stays visible: the mismatch is asserted to still exist, so whichever way
 // it is resolved the entry fails as stale and closing the gap is a deletion.
-var restTierMismatches = map[string]config.OperationsLevel{}
+var restTierMismatches = map[string]bool{}
 
-// Fails when a tool drifts from the tier its REST equivalent is gated at. The
-// REST side is pinned in internal/api, which deliberately does not import this
-// package. A tool in restTierMismatches is held to the opposite assertion, so
-// closing the gap deletes the entry rather than drifting past it.
-func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
-	srv := newResourceTestServer(t, cache.New(nil))
+// restOperationTiers reads the operations-level badge of every operation in
+// api/openapi.yaml, keyed "METHOD /path". An operation without one is tier 0.
+func restOperationTiers(t *testing.T) map[string]config.OperationsLevel {
+	t.Helper()
 
-	for name := range restTierMismatches {
-		if _, both := restTierParity[name]; both {
-			t.Errorf("%s is in both restTierParity and restTierMismatches, "+
-				"which cannot both be true", name)
+	raw, err := os.ReadFile("../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var doc struct {
+		Paths map[string]map[string]yaml.Node `yaml:"paths"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+
+	tiers := make(map[string]config.OperationsLevel)
+	for path, item := range doc.Paths {
+		for method, node := range item {
+			var op struct {
+				Badges []struct {
+					Name string `yaml:"name"`
+				} `yaml:"x-badges"`
+			}
+			if node.Kind != yaml.MappingNode || node.Decode(&op) != nil {
+				continue
+			}
+
+			key := strings.ToUpper(method) + " " + path
+			tiers[key] = config.OpsReadOnly
+			for _, badge := range op.Badges {
+				if level, ok := strings.CutPrefix(badge.Name, "operations-level:"); ok {
+					n, err := strconv.Atoi(level)
+					if err != nil {
+						t.Fatalf("%s: badge %q: %v", key, badge.Name, err)
+					}
+					tiers[key] = config.OperationsLevel(n)
+				}
+			}
 		}
 	}
 
-	unseen := maps.Clone(restTierParity)
-	unseenMismatches := maps.Clone(restTierMismatches)
+	return tiers
+}
+
+// Fails when a tool drifts from the tier its REST equivalents are gated at. A
+// tool in restTierMismatches is held to the opposite assertion, so closing the
+// gap deletes the entry rather than drifting past it.
+func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+	tiers := restOperationTiers(t)
+
+	unseen := maps.Clone(restOperations)
 
 	for _, def := range srv.toolCatalog() {
-		if rest, known := restTierMismatches[def.tool.Name]; known {
-			delete(unseenMismatches, def.tool.Name)
-
-			if def.tier == rest {
-				t.Errorf(
-					"%s now matches the REST tier (%v) — remove its "+
-						"restTierMismatches entry and add it to restTierParity",
-					def.tool.Name, rest,
-				)
-			}
-
-			continue
-		}
-
-		want, checked := restTierParity[def.tool.Name]
+		operations, checked := restOperations[def.tool.Name]
 		if !checked {
 			// Every write tool has a REST equivalent, so one without a row is
 			// a tier nothing compares.
 			if def.tier > config.OpsReadOnly {
-				t.Errorf("%s is a write tool with no restTierParity row", def.tool.Name)
+				t.Errorf("%s is a write tool with no restOperations row", def.tool.Name)
 			}
 
 			continue
@@ -588,21 +627,43 @@ func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
 
 		delete(unseen, def.tool.Name)
 
-		if def.tier != want {
-			t.Errorf(
-				"%s tier = %v, want %v to match the REST route for the same operation",
-				def.tool.Name, def.tier, want,
-			)
+		for _, operation := range operations {
+			rest, ok := tiers[operation]
+			if !ok {
+				t.Errorf("%s: %s is not in api/openapi.yaml", def.tool.Name, operation)
+
+				continue
+			}
+
+			if restTierMismatches[def.tool.Name] {
+				if def.tier == rest {
+					t.Errorf(
+						"%s now matches %s (tier %v) — remove its "+
+							"restTierMismatches entry",
+						def.tool.Name, operation, rest,
+					)
+				}
+
+				continue
+			}
+
+			if def.tier != rest {
+				t.Errorf(
+					"%s tier = %v, want %v to match %s",
+					def.tool.Name, def.tier, rest, operation,
+				)
+			}
 		}
 	}
 
 	for name := range unseen {
-		t.Errorf("%s is named in restTierParity but is not registered", name)
+		t.Errorf("%s is named in restOperations but is not registered", name)
 	}
 
-	for name := range unseenMismatches {
-		t.Errorf("%s is named in restTierMismatches but is not registered — "+
-			"remove the entry", name)
+	for name := range restTierMismatches {
+		if _, ok := restOperations[name]; !ok {
+			t.Errorf("%s is named in restTierMismatches but has no restOperations row", name)
+		}
 	}
 }
 
