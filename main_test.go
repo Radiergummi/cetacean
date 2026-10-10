@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -67,6 +68,43 @@ func TestRunHealthcheckReadsTheConfigFile(t *testing.T) {
 
 	if code := runHealthcheck(&config.Flags{Config: path}); code != 0 {
 		t.Errorf("healthcheck exit = %d, want 0", code)
+	}
+}
+
+// Go reads the proxy environment once per process, so the probe runs in a
+// child started with HTTP_PROXY set; a probe sent through it gets a 502.
+func TestProbeReadyIgnoresTheProxyEnvironment(t *testing.T) {
+	if target := os.Getenv("CETACEAN_TEST_PROBE_TARGET"); target != "" {
+		if err := probeReady(target, false); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(proxy.Close)
+
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	t.Cleanup(server.Close)
+
+	_, port, err := net.SplitHostPort(server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command( //nolint:gosec // re-runs this test binary
+		os.Args[0],
+		"-test.run=^TestProbeReadyIgnoresTheProxyEnvironment$",
+	)
+	cmd.Env = append(os.Environ(),
+		"HTTP_PROXY="+proxy.URL,
+		"NO_PROXY=",
+		"CETACEAN_TEST_PROBE_TARGET=http://localhost.:"+port+"/-/ready",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("probe went through the proxy: %v\n%s", err, out)
 	}
 }
 

@@ -753,15 +753,16 @@ func probeReady(target string, tlsEnabled bool) error {
 		return err
 	}
 
-	client := http.DefaultClient
+	// No Proxy: the listen address is the server's own, never one a proxy reaches.
+	transport := &http.Transport{}
 	if tlsEnabled {
 		// The probe dials the listen address, which the certificate need not name.
-		client = &http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // own listener
-		}}
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec // own listener
+		}
 	}
 
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Transport: transport}).Do(req)
 	if err != nil {
 		return err
 	}
