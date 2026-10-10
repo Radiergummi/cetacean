@@ -4030,7 +4030,7 @@ paths:
       description: >-
         Replaces the network attachments for the service. Requires operations level 2, and read access to
         each network the service does not already join. A network that is not known answers
-        `400 SVC021`.
+        `400 SVC021`; a name several networks share answers `409 API015`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"

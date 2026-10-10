@@ -1116,6 +1116,9 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 			return
 		}
 		target, found, resolveErr := h.cache.ResolveNetwork(ref.Target)
+		if h.reportAmbiguousName(w, r, "network", resolveErr) {
+			return
+		}
 		if resolveErr != nil || !found {
 			target.ID = ref.Target
 		}

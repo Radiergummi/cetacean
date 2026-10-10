@@ -1942,6 +1942,30 @@ func TestPatchServiceAttachments_UnknownReferenceWithoutPolicy(t *testing.T) {
 	}
 }
 
+// A network name two networks share is ambiguous, not unknown.
+func TestPatchServiceNetworks_AmbiguousName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "shared"})
+	c.SetNetwork(network.Summary{ID: "net2", Name: "shared"})
+	h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
+
+	req := httptest.NewRequest(
+		"PATCH",
+		"/services/svc1/networks",
+		strings.NewReader(`{"networks":[{"target":"shared"}]}`),
+	)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceNetworks(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status=%d, want 409; body: %s", w.Code, w.Body.String())
+	}
+	assertACLErrorCode(t, w, "API015")
+}
+
 // Creation is authorized on the name being created, the key MCP checks, so a
 // grant scoped to a team's prefix can create inside it and nowhere else.
 func TestCreateDataResource_AuthorizesTheNameBeingCreated(t *testing.T) {

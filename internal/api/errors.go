@@ -130,7 +130,7 @@ var errorRegistry = map[string]ErrorDef{
 		Code:   "API015",
 		Title:  "Ambiguous Identifier",
 		Status: http.StatusConflict,
-		Description: "The name in the path identifies more than one resource, " +
+		Description: "The name in the path or request body identifies more than one resource, " +
 			"so the server cannot tell which one was meant. " +
 			"Swarm does not require node hostnames to be unique.",
 		Suggestion: "Address the resource by its ID. The detail names every " +
