@@ -3,6 +3,7 @@ import { EditablePanel } from "./EditablePanel";
 import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useState } from "react";
 
 const linuxCapabilities = [
@@ -51,21 +52,27 @@ export function CapabilitiesEditor({
   onSaved: (updated: ContainerConfig) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/container-config`);
   const [addList, setAddList] = useState<string[]>([]);
   const [dropList, setDropList] = useState<string[]>([]);
 
   const isEmpty = !config.capabilityAdd?.length && !config.capabilityDrop?.length;
 
   function resetForm() {
+    version.capture();
     setAddList(config.capabilityAdd ?? []);
     setDropList(config.capabilityDrop ?? []);
   }
 
   async function save() {
-    const updated = await api.patchServiceContainerConfig(serviceId, {
-      capabilityAdd: addList.length > 0 ? addList : null,
-      capabilityDrop: dropList.length > 0 ? dropList : null,
-    });
+    const updated = await api.patchServiceContainerConfig(
+      serviceId,
+      {
+        capabilityAdd: addList.length > 0 ? addList : null,
+        capabilityDrop: dropList.length > 0 ? dropList : null,
+      },
+      await version.ifMatch(),
+    );
     onSaved(updated);
   }
 

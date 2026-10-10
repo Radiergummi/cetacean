@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useState } from "react";
 
 export function CommandEditor({
@@ -17,12 +18,14 @@ export function CommandEditor({
   onSaved: (updated: ContainerConfig) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/container-config`);
   const [commandInput, setCommandInput] = useState("");
   const [argsInput, setArgsInput] = useState("");
   const [dirInput, setDirInput] = useState("");
   const [userInput, setUserInput] = useState("");
 
   function resetForm() {
+    version.capture();
     setCommandInput(config.command?.join(" ") ?? "");
     setArgsInput(config.args?.join(" ") ?? "");
     setDirInput(config.dir);
@@ -32,12 +35,16 @@ export function CommandEditor({
   async function save() {
     const cmd = commandInput.trim() ? commandInput.trim().split(/\s+/) : null;
     const argsList = argsInput.trim() ? argsInput.trim().split(/\s+/) : null;
-    const updated = await api.patchServiceContainerConfig(serviceId, {
-      command: cmd,
-      args: argsList,
-      dir: dirInput,
-      user: userInput,
-    });
+    const updated = await api.patchServiceContainerConfig(
+      serviceId,
+      {
+        command: cmd,
+        args: argsList,
+        dir: dirInput,
+        user: userInput,
+      },
+      await version.ifMatch(),
+    );
     onSaved(updated);
   }
 

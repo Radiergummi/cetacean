@@ -10,6 +10,7 @@ import PageHeader from "./PageHeader";
 import { RemoveResourceAction } from "./RemoveResourceAction";
 import ResourceName from "./ResourceName";
 import ServiceRefList from "./ServiceRefList";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useState, type ReactNode } from "react";
 
 interface DataResourceDetailProps {
@@ -25,7 +26,7 @@ interface DataResourceDetailProps {
   history: HistoryEntry[];
   allowedMethods: Set<string>;
   onRemove: () => Promise<void>;
-  onPatchLabels: (ops: PatchOp[]) => Promise<Record<string, string>>;
+  onPatchLabels: (ops: PatchOp[], ifMatch: string | undefined) => Promise<Record<string, string>>;
   children?: ReactNode | undefined;
 }
 
@@ -51,6 +52,7 @@ export default function DataResourceDetail({
   onPatchLabels,
   children,
 }: DataResourceDetailProps) {
+  const labelsVersion = useEditVersion(`${listPath}/${id}/labels`);
   const [labels, setLabels] = useState<Record<string, string>>(initialLabels);
   const [lastInitialLabels, setLastInitialLabels] = useState(initialLabels);
   const { stack } = parseStackLabels(initialLabels);
@@ -115,8 +117,9 @@ export default function DataResourceDetail({
         editDisabled={!allowedMethods.has("PATCH")}
         isKeyReadOnly={isReservedLabelKey}
         validateKey={validateLabelKey}
+        onEditStart={labelsVersion.capture}
         onSave={async (ops) => {
-          const updated = await onPatchLabels(ops);
+          const updated = await onPatchLabels(ops, await labelsVersion.ifMatch());
           setLabels(updated);
 
           return updated;

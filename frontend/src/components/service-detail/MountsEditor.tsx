@@ -7,6 +7,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { getErrorMessage } from "@/lib/utils";
@@ -56,6 +57,7 @@ export function MountsEditor({
   onSaved,
   canEdit = false,
 }: MountsEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/mounts`);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export function MountsEditor({
   useLeaveGuard(editing);
 
   function openEdit() {
+    version.capture();
     setDraft(mounts.map((mount) => structuredClone(mount)));
     setSaveError(null);
     setEditing(true);
@@ -110,7 +113,7 @@ export function MountsEditor({
     setSaveError(null);
 
     try {
-      const result = await api.patchServiceMounts(serviceId, draft);
+      const result = await api.patchServiceMounts(serviceId, draft, await version.ifMatch());
       setEditing(false);
       onSaved(result.mounts);
     } catch (error) {

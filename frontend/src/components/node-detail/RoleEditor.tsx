@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { cn } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
@@ -46,6 +47,7 @@ export function RoleEditor({
   managerCount,
   canEdit = false,
 }: RoleEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/nodes/${nodeId}/role`);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(currentRole);
   const [demotePending, setDemotePending] = useState(false);
@@ -53,6 +55,7 @@ export function RoleEditor({
 
   function handleOpenChange(next: boolean) {
     if (next) {
+      version.capture();
       setValue(currentRole);
     }
 
@@ -78,7 +81,7 @@ export function RoleEditor({
 
     setDemotePending(false);
     await action.execute(async () => {
-      await api.updateNodeRole(nodeId, value);
+      await api.updateNodeRole(nodeId, value, await version.ifMatch());
       setOpen(false);
     }, "Failed to update role");
   }

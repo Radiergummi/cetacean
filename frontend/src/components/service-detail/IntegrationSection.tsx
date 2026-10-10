@@ -4,6 +4,7 @@ import { KeyValueEditor } from "@/components/KeyValueEditor";
 import SegmentedControl from "@/components/SegmentedControl";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { showErrorToast } from "@/lib/showErrorToast";
@@ -51,13 +52,14 @@ export function IntegrationSection({
   editable?: boolean | undefined;
   editContent?: ReactNode | undefined;
   onEditStart?: (() => void) | undefined;
-  onSave?: (() => Promise<void>) | undefined;
+  onSave?: ((ifMatch: string | undefined) => Promise<void>) | undefined;
   serviceId: string;
   onRawSave: (updated: Record<string, string>) => void;
   /** Read-only visualisation. When given, the view toggle becomes three-way. */
   visualContent?: ReactNode | undefined;
 }) {
   const [view, setView] = useState<View>(visualContent ? "graph" : "structured");
+  const version = useEditVersion(`/services/${serviceId}/labels`);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export function IntegrationSection({
     setSaveError(null);
 
     try {
-      await onSave();
+      await onSave(await version.ifMatch());
       setEditing(false);
     } catch (error) {
       setSaveError(getErrorMessage(error, "Save failed"));
@@ -92,6 +94,7 @@ export function IntegrationSection({
   }
 
   function startEditing() {
+    version.capture();
     onEditStart?.();
     setSaveError(null);
     setEditing(true);
@@ -169,7 +172,7 @@ export function IntegrationSection({
           defaultEditing={editing}
           onCancel={() => setEditing(false)}
           onSave={async (ops) => {
-            const updated = await api.patchServiceLabels(serviceId, ops);
+            const updated = await api.patchServiceLabels(serviceId, ops, await version.ifMatch());
             onRawSave(updated);
             setEditing(false);
             return updated;
