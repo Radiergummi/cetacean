@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // getLabelsSpec describes how to read labels for a resource type.
@@ -60,6 +62,9 @@ type patchLabelsSpec[T any] struct {
 		mutate func(current map[string]string) (map[string]string, error),
 	) (T, error)
 	conflictCode string
+
+	// stackMember marks a type whose stack membership follows its labels.
+	stackMember bool
 }
 
 func handleGetLabels[T any](
@@ -86,6 +91,7 @@ func handleGetLabels[T any](
 func handlePatchLabels[T any](
 	w http.ResponseWriter,
 	r *http.Request,
+	evaluator *acl.Evaluator,
 	spec patchLabelsSpec[T],
 ) {
 	key := r.PathValue(spec.pathKey)
@@ -102,10 +108,21 @@ func handlePatchLabels[T any](
 		return
 	}
 
+	if spec.stackMember {
+		identity := auth.IdentityFromContext(r.Context())
+		mutate = cluster.GuardStackLabel(mutate, func(resource string) bool {
+			return evaluator.Can(identity, "write", resource)
+		})
+	}
+
 	slog.Info("patching "+spec.resource+" labels", spec.resource, key)
 
 	result, err := spec.update(r.Context(), key, mutate)
 	if err != nil {
+		if denied, ok := errors.AsType[*cluster.StackLabelDeniedError](err); ok {
+			writeErrorCode(w, r, "ACL002", denied.Error())
+			return
+		}
 		if isPatchApplyError(err) {
 			writePatchError(w, r, err)
 			return

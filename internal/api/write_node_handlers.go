@@ -143,7 +143,7 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
-	handlePatchLabels(w, r, patchLabelsSpec[swarm.Node]{
+	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Node]{
 		resource:     "node",
 		pathKey:      "id",
 		typeName:     "NodeLabels",
