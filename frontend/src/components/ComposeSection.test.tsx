@@ -26,6 +26,12 @@ function renderSection(fetcher: (signal?: AbortSignal) => Promise<string>) {
 }
 
 describe("ComposeSection", () => {
+  it("titles itself with a second-level heading", () => {
+    renderSection(vi.fn<() => Promise<string>>().mockResolvedValue(document));
+
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(/compose/i);
+  });
+
   // Most visits to a detail page do not want the export, so rendering one must
   // not cost a request.
   it("fetches nothing until it is expanded", () => {

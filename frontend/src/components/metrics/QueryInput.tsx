@@ -214,8 +214,6 @@ export function QueryInput({ value, onChange, onRun, loading, completion }: Prop
           onBlur={handleBlur}
           placeholder="Enter a PromQL expression..."
           rows={1}
-          role="combobox"
-          aria-expanded={hasSuggestions}
           aria-autocomplete="list"
           aria-controls={hasSuggestions ? "query-suggestions" : undefined}
           aria-activedescendant={hasSuggestions ? `query-suggestion-${highlightIndex}` : undefined}

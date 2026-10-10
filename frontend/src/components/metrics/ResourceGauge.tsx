@@ -63,7 +63,7 @@ export default function ResourceGauge({ label, value, subtitle, size = "md" }: P
         </div>
       </div>
       <span className={`${sizeLabel} font-medium text-muted-foreground`}>{label}</span>
-      {subtitle && <span className="-mt-0.5 text-[10px] text-muted-foreground/70">{subtitle}</span>}
+      {subtitle && <span className="-mt-0.5 text-[10px] text-muted-foreground">{subtitle}</span>}
     </div>
   );
 }
