@@ -69,6 +69,10 @@ func TestCIMDFetchValid(t *testing.T) {
 // TestCIMDFetchRejectsHTTP ensures plain HTTP client_ids are rejected before
 // any network IO.
 func TestCIMDFetchRejectsHTTP(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-id-url-uses-https",
+	)
+
 	fetcher := &CIMDFetcher{}
 	_, err := fetcher.Fetch(t.Context(), "http://example.com/client")
 	if !errors.Is(err, ErrCIMDInvalidURL) {
@@ -79,6 +83,11 @@ func TestCIMDFetchRejectsHTTP(t *testing.T) {
 // TestCIMDFetchRejectsLoopbackByDefault ensures loopback addresses are blocked
 // when AllowLoopback is false.
 func TestCIMDFetchRejectsLoopbackByDefault(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/special-use-addresses-not-fetched",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/loopback-exception-not-in-production",
+	)
+
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -98,6 +107,11 @@ func TestCIMDFetchRejectsLoopbackByDefault(t *testing.T) {
 // TestCIMDFetchClientIDMismatch ensures the client_id in the document must
 // match the requested URL exactly.
 func TestCIMDFetchClientIDMismatch(t *testing.T) {
+	spec.Satisfies(
+		t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/document-client-id-matches-the-fetched-url",
+	)
+
 	srv := httptest.NewTLSServer(serveMetadata("https://wrong.example.com/client", ClientMetadata{
 		ClientName: "Wrong",
 	}))
@@ -116,6 +130,10 @@ func TestCIMDFetchClientIDMismatch(t *testing.T) {
 
 // TestCIMDFetchResponseTooLarge ensures responses over 5 KiB are rejected.
 func TestCIMDFetchResponseTooLarge(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/response-size-limited",
+	)
+
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// Write more than 5 KiB of data (not valid JSON, but we check size first)
@@ -136,7 +154,15 @@ func TestCIMDFetchResponseTooLarge(t *testing.T) {
 
 // TestCIMDFetchSymmetricAuthRejected ensures symmetric auth methods are refused.
 func TestCIMDFetchSymmetricAuthRejected(t *testing.T) {
-	for _, method := range []string{"client_secret_post", "client_secret_basic"} {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/no-symmetric-token-endpoint-auth",
+	)
+
+	for _, method := range []string{
+		"client_secret_post",
+		"client_secret_basic",
+		"client_secret_jwt",
+	} {
 		t.Run(method, func(t *testing.T) {
 			var serverURL string
 			srv := httptest.NewTLSServer(
@@ -168,6 +194,11 @@ func TestCIMDFetchSymmetricAuthRejected(t *testing.T) {
 // TestCIMDFetchRejectsFragmentOrCredentials ensures fragment and userinfo are
 // rejected before any network IO.
 func TestCIMDFetchRejectsFragmentOrCredentials(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-id-has-no-userinfo",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-id-has-no-fragment",
+	)
+
 	cases := []struct {
 		name     string
 		clientID string
@@ -223,7 +254,11 @@ func TestCIMDFetchCachesResults(t *testing.T) {
 
 // TestCIMDFetchHasRedirectURI verifies the exact-match helper.
 func TestCIMDFetchHasRedirectURI(t *testing.T) {
-	spec.Satisfies(t, "oauth/rfc8252/redirect-uri-registered-and-exact-matched")
+	spec.Satisfies(
+		t,
+		"oauth/rfc8252/redirect-uri-registered-and-exact-matched",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/redirect-urls-registered-and-exact-matched",
+	)
 
 	meta := &ClientMetadata{
 		ClientID:     "https://example.com/client",
@@ -249,6 +284,10 @@ func TestCIMDFetchHasRedirectURI(t *testing.T) {
 // TestCIMDFetchRejectsEmptyPath ensures that a URL without a meaningful path
 // component is rejected.
 func TestCIMDFetchRejectsEmptyPath(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-id-has-a-path",
+	)
+
 	for _, clientID := range []string{
 		"https://example.com",
 		"https://example.com/",
@@ -262,6 +301,10 @@ func TestCIMDFetchRejectsEmptyPath(t *testing.T) {
 
 // TestCIMDFetchNonOKStatus verifies that non-200 responses are rejected.
 func TestCIMDFetchNonOKStatus(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/only-200-is-a-document",
+	)
+
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}))
@@ -282,6 +325,10 @@ func TestCIMDFetchNonOKStatus(t *testing.T) {
 }
 
 func TestCIMDFetchBlocksCGNAT(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/special-use-addresses-not-fetched",
+	)
+
 	f := &CIMDFetcher{}
 	if err := f.checkIP(net.ParseIP("100.64.1.1")); !errors.Is(err, ErrCIMDSSRFBlocked) {
 		t.Errorf("100.64.1.1: got %v, want errors.Is(ErrCIMDSSRFBlocked)", err)
@@ -394,6 +441,10 @@ func validDocument(clientID string) ClientMetadata {
 // 169.254.169.254 is the metadata service on every major cloud: link-local,
 // and neither private nor loopback, so only its own check refuses it.
 func TestCIMDRefusesLinkLocalAddresses(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/special-use-addresses-not-fetched",
+	)
+
 	f := &CIMDFetcher{}
 
 	for _, addr := range []string{"169.254.169.254", "fe80::1"} {
@@ -406,6 +457,10 @@ func TestCIMDRefusesLinkLocalAddresses(t *testing.T) {
 // Every other test dials an IP literal, but a client_id names a host, and the
 // address it resolves to is what a rebinding attacker controls.
 func TestCIMDDialScreensTheAddressesANameResolvesTo(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/special-use-addresses-not-fetched",
+	)
+
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -438,6 +493,10 @@ func TestCIMDDialScreensTheAddressesANameResolvesTo(t *testing.T) {
 
 // logo_uri is rendered on the consent page.
 func TestCIMDRequiresAnHTTPSLogo(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/only-known-uri-schemes",
+	)
+
 	for logo, wantErr := range map[string]bool{
 		"https://example.com/logo.png": false,
 		"http://example.com/logo.png":  true,
@@ -466,6 +525,10 @@ func TestCIMDRefusesAnHTMLDocument(t *testing.T) {
 }
 
 func TestCIMDAcceptsADocumentExactlyAtTheSizeCap(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/response-size-limited",
+	)
+
 	err := fetchServed(t, func(id string, w http.ResponseWriter, _ *http.Request) {
 		body, _ := json.Marshal(validDocument(id))
 		w.Header().Set("Content-Type", "application/json")
@@ -479,6 +542,10 @@ func TestCIMDAcceptsADocumentExactlyAtTheSizeCap(t *testing.T) {
 // Counted as net/http counts its own limit: the request that would follow
 // the cimdMaxRedirects-th redirect is refused.
 func TestCIMDRedirectLimit(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/redirects-not-followed",
+	)
+
 	for hops, wantErr := range map[int]bool{cimdMaxRedirects - 1: false, cimdMaxRedirects: true} {
 		err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
 			var n int
@@ -498,7 +565,155 @@ func TestCIMDRedirectLimit(t *testing.T) {
 	}
 }
 
+func TestCIMDRefusesDotSegments(t *testing.T) {
+	spec.Satisfies(
+		t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-id-has-no-dot-segments",
+	)
+
+	f := &CIMDFetcher{}
+
+	for _, clientID := range []string{
+		"https://example.com/./client",
+		"https://example.com/a/../client",
+		"https://example.com/client/..",
+		"https://example.com/%2e%2e/client",
+	} {
+		if err := f.validateURL(clientID); !errors.Is(err, ErrCIMDInvalidURL) {
+			t.Errorf("%s: err = %v, want ErrCIMDInvalidURL", clientID, err)
+		}
+	}
+
+	if err := f.validateURL("https://example.com/.well-known/client.json"); err != nil {
+		t.Errorf("a dot inside a segment was refused: %v", err)
+	}
+}
+
+// RFC 6890's blocks that are not globally reachable, beyond the categories
+// net.IP names: none of them is a host a client's metadata can live on.
+func TestCIMDRefusesSpecialUseAddresses(t *testing.T) {
+	spec.Satisfies(
+		t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/special-use-addresses-not-fetched",
+	)
+
+	f := &CIMDFetcher{}
+
+	for _, addr := range []string{
+		"0.1.2.3", "192.0.0.8", "192.0.2.1", "198.18.0.1", "198.51.100.1",
+		"203.0.113.1", "240.0.0.1", "255.255.255.255",
+		"100::1", "2001::1", "2001:2::1", "2001:db8::1",
+	} {
+		if err := f.checkIP(net.ParseIP(addr)); !errors.Is(err, ErrCIMDSSRFBlocked) {
+			t.Errorf("checkIP(%s) = %v, want ErrCIMDSSRFBlocked", addr, err)
+		}
+	}
+
+	for _, addr := range []string{"93.184.216.34", "2606:4700::1111"} {
+		if err := f.checkIP(net.ParseIP(addr)); err != nil {
+			t.Errorf("checkIP(%s) = %v, want a public address allowed", addr, err)
+		}
+	}
+}
+
+// HTTPS://host/client names the same resource after normalisation, and is
+// still not the client_id that was fetched.
+func TestCIMDComparesTheClientIDAsAString(t *testing.T) {
+	spec.Satisfies(
+		t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-id-urls-compared-as-strings",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/document-client-id-matches-the-fetched-url",
+	)
+
+	err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
+		serveMetadata("", validDocument(strings.Replace(id, "https://", "HTTPS://", 1)))(w, r)
+	})
+	if !errors.Is(err, ErrCIMDClientIDMismatch) {
+		t.Fatalf("err = %v, want ErrCIMDClientIDMismatch", err)
+	}
+}
+
+// A failure cached would refuse the client until it lapsed, and would let one
+// bad answer from its host stand in for every later one.
+func TestCIMDCachesNoFailedFetch(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/error-responses-not-cached",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/invalid-documents-not-cached",
+	)
+
+	for _, tc := range []struct {
+		name string
+		fail func(w http.ResponseWriter, r *http.Request)
+	}{
+		{
+			name: "an error response",
+			fail: func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			},
+		},
+		{
+			name: "an invalid document",
+			fail: func(w http.ResponseWriter, r *http.Request) {
+				serveMetadata("https://elsewhere.example/client", ClientMetadata{})(w, r)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				serverURL string
+				calls     atomic.Int32
+			)
+
+			srv := httptest.NewTLSServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if calls.Add(1) == 1 {
+						tc.fail(w, r)
+						return
+					}
+
+					serveMetadata("", validDocument(serverURL+"/client"))(w, r)
+				}),
+			)
+			t.Cleanup(srv.Close)
+			serverURL = srv.URL
+
+			f := &CIMDFetcher{Client: srv.Client(), AllowLoopback: true}
+
+			if _, err := f.Fetch(t.Context(), srv.URL+"/client"); err == nil {
+				t.Fatal("the first fetch succeeded; the case does not fail")
+			}
+
+			if _, err := f.Fetch(t.Context(), srv.URL+"/client"); err != nil {
+				t.Errorf("the second fetch was answered from the failure: %v", err)
+			}
+		})
+	}
+}
+
+// Pins a deferred requirement: the document is accepted, and nothing at the
+// token endpoint authenticates the client by the key it publishes.
+func TestCIMDAcceptsAPrivateKeyJWTDocument(t *testing.T) {
+	spec.Satisfies(
+		t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/private-key-jwt-client-is-authenticated",
+	)
+
+	err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
+		meta := validDocument(id)
+		meta.TokenEndpointAuthMethod = "private_key_jwt"
+		serveMetadata("", meta)(w, r)
+	})
+	if err != nil {
+		t.Fatalf("a private_key_jwt document was refused: %v", err)
+	}
+}
+
 func TestCIMDCacheEntryLapsesAtItsTTL(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-metadata-is-re-fetched",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/cache-headers-respected",
+	)
+
 	fetched := time.Unix(1_700_000_000, 0)
 	entry := cachedEntry{meta: &ClientMetadata{}, fetchedAt: fetched}
 

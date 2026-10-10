@@ -51,6 +51,21 @@ var cgnatBlock = func() *net.IPNet {
 	return n
 }()
 
+// specialUseBlocks are the RFC 6890 blocks not globally reachable that the
+// net.IP predicates in checkIP do not already name.
+var specialUseBlocks = func() []*net.IPNet {
+	var blocks []*net.IPNet
+	for _, cidr := range []string{
+		"0.0.0.0/8", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
+		"198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
+		"100::/64", "2001::/23", "2001:db8::/32",
+	} {
+		_, n, _ := net.ParseCIDR(cidr)
+		blocks = append(blocks, n)
+	}
+	return blocks
+}()
+
 // Sentinel errors for CIMD fetch failures. All are wrapped with %w so callers
 // can use errors.Is for fine-grained handling.
 var (
@@ -70,9 +85,9 @@ var (
 	// does not match the requested URL byte-for-byte.
 	ErrCIMDClientIDMismatch = errors.New("CIMD: client_id in document does not match requested URL")
 
-	// ErrCIMDSymmetricAuth is returned when the document advertises a symmetric
-	// token endpoint authentication method (client_secret_post or
-	// client_secret_basic) that Cetacean does not support.
+	// ErrCIMDSymmetricAuth is returned when the document advertises a token
+	// endpoint authentication method built on a shared secret, which Cetacean
+	// does not support.
 	ErrCIMDSymmetricAuth = errors.New("CIMD: symmetric token_endpoint_auth_method not supported")
 )
 
@@ -348,7 +363,16 @@ func (f *CIMDFetcher) validateURL(rawURL string) error {
 	if u.Path == "" || u.Path == "/" {
 		return fmt.Errorf("%w: URL must have a non-trivial path component", ErrCIMDInvalidURL)
 	}
+	if slices.ContainsFunc(strings.Split(u.Path, "/"), isDotSegment) {
+		return fmt.Errorf("%w: URL must not contain dot segments", ErrCIMDInvalidURL)
+	}
 	return nil
+}
+
+// isDotSegment reports whether a path segment is "." or "..". u.Path is
+// already decoded, so the percent-encoded spellings are refused too.
+func isDotSegment(segment string) bool {
+	return segment == "." || segment == ".."
 }
 
 // parseHTTPSURL parses rawURL and returns an error if the scheme is not https.
@@ -365,8 +389,8 @@ func parseHTTPSURL(rawURL string) (*url.URL, error) {
 
 // checkIP validates a single resolved IP against the SSRF block-list.
 // The block-list is exhaustive: loopback (unless AllowLoopback), private
-// (RFC 1918 + ULA), link-local (unicast + multicast), unspecified, and
-// multicast addresses are all rejected.
+// (RFC 1918 + ULA), link-local (unicast + multicast), unspecified, multicast
+// and the rest of RFC 6890's special-use blocks are all rejected.
 func (f *CIMDFetcher) checkIP(ip net.IP) error {
 	if ip.IsLoopback() && !f.AllowLoopback {
 		return fmt.Errorf("%w: resolved to loopback address %s", ErrCIMDSSRFBlocked, ip)
@@ -386,14 +410,22 @@ func (f *CIMDFetcher) checkIP(ip net.IP) error {
 	if ip.IsMulticast() {
 		return fmt.Errorf("%w: resolved to multicast address %s", ErrCIMDSSRFBlocked, ip)
 	}
+	if slices.ContainsFunc(specialUseBlocks, func(n *net.IPNet) bool { return n.Contains(ip) }) {
+		return fmt.Errorf("%w: resolved to special-use address %s", ErrCIMDSSRFBlocked, ip)
+	}
 	return nil
 }
 
 // isSymmetricAuthMethod reports whether the given token_endpoint_auth_method
-// is one of the symmetric methods (client_secret_post, client_secret_basic)
-// that Cetacean does not support.
+// is one of the registered methods built on a shared secret, which a client
+// that registers itself by URL has no way to establish.
 func isSymmetricAuthMethod(method string) bool {
-	return method == "client_secret_post" || method == "client_secret_basic"
+	switch method {
+	case "client_secret_post", "client_secret_basic", "client_secret_jwt":
+		return true
+	default:
+		return false
+	}
 }
 
 // cacheGet returns a cached metadata entry if one exists and is still fresh.
