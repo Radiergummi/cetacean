@@ -230,6 +230,15 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 			},
 			Description: swarm.NodeDescription{Hostname: "manager-1"},
 		})
+		c.SetNode(swarm.Node{
+			ID: "node2",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleWorker,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Description: swarm.NodeDescription{Hostname: "worker-1"},
+			Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		})
 
 		checker := NewClusterChecker(c)
 		recs := checker.Check(context.Background())
