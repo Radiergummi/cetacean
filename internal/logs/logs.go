@@ -105,28 +105,19 @@ func looksFramed(peek []byte) bool {
 	return len(peek) < 4 || peek[1] == 0 && peek[2] == 0 && peek[3] == 0
 }
 
-// readRawLines reads an unframed stream line by line, all of it stdout. As in
-// a frame, a continuation line inherits the identity of the line it continues.
+// readRawLines reads an unframed stream line by line, all of it stdout. Docker
+// stamps each line, so an unstamped one is its own error and inherits nothing.
 func readRawLines(r io.Reader, emit func(LogLine)) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), maxLogFrameSize)
 
-	var parent LogLine
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), "\r")
 		if line == "" {
 			continue
 		}
 
-		parsed := parseLine(line, "stdout")
-		if parsed.Timestamp == "" {
-			parsed.Timestamp = parent.Timestamp
-			parsed.Attrs = parent.Attrs
-		} else {
-			parent = parsed
-		}
-
-		emit(parsed)
+		emit(parseLine(line, "stdout"))
 	}
 
 	err := scanner.Err()
