@@ -4107,7 +4107,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service mount configuration
-      description: Replaces the mount configuration for the service. Requires operations level 2.
+      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4211,7 +4211,7 @@ paths:
       summary: Patch service container config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service container configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
