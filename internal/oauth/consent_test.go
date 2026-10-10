@@ -598,14 +598,20 @@ func TestConsentCookieIsScopedToTheOAuthPaths(t *testing.T) {
 	t.Fatalf("no %s cookie set (status %d)", csrfCookieName, rec.Code)
 }
 
-// The page adds frame-ancestors to the policy the router set, not replace it.
+// The page adds its own policy beside the one the router set: every policy
+// is enforced, so the global one keeps applying and nothing in it can loosen
+// frame-ancestors 'none'.
 func TestConsentHeadersKeepTheGlobalPolicy(t *testing.T) {
-	w := httptest.NewRecorder()
-	w.Header().Set("Content-Security-Policy", "default-src 'self'")
-	setConsentHeaders(w)
+	for _, global := range []string{"default-src 'self'", "default-src 'self'; frame-ancestors 'self'"} {
+		t.Run(global, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			w.Header().Set("Content-Security-Policy", global)
+			setConsentHeaders(w)
 
-	if got := w.Header().
-		Get("Content-Security-Policy"); got != "default-src 'self'; frame-ancestors 'none'" {
-		t.Errorf("Content-Security-Policy = %q", got)
+			got := w.Header().Values("Content-Security-Policy")
+			if !slices.Equal(got, []string{global, "frame-ancestors 'none'"}) {
+				t.Errorf("Content-Security-Policy = %q", got)
+			}
+		})
 	}
 }
