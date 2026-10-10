@@ -30,7 +30,7 @@ func fakeDaemon(t *testing.T, apiVersion string) *Client {
 
 	t.Cleanup(server.Close)
 
-	client, err := NewClient("tcp://" + strings.TrimPrefix(server.URL, "http://"))
+	client, err := NewClient("tcp://"+strings.TrimPrefix(server.URL, "http://"), TLS{})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCheckAPIVersionRefusesAnOldDaemon(t *testing.T) {
 // TestCheckAPIVersionToleratesAnAbsentDaemon pins the deliberate non-failure:
 // a socket not there yet is ordinary at startup, and the watcher retries.
 func TestCheckAPIVersionToleratesAnAbsentDaemon(t *testing.T) {
-	client, err := NewClient("tcp://127.0.0.1:1")
+	client, err := NewClient("tcp://127.0.0.1:1", TLS{})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

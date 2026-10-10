@@ -21,7 +21,12 @@
 # origins = []                              # Allowed CORS origins, or ["*"] for any
 
 [docker]
-# host = "unix:///var/run/docker.sock"      # Docker socket URI
+# host = "unix:///var/run/docker.sock"      # unix:// socket or tcp://host:port
+
+# [docker.tls]
+# ca = ""                                   # CA bundle path (PEM); unset = system roots
+# cert = ""                                 # Client certificate path (PEM)
+# key = ""                                  # Client private key path (PEM)
 
 [prometheus]
 # url = ""                                  # Prometheus base URL (unset = metrics disabled)
