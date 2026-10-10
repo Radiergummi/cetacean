@@ -33,6 +33,7 @@ import { IntegrationPanels } from "../components/service-detail/IntegrationPanel
 import { ServiceStatusCard } from "../components/service-detail/ServiceStatusCard";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
+import { useEditVersion } from "../hooks/useEditVersion";
 import { useServiceDetail } from "../hooks/useServiceDetail";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { stackNamespaceLabel } from "../lib/parseStackLabels";
@@ -42,6 +43,7 @@ import { useParams } from "react-router-dom";
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
   const detail = useServiceDetail(id);
+  const labelsVersion = useEditVersion(`/services/${id}/labels`);
 
   if (detail.error) {
     return <FetchError message="Failed to load service" />;
@@ -238,8 +240,9 @@ export default function ServiceDetail() {
           editDisabled={!detail.canPatch}
           isKeyReadOnly={isReservedLabelKey}
           validateKey={validateLabelKey}
+          onEditStart={labelsVersion.capture}
           onSave={async (ops) => {
-            const updated = await api.patchServiceLabels(id!, ops);
+            const updated = await api.patchServiceLabels(id!, ops, await labelsVersion.ifMatch());
             detail.onLabelsSaved(updated);
             return updated;
           }}

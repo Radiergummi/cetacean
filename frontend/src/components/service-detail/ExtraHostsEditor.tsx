@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -57,9 +58,11 @@ export function ExtraHostsEditor({
   onSaved: (updated: ContainerConfig) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/container-config`);
   const [rows, setRows] = useState<HostRow[]>([]);
 
   function resetForm() {
+    version.capture();
     const parsed = parseHosts(config.hosts);
     setRows(parsed.length > 0 ? parsed : [{ ip: "", hostname: "" }]);
   }
@@ -86,9 +89,13 @@ export function ExtraHostsEditor({
       .filter(({ ip, hostname }) => ip.trim() && hostname.trim())
       .map(({ ip, hostname }) => `${ip.trim()} ${hostname.trim()}`);
 
-    const updated = await api.patchServiceContainerConfig(serviceId, {
-      hosts: hostEntries.length > 0 ? hostEntries : null,
-    });
+    const updated = await api.patchServiceContainerConfig(
+      serviceId,
+      {
+        hosts: hostEntries.length > 0 ? hostEntries : null,
+      },
+      await version.ifMatch(),
+    );
     onSaved(updated);
   }
 

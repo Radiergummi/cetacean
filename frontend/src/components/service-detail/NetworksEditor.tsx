@@ -5,6 +5,7 @@ import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -22,6 +23,7 @@ export function NetworksEditor({
   onSaved,
   canEdit = false,
 }: NetworksEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/networks`);
   const [availableNetworks, setAvailableNetworks] = useState<ComboboxOption[]>([]);
   const [newNetworkId, setNewNetworkId] = useState("");
   const [newAliases, setNewAliases] = useState<string[]>([]);
@@ -64,7 +66,10 @@ export function NetworksEditor({
       columns={["Network", "Aliases"]}
       defaultOpen={networks.length > 0}
       editDisabled={!canEdit}
-      onEditStart={fetchNetworks}
+      onEditStart={() => {
+        version.capture();
+        fetchNetworks();
+      }}
       emptyLabel="No networks attached"
       emptyHint="Click Edit to attach Docker networks to this service."
       keyFn={({ target }) => target}
@@ -141,7 +146,7 @@ export function NetworksEditor({
         setNewAliases([]);
       }}
       onSave={async (items) => {
-        const result = await api.patchServiceNetworks(serviceId, items);
+        const result = await api.patchServiceNetworks(serviceId, items, await version.ifMatch());
         onSaved(result.networks);
       }}
     />

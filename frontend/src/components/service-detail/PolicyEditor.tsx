@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { UpdateConfig } from "@/api/types";
 import { NumberField } from "@/components/ui/number-field";
 import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { formatDuration, formatPercentage, nanosToSeconds } from "@/lib/format";
 import { useState } from "react";
 
@@ -51,6 +52,7 @@ export function PolicyEditor({
   onSaved,
   canEdit = false,
 }: PolicyEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/${type}-policy`);
   const [form, setForm] = useState<FormState>(policyToForm(null));
 
   const patchFunction =
@@ -89,6 +91,7 @@ export function PolicyEditor({
         ];
 
   function resetForm() {
+    version.capture();
     setForm(policyToForm(policy));
   }
 
@@ -102,7 +105,7 @@ export function PolicyEditor({
       Order: form.order,
     };
 
-    await patchFunction(serviceId, patch as UpdateConfig);
+    await patchFunction(serviceId, patch as UpdateConfig, await version.ifMatch());
     onSaved();
   }
 

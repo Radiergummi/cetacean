@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, currentETag } from "./client";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockFetch = vi.fn<(...args: unknown[]) => unknown>();
@@ -222,5 +222,45 @@ describe("api client", () => {
   it("builds task logs stream URL without params", () => {
     const url = api.taskLogsStreamURL("t1");
     expect(url).toBe("/tasks/t1/logs");
+  });
+});
+
+describe("preconditions", () => {
+  it("reads the current ETag of a path", async () => {
+    mockFetch.mockReturnValue(
+      Promise.resolve({ ok: true, status: 200, headers: new Headers({ ETag: '"abc"' }) }),
+    );
+
+    expect(await currentETag("/services/svc1/resources")).toBe('"abc"');
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/services/svc1/resources",
+      expect.objectContaining({ method: "HEAD" }),
+    );
+  });
+
+  it("sends If-Match on a write when given one", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ resources: {} }));
+
+    await api.patchServiceResources("svc1", { Limits: {} }, '"abc"');
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get("If-Match")).toBe('"abc"');
+  });
+
+  it("sends no If-Match when there is none", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ resources: {} }));
+
+    await api.patchServiceResources("svc1", { Limits: {} });
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).has("If-Match")).toBe(false);
+  });
+
+  it("says to reload when the resource changed since it was read", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({ title: "Precondition Failed", detail: "the ETag does not match" }, 412),
+    );
+
+    await expect(api.patchServiceResources("svc1", {}, '"old"')).rejects.toThrow(/reload/i);
   });
 });

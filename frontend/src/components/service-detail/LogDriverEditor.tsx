@@ -5,6 +5,7 @@ import type { LogDriver } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -38,10 +39,12 @@ export function LogDriverEditor({
   onSaved,
   canEdit = false,
 }: LogDriverEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/log-driver`);
   const [driverName, setDriverName] = useState("");
   const [options, setOptions] = useState<[string, string][]>([]);
 
   function resetForm() {
+    version.capture();
     setDriverName(logDriver?.Name ?? "");
     setOptions(logDriver?.Options ? Object.entries(logDriver.Options) : []);
   }
@@ -70,10 +73,14 @@ export function LogDriverEditor({
       }
     }
 
-    await api.patchServiceLogDriver(serviceId, {
-      Name: driverName,
-      Options: Object.keys(optionsMap).length > 0 ? optionsMap : undefined,
-    });
+    await api.patchServiceLogDriver(
+      serviceId,
+      {
+        Name: driverName,
+        Options: Object.keys(optionsMap).length > 0 ? optionsMap : undefined,
+      },
+      await version.ifMatch(),
+    );
 
     onSaved();
   }

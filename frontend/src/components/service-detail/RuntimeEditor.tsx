@@ -5,6 +5,7 @@ import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { formatDuration } from "@/lib/format";
 import { renderSwarmTemplate } from "@/lib/swarmTemplates";
 import { useCallback, useState } from "react";
@@ -52,6 +53,7 @@ export function RuntimeEditor({
   onSaved: (updated: ContainerConfig) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/container-config`);
   const [hostnameInput, setHostnameInput] = useState("");
   const [initValue, setInitValue] = useState<boolean | undefined>(undefined);
   const [ttyInput, setTtyInput] = useState(false);
@@ -60,6 +62,7 @@ export function RuntimeEditor({
   const [gracePeriodInput, setGracePeriodInput] = useState("");
 
   function resetForm() {
+    version.capture();
     setHostnameInput(config.hostname);
     setInitValue(config.init ?? undefined);
     setTtyInput(config.tty);
@@ -88,7 +91,11 @@ export function RuntimeEditor({
       patch.stopGracePeriod = null;
     }
 
-    const updated = await api.patchServiceContainerConfig(serviceId, patch);
+    const updated = await api.patchServiceContainerConfig(
+      serviceId,
+      patch,
+      await version.ifMatch(),
+    );
     onSaved(updated);
   }
 

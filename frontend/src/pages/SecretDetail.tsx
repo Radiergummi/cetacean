@@ -43,7 +43,7 @@ export default function SecretDetail() {
       history={history}
       allowedMethods={allowedMethods}
       onRemove={() => api.removeSecret(secret.ID)}
-      onPatchLabels={(ops) => api.patchSecretLabels(secret.ID, ops)}
+      onPatchLabels={(ops, ifMatch) => api.patchSecretLabels(secret.ID, ops, ifMatch)}
     />
   );
 }
