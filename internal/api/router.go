@@ -213,7 +213,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			func(s swarm.Service) string { return s.Spec.Name },
 		),
 	)
-	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, nodeHostnameOrID))
+	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, cluster.NodeACLName))
 	taskACL := h.requireWriteACL(h.taskServiceResource)
 	stackACL := h.requireWriteACL(pathResource("stack", "name"))
 	cfgACL := h.requireWriteACL(
