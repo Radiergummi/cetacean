@@ -330,8 +330,8 @@ func TestMCPConformanceProtocolVersionHeader(t *testing.T) {
 
 	// Both directions, because they are different code paths: a version
 	// sorting after ours is "modern" to mcp-go, which would answer it with
-	// every revision the SDK knows rather than the one this server serves.
-	for _, version := range []string{"2025-11-25", "2027-01-01", "v999.0.0"} {
+	// every revision the SDK knows rather than the ones this server serves.
+	for _, version := range []string{"2025-06-18", "2027-01-01", "v999.0.0"} {
 		t.Run("unsupported "+version+" names what is supported", func(t *testing.T) {
 			got := call(t, proc, conformanceRequest{
 				Method:  "tools/list",
@@ -345,8 +345,9 @@ func TestMCPConformanceProtocolVersionHeader(t *testing.T) {
 			got.refused(t, "unsupported version", http.StatusBadRequest, -32022)
 
 			supported, _ := got.Body.Error.Data["supported"].([]any)
-			if len(supported) != 1 || supported[0] != conformanceVersion {
-				t.Errorf("supported = %v, want [%s]", supported, conformanceVersion)
+			if len(supported) != 2 || supported[0] != conformanceVersion ||
+				supported[1] != "2025-11-25" {
+				t.Errorf("supported = %v, want [%s 2025-11-25]", supported, conformanceVersion)
 			}
 		})
 	}

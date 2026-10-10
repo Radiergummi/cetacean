@@ -100,6 +100,10 @@ Each of these looks like a simplification and is not.
   goroutine runs after the HTTP response is written, past the API's own recovery
   middleware, so the server option that installs recovery is the only thing
   between a panic in a mutation and a dead process.
+- **A 2025-11-25 request runs on mcp-go's session path with an empty session
+  ID**, which every legacy caller shares. Anything mcp-go scopes by session —
+  `tasks/list`, say — is scoped to nobody, so the protocol gate refuses it.
+  `WithStateful(false)` is not stateless: it still mints session IDs.
 - **mcp-go only cleans up a task when the client supplied a TTL**, so a hook
   fills one in; without it every mutation leaks a result for the process
   lifetime.
