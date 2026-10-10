@@ -290,6 +290,9 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "Failed to open the log stream from the Docker Engine.",
 		Suggestion:  "Check that the service or task still exists and the Docker Engine is reachable.",
 	},
+	"LOG009": {Code: "LOG009", Title: "Too Many Log Reads", Status: http.StatusTooManyRequests,
+		Description: "The maximum number of concurrent log reads has been reached.",
+		Suggestion:  "Retry after the time the Retry-After header names."},
 
 	// ── SSE: SSE connections ──────────────────────────────────────────
 	"SSE001": {

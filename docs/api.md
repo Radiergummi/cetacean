@@ -470,6 +470,8 @@ curl -X PUT http://localhost:9000/services/abc123/scale \
 | `respond-async, wait=10` | waits up to 10 seconds, then `202` with `Location` |
 | `return=minimal, wait=30` | waits, then `204`; `Preference-Applied` names both preferences |
 
+At most 32 writes wait at once. Past that, a `wait` is answered as `respond-async` would be, with a `Retry-After`.
+
 A `200` from an honored wait describes the service as it settled, read back after convergence—not the snapshot Docker
 returned when it accepted the write, whose `UpdateStatus` is still mid-rollout and whose `Version` a follow-up write
 would collide on.
@@ -615,7 +617,7 @@ carries no `resource`.
 
 ## Connection limits
 
-There's no general rate limiting. Concurrent streams are capped, and a request over the cap returns
+There's no general rate limiting. Concurrent streams and log reads are capped, and a request over the cap returns
 `429 Too Many Requests` with a `Retry-After` of 5 to 14 seconds. The value steps between refusals, so clients
 turned away together aren't told to come back together; none is told less than 5.
 
@@ -623,6 +625,7 @@ turned away together aren't told to come back together; none is told less than 5
 |--------------------------------------------------------|-------|----------|
 | SSE event clients (`/events` and per-resource streams) | 256   | `SSE001` |
 | Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
+| Log reads (the same paths as JSON)                     | 32    | `LOG009` |
 | Metrics streams (`/metrics` as SSE)                    | 64    | `MTR005` |
 
 ## Endpoints

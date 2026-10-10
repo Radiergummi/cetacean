@@ -2839,7 +2839,8 @@ paths:
         JSON (default): returns paginated log lines.
         SSE (`Accept: text/event-stream`): streams log lines in real time.
 
-        SSE streams have a 128-connection limit (returns 429 when exceeded).
+        SSE streams have a 128-connection limit (`LOG001`) and JSON reads a
+        32-read limit (`LOG009`); past either, the request returns 429.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/logLimit"
@@ -4543,7 +4544,8 @@ paths:
         JSON (default): returns paginated log lines.
         SSE (`Accept: text/event-stream`): streams log lines in real time.
 
-        SSE streams have a 128-connection limit (returns 429 when exceeded).
+        SSE streams have a 128-connection limit (`LOG001`) and JSON reads a
+        32-read limit (`LOG009`); past either, the request returns 429.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/logLimit"
@@ -5956,8 +5958,9 @@ components:
         the change, up to a server ceiling of 300 seconds; the response then
         carries `Preference-Applied: wait=<seconds>` reporting the wait
         actually applied. A wait that runs out answers 202 with the last
-        progress line and no `Preference-Applied`. `respond-async` answers 202
-        immediately. Omitting the header leaves the endpoint's behaviour
+        progress line and no `Preference-Applied`. Past 32 concurrent waits, a
+        wait answers 202 at once with a `Retry-After`. `respond-async` answers
+        202 immediately. Omitting the header leaves the endpoint's behaviour
         unchanged. The unrelated `return=minimal` preference is honoured on
         every write endpoint, this one included, and is not documented per
         endpoint.
@@ -6099,10 +6102,18 @@ components:
     ServiceAccepted:
       description: >
         Accepted: Docker took the change, but the cluster has not settled on
-        it. Returned when `Prefer: respond-async` was sent, or when a
-        `Prefer: wait` ran out before the service converged. Poll or stream
-        the `Location` URL to follow the rollout.
+        it. Returned when `Prefer: respond-async` was sent, when a
+        `Prefer: wait` ran out before the service converged, or when the
+        server already holds 32 waits. Poll or stream the `Location` URL to
+        follow the rollout.
       headers:
+        Retry-After:
+          description: >
+            Seconds to wait before polling `Location`. Sent only on a wait
+            refused because the server already holds 32.
+          schema:
+            type: integer
+            example: 5
         Location:
           description: The service to read convergence from
           schema:
@@ -6336,6 +6347,16 @@ components:
                 title: Too Many Log Streams
                 status: 429
                 detail: "server is at the 128-client log-stream limit"
+                instance: /services/r8m2x5nk3p7q/logs
+                requestId: req_a1b2c3d4e5f6
+            logReadLimit:
+              summary: Log read limit (LOG009)
+              value:
+                "@context": /api/context.jsonld
+                type: /api/errors/LOG009
+                title: Too Many Log Reads
+                status: 429
+                detail: "too many log reads in flight"
                 instance: /services/r8m2x5nk3p7q/logs
                 requestId: req_a1b2c3d4e5f6
 
