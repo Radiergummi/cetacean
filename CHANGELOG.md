@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - A Client ID Metadata Document is refused when its URL has `.` or `..` path segments, it declares `client_secret_jwt`, or its host resolves to a special-use address
+- **Breaking:** fetching a Client ID Metadata Document no longer follows redirects, and a document declaring any `token_endpoint_auth_method` other than `none` is refused instead of treated as a public client, as the draft requires
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

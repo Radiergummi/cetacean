@@ -539,29 +539,21 @@ func TestCIMDAcceptsADocumentExactlyAtTheSizeCap(t *testing.T) {
 	}
 }
 
-// Counted as net/http counts its own limit: the request that would follow
-// the cimdMaxRedirects-th redirect is refused.
-func TestCIMDRedirectLimit(t *testing.T) {
+func TestCIMDDoesNotFollowRedirects(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/draft-ietf-oauth-client-id-metadata-document/redirects-not-followed",
 	)
 
-	for hops, wantErr := range map[int]bool{cimdMaxRedirects - 1: false, cimdMaxRedirects: true} {
-		err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
-			var n int
-			_, _ = fmt.Sscanf(r.URL.Query().Get("n"), "%d", &n)
-
-			if n < hops {
-				http.Redirect(w, r, fmt.Sprintf("/client?n=%d", n+1), http.StatusFound)
-				return
-			}
-
-			serveMetadata("", validDocument(id))(w, r)
-		})
-
-		if (err != nil) != wantErr {
-			t.Errorf("%d redirects: err = %v, want refused=%v", hops, err, wantErr)
+	err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("moved") == "" {
+			http.Redirect(w, r, "/client?moved=1", http.StatusFound)
+			return
 		}
+
+		serveMetadata("", validDocument(id))(w, r)
+	})
+	if err == nil {
+		t.Fatal("a redirect to a valid document was followed")
 	}
 }
 
@@ -690,21 +682,34 @@ func TestCIMDCachesNoFailedFetch(t *testing.T) {
 	}
 }
 
-// Pins a deferred requirement: the document is accepted, and nothing at the
-// token endpoint authenticates the client by the key it publishes.
-func TestCIMDAcceptsAPrivateKeyJWTDocument(t *testing.T) {
+// Nothing at the token endpoint authenticates a client, so a document that
+// asks to be authenticated is refused rather than treated as public.
+func TestCIMDRefusesAuthenticatedClientDocuments(t *testing.T) {
 	spec.Satisfies(
 		t,
 		"oauth/draft-ietf-oauth-client-id-metadata-document/private-key-jwt-client-is-authenticated",
 	)
 
-	err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
-		meta := validDocument(id)
-		meta.TokenEndpointAuthMethod = "private_key_jwt"
-		serveMetadata("", meta)(w, r)
-	})
-	if err != nil {
-		t.Fatalf("a private_key_jwt document was refused: %v", err)
+	for _, method := range []string{"private_key_jwt", "tls_client_auth"} {
+		err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
+			meta := validDocument(id)
+			meta.TokenEndpointAuthMethod = method
+			serveMetadata("", meta)(w, r)
+		})
+		if !errors.Is(err, ErrCIMDUnsupportedAuth) {
+			t.Errorf("%s: err = %v, want ErrCIMDUnsupportedAuth", method, err)
+		}
+	}
+
+	for _, method := range []string{"", "none"} {
+		err := fetchServed(t, func(id string, w http.ResponseWriter, r *http.Request) {
+			meta := validDocument(id)
+			meta.TokenEndpointAuthMethod = method
+			serveMetadata("", meta)(w, r)
+		})
+		if err != nil {
+			t.Errorf("%q: a public client document was refused: %v", method, err)
+		}
 	}
 }
 

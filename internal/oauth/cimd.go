@@ -33,10 +33,6 @@ const cimdCacheTTL = time.Hour
 // DCRMaxClients for the same reason; this is CIMD's.
 const cimdCacheMaxEntries = 512
 
-// cimdMaxRedirects is the maximum number of redirects the fetcher will follow.
-// Lower than the net/http default of 10 to bound per-fetch work.
-const cimdMaxRedirects = 5
-
 // cimdMaxBodyBytes is the hard cap on the response body (5 KiB).
 const cimdMaxBodyBytes = 5 * 1024
 
@@ -89,6 +85,12 @@ var (
 	// endpoint authentication method built on a shared secret, which Cetacean
 	// does not support.
 	ErrCIMDSymmetricAuth = errors.New("CIMD: symmetric token_endpoint_auth_method not supported")
+
+	// ErrCIMDUnsupportedAuth is returned when the document asks to be
+	// authenticated at the token endpoint, which authenticates no client.
+	ErrCIMDUnsupportedAuth = errors.New("CIMD: token_endpoint_auth_method not supported")
+
+	errCIMDRedirect = errors.New("CIMD: redirects are not followed")
 )
 
 // ClientMetadata holds the fields from an OAuth Client ID Metadata Document
@@ -145,7 +147,7 @@ type CIMDFetcher struct {
 // httpClient returns an HTTP client suitable for fetching CIMD documents. Its
 // DialContext resolves the host, screens the IP and connects to that exact
 // address in one step, so a DNS-rebinding attacker cannot answer the
-// validation lookup and the connect differently. CheckRedirect re-validates.
+// validation lookup and the connect differently. Redirects are never followed.
 func (f *CIMDFetcher) httpClient() *http.Client {
 	f.clientOnce.Do(func() {
 		var c http.Client
@@ -162,11 +164,8 @@ func (f *CIMDFetcher) httpClient() *http.Client {
 				Transport: f.ssrfTransport(nil),
 			}
 		}
-		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if len(via) >= cimdMaxRedirects {
-				return fmt.Errorf("CIMD: exceeded %d redirects", cimdMaxRedirects)
-			}
-			return f.validateURL(req.URL.String())
+		c.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return errCIMDRedirect
 		}
 		f.cachedHTTP = &c
 	})
@@ -268,8 +267,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	req.Header.Set("Accept", "application/json")
 
 	// Steps 5–6: execute. SSRF block-list enforcement happens inside the
-	// transport's DialContext; redirects re-run URL-structure validation in
-	// CheckRedirect and then dial through the same SSRF-aware path.
+	// transport's DialContext; a redirect fails the fetch.
 	resp, err := f.httpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("CIMD fetch: HTTP request: %w", err)
@@ -317,6 +315,9 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	// Step 12: reject symmetric token endpoint auth methods.
 	if isSymmetricAuthMethod(meta.TokenEndpointAuthMethod) {
 		return nil, fmt.Errorf("%w: %q", ErrCIMDSymmetricAuth, meta.TokenEndpointAuthMethod)
+	}
+	if m := meta.TokenEndpointAuthMethod; m != "" && m != "none" {
+		return nil, fmt.Errorf("%w: %q", ErrCIMDUnsupportedAuth, m)
 	}
 
 	// Step 13: validate redirect_uris. Reuse the DCR validator so CIMD and
