@@ -43,7 +43,7 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 
 	if resp.StatusCode != http.StatusOK {
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("prometheus returned HTTP %d: %s", resp.StatusCode, string(preview))
+		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, preview))
 	}
 
 	var body struct {
@@ -164,7 +164,7 @@ func (pc *Client) RangeQueryRaw(
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
+		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, body))
 	}
 	return body, nil
 }
@@ -185,7 +185,7 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
+		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, body))
 	}
 	return body, nil
 }
@@ -193,7 +193,9 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 // unreachable reports a failed request without its URL, which names the
 // internal Prometheus address; callers relay this error to clients.
 func unreachable(err error) error {
-	slog.Warn("prometheus request failed", "error", err)
+	if !errors.Is(err, context.Canceled) {
+		slog.Warn("prometheus request failed", "error", err)
+	}
 
 	return errors.New("prometheus unreachable")
 }
