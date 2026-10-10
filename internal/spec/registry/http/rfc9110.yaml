@@ -304,8 +304,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-14.2
     mutants:
       - file: internal/api/pagination.go
-        replace: "\tspec, ok := strings.CutPrefix(header, \"items \")\n\tif !ok {"
-        with: "\tspec, ok := strings.CutPrefix(header, \"items \")\n\tif spec, ok = strings.TrimPrefix(header, \"bytes \"), true; !ok {"
+        replace: "len(header) < len(unit) || !strings.EqualFold(header[:len(unit)], unit) {"
+        with: "len(header) < len(unit) {"
 
   - id: an-invalid-ranges-specifier-may-be-refused
     level: MAY
