@@ -51,6 +51,10 @@ func TestCheckMounts(t *testing.T) {
 		}},
 	}
 	optionless := mount.Mount{Type: mount.TypeBind, Source: "/srv/logs", Target: "/logs"}
+	spelled := func(m mount.Mount, t mount.Type) []mount.Mount {
+		m.Type = t
+		return []mount.Mount{m}
+	}
 
 	cases := []struct {
 		name    string
@@ -77,6 +81,16 @@ func TestCheckMounts(t *testing.T) {
 		},
 		{"volume with a driver at tier 3", []mount.Mount{boundVolume}, config.OpsImpactful, false},
 		{"bind sent without options", []mount.Mount{optionless}, config.OpsConfiguration, false},
+		{"untyped mount at tier 2", spelled(socket, ""), config.OpsConfiguration, true},
+		{"uppercase bind at tier 2", spelled(socket, "BIND"), config.OpsConfiguration, true},
+		{"capitalised bind at tier 2", spelled(socket, "Bind"), config.OpsConfiguration, true},
+		{"uppercase pipe at tier 2", spelled(pipe, "NPIPE"), config.OpsConfiguration, true},
+		{
+			"uppercase volume at tier 2",
+			spelled(boundVolume, "VOLUME"),
+			config.OpsConfiguration,
+			true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
