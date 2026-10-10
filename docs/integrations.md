@@ -39,6 +39,9 @@ when the service allows `PATCH`, which requires [operations level][operations-le
 on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
 service label.
 
+The structured Traefik editor changes only the labels its fields show. Labels it doesn't model, such as TCP
+routers or `tls.options`, are kept when you save it.
+
 ## API
 
 Detected integrations appear as an `integrations` array on `GET /services/{id}`, omitted when nothing was detected.

@@ -252,3 +252,26 @@ func TestDetectTraefik_RouterWithoutService(t *testing.T) {
 		t.Errorf("expected 0 services, got %d", len(result.Services))
 	}
 }
+
+// The index comes from a label anyone with service write can set, and the
+// parser runs on every detail read, so it must not size an allocation.
+func TestDetectTraefik_TLSDomainIndexIsBounded(t *testing.T) {
+	labels := map[string]string{
+		"traefik.http.routers.web.rule":                       "Host(`a.example`)",
+		"traefik.http.routers.web.tls.domains[0].main":        "a.example",
+		"traefik.http.routers.web.tls.domains[10000000].main": "huge.example",
+	}
+
+	result := detectTraefik(labels)
+
+	if result == nil || len(result.Routers) != 1 {
+		t.Fatalf("got %+v, want one router", result)
+	}
+	r := result.Routers[0]
+	if r.TLS == nil {
+		t.Fatal("router has no TLS config")
+	}
+	if len(r.TLS.Domains) != 1 {
+		t.Fatalf("parsed %d domains, want only the in-range one", len(r.TLS.Domains))
+	}
+}
