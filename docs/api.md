@@ -734,6 +734,11 @@ current representation can't be read at all—`DELETE /plugins/{name}` inspects 
 than the cache—the write answers `503` (`ENG001`) or `500` (`ENG004`) instead, so an unreachable
 daemon isn't reported as a stale `ETag`.
 
+On an update to a service, node, config or secret, the check and the write are one step: the write
+names the version the check validated, and Docker refuses it, again with `412`, if anything changed
+in between. Docker's removals take no version, so a `DELETE` is checked just before it runs, and a
+change in that instant goes unnoticed.
+
 29 endpoints support it: `PATCH /services/{id}/env`, `PATCH /services/{id}/labels`,
 `PATCH /services/{id}/resources`, `PUT`/`PATCH /services/{id}/healthcheck`,
 `PUT /services/{id}/placement`, `PATCH /services/{id}/ports`,

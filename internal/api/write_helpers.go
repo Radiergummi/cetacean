@@ -148,13 +148,19 @@ func writeDockerError(
 const sequenceConflict = "update out of sequence"
 
 // writeResourceError handles Docker API errors for resource mutations,
-// mapping version conflicts to the given conflictCode.
+// mapping version conflicts to the given conflictCode, or to 412 when the
+// version was the one an If-Match precondition validated.
 func writeResourceError(
 	w http.ResponseWriter,
 	r *http.Request,
 	err error,
 	resource, id, conflictCode string,
 ) {
+	if preconditioned(r.Context()) && strings.Contains(err.Error(), sequenceConflict) {
+		writeErrorCode(w, r, "API013",
+			"If-Match did not match the current state of the resource")
+		return
+	}
 	if cerrdefs.IsConflict(err) ||
 		cerrdefs.IsFailedPrecondition(err) ||
 		strings.Contains(err.Error(), sequenceConflict) {
