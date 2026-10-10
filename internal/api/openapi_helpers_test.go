@@ -47,6 +47,11 @@ func loadTestSpec(t *testing.T) ([]byte, *openapi3.T, routers.Router) {
 		)
 
 		openapi3filter.RegisterBodyDecoder(
+			"application/feed+json",
+			openapi3filter.RegisteredBodyDecoder("application/json"),
+		)
+
+		openapi3filter.RegisterBodyDecoder(
 			openSearchMediaType,
 			openapi3filter.RegisteredBodyDecoder("text/plain"),
 		)
