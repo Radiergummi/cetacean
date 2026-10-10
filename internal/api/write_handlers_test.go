@@ -4732,6 +4732,18 @@ func TestHostAccessWritesRequireImpactfulLevel(t *testing.T) {
 			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts },
 		},
 		{
+			name:    "untyped bind mount",
+			path:    "/services/svc1/mounts",
+			body:    `{"mounts":[{"Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}]}`,
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts },
+		},
+		{
+			name:    "uppercase bind mount",
+			path:    "/services/svc1/mounts",
+			body:    `{"mounts":[{"Type":"BIND","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}]}`,
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts },
+		},
+		{
 			name:    "capability",
 			path:    "/services/svc1/container-config",
 			body:    `{"capabilityAdd":["SYS_ADMIN"]}`,

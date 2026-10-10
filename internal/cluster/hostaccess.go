@@ -3,6 +3,7 @@ package cluster
 import (
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
@@ -49,9 +50,11 @@ func CheckMounts(svc swarm.Service, requested []mount.Mount, level config.Operat
 	return nil
 }
 
+// reachesHost reads the type as Docker does: case-insensitively, with an empty
+// type meaning a bind.
 func reachesHost(m mount.Mount) bool {
-	switch m.Type {
-	case mount.TypeBind, mount.TypeNamedPipe:
+	switch mount.Type(strings.ToLower(string(m.Type))) {
+	case "", mount.TypeBind, mount.TypeNamedPipe:
 		return true
 	case mount.TypeVolume:
 		return m.VolumeOptions != nil && m.VolumeOptions.DriverConfig != nil
