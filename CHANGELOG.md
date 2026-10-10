@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** the OAuth authorization server is opt-in—set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
 - **Breaking:** a setting the schema doesn't know refuses startup and is named, rather than being ignored—a config file still carrying `[mcp.oauth]` won't start
+- **Breaking:** an unknown `CETACEAN_*` variable, a boolean other than `true`, `false`, `1` or `0`, or an unknown `logging.level` or `logging.format` refuses startup. Check your environment for typos before upgrading
 - **Breaking:** `auth.headers.trusted_proxies` is gone—use `server.trusted_proxies`, which headers mode already required
 - **Breaking:** `mcp.oauth.auth_bypass` is now `mcp.auth_bypass`, and accepts only `cert`, `headers`, and `tailscale`—a listed mode authenticates `/mcp` on its own, so `oauth.enabled` can stay off
 - **Breaking:** `/mcp`'s protected resource metadata moved to `/.well-known/oauth-protected-resource/mcp`, so one document describes one resource. A client following `resource_metadata` from the 401 is unaffected; one that hardcoded the root path isn't

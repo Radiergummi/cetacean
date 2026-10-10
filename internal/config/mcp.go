@@ -144,8 +144,13 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
+	enabled, err := resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
 	return MCPConfig{
-		Enabled:            resolveBool(nil, "CETACEAN_MCP", fEnabled, def.Enabled),
+		Enabled:            enabled,
 		OperationsLevel:    opsLevel,
 		MaxConcurrentTasks: maxConcurrentTasks,
 		TaskTTL:            taskTTL,
