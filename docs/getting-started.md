@@ -111,6 +111,23 @@ Independently of who is signed in, [`server.operations_level`][server.operations
 change at all. It's `0`—read-only—until you raise it, so a deployment that writes anything says so on
 purpose. Set it to `1` for operational writes (scale, update image, roll back, restart).
 
+## Outbound connections
+
+Cetacean sends no telemetry, and the dashboard loads nothing from a third party: its content security policy
+allows its own origin only. The server opens these connections, and no others:
+
+| To                                                                                       | When                                                                                                                                                                                       |
+|------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| The Docker daemon at [`docker.host`][docker.host]                                        | Always                                                                                                                                                                                     |
+| `api.github.com`, for the latest Docker Engine release                                   | When a node's page opens, or anyone requests `/-/docker-latest-version`, which needs no credentials. The answer is cached for an hour. No setting turns this off; blocked, the node page shows no update hint |
+| Prometheus at [`prometheus.url`][prometheus.url]                                         | When set                                                                                                                                                                                   |
+| The OIDC issuer, for discovery, signing keys, and the code exchange                       | With [`auth.mode`][auth.mode] `oidc`                                                                                                                                                       |
+| Tailscale's coordination server and relays, and `log.tailscale.com`                      | With [`auth.tailscale.mode`][auth.tailscale.mode] `tsnet`. The embedded node uploads its own diagnostic logs unless Cetacean's environment sets `TS_NO_LOGS_NO_SUPPORT=true`               |
+| The `https://` URL an MCP client names as its client ID                                  | With [`oauth.enabled`][oauth.enabled] and [`oauth.cimd_enabled`][oauth.cimd_enabled], when a client signs in that way. Private and loopback addresses are refused                         |
+| The OpenTelemetry collector at [`tracing.endpoint`][tracing.endpoint]                    | When set, with [`mcp.enabled`][mcp.enabled]                                                                                                                                                |
+
+In `local` Tailscale mode, Cetacean talks only to the host's Tailscale daemon, which makes its own connections.
+
 ## When something is wrong
 
 | Symptom                                                            | What it means                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -139,15 +156,22 @@ purpose. Set it to `1` for operational writes (scale, update image, roll back, r
 [api.ready]: api/explorer#tag/meta/GET/-/ready
 [api.metrics]: api/explorer#tag/monitoring/GET/metrics/status
 [auth.mode]: configuration#auth.mode
+[auth.tailscale.mode]: configuration#auth.tailscale.mode
 [authentication]: authentication
 [authorization]: authorization
 [configuration]: configuration
 [dashboard]: dashboard
+[docker.host]: configuration#docker.host
 [mcp]: mcp
+[mcp.enabled]: configuration#mcp.enabled
 [monitoring]: monitoring
+[oauth.cimd_enabled]: configuration#oauth.cimd_enabled
+[oauth.enabled]: configuration#oauth.enabled
+[prometheus.url]: configuration#prometheus.url
 [recommendations]: recommendations
 [server.base_path]: configuration#server.base_path
 [server.listen_addr]: configuration#server.listen_addr
 [server.operations_level]: configuration#server.operations_level
 [tls.cert]: configuration#tls.cert
 [tls.key]: configuration#tls.key
+[tracing.endpoint]: configuration#tracing.endpoint

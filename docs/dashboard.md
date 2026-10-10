@@ -106,6 +106,24 @@ restart on a service, plus inline editors for environment variables, resource re
 ports, update and rollback policy, and the log driver; availability and labels on a node; force removal on a task.
 Actions hidden by permissions aren't rendered.
 
+## Rotating a secret or config
+
+Swarm can't change a secret or a config once it exists, so rotating one means replacing it:
+
+1. On the **Secrets** list, create the replacement under a new name, such as `db_password_v2`. This needs
+   [operations level][operations-level] 2.
+2. Open the old secret. Its page lists every service that mounts it. On each service, edit **Secrets**: add the
+   replacement with the same **Target** the old one had, so the container reads the same file, and remove the old
+   one. Saving rolls the service out once. This also needs level 2.
+3. Once the old secret's page lists no services, remove it. This needs level 3, and Docker refuses while any service
+   still mounts it.
+
+Configs follow the same steps from the **Configs** list and each service's **Configs** editor. A service deployed
+from a Compose file gets the old reference back on the next `docker stack deploy`, so change the file as well.
+
+Over the API, the same sequence is `POST /secrets`, then `PATCH /services/{id}/secrets` for each service named in
+`GET /secrets/{id}`, then `DELETE /secrets/{id}`; see the [API guide][api].
+
 ## Charts
 
 Charts appear on the cluster overview and on node, service and task detail pages, and require
@@ -163,6 +181,7 @@ modules and frontend packages. Search by name, or filter by ecosystem and licens
 the full text for that dependency, with its NOTICE file if it ships one. The header links to the complete
 attribution document.
 
+[api]: api
 [authentication]: authentication
 [authorization]: authorization
 [feeds]: api#feeds
