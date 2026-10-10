@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // addressable names the two ways a caller can address one seeded resource: by
@@ -156,4 +159,61 @@ func readableOverMCP(t *testing.T, w *World, persona, singular, identifier strin
 	}
 
 	return !call.IsError
+}
+
+// The dashboard confirms a drain from the REST assessment and an agent plans
+// one from MCP's drain-impact view. Both read internal/cluster, so for one
+// identity they must name the same services as movable and stranded.
+func TestDrainImpactAgreesAcrossTransports(t *testing.T) {
+	w := NewWorld(t)
+
+	for _, persona := range PersonaNames() {
+		t.Run(persona, func(t *testing.T) {
+			resp := w.REST(t, persona, http.MethodGet, "/nodes/"+SeededNodeID+"/drain-impact")
+			defer resp.Body.Close()
+
+			result, rpcErr := w.MCP(t, persona, "tools/call", map[string]any{
+				"name": "get_topology",
+				"arguments": map[string]any{
+					"view": cluster.TopologyViewDrainImpact,
+					"node": SeededNodeID,
+				},
+			})
+
+			var call struct {
+				IsError bool `json:"isError"`
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if rpcErr == nil {
+				if err := json.Unmarshal(result, &call); err != nil {
+					t.Fatalf("decode tools/call get_topology: %v", err)
+				}
+			}
+
+			mcpOK := rpcErr == nil && !call.IsError
+			if restOK := resp.StatusCode == http.StatusOK; restOK != mcpOK {
+				t.Fatalf("REST status %d, MCP admitted = %t", resp.StatusCode, mcpOK)
+			}
+			if !mcpOK {
+				return
+			}
+
+			var overREST, overMCP cluster.TopologyGraph
+			if err := json.NewDecoder(resp.Body).Decode(&overREST); err != nil {
+				t.Fatalf("decode REST: %v", err)
+			}
+			if len(call.Content) == 0 {
+				t.Fatal("get_topology returned no content")
+			}
+			if err := json.Unmarshal([]byte(call.Content[0].Text), &overMCP); err != nil {
+				t.Fatalf("decode MCP: %v", err)
+			}
+
+			if !reflect.DeepEqual(overREST, overMCP) {
+				t.Errorf("REST and MCP disagree:\nREST %+v\nMCP  %+v", overREST, overMCP)
+			}
+		})
+	}
 }

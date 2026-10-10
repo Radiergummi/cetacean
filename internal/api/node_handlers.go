@@ -49,6 +49,38 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSONTimed(w, r, rep, node.UpdatedAt)
 }
 
+// HandleNodeDrainImpact answers what draining a node would move and what it
+// would strand, the assessment MCP's get_topology drain-impact view gives. The
+// cluster's tasks, not the node's, since a per-node replica cap is measured
+// against what each candidate already runs.
+func (h *Handlers) HandleNodeDrainImpact(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	node, ok := lookupACL(h, w, r, "node", id, h.cache.GetNode, nodeResource)
+	if !ok {
+		return
+	}
+
+	identity := auth.IdentityFromContext(r.Context())
+	all := h.cache.ListNodes()
+	nodes := acl.Filter(h.acl, identity, "read", all, nodeResource)
+	services := acl.Filter(
+		h.acl, identity, "read",
+		h.cache.ListServices(),
+		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+	)
+	tasks := acl.FilterInPlaceNamed(
+		h.acl, identity, "read",
+		h.cache.ListTasks(),
+		"task",
+		func(t swarm.Task) string { return t.ID },
+	)
+
+	graph := cluster.DrainImpactGraph(node, nodes, tasks, services)
+	cluster.NoteHiddenNodes(&graph, len(nodes), len(all)-len(nodes))
+
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), r.URL.Path, "DrainImpact", graph))
+}
+
 func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	node, ok := lookupACL(h, w, r, "node", id, h.cache.GetNode, nodeResource)

@@ -1494,6 +1494,7 @@ func TestNodeSubResourceGET_ACLDenied(t *testing.T) {
 	}{
 		{"role", h.HandleGetNodeRole},
 		{"labels", h.HandleGetNodeLabels},
+		{"drain-impact", h.HandleNodeDrainImpact},
 	} {
 		t.Run(sub.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/nodes/node1/"+sub.name, nil)

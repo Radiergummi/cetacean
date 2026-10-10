@@ -1,3 +1,4 @@
+import { DrainImpactSummary } from "./DrainImpactSummary";
 import { api } from "@/api/client";
 import InfoCard from "@/components/InfoCard";
 import { Spinner } from "@/components/Spinner";
@@ -37,7 +38,7 @@ const availabilityOptions = [
     value: "drain" as const,
     icon: LogOut,
     title: "Drain",
-    description: "All tasks are rescheduled to other nodes.",
+    description: "Running tasks move to other nodes, where placement allows.",
   },
 ];
 
@@ -194,9 +195,13 @@ export function AvailabilityEditor({
           <AlertDialogHeader>
             <AlertDialogTitle>Drain this node?</AlertDialogTitle>
             <AlertDialogDescription>
-              Draining this node will reschedule all running tasks to other nodes.
+              The node stops accepting tasks, and Swarm moves its running ones elsewhere.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <DrainImpactSummary
+            nodeId={nodeId}
+            enabled={drainPending}
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
