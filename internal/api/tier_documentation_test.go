@@ -14,10 +14,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// The operations level a write endpoint needs is stated four times: the route's
-// chain, resourceWriteMethods, an x-badges marker in api/openapi.yaml, and a
-// row in docs/api.md. These two tests chain them together — the badge against
-// the tier the router enforces, the table against the badge.
+// The operations level a write endpoint needs is stated three times: the route's
+// chain, an x-badges marker in api/openapi.yaml, and a row in docs/api.md. These
+// two tests chain them together — the badge against the tier the router
+// enforces, the table against the badge.
 
 // operationsLevelBadge matches the marker as it appears in the OpenAPI
 // document: `- name: "operations-level:2"`.

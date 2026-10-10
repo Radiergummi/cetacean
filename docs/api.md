@@ -435,7 +435,9 @@ SSE and streaming endpoints set no caching headers.
 
 `Allow` on `GET` and `HEAD` responses lists the methods available for that resource under the current
 [operations level][operations-level] and [ACL][authorization] grants. Inspect it before attempting a
-write.
+write. On a resource such as `/services/{id}`, it also covers the writes on its sub-resources: `PUT`
+there means `PUT /services/{id}/scale` is open to you. A sub-resource or a collection lists only its own
+methods.
 
 `Accept-Patch` lists the patch formats a resource accepts, either `application/json-patch+json, application/merge-patch+json`
 or `application/merge-patch+json` alone. It appears only when the operations level and ACL permit writes.

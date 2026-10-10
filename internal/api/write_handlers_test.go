@@ -4275,9 +4275,10 @@ func TestHandleGetServiceMode(t *testing.T) {
 		t.Errorf("mode=%v, want replicated", resp["mode"])
 	}
 
+	// No PUT is routed: Swarmkit refuses every mode change.
 	allow := w.Header().Get("Allow")
-	if allow != "GET, HEAD, PUT" {
-		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD, PUT")
+	if allow != "GET, HEAD" {
+		t.Errorf("Allow=%q, want %q", allow, "GET, HEAD")
 	}
 }
 

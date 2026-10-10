@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -17,71 +18,84 @@ const AcceptPatch = "application/json-patch+json, application/merge-patch+json"
 // support JSON Merge Patch (RFC 7396).
 const AcceptMergePatch = "application/merge-patch+json"
 
-// resourceMethods defines what write methods exist for each resource type
-// at each operations tier.
-type methodSpec struct {
-	method string
-	tier   config.OperationsLevel
+// tieredChain is a write route's middleware at one operations level. Its
+// handlers carry that level, so the router records what each write route needs
+// and Allow is read off the routes instead of a list kept beside them.
+type tieredChain struct {
+	chain Chain
+	level config.OperationsLevel
 }
 
-// resourceWriteMethods maps resource types to their write methods and the
-// minimum operations tier each needs. A method appearing at several tiers takes
-// the lowest, so it shows in Allow whenever any of its uses is enabled.
-var resourceWriteMethods = map[string][]methodSpec{
-	"service": {
-		{
-			"PUT",
-			config.OpsOperational,
-		}, // scale, image (tier1); endpoint-mode is tier3 but PUT is available if tier1 is enabled
-		{"POST", config.OpsOperational},    // rollback, restart
-		{"PATCH", config.OpsConfiguration}, // env, labels, resources, etc.
-		{"DELETE", config.OpsImpactful},    // remove
-	},
-	"node": {
-		{"PUT", config.OpsImpactful},       // availability, role
-		{"PATCH", config.OpsConfiguration}, // labels
-		{"DELETE", config.OpsImpactful},    // remove
-	},
-	"task": {
-		{"DELETE", config.OpsImpactful},
-	},
-	"config": {
-		{"POST", config.OpsConfiguration},  // create
-		{"PATCH", config.OpsConfiguration}, // labels
-		{"DELETE", config.OpsImpactful},
-	},
-	"secret": {
-		{"POST", config.OpsConfiguration},
-		{"PATCH", config.OpsConfiguration},
-		{"DELETE", config.OpsImpactful},
-	},
-	"network": {
-		{"DELETE", config.OpsImpactful},
-	},
-	"volume": {
-		{"DELETE", config.OpsImpactful},
-	},
-	"stack": {
-		{"DELETE", config.OpsImpactful},
-	},
-	"plugin": {
-		{
-			"POST",
-			config.OpsConfiguration,
-		}, // enable, disable (tier2); install, privileges, upgrade (tier3)
-		{"PATCH", config.OpsConfiguration}, // settings
-		{"DELETE", config.OpsImpactful},    // remove
-	},
-	"swarm": {
-		{
-			"PATCH",
-			config.OpsConfiguration,
-		}, // orchestration, raft, dispatcher (tier2); ca, encryption (tier3)
-		{
-			"POST",
-			config.OpsImpactful,
-		}, // rotate-token, rotate-unlock-key, force-rotate-ca, unlock
-	},
+func (h *Handlers) tiered(acl Constructor, level config.OperationsLevel) tieredChain {
+	return tieredChain{NewChain(acl, h.requireLevel(level)), level}
+}
+
+func (c tieredChain) Append(constructors ...Constructor) tieredChain {
+	return tieredChain{c.chain.Append(constructors...), c.level}
+}
+
+func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
+	return tieredHandler{c.chain.ThenFunc(fn), c.level}
+}
+
+type tieredHandler struct {
+	http.Handler
+	level config.OperationsLevel
+}
+
+type tieredRoute struct {
+	method, path string
+	level        config.OperationsLevel
+}
+
+// routeTable is a router built without dependencies, for its routes alone.
+// Which routes exist and the level each needs does not vary with configuration,
+// and handlers called without a router in front of them answer Allow as well.
+func routeTable() *routeRecorder {
+	routeTableOnce.Do(func() {
+		_, routeTableRoutes = newRouter(RouterConfig{
+			Handlers:     &Handlers{},
+			AuthProvider: &auth.NoneProvider{},
+			OpenAPISpec:  []byte("{}"),
+			AsyncAPISpec: []byte("{}"),
+		})
+	})
+
+	return routeTableRoutes
+}
+
+var (
+	routeTableOnce   sync.Once
+	routeTableRoutes *routeRecorder
+)
+
+var writeMethods = []string{"PUT", "POST", "PATCH", "DELETE"}
+
+// allowedMethods lists GET, HEAD and every write method routed at the path r
+// matched that the caller's level reaches. With below, the routes under that
+// path count too: a resource's Allow speaks for its sub-resources' writes.
+func (h *Handlers) allowedMethods(r *http.Request, below bool) []string {
+	routes := routeTable()
+	_, pattern := routes.mux.Handler(r)
+	_, path, routed := strings.Cut(pattern, " ")
+	level := h.levelFor(r)
+
+	offered := make(map[string]bool)
+	for _, route := range routes.tiered {
+		at := route.path == path || below && strings.HasPrefix(route.path, path+"/")
+		if routed && at && level >= route.level {
+			offered[route.method] = true
+		}
+	}
+
+	methods := []string{"GET", "HEAD"}
+	for _, method := range writeMethods {
+		if offered[method] {
+			methods = append(methods, method)
+		}
+	}
+
+	return methods
 }
 
 // resourceAcceptPatch maps resource types to their Accept-Patch header value.
@@ -121,65 +135,39 @@ func (h *Handlers) setAllow(
 	methods := []string{"GET", "HEAD"}
 
 	id := auth.IdentityFromContext(r.Context())
-	canWrite := h.acl.Can(id, "write", resourceType+":"+resourceName)
-
-	hasPatch := false
-	for _, spec := range resourceWriteMethods[resourceType] {
-		if h.levelFor(r) >= spec.tier && canWrite {
-			methods = append(methods, spec.method)
-			if spec.method == "PATCH" {
-				hasPatch = true
-			}
-		}
+	if h.acl.Can(id, "write", resourceType+":"+resourceName) {
+		methods = h.allowedMethods(r, true)
 	}
 
 	w.Header().Set("Allow", strings.Join(methods, ", "))
 	varyByIdentity(w)
 
-	if hasPatch {
+	if slices.Contains(methods, "PATCH") {
 		if ap, ok := resourceAcceptPatch[resourceType]; ok {
 			w.Header().Set("Accept-Patch", ap)
 		}
 	}
 }
 
-// setAllowSubResource sets the Allow header for a sub-resource endpoint
-// that supports a single write method at a given operations tier.
+// setAllowSubResource sets the Allow header for a sub-resource endpoint.
 func (h *Handlers) setAllowSubResource(
 	w http.ResponseWriter,
 	r *http.Request,
-	method string,
-	tier config.OperationsLevel,
 	resourceExpr string,
 ) {
 	methods := []string{"GET", "HEAD"}
-	if h.levelFor(r) >= tier {
-		id := auth.IdentityFromContext(r.Context())
-		if h.acl.Can(id, "write", resourceExpr) {
-			methods = append(methods, method)
-		}
+	if h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceExpr) {
+		methods = h.allowedMethods(r, false)
 	}
 	w.Header().Set("Allow", strings.Join(methods, ", "))
 	varyByIdentity(w)
 }
 
-// listCreateMethods maps resource types that support creation via POST to
-// the minimum operations tier required.
-var listCreateMethods = map[string]config.OperationsLevel{
-	"config": config.OpsConfiguration,
-	"secret": config.OpsConfiguration,
-	"plugin": config.OpsConfiguration,
-}
-
 // setAllowList sets the Allow header for list endpoints.
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	methods := []string{"GET", "HEAD"}
-
-	if tier, ok := listCreateMethods[resourceType]; ok && h.levelFor(r) >= tier {
-		id := auth.IdentityFromContext(r.Context())
-		if h.acl.Can(id, "write", resourceType+":*") {
-			methods = append(methods, "POST")
-		}
+	if h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceType+":*") {
+		methods = h.allowedMethods(r, false)
 	}
 
 	w.Header().Set("Allow", strings.Join(methods, ", "))
