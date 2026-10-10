@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1327,6 +1328,48 @@ func TestHandleSwarm_RedactsJoinTokensWithoutSwarmWrite(t *testing.T) {
 	body := w.Body.String()
 	if strings.Contains(body, "SWMTKN") {
 		t.Fatal("join tokens should be redacted for users without swarm:cluster write")
+	}
+}
+
+func TestHandleSwarm_RedactsJoinTokensBelowImpactfulLevel(t *testing.T) {
+	for _, level := range []config.OperationsLevel{
+		config.OpsReadOnly,
+		config.OpsOperational,
+		config.OpsConfiguration,
+	} {
+		t.Run(fmt.Sprintf("level %d", level), func(t *testing.T) {
+			// No policy: every identity may write, as under auth none.
+			h := newTestHandlers(
+				t,
+				withOpsLevel(level),
+				withACL(acl.NewEvaluator()),
+				withSystemClient(&mockSystemClient{
+					swarmInspectFn: func(_ context.Context) (swarm.Swarm, error) {
+						return swarm.Swarm{
+							JoinTokens: swarm.JoinTokens{
+								Worker:  "SWMTKN-1-worker-secret",
+								Manager: "SWMTKN-1-manager-secret",
+							},
+						}, nil
+					},
+				}),
+			)
+
+			req := httptest.NewRequest("GET", "/swarm", nil)
+			req = req.WithContext(
+				auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "anonymous"}),
+			)
+			w := httptest.NewRecorder()
+			h.HandleSwarm(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status=%d, want 200", w.Code)
+			}
+
+			if strings.Contains(w.Body.String(), "SWMTKN") {
+				t.Fatal("join tokens should be redacted below the impactful operations level")
+			}
+		})
 	}
 }
 
