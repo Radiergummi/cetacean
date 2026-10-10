@@ -10,6 +10,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // NotificationManager tracks per-session resource subscriptions and matches
@@ -283,9 +284,10 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		return
 	}
 
-	aclResource := eventACLResource(event)
+	hasResource := eventACLResource(event) != ""
 	for _, d := range s.notifications.matchingDeliveries(event) {
-		if aclResource != "" && !s.canRead(d.identity, aclResource) {
+		canRead := func(resource string) bool { return s.canRead(d.identity, resource) }
+		if hasResource && !cluster.CanReadEvent(s.cache, event, canRead) {
 			continue
 		}
 

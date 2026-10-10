@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -130,7 +131,11 @@ func streamTestRouter(
 		withDockerClient(&mockLogStreamer{data: frames.Bytes()}),
 	}, opts...)
 
-	return newTestRouterWithCache(t, c, opts...), c, broadcaster
+	// /events reads the router's broadcaster, not the handlers'; main passes one.
+	sameBroadcaster := func(cfg *RouterConfig) { cfg.Broadcaster = broadcaster }
+	opts = append([]testHandlersOption{withCache(c)}, opts...)
+
+	return newTestRouterWithConfig(t, []routerOption{sameBroadcaster}, opts...), c, broadcaster
 }
 
 // resourceStreamRouter is streamTestRouter at the batching interval the
@@ -296,6 +301,36 @@ func TestReplayedFrameOmitsResource(t *testing.T) {
 
 	if _, present := payload["resource"]; present {
 		t.Error("a replayed envelope must not carry resource")
+	}
+}
+
+// TestGlobalStreamReplaysWhatTypesAdmits: /events is a ring channel, so a
+// replayable cursor replays rather than answering sync, and ?types= narrows
+// the replay as it narrows the live stream.
+func TestGlobalStreamReplaysWhatTypesAdmits(t *testing.T) {
+	t.Parallel()
+
+	router, c, _ := resourceStreamRouter(t)
+	cursor := strconv.FormatUint(c.History().Count(), 10)
+
+	for _, typ := range []cache.EventType{cache.EventService, cache.EventNode} {
+		c.History().Append(cache.HistoryEntry{
+			Type:       typ,
+			Action:     "update",
+			ResourceID: "x",
+			Name:       "x",
+			Timestamp:  time.Now(),
+		})
+	}
+
+	frames := streamUntilIdle(t, router, "/events?types=node", cursor, nil)
+
+	if len(frames) != 1 {
+		t.Fatalf("frames = %+v, want the one node event", frames)
+	}
+
+	if frames[0].Event != "node" {
+		t.Errorf("event = %q, want node", frames[0].Event)
 	}
 }
 

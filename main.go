@@ -605,7 +605,7 @@ func main() {
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
-		serveDualListeners(ctx, cfg, tlsCfg, router, handlers, tsnetLn)
+		serveDualListeners(ctx, cfg, tlsCfg, router, handlers, tsnetLn, broadcaster.Close)
 		return
 	}
 
@@ -617,6 +617,10 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 		TLSConfig:    serverTLSConfig,
 	}
+
+	// Shutdown waits for every handler to return, and an SSE stream never
+	// does on its own: end them first, or each deploy waits out the grace.
+	server.RegisterOnShutdown(broadcaster.Close)
 
 	// Graceful shutdown. ListenAndServe returns ErrServerClosed as soon as
 	// Shutdown closes the listeners, so main waits on drained rather than
@@ -718,6 +722,7 @@ func serveDualListeners(
 	router http.Handler,
 	h *api.Handlers,
 	tsnetLn net.Listener,
+	closeStreams func(),
 ) {
 	metaMux := http.NewServeMux()
 	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
@@ -736,6 +741,7 @@ func serveDualListeners(
 		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
 	}
+	appServer.RegisterOnShutdown(closeStreams)
 
 	// Graceful shutdown of both servers; see drained above.
 	drained := make(chan struct{})

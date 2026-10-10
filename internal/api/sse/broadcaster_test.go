@@ -747,3 +747,92 @@ func (f *flushRecorder) Flush() {}
 
 // Ensure flushRecorder implements http.Flusher.
 var _ http.Flusher = (*flushRecorder)(nil)
+
+// The global stream replays every type it carries, so a reconnect catches up
+// instead of starting over with a full sync.
+func TestSSE_ReplayAllReplaysEveryType(t *testing.T) {
+	h := cache.NewHistory(100)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s0"})
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	req.Header.Set("Last-Event-ID", "1")
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil, ReplayAll)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, `"n1"`)
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	if !strings.Contains(body, `"s1"`) {
+		t.Error("expected service s1 in replay")
+	}
+	if strings.Contains(body, "full_sync") {
+		t.Error("replay fell back to a full sync")
+	}
+}
+
+func TestTypesFilter(t *testing.T) {
+	if TypesFilter(httptest.NewRequest("GET", "/events", nil)) != nil {
+		t.Error("no ?types= should mean no filter")
+	}
+
+	match := TypesFilter(httptest.NewRequest("GET", "/events?types=service,%20node", nil))
+	for typ, want := range map[cache.EventType]bool{
+		cache.EventService: true,
+		cache.EventNode:    true,
+		cache.EventTask:    false,
+		cache.EventSync:    true, // a sync tells the client to refetch, whatever it narrowed to
+	} {
+		if got := match(cache.Event{Type: typ}); got != want {
+			t.Errorf("%s: match = %v, want %v", typ, got, want)
+		}
+	}
+}
+
+// A removed task is gone from the cache by the time the event is matched, so
+// the event itself must say which service and node it belonged to.
+func TestResourceMatcherSeesTaskRemoves(t *testing.T) {
+	var removed cache.Event
+	c := cache.New(func(e cache.Event) {
+		if e.Action == "remove" {
+			removed = e
+		}
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "node1"})
+	c.DeleteTask("t1")
+
+	if !ResourceMatcher(cache.EventService, "svc1")(removed) {
+		t.Error("the service stream drops its task's remove")
+	}
+	if !ResourceMatcher(cache.EventNode, "node1")(removed) {
+		t.Error("the node stream drops its task's remove")
+	}
+}
+
+// The removed task rides on its event only for matching; a remove names what
+// is gone and carries no resource, as every other type's remove does.
+func TestToSSEEvent_RemoveCarriesNoResource(t *testing.T) {
+	ev := ToSSEEvent(cache.Event{
+		Type:     cache.EventTask,
+		Action:   "remove",
+		ID:       "t1",
+		Resource: swarm.Task{ID: "t1"},
+	}, "")
+
+	if ev.Resource != nil {
+		t.Errorf("resource = %+v, want none", ev.Resource)
+	}
+}
