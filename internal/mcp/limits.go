@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	// maxRequestBytes caps a JSON-RPC body, matching the REST writes. A
-	// secret or config, the largest thing a tool takes, stays under it.
+	// maxRequestBytes caps a JSON-RPC body at the REST writes' limit.
 	maxRequestBytes = 1 << 20
 
 	// maxListenStreams bounds open subscriptions/listen streams. Each holds a
