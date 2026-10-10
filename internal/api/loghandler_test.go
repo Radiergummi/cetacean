@@ -717,4 +717,27 @@ func TestHandleServiceLogs_RefusesPastTheReadCap(t *testing.T) {
 			w.Header().Get("Retry-After"),
 		)
 	}
+	if got := h.activeLogReads.Load(); got != maxLogReads {
+		t.Errorf("a refused read changed the count to %d, want %d", got, maxLogReads)
+	}
+}
+
+func TestHandleServiceLogs_ReleasesItsReadSlot(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
+	h.activeLogReads.Store(maxLogReads - 1)
+
+	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 with one slot free", w.Code)
+	}
+	if got := h.activeLogReads.Load(); got != maxLogReads-1 {
+		t.Errorf("reads in flight = %d after the read, want %d", got, maxLogReads-1)
+	}
 }

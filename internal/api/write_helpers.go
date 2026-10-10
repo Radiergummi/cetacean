@@ -242,11 +242,13 @@ func (h *Handlers) awaitPreferred(
 	}
 
 	if waiting {
-		progress, err = cluster.AwaitService(
-			r.Context(), h.cache, svc.ID, svc.Version.Index,
-			cluster.ConvergencePollInterval, wait,
-		)
-		h.activePreferWaits.Add(-1)
+		func() {
+			defer h.activePreferWaits.Add(-1)
+			progress, err = cluster.AwaitService(
+				r.Context(), h.cache, svc.ID, svc.Version.Index,
+				cluster.ConvergencePollInterval, wait,
+			)
+		}()
 	}
 
 	// RFC 7240 §2 asks for the wait actually applied, which preferWait may
