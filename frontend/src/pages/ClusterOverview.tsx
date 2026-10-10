@@ -60,7 +60,7 @@ export default function ClusterOverview() {
         <PageHeader title="Cluster Overview" />
         <FetchError
           message={clusterError.message}
-          onRetry={() => void refetchCluster()}
+          onRetry={() => refetchCluster()}
         />
       </div>
     );
