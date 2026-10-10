@@ -3,12 +3,14 @@ package mcp
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -119,5 +121,97 @@ func (s *Server) installTaskTTLHook(h *mcpserver.Hooks) {
 			"tool", msg.Params.Name,
 			"max", s.config.MaxTaskTTL,
 		)
+	})
+}
+
+// taskOwners records which identity created each task. mcp-go isolates tasks
+// by session, and a stateless request has none, so it would serve any task to
+// whoever names its ID.
+type taskOwners struct {
+	mu     sync.Mutex
+	owners map[string]string
+}
+
+func (o *taskOwners) record(taskID, owner string, retention time.Duration) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.owners == nil {
+		o.owners = make(map[string]string)
+	}
+
+	o.owners[taskID] = owner
+
+	if retention > 0 {
+		time.AfterFunc(retention, func() {
+			o.mu.Lock()
+			defer o.mu.Unlock()
+
+			delete(o.owners, taskID)
+		})
+	}
+}
+
+// owns fails closed: a task with no record belongs to nobody.
+func (o *taskOwners) owns(taskID, caller string) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	owner, ok := o.owners[taskID]
+
+	return ok && owner == caller
+}
+
+// taskOwner keys a task to its creator. The provider is part of the key: the
+// same subject from two providers need not be the same principal.
+func taskOwner(ctx context.Context) string {
+	id := auth.IdentityFromContext(ctx)
+	if id == nil {
+		return ""
+	}
+
+	return id.Provider + "\x00" + id.Subject
+}
+
+// taskOwnerRetention is the longest retention installTaskTTLHook can leave a
+// task with, which its ownership record must outlast. Zero: some task may live
+// as long as the process, and so must its record.
+func (s *Server) taskOwnerRetention() time.Duration {
+	if s.config.TaskTTL <= 0 || s.config.MaxTaskTTL <= 0 {
+		return 0
+	}
+
+	return s.config.MaxTaskTTL
+}
+
+// taskCreationHooks records a task's creator. mcp-go calls it holding its task
+// lock, so it must not call back into the server.
+func (s *Server) taskCreationHooks() *mcpserver.TaskHooks {
+	h := &mcpserver.TaskHooks{}
+	h.AddOnTaskCreated(func(ctx context.Context, metrics mcpserver.TaskMetrics) {
+		s.taskOwners.record(metrics.TaskID, taskOwner(ctx), s.taskOwnerRetention())
+	})
+
+	return h
+}
+
+// installTaskOwnerHooks points a request for another identity's task at an ID
+// mcp-go never issues, so the caller gets the answer an unknown ID gets. Like
+// installTaskTTLHook, it relies on the handler receiving the hooked request.
+func (s *Server) installTaskOwnerHooks(h *mcpserver.Hooks) {
+	hide := func(ctx context.Context, taskID *string) {
+		if !s.taskOwners.owns(*taskID, taskOwner(ctx)) {
+			*taskID = ""
+		}
+	}
+
+	h.AddBeforeGetTask(func(ctx context.Context, _ any, msg *mcplib.GetTaskRequest) {
+		hide(ctx, &msg.Params.TaskId)
+	})
+	h.AddBeforeTaskResult(func(ctx context.Context, _ any, msg *mcplib.TaskResultRequest) {
+		hide(ctx, &msg.Params.TaskId)
+	})
+	h.AddBeforeCancelTask(func(ctx context.Context, _ any, msg *mcplib.CancelTaskRequest) {
+		hide(ctx, &msg.Params.TaskId)
 	})
 }
