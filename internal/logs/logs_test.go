@@ -495,3 +495,28 @@ func TestParseDockerLogsReadsAnUnframedTTYStream(t *testing.T) {
 		t.Errorf("first line = %+v, want taskId t1 on stdout", lines[0])
 	}
 }
+
+// Docker frames its own errors as a fourth stream, and one can come first.
+func TestParseDockerLogsReadsAStreamOpeningWithASystemError(t *testing.T) {
+	var buf bytes.Buffer
+	buf.Write(buildFrame(3, "Error grabbing logs: node is down\n"))
+	buf.Write(buildFrame(1, "2024-01-01T00:00:00.000000000Z hello\n"))
+
+	lines, err := ParseDockerLogs(&buf)
+	if err != nil {
+		t.Fatalf("ParseDockerLogs: %v", err)
+	}
+	if len(lines) != 2 || lines[1].Message != "hello" {
+		t.Fatalf("lines = %+v, want the error and then hello", lines)
+	}
+}
+
+// Docker query-escapes the details it prepends; Swarm's own IDs never need it.
+func TestParseDetailsUnescapesLabelValues(t *testing.T) {
+	line := "app.team=platform+team%2C+ops,com.docker.swarm.task.id=t1 hello"
+
+	attrs, message := parseDetails(line)
+	if message != "hello" || attrs["app.team"] != "platform team, ops" {
+		t.Errorf("attrs = %v, message = %q; want app.team %q", attrs, message, "platform team, ops")
+	}
+}
