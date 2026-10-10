@@ -100,6 +100,7 @@ export async function saveModelledLabels(
   if (ops.length === 0) {
     return;
   }
+
   const updated = await api.patchServiceLabels(serviceId, ops);
   onSaved(updated);
 }
