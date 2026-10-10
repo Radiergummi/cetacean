@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 )
@@ -149,6 +150,43 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 
+	snapshot, err := resolveBool(flags.Snapshot, "CETACEAN_SNAPSHOT", fSnapshot, true)
+	if err != nil {
+		return nil, err
+	}
+
+	pprof, err := resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false)
+	if err != nil {
+		return nil, err
+	}
+
+	selfMetrics, err := resolveBool(flags.SelfMetrics, "CETACEAN_SELF_METRICS", fSelfMetrics, true)
+	if err != nil {
+		return nil, err
+	}
+
+	recommendations, err := resolveBool(
+		flags.Recommendations,
+		"CETACEAN_RECOMMENDATIONS",
+		fRecommendations,
+		true,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	logLevel := strings.ToLower(resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"))
+	if !slices.Contains([]string{"debug", "info", "warn", "error"}, logLevel) {
+		return nil, fmt.Errorf("logging.level %q: want debug, info, warn or error", logLevel)
+	}
+
+	logFormat := strings.ToLower(
+		resolve(flags.LogFormat, "CETACEAN_LOG_FORMAT", fLogFormat, "json"),
+	)
+	if logFormat != "json" && logFormat != "text" {
+		return nil, fmt.Errorf("logging.format %q: want json or text", logFormat)
+	}
+
 	cfg := &Config{
 		DockerHost: resolve(
 			flags.DockerHost,
@@ -166,25 +204,15 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			resolve(flags.PublicURL, "CETACEAN_PUBLIC_URL", fPublicURL, ""),
 			"/",
 		),
-		LogLevel:         resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"),
-		LogFormat:        resolve(flags.LogFormat, "CETACEAN_LOG_FORMAT", fLogFormat, "json"),
+		LogLevel:         logLevel,
+		LogFormat:        logFormat,
 		DataDir:          resolve(flags.DataDir, "CETACEAN_DATA_DIR", fDataDir, "./data"),
-		Snapshot:         resolveBool(flags.Snapshot, "CETACEAN_SNAPSHOT", fSnapshot, true),
+		Snapshot:         snapshot,
 		SSEBatchInterval: batchInterval,
-		Pprof:            resolveBool(flags.Pprof, "CETACEAN_PPROF", fPprof, false),
-		SelfMetrics: resolveBool(
-			flags.SelfMetrics,
-			"CETACEAN_SELF_METRICS",
-			fSelfMetrics,
-			true,
-		),
-		Recommendations: resolveBool(
-			flags.Recommendations,
-			"CETACEAN_RECOMMENDATIONS",
-			fRecommendations,
-			true,
-		),
-		OperationsLevel: OperationsLevel(opsLevel),
+		Pprof:            pprof,
+		SelfMetrics:      selfMetrics,
+		Recommendations:  recommendations,
+		OperationsLevel:  OperationsLevel(opsLevel),
 		CORSOrigins: resolveStringSlice(
 			flags.CORSOrigins,
 			"CETACEAN_CORS_ORIGINS",

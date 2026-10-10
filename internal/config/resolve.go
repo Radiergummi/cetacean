@@ -48,23 +48,25 @@ func resolveSecret(flag *string, envKey string, file *string, def string) (strin
 }
 
 // resolveBool returns the first set value in precedence order:
-// flag > env > file > hardcoded default.
-func resolveBool(flag *bool, envKey string, file *bool, def bool) bool {
+// flag > env > file > hardcoded default. An env value other than true, false,
+// 1 or 0 is an error: falling through would hand back the default.
+func resolveBool(flag *bool, envKey string, file *bool, def bool) (bool, error) {
 	if flag != nil {
-		return *flag
+		return *flag, nil
 	}
 	if v := os.Getenv(envKey); v != "" {
 		switch strings.ToLower(v) {
 		case "true", "1":
-			return true
+			return true, nil
 		case "false", "0":
-			return false
+			return false, nil
 		}
+		return false, fmt.Errorf("invalid boolean from %s %q: want true, false, 1 or 0", envKey, v)
 	}
 	if file != nil {
-		return *file
+		return *file, nil
 	}
-	return def
+	return def, nil
 }
 
 // resolveDuration returns the first set value in precedence order:

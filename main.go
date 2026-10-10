@@ -78,6 +78,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if err := config.CheckEnv(os.Environ()); err != nil {
+		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
 	configPath := flags.Config
 	if configPath == "" {
 		configPath = config.DiscoverConfigFile()

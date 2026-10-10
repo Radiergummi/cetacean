@@ -21,7 +21,8 @@ The `acl.*`, `mcp.*`, `oauth.*`, and `sizing.*` settings have no command-line fl
 the config file.
 
 A setting this page doesn't list isn't ignored: a config file carrying a key the schema doesn't
-know refuses startup and names it.
+know, or an environment carrying a `CETACEAN_*` variable no setting reads, refuses startup and
+names it. So does a value a setting can't parse: an on-off setting takes `true`, `false`, `1` or `0`.
 
 ## General settings
 
