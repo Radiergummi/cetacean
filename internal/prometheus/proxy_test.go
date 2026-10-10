@@ -3,6 +3,7 @@ package prometheus
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -148,5 +149,33 @@ func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("status=%d, want 503", w.Code)
+	}
+}
+
+// A rejected query reaches the caller with Prometheus's reason, never with
+// the internal address the proxy forwarded it to.
+func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(
+			[]byte(
+				`{"status":"error","errorType":"bad_data","error":"parse error: unexpected end of input"}`,
+			),
+		)
+	}))
+	defer prom.Close()
+
+	proxy := NewProxy(prom.URL, noopErrorWriter)
+
+	req := httptest.NewRequest("GET", "/metrics?query=up%7B", nil)
+	w := httptest.NewRecorder()
+	proxy.HandleMetrics(w, req)
+
+	body := w.Body.String()
+	if strings.Contains(body, prom.URL) || strings.Contains(body, "127.0.0.1") {
+		t.Errorf("the error names the Prometheus address: %s", body)
+	}
+	if !strings.Contains(body, "parse error: unexpected end of input") {
+		t.Errorf("the error drops Prometheus's reason: %s", body)
 	}
 }
