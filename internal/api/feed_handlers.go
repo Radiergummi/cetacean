@@ -306,7 +306,7 @@ func recommendationToFeedEntry(
 
 	content := "<p>" + html.EscapeString(rec.Message) + "</p>"
 	if href != "" {
-		content += `<p><a href="` + href + `">View in Cetacean</a></p>`
+		content += `<p><a href="` + html.EscapeString(href) + `">View in Cetacean</a></p>`
 	}
 
 	return feedEntry{
@@ -345,7 +345,7 @@ func historyEntryHTML(e cache.HistoryEntry, href string) string {
 
 	if href != "" {
 		b.WriteString(`<p><a href="`)
-		b.WriteString(href)
+		b.WriteString(html.EscapeString(href))
 		b.WriteString(`">View in Cetacean</a></p>`)
 	}
 
