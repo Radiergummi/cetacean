@@ -156,6 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A stack's page lists the configs, secrets, networks and volumes deployed with it straight away, instead of after the next full sync
 - Until the first sync, a restart serves the loaded snapshot to JSON, CSV and MCP clients as well as the dashboard, instead of answering `503`
 - Memory no longer grows with every task ID the event history has ever seen
+- Dashboard pages without charts or graphs no longer download the chart and graph code on first load
+- A finding picked in the recommendations widget reaches the model with its resource names and text quoted as a JSON value marked as cluster data
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
 - An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings
