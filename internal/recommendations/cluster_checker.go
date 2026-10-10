@@ -46,9 +46,19 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 		}
 	}
 
-	// Manager nodes with active availability
-	for _, node := range cc.cache.ListNodes() {
-		if node.Spec.Role == swarm.NodeRoleManager &&
+	// Manager nodes with active availability, when a worker could take their
+	// tasks: without one, draining the managers strands everything.
+	nodes := cc.cache.ListNodes()
+	workerAvailable := false
+	for _, node := range nodes {
+		if node.Spec.Role == swarm.NodeRoleWorker &&
+			node.Spec.Availability == swarm.NodeAvailabilityActive &&
+			node.Status.State == swarm.NodeStateReady {
+			workerAvailable = true
+		}
+	}
+	for _, node := range nodes {
+		if workerAvailable && node.Spec.Role == swarm.NodeRoleManager &&
 			node.Spec.Availability == swarm.NodeAvailabilityActive {
 			recs = append(recs, Recommendation{
 				Category:   CategoryManagerHasWorkloads,

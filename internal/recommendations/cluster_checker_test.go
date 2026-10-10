@@ -104,6 +104,15 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 			},
 			Description: swarm.NodeDescription{Hostname: "manager-1"},
 		})
+		c.SetNode(swarm.Node{
+			ID: "node2",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleWorker,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Description: swarm.NodeDescription{Hostname: "worker-1"},
+			Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		})
 
 		checker := NewClusterChecker(c)
 		recs := checker.Check(context.Background())
@@ -128,6 +137,89 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 		}
 	})
 
+	// Draining the only active node strands every task, so a single-node swarm
+	// has nothing to move the manager's work to.
+	t.Run("sole active node emits no recommendation", func(t *testing.T) {
+		c := cache.New(nil)
+		c.SetNode(swarm.Node{
+			ID: "node1",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleManager,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Description: swarm.NodeDescription{Hostname: "manager-1"},
+		})
+
+		for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+			if rec.Category == CategoryManagerHasWorkloads {
+				t.Error("a single-node swarm was told to drain its only node")
+			}
+		}
+	})
+
+	// Draining every manager of a managers-only swarm strands the same tasks,
+	// and so does draining towards a worker that is down.
+	t.Run("no ready active worker emits no recommendation", func(t *testing.T) {
+		c := cache.New(nil)
+		for _, id := range []string{"m1", "m2", "m3"} {
+			c.SetNode(swarm.Node{
+				ID: id,
+				Spec: swarm.NodeSpec{
+					Role:         swarm.NodeRoleManager,
+					Availability: swarm.NodeAvailabilityActive,
+				},
+				Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+			})
+		}
+		c.SetNode(swarm.Node{
+			ID: "w1",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleWorker,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Status: swarm.NodeStatus{State: swarm.NodeStateDown},
+		})
+
+		for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+			if rec.Category == CategoryManagerHasWorkloads {
+				t.Errorf("manager %s told to drain with no worker to take over", rec.TargetID)
+			}
+		}
+	})
+
+	// A ready worker that is drained or paused accepts no new tasks either.
+	for _, availability := range []swarm.NodeAvailability{swarm.NodeAvailabilityDrain, swarm.NodeAvailabilityPause} {
+		t.Run("ready "+string(availability)+" worker emits no recommendation", func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetNode(swarm.Node{
+				ID: "m1",
+				Spec: swarm.NodeSpec{
+					Role:         swarm.NodeRoleManager,
+					Availability: swarm.NodeAvailabilityActive,
+				},
+				Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+			})
+			c.SetNode(swarm.Node{
+				ID: "w1",
+				Spec: swarm.NodeSpec{
+					Role:         swarm.NodeRoleWorker,
+					Availability: availability,
+				},
+				Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+			})
+
+			for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+				if rec.Category == CategoryManagerHasWorkloads {
+					t.Errorf(
+						"manager %s told to drain towards a %s worker",
+						rec.TargetID,
+						availability,
+					)
+				}
+			}
+		})
+	}
+
 	t.Run("manager node with drain availability emits no recommendation", func(t *testing.T) {
 		c := cache.New(nil)
 		c.SetNode(swarm.Node{
@@ -137,6 +229,15 @@ func TestClusterChecker_ManagerHasWorkloads(t *testing.T) {
 				Availability: swarm.NodeAvailabilityDrain,
 			},
 			Description: swarm.NodeDescription{Hostname: "manager-1"},
+		})
+		c.SetNode(swarm.Node{
+			ID: "node2",
+			Spec: swarm.NodeSpec{
+				Role:         swarm.NodeRoleWorker,
+				Availability: swarm.NodeAvailabilityActive,
+			},
+			Description: swarm.NodeDescription{Hostname: "worker-1"},
+			Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
 		})
 
 		checker := NewClusterChecker(c)

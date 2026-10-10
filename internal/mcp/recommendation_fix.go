@@ -34,7 +34,6 @@ type mcpRecommendation struct {
 // to silence instead of reintroducing the defect.
 var fixToolsByRoute = map[string]recommendationFix{
 	"PUT /services/{id}/scale":       {Tool: "scale_service"},
-	"PUT /nodes/{id}/availability":   {Tool: "update_node", Section: "availability"},
 	"PATCH /services/{id}/resources": {Tool: "update_service", Section: "resources"},
 }
 
