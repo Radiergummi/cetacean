@@ -28,8 +28,19 @@ VALE_FLAGS ?=
 lint-docs: .vale/styles/.synced
 	vale $(VALE_FLAGS) $(DOCS)
 
-.vale/styles/.synced: .vale.ini
-	vale sync
+# The style packages BasedOnStyles names, by URL and SHA-256. Fetched here rather
+# than by `vale sync`, which checks nothing it downloads.
+VALE_PACKAGES := \
+	https://github.com/errata-ai/Google/releases/download/v0.7.0/Google.zip=dddb3dca035a067fe9ab13a1d8d8f89cb63e8b83ab4cf1934a935d60cd91d697 \
+	https://github.com/errata-ai/proselint/releases/download/v0.3.4/proselint.zip=48b1fb481ba44f6505d44346b283f6cdc74efd234f913bbdb09bf34420fab81c
+
+.vale/styles/.synced: Makefile
+	@set -e; for package in $(VALE_PACKAGES); do \
+		url=$${package%=*}; zip=$$(mktemp); \
+		curl -fsSL -o "$$zip" "$$url"; \
+		echo "$${package##*=}  $$zip" | sha256sum -c - >/dev/null || { echo "checksum mismatch: $$url" >&2; rm -f "$$zip"; exit 1; }; \
+		unzip -qo "$$zip" -d .vale/styles; rm -f "$$zip"; \
+	done
 	touch $@
 
 ## Type-check the frontend and the website
