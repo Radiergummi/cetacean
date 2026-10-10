@@ -135,6 +135,8 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 | Every agent must sign in again after a redeploy  | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                       |
 | Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] isn't the URL clients reach from outside.                         |
 | A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].           |
+| A subscription is refused with `429`             | 64 subscription streams are already open. The client retries after `Retry-After`.                          |
+| A call is refused with `413`                     | Its request body is over 1 MiB.                                                                             |
 | An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.            |
 | `cert` auth mode: client can't connect          | mTLS can't drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off. |
 

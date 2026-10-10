@@ -420,6 +420,30 @@ func TestMCPOriginGuardRefusesAForgedOrigin(t *testing.T) {
 			}
 		}
 	})
+
+	// The CSRF guard leaves /mcp to this one, so a wildcard admitting every
+	// origin here would let any page drive the write tools.
+	t.Run("with a wildcard", func(t *testing.T) {
+		proc := sut.Start(t, sut.Config{
+			Port:       deploymentPort,
+			DockerHost: env.DockerHost,
+			Env: map[string]string{
+				"CETACEAN_AUTH_MODE":        "none",
+				"CETACEAN_OPERATIONS_LEVEL": "1",
+				"CETACEAN_MCP":              "true",
+				"CETACEAN_CORS_ORIGINS":     "*",
+			},
+		})
+
+		if !strings.Contains(proc.Logs(), "MCP Origin guard does not accept a wildcard") {
+			t.Error("the binary started with a wildcard and did not warn")
+		}
+
+		if status := mcpOriginStatus(t, proc, "https://evil.example.com"); status !=
+			http.StatusForbidden {
+			t.Errorf("a cross-site Origin: status = %d, want 403", status)
+		}
+	})
 }
 
 // mcpOriginStatus POSTs a tools/list to /mcp with the given Origin (none when

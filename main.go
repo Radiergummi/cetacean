@@ -930,7 +930,6 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
-		AllowAnyOrigin:  d.cors.Wildcard(),
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 	})
@@ -942,17 +941,15 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
 		"protocol_version", mcp.ProtocolVersion)
 
-	// A browser-based MCP client has to clear two gates: the Origin guard
-	// below, and the cross-origin protection every route carries. The guard
-	// honours a wildcard and the protection cannot, so "*" is no longer the
-	// shortcut it once was here — the origins have to be named.
+	// A browser-based MCP client needs its origin named: the Origin guard
+	// matches exactly, so neither an empty list nor "*" admits one.
 	if !d.cors.Enabled() {
 		slog.Warn(
 			"MCP Origin guard active with no allowlist: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403. Set CETACEAN_CORS_ORIGINS to the origins they run on. Non-browser MCP clients send no Origin and are unaffected.",
 		)
 	} else if d.cors.Wildcard() {
 		slog.Warn(
-			"MCP Origin guard allows any origin, but a wildcard cannot be a trusted origin for cross-origin protection, so browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403 on every call. List the origins they run on instead. Non-browser MCP clients send no Origin and are unaffected.",
+			"MCP Origin guard does not accept a wildcard: browser-based MCP clients (e.g. MCP Inspector) will be rejected with 403 on every call. List the origins they run on instead. Non-browser MCP clients send no Origin and are unaffected.",
 		)
 	}
 
