@@ -4715,3 +4715,91 @@ func TestPreferWaitWithIfMatch(t *testing.T) {
 		t.Errorf("Preference-Applied = %q, want %q", got, "wait=5")
 	}
 }
+
+// A bind mount or an added capability reaches the host from inside the
+// container, so either needs the impactful tier whatever route carries it.
+func TestHostAccessWritesRequireImpactfulLevel(t *testing.T) {
+	cases := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(*Handlers) http.HandlerFunc
+	}{
+		{
+			name:    "bind mount",
+			path:    "/services/svc1/mounts",
+			body:    `{"mounts":[{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}]}`,
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts },
+		},
+		{
+			name:    "untyped bind mount",
+			path:    "/services/svc1/mounts",
+			body:    `{"mounts":[{"Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}]}`,
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts },
+		},
+		{
+			name:    "uppercase bind mount",
+			path:    "/services/svc1/mounts",
+			body:    `{"mounts":[{"Type":"BIND","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}]}`,
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts },
+		},
+		{
+			name:    "capability",
+			path:    "/services/svc1/container-config",
+			body:    `{"capabilityAdd":["SYS_ADMIN"]}`,
+			handler: func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceContainerConfig },
+		},
+	}
+
+	for _, tc := range cases {
+		for _, level := range []config.OperationsLevel{config.OpsConfiguration, config.OpsImpactful} {
+			t.Run(fmt.Sprintf("%s at level %d", tc.name, level), func(t *testing.T) {
+				c := cache.New(nil)
+				c.SetService(swarm.Service{ID: "svc1"})
+
+				written := false
+				mock := &mockWriteClient{}
+				mock.updateServiceMountsFn = func(context.Context, string, []mount.Mount) (swarm.Service, error) {
+					written = true
+					return swarm.Service{ID: "svc1"}, nil
+				}
+				mock.updateServiceSpecFn = func(_ context.Context, _ string, spec swarm.ServiceSpec) (swarm.Service, error) {
+					written = true
+					return swarm.Service{ID: "svc1", Spec: spec}, nil
+				}
+
+				h := newTestHandlers(t, withCache(c), withWriteClient(mock), withOpsLevel(level))
+				req := httptest.NewRequest("PATCH", tc.path, strings.NewReader(tc.body))
+				req.Header.Set("Content-Type", "application/merge-patch+json")
+				req.SetPathValue("id", "svc1")
+				w := httptest.NewRecorder()
+				tc.handler(h)(w, req)
+
+				if level >= config.OpsImpactful {
+					if w.Code != http.StatusOK || !written {
+						t.Fatalf(
+							"status=%d written=%v, want 200 and a write; body: %s",
+							w.Code,
+							written,
+							w.Body.String(),
+						)
+					}
+
+					return
+				}
+
+				if w.Code != http.StatusForbidden || written {
+					t.Fatalf(
+						"status=%d written=%v, want 403 and no write; body: %s",
+						w.Code,
+						written,
+						w.Body.String(),
+					)
+				}
+				if !strings.Contains(w.Body.String(), "OPS001") {
+					t.Errorf("body does not name OPS001: %s", w.Body.String())
+				}
+			})
+		}
+	}
+}

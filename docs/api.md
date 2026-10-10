@@ -719,6 +719,10 @@ passes the per-resource [ACL][authorization] write check.
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
 
+Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a bind, named-pipe, or
+driver-configured volume mount the service doesn't already have, and `PATCH /services/{id}/container-config` a
+capability added to `capabilityAdd`.
+
 ### Preconditions
 
 Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request

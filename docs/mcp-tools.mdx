@@ -266,8 +266,11 @@ data it was writing to a dropped mount.
 
     > [!CAUTION]
     > A bind mount hands the container the host's filesystem at that path, and binding `/var/run/docker.sock` gives
-    > it control of the whole cluster. `update_service_mounts` does it if asked; the operations level isn't what
-    > stops it.
+    > it control of the whole cluster. Below level 3 a bind mount the service doesn't already have is refused; at
+    > level 3, `update_service_mounts` does it if asked.
+
+    The tool can't set bind options, so a bind the service has with a propagation mode reads as changed: below level 3
+    it's refused, and at level 3 resending it drops the mode.
 </McpTool>
 
 ### Cluster resources
