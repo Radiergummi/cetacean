@@ -11,7 +11,7 @@ import { SizingBadge } from "../components/SizingBadge";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
-import { rolloutToneClass, serviceUpdateStatus } from "../lib/deriveServiceState";
+import { rolloutToneClass, serviceModeLabel, serviceUpdateStatus } from "../lib/deriveServiceState";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
 import { cn } from "../lib/utils";
@@ -69,7 +69,7 @@ export default function ServiceList() {
         },
         {
           ...sortColumn("Mode", "mode", sortKey, sortDir, toggle),
-          cell: ({ Spec }) => (Spec.Mode.Replicated ? "replicated" : "global"),
+          cell: ({ Spec }) => serviceModeLabel(Spec.Mode),
         },
         {
           header: "Ports",
@@ -227,7 +227,7 @@ export default function ServiceList() {
                   key="mode"
                   className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
                 >
-                  global
+                  {serviceModeLabel(service.Spec.Mode)}
                 </span>
               ),
             ]}

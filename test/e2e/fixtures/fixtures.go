@@ -617,7 +617,7 @@ func waitConverged(ctx context.Context, env *harness.Env, name string) error {
 			return err
 		}
 
-		converged, msg := cluster.ServiceConverged(svc, running)
+		converged, msg := cluster.ServiceConverged(svc, running, 0)
 		last = msg
 
 		if converged {
