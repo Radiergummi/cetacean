@@ -849,7 +849,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 			notAcceptable(
 				w,
 				r,
-				"application/vnd.jgf+json, application/json, application/graphml+xml, text/vnd.graphviz",
+				"text/html, application/vnd.jgf+json, application/json, application/graphml+xml, text/vnd.graphviz",
 			)
 		}
 	})

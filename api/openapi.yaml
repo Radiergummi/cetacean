@@ -1067,6 +1067,9 @@ paths:
                 suggestion: Re-read the service and retry the operation.
         "404":
           description: Unknown error code
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/ProblemDetail" }
 
   # ── Events ───────────────────────────────────────────────────────────
 

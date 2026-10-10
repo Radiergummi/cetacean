@@ -477,6 +477,25 @@ func TestRefusalNamesOnlyWhatTheEndpointServes(t *testing.T) {
 	}
 }
 
+// /topology dispatches by hand, so its 406 list is written out rather than
+// derived from what the switch serves.
+func TestTopologyRefusalNamesEveryTypeItServes(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+	problem := refuse(t, router, "/topology", "application/atom+xml")
+
+	for _, served := range []string{
+		"text/html",
+		"application/vnd.jgf+json",
+		"application/json",
+		"application/graphml+xml",
+		"text/vnd.graphviz",
+	} {
+		if !strings.Contains(problem.Detail, served) {
+			t.Errorf("/topology serves %s, but its 406 omits it: %q", served, problem.Detail)
+		}
+	}
+}
+
 // Holds both halves of the claim together: neither media type resolves against
 // supportedTypes, and each document still answers a client asking for it.
 // Asserting only the second half is satisfied by putting the row back, which is
