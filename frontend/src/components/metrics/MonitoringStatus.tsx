@@ -43,7 +43,7 @@ export default function MonitoringStatus({ status, source }: Props) {
           <strong>Monitoring not configured.</strong> Deploy the monitoring stack to enable CPU,
           memory, and disk metrics across your cluster.
         </p>
-        <pre className="mt-2 max-w-full overflow-x-auto rounded bg-status-info/15 px-2 py-1 text-xs">
+        <pre className="mt-2 max-w-fit overflow-x-auto rounded bg-status-info/15 px-2 py-1 text-xs">
           docker stack deploy -c compose.monitoring.yaml cetacean-monitoring
         </pre>
         <p className="mt-3 text-xs">
