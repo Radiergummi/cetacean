@@ -290,7 +290,7 @@ consent screen, so one would only sit unused.
 </ConfigParam>
 
 <ConfigParam name="oauth.dcr_max_clients" env="CETACEAN_OAUTH_DCR_MAX_CLIENTS" default="1000">
-  Global cap on registered clients. Once reached, the least recently used registration is evicted.
+  Global cap on registered clients. Once reached, the oldest registration is evicted, and the eviction is logged.
 </ConfigParam>
 
 <ConfigParam name="oauth.cimd_enabled" env="CETACEAN_OAUTH_CIMD_ENABLED" default="true">

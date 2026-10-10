@@ -370,8 +370,8 @@ TLS listener and isn't consulted here. A certificate presented directly always w
 
 Every preceding mode establishes identity from something the deployment already trusts—a session cookie, an IdP token,
 a client certificate, a proxy header. A script, a CLI or a native app often has none of those. With
-[`oauth.enabled`][oauth.enabled] set, Cetacean is its own OAuth 2.1 authorization server and issues access tokens
-for the API, on any auth mode, with nothing else to configure.
+[`oauth.enabled`][oauth.enabled] and [`oauth.api_tokens`][oauth.api_tokens] set, Cetacean is its own OAuth 2.1
+authorization server and issues access tokens for the API, on any auth mode.
 
 Send one as a bearer token:
 
@@ -407,8 +407,8 @@ agent for MCP isn't approving it to delete your services. A client discovers whi
 the `resource_metadata` parameter of the `WWW-Authenticate` header on a 401, and asks for that one by its RFC 8707
 `resource` parameter.
 
-Set [`oauth.api_tokens`][oauth.api_tokens] to `false` to offer only `/mcp`. The API resource then has no metadata
-document and the authorize endpoint refuses to mint a token for it.
+With [`oauth.api_tokens`][oauth.api_tokens] off, the default, only `/mcp` is offered. The API resource then has no
+metadata document and the authorize endpoint refuses to mint a token for it.
 
 ### What a token is not
 

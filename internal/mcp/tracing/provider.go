@@ -57,6 +57,12 @@ func NewProvider(ctx context.Context, endpoint, serviceVersion string) (*Provide
 		provider: sdktrace.NewTracerProvider(
 			sdktrace.WithBatcher(exporter),
 			sdktrace.WithResource(attributes),
+			// The default drops a span whose remote parent says not sampled,
+			// which lets any caller switch off tracing of its own requests.
+			sdktrace.WithSampler(sdktrace.ParentBased(
+				sdktrace.AlwaysSample(),
+				sdktrace.WithRemoteParentNotSampled(sdktrace.AlwaysSample()),
+			)),
 		),
 	}, nil
 }

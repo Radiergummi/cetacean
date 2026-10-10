@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -116,6 +117,13 @@ func (r *ClientRegistry) register(reg *ClientRegistration) {
 			oldest := r.order[0]
 			r.order = r.order[1:]
 			delete(r.clients, oldest)
+			slog.Info(
+				"evicted the oldest registered OAuth client at the cap",
+				"client_id",
+				oldest,
+				"cap",
+				r.maxClients,
+			)
 		}
 	}
 
