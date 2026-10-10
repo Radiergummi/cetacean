@@ -821,3 +821,18 @@ func TestResourceMatcherSeesTaskRemoves(t *testing.T) {
 		t.Error("the node stream drops its task's remove")
 	}
 }
+
+// The removed task rides on its event only for matching; a remove names what
+// is gone and carries no resource, as every other type's remove does.
+func TestToSSEEvent_RemoveCarriesNoResource(t *testing.T) {
+	ev := ToSSEEvent(cache.Event{
+		Type:     cache.EventTask,
+		Action:   "remove",
+		ID:       "t1",
+		Resource: swarm.Task{ID: "t1"},
+	}, "")
+
+	if ev.Resource != nil {
+		t.Errorf("resource = %+v, want none", ev.Resource)
+	}
+}
