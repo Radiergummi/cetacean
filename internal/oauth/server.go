@@ -921,16 +921,17 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.renderConsentPage(w, consentData{
-		ClientName:          meta.ClientName,
-		Verified:            verified,
-		RedirectURI:         redirectURIRaw,
-		Subject:             identity.Subject,
-		Email:               identity.Email,
-		ResponseType:        responseType,
-		ClientID:            clientID,
-		CodeChallenge:       codeChallenge,
-		CodeChallengeMethod: codeChallengeMethod,
-		State:               state,
+		ClientName:             meta.ClientName,
+		Verified:               verified,
+		RedirectURI:            redirectURIRaw,
+		RegisteredRedirectURIs: meta.RedirectURIs,
+		Subject:                identity.Subject,
+		Email:                  identity.Email,
+		ResponseType:           responseType,
+		ClientID:               clientID,
+		CodeChallenge:          codeChallenge,
+		CodeChallengeMethod:    codeChallengeMethod,
+		State:                  state,
 
 		// resourceParam is the raw request parameter, echoed back unchanged:
 		// the form must resubmit what the client sent, not the resolved
@@ -1043,19 +1044,20 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	// it with a nonce bound to the new fingerprint.
 	if fingerprint := consentFingerprint(meta); fingerprint != shownFingerprint {
 		s.renderConsentPage(w, consentData{
-			ClientName:          meta.ClientName,
-			Verified:            verified,
-			RedirectURI:         redirectURIRaw,
-			Subject:             identity.Subject,
-			Email:               identity.Email,
-			ResponseType:        responseType,
-			ClientID:            clientID,
-			CodeChallenge:       codeChallenge,
-			CodeChallengeMethod: codeChallengeMethod,
-			State:               state,
-			Resource:            resourceParam,
-			ResourceID:          effectiveResource,
-			Fingerprint:         fingerprint,
+			ClientName:             meta.ClientName,
+			Verified:               verified,
+			RedirectURI:            redirectURIRaw,
+			RegisteredRedirectURIs: meta.RedirectURIs,
+			Subject:                identity.Subject,
+			Email:                  identity.Email,
+			ResponseType:           responseType,
+			ClientID:               clientID,
+			CodeChallenge:          codeChallenge,
+			CodeChallengeMethod:    codeChallengeMethod,
+			State:                  state,
+			Resource:               resourceParam,
+			ResourceID:             effectiveResource,
+			Fingerprint:            fingerprint,
 		})
 
 		return

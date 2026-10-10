@@ -197,9 +197,10 @@ sequenceDiagram
     client->>cetacean: POST /mcp, Bearer token
 ```
 
-The consent screen labels how the client identified itself. **Verified via published metadata** means the client is
-named by a URL Cetacean fetched and checked. **Self-reported identity** means the client named itself; those are never
-remembered, so you approve them every time.
+The consent screen labels how the client identified itself. **Verified** means the client is named by a URL Cetacean
+fetched and checked. **Self-registered** means the client named itself; those are never remembered, so you approve them
+every time. The screen lists every redirect URI the client registers, since a remembered approval covers all of them.
+It shows no client logo, because the page loads nothing from elsewhere.
 
 Refresh tokens, approvals, and dynamically registered clients are stored in `oauth-tokens.json` under
 [`storage.data_dir`][storage.data_dir], at mode `0600`—anyone who can write that file can pre-approve a client. Nothing

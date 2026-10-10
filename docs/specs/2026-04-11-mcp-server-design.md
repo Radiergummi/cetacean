@@ -111,7 +111,7 @@ Every authorization and token request MUST include a `resource` parameter naming
    - **CIMD**: use an `https://` URL as `client_id` pointing to a self-hosted metadata document. Cetacean fetches and verifies it on first use.
 5. Client redirects user to `/oauth/authorize?response_type=code&client_id=...&code_challenge=...&resource=...&state=...`.
 6. Cetacean's auth middleware authenticates the user using whatever auth mode is configured.
-7. User sees a server-rendered HTML consent screen showing the verified client name/logo and the redirect URI.
+7. User sees a server-rendered HTML consent screen showing the client name, a "Verified" or "Self-registered" badge, and the redirect URI. No logo: the page loads nothing from a third party.
 8. Cetacean issues an authorization code (bound to `client_id`, `redirect_uri`, `code_challenge`, `resource`, identity) and redirects back to the client.
 9. Client exchanges the code for access token + refresh token at `/oauth/token` (must echo back the same `resource`).
 10. Subsequent MCP requests include `Authorization: Bearer <token>`.
@@ -153,7 +153,7 @@ When Cetacean receives an authorization request with a URL-shaped `client_id`:
 2. Validate the `client_id` field in the document matches the URL (exact string comparison).
 3. Validate `redirect_uris` includes the requested `redirect_uri`.
 4. Reject symmetric auth methods (`client_secret_post`, `client_secret_basic`).
-5. Display `client_name` and `logo_uri` on the consent screen with a green "Verified via published metadata" badge.
+5. Display `client_name` on the consent screen with a green "Verified" badge. `logo_uri` is validated but not rendered.
 6. Cache the metadata in-memory (1-hour TTL).
 
 If the `client_id` is neither a URL nor a known DCR registration, the request is rejected with `invalid_client`.
@@ -357,7 +357,7 @@ Sessions are ephemeral and reconnect-friendly. Designed for multi-replica deploy
 
 **Consent screen:**
 - Not iframeable: `Content-Security-Policy: frame-ancestors 'none'` + `X-Frame-Options: DENY`.
-- Displays verified client name and logo from CIMD document.
+- Displays the verified client name from the CIMD document.
 - Shows the `redirect_uri` where tokens will be sent.
 - Requires explicit user approval.
 

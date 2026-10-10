@@ -13,7 +13,8 @@ const apiPlaygroundHTML = `<!DOCTYPE html>
 <html>
 <head><title>Cetacean API</title><meta charset="utf-8"/></head>
 <body>
-  <script id="api-reference" data-url="/api"></script>
+  <script id="api-reference" data-url="/api"
+    data-configuration='{"telemetry":false,"withDefaultFonts":false}'></script>
   <script src="/api/scalar.js"></script>
 </body>
 </html>`
