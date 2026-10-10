@@ -19,7 +19,7 @@ func hostAccessService() swarm.Service {
 					Type:        mount.TypeBind,
 					Source:      "/srv/logs",
 					Target:      "/logs",
-					BindOptions: &mount.BindOptions{},
+					BindOptions: &mount.BindOptions{Propagation: mount.PropagationRShared},
 				},
 			},
 			CapabilityAdd: []string{"NET_ADMIN"},
@@ -50,6 +50,8 @@ func TestCheckMounts(t *testing.T) {
 			Options: map[string]string{"type": "none", "o": "bind", "device": "/"},
 		}},
 	}
+	emptyOptions := existing
+	emptyOptions.BindOptions = &mount.BindOptions{}
 	optionless := mount.Mount{Type: mount.TypeBind, Source: "/srv/logs", Target: "/logs"}
 	spelled := func(m mount.Mount, t mount.Type) []mount.Mount {
 		m.Type = t
@@ -80,7 +82,18 @@ func TestCheckMounts(t *testing.T) {
 			true,
 		},
 		{"volume with a driver at tier 3", []mount.Mount{boundVolume}, config.OpsImpactful, false},
-		{"bind sent without options", []mount.Mount{optionless}, config.OpsConfiguration, false},
+		{
+			"bind sent with an empty options block",
+			[]mount.Mount{emptyOptions},
+			config.OpsConfiguration,
+			false,
+		},
+		{
+			"bind stored with propagation, sent without",
+			[]mount.Mount{optionless},
+			config.OpsConfiguration,
+			true,
+		},
 		{"untyped mount at tier 2", spelled(socket, ""), config.OpsConfiguration, true},
 		{"uppercase bind at tier 2", spelled(socket, "BIND"), config.OpsConfiguration, true},
 		{"capitalised bind at tier 2", spelled(socket, "Bind"), config.OpsConfiguration, true},
@@ -101,6 +114,37 @@ func TestCheckMounts(t *testing.T) {
 				t.Errorf("err = %v, want refused=%v", err, tc.refused)
 			}
 		})
+	}
+}
+
+func TestCheckMountsNamesTheReason(t *testing.T) {
+	cases := []struct {
+		mount mount.Mount
+		want  string
+	}{
+		{
+			mount.Mount{Source: "/var/run/docker.sock", Target: "/s"},
+			"a bind mount of /var/run/docker.sock requires operations level 3",
+		},
+		{
+			mount.Mount{Type: "NPIPE", Source: `\\.\pipe\x`, Target: "/p"},
+			`a named pipe mount of \\.\pipe\x requires operations level 3`,
+		},
+		{
+			mount.Mount{
+				Type:          mount.TypeVolume,
+				Source:        "root",
+				Target:        "/host",
+				VolumeOptions: &mount.VolumeOptions{DriverConfig: &mount.Driver{Name: "local"}},
+			},
+			"a volume mount of root with driver options requires operations level 3",
+		},
+	}
+	for _, tc := range cases {
+		err := CheckMounts(hostAccessService(), []mount.Mount{tc.mount}, config.OpsConfiguration)
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("err = %v, want %q", err, tc.want)
+		}
 	}
 }
 
