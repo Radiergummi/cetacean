@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	json "github.com/goccy/go-json"
 
 	"github.com/docker/docker/api/types/container"
@@ -2175,7 +2176,7 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 
 	wc := &mockWriteClient{
 		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
-			return fmt.Errorf("node is not down")
+			return fmt.Errorf("connection reset by peer")
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -2187,6 +2188,90 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+// The engine answers an undrained node with a 400, which the client reads as
+// an invalid argument; the message is what says the node's state is the cause.
+func TestHandleRemoveNode_NotDownIsAConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
+
+	wc := &mockWriteClient{
+		removeNodeFn: func(_ context.Context, _ string, _ bool) error {
+			return fmt.Errorf(
+				"%w: node node1 is not down and can't be removed",
+				cerrdefs.ErrInvalidArgument,
+			)
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/nodes/node1", nil)
+	req.SetPathValue("id", "node1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNode(w, req)
+
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "NOD001") {
+		t.Errorf("status=%d body=%s, want 409 NOD001", w.Code, w.Body.String())
+	}
+}
+
+// force does not override use by a container; the refusal keeps its code, and
+// the detail does not name the container in the way.
+func TestHandleRemoveVolume_InUseWithForceIsAConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetVolume(volume.Volume{Name: "my-vol"})
+
+	wc := &mockWriteClient{
+		removeVolumeFn: func(context.Context, string, bool) error {
+			return fmt.Errorf(
+				"%w: remove my-vol: volume is in use - [19625d2c]",
+				cerrdefs.ErrConflict,
+			)
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/volumes/my-vol?force=true", nil)
+	req.SetPathValue("name", "my-vol")
+	w := httptest.NewRecorder()
+	h.HandleRemoveVolume(w, req)
+
+	body := w.Body.String()
+	if w.Code != http.StatusConflict || !strings.Contains(body, "VOL001") ||
+		strings.Contains(body, "19625d2c") {
+		t.Errorf("status=%d body=%s, want 409 VOL001 without the container", w.Code, body)
+	}
+}
+
+// Swarmkit refuses a referenced config with InvalidArgument, naming the services.
+func TestHandleRemoveConfig_InUseIsAConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "my-config"}},
+	})
+
+	wc := &mockWriteClient{
+		removeConfigFn: func(context.Context, string) error {
+			return fmt.Errorf(
+				"%w: config 'my-config' is in use by the following service: hidden-service",
+				cerrdefs.ErrInvalidArgument,
+			)
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/configs/cfg1", nil)
+	req.SetPathValue("id", "cfg1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveConfig(w, req)
+
+	body := w.Body.String()
+	if w.Code != http.StatusConflict || !strings.Contains(body, "CFG001") ||
+		strings.Contains(body, "hidden-service") {
+		t.Errorf("status=%d body=%s, want 409 CFG001 without the service", w.Code, body)
 	}
 }
 
@@ -2413,6 +2498,42 @@ func TestHandleRemoveStack_PartialFailure(t *testing.T) {
 	errs := resp["errors"].([]any)
 	if len(errs) != 1 {
 		t.Fatalf("errors length=%d, want 1", len(errs))
+	}
+}
+
+// A stack's network or secret may also be used outside the stack, by a service
+// the caller may not be allowed to read.
+func TestHandleRemoveStack_ConflictDoesNotRepeatEngineText(t *testing.T) {
+	c := cache.New(nil)
+	seedStack(c, "myapp")
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(context.Context, string) error { return nil },
+		removeNetworkFn: func(context.Context, string) error {
+			return fmt.Errorf(
+				"%w: rpc error: code = FailedPrecondition desc = network n is in use by service hidden-service",
+				cerrdefs.ErrInvalidArgument,
+			)
+		},
+		removeConfigFn: func(context.Context, string) error { return nil },
+		removeSecretFn: func(context.Context, string) error {
+			return fmt.Errorf(
+				"%w: secret 's' is in use by the following service: hidden-service",
+				cerrdefs.ErrInvalidArgument,
+			)
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/stacks/myapp", nil)
+	req.SetPathValue("name", "myapp")
+	w := httptest.NewRecorder()
+	h.HandleRemoveStack(w, req)
+
+	body := w.Body.String()
+	if w.Code != http.StatusOK || strings.Contains(body, "hidden-service") ||
+		strings.Count(body, "cannot be removed in its current state") != 2 {
+		t.Errorf("status=%d body=%s, want two generic refusals", w.Code, body)
 	}
 }
 
@@ -3369,6 +3490,33 @@ func TestHandleRemoveNetwork_DockerError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("status=%d, want 500", w.Code)
+	}
+}
+
+// Swarmkit's FailedPrecondition reaches the client as a 400, naming the service.
+func TestHandleRemoveNetwork_InUseBySwarmServiceIsAConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "my-network"})
+
+	wc := &mockWriteClient{
+		removeNetworkFn: func(context.Context, string) error {
+			return fmt.Errorf(
+				"%w: rpc error: code = FailedPrecondition desc = network net1 is in use by service hidden-service",
+				cerrdefs.ErrInvalidArgument,
+			)
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/networks/net1", nil)
+	req.SetPathValue("id", "net1")
+	w := httptest.NewRecorder()
+	h.HandleRemoveNetwork(w, req)
+
+	body := w.Body.String()
+	if w.Code != http.StatusConflict || !strings.Contains(body, "NET001") ||
+		strings.Contains(body, "hidden-service") {
+		t.Errorf("status=%d body=%s, want 409 NET001 without the service", w.Code, body)
 	}
 }
 

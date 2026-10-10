@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 type updateAvailabilityRequest struct {
@@ -96,8 +96,8 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	err := h.nodeWriter.RemoveNode(r.Context(), id, force)
 	if err != nil {
-		if !force && (cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err)) {
-			writeErrorCode(w, r, "NOD001", err.Error())
+		if cluster.IsRemovalConflict(err, "node") {
+			writeRemovalConflict(w, r, err, "NOD001", "node", id)
 			return
 		}
 		writeDockerError(w, r, err, "node", id)

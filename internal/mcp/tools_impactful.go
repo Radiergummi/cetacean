@@ -62,7 +62,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", s.checkServiceWrite,
+			handler: s.removeHandler("id", "service", s.checkServiceWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveService(ctx, id)
 				}),
@@ -84,7 +84,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", s.checkTaskWrite,
+			handler: s.removeHandler("id", "task", s.checkTaskWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveTask(ctx, id)
 				}),
@@ -106,7 +106,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", s.checkConfigWrite,
+			handler: s.removeHandler("id", "config", s.checkConfigWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveConfig(ctx, id)
 				}),
@@ -128,7 +128,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", s.checkSecretWrite,
+			handler: s.removeHandler("id", "secret", s.checkSecretWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveSecret(ctx, id)
 				}),
@@ -150,7 +150,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", s.checkNetworkWrite,
+			handler: s.removeHandler("id", "network", s.checkNetworkWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveNetwork(ctx, id)
 				}),
@@ -160,7 +160,7 @@ func (s *Server) impactfulTools() []toolDef {
 				mcplib.WithToolTitle("Remove volume"),
 				mcplib.WithOutputSchema[removalResult](),
 				mcplib.WithDescription(
-					"Delete a Docker volume by name. Fails if any container is currently using it unless `force` is set. Volume contents are irrecoverable.",
+					"Delete a Docker volume by name. Fails if any container is currently using a local volume, `force` included; there `force` only overrides an error from the volume driver. On a cluster volume `force` deletes it even while it is in use. Volume contents are irrecoverable.",
 				),
 				mcplib.WithReadOnlyHintAnnotation(false),
 				mcplib.WithDestructiveHintAnnotation(true),
@@ -173,7 +173,7 @@ func (s *Server) impactfulTools() []toolDef {
 				mcplib.WithBoolean(
 					"force",
 					mcplib.Description(
-						"Force removal even if the volume is in use. Default false.",
+						"Remove a local volume even if its driver reports an error, or a cluster volume even while it is in use. Does not override use of a local volume by a container. Default false.",
 					),
 				),
 			),

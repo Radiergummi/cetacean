@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	cerrdefs "github.com/containerd/errdefs"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // removeSpec describes how to remove a resource. Used by handleRemove to
@@ -32,8 +32,8 @@ func handleRemove[T any](
 	slog.Info("removing "+spec.resource, spec.resource, key)
 
 	if err := spec.remove(r.Context(), key); err != nil {
-		if cerrdefs.IsConflict(err) || cerrdefs.IsFailedPrecondition(err) {
-			writeErrorCode(w, r, spec.conflictCode, err.Error())
+		if cluster.IsRemovalConflict(err, spec.resource) {
+			writeRemovalConflict(w, r, err, spec.conflictCode, spec.resource, key)
 			return
 		}
 

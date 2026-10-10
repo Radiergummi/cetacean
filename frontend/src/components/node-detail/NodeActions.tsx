@@ -37,7 +37,8 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
 
   const errorCode = remove.cause instanceof ApiError ? remove.cause.code : null;
   const errorInfo = getErrorInfo(errorCode);
-  const showForceRemove = errorInfo?.action === "force-remove";
+  const isManager = node.Spec.Role === "manager";
+  const showForceRemove = errorInfo?.action === "force-remove" && !isManager;
 
   function handleOpenChange(next: boolean) {
     setDialogOpen(next);
