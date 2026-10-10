@@ -1,3 +1,4 @@
+import { seededRandom } from "./timeseries";
 import type { Config, Network, Node, Secret, Service, Task, Volume } from "@/api/types";
 
 /** Generate a random hex string of the given length using WebCrypto. */
@@ -9,14 +10,24 @@ export function randomHex(length: number): string {
     .slice(0, length);
 }
 
+/**
+ * Generate a hex string from a seeded source. Dataset IDs must not change between page
+ * loads, or a reloaded or shared demo deep link points at nothing.
+ */
+function seededHex(random: () => number, length: number): string {
+  return Array.from({ length }, () => Math.floor(random() * 16).toString(16)).join("");
+}
+
+const datasetRandom = seededRandom(0x5eed);
+
 /** Generate a Docker-style 25-char hex ID. */
 function objectId(): string {
-  return randomHex(25);
+  return seededHex(datasetRandom, 25);
 }
 
 /** Generate a fake sha256 digest string. */
 function digest(): string {
-  return `sha256:${randomHex(64)}`;
+  return `sha256:${seededHex(datasetRandom, 64)}`;
 }
 
 // Pre-generate all IDs so they can be cross-referenced within buildDataset.
@@ -804,7 +815,8 @@ function buildServices(): Service[] {
 }
 
 function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
-  const nextTaskID = (): string => objectId();
+  const taskRandom = seededRandom(0x7a5c);
+  const nextTaskID = (): string => seededHex(taskRandom, 25);
   const nextContainerID = (): string => randomHex(64);
 
   const workerNodes = [idNodeWorker1, idNodeWorker2];
