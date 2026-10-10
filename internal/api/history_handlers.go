@@ -40,11 +40,20 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries := h.cache.History().List(cache.HistoryQuery{
+	query := cache.HistoryQuery{
 		Type:       cache.EventType(resourceType),
 		ResourceID: resourceID,
 		Limit:      limit,
-	})
+	}
+
+	// The type names what resourceId is, and a service's timeline holds its
+	// tasks' entries too.
+	if query.Type == cache.EventService && resourceID != "" {
+		query.Type = ""
+		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
+	}
+
+	entries := h.cache.History().List(query)
 	if entries == nil {
 		entries = []cache.HistoryEntry{}
 	}

@@ -31,6 +31,7 @@ func (s *Server) toolGetTopology(
 			s.filterNodes(ctx, s.cache.ListNodes()),
 			s.cache.ListTasks(),
 			s.filterServices(ctx, s.cache.ListServices()),
+			s.cache.FlappingServices(),
 		))
 
 	case cluster.TopologyViewDrainImpact:

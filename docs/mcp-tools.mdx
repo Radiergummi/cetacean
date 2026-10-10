@@ -41,8 +41,8 @@ resources they returned, so a host can offer somewhere to go next.
 <McpTool name="get_cluster_status" level={0}>
     <Fragment slot="arguments">none</Fragment>
 
-    Answers whether the cluster is healthy and, when it's not, names the services not in their desired state, the
-    nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here.
+    Answers whether the cluster is healthy and, when it's not, names the services not in their desired state or
+    restarting in a loop, the nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here.
 </McpTool>
 
 <McpTool name="find" level={0}>
@@ -102,7 +102,8 @@ What the cluster is doing now, and what it did recently.
     <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `limit`</Fragment>
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
-    exactly one is given and otherwise only where no other type claims the name.
+    exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
+    tasks' entries unless `types` leaves out `task`.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>

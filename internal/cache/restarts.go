@@ -2,6 +2,7 @@ package cache
 
 import (
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -17,6 +18,12 @@ type RestartTracker struct {
 	horizon  time.Duration
 	bucket   time.Duration
 	services map[string]map[int64]uint32 // serviceID -> bucket-start-unix -> count
+
+	// recent holds each service's newest flappingRestarts failure times, oldest
+	// first. The buckets are an hour wide, too coarse to tell a loop still
+	// running from one fixed half an hour ago. Not persisted: a full sync
+	// replays the failures Swarm still holds, with their own timestamps.
+	recent map[string][]time.Time
 
 	// observing is the moment this tracker began counting: process start, or
 	// the oldest bucket a restored snapshot brought back. It is what keeps
@@ -39,8 +46,35 @@ func NewRestartTracker(horizon, bucket time.Duration) *RestartTracker {
 		horizon:   horizon,
 		bucket:    bucket,
 		services:  make(map[string]map[int64]uint32),
+		recent:    make(map[string][]time.Time),
 		observing: time.Now(),
 	}
+}
+
+// A service is flapping when its last flappingRestarts involuntary task
+// terminations all fall within flappingWindow: Swarm's default restart delay
+// is five seconds, so a crash loop clears this many times over, while a
+// service that has stopped failing drops out once the window passes.
+const (
+	flappingRestarts = 3
+	flappingWindow   = 10 * time.Minute
+)
+
+// Flapping returns the services currently in a restart loop.
+func (rt *RestartTracker) Flapping() map[string]bool {
+	rt.mu.RLock()
+	defer rt.mu.RUnlock()
+
+	cutoff := time.Now().Add(-flappingWindow)
+	out := make(map[string]bool)
+
+	for id, times := range rt.recent {
+		if len(times) == flappingRestarts && times[0].After(cutoff) {
+			out[id] = true
+		}
+	}
+
+	return out
 }
 
 // TrackingSince is the earliest moment the tracker can account for, and so the
@@ -100,6 +134,16 @@ func (rt *RestartTracker) Record(serviceID string, when time.Time) {
 	buckets[key]++
 
 	rt.pruneLocked(buckets, time.Now())
+
+	recent := rt.recent[serviceID]
+	at, _ := slices.BinarySearchFunc(recent, when, time.Time.Compare)
+	recent = slices.Insert(recent, at, when)
+
+	if len(recent) > flappingRestarts {
+		recent = recent[len(recent)-flappingRestarts:]
+	}
+
+	rt.recent[serviceID] = recent
 }
 
 // Count returns the total number of failures for serviceID within the given
@@ -133,6 +177,7 @@ func (rt *RestartTracker) Forget(serviceID string) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	delete(rt.services, serviceID)
+	delete(rt.recent, serviceID)
 }
 
 // Horizon returns the configured retention window.

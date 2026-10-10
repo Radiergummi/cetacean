@@ -61,9 +61,10 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
 		// Counted once: asking per row would walk the task table per service.
 		running := h.cache.RunningTaskCounts()
+		flapping := h.cache.FlappingServices()
 
 		writeListCSV(w, r, "service", services, p, func(page []swarm.Service) []cluster.Row {
-			return cluster.RowsForServices(page, running)
+			return cluster.RowsForServices(page, running, flapping)
 		})
 
 		return

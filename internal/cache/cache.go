@@ -96,6 +96,15 @@ type ClusterSnapshot struct {
 	// needing both walks the task table once rather than twice under two locks.
 	// Not serialized: the REST /cluster payload is a published contract.
 	RunningByService map[string]int `json:"-"`
+
+	// Flapping names the services in a restart loop, which count as degraded
+	// whatever their running count says at the moment it was taken.
+	Flapping map[string]bool `json:"-"`
+}
+
+// FlappingServices returns the services currently in a restart loop.
+func (c *Cache) FlappingServices() map[string]bool {
+	return c.restarts.Flapping()
 }
 
 type OnChangeFunc func(Event)
@@ -276,12 +285,17 @@ func (c *Cache) notify(e Event) {
 	c.generation.Add(1)
 
 	if e.Type != EventSync {
-		e.HistoryID = c.history.Append(HistoryEntry{
+		entry := HistoryEntry{
 			Type:       e.Type,
 			Action:     e.Action,
 			ResourceID: e.ID,
 			Name:       e.Name,
-		})
+		}
+		if task, ok := e.Resource.(swarm.Task); ok {
+			entry.ServiceID = task.ServiceID
+		}
+
+		e.HistoryID = c.history.Append(entry)
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
 	} else {
 		e.HistoryID = c.history.Count()
@@ -995,15 +1009,21 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		}
 	}
 
+	flapping := c.restarts.Flapping()
+
 	var servicesConverged, servicesDegraded int
 	var reservedCPU, reservedMemory int64
 	for _, svc := range c.services {
 		if svc.Spec.Mode.Global != nil {
-			servicesConverged++
+			if flapping[svc.ID] {
+				servicesDegraded++
+			} else {
+				servicesConverged++
+			}
 		} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 			desired := int(*svc.Spec.Mode.Replicated.Replicas)
 			running := runningByService[svc.ID]
-			if running >= desired {
+			if running >= desired && !flapping[svc.ID] {
 				servicesConverged++
 			} else {
 				servicesDegraded++
@@ -1034,6 +1054,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		MaxNodeMemory:     maxMemory,
 		LastSync:          c.lastSync,
 		RunningByService:  runningByService,
+		Flapping:          flapping,
 	}
 }
 
