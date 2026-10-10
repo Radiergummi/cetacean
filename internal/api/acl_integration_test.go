@@ -1778,11 +1778,24 @@ func TestPatchServiceAttachments_RequireReadOnTheAttachment(t *testing.T) {
 			c := cache.New(nil)
 			c.SetService(
 				swarm.Service{
-					ID:   "svc1",
-					Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+					ID: "svc1",
+					Spec: swarm.ServiceSpec{
+						Annotations: swarm.Annotations{Name: "web"},
+						TaskTemplate: swarm.TaskSpec{
+							ContainerSpec: &swarm.ContainerSpec{
+								Secrets: []*swarm.SecretReference{{SecretID: "x-held"}},
+								Configs: []*swarm.ConfigReference{{ConfigID: "x-held"}},
+							},
+							Networks: []swarm.NetworkAttachmentConfig{{Target: "x-held"}},
+						},
+					},
 				},
 			)
-			for id, name := range map[string]string{"x-mine": "mine", "x-theirs": "theirs"} {
+			for id, name := range map[string]string{
+				"x-mine":   "mine",
+				"x-theirs": "theirs",
+				"x-held":   "held",
+			} {
 				c.SetSecret(
 					swarm.Secret{
 						ID:   id,
@@ -1864,6 +1877,15 @@ func TestPatchServiceAttachments_RequireReadOnTheAttachment(t *testing.T) {
 			if w := send("x-mine", "mine"); w.Code != http.StatusOK {
 				t.Fatalf(
 					"readable attachment: status=%d, want 200; body: %s",
+					w.Code,
+					w.Body.String(),
+				)
+			}
+
+			// Re-sending what the service already carries must not need read on it.
+			if w := send("x-held", "held"); w.Code != http.StatusOK {
+				t.Fatalf(
+					"already-attached reference: status=%d, want 200; body: %s",
 					w.Code,
 					w.Body.String(),
 				)
@@ -1995,5 +2017,59 @@ func TestInstallPlugin_RequiresTypeWideWriteGrant(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("POST /plugins: status=%d, want 403", w.Code)
+	}
+}
+
+// Rotation is create-then-repoint, and the attach check resolves through the
+// cache the watcher fills only later, so the create must seed it.
+func TestCreatedDataResourceIsImmediatelyAttachable(t *testing.T) {
+	for _, kind := range []string{"secret", "config"} {
+		t.Run(kind, func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetService(
+				swarm.Service{
+					ID:   "svc1",
+					Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+				},
+			)
+			mock := &mockWriteClient{
+				createConfigFn: func(context.Context, swarm.ConfigSpec) (string, error) {
+					return "fresh", nil
+				},
+				createSecretFn: func(context.Context, swarm.SecretSpec) (string, error) {
+					return "fresh", nil
+				},
+				updateServiceSecretsFn: func(context.Context, string, []*swarm.SecretReference) (swarm.Service, error) {
+					return swarm.Service{ID: "svc1"}, nil
+				},
+				updateServiceConfigsFn: func(context.Context, string, []*swarm.ConfigReference) (swarm.Service, error) {
+					return swarm.Service{ID: "svc1"}, nil
+				},
+			}
+			router := newTestRouterWithCache(t, c, withWriteClient(mock))
+
+			send := func(method, path, contentType, body string) int {
+				req := httptest.NewRequest(method, path, strings.NewReader(body))
+				req.Header.Set("Content-Type", contentType)
+				req.Header.Set("Accept", "application/json")
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, req)
+
+				return w.Code
+			}
+
+			if code := send(
+				"POST", "/"+kind+"s", "application/json", `{"name":"rot_v1","data":"aGVsbG8="}`,
+			); code != http.StatusCreated {
+				t.Fatalf("create: status=%d, want 201", code)
+			}
+
+			body := fmt.Sprintf(`{%q:[{%q:"fresh",%q:"rot_v1"}]}`, kind+"s", kind+"ID", kind+"Name")
+			if code := send(
+				"PATCH", "/services/svc1/"+kind+"s", "application/merge-patch+json", body,
+			); code != http.StatusOK {
+				t.Errorf("attach the new %s: status=%d, want 200", kind, code)
+			}
+		})
 	}
 }
