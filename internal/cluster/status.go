@@ -90,7 +90,7 @@ func BuildClusterStatus(
 
 	stalled := 0
 
-	for _, row := range RowsForServices(services, running) {
+	for _, row := range RowsForServices(services, running, snap.CompletedJobsByService) {
 		svc := byID[row.ID]
 
 		// A stalled rollout is a rollout even though the service does not read

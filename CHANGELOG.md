@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- Job-mode services read `completed` once their run finishes instead of `running` forever, `Prefer: wait` and MCP's `watch` wait for the run, and the dashboard names their mode
+- A stack's page lists the configs, secrets, networks and volumes deployed with it straight away, instead of after the next full sync
+- Until the first sync, a restart serves the loaded snapshot to JSON, CSV and MCP clients as well as the dashboard, instead of answering `503`
+- Memory no longer grows with every task ID the event history has ever seen
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

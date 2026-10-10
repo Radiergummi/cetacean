@@ -11,6 +11,7 @@ import ResourceName from "../components/ResourceName";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useDetailResource } from "../hooks/useDetailResource";
+import { serviceModeLabel } from "../lib/deriveServiceState";
 import type { TaskCount } from "../lib/stackGraph";
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -80,16 +81,13 @@ export default function StackDetail() {
         const counts: Record<string, TaskCount> = {};
 
         for (const [service, tasks] of results) {
+          const { Global, GlobalJob, ReplicatedJob } = service.Spec.Mode;
+          const running = tasks.filter(({ Status: { State } }) => State === "running").length;
           const desired =
             service.Spec.Mode.Replicated?.Replicas ??
-            (service.Spec.Mode.Global
-              ? tasks.filter(({ Status: { State } }) => State === "running").length
-              : 1);
+            (Global || GlobalJob || ReplicatedJob ? running : 1);
 
-          counts[service.ID] = {
-            running: tasks.filter(({ Status: { State } }) => State === "running").length,
-            desired,
-          };
+          counts[service.ID] = { running, desired };
         }
         setTaskCounts((previous) => (sameCounts(previous, counts) ? previous : counts));
       });
@@ -179,7 +177,7 @@ export default function StackDetail() {
                 <td className="p-3 font-mono text-xs">
                   {TaskTemplate?.ContainerSpec?.Image?.split("@")[0]}
                 </td>
-                <td className="p-3 text-sm">{Mode.Replicated ? "replicated" : "global"}</td>
+                <td className="p-3 text-sm">{serviceModeLabel(Mode)}</td>
                 <td className="p-3 text-sm tabular-nums">
                   {taskCounts[ID] ? (
                     <span>

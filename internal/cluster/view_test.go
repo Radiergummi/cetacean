@@ -22,7 +22,7 @@ func TestRowsForServicesCarryDerivedState(t *testing.T) {
 	svc := replicated("api", 3)
 	svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": "demo"}
 
-	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2})
+	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2}, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
@@ -609,7 +609,7 @@ func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
 
 	// One desired, none running: the same numbers DeriveServiceState sees on
 	// the list side, and so the same state.
-	if want := DeriveServiceState(svc, 0); got.State != want {
+	if want := DeriveServiceState(svc, 0, 0); got.State != want {
 		t.Errorf(
 			"state = %q, want %q — the draining task was counted as a replica",
 			got.State, want,

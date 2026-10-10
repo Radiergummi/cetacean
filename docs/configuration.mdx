@@ -379,8 +379,10 @@ cetacean healthcheck      Exit 0 if ready, 1 otherwise (for Docker HEALTHCHECK)
 ## Snapshots
 
 Cetacean writes all cached swarm state to `${data_dir}/snapshot.json` after every sync. On startup
-it loads the snapshot to serve stale-but-fast data while the live sync catches up. Writes are
-atomic, so a crash mid-write can't corrupt the file.
+it loads the snapshot to serve stale-but-fast data while the live sync catches up, in every
+representation: JSON, CSV, MCP, and the dashboard alike. Without a snapshot, reads of cluster
+state answer `503` until the first sync, and `/-/ready` answers `503` until then either way.
+Snapshot writes are atomic, so a crash mid-write can't corrupt the file.
 
 ## Health checks
 

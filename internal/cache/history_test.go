@@ -624,3 +624,52 @@ func TestHistoryOldestReportsTheHorizonItCanAnswerFor(t *testing.T) {
 		t.Errorf("Oldest = %v, want %v — the horizon must follow the ring", oldest, want)
 	}
 }
+
+// A resource whose every entry the ring has overwritten keeps no index: a
+// crash-looping service mints a task ID per restart, and each would otherwise
+// hold its index ring for the life of the process.
+func TestHistoryPrunesIndexOfOverwrittenResources(t *testing.T) {
+	const size = 8
+	h := NewHistory(size)
+
+	for i := range 100 {
+		h.Append(HistoryEntry{
+			Type:       EventTask,
+			Action:     "update",
+			ResourceID: fmt.Sprintf("task-%d", i),
+		})
+	}
+
+	if got := len(h.byResource); got > size {
+		t.Errorf("byResource holds %d resources, want at most the ring's %d", got, size)
+	}
+
+	// A pruned resource still answers as having nothing, and a surviving one
+	// still answers from its index.
+	if got := h.List(HistoryQuery{ResourceID: "task-0"}); len(got) != 0 {
+		t.Errorf("List(task-0) = %d entries, want none once overwritten", len(got))
+	}
+
+	if got := h.List(HistoryQuery{ResourceID: "task-99"}); len(got) != 1 {
+		t.Errorf("List(task-99) = %d entries, want 1", len(got))
+	}
+}
+
+// A resource that recurs keeps its index while any of its entries survive.
+func TestHistoryKeepsIndexWhileAnEntrySurvives(t *testing.T) {
+	h := NewHistory(4)
+
+	h.Append(HistoryEntry{ResourceID: "svc"})
+	h.Append(HistoryEntry{ResourceID: "a"})
+	h.Append(HistoryEntry{ResourceID: "svc"})
+	h.Append(HistoryEntry{ResourceID: "b"})
+	h.Append(HistoryEntry{ResourceID: "c"}) // overwrites svc's first entry only
+
+	if got := h.List(HistoryQuery{ResourceID: "svc"}); len(got) != 1 {
+		t.Errorf("List(svc) = %d entries, want the 1 that survives", len(got))
+	}
+
+	if _, ok := h.byResource["svc"]; !ok {
+		t.Error("svc's index was pruned while one of its entries survives")
+	}
+}

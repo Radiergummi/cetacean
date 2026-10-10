@@ -113,9 +113,53 @@ func TestDeriveServiceState(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := cluster.DeriveServiceState(tc.svc, tc.runningCount)
+			got := cluster.DeriveServiceState(tc.svc, tc.runningCount, 0)
 			if got != tc.want {
 				t.Errorf("DeriveServiceState() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A job runs to completion rather than being kept running, so neither the
+// replicated rule (desired 0 reads as "running" forever) nor the global one fits.
+func TestJobServiceStateFollowsItsRun(t *testing.T) {
+	replicatedJob := swarm.Service{Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{
+		ReplicatedJob: &swarm.ReplicatedJob{TotalCompletions: new(uint64(2))},
+	}}}
+	globalJob := swarm.Service{Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{
+		GlobalJob: &swarm.GlobalJob{},
+	}}}
+	defaultJob := swarm.Service{Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{
+		ReplicatedJob: &swarm.ReplicatedJob{},
+	}}}
+
+	tests := []struct {
+		name               string
+		svc                swarm.Service
+		running, completed int
+		want               string
+		converged          bool
+	}{
+		{"replicated job running", replicatedJob, 1, 1, "running", false},
+		{"replicated job done", replicatedJob, 0, 2, "completed", true},
+		{"replicated job short of its completions", replicatedJob, 0, 1, "failed", false},
+		{"replicated job never ran", replicatedJob, 0, 0, "failed", false},
+		{"defaulted job done after one", defaultJob, 0, 1, "completed", true},
+		{"global job running", globalJob, 2, 1, "running", false},
+		{"global job done", globalJob, 0, 3, "completed", true},
+		{"global job never ran", globalJob, 0, 0, "failed", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cluster.DeriveServiceState(tc.svc, tc.running, tc.completed); got != tc.want {
+				t.Errorf("DeriveServiceState = %q, want %q", got, tc.want)
+			}
+
+			converged, status := cluster.ServiceConverged(tc.svc, tc.running, tc.completed)
+			if converged != tc.converged {
+				t.Errorf("ServiceConverged = %v (%q), want %v", converged, status, tc.converged)
 			}
 		})
 	}
@@ -143,11 +187,11 @@ func TestServiceConvergedWaitsOutRollback(t *testing.T) {
 				UpdateStatus: &swarm.UpdateStatus{State: state},
 			}
 
-			if done, status := cluster.ServiceConverged(svc, 2); done {
+			if done, status := cluster.ServiceConverged(svc, 2, 0); done {
 				t.Errorf("reported converged during %s (status %q)", state, status)
 			}
 
-			if got := cluster.DeriveServiceState(svc, 2); got != "updating" {
+			if got := cluster.DeriveServiceState(svc, 2, 0); got != "updating" {
 				t.Errorf("DeriveServiceState = %q, want %q — the two must agree", got, "updating")
 			}
 		})
@@ -168,7 +212,7 @@ func TestServiceConvergedRejectsSurplusRunningTasks(t *testing.T) {
 		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateCompleted},
 	}
 
-	converged, observed := cluster.ServiceConverged(svc, 3)
+	converged, observed := cluster.ServiceConverged(svc, 3, 0)
 	if converged {
 		t.Errorf(
 			"ServiceConverged(desired 2, running 3) = true, %q; want not converged "+
@@ -177,14 +221,14 @@ func TestServiceConvergedRejectsSurplusRunningTasks(t *testing.T) {
 		)
 	}
 
-	if converged, observed := cluster.ServiceConverged(svc, 2); !converged {
+	if converged, observed := cluster.ServiceConverged(svc, 2, 0); !converged {
 		t.Errorf("ServiceConverged(desired 2, running 2) = false, %q; want converged", observed)
 	}
 
 	// DeriveServiceState deliberately does not follow it here. It answers
 	// "is this service healthy", and a surplus replica is not a fault; only
 	// "has the mutation landed" cares that the count is above the spec.
-	if got := cluster.DeriveServiceState(svc, 3); got != "running" {
+	if got := cluster.DeriveServiceState(svc, 3, 0); got != "running" {
 		t.Errorf("DeriveServiceState = %q, want %q", got, "running")
 	}
 }
@@ -202,7 +246,7 @@ func TestServiceConvergedWaitsOutAnUpdateEvenWithEnoughRunning(t *testing.T) {
 		UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
 	}
 
-	if converged, _ := cluster.ServiceConverged(svc, 3); converged {
+	if converged, _ := cluster.ServiceConverged(svc, 3, 0); converged {
 		t.Error("ServiceConverged reported an in-flight update as settled")
 	}
 }
