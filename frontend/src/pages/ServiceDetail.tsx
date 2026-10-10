@@ -91,7 +91,7 @@ export default function ServiceDetail() {
 
       <SizingBanner
         hints={detail.serviceRecommendations}
-        canFix={detail.canPatch}
+        allowedMethods={detail.allowedMethods}
         onFixed={detail.refetchService}
       />
 
