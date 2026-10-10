@@ -48,6 +48,36 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe("ConfigList", () => {
+  // Grid view is forced on phones, so it has to page like the table does.
+  it("loads the next page from grid view", async () => {
+    vi.stubGlobal("localStorage", {
+      ...localStorageStub,
+      getItem: (key: string) => (key === "viewMode:configs" ? "grid" : null),
+    });
+    const page = (offset: number) =>
+      Array.from({ length: 50 }, (_, index) =>
+        fakeConfig(`c${offset + index}`, `config-${offset + index}`),
+      );
+    mockConfigs
+      .mockResolvedValueOnce({
+        data: { items: page(0), total: 100, limit: 50, offset: 0 },
+        allowedMethods: new Set(),
+      })
+      .mockResolvedValueOnce({
+        data: { items: page(50), total: 100, limit: 50, offset: 50 },
+        allowedMethods: new Set(),
+      });
+    render(<ConfigList />, { wrapper });
+
+    expect(await screen.findByTestId("load-more-sentinel")).toBeInTheDocument();
+
+    const observer = vi.mocked(IntersectionObserver);
+    const [callback] = observer.mock.calls.at(-1) as unknown as [IntersectionObserverCallback];
+    callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+
+    expect(await screen.findByText("config-99")).toBeInTheDocument();
+  });
+
   it("renders config list", async () => {
     const items = [fakeConfig("c1", "app-config"), fakeConfig("c2", "db-config")];
     mockConfigs.mockResolvedValue({

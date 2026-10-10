@@ -5,6 +5,7 @@
 import { api, type ClusterSnapshot } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
+import FetchError from "../components/FetchError";
 import {
   CapacitySection,
   MetricsPanel,
@@ -26,7 +27,11 @@ const clusterStackCharts = stackResourceCharts();
 export default function ClusterOverview() {
   const prevRef = useRef<ClusterSnapshot | null>(null);
 
-  const { data: snapshot } = useQuery({
+  const {
+    data: snapshot,
+    error: clusterError,
+    refetch: refetchCluster,
+  } = useQuery({
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
   });
@@ -48,6 +53,18 @@ export default function ClusterOverview() {
 
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
+
+  if (!snapshot && clusterError) {
+    return (
+      <div>
+        <PageHeader title="Cluster Overview" />
+        <FetchError
+          message={clusterError.message}
+          onRetry={() => refetchCluster()}
+        />
+      </div>
+    );
+  }
 
   if (!snapshot) {
     return (

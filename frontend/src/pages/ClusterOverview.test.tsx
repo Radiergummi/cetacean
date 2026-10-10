@@ -58,6 +58,14 @@ describe("ClusterOverview", () => {
     expect(screen.getByText("Cluster Overview")).toBeInTheDocument();
   });
 
+  it("shows the error instead of a skeleton when the snapshot fails", async () => {
+    mockCluster.mockRejectedValue(new Error("Docker daemon is not reachable"));
+    render(<ClusterOverview />, { wrapper });
+
+    expect(await screen.findByText("Docker daemon is not reachable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+
   it("renders snapshot data", async () => {
     mockCluster.mockResolvedValue({
       nodeCount: 3,
