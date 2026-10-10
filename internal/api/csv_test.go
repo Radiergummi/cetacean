@@ -604,3 +604,25 @@ func TestCSVFallbackColumns(t *testing.T) {
 		t.Errorf("header = %v, want %v", table.header, want)
 	}
 }
+
+// A spreadsheet runs a cell that starts with a formula character, and labels
+// such as the stack namespace are set by anyone with service write.
+func TestRenderCSVNeutralisesFormulas(t *testing.T) {
+	got := string(renderCSV(csvTable{
+		header: []string{"name", "replicas"},
+		records: [][]string{
+			{"=cmd|'/C calc'!A0", "-1"},
+			{"+x", "@SUM(A1)"},
+			{"-x", "\tlead"},
+		},
+	}))
+
+	want := "name,replicas\r\n" +
+		"'=cmd|'/C calc'!A0,-1\r\n" +
+		"'+x,'@SUM(A1)\r\n" +
+		"'-x,'\tlead\r\n"
+
+	if got != want {
+		t.Errorf("renderCSV:\n got %q\nwant %q", got, want)
+	}
+}

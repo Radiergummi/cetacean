@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"net/url"
@@ -303,9 +304,9 @@ func recommendationToFeedEntry(
 		}
 	}
 
-	content := "<p>" + rec.Message + "</p>"
+	content := "<p>" + html.EscapeString(rec.Message) + "</p>"
 	if href != "" {
-		content += `<p><a href="` + href + `">View in Cetacean</a></p>`
+		content += `<p><a href="` + html.EscapeString(href) + `">View in Cetacean</a></p>`
 	}
 
 	return feedEntry{
@@ -330,21 +331,21 @@ func historyEntryHTML(e cache.HistoryEntry, href string) string {
 
 	var b strings.Builder
 	b.WriteString("<p>")
-	b.WriteString(verb)
+	b.WriteString(html.EscapeString(verb))
 	b.WriteString(" ")
-	b.WriteString(string(e.Type))
+	b.WriteString(html.EscapeString(string(e.Type)))
 	b.WriteString(" <strong>")
-	b.WriteString(e.Name)
+	b.WriteString(html.EscapeString(e.Name))
 	b.WriteString("</strong>")
 	if e.Summary != "" && e.Summary != e.Action+" "+e.Name {
 		b.WriteString(": ")
-		b.WriteString(e.Summary)
+		b.WriteString(html.EscapeString(e.Summary))
 	}
 	b.WriteString("</p>")
 
 	if href != "" {
 		b.WriteString(`<p><a href="`)
-		b.WriteString(href)
+		b.WriteString(html.EscapeString(href))
 		b.WriteString(`">View in Cetacean</a></p>`)
 	}
 
