@@ -180,7 +180,7 @@ function RecommendationsIndicator() {
       >
         <Lightbulb className="size-4" />
         {total > 0 && (
-          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-warning text-[10px] font-bold text-white">
+          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-status-warning text-[10px] font-bold text-status-foreground">
             {total > 99 ? "99" : total}
           </span>
         )}
