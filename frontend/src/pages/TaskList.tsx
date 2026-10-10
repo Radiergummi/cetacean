@@ -5,6 +5,7 @@ import EmptyState from "../components/EmptyState";
 import FetchError from "../components/FetchError";
 import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
+import LoadMoreSentinel from "../components/LoadMoreSentinel";
 import { TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
@@ -260,6 +261,12 @@ export default function TaskList() {
               </div>
             </section>
           ))}
+          {hasMore && (
+            <LoadMoreSentinel
+              key={tasks.length}
+              onLoadMore={loadMore}
+            />
+          )}
         </div>
       )}
     </div>
