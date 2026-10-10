@@ -1864,12 +1864,14 @@ func TestPatchServiceAttachments_RequireReadOnTheAttachment(t *testing.T) {
 					w.Body.String(),
 				)
 			}
-			if w := send("unknown", "mine"); w.Code != http.StatusForbidden {
+			if w := send("unknown", "mine"); w.Code != http.StatusBadRequest {
 				t.Fatalf(
-					"unknown attachment: status=%d, want 403; body: %s",
+					"unknown attachment: status=%d, want 400; body: %s",
 					w.Code,
 					w.Body.String(),
 				)
+			} else {
+				assertACLErrorCode(t, w, "SVC021")
 			}
 			if written {
 				t.Fatal("a refused attachment reached the writer")
@@ -1891,6 +1893,51 @@ func TestPatchServiceAttachments_RequireReadOnTheAttachment(t *testing.T) {
 					w.Body.String(),
 				)
 			}
+		})
+	}
+}
+
+// Without a policy nothing is denied, so a reference the cache has not seen yet
+// is reported as unknown, never as an access refusal.
+func TestPatchServiceAttachments_UnknownReferenceWithoutPolicy(t *testing.T) {
+	cases := map[string]struct {
+		path    string
+		handler func(*Handlers) http.HandlerFunc
+		body    string
+	}{
+		"secrets": {
+			"/services/svc1/secrets",
+			func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceSecrets },
+			`{"secrets":[{"secretID":"unknown","secretName":"db"}]}`,
+		},
+		"configs": {
+			"/services/svc1/configs",
+			func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceConfigs },
+			`{"configs":[{"configID":"unknown","configName":"app"}]}`,
+		},
+		"networks": {
+			"/services/svc1/networks",
+			func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceNetworks },
+			`{"networks":[{"target":"unknown"}]}`,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := cache.New(nil)
+			c.SetService(swarm.Service{ID: "svc1"})
+			h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
+
+			req := httptest.NewRequest("PATCH", tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/merge-patch+json")
+			req.SetPathValue("id", "svc1")
+			w := httptest.NewRecorder()
+			tc.handler(h)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d, want 400; body: %s", w.Code, w.Body.String())
+			}
+			assertACLErrorCode(t, w, "SVC021")
 		})
 	}
 }

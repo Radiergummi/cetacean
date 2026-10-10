@@ -514,6 +514,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "A published port must name the container port it forwards to.",
 		Suggestion:  "Set TargetPort to a non-zero container port for every port entry.",
 	},
+	"SVC021": {
+		Code:        "SVC021",
+		Title:       "Unknown Attachment",
+		Status:      http.StatusBadRequest,
+		Description: "A secret, config, or network the request attaches is not known to the cluster.",
+		Suggestion:  "Check the ID. A resource created outside Cetacean can take a moment to appear; retry shortly.",
+	},
 
 	// ── TSK: task operations ──────────────────────────────────────────
 	"TSK001": {
