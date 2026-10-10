@@ -115,6 +115,12 @@ requirements:
       - file: internal/api/precondition.go
         replace: "\t\t\tif !etagMatchStrong(ifMatch, computeETag(body)) {"
         with: "\t\t\tif false && !etagMatchStrong(ifMatch, computeETag(body)) {"
+      - file: internal/api/precondition.go
+        replace: "return docker.WithPinnedVersion(ctx, kind, subject, meta.Version)"
+        with: "return docker.WithPinnedVersion(ctx, kind, subject, swarm.Version{Index: meta.Version.Index + 1})"
+      - file: internal/api/write_helpers.go
+        replace: "if preconditioned(r.Context()) && strings.Contains"
+        with: "if false && strings.Contains"
 
   - id: a-failed-precondition-may-answer-412
     level: MAY

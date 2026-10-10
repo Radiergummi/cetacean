@@ -8,7 +8,10 @@ import (
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // precond evaluates RFC 9110 §13.1.1 If-Match against the representation a GET
@@ -40,6 +43,10 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 					"failed to read the current representation")
 				return
 			}
+
+			// Read before the representation: if the record moves in between,
+			// the write is refused rather than let through.
+			pinned := h.pinSubjectVersion(r)
 
 			value, err := rep(r)
 			switch {
@@ -82,8 +89,64 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(pinned(r.Context())))
 		})
+	}
+}
+
+// preconditionedKey marks a request whose subject's version is pinned, so the
+// engine's sequence conflict on it is the precondition failing late.
+type preconditionedKey struct{}
+
+func preconditioned(ctx context.Context) bool {
+	marked, _ := ctx.Value(preconditionedKey{}).(bool)
+
+	return marked
+}
+
+// pinSubjectVersion returns what makes the write name the version of the
+// record the precondition is evaluated against, for the kinds whose engine
+// write takes one. Deletes take none, so only updates are made atomic.
+func (h *Handlers) pinSubjectVersion(r *http.Request) func(context.Context) context.Context {
+	unchanged := func(ctx context.Context) context.Context { return ctx }
+
+	root, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	id := r.PathValue("id")
+
+	var (
+		kind    string
+		meta    swarm.Meta
+		subject string
+		found   bool
+	)
+
+	switch root {
+	case "services":
+		var svc swarm.Service
+		svc, found = h.cache.GetService(id)
+		kind, subject, meta = "service", svc.ID, svc.Meta
+	case "nodes":
+		var node swarm.Node
+		node, found = h.cache.GetNode(id)
+		kind, subject, meta = "node", node.ID, node.Meta
+	case "configs":
+		var cfg swarm.Config
+		cfg, found = h.cache.GetConfig(id)
+		kind, subject, meta = "config", cfg.ID, cfg.Meta
+	case "secrets":
+		var sec swarm.Secret
+		sec, found = h.cache.GetSecret(id)
+		kind, subject, meta = "secret", sec.ID, sec.Meta
+	}
+
+	if !found {
+		return unchanged
+	}
+
+	return func(ctx context.Context) context.Context {
+		ctx = context.WithValue(ctx, preconditionedKey{}, true)
+
+		return docker.WithPinnedVersion(ctx, kind, subject, meta.Version)
 	}
 }
 
