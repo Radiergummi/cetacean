@@ -234,7 +234,7 @@ func TestErrorDefsAreCompleteAndSorted(t *testing.T) {
 // code maps to: the writer lives here, and sse cannot import this package. Both
 // endpoints document a 429, so the mapping is asserted rather than assumed.
 func TestWriteErrorCodeSSE001Is429(t *testing.T) {
-	for _, code := range []string{"SSE001", "LOG001"} {
+	for _, code := range []string{"SSE001", "LOG001", "LOG009"} {
 		t.Run(code, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/events", nil)
 			w := httptest.NewRecorder()

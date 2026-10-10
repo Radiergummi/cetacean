@@ -257,9 +257,6 @@ var errorRegistry = map[string]ErrorDef{
 	"LOG001": {Code: "LOG001", Title: "Too Many Log Streams", Status: http.StatusTooManyRequests,
 		Description: "The maximum number of concurrent log stream connections has been reached.",
 		Suggestion:  "Close an existing log stream before opening a new one."},
-	"LOG009": {Code: "LOG009", Title: "Too Many Log Reads", Status: http.StatusTooManyRequests,
-		Description: "The maximum number of concurrent log reads has been reached.",
-		Suggestion:  "Retry after the time the Retry-After header names."},
 	"LOG002": {Code: "LOG002", Title: "Invalid Stream Parameter", Status: http.StatusBadRequest,
 		Description: "The stream parameter must be either stdout or stderr.",
 		Suggestion:  "Use stream=stdout or stream=stderr."},
@@ -293,6 +290,9 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "Failed to open the log stream from the Docker Engine.",
 		Suggestion:  "Check that the service or task still exists and the Docker Engine is reachable.",
 	},
+	"LOG009": {Code: "LOG009", Title: "Too Many Log Reads", Status: http.StatusTooManyRequests,
+		Description: "The maximum number of concurrent log reads has been reached.",
+		Suggestion:  "Retry after the time the Retry-After header names."},
 
 	// ── SSE: SSE connections ──────────────────────────────────────────
 	"SSE001": {

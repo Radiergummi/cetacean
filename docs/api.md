@@ -617,7 +617,7 @@ carries no `resource`.
 
 ## Connection limits
 
-There's no general rate limiting. Concurrent streams are capped, and a request over the cap returns
+There's no general rate limiting. Concurrent streams and log reads are capped, and a request over the cap returns
 `429 Too Many Requests` with a `Retry-After` of 5 to 14 seconds. The value steps between refusals, so clients
 turned away together aren't told to come back together; none is told less than 5.
 
@@ -625,7 +625,7 @@ turned away together aren't told to come back together; none is told less than 5
 |--------------------------------------------------------|-------|----------|
 | SSE event clients (`/events` and per-resource streams) | 256   | `SSE001` |
 | Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
-| Log reads (the same paths as JSON or plain text)       | 32    | `LOG009` |
+| Log reads (the same paths as JSON)                     | 32    | `LOG009` |
 | Metrics streams (`/metrics` as SSE)                    | 64    | `MTR005` |
 
 ## Endpoints

@@ -4747,3 +4747,27 @@ func TestPreferWaitPastTheCapAnswersAsync(t *testing.T) {
 		t.Errorf("took %s; a write past the cap must not wait", elapsed)
 	}
 }
+
+func TestPreferWaitReleasesItsSlot(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(preferTestService())
+	wc := &mockWriteClient{
+		scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
+			return preferTestService(), nil
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+	h.activePreferWaits.Store(maxPreferWaits - 1)
+
+	req := scaleWithPrefer("wait=0")
+	req.SetPathValue("id", "svc1")
+	rec := httptest.NewRecorder()
+	h.HandleScaleService(rec, req)
+
+	if got := rec.Header().Get("Retry-After"); got != "" {
+		t.Errorf("Retry-After = %q with a slot free, want none", got)
+	}
+	if got := h.activePreferWaits.Load(); got != maxPreferWaits-1 {
+		t.Errorf("waits in flight = %d after the write, want %d", got, maxPreferWaits-1)
+	}
+}
