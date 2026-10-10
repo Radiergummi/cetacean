@@ -331,8 +331,8 @@ than a standing claim:
   driven for every refusal but never for the accepted case, which would remove the swarm's only
   node. Both are recorded on the route's own entry, so the gate still counts them.
 - ~~SSE 429 and `Retry-After` at the connection cap.~~ Covered by
-  `TestSSEConnectionCapRefusesWithRetryAfter` in `sse_acl_test.go`, which opens `sse.MaxClients`
-  real subscribers and asserts the next one is refused with 429, `Retry-After: 5` and an RFC 9457
+  `TestSSEConnectionCapRefusesWithRetryAfter` in `sse_acl_test.go`, which opens
+  `sse.MaxClientsPerOwner` real subscribers as one persona and asserts its next one is refused with 429, `Retry-After: 5` and an RFC 9457
   `SSE001` body. `internal/api/sse/broadcaster_test.go` still substitutes a `noopErrorWriter`
   rather than driving a real client past the cap, so this lane remains the only thing pinning it.
 

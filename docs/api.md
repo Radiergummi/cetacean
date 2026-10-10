@@ -580,9 +580,10 @@ EventSource clients ignore it.
 
 ### Reconnection and replay
 
-Each event carries an incrementing `id:`. EventSource clients send `Last-Event-ID` on reconnect and the server replays
-what they missed from the change history. Detail and stack streams can't be replayed, and a cursor older than the
-history buffer can't either; both cases send a `sync` event telling the client to refetch.
+Each event carries an `id:`. Treat it as opaque: it names a position in the change history of one Cetacean process.
+EventSource clients send `Last-Event-ID` on reconnect and the server replays what they missed from the change history.
+Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer or one written
+before Cetacean restarted; all three send a `sync` event telling the client to refetch.
 
 ### Metrics streams
 
@@ -622,8 +623,12 @@ turned away together aren't told to come back together; none is told less than 5
 | Stream                                                 | Limit | Code     |
 |--------------------------------------------------------|-------|----------|
 | SSE event clients (`/events` and per-resource streams) | 256   | `SSE001` |
+| SSE event clients from one caller                      | 64    | `SSE001` |
 | Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
 | Metrics streams (`/metrics` as SSE)                    | 64    | `MTR005` |
+
+A caller is the signed-in identity, or the client address under the `none` auth mode. Behind a reverse proxy, set
+[`server.trusted_proxies`][server.trusted_proxies] so that address is the client's rather than the proxy's.
 
 ## Endpoints
 

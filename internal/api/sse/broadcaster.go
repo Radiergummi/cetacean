@@ -1,9 +1,12 @@
 package sse
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
@@ -27,9 +31,16 @@ type sseClient struct {
 	events chan cache.Event
 	match  func(cache.Event) bool // nil means accept all
 	done   chan struct{}
+	owner  string
 }
 
-const MaxClients = 256
+const (
+	MaxClients = 256
+
+	// MaxClientsPerOwner is one caller's share of MaxClients, so no single
+	// identity, or address under auth none, can hold every slot.
+	MaxClientsPerOwner = MaxClients / 4
+)
 
 // ErrorWriter is a callback for writing HTTP error responses.
 // This decouples the SSE package from the API error registry.
@@ -38,6 +49,7 @@ type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail strin
 type Broadcaster struct {
 	mu                sync.RWMutex
 	clients           map[*sseClient]struct{}
+	owners            map[string]int
 	closed            bool
 	inbox             chan cache.Event
 	stop              chan struct{}
@@ -51,6 +63,10 @@ type Broadcaster struct {
 	// is running — an identifier without it addresses nothing on a deployment
 	// served under a prefix.
 	basePath string
+
+	// epoch prefixes every event id, so a cursor from another process, whose
+	// history counter restarted, reads as foreign rather than as a position.
+	epoch string
 }
 
 func NewBroadcaster(
@@ -63,12 +79,14 @@ func NewBroadcaster(
 	}
 	b := &Broadcaster{
 		clients:           make(map[*sseClient]struct{}),
+		owners:            make(map[string]int),
 		inbox:             make(chan cache.Event, 256),
 		stop:              make(chan struct{}),
 		batchInterval:     batchInterval,
 		keepaliveInterval: 15 * time.Second,
 		writeError:        writeError,
 		replay:            replay,
+		epoch:             newEpoch(),
 	}
 	go b.fanOut()
 	return b
@@ -154,6 +172,7 @@ func (b *Broadcaster) ServeSSE(
 		events: make(chan cache.Event, 64),
 		match:  match,
 		done:   make(chan struct{}),
+		owner:  ownerOf(r),
 	}
 
 	b.mu.Lock()
@@ -167,10 +186,17 @@ func (b *Broadcaster) ServeSSE(
 		b.writeError(w, r, "SSE001", "too many SSE connections")
 		return
 	}
+	if b.owners[client.owner] >= MaxClientsPerOwner {
+		b.mu.Unlock()
+		w.Header().Set("Retry-After", RetryAfter())
+		b.writeError(w, r, "SSE001", "too many SSE connections from this client")
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	b.clients[client] = struct{}{}
+	b.owners[client.owner]++
 	b.mu.Unlock()
 	metrics.RecordSSEConnect()
 
@@ -178,14 +204,15 @@ func (b *Broadcaster) ServeSSE(
 
 	var skipBelow uint64
 	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && b.replay != nil {
-		if id, err := strconv.ParseUint(lastID, 10, 64); err == nil {
-			skipBelow = b.replayEvents(w, flusher, id, replayType, client.match)
-		}
+		skipBelow = b.replayEvents(w, flusher, lastID, replayType, client.match)
 	}
 
 	defer func() {
 		b.mu.Lock()
 		delete(b.clients, client)
+		if b.owners[client.owner]--; b.owners[client.owner] <= 0 {
+			delete(b.owners, client.owner)
+		}
 		// Close the done channel if it wasn't already closed by Broadcaster.Close(),
 		// so any goroutine selecting on it can unblock.
 		select {
@@ -208,7 +235,7 @@ func (b *Broadcaster) ServeSSE(
 		case e, ok := <-client.events:
 			if !ok {
 				if len(batch) > 0 {
-					WriteBatch(w, flusher, batch, b.basePath)
+					WriteBatch(w, flusher, batch, b.basePath, b.epoch)
 				}
 				return
 			}
@@ -223,7 +250,7 @@ func (b *Broadcaster) ServeSSE(
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, b.basePath)
+				WriteBatch(w, flusher, batch, b.basePath, b.epoch)
 				batch = batch[:0]
 				keepalive.Reset(b.keepaliveInterval)
 			}
@@ -232,12 +259,12 @@ func (b *Broadcaster) ServeSSE(
 			flusher.Flush()
 		case <-r.Context().Done():
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, b.basePath)
+				WriteBatch(w, flusher, batch, b.basePath, b.epoch)
 			}
 			return
 		case <-client.done:
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, b.basePath)
+				WriteBatch(w, flusher, batch, b.basePath, b.epoch)
 			}
 			return
 		}
@@ -247,7 +274,7 @@ func (b *Broadcaster) ServeSSE(
 func (b *Broadcaster) replayEvents(
 	w io.Writer,
 	flusher http.Flusher,
-	afterID uint64,
+	lastID string,
 	replayType cache.EventType,
 	match func(cache.Event) bool,
 ) uint64 {
@@ -255,12 +282,17 @@ func (b *Broadcaster) replayEvents(
 		count := b.replay.Count()
 		WriteBatch(w, flusher, []cache.Event{{
 			Type: cache.EventSync, Action: "full_sync", HistoryID: count,
-		}}, b.basePath)
+		}}, b.basePath, b.epoch)
 		return count
 	}
 
 	// Detail/stack streams are ineligible for replay — send sync.
 	if replayType == "" {
+		return writeSync()
+	}
+
+	afterID, ok := b.cursor(lastID)
+	if !ok {
 		return writeSync()
 	}
 
@@ -299,8 +331,47 @@ func (b *Broadcaster) replayEvents(
 		return afterID
 	}
 
-	WriteBatch(w, flusher, replay, b.basePath)
+	WriteBatch(w, flusher, replay, b.basePath, b.epoch)
 	return replay[len(replay)-1].HistoryID
+}
+
+// EventID is the id the stream writes for a history position.
+func (b *Broadcaster) EventID(historyID uint64) string {
+	return b.epoch + "-" + strconv.FormatUint(historyID, 10)
+}
+
+// cursor reads the history id out of a Last-Event-ID this process wrote.
+func (b *Broadcaster) cursor(lastID string) (uint64, bool) {
+	n, ok := strings.CutPrefix(lastID, b.epoch+"-")
+	if !ok {
+		return 0, false
+	}
+
+	id, err := strconv.ParseUint(n, 10, 64)
+
+	return id, err == nil
+}
+
+func newEpoch() string {
+	var nonce [4]byte
+	_, _ = rand.Read(nonce[:])
+
+	return hex.EncodeToString(nonce[:])
+}
+
+// ownerOf names whose share of the connection cap a request draws on: the
+// authenticated identity, or the client address when every caller is anonymous.
+func ownerOf(r *http.Request) string {
+	if id := auth.IdentityFromContext(r.Context()); id != nil && id.Provider != "none" {
+		return id.Provider + ":" + id.Subject
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+
+	return "addr:" + host
 }
 
 // TypeMatcher returns a match function that accepts events of the given type.
@@ -461,7 +532,12 @@ func ResourceType(typ cache.EventType) string {
 	}
 }
 
-func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event, basePath string) {
+func WriteBatch(
+	w io.Writer,
+	flusher http.Flusher,
+	events []cache.Event,
+	basePath, epoch string,
+) {
 	var maxID uint64
 	for _, e := range events {
 		if e.HistoryID > maxID {
@@ -471,14 +547,14 @@ func WriteBatch(w io.Writer, flusher http.Flusher, events []cache.Event, basePat
 
 	if len(events) == 1 {
 		data, _ := json.Marshal(ToSSEEvent(events[0], basePath))
-		fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", maxID, events[0].Type, data)
+		fmt.Fprintf(w, "id: %s-%d\nevent: %s\ndata: %s\n\n", epoch, maxID, events[0].Type, data)
 	} else {
 		enriched := make([]Event, len(events))
 		for i, e := range events {
 			enriched[i] = ToSSEEvent(e, basePath)
 		}
 		data, _ := json.Marshal(enriched)
-		fmt.Fprintf(w, "id: %d\nevent: batch\ndata: %s\n\n", maxID, data)
+		fmt.Fprintf(w, "id: %s-%d\nevent: batch\ndata: %s\n\n", epoch, maxID, data)
 	}
 	flusher.Flush()
 }
