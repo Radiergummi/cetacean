@@ -359,11 +359,13 @@ against measured usage. The other checkers use fixed thresholds.
 
 ## Config file
 
-Pass a TOML file with `-config` or `CETACEAN_CONFIG`. Every field is optional; an omitted key uses
-the default.
+Pass a TOML file with `-config` or `CETACEAN_CONFIG`. Without either, Cetacean reads the first
+of these that exists: `./cetacean.toml`, `$XDG_CONFIG_HOME/cetacean/cetacean.toml` (or
+`~/.config/cetacean/cetacean.toml`), `~/.cetacean.toml`, and `/etc/cetacean/cetacean.toml`. Every
+field is optional; an omitted key uses the default.
 
 ```bash
-cetacean -config /etc/cetacean/config.toml
+CETACEAN_CONFIG=/etc/cetacean/config.toml cetacean
 ```
 
 `docs/config.reference.toml` in the repository lists every option with its default. Copy it as a
@@ -392,7 +394,11 @@ Two meta endpoints, exempt from authentication and content negotiation:
 | `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, `depends_on` gating |
 
 The `cetacean healthcheck` subcommand probes `/-/ready` and is what the built-in Docker
-`HEALTHCHECK` runs.
+`HEALTHCHECK` runs. It loads its configuration the way the server does, so it probes the
+configured listen address, base path, and TLS setting. Docker runs it as a separate process
+without the service's command-line flags, though: set anything it must honor in the environment,
+in a file named by `CETACEAN_CONFIG`, or in a file at one of the [discovered paths][config-file].
+Flags given to the subcommand itself go before `healthcheck`.
 
 ## Operations level
 

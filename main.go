@@ -11,9 +11,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,13 +61,18 @@ var asyncapiSpec []byte
 var scalarJS []byte
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		os.Exit(runHealthcheck())
-	}
-
 	flags, err := config.ParseFlags(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "flag error: %v\n", err)
+		os.Exit(2)
+	}
+
+	switch {
+	case len(flags.Args) == 0:
+	case len(flags.Args) == 1 && flags.Args[0] == "healthcheck":
+		os.Exit(runHealthcheck(flags))
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", strings.Join(flags.Args, " "))
 		os.Exit(2)
 	}
 
@@ -673,39 +681,110 @@ const dockerProbeTimeout = 10 * time.Second
 // requests, inside the ten seconds an orchestrator allows before SIGKILL.
 const shutdownGrace = 5 * time.Second
 
-func runHealthcheck() int {
-	addr := os.Getenv("CETACEAN_LISTEN_ADDR")
-	if addr == "" {
-		addr = ":9000"
+// runHealthcheck probes the server's readiness with the configuration the
+// server itself would load, so a listen address, base path or TLS set in any
+// source is the one probed.
+func runHealthcheck(flags *config.Flags) int {
+	configPath := flags.Config
+	if configPath == "" {
+		configPath = config.DiscoverConfigFile()
 	}
-	basePath := config.NormalizeBasePath(os.Getenv("CETACEAN_BASE_PATH"))
 
+	fc, err := config.LoadFile(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
+		return 1
+	}
+
+	cfg, err := config.Load(fc, flags)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
+		return 1
+	}
+
+	tlsEnabled := config.LoadTLS(flags, fc).Enabled()
+
+	target, err := healthcheckURL(cfg.ListenAddr, cfg.BasePath, tlsEnabled)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
+		return 1
+	}
+
+	if err := probeReady(target, tlsEnabled); err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
+		return 1
+	}
+
+	return 0
+}
+
+// healthcheckURL is where readiness answers from inside the server's own
+// container: a wildcard or empty listen host is reached over loopback.
+func healthcheckURL(listenAddr, basePath string, tlsEnabled bool) (string, error) {
+	host, port, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return "", fmt.Errorf("listen address %q: %w", listenAddr, err)
+	}
+
+	if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
+		host = "localhost"
+	}
+
+	scheme := "http"
+	if tlsEnabled {
+		scheme = "https"
+	}
+
+	target := url.URL{
+		Scheme: scheme,
+		Host:   net.JoinHostPort(host, port),
+		Path:   basePath + "/-/ready",
+	}
+
+	return target.String(), nil
+}
+
+func probeReady(target string, tlsEnabled bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		"http://localhost"+addr+basePath+"/-/ready",
-		nil,
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
-		return 1
+		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	// No Proxy: the listen address is the server's own, never one a proxy reaches.
+	transport := &http.Transport{}
+	if tlsEnabled {
+		// The probe dials the listen address, which the certificate need not name.
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec // own listener
+		}
+	}
+
+	resp, err := (&http.Client{Transport: transport}).Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
-		return 1
+		return err
 	}
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "healthcheck failed: status %d\n", resp.StatusCode)
-		return 1
+		return fmt.Errorf("status %d", resp.StatusCode)
 	}
-	return 0
+
+	return nil
+}
+
+// newMetaMux serves the meta endpoints at the root and, as the full router
+// does, under the base path, where `cetacean healthcheck` probes.
+func newMetaMux(basePath string, health, ready http.HandlerFunc) *http.ServeMux {
+	mux := http.NewServeMux()
+	for _, prefix := range slices.Compact([]string{"", basePath}) {
+		mux.HandleFunc("GET "+prefix+"/-/health", health)
+		mux.HandleFunc("GET "+prefix+"/-/ready", ready)
+	}
+
+	return mux
 }
 
 // serveDualListeners runs two HTTP servers for tsnet mode:
@@ -719,13 +798,9 @@ func serveDualListeners(
 	h *api.Handlers,
 	tsnetLn net.Listener,
 ) {
-	metaMux := http.NewServeMux()
-	metaMux.HandleFunc("GET /-/health", h.HandleHealth)
-	metaMux.HandleFunc("GET /-/ready", h.HandleReady)
-
 	metaServer := &http.Server{
 		Addr:        cfg.ListenAddr,
-		Handler:     metaMux,
+		Handler:     newMetaMux(cfg.BasePath, h.HandleHealth, h.HandleReady),
 		ReadTimeout: 5 * time.Second,
 		IdleTimeout: 120 * time.Second,
 	}

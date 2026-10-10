@@ -8,7 +8,8 @@ import (
 // Flags holds parsed CLI flag values. Pointer fields distinguish
 // "not set" (nil) from "set to zero value".
 type Flags struct {
-	Config          string // path to TOML config file
+	Config          string   // path to TOML config file
+	Args            []string // positional arguments after the flags
 	Listen          *string
 	DockerHost      *string
 	PrometheusURL   *string
@@ -202,6 +203,8 @@ func ParseFlags(args []string) (*Flags, error) {
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
+
+	f.Args = fs.Args()
 
 	// Only set pointer fields for flags that were explicitly provided.
 	fs.Visit(func(fl *flag.Flag) {
