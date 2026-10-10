@@ -359,7 +359,7 @@ func (s *Server) canRead(identity *auth.Identity, aclResource string) bool {
 }
 
 // eventACLResource returns the ACL resource key for a cache event, or "" when
-// the event carries no resource (sync, ref_changed, etc). Mirrors the ACL key
+// the event names no resource (sync, or a ref to one already gone). Mirrors the ACL key
 // convention used by lookupResource and tools.go.
 func eventACLResource(event cache.Event) string {
 	prefix := eventTypeToACLPrefix(event.Type)

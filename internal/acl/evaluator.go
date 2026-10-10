@@ -88,6 +88,29 @@ func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) b
 	return false
 }
 
+// Checker is Can with the identity's grants collected once, for a caller asking
+// about many resources. It answers under the policy current when it was made.
+func (e *Evaluator) Checker(id *auth.Identity, permission string) func(resource string) bool {
+	if e == nil {
+		return func(string) bool { return true }
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return func(string) bool { return true }
+	}
+
+	grants := e.collectGrants(id, p)
+
+	return func(resource string) bool {
+		for _, g := range grants {
+			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
 // Filter returns only items the identity can access with the given permission.
 //
 // items is left untouched. A caller that owns the slice outright — one holding

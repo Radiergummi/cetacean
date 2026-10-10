@@ -34,6 +34,36 @@ func TestEvaluator_NilPolicyAllowsAll(t *testing.T) {
 	}
 }
 
+func TestEvaluator_CheckerAgreesWithCan(t *testing.T) {
+	var unset *Evaluator
+	if !unset.Checker(nil, "read")("service:foo") {
+		t.Fatal("nil evaluator should allow all")
+	}
+
+	e := NewEvaluator()
+	e.SetResolver(&stubResolver{stacks: map[string]string{"service:web": "shop"}})
+	e.SetPolicy(&Policy{Grants: []Grant{
+		{
+			Resources:   []string{"stack:shop"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	alice := &auth.Identity{Subject: "alice"}
+	bob := &auth.Identity{Subject: "bob"}
+	for _, id := range []*auth.Identity{alice, bob} {
+		for _, perm := range []string{"read", "write"} {
+			check := e.Checker(id, perm)
+			for _, res := range []string{"service:web", "service:other", "stack:shop"} {
+				if got, want := check(res), e.Can(id, perm, res); got != want {
+					t.Errorf("%s %s %s: Checker = %v, Can = %v", id.Subject, perm, res, got, want)
+				}
+			}
+		}
+	}
+}
+
 func TestEvaluator_BasicGrant(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{

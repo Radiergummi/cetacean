@@ -144,7 +144,7 @@ func (s *Server) findAcrossTypes(
 
 	limit := req.GetInt("limit", 3)
 
-	results := s.filterSearchResults(ctx, cluster.Search(ctx, s.cache, query, limit))
+	results := cluster.Search(ctx, s.cache, query, limit, s.readPredicate(ctx))
 
 	// Sized by the hits actually held, not by results.Total: Total is the
 	// pre-cap count across the whole cluster, so on a broad query it would

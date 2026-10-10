@@ -41,6 +41,11 @@ type HistoryQuery struct {
 	// copying the whole ring to discard it. Exclusive; zero means unbounded.
 	// Named for the comparison, since "since" here means History.Since.
 	After time.Time
+
+	// Visible, when set, keeps only the entries it admits, so Limit and
+	// BeforeID page over what the caller may read. It runs under the history
+	// lock and must not call back into History.
+	Visible func(HistoryEntry) bool
 }
 
 type History struct {
@@ -313,6 +318,10 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 	if q.NameContains != "" && !strings.Contains(
 		strings.ToLower(e.Name), strings.ToLower(q.NameContains),
 	) {
+		return false
+	}
+
+	if q.Visible != nil && !q.Visible(e) {
 		return false
 	}
 

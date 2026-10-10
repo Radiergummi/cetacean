@@ -1198,6 +1198,54 @@ func TestCache_SetService_RefChangeDiff(t *testing.T) {
 	}
 }
 
+// A scoped stream authorizes on the event's name, so a ref_changed without one
+// is dropped by every grant narrower than "*".
+func TestCache_RefChangedCarriesReferencedName(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "app-secret"}},
+	})
+	c.SetNetwork(network.Summary{ID: "net1", Name: "app-net"})
+	c.SetVolume(volume.Volume{Name: "app-data"})
+
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
+		Configs: []*swarm.ConfigReference{{ConfigID: "cfg1"}},
+		Secrets: []*swarm.SecretReference{{SecretID: "sec1"}},
+		Mounts:  []mount.Mount{{Type: mount.TypeVolume, Source: "app-data"}},
+	}
+	svc.Spec.TaskTemplate.Networks = []swarm.NetworkAttachmentConfig{{Target: "net1"}}
+
+	events = nil
+	c.SetService(svc)
+
+	want := map[EventType]string{
+		EventConfig:  "app-config",
+		EventSecret:  "app-secret",
+		EventNetwork: "app-net",
+		EventVolume:  "app-data",
+	}
+	for _, e := range events {
+		if e.Action != "ref_changed" {
+			continue
+		}
+		if e.Name != want[e.Type] {
+			t.Errorf("%s ref_changed Name = %q, want %q", e.Type, e.Name, want[e.Type])
+		}
+		delete(want, e.Type)
+	}
+	if len(want) > 0 {
+		t.Errorf("no ref_changed event for %v", want)
+	}
+}
+
 func TestCache_MultipleListeners(t *testing.T) {
 	c := New(nil)
 

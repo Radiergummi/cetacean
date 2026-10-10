@@ -51,12 +51,8 @@ func (s *Server) toolWatch(
 	if err != nil {
 		return "", err
 	}
-	if !found {
+	if !found || s.checkRead(ctx, "service", svc.Spec.Name) != nil {
 		return "", fmt.Errorf("no such service %q", name)
-	}
-
-	if err := s.checkRead(ctx, "service", svc.Spec.Name); err != nil {
-		return "", err
 	}
 
 	// Claimed after the read check, so a call the caller was never allowed to

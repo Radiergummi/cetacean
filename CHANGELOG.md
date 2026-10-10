@@ -58,11 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.operations_level` defaults to `0`, read-only. A deployment that never set it could perform operational writes, and on `auth.mode=none` could do so unauthenticated—set it to `1` to keep that
 - **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale`, and `headers`—no challenge can ask for the credential those modes read
 - Signing in from an address ending in `.atom`, `.csv`, or `.json` returns to that resource's page, not the file
+- MCP's `cetacean://cluster` and `get_cluster_status` need at least one grant, as `GET /cluster` does
+- Over MCP, a resource the caller may not read is reported as not found, as the documentation promised, rather than as denied
 
 ### Removed
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
+- `GET /search` and MCP's `find` count only matches the caller may read, so a count no longer reveals resources the policy hides
+- History feeds, `GET /history`, and `cetacean://history` fill a page with entries the caller may read, so a restricted caller no longer gets an empty one
+- `GET /topology`, in every format, no longer names networks the caller may not read
+- A config, secret, network or volume page under a scoped grant updates live when a service starts or stops using it
+- Creating a config or secret answers with only the services the caller may read
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
