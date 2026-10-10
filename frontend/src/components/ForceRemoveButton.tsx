@@ -46,7 +46,12 @@ export default function ForceRemoveButton({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Force remove</AlertDialogAction>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={onConfirm}
+          >
+            Force remove
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
