@@ -4736,9 +4736,7 @@ func TestCreateSecretWritesOneJSONStatus(t *testing.T) {
 	if w.status != http.StatusCreated {
 		t.Errorf("recorded status = %d, want 201", w.status)
 	}
-	if ct := recorder.Header().
-		Get("Content-Type"); !strings.HasPrefix(ct, "application/") ||
-		!strings.Contains(ct, "json") {
-		t.Errorf("Content-Type = %q, want JSON", ct)
+	if ct := recorder.Result().Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("sent Content-Type = %q, want application/json", ct)
 	}
 }

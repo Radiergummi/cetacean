@@ -71,9 +71,12 @@ type statusWriter struct {
 	wroteHeader bool
 }
 
+// WriteHeader keeps the first status, as net/http does with a superfluous call.
 func (w *statusWriter) WriteHeader(code int) {
-	w.wroteHeader = true
-	w.status = code
+	if !w.wroteHeader {
+		w.wroteHeader = true
+		w.status = code
+	}
 	w.ResponseWriter.WriteHeader(code)
 }
 
