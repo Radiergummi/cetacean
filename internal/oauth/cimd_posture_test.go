@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // fetchASMetadata returns the decoded RFC 8414 metadata document.
@@ -34,6 +36,10 @@ func fetchASMetadata(t *testing.T, s *Server) map[string]any {
 // Client ID Metadata Documents. A client cannot know we accept an https://
 // client_id unless we say so, and there is no other discovery path for it.
 func TestMetadataAdvertisesCIMD(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/metadata-advertises-support",
+	)
+
 	doc := fetchASMetadata(t, newTestServer(t))
 
 	if supported, _ := doc["client_id_metadata_document_supported"].(bool); !supported {
@@ -80,6 +86,11 @@ func TestCIMDDisabledRejectsHTTPSClientID(t *testing.T) {
 
 // TestCIMDEnabledStillResolves guards the default path.
 func TestCIMDEnabledStillResolves(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/client-metadata-is-fetched",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/failed-fetch-aborts-the-request",
+	)
+
 	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/authorize", nil)

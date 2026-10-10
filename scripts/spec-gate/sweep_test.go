@@ -129,3 +129,26 @@ func TestCitationREMatchesAnUnnumberedSpecification(t *testing.T) {
 		t.Errorf("OAuth 2.0 matched %q", match)
 	}
 }
+
+// An Internet-Draft is named by its draft name, with or without the revision
+// suffix, and both spellings are one document: the one the registry files
+// under the bare name.
+func TestCitationREMatchesAnInternetDraftAcrossRevisions(t *testing.T) {
+	const name = "draft-ietf-oauth-client-id-metadata-document"
+
+	for _, input := range []string{
+		"// (" + name + ").",
+		"[" + name + "-01](https://datatracker.ietf.org/doc/" + name + "/)",
+		"see " + name + "-02, section 3",
+	} {
+		match := citationRE.FindString(input)
+		if got := spec.Token(match); got != spec.Token(name) {
+			t.Errorf("%q: matched %q, token %q, want %q", input, match, got, spec.Token(name))
+		}
+	}
+
+	// A JSON Schema draft is not an Internet-Draft name.
+	if match := citationRE.FindString(`"$schema": "draft-07"`); match != "" {
+		t.Errorf("a JSON Schema draft matched %q", match)
+	}
+}

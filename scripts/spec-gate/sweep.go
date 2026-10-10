@@ -13,8 +13,9 @@ import (
 // citationRE matches how specifications are named in comments, prose and links.
 // Case-insensitive because an rfc-editor.org URL spells the number in lower
 // case. OAuth 2.1 has no number yet: it is an Internet-Draft, named by title.
+// Any other Internet-Draft is named by its draft name.
 var citationRE = regexp.MustCompile(
-	`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4}|OAuth[ -]?2\.1)\b`,
+	`(?i)\b(RFC[ -]?[0-9]{3,4}|SEP[ -]?[0-9]{3,4}|OAuth[ -]?2\.1|draft-ietf(?:-[a-z0-9]+)+)\b`,
 )
 
 // mechanismPrefixes are this mechanism's own files: the registry states each

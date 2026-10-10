@@ -2,6 +2,33 @@
 # Most are held by a dismissal, which is one line of prose with nothing to
 # match against; the rest are the finding. Regenerate with spec-extract --write,
 # and shrink this file only by registering or dismissing what it lists.
+oauth/draft-ietf-oauth-client-id-metadata-document:
+    - '* MAY contain a port'
+    - '* SHOULD NOT contain a query component'
+    - '* private key material MUST NOT be included in the Client ID Metadata Document; only public keys, such as those published via the jwks or jwks_uri properties, are permitted'
+    - '* the client_secret and client_secret_expires_at properties MUST NOT be used'
+    - A Client Identifier URL MUST be associated with a set of client metadata, in the form of a Client ID Metadata Document as described in Section 4, available at the Client Identifier URL.
+    - A short URL is RECOMMENDED, since the URI may be displayed to the end user in the authorization interface or in management interfaces.
+    - An authorization server MAY instead associate a Client Identifier URL with client metadata through other means, such as by pre-registering the URL as described in Section 7.2.
+    - An authorization server MAY pre-register Client Identifier URLs.
+    - Authorization servers SHOULD consider network policies or other measures to prevent making requests to special-use addresses.
+    - Authorization servers SHOULD fetch the client_id metadata document provided in the authorization request in order to provide users with additional information about the request, such as the application name and logo.
+    - Authorization servers SHOULD respect cache headers as described in Section 5.2 to reduce the frequency of unnecessary fetches.
+    - Authorization servers deployed for development or testing purposes MAY relax this restriction to allow fetching from loopback addresses when the authorization server itself is also running on a loopback address and the resolved address matches the same loopback interface.
+    - Authorization servers that wish to make use of the logo_uri property within Client ID Metadata Document SHOULD prefetch the file at logo_uri and cache it for the cache duration of the Client ID Metadata Document.
+    - Clients that are capable of maintaining private key material and performing client authentication SHOULD do so with an acceptable method, such as a method in the OAuth Token Endpoint Authentication Methods registry (https://www.iana.org/assignments/oauth-parameters/ oauth-parameters.xhtml#token-endpoint-auth-method).
+    - 'For example, the client MAY include the following properties in its metadata document to establish a public key and advertise the private_key_jwt authentication method defined in [OpenID]:'
+    - If the server does not fetch the Client ID Metadata Document, then it SHOULD take additional measures to ensure the user is provided with as much information as possible about the request.
+    - Other specifications MAY place additional restrictions on the contents of the Client ID Metadata Document accepted by authorization servers implementing their specification.
+    - The Client ID Metadata Document MAY also be served with more specific content types as long as the response is JSON and conforms to application/<AS-defined>+json.
+    - The Client ID Metadata Document MUST be served with a 200 OK HTTP status code.
+    - The authorization server MAY cache the client metadata it discovers at the Client ID Metadata Document URL.
+    - The authorization server SHOULD fetch the Client ID Metadata Document at the URL at the time of establishing this pre-registration, although other means of registering the metadata document are also valid.
+    - The software_statement parameter defined in [RFC7591] MAY be used together with a Client Identifier URL, for example by including it as a property of the Client ID Metadata Document.
+    - This establishes this client as a confidential client, and any communication with the authorization server MUST include client authentication of the registered type.
+    - Usage of a stable URL that does not change frequently for the client is also RECOMMENDED, as changing the URL will appear to the authorization server to be an entirely different Client Identifier URL as described in Section 8.3.
+    - Using a path of / (e.g., https://example.com/) is NOT RECOMMENDED, since the Client ID Metadata Document would then be served at the root of the domain, conflicting with existing content that may be published there.
+    - 'client_id_metadata_document_supported: OPTIONAL.'
 oauth/oauth-2-1:
     - '"client_id": OPTIONAL.'
     - '"client_id": REQUIRED, if the client is not authenticating with the authorization server as described in Section 3.2.1.'

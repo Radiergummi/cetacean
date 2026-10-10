@@ -33,10 +33,6 @@ const cimdCacheTTL = time.Hour
 // DCRMaxClients for the same reason; this is CIMD's.
 const cimdCacheMaxEntries = 512
 
-// cimdMaxRedirects is the maximum number of redirects the fetcher will follow.
-// Lower than the net/http default of 10 to bound per-fetch work.
-const cimdMaxRedirects = 5
-
 // cimdMaxBodyBytes is the hard cap on the response body (5 KiB).
 const cimdMaxBodyBytes = 5 * 1024
 
@@ -49,6 +45,21 @@ const cimdFetchTimeout = 5 * time.Second
 var cgnatBlock = func() *net.IPNet {
 	_, n, _ := net.ParseCIDR("100.64.0.0/10")
 	return n
+}()
+
+// specialUseBlocks are the RFC 6890 blocks not globally reachable that the
+// net.IP predicates in checkIP do not already name.
+var specialUseBlocks = func() []*net.IPNet {
+	var blocks []*net.IPNet
+	for _, cidr := range []string{
+		"0.0.0.0/8", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
+		"198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
+		"100::/64", "2001::/23", "2001:db8::/32",
+	} {
+		_, n, _ := net.ParseCIDR(cidr)
+		blocks = append(blocks, n)
+	}
+	return blocks
 }()
 
 // Sentinel errors for CIMD fetch failures. All are wrapped with %w so callers
@@ -70,10 +81,16 @@ var (
 	// does not match the requested URL byte-for-byte.
 	ErrCIMDClientIDMismatch = errors.New("CIMD: client_id in document does not match requested URL")
 
-	// ErrCIMDSymmetricAuth is returned when the document advertises a symmetric
-	// token endpoint authentication method (client_secret_post or
-	// client_secret_basic) that Cetacean does not support.
+	// ErrCIMDSymmetricAuth is returned when the document advertises a token
+	// endpoint authentication method built on a shared secret, which Cetacean
+	// does not support.
 	ErrCIMDSymmetricAuth = errors.New("CIMD: symmetric token_endpoint_auth_method not supported")
+
+	// ErrCIMDUnsupportedAuth is returned when the document asks to be
+	// authenticated at the token endpoint, which authenticates no client.
+	ErrCIMDUnsupportedAuth = errors.New("CIMD: token_endpoint_auth_method not supported")
+
+	errCIMDRedirect = errors.New("CIMD: redirects are not followed")
 )
 
 // ClientMetadata holds the fields from an OAuth Client ID Metadata Document
@@ -130,7 +147,7 @@ type CIMDFetcher struct {
 // httpClient returns an HTTP client suitable for fetching CIMD documents. Its
 // DialContext resolves the host, screens the IP and connects to that exact
 // address in one step, so a DNS-rebinding attacker cannot answer the
-// validation lookup and the connect differently. CheckRedirect re-validates.
+// validation lookup and the connect differently. Redirects are never followed.
 func (f *CIMDFetcher) httpClient() *http.Client {
 	f.clientOnce.Do(func() {
 		var c http.Client
@@ -147,11 +164,8 @@ func (f *CIMDFetcher) httpClient() *http.Client {
 				Transport: f.ssrfTransport(nil),
 			}
 		}
-		c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if len(via) >= cimdMaxRedirects {
-				return fmt.Errorf("CIMD: exceeded %d redirects", cimdMaxRedirects)
-			}
-			return f.validateURL(req.URL.String())
+		c.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return errCIMDRedirect
 		}
 		f.cachedHTTP = &c
 	})
@@ -253,8 +267,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	req.Header.Set("Accept", "application/json")
 
 	// Steps 5–6: execute. SSRF block-list enforcement happens inside the
-	// transport's DialContext; redirects re-run URL-structure validation in
-	// CheckRedirect and then dial through the same SSRF-aware path.
+	// transport's DialContext; a redirect fails the fetch.
 	resp, err := f.httpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("CIMD fetch: HTTP request: %w", err)
@@ -303,6 +316,9 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 	if isSymmetricAuthMethod(meta.TokenEndpointAuthMethod) {
 		return nil, fmt.Errorf("%w: %q", ErrCIMDSymmetricAuth, meta.TokenEndpointAuthMethod)
 	}
+	if m := meta.TokenEndpointAuthMethod; m != "" && m != "none" {
+		return nil, fmt.Errorf("%w: %q", ErrCIMDUnsupportedAuth, m)
+	}
 
 	// Step 13: validate redirect_uris. Reuse the DCR validator so CIMD and
 	// dynamically-registered clients converge on the same allowed shapes
@@ -348,7 +364,16 @@ func (f *CIMDFetcher) validateURL(rawURL string) error {
 	if u.Path == "" || u.Path == "/" {
 		return fmt.Errorf("%w: URL must have a non-trivial path component", ErrCIMDInvalidURL)
 	}
+	if slices.ContainsFunc(strings.Split(u.Path, "/"), isDotSegment) {
+		return fmt.Errorf("%w: URL must not contain dot segments", ErrCIMDInvalidURL)
+	}
 	return nil
+}
+
+// isDotSegment reports whether a path segment is "." or "..". u.Path is
+// already decoded, so the percent-encoded spellings are refused too.
+func isDotSegment(segment string) bool {
+	return segment == "." || segment == ".."
 }
 
 // parseHTTPSURL parses rawURL and returns an error if the scheme is not https.
@@ -365,8 +390,8 @@ func parseHTTPSURL(rawURL string) (*url.URL, error) {
 
 // checkIP validates a single resolved IP against the SSRF block-list.
 // The block-list is exhaustive: loopback (unless AllowLoopback), private
-// (RFC 1918 + ULA), link-local (unicast + multicast), unspecified, and
-// multicast addresses are all rejected.
+// (RFC 1918 + ULA), link-local (unicast + multicast), unspecified, multicast
+// and the rest of RFC 6890's special-use blocks are all rejected.
 func (f *CIMDFetcher) checkIP(ip net.IP) error {
 	if ip.IsLoopback() && !f.AllowLoopback {
 		return fmt.Errorf("%w: resolved to loopback address %s", ErrCIMDSSRFBlocked, ip)
@@ -386,14 +411,22 @@ func (f *CIMDFetcher) checkIP(ip net.IP) error {
 	if ip.IsMulticast() {
 		return fmt.Errorf("%w: resolved to multicast address %s", ErrCIMDSSRFBlocked, ip)
 	}
+	if slices.ContainsFunc(specialUseBlocks, func(n *net.IPNet) bool { return n.Contains(ip) }) {
+		return fmt.Errorf("%w: resolved to special-use address %s", ErrCIMDSSRFBlocked, ip)
+	}
 	return nil
 }
 
 // isSymmetricAuthMethod reports whether the given token_endpoint_auth_method
-// is one of the symmetric methods (client_secret_post, client_secret_basic)
-// that Cetacean does not support.
+// is one of the registered methods built on a shared secret, which a client
+// that registers itself by URL has no way to establish.
 func isSymmetricAuthMethod(method string) bool {
-	return method == "client_secret_post" || method == "client_secret_basic"
+	switch method {
+	case "client_secret_post", "client_secret_basic", "client_secret_jwt":
+		return true
+	default:
+		return false
+	}
 }
 
 // cacheGet returns a cached metadata entry if one exists and is still fresh.
