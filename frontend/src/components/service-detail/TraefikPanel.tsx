@@ -338,6 +338,9 @@ export function TraefikPanel({
   const hasServices = services && services.length > 0;
   const hasMiddlewares = middlewares && middlewares.length > 0;
 
+  // The state the form was seeded from; a save diffs against it, not against
+  // an integration that may have been refetched while the form was open.
+  const [seed, setSeed] = useState(integration);
   const [formEnabled, setFormEnabled] = useState(integration.enabled);
   const [routerForms, setRouterForms] = useState<RouterFormState[]>(() =>
     initRouterForms(integration),
@@ -350,6 +353,7 @@ export function TraefikPanel({
   );
 
   function resetForm() {
+    setSeed(integration);
     setFormEnabled(integration.enabled);
     setRouterForms(initRouterForms(integration));
     setServiceForms(initServiceForms(integration));
@@ -358,10 +362,10 @@ export function TraefikPanel({
 
   async function handleSave() {
     const before = serializeTraefikLabels(
-      integration.enabled,
-      initRouterForms(integration),
-      initServiceForms(integration),
-      initMiddlewareForms(integration),
+      seed.enabled,
+      initRouterForms(seed),
+      initServiceForms(seed),
+      initMiddlewareForms(seed),
     );
     const after = serializeTraefikLabels(formEnabled, routerForms, serviceForms, middlewareForms);
     await saveModelledLabels(rawLabels, before, after, serviceId, onSaved);
