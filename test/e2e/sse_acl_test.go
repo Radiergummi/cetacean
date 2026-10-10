@@ -259,8 +259,8 @@ func TestEventsStreamAppliesTheACL(t *testing.T) {
 	}
 }
 
-// TestSSEConnectionCapRefusesWithRetryAfter drives the broadcaster to MaxClients
-// and asserts the next subscriber is refused in a way it can act on: a 429 with
+// TestSSEConnectionCapRefusesWithRetryAfter drives one caller to its share of
+// the broadcaster, MaxClientsPerOwner, and asserts its next subscriber is refused in a way it can act on: a 429 with
 // Retry-After, not a dropped connection, a hang, or a 503 that reads as
 // "this endpoint is broken".
 func TestSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
@@ -275,8 +275,8 @@ func TestSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	// ServeSSE registers a client before writing the response head, so a
 	// request whose headers have arrived is a client the broadcaster is
 	// already counting. Opening these serially therefore reaches exactly
-	// MaxClients with no race to reason about.
-	for opened := range sse.MaxClients {
+	// MaxClientsPerOwner with no race to reason about.
+	for opened := range sse.MaxClientsPerOwner {
 		req, err := http.NewRequestWithContext(
 			ctx, http.MethodGet, proc.BaseURL+"/events", nil,
 		)
@@ -289,15 +289,15 @@ func TestSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 
 		resp, err := proc.StreamClient().Do(req)
 		if err != nil {
-			t.Fatalf("open stream %d of %d: %v", opened+1, sse.MaxClients, err)
+			t.Fatalf("open stream %d of %d: %v", opened+1, sse.MaxClientsPerOwner, err)
 		}
 
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
 			t.Fatalf(
 				"stream %d of %d was refused with %d; the broadcaster ran out of room "+
-					"before MaxClients",
-				opened+1, sse.MaxClients, resp.StatusCode,
+					"before MaxClientsPerOwner",
+				opened+1, sse.MaxClientsPerOwner, resp.StatusCode,
 			)
 		}
 
@@ -317,7 +317,7 @@ func TestSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	if outcome.status != http.StatusTooManyRequests {
 		t.Fatalf(
 			"subscriber %d: status = %d, want 429; body: %s",
-			sse.MaxClients+1, outcome.status, outcome.body,
+			sse.MaxClientsPerOwner+1, outcome.status, outcome.body,
 		)
 	}
 
