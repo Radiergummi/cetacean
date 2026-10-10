@@ -38,6 +38,7 @@ export default function CreateResourceDialog({
   function handleOpenChange(next: boolean) {
     if (!next) {
       onReset();
+      action.reset();
     }
 
     setOpen(next);

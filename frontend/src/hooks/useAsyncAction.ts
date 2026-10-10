@@ -48,5 +48,10 @@ export function useAsyncAction(options?: AsyncActionOptions) {
     [toastRef],
   );
 
-  return { loading, error, cause, execute };
+  const reset = useCallback(() => {
+    setError(null);
+    setCause(null);
+  }, []);
+
+  return { loading, error, cause, execute, reset };
 }
