@@ -64,6 +64,14 @@ You are asked to approve a client once, not every session. Approval lasts [`oaut
 by default) and renews each time you approve. Set it to `0s` to be asked every time. You are always asked again if the
 client changes its name or redirect URLs.
 
+### Protocol revisions
+
+Cetacean speaks MCP `2026-07-28` in full and `2025-11-25`, the revision most clients and client libraries use today, without
+sessions. A `2025-11-25` client connects through the usual `initialize` handshake and can call every tool, read every
+resource, and use every prompt. What it can't do is wait for the server to tell it something: it gets no stream to
+receive notifications on, so resource subscriptions and list-change notices are left out of what the server offers it.
+Every older revision is refused.
+
 ## Decide what an agent may change
 
 An agent is never more privileged than the identity that signed in. Two controls narrow it further.
@@ -131,7 +139,7 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 
 | Symptom                                          | Cause                                                                                                       |
 |--------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| Client reports `unsupported protocol version`    | The client is older than MCP revision `2026-07-28`. Upgrade it; older revisions are refused.                |
+| Client reports `unsupported protocol version`    | The client is older than MCP revision `2025-11-25`. Upgrade it; see [Protocol revisions](#protocol-revisions). |
 | Every agent must sign in again after a redeploy  | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                       |
 | Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] isn't the URL clients reach from outside.                         |
 | A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].           |

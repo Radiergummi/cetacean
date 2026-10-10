@@ -940,7 +940,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 	}
 	slog.Info("MCP server enabled",
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
-		"protocol_version", mcp.ProtocolVersion)
+		"protocol_versions", mcp.SupportedProtocolVersions)
 
 	// A browser-based MCP client has to clear two gates: the Origin guard
 	// below, and the cross-origin protection every route carries. The guard
