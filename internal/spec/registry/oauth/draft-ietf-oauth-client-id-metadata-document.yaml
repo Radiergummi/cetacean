@@ -1,0 +1,337 @@
+source: draft-ietf-oauth-client-id-metadata-document
+title: OAuth Client ID Metadata Document
+revision: draft-ietf-oauth-client-id-metadata-document-02
+reviewed: 2026-10-10
+url:
+  - https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+  - https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.txt
+
+inventory:
+  from: >-
+    §3 through §9 of draft-02 — the Client Identifier URL, the document, how
+    an authorization server discovers and caches it, its metadata, the
+    implementation, security and privacy considerations. §1 is the
+    introduction, §2 the BCP 14 boilerplate, §10 IANA's and §11 references.
+    This deployment is the authorization server, so a statement binding the
+    client or the document's publisher is dismissed with the half the server
+    enforces named. §4 and §5 both say the document is served with 200 OK;
+    the two sentences are one statement here.
+  count: 51
+  sections: ["3", "4", "5", "6", "7", "8", "9"]
+
+requirements:
+  - id: client-id-url-uses-https
+    level: MUST
+    text: >-
+      A Client Identifier URL: MUST use the https URL scheme
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-3
+
+  - id: client-id-has-no-userinfo
+    level: MUST
+    text: >-
+      A Client Identifier URL: MUST NOT contain a userinfo component defined by
+      [RFC3986]
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-3
+
+  - id: client-id-has-a-path
+    level: MUST
+    text: >-
+      A Client Identifier URL: MUST contain a path component
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-3
+
+  - id: client-id-has-no-dot-segments
+    level: MUST
+    text: >-
+      A Client Identifier URL: MUST NOT contain single-dot or double-dot path
+      components
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-3
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\tif slices.ContainsFunc(strings.Split(u.Path, \"/\"), isDotSegment) {"
+        with: "\tif false {"
+
+  - id: client-id-has-no-fragment
+    level: MUST
+    text: >-
+      A Client Identifier URL: MUST NOT contain a fragment component
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-3
+
+  - id: client-id-urls-compared-as-strings
+    level: MUST
+    text: >-
+      Client Identifier URLs MUST be compared using simple string comparison,
+      as defined in Section 6.2.1 of [RFC3986].
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-3
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\tif meta.ClientID != clientID {"
+        with: "\tif !strings.EqualFold(meta.ClientID, clientID) {"
+
+  - id: document-client-id-matches-the-fetched-url
+    level: MUST
+    text: >-
+      The Client ID Metadata Document MUST contain a client_id property whose
+      value MUST match the Client Identifier URL, which MUST also match the URL
+      that the authorization server used to fetch the document; comparisons
+      MUST be made using simple string comparison as defined in Section 6.2.1
+      of [RFC3986].
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-4
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\tif meta.ClientID != clientID {"
+        with: "\tif meta.ClientID == \"\" {"
+
+  - id: no-symmetric-token-endpoint-auth
+    level: MUST
+    text: >-
+      the token_endpoint_auth_method property MUST NOT include
+      client_secret_post, client_secret_basic, client_secret_jwt, or any other
+      method based around a shared symmetric secret
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-4.1
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\tcase \"client_secret_post\", \"client_secret_basic\", \"client_secret_jwt\":"
+        with: "\tcase \"client_secret_post\", \"client_secret_basic\":"
+
+  - id: redirect-urls-registered-and-exact-matched
+    level: MUST
+    text: >-
+      According to [RFC9700], the authorization server MUST require
+      registration of redirect URLs, and MUST ensure that the redirect URL in
+      an authorization request is an exact match, using simple string
+      comparison, of a registered redirect URL.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-4.2
+
+  - id: client-metadata-is-fetched
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD automatically fetch the Client ID Metadata
+      Document at the Client Identifier URL to retrieve the client metadata.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5
+
+  - id: client-metadata-is-re-fetched
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD periodically re-fetch the Client ID Metadata
+      Document as the contents may change over time.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5
+
+  - id: only-200-is-a-document
+    level: MUST
+    text: >-
+      The authorization server MUST treat all other HTTP status codes as an
+      error response, as described in Section 5.1.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5
+
+  - id: redirects-not-followed
+    level: MUST
+    text: >-
+      The authorization server MUST NOT automatically follow HTTP redirects
+      when fetching the Client ID Metadata Document.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5
+    deferred: >-
+      The fetcher follows up to cimdMaxRedirects, re-validating each hop's URL
+      and screening each hop's address. Refusing them would break a client
+      whose document sits behind a redirect today, so whether to is a decision
+      rather than a fix.
+
+  - id: failed-fetch-aborts-the-request
+    level: SHOULD
+    text: >-
+      If the authorization server attempts to fetch the Client ID Metadata
+      Document, and fetching the metadata document fails, the authorization
+      server SHOULD abort the authorization request.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5.1
+
+  - id: cache-headers-respected
+    level: SHOULD
+    text: >-
+      The authorization server SHOULD respect HTTP cache headers [RFC9111] when
+      caching client metadata, but MAY define its own upper and/or lower
+      bounds on an acceptable cache lifetime as well.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5.2
+    deferred: >-
+      Every document is cached for exactly cimdCacheTTL, whatever its response
+      says: the bound is applied, the headers are not read.
+
+  - id: error-responses-not-cached
+    level: MUST
+    text: >-
+      The authorization server MUST NOT cache error responses.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5.2
+
+  - id: invalid-documents-not-cached
+    level: MUST
+    text: >-
+      The authorization server also MUST NOT cache documents which are invalid
+      or malformed.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5.2
+
+  - id: metadata-advertises-support
+    level: MUST
+    text: >-
+      Authorization servers that publish Authorization Server Metadata
+      [RFC8414] MUST include the following property to signal support for
+      Client ID Metadata Documents as described in this specification.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-6
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\tdoc.ClientIDMetadataDocumentSupported = s.cfg.OAuth.CIMDEnabled"
+        with: "\tdoc.ClientIDMetadataDocumentSupported = false"
+
+  - id: generated-client-ids-are-not-https
+    level: SHOULD
+    text: >-
+      If an authorization server wishes to support clients using Client ID
+      Metadata Documents as well as clients where the authorization server
+      generates the client_id, it SHOULD ensure that the client_id strings it
+      generates do not start with https://.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-7.1
+
+  - id: private-key-jwt-client-is-authenticated
+    level: MUST
+    text: >-
+      When a client declares token_endpoint_auth_method as private_key_jwt,
+      the authorization server MUST require client authentication according to
+      Section 2.2 of [RFC7523] using the corresponding key discovered from the
+      client's metadata document.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.2
+    deferred: >-
+      This server authenticates no client at its token endpoint and advertises
+      only "none", yet accepts a document declaring private_key_jwt and treats
+      it as a public client. Refusing such documents would conform, and would
+      turn away clients that work today.
+
+  - id: hostname-displayed-on-consent
+    level: SHOULD
+    text: >-
+      The authorization server SHOULD display the hostname of the client_id on
+      the authorization interface, in addition to displaying the fetched
+      client information if any.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.5
+    deferred: >-
+      The consent page names the client by its self-asserted client_name, a
+      Verified badge and the redirect URI. The client_id rides along only in a
+      hidden form field.
+
+  - id: special-use-addresses-not-fetched
+    level: MUST
+    text: >-
+      Authorization servers MUST NOT fetch a Client ID Metadata Document URL or
+      any URLs contained within a Client ID Metadata Document that resolve to
+      special-use IP addresses as defined in [RFC6890].
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.6
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\tif ip.IsLoopback() && !f.AllowLoopback {"
+        with: "\tif false {"
+      - file: internal/oauth/cimd.go
+        replace: "\tif ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {"
+        with: "\tif false {"
+      - file: internal/oauth/cimd.go
+        replace: "\tif slices.ContainsFunc(specialUseBlocks, func(n *net.IPNet) bool { return n.Contains(ip) }) {"
+        with: "\tif false {"
+
+  - id: loopback-exception-not-in-production
+    level: MUST
+    text: >-
+      Authorization servers MUST NOT apply this exception in production
+      deployments, since doing so would allow an attacker-controlled Client
+      Identifier URL to cause the authorization server to make requests
+      against itself or other services on the loopback interface or
+      special-use IP addresses.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.6
+
+  - id: only-known-uri-schemes
+    level: SHOULD
+    text: >-
+      Authorization servers SHOULD ensure they only fetch or parse URLs with
+      known and supported URI schemes.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.6
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\t\tif err != nil || u.Scheme != \"https\" {"
+        with: "\t\tif err != nil || u.Scheme == \"\" {"
+
+  - id: response-size-limited
+    level: SHOULD
+    text: >-
+      Instead, authorization servers SHOULD limit the amount of data they read
+      and process when fetching a Client ID Metadata Document, for example by
+      stopping after a maximum number of bytes and treating the response as an
+      error if that limit is reached before the document has been fully read.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.7
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "const cimdMaxBodyBytes = 5 * 1024"
+        with: "const cimdMaxBodyBytes = 64 * 1024"
+
+dismissed:
+  client-id-may-carry-a-port: >-
+    A MAY about the URL a client chooses. A port is accepted and is part of
+    the string compared.
+  client-id-should-not-carry-a-query: >-
+    A SHOULD NOT binding the client that chooses its URL. A query is accepted
+    and compared as part of the string.
+  short-url-recommended: >-
+    Advice to the client choosing its URL.
+  stable-url-recommended: >-
+    Advice to the client choosing its URL.
+  root-path-not-recommended: >-
+    Advice to the client. This server refuses a bare "/" outright, under
+    oauth/draft-ietf-oauth-client-id-metadata-document/client-id-has-a-path.
+  client-id-url-serves-its-metadata: >-
+    Binds whoever publishes the URL. The server's half is fetching it, which is
+    oauth/draft-ietf-oauth-client-id-metadata-document/client-metadata-is-fetched.
+  document-served-with-200: >-
+    §4 and §5 both bind the publisher to answer 200 OK. The server's half is
+    oauth/draft-ietf-oauth-client-id-metadata-document/only-200-is-a-document.
+  more-specific-content-types: >-
+    A MAY for the publisher. This server refuses only text/html and decodes
+    any other type as JSON.
+  other-specifications-may-restrict: >-
+    Binds other specifications.
+  no-client-secret-in-document: >-
+    Binds the publisher. This server reads no client_secret from a document
+    and authenticates no client by one, so a document carrying one gains
+    nothing.
+  no-private-key-in-document: >-
+    Binds the publisher. This server reads no key material from a document.
+  software-statement-may-be-used: >-
+    A MAY. This server reads no software_statement.
+  other-means-of-association: >-
+    A MAY. This server associates a Client Identifier URL with metadata only
+    by fetching it.
+  metadata-may-be-cached: >-
+    A MAY. This server caches a document for cimdCacheTTL.
+  supported-parameter-declaration: >-
+    The declaration of the parameter itself. Its presence is
+    oauth/draft-ietf-oauth-client-id-metadata-document/metadata-advertises-support.
+  pre-registration-allowed: >-
+    A MAY. This server pre-registers no Client Identifier URL.
+  pre-registration-fetches: >-
+    Conditional on pre-registering, which this server does not do.
+  clients-should-authenticate: >-
+    Binds a client capable of holding a private key.
+  client-may-publish-a-key: >-
+    A MAY for the client, given as an example.
+  confidential-client-authenticates: >-
+    Binds the client. The server's half is
+    oauth/draft-ietf-oauth-client-id-metadata-document/private-key-jwt-client-is-authenticated.
+  fetch-to-inform-the-user: >-
+    The same fetch as
+    oauth/draft-ietf-oauth-client-id-metadata-document/client-metadata-is-fetched,
+    restated for its use on the consent page.
+  measures-when-not-fetching: >-
+    Conditional on not fetching the document, which this server always does.
+  loopback-relaxation-for-development: >-
+    A MAY. The relaxation exists only as a field tests set; no configuration
+    reaches it.
+  network-policies-considered: >-
+    An operator's network policy, outside the binary.
+  logo-prefetched-and-cached: >-
+    Conditional on displaying logo_uri, which the consent page does not.
+  cache-headers-reduce-fetches: >-
+    A restatement of
+    oauth/draft-ietf-oauth-client-id-metadata-document/cache-headers-respected
+    for its privacy effect.

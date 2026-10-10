@@ -71,6 +71,7 @@ func TestConsentPageRender(t *testing.T) {
 		"oauth/rfc9700/clickjacking-prevented",
 		"oauth/rfc9700/csp-used-against-framing",
 		"oauth/rfc9700/csp-combined-with-a-legacy-defence",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/hostname-displayed-on-consent",
 	)
 
 	s := newTestServer(t)
