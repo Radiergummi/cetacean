@@ -459,6 +459,11 @@ support returns ordinary JSON.
 MCP Apps are self-contained: they load nothing from the network and read data only through Cetacean's MCP tools,
 so a widget shows exactly what the calling identity's grants allow.
 
+Picking a finding in the recommendations widget sends the model a message in the user's name, and that message
+quotes resource names and finding text from the cluster. Whoever can name a service or node chooses part of it.
+The widget passes those fields as one JSON value marked as cluster data, but the model still reads them, so treat
+a follow-up from a widget as you would any output that quotes the cluster.
+
 {/* cards */}
 
 | Resource                        | Renders                                                         | Behavior                                                                                                                            |
