@@ -367,8 +367,8 @@ func TestAPIDocEndpoints(t *testing.T) {
 		if !strings.Contains(body, "api-reference") {
 			t.Error("response body missing api-reference identifier")
 		}
-		if !strings.Contains(body, "/api/scalar.js") {
-			t.Error("response body should reference local /api/scalar.js, not CDN")
+		if !strings.Contains(body, `src="api/scalar.js"`) {
+			t.Error("response body should reference the local api/scalar.js, not CDN")
 		}
 	})
 

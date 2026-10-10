@@ -1,20 +1,24 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
+// apiPlaygroundHTML takes the base href; every reference below it is relative.
 const apiPlaygroundHTML = `<!DOCTYPE html>
 <html>
-<head><title>Cetacean API</title><meta charset="utf-8"/></head>
+<head><title>Cetacean API</title><meta charset="utf-8"/><base href="%s"/></head>
 <body>
-  <script id="api-reference" data-url="/api"></script>
-  <script src="/api/scalar.js"></script>
+  <script id="api-reference" data-url="api"></script>
+  <script src="api/scalar.js"></script>
 </body>
 </html>`
 
@@ -27,10 +31,15 @@ const (
 )
 
 // HandleAPIDoc returns the negotiated handler and the one behind the .yaml
-// address. HTML gets the Scalar playground, */* and JSON get the spec as JSON,
-// and a YAML type gets the source file verbatim. Both come from one call so
+// address: HTML gets the Scalar playground, */* and JSON the spec as JSON, and
+// YAML the source, verbatim but for a base path in its servers. One call, so
 // they share the bodies, each hashed and compressed once.
-func HandleAPIDoc(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
+func HandleAPIDoc(specYAML []byte, basePath string) (negotiated, yamlOnly http.HandlerFunc) {
+	specYAML, err := rebaseServers(specYAML, basePath)
+	if err != nil {
+		panic("openapi spec " + err.Error())
+	}
+
 	// Convert YAML to JSON once at startup.
 	var parsed any
 	if err := yaml.Unmarshal(specYAML, &parsed); err != nil {
@@ -43,7 +52,9 @@ func HandleAPIDoc(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 
 	// Both bodies are fixed for the life of the process, so each is hashed
 	// once and compressed at most once per coding.
-	playground := newStaticBody([]byte(apiPlaygroundHTML))
+	playground := newStaticBody(
+		fmt.Appendf(nil, apiPlaygroundHTML, html.EscapeString(basePath+"/")),
+	)
 	spec := newStaticBody(specJSON)
 	source := newStaticBody(specYAML)
 
@@ -92,6 +103,55 @@ func HandleScalarJS(js []byte) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		bundle.serve(w, r)
 	}
+}
+
+// rebaseServers prefixes each root-relative server URL with the base path,
+// which the authored document cannot know.
+func rebaseServers(specYAML []byte, basePath string) ([]byte, error) {
+	if basePath == "" {
+		return specYAML, nil
+	}
+
+	var document yaml.Node
+	if err := yaml.Unmarshal(specYAML, &document); err != nil {
+		return nil, fmt.Errorf("is not valid YAML: %w", err)
+	}
+
+	if len(document.Content) == 0 || document.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("does not parse to an object")
+	}
+
+	root := document.Content[0]
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != "servers" {
+			continue
+		}
+
+		for _, server := range root.Content[i+1].Content {
+			for j := 0; j+1 < len(server.Content); j += 2 {
+				url := server.Content[j+1]
+				if server.Content[j].Value == "url" && strings.HasPrefix(url.Value, "/") {
+					url.Value = basePath + url.Value
+				}
+			}
+		}
+	}
+
+	// yaml.Marshal indents by four; the authored file uses two.
+	var out bytes.Buffer
+
+	encoder := yaml.NewEncoder(&out)
+	encoder.SetIndent(2)
+
+	if err := encoder.Encode(&document); err != nil {
+		return nil, err
+	}
+
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+
+	return out.Bytes(), nil
 }
 
 // yamlDocument parses a spec into the JSON-shaped object both descriptions

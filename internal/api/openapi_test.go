@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -39,6 +42,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 		method     string
 		path       string
 		accept     string
+		rangeSpec  string
 		wantStatus int
 		// If true, we skip response body validation (for HTML responses).
 		skipBodyValidation bool
@@ -121,6 +125,29 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 			accept:     "application/json",
 			wantStatus: 200,
 		},
+		{
+			name:       "range request for part of a list",
+			method:     "GET",
+			path:       "/nodes",
+			accept:     "application/json",
+			rangeSpec:  "items 0-0",
+			wantStatus: 206,
+		},
+		{
+			name:       "range request past the end of a list",
+			method:     "GET",
+			path:       "/nodes",
+			accept:     "application/json",
+			rangeSpec:  "items 50-99",
+			wantStatus: 416,
+		},
+		{
+			name:       "JSON Feed of a list",
+			method:     "GET",
+			path:       "/nodes",
+			accept:     "application/feed+json",
+			wantStatus: 200,
+		},
 	}
 
 	for _, tc := range tests {
@@ -128,6 +155,9 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)
 			if tc.accept != "" {
 				req.Header.Set("Accept", tc.accept)
+			}
+			if tc.rangeSpec != "" {
+				req.Header.Set("Range", tc.rangeSpec)
 			}
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
@@ -174,7 +204,8 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 				Header:                 resp.Header,
 				Body:                   resp.Body,
 				Options: &openapi3filter.Options{
-					SkipSettingDefaults: true,
+					SkipSettingDefaults:   true,
+					IncludeResponseStatus: true,
 				},
 			}
 
@@ -194,5 +225,52 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A client reading the documented schema must see a partial removal as one.
+func TestRemoveStackMatchesOpenAPISpec(t *testing.T) {
+	_, _, specRouter := loadTestSpec(t)
+
+	c := cache.New(nil)
+	seedStack(c, "myapp")
+
+	wc := &mockWriteClient{
+		removeServiceFn: func(_ context.Context, _ string) error { return nil },
+		removeNetworkFn: func(_ context.Context, _ string) error {
+			return errors.New("network is in use")
+		},
+		removeConfigFn: func(_ context.Context, _ string) error { return nil },
+		removeSecretFn: func(_ context.Context, _ string) error { return nil },
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	req := httptest.NewRequest("DELETE", "/stacks/myapp", nil)
+	req.SetPathValue("name", "myapp")
+	w := httptest.NewRecorder()
+	h.HandleRemoveStack(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	route, pathParams, err := specRouter.FindRoute(req)
+	if err != nil {
+		t.Fatalf("route not found in spec: %v", err)
+	}
+
+	resp := w.Result()
+	input := &openapi3filter.ResponseValidationInput{
+		RequestValidationInput: &openapi3filter.RequestValidationInput{
+			Request:    req,
+			PathParams: pathParams,
+			Route:      route,
+		},
+		Status: resp.StatusCode,
+		Header: resp.Header,
+		Body:   resp.Body,
+	}
+	if err := openapi3filter.ValidateResponse(req.Context(), input); err != nil {
+		t.Errorf("response validation failed: %v\nbody: %s", err, w.Body.String())
 	}
 }
