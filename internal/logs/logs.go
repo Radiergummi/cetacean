@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -29,7 +30,7 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 	br := bufio.NewReader(r)
 
 	// A TTY service's stream is unframed text. A frame opens with its stream
-	// byte (0-2) and three zero bytes; a timestamped line opens with a digit.
+	// byte (0-3) and three zero bytes; a timestamped line opens with a digit.
 	if peek, _ := br.Peek(8); len(peek) > 0 && !looksFramed(peek) {
 		return readRawLines(br, emit)
 	}
@@ -97,7 +98,7 @@ func readDockerLogFrames(r io.Reader, emit func(LogLine)) error {
 }
 
 func looksFramed(peek []byte) bool {
-	if peek[0] > 2 {
+	if peek[0] > 3 {
 		return false
 	}
 
@@ -170,8 +171,8 @@ func parseLine(line, stream string) LogLine {
 	return LogLine{Timestamp: timestamp, Message: msg, Stream: stream, Attrs: attrs}
 }
 
-// parseDetails extracts the comma-separated key=value prefix that Docker
-// prepends when Details=true. Returns the attributes and the remaining line.
+// parseDetails extracts the comma-separated, query-escaped key=value prefix
+// that Docker prepends when Details=true. Returns the attributes and the rest.
 // The prefix is known by its shape rather than its first key: a service's own
 // --log-opt labels join Docker's and may sort before them.
 func parseDetails(line string) (map[string]string, string) {
@@ -185,6 +186,11 @@ func parseDetails(line string) (map[string]string, string) {
 	for pair := range strings.SplitSeq(before, ",") {
 		key, val, ok := strings.Cut(pair, "=")
 		if !ok || key == "" {
+			return nil, line
+		}
+		key, keyErr := url.QueryUnescape(key)
+		val, valErr := url.QueryUnescape(val)
+		if keyErr != nil || valErr != nil {
 			return nil, line
 		}
 		if strings.HasPrefix(key, "com.docker.") {
