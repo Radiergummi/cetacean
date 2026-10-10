@@ -212,6 +212,9 @@ type Server struct {
 	notifications       *NotificationManager
 	cancelNotifications func()
 
+	// taskOwners binds each task to the identity that created it.
+	taskOwners taskOwners
+
 	// watches bounds concurrent `watch` waits — see maxConcurrentWatches. A nil
 	// channel disables the bound, which is what a Server built without New gets;
 	// only New wires it, and only New serves real traffic.
@@ -364,6 +367,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// bounded separately, by installTaskTTLHook — mcp-go offers no server
 		// option for it.
 		mcpserver.WithMaxConcurrentTasks(opts.Config.MaxConcurrentTasks),
+		mcpserver.WithTaskHooks(srv.taskCreationHooks()),
 	}
 
 	// SEP-414 trace context. Installed only when a tracer is configured: the
