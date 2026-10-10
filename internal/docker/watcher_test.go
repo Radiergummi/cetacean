@@ -61,46 +61,32 @@ func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var data cache.FullSyncData
-	var failed int
-	if m.listErrors["nodes"] == nil {
+	failed := make(map[string]bool)
+	for name, err := range m.listErrors {
+		failed[name] = err != nil
+	}
+	if !failed["nodes"] {
 		data.Nodes, data.HasNodes = m.nodes, true
-	} else {
-		failed++
 	}
-	if m.listErrors["services"] == nil {
+	if !failed["services"] {
 		data.Services, data.HasServices = m.services, true
-	} else {
-		failed++
 	}
-	if m.listErrors["tasks"] == nil {
+	if !failed["tasks"] {
 		data.Tasks, data.HasTasks = m.tasks, true
-	} else {
-		failed++
 	}
-	if m.listErrors["configs"] == nil {
+	if !failed["configs"] {
 		data.Configs, data.HasConfigs = m.configs, true
-	} else {
-		failed++
 	}
-	if m.listErrors["secrets"] == nil {
+	if !failed["secrets"] {
 		data.Secrets, data.HasSecrets = m.secrets, true
-	} else {
-		failed++
 	}
-	if m.listErrors["networks"] == nil {
+	if !failed["networks"] {
 		data.Networks, data.HasNetworks = m.networks, true
-	} else {
-		failed++
 	}
-	if m.listErrors["volumes"] == nil {
+	if !failed["volumes"] {
 		data.Volumes, data.HasVolumes = m.volumes, true
-	} else {
-		failed++
 	}
-	if failed == 7 {
-		return data, fmt.Errorf("all resource syncs failed")
-	}
-	return data, nil
+	return data, fullSyncError(failed)
 }
 
 func (m *mockClient) Inspect(
@@ -592,6 +578,40 @@ func TestRun_SignalsReady(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		cancel()
 		t.Fatal("Run did not exit after context cancel")
+	}
+}
+
+// A manager started before its swarm elects a leader refuses every swarm list
+// while its event stream stays up, so no reconnect follows; the periodic sync
+// that succeeds once a leader exists has to be the one that reports ready.
+func TestRun_PeriodicSyncSignalsReadyAfterFailedStartup(t *testing.T) {
+	mc := newMockClient()
+	for _, name := range swarmResources {
+		mc.listErrors[name] = errors.New("the swarm does not have a leader")
+	}
+
+	w := NewWatcher(mc, cache.New(nil), "")
+	w.syncInterval = 5 * time.Millisecond
+
+	go w.Run(t.Context())
+
+	for mc.fullSyncs.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case <-w.Ready():
+		t.Fatal("ready before any swarm resource could be listed")
+	default:
+	}
+
+	mc.mu.Lock()
+	clear(mc.listErrors)
+	mc.mu.Unlock()
+
+	select {
+	case <-w.Ready():
+	case <-time.After(2 * time.Second):
+		t.Fatal("a successful periodic sync did not signal ready")
 	}
 }
 
