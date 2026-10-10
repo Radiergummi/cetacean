@@ -129,11 +129,10 @@ requirements:
       The authorization server MUST NOT automatically follow HTTP redirects
       when fetching the Client ID Metadata Document.
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5
-    deferred: >-
-      The fetcher follows up to cimdMaxRedirects, re-validating each hop's URL
-      and screening each hop's address. Refusing them would break a client
-      whose document sits behind a redirect today, so whether to is a decision
-      rather than a fix.
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\t\t\treturn errCIMDRedirect"
+        with: "\t\t\treturn nil"
 
   - id: failed-fetch-aborts-the-request
     level: SHOULD
@@ -196,11 +195,10 @@ requirements:
       Section 2.2 of [RFC7523] using the corresponding key discovered from the
       client's metadata document.
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.2
-    deferred: >-
-      This server authenticates no client at its token endpoint and advertises
-      only "none", yet accepts a document declaring private_key_jwt and treats
-      it as a public client. Refusing such documents would conform, and would
-      turn away clients that work today.
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "if m := meta.TokenEndpointAuthMethod; m != \"\" && m != \"none\" {"
+        with: "if m := meta.TokenEndpointAuthMethod; false && m != \"none\" {"
 
   - id: hostname-displayed-on-consent
     level: SHOULD
