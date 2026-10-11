@@ -253,8 +253,6 @@ func TestDetectTraefik_RouterWithoutService(t *testing.T) {
 	}
 }
 
-// The index comes from a label anyone with service write can set, and the
-// parser runs on every detail read, so it must not size an allocation.
 func TestDetectTraefik_TLSDomainIndexIsBounded(t *testing.T) {
 	labels := map[string]string{
 		"traefik.http.routers.web.rule":                       "Host(`a.example`)",
