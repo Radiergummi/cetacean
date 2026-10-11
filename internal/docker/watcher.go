@@ -140,8 +140,8 @@ func (w *Watcher) waitForSettles() {
 	w.settles.Wait()
 }
 
-// Ready returns a channel that is closed after the first full sync succeeds,
-// whichever path ran it.
+// Ready returns a channel that is closed after the watcher's first successful
+// full sync, startup or periodic; a manual resync does not count.
 func (w *Watcher) Ready() <-chan struct{} {
 	return w.ready
 }
@@ -191,23 +191,34 @@ func (w *Watcher) writeSnapshot() {
 // all. The periodic tick inside watchEvents runs beside a live stream and does
 // not.
 func (w *Watcher) fullSync(ctx context.Context) error {
-	return w.sync(ctx, true)
+	if err := w.sync(ctx); err != nil {
+		w.setConnected(false)
+		return err
+	}
+
+	w.markTracking()
+	return nil
 }
 
-// sync re-fetches the cluster and replaces the cache with the result.
-// tracksConnection says whether this sync speaks for the event stream's health:
-// a watcher-driven one does, a manual resync does not — it runs beside a
-// healthy stream, and a transient failure there is not the engine going away.
-func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
+// markTracking records a successful watcher-driven sync. Connected is stored
+// before ready closes, so a reader woken by Ready sees it.
+func (w *Watcher) markTracking() {
+	w.setConnected(true)
+	w.syncOnce.Do(func() { close(w.ready) })
+}
+
+// sync re-fetches the cluster and replaces the cache with the result. It says
+// nothing about the event stream: only the watcher's own syncs do, by caller.
+func (w *Watcher) sync(ctx context.Context) error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
 
-	return w.syncLocked(ctx, tracksConnection)
+	return w.syncLocked(ctx)
 }
 
 // syncLocked is sync's body, for a caller that already holds syncMu — the
 // periodic tick, so it can try the lock instead of blocking behind it.
-func (w *Watcher) syncLocked(ctx context.Context, tracksConnection bool) error {
+func (w *Watcher) syncLocked(ctx context.Context) error {
 	start := time.Now()
 	slog.Info("starting full sync")
 
@@ -215,10 +226,6 @@ func (w *Watcher) syncLocked(ctx context.Context, tracksConnection bool) error {
 	if err != nil {
 		slog.Error("full sync failed", "error", err)
 		metrics.RecordSyncFailure()
-
-		if tracksConnection {
-			w.setConnected(false)
-		}
 
 		return err
 	}
@@ -229,11 +236,6 @@ func (w *Watcher) syncLocked(ctx context.Context, tracksConnection bool) error {
 	metrics.ObserveSyncDuration(done.Sub(start).Seconds())
 	metrics.RecordSyncSuccess(done)
 	w.lastSync.Store(done.UnixNano())
-	w.syncOnce.Do(func() { close(w.ready) })
-
-	if tracksConnection {
-		w.setConnected(true)
-	}
 
 	snap := w.store.Snapshot()
 	slog.Info(
@@ -258,7 +260,7 @@ func (w *Watcher) Resync(ctx context.Context) error {
 	// Detached: callers who joined this flight must not fail with the first,
 	// but each caller still stops waiting when its own context ends.
 	flight := w.resyncs.DoChan("resync", func() (any, error) {
-		if err := w.sync(context.WithoutCancel(ctx), false); err != nil {
+		if err := w.sync(context.WithoutCancel(ctx)); err != nil {
 			return nil, err
 		}
 		w.writeSnapshot()
@@ -415,14 +417,14 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 
 			slog.Info("periodic full re-sync")
 
-			// Not a connection check: this runs beside a live stream, so a
-			// failure here is not a disconnection — the stream ending is.
-			// lastSync still stops advancing, which is what reports a cache
-			// that has gone stale.
-			err := w.syncLocked(ctx, false)
+			// Beside a live stream a failure is not a disconnection, but a
+			// success is the stream's verdict restored. lastSync stopping is
+			// what reports a cache gone stale.
+			err := w.syncLocked(ctx)
 			w.syncMu.Unlock()
 
 			if err == nil {
+				w.markTracking()
 				w.writeSnapshot()
 			}
 		}

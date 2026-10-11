@@ -76,7 +76,9 @@ func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	var data cache.FullSyncData
 	failed := make(map[string]bool)
 	for name, err := range m.listErrors {
-		failed[name] = err != nil
+		if err != nil {
+			failed[name] = true
+		}
 	}
 	if !failed["nodes"] {
 		data.Nodes, data.HasNodes = m.nodes, true
@@ -625,6 +627,35 @@ func TestRun_PeriodicSyncSignalsReadyAfterFailedStartup(t *testing.T) {
 	case <-w.Ready():
 	case <-time.After(2 * time.Second):
 		t.Fatal("a successful periodic sync did not signal ready")
+	}
+	if connected, _ := w.Liveness(); !connected {
+		t.Fatal("ready while the watcher reports the cluster as untracked")
+	}
+}
+
+// A manual resync is not the watcher's own: it may run while the stream is
+// down, so it neither reports the stream connected nor the instance ready.
+func TestManualResyncLeavesReadinessToTheWatcher(t *testing.T) {
+	mc := newMockClient()
+	for _, name := range swarmResources {
+		mc.listErrors[name] = errors.New("the swarm does not have a leader")
+	}
+
+	w := NewWatcher(mc, cache.New(nil), "")
+	if err := w.fullSync(t.Context()); err == nil {
+		t.Fatal("fullSync succeeded without any swarm resource")
+	}
+
+	clear(mc.listErrors)
+	if err := w.Resync(t.Context()); err != nil {
+		t.Fatalf("Resync: %v", err)
+	}
+
+	select {
+	case <-w.Ready():
+		connected, _ := w.Liveness()
+		t.Fatalf("a manual resync signalled ready (connected=%v)", connected)
+	default:
 	}
 }
 
