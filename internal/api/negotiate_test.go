@@ -585,6 +585,8 @@ func TestAnExtensionSuffixDoesNotSkipAuthentication(t *testing.T) {
 
 // RFC 9110 §8.3.1: type, subtype and parameter names are case-insensitive.
 func TestParseAcceptRangesIsCaseInsensitive(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-q-parameter-is-a-weight-wherever-it-sits")
+
 	ranges := parseAcceptRanges("Application/JSON;Q=0.5, TEXT/*;q=0")
 	if len(ranges) != 2 {
 		t.Fatalf("parsed %d ranges, want 2", len(ranges))
