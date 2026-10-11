@@ -22,7 +22,7 @@ type LogLine struct {
 	Attrs     map[string]string `json:"attrs,omitempty"`
 }
 
-// readDockerLogFrames reads Docker's multiplexed frames —
+// readDockerLogFrames reads Docker's multiplexed or raw (TTY) output — frames are
 // [stream_type(1)][padding(3)][size(4 BE)][payload], 1=stdout, 2=stderr — and
 // calls emit per line. ServiceLogs with Follow=false may never close the
 // stream, so an idle-timeout wrapper closes it 2s after the last frame.
@@ -128,7 +128,7 @@ func readRawLines(r io.Reader, emit func(LogLine)) error {
 	return err
 }
 
-// ParseDockerLogs reads Docker multiplexed log output and returns parsed lines.
+// ParseDockerLogs reads Docker multiplexed or raw (TTY) log output and returns parsed lines.
 func ParseDockerLogs(r io.Reader) ([]LogLine, error) {
 	var lines []LogLine
 	err := readDockerLogFrames(r, func(l LogLine) {
@@ -203,7 +203,7 @@ func parseDetails(line string) (map[string]string, string) {
 	return attrs, after
 }
 
-// StreamDockerLogs reads Docker multiplexed log frames and sends parsed lines to ch.
+// StreamDockerLogs reads Docker multiplexed or raw (TTY) log output and sends parsed lines to ch.
 // Returns nil on EOF. The caller must close ch after this returns.
 func StreamDockerLogs(r io.Reader, ch chan<- LogLine) error {
 	return readDockerLogFrames(r, func(l LogLine) {
