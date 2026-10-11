@@ -3642,7 +3642,8 @@ paths:
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service labels.
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
-        Requires operations level 2.
+        Requires operations level 2. Setting `com.docker.stack.namespace` to a stack the service
+        is not in also requires `write` on that stack (`403 ACL002` otherwise).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -5161,6 +5162,8 @@ paths:
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the config labels.
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+        Setting `com.docker.stack.namespace` to a stack the config is not in also requires
+        `write` on that stack (`403 ACL002` otherwise).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -5442,6 +5445,8 @@ paths:
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the secret labels.
         Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+        Setting `com.docker.stack.namespace` to a stack the secret is not in also requires
+        `write` on that stack (`403 ACL002` otherwise).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"

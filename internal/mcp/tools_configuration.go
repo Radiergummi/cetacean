@@ -110,7 +110,7 @@ func (s *Server) configurationTools() []toolDef {
 				mcplib.WithObject(
 					"labels",
 					mcplib.Description(
-						"Labels to set on the secret. Set com.docker.stack.namespace to attach it to a stack.",
+						"Labels to set on the secret. Set com.docker.stack.namespace to attach it to a stack; that needs write on the stack.",
 					),
 				),
 			),
@@ -150,7 +150,7 @@ func (s *Server) configurationTools() []toolDef {
 				mcplib.WithObject(
 					"labels",
 					mcplib.Description(
-						"Labels to set on the config. Set com.docker.stack.namespace to attach it to a stack.",
+						"Labels to set on the config. Set com.docker.stack.namespace to attach it to a stack; that needs write on the stack.",
 					),
 				),
 			),
