@@ -143,7 +143,7 @@ Content-Type: application/json
 
 Cetacean responds with a generated `client_id` (`cetacean-<random>`) and persists the registration in-memory (initial version) keyed by client_id. Symmetric auth methods (`client_secret_*`) are rejected — every DCR client is a public client and MUST use PKCE. Registrations are subject to a per-host rate limit (default 10/hour/IP) and a global cap (default 1000) to prevent abuse; over-cap registrations get 429.
 
-DCR client metadata is **not** verified — anyone can register any `client_name`. The consent screen makes this visible: DCR-registered clients are flagged "Self-reported identity" with a yellow badge.
+DCR client metadata is **not** verified — anyone can register any `client_name`. The consent screen makes this visible: DCR-registered clients are flagged "Self-registered" with a yellow badge.
 
 **Path B — Client ID Metadata Documents (CIMD).** For clients that publish their own metadata at a stable URL ([draft-ietf-oauth-client-id-metadata-document-01](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)). The `client_id` is an `https://` URL pointing to a JSON metadata document. CIMD is still an IETF draft, so the implementation is gated behind `CETACEAN_MCP_CIMD_ENABLED` (default `true`) so we can disable it if the draft changes incompatibly.
 

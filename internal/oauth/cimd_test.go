@@ -436,7 +436,7 @@ func TestCIMDDialScreensTheAddressesANameResolvesTo(t *testing.T) {
 	_ = conn.Close()
 }
 
-// logo_uri is rendered on the consent page.
+// logo_uri must be https, though nothing renders it.
 func TestCIMDRequiresAnHTTPSLogo(t *testing.T) {
 	for logo, wantErr := range map[string]bool{
 		"https://example.com/logo.png": false,
