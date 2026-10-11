@@ -13,6 +13,10 @@ type basePathCtxKey struct{}
 
 var basePathKey = basePathCtxKey{}
 
+// unstrippedCtxKey marks a request basePathMiddleware passed on with its path
+// still rooted at the host rather than at the base path.
+type unstrippedCtxKey struct{}
+
 type publicURLCtxKey struct{}
 
 var publicURLKey = publicURLCtxKey{}
@@ -169,6 +173,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		// whatever is left unrouted, which would put the dashboard at the host root.
 		if strings.HasPrefix(path, derivedWellKnownPrefix) && routes.serves(r) {
 			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			ctx = context.WithValue(ctx, unstrippedCtxKey{}, true)
 			next.ServeHTTP(w, r.WithContext(ctx))
 
 			return
