@@ -60,7 +60,7 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&body); err != nil {
-		return nil, fmt.Errorf("prometheus response parse error: %w", err)
+		return nil, &redactedError{message: "prometheus response parse error", cause: err}
 	}
 	if body.Status != "success" {
 		return nil, fmt.Errorf("prometheus error: %s: %s", body.ErrorType, body.Error)
@@ -162,7 +162,7 @@ func (pc *Client) RangeQueryRaw(
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, body))
@@ -183,7 +183,7 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, body))

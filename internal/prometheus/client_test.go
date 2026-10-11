@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -152,10 +153,20 @@ func TestClient_ErrorsOmitThePrometheusAddress(t *testing.T) {
 	refused := httptest.NewServer(http.NotFoundHandler())
 	refused.Close()
 
+	// A connection reset mid-body fails the read with both endpoints' addresses.
+	reset := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, _ := w.(http.Hijacker).Hijack()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n{\"status\":")
+		buf.Flush()
+		_ = conn.(*net.TCPConn).SetLinger(0)
+		conn.Close()
+	}))
+	defer reset.Close()
+
 	// A prometheus.url that does not parse fails before any request is sent.
 	malformed := "http://[::1]:namedport"
 
-	for _, base := range []string{gateway.URL, refused.URL, malformed} {
+	for _, base := range []string{gateway.URL, refused.URL, reset.URL, malformed} {
 		pc := NewClient(base)
 		queries := map[string]func() error{
 			"InstantQuery": func() error {
