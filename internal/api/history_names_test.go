@@ -87,3 +87,18 @@ func TestHistoryFeedNamesTasksTheWaySwarmDoes(t *testing.T) {
 		t.Errorf("feed does not name the task shop_web.1: %s", w.Body.String())
 	}
 }
+
+func TestTaskFeedTitlesItselfTheWaySwarmNamesTheTask(t *testing.T) {
+	router := newTestRouterWithCache(t, historyNamesCache())
+
+	req := httptest.NewRequest("GET", "/tasks/wdqyr99x2amp6lf383k3fwb5g.atom", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "<title>shop_web.1</title>") {
+		t.Errorf("task feed is not titled shop_web.1: %s", w.Body.String())
+	}
+}

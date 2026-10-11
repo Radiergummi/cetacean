@@ -14,6 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/metrics"
 	"github.com/radiergummi/cetacean/internal/prometheus"
@@ -641,7 +642,7 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 				h.streamResource(w, r, cache.EventTask, r.PathValue("id"))
 			},
 			h.detailFeeds(cache.EventTask, "id", func(id string) string {
-				return id
+				return cluster.TaskDisplayName(h.cache, id)
 			}),
 			spa,
 		),

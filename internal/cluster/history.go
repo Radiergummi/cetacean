@@ -21,7 +21,7 @@ func NameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.Hist
 
 		name, ok := names[e.ResourceID]
 		if !ok {
-			name = taskDisplayName(c, e.ResourceID)
+			name = TaskDisplayName(c, e.ResourceID)
 			names[e.ResourceID] = name
 		}
 
@@ -31,9 +31,9 @@ func NameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.Hist
 	return named
 }
 
-// taskDisplayName resolves one task ID to "<service>.<slot>", falling back to
+// TaskDisplayName resolves one task ID to "<service>.<slot>", falling back to
 // the ID when either record has already gone.
-func taskDisplayName(c *cache.Cache, taskID string) string {
+func TaskDisplayName(c *cache.Cache, taskID string) string {
 	task, ok := c.GetTask(taskID)
 	if !ok {
 		return taskID
