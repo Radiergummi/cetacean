@@ -63,11 +63,8 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
   }
 
   const failedCount = tasks.filter(({ Status: { State } }) => State === "failed").length;
-  const emptyMessage = stateFilter
-    ? "No tasks in this state."
-    : failedCount > 0
-      ? `No active tasks; ${failedCount} failed.`
-      : "No active tasks.";
+  const emptyMessage =
+    failedCount > 0 ? `No active tasks; ${failedCount} failed.` : "No active tasks.";
 
   return (
     <CollapsibleSection
