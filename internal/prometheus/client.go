@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -206,6 +207,11 @@ func (e *redactedError) LogValue() slog.Value {
 }
 
 func unreachable(err error) error {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return &redactedError{message: "prometheus query timed out", cause: err}
+	}
+
 	return &redactedError{message: "prometheus unreachable", cause: err}
 }
 

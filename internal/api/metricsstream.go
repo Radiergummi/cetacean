@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"sync/atomic"
@@ -76,10 +77,21 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	now := strconv.FormatInt(time.Now().Unix(), 10)
 	start := strconv.FormatInt(time.Now().Unix()-int64(rangeSec), 10)
 	stepStr := strconv.Itoa(step)
-	initial, err := h.promClient.RangeQueryRaw(ctx, query, start, now, stepStr)
-	if err != nil {
+	// The frame carries a fixed message; the cause is logged once per run of
+	// failures rather than on every tick.
+	failing := false
+	writeQueryError := func(err error) {
+		if !failing && ctx.Err() == nil {
+			slog.Warn("metrics stream query failed", "query", query, "error", err)
+		}
+		failing = true
 		fmt.Fprintf(w, "event: query_error\ndata: %s\n\n", marshalErrorEvent(err))
 		flusher.Flush()
+	}
+
+	initial, err := h.promClient.RangeQueryRaw(ctx, query, start, now, stepStr)
+	if err != nil {
+		writeQueryError(err)
 	} else {
 		writeSSEEvent(w, flusher, "initial", initial)
 	}
@@ -123,9 +135,9 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if res.err != nil {
-				fmt.Fprintf(w, "event: query_error\ndata: %s\n\n", marshalErrorEvent(res.err))
-				flusher.Flush()
+				writeQueryError(res.err)
 			} else {
+				failing = false
 				writeSSEEvent(w, flusher, "point", res.data)
 			}
 			keepalive.Reset(15 * time.Second)

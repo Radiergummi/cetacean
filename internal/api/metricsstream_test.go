@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -177,6 +179,36 @@ func TestMetricsStream_ErrorEvent(t *testing.T) {
 	}
 	if strings.Contains(body, "\nid: ") {
 		t.Error("metrics frames carry no id; this stream writes none")
+	}
+}
+
+// The query_error frame omits the cause, so the log must hold it — once per
+// failure, not once per tick.
+func TestMetricsStream_LogsTheCauseOnceWhenQueriesStartFailing(t *testing.T) {
+	refused := httptest.NewServer(http.NotFoundHandler())
+	refused.Close()
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	defer slog.SetDefault(previous)
+
+	h := &Handlers{
+		promClient:     promapi.NewClient(refused.URL),
+		tickerInterval: 10 * time.Millisecond,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	req := httptest.NewRequest("GET", "/-/metrics/query_range?query=up&step=15", nil)
+	w := httptest.NewRecorder()
+	h.HandleMetricsStream(w, req.WithContext(ctx))
+
+	if n := strings.Count(w.Body.String(), "event: query_error"); n < 2 {
+		t.Fatalf("got %d query_error frames, want several", n)
+	}
+	if n := strings.Count(logged.String(), "connection refused"); n != 1 {
+		t.Errorf("logged the cause %d times, want once:\n%s", n, logged.String())
 	}
 }
 

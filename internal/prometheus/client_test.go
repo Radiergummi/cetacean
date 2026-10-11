@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClient_InstantQuery(t *testing.T) {
@@ -219,5 +220,24 @@ func TestClient_UnreachableLogsItsCauseOnlyThroughTheCaller(t *testing.T) {
 	slog.Warn("query failed", "error", err)
 	if !strings.Contains(logged.String(), "connection refused") {
 		t.Errorf("the caller's log omits the cause: %s", logged.String())
+	}
+}
+
+// A query Prometheus is too slow to answer must not read as Prometheus being
+// down: the status poll may well reach it in the meantime.
+func TestClient_TimeoutIsNotReportedAsUnreachable(t *testing.T) {
+	release := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		<-release
+	}))
+	defer slow.Close()
+	defer close(release)
+
+	pc := NewClient(slow.URL)
+	pc.client.Timeout = 20 * time.Millisecond
+
+	_, err := pc.RangeQueryRaw(context.Background(), "up", "0", "1", "1")
+	if err == nil || err.Error() != "prometheus query timed out" {
+		t.Errorf("err = %v, want the fixed timeout message", err)
 	}
 }
