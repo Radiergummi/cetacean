@@ -107,8 +107,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Node, service, and stack streams receive task removals, a stack stream also every removal of `docker stack rm`, and a service- or stack-scoped grant admits them on `GET /events`, its replay, and MCP subscriptions
 - Shutdown ends open `/events` and resource event streams first instead of waiting out the grace period and logging an error
 - `Accept` media types and parameters, and the `items` range unit, are matched case-insensitively
+- `Accept` media types and parameters, and the `items` range unit, are matched case-insensitively, including when choosing between the OIDC login redirect and a 401
 - Under `server.base_path`, a URL with `//` or `.` segments redirects within the deployment instead of out of it
-- `/api/errors/{code}` answers an unknown code with a problem document, `/topology`'s 406 lists every type it serves, and CORS responses vary on `Origin` even when they grant nothing
+- `/api/errors/{code}` answers an unknown code with a problem document
+- `/topology`'s 406 lists every type it serves
+- CORS responses vary on `Origin` even when they grant nothing
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
