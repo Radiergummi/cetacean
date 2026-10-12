@@ -524,10 +524,7 @@ func main() {
 		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
 	}
 
-	// Bearer tokens and upstream credentials cross the wire to /mcp. An https
-	// public URL means a proxy terminates TLS in front of us.
-	if cfg.MCP.Enabled && authCfg.Mode != "none" && !tlsCfg.Enabled() &&
-		!strings.HasPrefix(cfg.PublicURL, "https://") {
+	if mcpInClear(cfg.MCP.Enabled, authCfg.Mode, tlsCfg.Enabled(), cfg.PublicURL) {
 		slog.Warn("MCP is enabled without TLS: credentials reach /mcp in clear text. " +
 			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
@@ -1043,4 +1040,16 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 	}
 
 	return mcpSrv.Handler(), mcpSrv.Close
+}
+
+// mcpInClear reports whether bearer tokens and upstream credentials reach /mcp
+// unencrypted. An https public URL means a proxy terminates TLS in front of us.
+func mcpInClear(mcpEnabled bool, authMode string, tlsEnabled bool, publicURL string) bool {
+	if !mcpEnabled || authMode == "none" || tlsEnabled {
+		return false
+	}
+
+	u, err := url.Parse(publicURL)
+
+	return err != nil || u.Scheme != "https"
 }

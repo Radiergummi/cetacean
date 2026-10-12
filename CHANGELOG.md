@@ -84,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The cluster overview shows why its data failed to load, with a retry, instead of loading forever
 - A task list whose filter hides every task says so and offers to show them all
 - `cetacean --help` exits 0 and states the operations level default as 0
-- Startup warns when MCP is enabled without TLS outside auth mode `none` and `server.public_url` isn't `https`, as the docs said it would
+- Startup warns when MCP is enabled without TLS outside auth mode `none` and `server.public_url` isn't `https`
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
