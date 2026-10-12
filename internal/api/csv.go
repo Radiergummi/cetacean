@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,9 +26,29 @@ func renderCSV(table csvTable) []byte {
 
 	// A bytes.Buffer write cannot fail.
 	_ = w.Write(table.header)
-	_ = w.WriteAll(table.records)
+	for _, record := range table.records {
+		safe := make([]string, len(record))
+		for i, cell := range record {
+			safe[i] = neutraliseFormula(cell)
+		}
+		_ = w.Write(safe)
+	}
+	w.Flush()
 
 	return buf.Bytes()
+}
+
+// neutraliseFormula prefixes a cell a spreadsheet would run as a formula with
+// an apostrophe. A plain number keeps its minus sign.
+func neutraliseFormula(cell string) string {
+	if cell == "" || !strings.ContainsRune("=+-@\t\r", rune(cell[0])) {
+		return cell
+	}
+	if _, err := strconv.ParseFloat(cell, 64); err == nil {
+		return cell
+	}
+
+	return "'" + cell
 }
 
 func writeCSV(w http.ResponseWriter, r *http.Request, name string, table csvTable) {

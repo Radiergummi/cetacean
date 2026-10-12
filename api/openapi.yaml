@@ -6404,6 +6404,10 @@ components:
         no `Content-Range`. `search`, `filter`, `sort` and ACL filtering apply
         exactly as they do to the JSON.
 
+        A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is
+        prefixed with `'`, so a spreadsheet shows it as a label instead of
+        running it as a formula. A number such as `-1` is left as it is.
+
     # ── Error ────────────────────────────────────────────────────────
 
     ProblemDetail:
