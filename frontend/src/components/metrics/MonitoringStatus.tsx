@@ -66,7 +66,7 @@ export default function MonitoringStatus({ status, source }: Props) {
           <strong>Cannot reach Prometheus</strong> — metrics unavailable. Check that the Prometheus
           service is running and reachable from Cetacean; Cetacean's log has the cause.
         </p>
-        {status.error && (
+        {status.error && status.error !== "prometheus unreachable" && (
           <pre className="mt-2 max-w-full overflow-x-auto rounded bg-status-warning/15 px-2 py-1 text-xs">
             {status.error}
           </pre>

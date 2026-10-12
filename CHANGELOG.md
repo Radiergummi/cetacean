@@ -121,8 +121,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The consent page adds `frame-ancestors 'none'` to the global Content Security Policy instead of replacing it, and its nonce cookie is scoped to the OAuth paths under `server.base_path`
 - The API explorer's policy no longer allows inline scripts, and a caller's `traceparent` can no longer switch off tracing of its own requests
 - An OAuth client evicted at `oauth.dcr_max_clients` is logged; the docs describe the eviction as oldest-first, which it is
-- Metrics query errors keep Prometheus's own message but no longer name its internal address, and the metrics charts keep working while Docker is unreachable
-- Metrics query errors keep Prometheus's own message but no longer name its internal address. When Prometheus can't be reached, the status banner, `GET /metrics/status`, and the metrics stream say only that; the cause is in Cetacean's log
 - Metrics query errors keep Prometheus's own message but no longer name its internal address. When Prometheus can't be reached or times out, the status banner, `GET /metrics/status`, the metrics stream, and MCP `get_metrics` say only that; the cause is in Cetacean's log
 - `GET /metrics` and `GET /metrics/labels` answer while Docker is unreachable
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
