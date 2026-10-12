@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
+.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -31,6 +31,17 @@ lint-docs: .vale/styles/.synced
 .vale/styles/.synced: .vale.ini
 	vale sync
 	touch $@
+
+## Fail on a reachable vulnerability that VULN_IGNORE does not list
+# Both are in github.com/docker/docker and have no fixed version. Drop an ID
+# once govulncheck names a release that fixes it.
+VULN_IGNORE := GO-2026-4887 GO-2026-4883
+
+vuln:
+	@out=$$(go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -format json ./...) && \
+	found=$$(printf '%s' "$$out" | jq -r --arg ignore "$(VULN_IGNORE)" \
+		'select(.finding.trace[0].function? != null) | .finding.osv | select(IN($$ignore | split(" ")[]) | not)' | sort -u) && \
+	if [ -n "$$found" ]; then echo "reachable vulnerabilities:"; echo "$$found"; exit 1; fi
 
 ## Type-check the frontend and the website
 # The website's error reference is generated from Go source, and `astro check`

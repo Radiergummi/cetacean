@@ -138,6 +138,7 @@ jobs:
       # does. Without this step misformatted Go passes CI and is caught only
       # by a local `make fmt-check`.
       - run: golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
+      - run: make vuln
 
   lint-workflows:
     runs-on: ubuntu-latest
