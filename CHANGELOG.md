@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Startup warns when MCP is enabled without TLS outside auth mode `none` and `server.public_url` isn't `https`
 - `GET /swarm/unlock-key` is sent with `Cache-Control: no-store` and varies by identity, so no cache keeps the key
 - Creating a config or secret answers `201` with a JSON `Content-Type` and is logged as `201`; `/-/ready` sends its `503` as JSON too
-- Configs with non-ASCII text display and copy correctly, and can be created from text containing characters outside Latin-1; a failed create shows its error in the dialog
+- Configs containing accented letters, CJK or emoji display and copy correctly, and configs and secrets containing them can be created; a failed create shows its error in the dialog
 - Clearing a CPU or memory limit or reservation in the resources editor removes it from the service
 - Force remove asks for confirmation before it runs
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
