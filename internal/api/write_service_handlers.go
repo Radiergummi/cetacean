@@ -789,6 +789,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	slog.Info("updating service container config", "service", id)
 
+	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
 		r.Context(),
 		id,
@@ -801,6 +802,11 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 			var merged containerConfigResponse
 			if err := merge(containerConfigFromSpec(cs), &merged); err != nil {
 				return err
+			}
+
+			current := swarm.Service{Spec: *spec}
+			if err := cluster.CheckCapabilities(current, merged.CapabilityAdd, level); err != nil {
+				return &specPatchError{"OPS001", err.Error()}
 			}
 
 			cs.Command = merged.Command
@@ -1173,7 +1179,8 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -1181,6 +1188,11 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		Mounts []mount.Mount `json:"mounts"`
 	}](w, r)
 	if !ok {
+		return
+	}
+
+	if err := cluster.CheckMounts(svc, req.Mounts, h.levelFor(r)); err != nil {
+		writeErrorCode(w, r, "OPS001", err.Error())
 		return
 	}
 

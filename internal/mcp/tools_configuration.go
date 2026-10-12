@@ -216,7 +216,7 @@ func (s *Server) configurationTools() []toolDef {
 				"update_service_mounts",
 				mcplib.WithToolTitle("Change a service's filesystem mounts"),
 				mcplib.WithDescription(
-					"Replace the complete set of filesystem mounts a service's containers receive: named volumes, host bind mounts and tmpfs. The list replaces rather than merges, so pass every mount the service should end up with — one you leave out is unmounted, and a container may lose data it was writing there. Triggers a rolling deploy. Note that a bind mount hands the container the host's filesystem at that path, and binding the Docker socket (/var/run/docker.sock) gives it control of the whole cluster; this tool will do it if asked, so check with the operator before mounting a host path they did not name.",
+					"Replace the complete set of filesystem mounts a service's containers receive: named volumes, host bind mounts and tmpfs. The list replaces rather than merges, so pass every mount the service should end up with — one you leave out is unmounted, and a container may lose data it was writing there. Triggers a rolling deploy. Note that a bind mount hands the container the host's filesystem at that path, and binding the Docker socket (/var/run/docker.sock) gives it control of the whole cluster; below operations level 3 a bind mount the service does not already have is refused, and at level 3 check with the operator before mounting a host path they did not name. This tool cannot set bind options, so a bind the service carries with a propagation mode reads as changed: below level 3 it is refused, and at level 3 resending it drops the mode.",
 				),
 				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
