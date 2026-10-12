@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
-import { badgeBlue, badgePurple, badgeTeal, saveIntegrationLabels } from "@/lib/integrationLabels";
+import { badgeBlue, badgePurple, badgeTeal, saveModelledLabels } from "@/lib/integrationLabels";
 import {
   serializeTraefikLabels,
   type RouterFormState,
@@ -338,6 +338,9 @@ export function TraefikPanel({
   const hasServices = services && services.length > 0;
   const hasMiddlewares = middlewares && middlewares.length > 0;
 
+  // The state the form was seeded from; a save diffs against it, not against
+  // an integration that may have been refetched while the form was open.
+  const [seed, setSeed] = useState(integration);
   const [formEnabled, setFormEnabled] = useState(integration.enabled);
   const [routerForms, setRouterForms] = useState<RouterFormState[]>(() =>
     initRouterForms(integration),
@@ -350,6 +353,7 @@ export function TraefikPanel({
   );
 
   function resetForm() {
+    setSeed(integration);
     setFormEnabled(integration.enabled);
     setRouterForms(initRouterForms(integration));
     setServiceForms(initServiceForms(integration));
@@ -357,13 +361,14 @@ export function TraefikPanel({
   }
 
   async function handleSave() {
-    const newLabels = serializeTraefikLabels(
-      formEnabled,
-      routerForms,
-      serviceForms,
-      middlewareForms,
+    const before = serializeTraefikLabels(
+      seed.enabled,
+      initRouterForms(seed),
+      initServiceForms(seed),
+      initMiddlewareForms(seed),
     );
-    await saveIntegrationLabels(rawLabels, newLabels, serviceId, onSaved);
+    const after = serializeTraefikLabels(formEnabled, routerForms, serviceForms, middlewareForms);
+    await saveModelledLabels(rawLabels, before, after, serviceId, onSaved);
   }
 
   function updateRouter(index: number, updated: RouterFormState) {
