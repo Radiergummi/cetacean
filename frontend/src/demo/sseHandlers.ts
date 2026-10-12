@@ -38,6 +38,7 @@ const detailTypes = [
   "secrets",
   "networks",
   "volumes",
+  "stacks",
 ] as const;
 
 export function createSSEHandlers(dataset: Dataset) {
