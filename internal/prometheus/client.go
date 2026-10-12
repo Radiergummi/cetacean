@@ -44,7 +44,7 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 
 	if resp.StatusCode != http.StatusOK {
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, preview))
+		return nil, statusError(resp.StatusCode, preview)
 	}
 
 	var body struct {
@@ -165,7 +165,7 @@ func (pc *Client) RangeQueryRaw(
 		return nil, unreachable(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, body))
+		return nil, statusError(resp.StatusCode, body)
 	}
 	return body, nil
 }
@@ -186,7 +186,7 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 		return nil, unreachable(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(prometheusErrorDetail(resp.StatusCode, body))
+		return nil, statusError(resp.StatusCode, body)
 	}
 	return body, nil
 }
@@ -213,6 +213,19 @@ func unreachable(err error) error {
 	}
 
 	return &redactedError{message: "prometheus unreachable", cause: err}
+}
+
+// statusError keeps the upstream body as the logged cause, since the message
+// drops a 5xx's text.
+func statusError(status int, body []byte) error {
+	if len(body) > 512 {
+		body = body[:512]
+	}
+
+	return &redactedError{
+		message: prometheusErrorDetail(status, body),
+		cause:   errors.New(string(body)),
+	}
 }
 
 func invalidRequest(err error) error {

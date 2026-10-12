@@ -179,3 +179,33 @@ func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
 		t.Errorf("the error drops Prometheus's reason: %s", body)
 	}
 }
+
+// Prometheus's own query errors are 4xx and the caller's to fix; a 5xx may come
+// from a gateway in front of it, whose message can name internal addresses.
+func TestMetricsProxyHandler_ForwardsTheUpstreamReasonOnlyFor4xx(t *testing.T) {
+	const reason = "upstream 10.0.0.9:9090 refused"
+
+	for status, forwarded := range map[int]bool{
+		http.StatusBadRequest:          true,
+		http.StatusUnprocessableEntity: true,
+		http.StatusBadGateway:          false,
+		http.StatusServiceUnavailable:  false,
+	} {
+		prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			w.Write([]byte(`{"status":"error","errorType":"x","error":"` + reason + `"}`))
+		}))
+
+		w := httptest.NewRecorder()
+		NewProxy(prom.URL, noopErrorWriter).
+			HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		prom.Close()
+
+		if got := strings.Contains(w.Body.String(), reason); got != forwarded {
+			t.Errorf(
+				"HTTP %d: forwarded = %v, want %v: %s",
+				status, got, forwarded, w.Body.String(),
+			)
+		}
+	}
+}

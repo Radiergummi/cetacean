@@ -252,3 +252,40 @@ func TestClient_TimeoutIsNotReportedAsUnreachable(t *testing.T) {
 		t.Errorf("err = %v, want the fixed timeout message", err)
 	}
 }
+
+// A 5xx may be a gateway's answer rather than Prometheus's, so its text stays
+// out of the error a client sees and reaches only the caller's log.
+func TestClient_ServerErrorKeepsTheUpstreamReasonOutOfTheMessage(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"status":"error","error":"upstream 10.0.0.9:9090 refused"}`))
+	}))
+	defer prom.Close()
+
+	pc := NewClient(prom.URL)
+	queries := map[string]func() error{
+		"InstantQuery": func() error {
+			_, err := pc.InstantQuery(context.Background(), "up")
+			return err
+		},
+		"RangeQueryRaw": func() error {
+			_, err := pc.RangeQueryRaw(context.Background(), "up", "0", "1", "1")
+			return err
+		},
+	}
+	for name, query := range queries {
+		err := query()
+		if err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+		if strings.Contains(err.Error(), "10.0.0.9") {
+			t.Errorf("%s: the error forwards a 5xx's text: %s", name, err)
+		}
+
+		var logged bytes.Buffer
+		slog.New(slog.NewTextHandler(&logged, nil)).Warn("query failed", "error", err)
+		if !strings.Contains(logged.String(), "10.0.0.9") {
+			t.Errorf("%s: the log omits the upstream text: %s", name, logged.String())
+		}
+	}
+}

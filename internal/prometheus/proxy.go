@@ -178,13 +178,14 @@ func writeNilProxyError(w http.ResponseWriter, r *http.Request) {
 }
 
 // prometheusErrorDetail is what a client sees of a Prometheus error: its own
-// message when it sent one (a PromQL parse error is the caller's to fix), and
-// never the URL, which names the internal address.
+// message for a 4xx (a PromQL error is the caller's to fix), never the URL, and
+// never a 5xx's text, which a gateway in front of Prometheus may have written.
 func prometheusErrorDetail(status int, body []byte) string {
 	var parsed struct {
 		Error string `json:"error"`
 	}
-	if json.Unmarshal(body, &parsed) == nil && parsed.Error != "" {
+	if status >= 400 && status < 500 &&
+		json.Unmarshal(body, &parsed) == nil && parsed.Error != "" {
 		return fmt.Sprintf("prometheus returned HTTP %d: %s", status, parsed.Error)
 	}
 
