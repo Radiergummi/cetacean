@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { PrometheusResponse } from "@/api/types";
+import EmptyState from "@/components/EmptyState";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import MonitoringStatus from "@/components/metrics/MonitoringStatus";
 import { QueryInput } from "@/components/metrics/QueryInput";
@@ -30,7 +31,8 @@ export default function MetricsConsole() {
     searchParams.get("q")?.trim() || null,
   );
   const monitoring = useMonitoringStatus();
-  const completion = useQueryCompletion(!!monitoring?.prometheusReachable);
+  const queryable = monitoring?.queryable === true;
+  const completion = useQueryCompletion(!!monitoring?.prometheusReachable && queryable);
   const queryClient = useQueryClient();
 
   const {
@@ -40,7 +42,7 @@ export default function MetricsConsole() {
   } = useQuery<PrometheusResponse["data"]>({
     queryKey: ["metrics-instant", activeQuery],
     queryFn: () => api.metricsQuery(activeQuery!).then((r) => r.data),
-    enabled: !!activeQuery,
+    enabled: !!activeQuery && queryable,
     staleTime: 0,
   });
 
@@ -86,6 +88,15 @@ export default function MetricsConsole() {
     );
   };
 
+  if (monitoring && !queryable) {
+    return (
+      <div>
+        <PageHeader title="Query Console" />
+        <EmptyState message="Metrics aren't available for your access." />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader title="Query Console" />
@@ -107,7 +118,7 @@ export default function MetricsConsole() {
           </div>
         )}
 
-        {activeQuery && (
+        {activeQuery && queryable && (
           <>
             <div className="flex items-center gap-2">
               <SegmentedControl

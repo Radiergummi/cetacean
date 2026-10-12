@@ -15,7 +15,7 @@ import (
 const maxMetricsStreamClients = 64
 
 func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
-	if !h.requireAnyGrant(w, r) {
+	if !h.requireReadEverything(w, r) {
 		return
 	}
 

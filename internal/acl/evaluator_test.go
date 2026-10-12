@@ -658,6 +658,42 @@ func TestEvaluator_NilIdentityWithActivePolicy(t *testing.T) {
 	}
 }
 
+// Only a bare "*" covers everything: patterns spanning every type still leave
+// out whatever the policy has no type for, which is what PromQL can reach.
+func TestCanReadEverything(t *testing.T) {
+	var nilEvaluator *Evaluator
+	if !nilEvaluator.CanReadEverything(nil) || !NewEvaluator().CanReadEverything(nil) {
+		t.Fatal("no policy should allow all")
+	}
+
+	alice := &auth.Identity{Subject: "alice"}
+	for name, tc := range map[string]struct {
+		resources   []string
+		permissions []string
+		want        bool
+	}{
+		"bare wildcard read":   {[]string{"*"}, []string{"read"}, true},
+		"bare wildcard write":  {[]string{"*"}, []string{"write"}, true},
+		"every typed wildcard": {[]string{"*:*"}, []string{"read"}, false},
+		"service and node":     {[]string{"service:*", "node:*"}, []string{"read"}, false},
+		"stack":                {[]string{"stack:web"}, []string{"read"}, false},
+	} {
+		e := NewEvaluator()
+		e.SetPolicy(&Policy{Grants: []Grant{{
+			Resources:   tc.resources,
+			Audience:    []string{"user:alice"},
+			Permissions: tc.permissions,
+		}}})
+
+		if got := e.CanReadEverything(alice); got != tc.want {
+			t.Errorf("%s: CanReadEverything = %v, want %v", name, got, tc.want)
+		}
+		if e.CanReadEverything(&auth.Identity{Subject: "bob"}) {
+			t.Errorf("%s: a grant for alice covered bob", name)
+		}
+	}
+}
+
 // typeAgreementResolver holds one resource of every stack-capable type, all in
 // stack "web", plus a task belonging to service "api".
 func typeAgreementResolver() *stubResolver {

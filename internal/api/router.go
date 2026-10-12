@@ -291,13 +291,13 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /metrics/labels", h.withAnyGrant(metricsProxy.HandleMetricsLabels))
+	mux.HandleFunc("GET /metrics/labels", h.withReadEverything(metricsProxy.HandleMetricsLabels))
 	mux.HandleFunc(
 		"GET /metrics/labels/{name}",
-		h.withAnyGrant(metricsProxy.HandleMetricsLabelValues),
+		h.withReadEverything(metricsProxy.HandleMetricsLabelValues),
 	)
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
-		h.withAnyGrant(metricsProxy.HandleMetrics),
+		h.withReadEverything(metricsProxy.HandleMetrics),
 		h.HandleMetricsStream,
 		feedHandlers{},
 		spa,

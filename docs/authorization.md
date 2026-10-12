@@ -143,19 +143,20 @@ flowchart LR
 
 Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:
 
-| Code                          | Status | Meaning                                                                  |
-| ----------------------------- | ------ | ------------------------------------------------------------------------ |
-| [`ACL001`](api/errors#ACL001) | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
-| [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                            |
-| [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at    |
+| Code                          | Status | Meaning                                                                                                       |
+| ----------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| [`ACL001`](api/errors#ACL001) | 403    | Read denied on a detail endpoint, the identity holds no grants at all, or a metrics query lacks `read` on `*` |
+| [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                                                                 |
+| [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at                                         |
 
 Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
 dashboard knows which action buttons to show you.
 
-> [!WARNING]
-> The [Prometheus][monitoring] query endpoints (`GET /metrics`, `GET /metrics/labels`) aren't filtered per
-> resource. Any identity holding at least one grant can query usage for every service and node and list their
-> names, so a multi-tenant policy doesn't isolate tenants there. Leave `prometheus.url` unset where that matters.
+The [Prometheus][monitoring] query endpoints (`GET /metrics`, its event stream, `GET /metrics/labels`, and
+`GET /metrics/labels/{name}`) take PromQL, which reaches every service and node. They need a `read` grant on
+the bare resource `*`; anything narrower, even `service:*` and `node:*` together, gets `403 ACL001`, and the
+dashboard leaves out its charts. MCP [`get_metrics`][mcp.tools.get_metrics] isn't affected: it never runs
+the caller's PromQL, so it charts only the services and nodes the caller may read.
 
 ## Examples
 
@@ -200,7 +201,7 @@ grants:
     permissions: ["read"]
 ```
 
-Multi-tenant isolation, with no cross-tenant visibility outside the metrics endpoints (see the warning above):
+Multi-tenant isolation, with no cross-tenant visibility:
 
 ```yaml
 grants:
@@ -234,6 +235,7 @@ caller can never use is left out of `tools/list`.
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [mcp]: mcp
+[mcp.tools.get_metrics]: mcp-tools#get_metrics
 [monitoring]: monitoring
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations

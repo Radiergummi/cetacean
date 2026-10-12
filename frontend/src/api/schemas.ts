@@ -300,6 +300,7 @@ export const identitySchema = z.looseObject({
 export const monitoringStatusSchema = z.looseObject({
   prometheusConfigured: z.boolean(),
   prometheusReachable: z.boolean(),
+  queryable: z.boolean(),
   nodeExporter: z.looseObject({ targets: z.number(), nodes: z.number() }).nullable(),
   cadvisor: z.looseObject({ targets: z.number(), nodes: z.number() }).nullable(),
 });

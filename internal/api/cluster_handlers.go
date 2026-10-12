@@ -226,6 +226,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 type MonitoringStatus struct {
 	PrometheusConfigured bool          `json:"prometheusConfigured"`
 	PrometheusReachable  bool          `json:"prometheusReachable"`
+	Queryable            bool          `json:"queryable"`
 	Error                string        `json:"error,omitempty"`
 	NodeExporter         *TargetStatus `json:"nodeExporter"`
 	Cadvisor             *TargetStatus `json:"cadvisor"`
@@ -241,6 +242,8 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	queryable := h.acl.CanReadEverything(auth.IdentityFromContext(r.Context()))
+
 	if h.promClient == nil {
 		writeJSON(
 			w,
@@ -248,7 +251,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 				r.Context(),
 				"/metrics/status",
 				"MonitoringStatus",
-				MonitoringStatus{},
+				MonitoringStatus{Queryable: queryable},
 			),
 		)
 		return
@@ -261,6 +264,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 
 	var status MonitoringStatus
 	status.PrometheusConfigured = true
+	status.Queryable = queryable
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup

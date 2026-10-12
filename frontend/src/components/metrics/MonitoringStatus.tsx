@@ -14,6 +14,11 @@ interface Props {
 export default function MonitoringStatus({ status, source }: Props) {
   const [dismissed, setDismissed] = useState(() => readStoredValue(dismissKey) === "true");
 
+  // Nothing here is this caller's to fix; the charts are left out instead.
+  if (!status.queryable) {
+    return null;
+  }
+
   // Fully healthy — nothing to show
   if (status.prometheusConfigured && status.prometheusReachable) {
     const nodeExporterRunning =

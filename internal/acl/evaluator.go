@@ -177,6 +177,28 @@ func (e *Evaluator) HasAnyGrant(id *auth.Identity) bool {
 	return len(grants) > 0
 }
 
+// CanReadEverything reports whether a grant gives the identity read on a bare
+// "*". Typed patterns never count, even all of them together: they leave out
+// anything without a type, which is what an endpoint not filtered per resource
+// exposes.
+func (e *Evaluator) CanReadEverything(id *auth.Identity) bool {
+	if e == nil {
+		return true
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return true
+	}
+
+	for _, g := range e.collectGrants(id, p) {
+		if hasPermission(g, "read") && slices.Contains(g.Resources, "*") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // PermissionsFor returns a map of resource patterns to permission lists
 // representing the effective permissions for the given identity. This is
 // a projection of raw grant patterns, not resolved to actual resources.

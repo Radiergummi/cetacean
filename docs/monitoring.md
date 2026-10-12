@@ -153,6 +153,9 @@ cluster" or the node-exporter equivalent.
 Browsers query Prometheus through Cetacean rather than directly, so Prometheus needs no CORS configuration and
 never has to be reachable from outside the swarm network. See the [API reference][api] for the proxy endpoints.
 
+Under an [ACL policy][authorization], only a caller with `read` on the bare resource `*` may use the proxy.
+Anyone else sees the dashboard without its charts and the query console without a query field.
+
 ## Self-metrics
 
 Cetacean exposes Prometheus metrics about its own operation at `/-/metrics`: HTTP requests and latency, SSE
@@ -194,6 +197,7 @@ The same state is available without Prometheus as the body of `GET /-/health`; s
 
 [api]: api
 [authentication]: authentication#exempt-paths
+[authorization]: authorization
 [config-file]: configuration#config-file
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools

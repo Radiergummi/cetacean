@@ -15,6 +15,8 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
@@ -435,6 +437,41 @@ func TestHandleMonitoringStatus_WithPrometheus(t *testing.T) {
 	}
 	if resp.Cadvisor.Nodes != 2 {
 		t.Errorf("expected cadvisor.nodes=2, got %d", resp.Cadvisor.Nodes)
+	}
+}
+
+// The dashboard hides its charts on this rather than reading the policy itself.
+func TestHandleMonitoringStatus_SaysWhetherTheCallerMayQuery(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"status":"success","data":{"resultType":"vector","result":[]}}`)
+	}))
+	defer prom.Close()
+
+	for resource, want := range map[string]bool{"*": true, "stack:web": false} {
+		evaluator := acl.NewEvaluator()
+		evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+			Resources:   []string{resource},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		}}})
+		h := newTestHandlers(
+			t,
+			withACL(evaluator),
+			withPromClient(promapi.NewClient(prom.URL)),
+		)
+
+		req := httptest.NewRequest("GET", "/metrics/status", nil)
+		req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "a"}))
+		w := httptest.NewRecorder()
+		h.HandleMonitoringStatus(w, req)
+
+		var resp MonitoringStatus
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatal(err)
+		}
+		if resp.Queryable != want {
+			t.Errorf("read on %s: queryable = %v, want %v", resource, resp.Queryable, want)
+		}
 	}
 }
 

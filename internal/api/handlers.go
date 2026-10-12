@@ -316,6 +316,28 @@ func (h *Handlers) withAnyGrant(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requireReadEverything gates the Prometheus proxy: PromQL reaches every
+// service and node, so nothing narrower than read on a bare "*" may query it.
+func (h *Handlers) requireReadEverything(w http.ResponseWriter, r *http.Request) bool {
+	varyByIdentity(w)
+
+	if h.acl.CanReadEverything(auth.IdentityFromContext(r.Context())) {
+		return true
+	}
+	writeErrorCode(w, r, "ACL001", `metrics require read access on "*"`)
+	return false
+}
+
+// withReadEverything wraps a handler with a requireReadEverything check.
+func (h *Handlers) withReadEverything(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !h.requireReadEverything(w, r) {
+			return
+		}
+		next(w, r)
+	}
+}
+
 func searchFilter[T any](items []T, query string, name func(T) string) []T {
 	if query == "" {
 		return items
