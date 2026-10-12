@@ -57,7 +57,7 @@ func versionDaemon(t *testing.T) (*Client, func() []string) {
 	}))
 	t.Cleanup(server.Close)
 
-	client, err := NewClient("tcp://" + strings.TrimPrefix(server.URL, "http://"))
+	client, err := NewClient("tcp://"+strings.TrimPrefix(server.URL, "http://"), TLS{})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
