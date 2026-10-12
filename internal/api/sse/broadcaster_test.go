@@ -836,3 +836,36 @@ func TestToSSEEvent_RemoveCarriesNoResource(t *testing.T) {
 		t.Errorf("resource = %+v, want none", ev.Resource)
 	}
 }
+
+// `docker stack rm` takes the services out of the stack before their tasks
+// and before the configs, so membership must come from the event itself.
+func TestStackMatcherSeesStackRemoves(t *testing.T) {
+	labels := map[string]string{"com.docker.stack.namespace": "shop"}
+	var removed []cache.Event
+	c := cache.New(func(e cache.Event) {
+		if e.Action == "remove" {
+			removed = append(removed, e)
+		}
+	})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_web", Labels: labels}},
+	})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg1",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "shop_conf", Labels: labels}},
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2"})
+	c.DeleteService("svc1")
+	c.DeleteTask("t1")
+	c.DeleteConfig("cfg1")
+	c.DeleteTask("t2")
+
+	match := StackMatcher(c, "shop")
+	for _, e := range removed {
+		if want := e.ID != "t2"; match(e) != want {
+			t.Errorf("%s remove of %s: match = %v, want %v", e.Type, e.ID, !want, want)
+		}
+	}
+}

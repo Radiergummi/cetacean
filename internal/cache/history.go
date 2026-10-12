@@ -15,6 +15,10 @@ type HistoryEntry struct {
 	ResourceID string    `json:"resourceId"`
 	Name       string    `json:"name"`
 	Summary    string    `json:"summary,omitempty"`
+
+	// Service and Stack are the remove Event's, for authorizing its replay.
+	Service string `json:"-"`
+	Stack   string `json:"-"`
 }
 
 type HistoryQuery struct {

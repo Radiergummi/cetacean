@@ -298,6 +298,8 @@ func (b *Broadcaster) replayEvents(
 			ID:        e.ResourceID,
 			Name:      e.Name,
 			HistoryID: e.ID,
+			Service:   e.Service,
+			Stack:     e.Stack,
 		}
 
 		if match != nil && !match(ev) {
@@ -379,6 +381,10 @@ func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 		if e.Type == cache.EventSync {
 			return true
 		}
+		// The cache has already taken a removed resource out of its stack.
+		if e.Action == "remove" {
+			return e.Stack == name
+		}
 		switch e.Type {
 		case cache.EventService, cache.EventConfig, cache.EventSecret,
 			cache.EventNetwork, cache.EventVolume:
@@ -415,7 +421,7 @@ func ToSSEEvent(e cache.Event, basePath string) Event {
 		path = basePath + path
 	}
 
-	// A removed task rides on its event for matching only.
+	// A removed resource rides on its event for matching only.
 	resource := e.Resource
 	if e.Action == "remove" {
 		resource = nil

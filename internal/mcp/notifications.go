@@ -287,7 +287,7 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 	hasResource := eventACLResource(event) != ""
 	for _, d := range s.notifications.matchingDeliveries(event) {
 		canRead := func(resource string) bool { return s.canRead(d.identity, resource) }
-		if hasResource && !cluster.CanReadEvent(s.cache, event, canRead) {
+		if hasResource && !cluster.CanReadEvent(event, canRead) {
 			continue
 		}
 

@@ -36,6 +36,11 @@ type Event struct {
 	Name      string    `json:"name,omitempty"`
 	Resource  any       `json:"resource,omitempty"`
 	HistoryID uint64    `json:"-"`
+
+	// Service and Stack name what a removed resource belonged to, which the
+	// cache can no longer resolve once it is gone.
+	Service string `json:"-"`
+	Stack   string `json:"-"`
 }
 
 type Stack struct {
@@ -112,6 +117,7 @@ type Cache struct {
 	tasks          map[string]swarm.Task
 	tasksByService map[string]map[string]struct{} // serviceID -> set of taskIDs
 	tasksByNode    map[string]map[string]struct{} // nodeID -> set of taskIDs
+	goneServices   map[string]swarm.Service       // removed services whose tasks remain
 	configs        ResourceMap[swarm.Config]
 	secrets        ResourceMap[swarm.Secret]
 	networks       ResourceMap[network.Summary]
@@ -150,6 +156,7 @@ func New(onChange OnChangeFunc) *Cache {
 		tasks:          make(map[string]swarm.Task),
 		tasksByService: make(map[string]map[string]struct{}),
 		tasksByNode:    make(map[string]map[string]struct{}),
+		goneServices:   make(map[string]swarm.Service),
 		stacks:         make(map[string]Stack),
 		serviceRef:     newServiceRefIndex(),
 		history:        NewHistory(10000),
@@ -279,12 +286,18 @@ func (c *Cache) notify(e Event) {
 	// Every event means the contents changed, a resync included.
 	c.generation.Add(1)
 
+	if e.Action == "remove" && e.Service == "" && e.Stack == "" {
+		e.Service, e.Stack = c.removedFrom(e.Resource)
+	}
+
 	if e.Type != EventSync {
 		e.HistoryID = c.history.Append(HistoryEntry{
 			Type:       e.Type,
 			Action:     e.Action,
 			ResourceID: e.ID,
 			Name:       e.Name,
+			Service:    e.Service,
+			Stack:      e.Stack,
 		})
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
 	} else {
@@ -487,17 +500,25 @@ func (c *Cache) DeleteService(id string) {
 	c.mu.Lock()
 	var oldRefs refSet
 	var name string
-	if old, ok := c.services[id]; ok {
+	old, existed := c.services[id]
+	if existed {
 		name = old.Spec.Name
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, id, old.Spec.Labels)
 		c.serviceRef.remove(old)
+		if len(c.tasksByService[id]) > 0 {
+			c.goneServices[id] = old
+		}
 	}
 	delete(c.services, id)
 	c.mu.Unlock()
 
 	c.restarts.Forget(id)
-	c.notify(Event{Type: EventService, Action: "remove", ID: id, Name: name})
+	event := Event{Type: EventService, Action: "remove", ID: id, Name: name}
+	if existed {
+		event.Resource = old
+	}
+	c.notify(event)
 	c.notifyRefChanges(oldRefs, refSet{})
 }
 
@@ -559,15 +580,30 @@ func (c *Cache) GetTask(id string) (swarm.Task, bool) {
 func (c *Cache) DeleteTask(id string) {
 	c.mu.Lock()
 	old, existed := c.tasks[id]
+	var service, stack string
 	if existed {
 		c.removeTaskIndex(old)
+		// Resolved here, under the same lock as removeTaskIndex: a concurrent
+		// DeleteTask for the service's other last task must not be able to
+		// forget the goneServices entry before this one reads it.
+		service, stack = c.removedTaskFromLocked(old)
+		if c.tasksByService[old.ServiceID] == nil {
+			delete(c.goneServices, old.ServiceID)
+		}
 	}
 	delete(c.tasks, id)
 	c.mu.Unlock()
 
 	// The removed task rides along: node, service and stack streams match a
 	// task event on its parents, which the cache can no longer look up.
-	event := Event{Type: EventTask, Action: "remove", ID: id, Name: id}
+	event := Event{
+		Type:    EventTask,
+		Action:  "remove",
+		ID:      id,
+		Name:    id,
+		Service: service,
+		Stack:   stack,
+	}
 	if existed {
 		event.Resource = old
 	}
@@ -587,6 +623,16 @@ func (c *Cache) addTaskIndex(t swarm.Task) {
 			c.tasksByNode[t.NodeID] = make(map[string]struct{})
 		}
 		c.tasksByNode[t.NodeID][t.ID] = struct{}{}
+	}
+}
+
+// pruneGoneServices forgets removed services no task refers to any more. Must
+// be called with c.mu held for writing.
+func (c *Cache) pruneGoneServices() {
+	for id := range c.goneServices {
+		if c.tasksByService[id] == nil {
+			delete(c.goneServices, id)
+		}
 	}
 }
 
@@ -1095,6 +1141,7 @@ func (c *Cache) replaceTasks(tasks []swarm.Task) {
 	c.tasks = m
 	c.tasksByService = byService
 	c.tasksByNode = byNode
+	c.pruneGoneServices()
 	c.mu.Unlock()
 }
 
@@ -1246,10 +1293,21 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.nodes.Replace(nodes)
 	}
 	if data.HasServices {
-		// Forget restart buckets for services no longer present.
-		for id := range c.services {
-			if _, ok := services[id]; !ok {
-				c.restarts.Forget(id)
+		// Forget restart buckets for services no longer present, and keep a
+		// dropped service whose tasks remain, mirroring DeleteService: a
+		// reconnect resync can land between a `docker service rm`'s removal
+		// of the service and of its tasks.
+		for id, old := range c.services {
+			if _, ok := services[id]; ok {
+				continue
+			}
+			c.restarts.Forget(id)
+			remaining := c.tasksByService[id]
+			if data.HasTasks {
+				remaining = byService[id]
+			}
+			if len(remaining) > 0 {
+				c.goneServices[id] = old
 			}
 		}
 		c.services = services
@@ -1273,6 +1331,7 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.tasks = tasks
 		c.tasksByService = byService
 		c.tasksByNode = byNode
+		c.pruneGoneServices()
 	}
 	if data.HasConfigs {
 		c.configs.Replace(configs)

@@ -165,7 +165,7 @@ func (h *Handlers) aclMatchWrap(
 		if ev.Type == cache.EventSync {
 			return true
 		}
-		return cluster.CanReadEvent(h.cache, ev, func(resource string) bool {
+		return cluster.CanReadEvent(ev, func(resource string) bool {
 			return h.acl.Can(id, "read", resource)
 		})
 	}
