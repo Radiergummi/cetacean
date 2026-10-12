@@ -191,7 +191,12 @@ func TestJobServiceStateFollowsItsRun(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := cluster.DeriveServiceState(tc.svc, tc.running, tc.completed, false); got != tc.want {
+			if got := cluster.DeriveServiceState(
+				tc.svc,
+				tc.running,
+				tc.completed,
+				false,
+			); got != tc.want {
 				t.Errorf("DeriveServiceState = %q, want %q", got, tc.want)
 			}
 

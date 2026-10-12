@@ -685,6 +685,30 @@ func TestHistoryPrunesIndexOfOverwrittenResources(t *testing.T) {
 	}
 }
 
+// A task entry is indexed under its service too, so overwriting it must prune
+// that index as well, or every service that ever ran a task keeps one.
+func TestHistoryPrunesServiceIndexOfOverwrittenTasks(t *testing.T) {
+	const size = 8
+	h := NewHistory(size)
+
+	for i := range 100 {
+		h.Append(HistoryEntry{
+			Type:       EventTask,
+			Action:     "update",
+			ResourceID: fmt.Sprintf("task-%d", i),
+			ServiceID:  fmt.Sprintf("svc-%d", i),
+		})
+	}
+
+	if got := len(h.byResource); got > 2*size {
+		t.Errorf("byResource holds %d IDs, want at most the ring's tasks and services", got)
+	}
+
+	if _, ok := h.byResource["svc-0"]; ok {
+		t.Error("svc-0's index outlived its last entry")
+	}
+}
+
 // A resource that recurs keeps its index while any of its entries survive.
 func TestHistoryKeepsIndexWhileAnEntrySurvives(t *testing.T) {
 	h := NewHistory(4)

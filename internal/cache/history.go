@@ -228,9 +228,11 @@ func (h *History) Append(e HistoryEntry) uint64 {
 	// The ring overwrites oldest-first, so a resource whose newest entry sits
 	// in the slot being reused has no entry left.
 	if h.full {
-		evicted := h.entries[h.cursor].ResourceID
-		if ring := h.byResource[evicted]; ring != nil && ring.newest() == h.cursor {
-			delete(h.byResource, evicted)
+		evicted := h.entries[h.cursor]
+		for _, id := range [...]string{evicted.ResourceID, evicted.ServiceID} {
+			if ring := h.byResource[id]; ring != nil && ring.newest() == h.cursor {
+				delete(h.byResource, id)
+			}
 		}
 	}
 
