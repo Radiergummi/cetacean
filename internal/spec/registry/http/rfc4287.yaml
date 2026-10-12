@@ -192,6 +192,19 @@ requirements:
       The HTML markup SHOULD be such that it could validly appear directly
       within an HTML <DIV> element.
     url: https://www.rfc-editor.org/rfc/rfc4287#section-4.1.3.3
+    mutants:
+      - file: internal/api/feed_handlers.go
+        replace: "\tcontent := \"<p>\" + html.EscapeString(rec.Message) + \"</p>\""
+        with: "\tcontent := \"<p>\" + rec.Message + \"</p>\""
+      - file: internal/api/feed_handlers.go
+        replace: "\t\tcontent += `<p><a href=\"` + html.EscapeString(href) + `\">View in Cetacean</a></p>`"
+        with: "\t\tcontent += `<p><a href=\"` + href + `\">View in Cetacean</a></p>`"
+      - file: internal/api/feed_handlers.go
+        replace: "\tb.WriteString(html.EscapeString(e.Name))"
+        with: "\tb.WriteString(e.Name)"
+      - file: internal/api/feed_handlers.go
+        replace: "\t\tb.WriteString(html.EscapeString(href))"
+        with: "\t\tb.WriteString(href)"
 
   - id: a-category-has-a-term
     level: MUST

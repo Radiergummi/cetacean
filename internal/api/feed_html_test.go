@@ -8,9 +8,12 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/recommendations"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 func TestHistoryEntryHTMLEscapesNames(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4287/html-content-suits-a-div")
+
 	got := historyEntryHTML(cache.HistoryEntry{
 		Type:    "node",
 		Action:  "update",
@@ -24,6 +27,8 @@ func TestHistoryEntryHTMLEscapesNames(t *testing.T) {
 }
 
 func TestRecommendationFeedEntryEscapesTheMessage(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4287/html-content-suits-a-div")
+
 	entry := recommendationToFeedEntry(
 		httptest.NewRequest("GET", "/recommendations.atom", nil),
 		recommendations.Recommendation{Message: `node <img src=x onerror=alert(1)> is full`},
@@ -38,6 +43,8 @@ func TestRecommendationFeedEntryEscapesTheMessage(t *testing.T) {
 // A trusted proxy's X-Forwarded-Host passes isAuthority with quotes and angle
 // brackets in it, so the origin is as untrusted as any other value here.
 func TestFeedEntryHTMLEscapesTheLink(t *testing.T) {
+	spec.Satisfies(t, "http/rfc4287/html-content-suits-a-div")
+
 	req := httptest.NewRequest("GET", "/recommendations.atom", nil)
 	req.Host = `a"><b`
 
