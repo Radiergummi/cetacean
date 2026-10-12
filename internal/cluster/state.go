@@ -57,8 +57,7 @@ func ServiceConverged(svc swarm.Service, runningCount int) (bool, string) {
 // DeriveServiceState returns a human-readable state for a service given its
 // running-task count — "running", "flapping", "pending", "failed" or
 // "updating" — and is read by both transports so they cannot report
-// differently. flapping, from cache.FlappingServices, stops a crash loop caught
-// with its replicas up from reading as "running".
+// differently. flapping stops a crash loop caught with replicas up from reading "running".
 func DeriveServiceState(svc swarm.Service, runningCount int, flapping bool) string {
 	if serviceUpdateInFlight(svc) {
 		return "updating"
