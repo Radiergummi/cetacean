@@ -506,3 +506,30 @@ func TestCleanPathsRedirectLeavesADerivedWellKnownPathAtTheRoot(t *testing.T) {
 		})
 	}
 }
+
+// A dot-segment escape cleans to a path outside the well-known family, so it
+// must redirect into the mount like any other host-root path — not past it.
+func TestCleanPathsRedirectPrefixesADotSegmentEscapeFromTheWellKnownFamily(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean"), withOAuthRoutes("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	for request, want := range map[string]string{
+		"/.well-known/oauth-protected-resource/../../nodes":           "/cetacean/nodes",
+		"/.well-known/oauth-protected-resource/../../oauth/authorize": "/cetacean/oauth/authorize",
+	} {
+		t.Run(request, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("GET", request, nil))
+
+			if w.Code != http.StatusTemporaryRedirect {
+				t.Fatalf("status = %d, want 307", w.Code)
+			}
+			if got := w.Header().Get("Location"); got != want {
+				t.Errorf("Location = %q, want %q", got, want)
+			}
+		})
+	}
+}

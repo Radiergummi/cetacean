@@ -106,7 +106,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /events` applies `?types=` and, on reconnect with `Last-Event-ID`, replays missed events instead of always forcing a full sync
 - Node, service, and stack streams receive task removals, a stack stream also every removal of `docker stack rm`, and a service- or stack-scoped grant admits them on `GET /events`, its replay, and MCP subscriptions
 - Shutdown ends open `/events` and resource event streams first instead of waiting out the grace period and logging an error
-- `Accept` media types and parameters, and the `items` range unit, are matched case-insensitively
 - `Accept` media types and parameters, and the `items` range unit, are matched case-insensitively, including when choosing between the OIDC login redirect and a 401
 - Under `server.base_path`, a URL with `//` or `.` segments redirects within the deployment instead of out of it
 - `/api/errors/{code}` answers an unknown code with a problem document

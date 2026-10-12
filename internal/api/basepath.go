@@ -173,7 +173,15 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		// whatever is left unrouted, which would put the dashboard at the host root.
 		if strings.HasPrefix(path, derivedWellKnownPrefix) && routes.serves(r) {
 			ctx := context.WithValue(r.Context(), basePathKey, basePath)
-			ctx = context.WithValue(ctx, unstrippedCtxKey{}, true)
+
+			// routes.serves matches the mux's own clean-path redirect, so a
+			// dot-segment escape (.../../nodes) that leaves the family here
+			// must still get its cleanPaths redirect prefixed, unlike a
+			// derived path that stays in the family after cleaning.
+			if strings.HasPrefix(cleanPath(path), derivedWellKnownPrefix) {
+				ctx = context.WithValue(ctx, unstrippedCtxKey{}, true)
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 
 			return
