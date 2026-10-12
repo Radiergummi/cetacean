@@ -1624,6 +1624,11 @@ paths:
       responses:
         "200":
           description: Current unlock key
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
           content:
             application/json:
               schema:

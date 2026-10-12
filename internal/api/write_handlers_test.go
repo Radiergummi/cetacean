@@ -4847,8 +4847,7 @@ func TestHostAccessWritesRequireImpactfulLevel(t *testing.T) {
 	}
 }
 
-// One status per response: a create that wrote 201 and then let writeJSON
-// write 200 sent text/plain and logged the wrong status.
+// A create sends one status, 201, as JSON.
 func TestCreateSecretWritesOneJSONStatus(t *testing.T) {
 	mock := &mockWriteClient{}
 	mock.createSecretFn = func(context.Context, swarm.SecretSpec) (string, error) { return "sec1", nil }
