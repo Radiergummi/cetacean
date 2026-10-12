@@ -299,6 +299,46 @@ func TestUnreadyServesTheLoadedSnapshotToEveryRepresentation(t *testing.T) {
 	}
 }
 
+// A snapshot answers a read; it must not wave a write through to a Docker
+// client that is not actually there yet, which the handler cannot survive.
+func TestUnreadyStillRefusesWritesDespiteALoadedSnapshot(t *testing.T) {
+	saved := cache.New(nil)
+	replicas := uint64(2)
+	saved.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+		},
+	})
+
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := saved.WriteToDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := cache.New(nil)
+	if err := loaded.LoadFromDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	router := newTestRouterWithConfig(
+		t,
+		nil,
+		withCache(loaded),
+		withReady(make(chan struct{})),
+	)
+
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(`{"replicas":3}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("PUT scale while not ready = %d, want %d: %s",
+			rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+}
+
 // TestWebManifestIsSelfContainedAndRelative: a manifest resolves member URLs
 // against its own URL, so relative ones work under CETACEAN_BASE_PATH and
 // absolute ones address the origin root. It also checks each icon names a file

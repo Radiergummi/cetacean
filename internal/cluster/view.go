@@ -753,9 +753,14 @@ func updatePolicyDetails(cfg *swarm.UpdateConfig) map[string]any {
 // serviceMode names a service's scheduling mode without exposing the nested
 // Docker union a caller would otherwise have to interpret.
 func serviceMode(svc swarm.Service) string {
-	if svc.Spec.Mode.Global != nil {
+	switch {
+	case svc.Spec.Mode.ReplicatedJob != nil:
+		return "replicated-job"
+	case svc.Spec.Mode.GlobalJob != nil:
+		return "global-job"
+	case svc.Spec.Mode.Global != nil:
 		return "global"
+	default:
+		return "replicated"
 	}
-
-	return "replicated"
 }

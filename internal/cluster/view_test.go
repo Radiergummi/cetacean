@@ -539,6 +539,24 @@ func TestServiceDetailsOmitsAbsentPolicyAndPorts(t *testing.T) {
 	}
 }
 
+// MCP's describe and update-preview surface "mode" from here; it must name a
+// job the way the REST Mode column and DeriveServiceState now do.
+func TestServiceDetailsNamesJobModes(t *testing.T) {
+	replicatedJob := swarm.Service{Spec: swarm.ServiceSpec{
+		Mode: swarm.ServiceMode{ReplicatedJob: &swarm.ReplicatedJob{}},
+	}}
+	globalJob := swarm.Service{Spec: swarm.ServiceSpec{
+		Mode: swarm.ServiceMode{GlobalJob: &swarm.GlobalJob{}},
+	}}
+
+	if got := ServiceDetails(replicatedJob)["mode"]; got != "replicated-job" {
+		t.Errorf("mode = %v, want replicated-job", got)
+	}
+	if got := ServiceDetails(globalJob)["mode"]; got != "global-job" {
+		t.Errorf("mode = %v, want global-job", got)
+	}
+}
+
 // A crash loop is made entirely of tasks the orchestrator has already replaced:
 // Swarm marks a task for shutdown the instant it fails, so every failure the
 // digest can see is a replaced one and excluding them answers with an empty
