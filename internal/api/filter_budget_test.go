@@ -26,6 +26,11 @@ func TestListFilterHasARequestBudget(t *testing.T) {
 			1,
 			`len(reduce(1..20000, #acc + "` + strings.Repeat("a", 300) + `", "")) > 0`,
 		},
+		{
+			"one item, one regexp match",
+			1,
+			`repeat("a", 99999) matches "` + strings.Repeat(`[a-z]{1,100}`, 9) + `x"`,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := cache.New(nil)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"regexp/syntax"
 	"strconv"
 	"sync"
 
@@ -30,6 +32,8 @@ func Compile(expression string) (Program, error) {
 		expression,
 		expr.AsBool(),
 		expr.Function(budgetCall, checkBudget),
+		expr.Function(budgetSize, checkSize),
+		expr.Function(budgetMatch, checkMatch),
 		expr.Patch(budgetPatcher{}),
 	)
 	if err != nil {
@@ -73,28 +77,56 @@ func (c *programCache) put(key string, prog Program) {
 	c.mu.Unlock()
 }
 
-// ErrBudget reports that an evaluation outlived its context.
+// ErrBudget reports that an evaluation outlived its context or that one step
+// exceeded its size bound.
 var ErrBudget = errors.New("filter evaluation budget exhausted")
 
-// Neither name is a token the expression grammar can produce, so an expression
-// can neither call the check itself nor shadow the context it reads.
+// None of these names is a token the expression grammar can produce, so an
+// expression can neither call a check itself nor shadow the context it reads.
 const (
 	budgetCall    = "budget check"
+	budgetSize    = "budget size"
+	budgetMatch   = "budget match"
 	budgetContext = "budget context"
 )
 
-// budgetPatcher routes every predicate body through checkBudget: expr bounds
-// a run's memory but not its steps, and every loop in the language iterates
-// through a predicate.
+// A concatenation or a regexp match is one VM step whose cost grows with its
+// operands, so each is bounded by size rather than by the deadline.
+const (
+	maxStringLen = 1 << 20
+	maxMatchCost = 1 << 20 // subject bytes × pattern instructions
+)
+
+// budgetPatcher routes every predicate body through checkBudget, since every
+// loop in the language iterates through a predicate, and bounds each `+`
+// result and `matches` subject: expr bounds a run's memory but not its steps.
 type budgetPatcher struct{}
 
 func (budgetPatcher) Visit(node *ast.Node) {
-	if p, ok := (*node).(*ast.PredicateNode); ok {
-		check := &ast.CallNode{
-			Callee:    &ast.IdentifierNode{Value: budgetCall},
-			Arguments: []ast.Node{&ast.IdentifierNode{Value: budgetContext}},
+	switch n := (*node).(type) {
+	case *ast.PredicateNode:
+		n.Node = &ast.SequenceNode{Nodes: []ast.Node{budgetNode(budgetCall), n.Node}}
+	case *ast.BinaryNode:
+		switch n.Operator {
+		case "+":
+			// A sum known to be numeric keeps its type for the checker.
+			if k := n.Type().Kind(); k == reflect.String || k == reflect.Interface {
+				*node = budgetNode(budgetSize, n)
+			}
+		case "matches":
+			size := n.Right
+			if s, ok := n.Right.(*ast.StringNode); ok {
+				size = &ast.IntegerNode{Value: patternSize(s.Value)}
+			}
+			n.Left = budgetNode(budgetMatch, n.Left, size)
 		}
-		p.Node = &ast.SequenceNode{Nodes: []ast.Node{check, p.Node}}
+	}
+}
+
+func budgetNode(name string, args ...ast.Node) *ast.CallNode {
+	return &ast.CallNode{
+		Callee:    &ast.IdentifierNode{Value: name},
+		Arguments: append([]ast.Node{&ast.IdentifierNode{Value: budgetContext}}, args...),
 	}
 }
 
@@ -104,6 +136,43 @@ func checkBudget(params ...any) (any, error) {
 		return nil, ErrBudget
 	}
 	return nil, nil
+}
+
+func checkSize(params ...any) (any, error) {
+	if s, ok := params[1].(string); ok && len(s) > maxStringLen {
+		return nil, ErrBudget
+	}
+	return params[1], nil
+}
+
+// checkMatch passes the subject through. Its size argument is the pattern's
+// instruction count, or the pattern itself when that is not a constant.
+func checkMatch(params ...any) (any, error) {
+	if _, err := checkBudget(params...); err != nil {
+		return nil, err
+	}
+	size, _ := params[2].(int)
+	if pattern, ok := params[2].(string); ok {
+		size = patternSize(pattern)
+	}
+	if s, ok := params[1].(string); ok && len(s)*size > maxMatchCost {
+		return nil, ErrBudget
+	}
+	return params[1], nil
+}
+
+// patternSize is the length of the program regexp runs for pattern, or 0 when
+// pattern does not compile and the match reports that itself.
+func patternSize(pattern string) int {
+	re, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return 0
+	}
+	prog, err := syntax.Compile(re.Simplify())
+	if err != nil {
+		return 0
+	}
+	return len(prog.Inst)
 }
 
 // Evaluate runs a compiled program against an environment map.

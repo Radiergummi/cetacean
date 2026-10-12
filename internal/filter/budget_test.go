@@ -63,3 +63,45 @@ func TestEvaluateContextCannotBeDisarmed(t *testing.T) {
 		}
 	}
 }
+
+// A single regexp match or concatenation is one VM step, so neither reaches a
+// predicate's check; each is bounded by its size instead.
+func TestEvaluateContextBoundsOneStep(t *testing.T) {
+	pattern := strings.Repeat(`[a-z]{1,100}`, 9) + "x"
+	for _, tc := range []struct {
+		name, expression string
+	}{
+		{"constant pattern", `repeat("a", 99999) matches "` + pattern + `"`},
+		{"pattern from a field", `repeat("a", 99999) matches p`},
+		{"doubling", `let a = repeat("a", 999999); let b = a + a; let c = b + b; len(c + c) > 0`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prog, err := Compile(tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+			started := time.Now()
+			_, err = EvaluateContext(t.Context(), prog, map[string]any{"p": pattern})
+			if !errors.Is(err, ErrBudget) {
+				t.Errorf("err = %v, want ErrBudget", err)
+			}
+			if elapsed := time.Since(started); elapsed > time.Second {
+				t.Errorf("took %s", elapsed)
+			}
+		})
+	}
+}
+
+func TestEvaluateContextKeepsOrdinaryMatchesAndConcatenation(t *testing.T) {
+	prog, err := Compile(`name + "-1" == "web-1" && name matches "^w[a-z]+$" && 1 + 2 == 3`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, err := EvaluateContext(t.Context(), prog, map[string]any{"name": "web"})
+	if err != nil || !ok {
+		t.Errorf("ok, err = %v, %v; want true, nil", ok, err)
+	}
+	if _, err := Compile(`name matches "["`); err == nil {
+		t.Error("an invalid constant pattern compiled")
+	}
+}

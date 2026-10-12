@@ -213,7 +213,7 @@ var errorRegistry = map[string]ErrorDef{
 		Code:        "FLT004",
 		Title:       "Filter Too Expensive",
 		Status:      http.StatusBadRequest,
-		Description: "The filter expression took too long to evaluate over the list.",
+		Description: "The filter expression was too expensive to evaluate over the list.",
 		Suggestion:  "Compare fields of the resource instead of building large collections in the expression.",
 	},
 
