@@ -208,7 +208,9 @@ paths:
       description: |
         Discards nothing, but re-fetches every resource from the Docker Engine
         and replaces the in-memory cache with the result. Useful when the cache
-        has drifted — an event missed during a rapid stack deploy, say.
+        has drifted — an event missed during a rapid stack deploy, say. A call
+        made while a re-sync is already running waits for that one and shares
+        its result.
 
         Not gated on the operations level: it re-reads the cluster and never
         changes it, so a read-only deployment can still use it. It does require

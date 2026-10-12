@@ -29,6 +29,9 @@ type DiskSnapshot struct {
 
 // WriteToDisk serializes the cache to a JSON file using atomic rename.
 func (c *Cache) WriteToDisk(path string) error {
+	c.diskMu.Lock()
+	defer c.diskMu.Unlock()
+
 	c.mu.RLock()
 	snap := DiskSnapshot{
 		Version:   snapshotVersion,

@@ -678,8 +678,9 @@ turned away together aren't told to come back together; none is told less than 5
 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
 returns up to 1000). `POST /-/resync` forces a full refetch from the Docker socket; unlike the other
-`/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
-but it isn't gated on the operations level—it re-reads the cluster and never changes it.
+`/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API.
+A call made while a re-sync is already running waits for that one and shares its result, and it isn't
+gated on the operations level—it re-reads the cluster and never changes it.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

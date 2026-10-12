@@ -57,12 +57,17 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 
 // HandleResync triggers a manual full re-fetch of cluster state, behind a shim
 // so this package does not import docker. Authenticated and behind a grant
-// despite its /-/ prefix: each call sweeps the whole Docker API, unthrottled.
-// Not gated on the operations level, though — a resync only re-reads.
+// despite its /-/ prefix: concurrent calls share one sweep of the whole Docker
+// API, but nothing throttles them. Not gated on the operations level: it only re-reads.
 func HandleResync(r Resyncer) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := r.Resync(req.Context()); err != nil {
+			if req.Context().Err() != nil {
+				// This caller gave up; the shared sync is detached and may
+				// still succeed for whoever else is waiting on it.
+				return
+			}
 			slog.Warn("manual resync failed", "error", err)
 			writeJSONStatus(w, http.StatusBadGateway, map[string]string{
 				"status": "error",

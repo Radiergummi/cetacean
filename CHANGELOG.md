@@ -98,7 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - With Tailscale, Cetacean exits if the listener for health checks fails to bind, rather than running without one
 - Built with Go 1.27.2 and `golang.org/x/net` 0.60.0, which fix vulnerabilities in the HTTP/2, TLS, and HTTP code the server uses
 - The image's license label uses the OCI key `org.opencontainers.image.licenses`
-- Concurrent `POST /-/resync` calls share one sync, and a manual resync can no longer overwrite the cache with an older fetch than the watcher's
+- Concurrent `POST /-/resync` calls share one sync, and full syncs no longer run at once, so an older one can't replace a newer one
 - The snapshot is flushed to disk before it replaces the previous one, and isn't written when `storage.data_dir` couldn't be created
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on

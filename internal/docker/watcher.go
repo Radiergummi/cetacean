@@ -203,6 +203,12 @@ func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
 
+	return w.syncLocked(ctx, tracksConnection)
+}
+
+// syncLocked is sync's body, for a caller that already holds syncMu — the
+// periodic tick, so it can try the lock instead of blocking behind it.
+func (w *Watcher) syncLocked(ctx context.Context, tracksConnection bool) error {
 	start := time.Now()
 	slog.Info("starting full sync")
 
@@ -246,11 +252,12 @@ func (w *Watcher) sync(ctx context.Context, tracksConnection bool) error {
 }
 
 // Resync triggers a full re-fetch of cluster state and overwrites the cache.
-// Exposed for manual recovery from drift via the admin API; the watcher's
-// regular event-stream path remains independent of this call.
+// Exposed for manual recovery from drift via the admin API. It shares syncMu
+// with the periodic tick, which skips itself rather than wait behind this.
 func (w *Watcher) Resync(ctx context.Context) error {
-	// Detached: callers who joined this flight must not fail with the first.
-	_, err, _ := w.resyncs.Do("resync", func() (any, error) {
+	// Detached: callers who joined this flight must not fail with the first,
+	// but each caller still stops waiting when its own context ends.
+	flight := w.resyncs.DoChan("resync", func() (any, error) {
 		if err := w.sync(context.WithoutCancel(ctx), false); err != nil {
 			return nil, err
 		}
@@ -259,7 +266,12 @@ func (w *Watcher) Resync(ctx context.Context) error {
 		return nil, nil
 	})
 
-	return err
+	select {
+	case result := <-flight:
+		return result.Err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 const (
@@ -393,13 +405,24 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				pending = make(map[eventKey]coalesced)
 				w.processBatch(ctx, batch)
 			}
+			// TryLock, not sync: a Resync already in flight (it holds syncMu
+			// too) refreshes everything this tick would, and waiting for it
+			// here would stall event processing behind it.
+			if !w.syncMu.TryLock() {
+				slog.Info("periodic full re-sync skipped: a sync is already running")
+				continue
+			}
+
 			slog.Info("periodic full re-sync")
 
 			// Not a connection check: this runs beside a live stream, so a
 			// failure here is not a disconnection — the stream ending is.
 			// lastSync still stops advancing, which is what reports a cache
 			// that has gone stale.
-			if err := w.sync(ctx, false); err == nil {
+			err := w.syncLocked(ctx, false)
+			w.syncMu.Unlock()
+
+			if err == nil {
 				w.writeSnapshot()
 			}
 		}

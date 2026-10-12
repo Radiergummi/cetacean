@@ -42,6 +42,10 @@ type mockClient struct {
 
 	// syncGate, when set, holds every FullSync until it is closed.
 	syncGate chan struct{}
+
+	// fullSyncFn, when set, replaces FullSync's default behaviour. It
+	// receives the 1-based call number, so a test can tell calls apart.
+	fullSyncFn func(call int64) (cache.FullSyncData, error)
 }
 
 func newMockClient() *mockClient {
@@ -59,9 +63,12 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 }
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
-	m.fullSyncs.Add(1)
+	call := m.fullSyncs.Add(1)
 	if m.syncGate != nil {
 		<-m.syncGate
+	}
+	if m.fullSyncFn != nil {
+		return m.fullSyncFn(call)
 	}
 
 	m.mu.Lock()
@@ -1136,4 +1143,119 @@ func TestResyncCoalescesConcurrentCalls(t *testing.T) {
 	if got := mc.fullSyncs.Load(); got != 1 {
 		t.Errorf("FullSync ran %d times, want 1", got)
 	}
+}
+
+// A caller that gives up must not stay parked on the shared flight, which runs
+// detached from every caller and may outlast them all.
+func TestResyncReturnsWhenCallerCancels(t *testing.T) {
+	mc := newMockClient()
+	mc.syncGate = make(chan struct{})
+	defer close(mc.syncGate)
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	resynced := make(chan error, 1)
+	go func() { resynced <- w.Resync(ctx) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+
+	select {
+	case err := <-resynced:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("Resync = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Resync still blocked after its caller's context was cancelled")
+	}
+}
+
+// syncMu must serialize the periodic sync and a manual Resync that overlaps
+// it, so a slower, older fetch cannot land after — and overwrite — a faster
+// one triggered later.
+func TestOlderSyncCannotOverwriteANewerOne(t *testing.T) {
+	mc := newMockClient()
+	store := cache.New(nil)
+	w := NewWatcher(mc, store, "")
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+
+	mc.fullSyncFn = func(call int64) (cache.FullSyncData, error) {
+		if call == 1 {
+			close(entered)
+			<-release
+
+			return cache.FullSyncData{Nodes: []swarm.Node{{ID: "stale"}}, HasNodes: true}, nil
+		}
+
+		return cache.FullSyncData{Nodes: []swarm.Node{{ID: "fresh"}}, HasNodes: true}, nil
+	}
+
+	periodic := make(chan error, 1)
+	go func() { periodic <- w.fullSync(context.Background()) }()
+	<-entered
+
+	manual := make(chan error, 1)
+	go func() { manual <- w.Resync(context.Background()) }()
+
+	// Give the manual resync a chance to run unsynchronized, were syncMu not
+	// there: its fetch isn't gated, so it would finish well within this.
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+
+	if err := <-periodic; err != nil {
+		t.Fatalf("periodic sync: %v", err)
+	}
+	if err := <-manual; err != nil {
+		t.Fatalf("manual resync: %v", err)
+	}
+
+	if _, ok := store.GetNode("fresh"); !ok {
+		t.Error("the later, faster sync's data was overwritten by the earlier, slower one")
+	}
+}
+
+// The periodic tick runs on the event loop's own goroutine; waiting behind a
+// manual Resync's syncMu would stall event processing for as long as that
+// resync takes. It must skip itself instead.
+func TestPeriodicSyncSkipsWhenAResyncIsRunning(t *testing.T) {
+	mc := newMockClient()
+	mc.syncGate = make(chan struct{})
+	w := NewWatcher(mc, cache.New(nil), "")
+	w.syncInterval = 5 * time.Millisecond
+
+	resynced := make(chan error, 1)
+	go func() { resynced <- w.Resync(context.Background()) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.watchEvents(ctx)
+	}()
+
+	// Several ticks' worth of time while the resync still holds syncMu.
+	time.Sleep(50 * time.Millisecond)
+
+	if got := mc.fullSyncs.Load(); got != 1 {
+		t.Errorf("FullSync called %d times while a resync was in flight, want 1", got)
+	}
+
+	close(mc.syncGate)
+
+	if err := <-resynced; err != nil {
+		t.Fatalf("Resync: %v", err)
+	}
+
+	cancel()
+	<-done
 }
