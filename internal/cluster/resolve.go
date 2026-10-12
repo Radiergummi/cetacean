@@ -22,8 +22,8 @@ func ResolveTask(c *cache.Cache, identifier string) (swarm.Task, bool, error) {
 	// separator at all is not a miss either — an unassigned global task
 	// renders as the bare service name — so the scan below decides.
 	serviceName := identifier
-	if dot := strings.LastIndex(identifier, "."); dot >= 0 {
-		serviceName = identifier[:dot]
+	if before, _, ok := strings.CutLast(identifier, "."); ok {
+		serviceName = before
 	}
 
 	service, ok, err := c.ResolveService(serviceName)
