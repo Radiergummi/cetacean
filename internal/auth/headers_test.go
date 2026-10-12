@@ -493,16 +493,26 @@ func TestHeadersProvider_RejectsDuplicatedIdentityHeaders(t *testing.T) {
 func TestHeadersProvider_CapsTheGroupCount(t *testing.T) {
 	p := NewHeadersProvider(config.HeadersConfig{Subject: "X-User", Groups: "X-Groups"})
 
-	groups := make([]string, maxGroups+1)
-	for i := range groups {
-		groups[i] = "g" + strings.Repeat("x", i%5)
+	request := func(n int) *http.Request {
+		groups := make([]string, n)
+		for i := range groups {
+			groups[i] = "g" + strings.Repeat("x", i%5)
+		}
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("X-User", "alice")
+		r.Header.Set("X-Groups", strings.Join(groups, ","))
+		return fromTrustedProxy(r)
 	}
 
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("X-User", "alice")
-	r.Header.Set("X-Groups", strings.Join(groups, ","))
+	id, err := p.Authenticate(httptest.NewRecorder(), request(maxGroups))
+	if err != nil {
+		t.Fatalf("a groups header at the cap was refused: %v", err)
+	}
+	if len(id.Groups) != maxGroups {
+		t.Errorf("got %d groups at the cap, want %d", len(id.Groups), maxGroups)
+	}
 
-	if _, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r)); err == nil {
+	if _, err := p.Authenticate(httptest.NewRecorder(), request(maxGroups+1)); err == nil {
 		t.Error("a groups header over the cap was accepted")
 	}
 }
