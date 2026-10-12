@@ -1,4 +1,4 @@
-import { formatBytes, formatRelativeDate } from "./format";
+import { formatBytes, formatDuration, formatRelativeDate } from "./format";
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 describe("formatBytes", () => {
@@ -71,5 +71,27 @@ describe("formatRelativeDate", () => {
     vi.setSystemTime(new Date("2024-01-01T12:00:00Z"));
     expect(formatRelativeDate("2024-01-01T12:01:00Z")).toBe("just now");
     vi.useRealTimers();
+  });
+});
+
+describe("formatDuration", () => {
+  const original = Intl.DurationFormat;
+
+  afterEach(() => {
+    Object.defineProperty(Intl, "DurationFormat", {
+      value: original,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it("formats a precise duration without Intl.DurationFormat", () => {
+    Object.defineProperty(Intl, "DurationFormat", {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+
+    expect(formatDuration(3_725 * 1e9, true)).toBe("1h 2m 5s");
   });
 });

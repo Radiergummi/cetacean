@@ -55,7 +55,7 @@ const VolumeList = lazy(() => import("./pages/VolumeList"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const Licenses = lazy(() => import("./pages/Licenses"));
 
-function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
   const [menuPathname, setMenuPathname] = useState(pathname);

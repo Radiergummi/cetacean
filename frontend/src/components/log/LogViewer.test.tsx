@@ -349,7 +349,9 @@ describe("LogViewer", () => {
 
     await waitFor(() => expect(screen.getByText(/starting up/)).toBeInTheDocument());
 
-    fireEvent.change(screen.getByTitle("Filter by level"), { target: { value: "error" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by level" }), {
+      target: { value: "error" },
+    });
 
     expect(screen.queryByText(/starting up/)).not.toBeInTheDocument();
     expect(screen.getByText(/something broke/)).toBeInTheDocument();
