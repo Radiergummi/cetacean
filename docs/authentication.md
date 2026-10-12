@@ -112,7 +112,7 @@ The reason is logged, not returned: which of `no subject header`, `invalid proxy
 
 Anonymous access. Every request receives a static identity with `subject: anonymous`.
 
-This mode also bypasses [authorization][authorization]: a configured ACL policy has no effect while `auth.mode` is
+This mode also bypasses [authorization][authorization]: a configured authorization policy has no effect while `auth.mode` is
 `none`. Use it when Cetacean sits behind a VPN, a firewall, or a proxy that authenticates for you.
 
 ## OIDC
@@ -397,9 +397,9 @@ apply to your browser session.
 
 The API and `/mcp` are separate protected resources with separate audiences:
 
-| Resource | Identifier              | Metadata document                             |
-| -------- | ----------------------- | --------------------------------------------- |
-| Web API  | the deployment root     | `/.well-known/oauth-protected-resource`       |
+| Resource | Identifier                   | Metadata document                           |
+| -------- | ---------------------------- | ------------------------------------------- |
+| Web API  | the deployment root          | `/.well-known/oauth-protected-resource`     |
 | `/mcp`   | the deployment root + `/mcp` | `/.well-known/oauth-protected-resource/mcp` |
 
 A token for one is refused by the other, even though one path lies under the other. This is deliberate: approving an
@@ -415,7 +415,7 @@ document and the authorize endpoint refuses to mint a token for it.
 There are no personal access tokens and no scopes—both discovery documents say so with an empty
 `scopes_supported`, and a client that asks for a scope anyway has it ignored rather than refused. The refresh token
 *is* the long-lived credential: it rotates single-use, survives restarts under [`storage.data_dir`][storage.data_dir],
-and detects reuse. A token carries its user's access, which the [ACL][authorization] decides—so a token can't hold
+and detects reuse. A token carries its user's access, which its [grants][authorization] decide—so a token can't hold
 more than the person who authorized it, and the `Allow` header on every response reports what it may actually do.
 
 > [!NOTE]
@@ -626,7 +626,7 @@ GET /auth/whoami HTTP/1.1
 curl -s http://localhost:9000/auth/whoami | jq .
 ```
 
-`GET /profile` returns the same identity plus the effective ACL grants. See the [API reference][api] for the
+`GET /profile` returns the same identity plus the effective grants. See the [API reference][api] for the
 response schemas.
 
 [acl.oidc_claim]: configuration#acl.oidc_claim
@@ -646,17 +646,17 @@ response schemas.
 [configuration]: configuration
 [getting-started]: getting-started
 [mcp]: mcp
-[oauth.api_tokens]: configuration#oauth.api_tokens
 [mcp.auth_bypass]: configuration#mcp.auth_bypass
+[oauth.api_tokens]: configuration#oauth.api_tokens
 [oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
 [rfc9440]: https://www.rfc-editor.org/rfc/rfc9440
 [server.forwarded_headers]: configuration#server.forwarded_headers
 [server.listen_addr]: configuration#server.listen_addr
-[storage.data_dir]: configuration#storage.data_dir
 [server.public_url]: configuration#server.public_url
 [server.trusted_proxies]: configuration#server.trusted_proxies
+[storage.data_dir]: configuration#storage.data_dir
 [tailscale]: configuration#tailscale
 [tls.cert]: configuration#tls.cert
 [tls.key]: configuration#tls.key

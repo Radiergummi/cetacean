@@ -100,10 +100,10 @@
 # lookback = "168h"                         # Time window for p95 queries (default 7 days)
 
 # --- OAuth 2.1 authorization server ---
-# Issues the bearer tokens protected resources accept. Opt-in: it mints
-# credentials for your cluster, so nothing enables it implicitly. /mcp is the
-# only protected resource today, so MCP under any auth mode but "none" needs
-# this enabled — startup refuses that combination without it.
+# Issues the bearer tokens protected resources accept: /mcp, and the web API
+# when api_tokens is on. Opt-in: it mints credentials for your cluster, so
+# nothing enables it implicitly. MCP under any auth mode but "none" needs this
+# enabled — startup refuses that combination without it.
 
 # [oauth]
 # enabled = false                           # Run the authorization server (/oauth/* + /.well-known/oauth-*)

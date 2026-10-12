@@ -1,6 +1,7 @@
 # ACL Labels Design
 
 **Date:** 2026-04-08
+**Status:** Reverted in [#302](https://github.com/Radiergummi/cetacean/pull/302); kept for the reasoning
 **Issue:** [#11](https://github.com/Radiergummi/cetacean/issues/11)
 
 ## Summary

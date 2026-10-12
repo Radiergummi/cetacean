@@ -587,6 +587,7 @@ func main() {
 	// the client certificate arrives in a header the proxy already verified,
 	// and this config would never be consulted.
 	if authCfg.Mode == "cert" && tlsCfg.Enabled() {
+		//nolint:gosec // G703: the CA path is operator-configured, not user input
 		caCert, err := os.ReadFile(filepath.Clean(authCfg.Cert.CA))
 		if err != nil {
 			slog.Error("failed to read CA cert", "error", err)

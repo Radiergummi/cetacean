@@ -2,15 +2,14 @@
 title: Integrations
 description: Structured panels for Traefik, Shepherd, swarm-cronjob, and Diun on the service detail page.
 category: guide
-tags: [ integrations, traefik, shepherd, swarm-cronjob, diun ]
+tags: [integrations, traefik, shepherd, swarm-cronjob, diun]
 ---
 
 # Integrations
 
-Cetacean has support for certain Swarm ecosystem tools, like Traefik or Shepherd. It detects them
-from a service's own labels, and renders each as a structured panel on the service
-[detail page][detail-pages], above the labels section. Nothing is rendered when no matching labels
-are present.
+Cetacean recognizes a few Swarm ecosystem tools, such as Traefik and Shepherd, from a service's own labels and
+renders each as a structured panel on the service [detail page][detail-pages], above the labels section. Nothing is
+rendered when no matching labels are present.
 
 ## Supported tools
 
@@ -35,7 +34,7 @@ their middleware chains to the service they route to.
 ## Editing
 
 Each panel has a view toggle and a link to the tool's own documentation. The structured and raw views are editable
-when the service allows `PATCH`, which requires [operations level][operations-level] 2 and ACL write permission
+when the service allows `PATCH`, which requires [operations level][operations-level] 2 and a write grant
 on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
 service label.
 

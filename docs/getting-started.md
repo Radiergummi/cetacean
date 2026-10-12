@@ -2,7 +2,7 @@
 title: Getting started
 description: Install Cetacean, deploy it to a Docker Swarm cluster, and open the dashboard.
 category: guide
-tags: [ installation, docker, swarm, quickstart ]
+tags: [installation, docker, swarm, quickstart]
 ---
 
 # Getting started
@@ -113,26 +113,29 @@ purpose. Set it to `1` for operational writes (scale, update image, roll back, r
 
 ## When something is wrong
 
-| Symptom                                                            | What it means                                                                                                                                                                                                                                                                                                                                                                                         |
-|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Symptom                                                            | What it means                                                                                                                                                                                                                                                                                                                                                                                       |
+|--------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Every list is empty, and [`GET /-/ready`][api.ready] answers `503` | Cetacean can't read the swarm. Resource endpoints answer `503` with code `ENG001`, and the log carries one `full sync resource failed` line per resource with the Docker error on it. Either the socket isn't mounted or not readable, or the node is a worker—only managers serve the swarm API. Check with `docker info --format '{{.Swarm.ControlAvailable}}'`, which prints `true` on a manager |
-| Cetacean exits at startup with `bind: address already in use`      | Something else holds the port. Move it with [`server.listen_addr`][server.listen_addr]                                                                                                                                                                                                                                                                                                                |
-| Action buttons are missing from a detail page                      | Your [operations level][server.operations_level] or your [grants][authorization] don't allow that write. Fetch the resource with `Accept: application/json` and read the `Allow` response header: `GET, HEAD` alone means no write is available to you                                                                                                                                               |
-| Charts are empty and a banner says so                              | Prometheus is unset, unreachable, or an exporter isn't reporting. [`GET /metrics/status`][api.metrics] says which; see&nbsp;[Monitoring][monitoring]                                                                                                                                                                                                                                                 |
-| Restarting loses the recent-failure history                        | The data directory isn't on a volume—see the note under [Stack deployment](#stack-deployment)                                                                                                                                                                                                                                                                                                        |
+| Cetacean exits at startup with `bind: address already in use`      | Something else holds the port. Move it with [`server.listen_addr`][server.listen_addr]                                                                                                                                                                                                                                                                                                              |
+| Action buttons are missing from a detail page                      | Your [operations level][server.operations_level] or your [grants][authorization] don't allow that write. Fetch the resource with `Accept: application/json` and read the `Allow` response header: `GET, HEAD` alone means no write is available to you                                                                                                                                              |
+| Charts are empty and a banner says so                              | Prometheus is unset, unreachable, or an exporter isn't reporting. [`GET /metrics/status`][api.metrics] says which; see [Monitoring][monitoring]                                                                                                                                                                                                                                                     |
+| Restarting loses the recent-failure history                        | The data directory isn't on a volume—see the note under [Stack deployment](#stack-deployment)                                                                                                                                                                                                                                                                                                       |
 
 [`GET /-/health`][api.health] answers `200` whenever the process is up, including while Cetacean can't reach Docker.
 [`/-/ready`][api.ready] is the one that tracks whether it has actually read the cluster.
 
 ## Where to go next
 
-| Page                           | Covers                                                                                    |
-|--------------------------------|-------------------------------------------------------------------------------------------|
-| [Dashboard][dashboard]         | Navigation, the command palette, and the chart and log viewer controls                    |
-| [Authorization][authorization] | Per-resource read and write grants, once callers are identified                           |
-| [MCP Server][mcp]              | The same access for an AI agent, under the same operations level and grants               |
-| [API guide][api]               | REST endpoints, SSE streams, and the Atom feed on every resource page                     |
-| [Configuration][configuration] | Every setting, including [`server.base_path`][server.base_path] for a proxy on a sub-path |
+| Page                               | Covers                                                                                    |
+|------------------------------------|-------------------------------------------------------------------------------------------|
+| [Dashboard][dashboard]             | Navigation, the command palette, and the chart and log viewer controls                    |
+| [Monitoring][monitoring]           | Prometheus, node-exporter, and cAdvisor, for charts and capacity bars                     |
+| [Recommendations][recommendations] | What Cetacean flags about your cluster, and how to tune or turn it off                    |
+| [Integrations][integrations]       | Structured panels for Traefik, Shepherd, swarm-cronjob, and Diun                          |
+| [Authorization][authorization]     | Per-resource read and write grants, once callers are identified                           |
+| [MCP server][mcp]                  | The same access for an AI agent, under the same operations level and grants               |
+| [API guide][api]                   | REST endpoints, SSE streams, and the Atom feed on every resource page                     |
+| [Configuration][configuration]     | Every setting, including [`server.base_path`][server.base_path] for a proxy on a sub-path |
 
 [api]: api
 [api.health]: api/explorer#tag/meta/GET/-/health
@@ -143,6 +146,7 @@ purpose. Set it to `1` for operational writes (scale, update image, roll back, r
 [authorization]: authorization
 [configuration]: configuration
 [dashboard]: dashboard
+[integrations]: integrations
 [mcp]: mcp
 [monitoring]: monitoring
 [recommendations]: recommendations
