@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
   api: { updateNodeRole: vi.fn<() => Promise<unknown>>().mockResolvedValue({}) },
+  currentETag: vi.fn<() => Promise<string | undefined>>(async () => undefined),
 }));
 
 import { api } from "@/api/client";
@@ -34,7 +35,7 @@ describe("RoleEditor", () => {
     expect(updateNodeRole).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Demote" }));
-    await waitFor(() => expect(updateNodeRole).toHaveBeenCalledWith("n1", "worker"));
+    await waitFor(() => expect(updateNodeRole).toHaveBeenCalledWith("n1", "worker", undefined));
   });
 
   it("does not demote when the confirmation is cancelled", async () => {
@@ -48,7 +49,7 @@ describe("RoleEditor", () => {
   it("demotes without a dialog when quorum has room to spare", async () => {
     demote(5);
 
-    await waitFor(() => expect(updateNodeRole).toHaveBeenCalledWith("n1", "worker"));
+    await waitFor(() => expect(updateNodeRole).toHaveBeenCalledWith("n1", "worker", undefined));
     expect(screen.queryByText("Demote this manager?")).not.toBeInTheDocument();
   });
 });

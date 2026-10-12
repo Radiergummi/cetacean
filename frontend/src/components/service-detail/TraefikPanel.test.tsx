@@ -9,6 +9,7 @@ vi.mock("@/api/client", () => ({
   api: {
     patchServiceLabels: vi.fn<() => Promise<Record<string, string>>>(async () => ({})),
   },
+  currentETag: vi.fn<() => Promise<string | undefined>>(async () => undefined),
 }));
 
 function integrationWithPort(port: number): TraefikIntegration {
