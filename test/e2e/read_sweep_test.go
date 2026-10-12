@@ -453,8 +453,9 @@ func driveGrantGate(path, accept string) readDriveFunc {
 // ─── routes needing a specific, hand-derived assertion ─────────────────
 
 // driveSwarm checks GET /swarm: gated by requireAnyGrant, but its body also
-// redacts join tokens unless the caller holds write:swarm:cluster. Only ops
-// holds it, so every other persona's tokens come back zeroed on a 200.
+// redacts join tokens below operations level 3, so even ops, the one
+// persona with write:swarm:cluster, gets none here — this lane runs at
+// level 2. The level-3 case with the grant is covered elsewhere.
 func driveSwarm(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	for _, p := range readPersonas {
 		t.Run(p.name, func(t *testing.T) {
@@ -487,18 +488,9 @@ func driveSwarm(t *testing.T, proc *sut.Process, _ baselineIDs) {
 			tokensPresent := body.Swarm.JoinTokens.Worker != "" ||
 				body.Swarm.JoinTokens.Manager != ""
 
-			if p.name == "ops" {
-				if !tokensPresent {
-					t.Error(
-						"ops (holds write:swarm:cluster) got zeroed join tokens, want the real ones",
-					)
-				}
-				return
-			}
-
 			if tokensPresent {
 				t.Errorf(
-					"%s (no write:swarm:cluster grant) got non-empty join tokens: %+v",
+					"%s got non-empty join tokens below operations level 3: %+v",
 					p.name, body.Swarm.JoinTokens,
 				)
 			}

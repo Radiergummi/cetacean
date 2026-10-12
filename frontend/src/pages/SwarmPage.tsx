@@ -119,18 +119,22 @@ export default function SwarmPage() {
               allowedMethods={page.allowedMethods}
               onRotated={page.fetchSwarmInfo}
             />
-            <JoinTokenDialog
-              label="Manager"
-              token={swarm.JoinTokens.Manager}
-              managerAddr={managerAddr}
-              variant="secondary"
-            />
-            <JoinTokenDialog
-              label="Worker"
-              token={swarm.JoinTokens.Worker}
-              managerAddr={managerAddr}
-              variant="default"
-            />
+            {page.allowedMethods.has("POST") && (
+              <>
+                <JoinTokenDialog
+                  label="Manager"
+                  token={swarm.JoinTokens.Manager}
+                  managerAddr={managerAddr}
+                  variant="secondary"
+                />
+                <JoinTokenDialog
+                  label="Worker"
+                  token={swarm.JoinTokens.Worker}
+                  managerAddr={managerAddr}
+                  variant="default"
+                />
+              </>
+            )}
           </>
         }
       />

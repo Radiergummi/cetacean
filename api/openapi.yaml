@@ -1236,7 +1236,9 @@ paths:
       operationId: getSwarm
       tags: [Cluster]
       summary: Swarm configuration
-      description: Full swarm inspect result with join tokens, raft config, etc.
+      description: >-
+        Full swarm inspect result with raft config, CA config and the join tokens. The join
+        tokens are empty unless the caller has write on `swarm:cluster` and operations level 3.
       responses:
         "200":
           description: Swarm info
