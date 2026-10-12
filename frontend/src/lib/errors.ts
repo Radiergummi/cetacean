@@ -119,7 +119,7 @@ const errorDictionary: Record<string, ErrorInfo> = {
   NOD001: {
     title: "Node not down",
     suggestion:
-      "Demote the node if it is a manager. Otherwise drain it and wait for it to reach the down state, or use force removal.",
+      "Demote the node if it is a manager. Then have it leave the swarm or stop it so it goes down, or use force removal.",
     action: "force-remove",
   },
   NOD002: {
@@ -164,7 +164,7 @@ const errorDictionary: Record<string, ErrorInfo> = {
   // VOL: volume operations
   VOL001: {
     title: "Volume in use",
-    suggestion: "Stop or remove the containers using this volume first.",
+    suggestion: "Stop or remove the containers or services using this volume first.",
   },
 
   // NET: network operations

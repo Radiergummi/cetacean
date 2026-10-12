@@ -2221,7 +2221,7 @@ func TestHandleRemoveNode_DockerError(t *testing.T) {
 	}
 }
 
-// The engine answers an undrained node with a 400, which the client reads as
+// The engine answers a node that is up with a 400, which the client reads as
 // an invalid argument; the message is what says the node's state is the cause.
 func TestHandleRemoveNode_NotDownIsAConflict(t *testing.T) {
 	c := cache.New(nil)

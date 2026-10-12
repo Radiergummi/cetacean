@@ -8,7 +8,7 @@ import (
 
 // The engine reports a removal's precondition with whatever status its
 // subsystem chose: a local network in use is a 403, and swarmkit's refusals
-// (a network or config in use, an undrained node) all flatten to 400. These
+// (a network or config in use, a node that is up) all flatten to 400. These
 // are the messages that mark them, matched where the class alone cannot.
 var removalConflictMessages = map[string][]string{
 	"config":  {"is in use by the following"},
