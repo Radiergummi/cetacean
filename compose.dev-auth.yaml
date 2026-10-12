@@ -211,7 +211,8 @@ services:
     image: dexidp/dex
     command: ["dex", "serve", "/etc/dex/dex.yaml"]
     ports:
-      - "127.0.0.1:9010:5556"
+      # Not loopback-only: cetacean-oidc reaches the issuer via host-gateway, which isn't 127.0.0.1 on Linux.
+      - "9010:5556"
     configs:
       - source: dex-config
         target: /etc/dex/dex.yaml

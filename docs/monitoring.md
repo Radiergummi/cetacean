@@ -28,8 +28,14 @@ docker stack deploy -c compose.monitoring.yaml monitoring
 ```
 
 Prometheus publishes no port, because it has no authentication of its own; Cetacean reaches it over the overlay.
-To open its UI, put it behind a proxy that authenticates, or publish it for a while with
-`docker service update --publish-add 127.0.0.1:9090:9090 monitoring_prometheus` on a node you can reach.
+To open its UI, put it behind a proxy that authenticates, or publish it for a while on the node running it.
+Swarm can't bind a published port to one address, so this opens it on every interface of that node;
+the second command closes it again:
+
+```bash
+docker service update --publish-add published=9090,target=9090,mode=host monitoring_prometheus
+docker service update --publish-rm published=9090,target=9090,mode=host monitoring_prometheus
+```
 
 `compose.prometheus.yaml` is a small overlay for `compose.yaml` that joins that network and sets
 [`prometheus.url`][prometheus.url]. Pass both files, on this deploy and every later one:
