@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -195,7 +194,7 @@ func TestAclMatchWrap_ReplayedTaskRemoveInheritsServiceGrant(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
 	c.SetTask(swarm.Task{ID: "t2", ServiceID: "svc2"})
 	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc1"})
-	cursor := strconv.FormatUint(c.History().Count(), 10)
+	seen := c.History().Count()
 	c.DeleteTask("t1")
 	c.DeleteTask("t2")
 	// `docker service rm` removes the service before its tasks.
@@ -221,7 +220,7 @@ func TestAclMatchWrap_ReplayedTaskRemoveInheritsServiceGrant(t *testing.T) {
 
 	r := httptest.NewRequestWithContext(ctx, "GET", "/events", nil)
 	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
-	r.Header.Set("Last-Event-ID", cursor)
+	r.Header.Set("Last-Event-ID", b.EventID(seen))
 	w := httptest.NewRecorder()
 	b.ServeSSE(w, r, h.aclMatchWrap(r, nil), sse.ReplayAll)
 
@@ -266,7 +265,7 @@ func TestAclMatchWrap_ReplayedStackRemovesInheritStackGrant(t *testing.T) {
 		Spec:      swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Labels: stackLabels}},
 	})
 	c.SetTask(swarm.Task{ID: "t3", ServiceID: "svc2"})
-	cursor := strconv.FormatUint(c.History().Count(), 10)
+	seen := c.History().Count()
 	c.DeleteTask("t1")
 	c.DeleteService("svc1")
 	c.DeleteTask("t2")
@@ -293,7 +292,7 @@ func TestAclMatchWrap_ReplayedStackRemovesInheritStackGrant(t *testing.T) {
 
 	r := httptest.NewRequestWithContext(ctx, "GET", "/events", nil)
 	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
-	r.Header.Set("Last-Event-ID", cursor)
+	r.Header.Set("Last-Event-ID", b.EventID(seen))
 	w := httptest.NewRecorder()
 	b.ServeSSE(w, r, h.aclMatchWrap(r, nil), sse.ReplayAll)
 

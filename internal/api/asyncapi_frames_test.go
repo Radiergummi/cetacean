@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -310,8 +309,8 @@ func TestReplayedFrameOmitsResource(t *testing.T) {
 func TestGlobalStreamReplaysWhatTypesAdmits(t *testing.T) {
 	t.Parallel()
 
-	router, c, _ := resourceStreamRouter(t)
-	cursor := strconv.FormatUint(c.History().Count(), 10)
+	router, c, broadcaster := resourceStreamRouter(t)
+	cursor := broadcaster.EventID(c.History().Count())
 
 	for _, typ := range []cache.EventType{cache.EventService, cache.EventNode} {
 		c.History().Append(cache.HistoryEntry{

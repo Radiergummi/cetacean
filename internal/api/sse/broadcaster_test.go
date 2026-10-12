@@ -877,7 +877,7 @@ func TestSSE_ReplayAllReplaysEveryType(t *testing.T) {
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
-	req.Header.Set("Last-Event-ID", "1")
+	req.Header.Set("Last-Event-ID", b.EventID(1))
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	done := make(chan struct{})
