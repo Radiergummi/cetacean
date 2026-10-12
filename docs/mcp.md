@@ -2,7 +2,7 @@
 title: MCP server
 description: Let AI agents read your cluster and make changes through Cetacean, under the same permissions as everyone else.
 category: guide
-tags: [ mcp, ai, agents, oauth, automation ]
+tags: [mcp, ai, agents, oauth, automation]
 ---
 
 # MCP server
@@ -25,8 +25,8 @@ environment:
   CETACEAN_PUBLIC_URL: https://cetacean.example.com
 ```
 
-Both flags are needed here. Clients authenticate with a bearer token, and the
-[authorization server][oauth.enabled] that issues it is opt-in on its own—it mints credentials for your
+Both [`mcp.enabled`][mcp.enabled] and [`oauth.enabled`][oauth.enabled] are needed here. Clients authenticate with a
+bearer token, and the authorization server that issues it is opt-in on its own—it mints credentials for your
 cluster, so nothing turns it on implicitly. `/mcp` authenticates itself rather than going through the usual
 middleware, so under any auth mode but `none` it needs either the authorization server or the active mode
 listed in [`mcp.auth_bypass`][mcp.auth_bypass]. Cetacean refuses to start with neither, because the endpoint
@@ -95,7 +95,7 @@ Clients that support this opt in per call; the agent handles it, there's nothing
 settled within five minutes is reported as failed, and [`mcp.max_concurrent_tasks`][mcp.max_concurrent_tasks] (default
 is 32) caps how many such waits run at once.
 
-Four tools wait; the [API][api] offers the same wait on six endpoints, adding service mode and endpoint mode. That's
+Four tools wait; the [API][api] offers the same wait on five service endpoints, adding endpoint mode. That's
 deliberate rather than an oversight: waiting over MCP costs a held task slot per call, so it's offered on the changes
 an agent routinely makes and watches, while an HTTP client waits on its own connection and pays for nothing it isn't
 using.
@@ -129,14 +129,14 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 
 ## Troubleshooting
 
-| Symptom                                          | Cause                                                                                                       |
-|--------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| Client reports `unsupported protocol version`    | The client is older than MCP revision `2026-07-28`. Upgrade it; older revisions are refused.                |
-| Every agent must sign in again after a redeploy  | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                       |
-| Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] isn't the URL clients reach from outside.                         |
-| A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].           |
-| An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.            |
-| `cert` auth mode: client can't connect          | mTLS can't drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off. |
+| Symptom                                          | Cause                                                                                                                                      |
+|--------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| Client reports `unsupported protocol version`    | The client is older than MCP revision `2026-07-28`. Upgrade it; older revisions are refused.                                               |
+| Every agent must sign in again after a redeploy  | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                                                  |
+| Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] isn't the URL clients reach from outside.                                                         |
+| A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].                                      |
+| An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.                                           |
+| `cert` auth mode: client can't connect           | mTLS can't drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off. |
 
 ## Behind a reverse proxy
 
@@ -144,10 +144,11 @@ Clients discover how to sign in by fetching well-known documents from Cetacean, 
 through to `/mcp`'s host alongside the endpoint itself:
 
 ```
+/.well-known/oauth-protected-resource
 /.well-known/oauth-protected-resource/mcp
 /.well-known/oauth-authorization-server
 /.well-known/openid-configuration
-/oauth/authorize   /oauth/token   /oauth/revoke   /oauth/register
+/oauth/authorize   /oauth/token   /oauth/revoke   /oauth/register   /oauth/jwks
 ```
 
 Under a [`server.base_path`][server.base_path], forward `/.well-known/*` from the host root as well
@@ -159,7 +160,8 @@ one a conformant client derives on its own.
 
 ## How it works
 
-Cetacean is its own OAuth 2.1 authorization server for `/mcp`, implementing the MCP `2026-07-28` authorization profile.
+Cetacean is its own OAuth 2.1 authorization server for `/mcp` and the web API, implementing the MCP `2026-07-28`
+authorization profile.
 A client discovers it, sends you through your configured auth provider, and exchanges the result for an access token and
 a refresh token. Access tokens are scoped to this deployment, so one can't be replayed against another Cetacean.
 
@@ -214,7 +216,6 @@ carry no expiry—RFC 7591 gives them none.
 
 [api]: api
 [api-tokens]: authentication#api-access-tokens
-[server.base_path]: configuration#server.base_path
 [authorization]: authorization
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
@@ -229,6 +230,7 @@ carry no expiry—RFC 7591 gives them none.
 [oauth.dcr_max_clients]: configuration#oauth.dcr_max_clients
 [oauth.enabled]: configuration#oauth.enabled
 [oauth.signing_key]: configuration#oauth.signing_key
+[server.base_path]: configuration#server.base_path
 [server.cors.origins]: configuration#server.cors.origins
 [server.operations_level]: configuration#server.operations_level
 [server.public_url]: configuration#server.public_url

@@ -17,8 +17,8 @@ Sensitive settings accept a `_FILE` suffix on their environment variable to read
 file at startup, which is how a Docker secret reaches the process. The `_FILE` variant ranks below
 the direct environment variable.
 
-The `acl.*`, `mcp.*`, `oauth.*`, and `sizing.*` settings have no command-line flags. Set them through the environment or
-the config file.
+The `acl.*`, `mcp.*`, `oauth.*`, `sizing.*`, and `tracing.*` settings have no command-line flags. Set them through the
+environment or the config file.
 
 A setting this page doesn't list isn't ignored: a config file carrying a key the schema doesn't
 know refuses startup and names it.
@@ -66,11 +66,11 @@ know refuses startup and names it.
 </ConfigParam>
 
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
-  Enable the recommendation engine, which periodically analyses swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
+  Enable the recommendation engine, which periodically analyzes swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
 </ConfigParam>
 
 <ConfigParam name="server.operations_level" flag="-operations-level" env="CETACEAN_OPERATIONS_LEVEL" default="0">
-  Which write operations the [dashboard][dashboard] and the [API][api] expose. `0` is read-only, `1` allows operational actions, `2` adds configuration edits, `3` allows destructive operations. See [Operations level][operations-level] for the breakdown.
+  Which write operations the [dashboard][dashboard] and the [API][api] expose. `0` is read-only, `1` allows operational actions, `2` adds configuration edits, `3` allows impactful operations such as deletions and node role changes. See [Operations level][operations-level] for the breakdown.
 </ConfigParam>
 
 <ConfigParam name="server.sse.batch_interval" flag="-sse-batch-interval" env="CETACEAN_SSE_BATCH_INTERVAL" default="100ms">
@@ -238,9 +238,10 @@ Cetacean can run an OAuth 2.1 authorization server, which issues the bearer toke
 resources. It's **disabled by default** and has to be asked for: it mints credentials for your cluster, so it
 should never appear as a side effect of enabling something else.
 
-Today `/mcp` is the only protected resource, and it authenticates itself rather than going through the
-[authentication][authentication] middleware. So under an auth mode other than `none` it needs one of two things,
-and Cetacean refuses to start with neither: this server, or the active mode listed in
+Two resources can be protected: `/mcp`, and the web API when [`oauth.api_tokens`][oauth.api_tokens] is on. `/mcp`
+authenticates itself rather than going through the [authentication][authentication] middleware. So under an auth
+mode other than `none` it needs one of two things, and Cetacean refuses to start with neither: this server, or the
+active mode listed in
 [`mcp.auth_bypass`][mcp.auth_bypass], which has the upstream provider authenticate every request instead. The
 bypass is how an mTLS deployment runs no authorization server at all—those clients can't drive a browser
 consent screen, so one would only sit unused.
@@ -386,10 +387,13 @@ atomic, so a crash mid-write can't corrupt the file.
 
 Two meta endpoints, exempt from authentication and content negotiation:
 
-| Endpoint        | Behavior                                        | Use for                             |
-|-----------------|-------------------------------------------------|-------------------------------------|
-| `GET /-/health` | Always 200 if the process is running            | Uptime monitoring, restart policies |
-| `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, `depends_on` gating |
+| Endpoint        | Behavior                                        | Use for                              |
+|-----------------|-------------------------------------------------|--------------------------------------|
+| `GET /-/health` | Always 200 if the process is running            | Uptime monitoring, restart policies  |
+| `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, Docker health checks |
+
+`GET /-/health` also reports the version, the operations level, and whether Cetacean is still tracking the cluster;
+the [API][api] page has the fields.
 
 The `cetacean healthcheck` subcommand probes `/-/ready` and is what the built-in Docker
 `HEALTHCHECK` runs.
@@ -406,17 +410,19 @@ expose. Each level includes everything below it. A request above the configured 
 | Scale, restart, roll back, update image                                       |      —      |       ✔       |        ✔        |      ✔      |
 | Edit service definitions (env, labels, resources, ports, placement, policies) |      —      |       —       |        ✔        |      ✔      |
 | Create configs and secrets, edit their labels                                 |      —      |       —       |        ✔        |      ✔      |
+| Edit node labels                                                              |      —      |       —       |        ✔        |      ✔      |
 | Enable, disable, or configure plugins                                         |      —      |       —       |        ✔        |      ✔      |
 | Edit swarm settings (raft, orchestration, dispatcher)                         |      —      |       —       |        ✔        |      ✔      |
 | Delete any resource                                                           |      —      |       —       |        —        |      ✔      |
-| Change node availability, role, or labels                                     |      —      |       —       |        —        |      ✔      |
-| Change service or endpoint mode                                               |      —      |       —       |        —        |      ✔      |
+| Change node availability or role                                              |      —      |       —       |        —        |      ✔      |
+| Change a service's endpoint mode                                              |      —      |       —       |        —        |      ✔      |
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
 | Manage CA and encryption, rotate tokens, unlock the swarm                     |      —      |       —       |        —        |      ✔      |
 
-Operations level and [ACL][interaction-with-operations-level] are independent checks
-and both must pass. Operations level is the global ceiling, ACL controls per-user scope. Set
-[`mcp.operations_level`][mcp.operations_level] to give MCP clients a lower ceiling than the dashboard.
+Operations level and [grants][interaction-with-operations-level] are independent checks
+and both must pass. Operations level is the global ceiling, grants control per-user scope. Set
+[`mcp.operations_level`][mcp.operations_level] to give MCP clients a lower ceiling than the dashboard, and
+[`oauth.token_operations_level`][oauth.token_operations_level] to do the same for API tokens.
 
 ## Profiling
 
@@ -433,8 +439,8 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [auth.headers.secret_header]: #auth.headers.secret_header
 [auth.oidc.redirect_url]: #auth.oidc.redirect_url
 [authentication]: authentication
-[cert-behind-proxy]: authentication#behind-a-tls-terminating-proxy
 [authorization]: authorization
+[cert-behind-proxy]: authentication#behind-a-tls-terminating-proxy
 [choosing-a-mode]: authentication#choosing-a-mode
 [client-certificates]: #client-certificates
 [config-file]: #config-file
@@ -446,10 +452,10 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [mcp.operations_level]: #mcp.operations_level
 [monitoring]: monitoring
 [oauth.api_tokens]: #oauth.api_tokens
-[oauth.token_operations_level]: #oauth.token_operations_level
 [oauth.enabled]: #oauth.enabled
 [oauth.issuer]: #oauth.issuer
 [oauth.refresh_token_ttl]: #oauth.refresh_token_ttl
+[oauth.token_operations_level]: #oauth.token_operations_level
 [oidc]: #oidc
 [operations-level]: #operations-level
 [recommendations]: recommendations

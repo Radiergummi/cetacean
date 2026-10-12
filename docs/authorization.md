@@ -43,12 +43,12 @@ A resource expression is `type:pattern`. Valid types are `service`, `stack`, `no
 must name a type. Patterns are globs (`*`, `?`, `[...]`, and `\` to escape any of them) matched against the
 identifier the resource is keyed by:
 
-| Type                                                                  | Pattern matches                            |
-| --------------------------------------------------------------------- | ------------------------------------------ |
-| `service`, `stack`, `config`, `secret`, `network`, `volume`, `plugin` | Resource name                              |
-| `node`                                                                | Hostname, or the node ID if it has none    |
-| `task`                                                                | Task ID                                    |
-| `swarm`                                                               | The single resource `swarm:cluster`        |
+| Type                                                                  | Pattern matches                         |
+| --------------------------------------------------------------------- | --------------------------------------- |
+| `service`, `stack`, `config`, `secret`, `network`, `volume`, `plugin` | Resource name                           |
+| `node`                                                                | Hostname, or the node ID if it has none |
+| `task`                                                                | Task ID                                 |
+| `swarm`                                                               | The single resource `swarm:cluster`     |
 
 Two inheritance rules widen a grant beyond a literal match:
 
@@ -93,13 +93,13 @@ An auth provider can carry per-user grants on the identity itself. These complem
 it: the identity's own grants are added to whatever the policy already grants it. Only the active auth mode's source
 is read.
 
-| Provider    | Source                        | Setting                                                              |
-| ----------- | ----------------------------- | -------------------------------------------------------------------- |
+| Provider    | Source                        | Setting                                                |
+| ----------- | ----------------------------- | ------------------------------------------------------ |
 | `tailscale` | Peer capability in the CapMap | [`acl.tailscale_capability`][acl.tailscale_capability] |
 | `oidc`      | Custom token claim            | [`acl.oidc_claim`][acl.oidc_claim]                     |
 | `headers`   | Proxy-injected header (JSON)  | [`acl.headers_acl`][acl.headers_acl]                   |
-| `cert`      | Policy only                   |—                                                                   |
-| `none`      | Not applicable                |—                                                                   |
+| `cert`      | Policy only                   | —                                                      |
+| `none`      | Not applicable                | —                                                      |
 
 Each source expects a JSON array of grant objects carrying `resources` and `permissions`. `audience` is ignored,
 since a provider grant always applies to the identity carrying it. An invalid grant is dropped without an error, so
@@ -130,16 +130,16 @@ flowchart LR
     class handler accent
 ```
 
-| Operations level | Grant           | Result                |
-| ---------------- | --------------- | --------------------- |
-| Allows           | Grants `write`  | Allowed               |
-| Allows           | No `write`      | Denied (`403 ACL002`) |
-| Blocks           | Grants `write`  | Denied (`403 OPS001`) |
+| Operations level | Grant          | Result                |
+| ---------------- | -------------- | --------------------- |
+| Allows           | Grants `write` | Allowed               |
+| Allows           | No `write`     | Denied (`403 ACL002`) |
+| Blocks           | Grants `write` | Denied (`403 OPS001`) |
 
 Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:
 
-| Code     | Status | Meaning                                                                  |
-| -------- | ------ | ------------------------------------------------------------------------ |
+| Code                          | Status | Meaning                                                                  |
+| ----------------------------- | ------ | ------------------------------------------------------------------------ |
 | [`ACL001`](api/errors#ACL001) | 403    | Read denied on a detail endpoint, or the identity holds no grants at all |
 | [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                            |
 | [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at    |

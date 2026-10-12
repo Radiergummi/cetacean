@@ -2,7 +2,7 @@
 title: Home
 description: Real-time observability and management dashboard for Docker Swarm mode clusters.
 category: overview
-tags: [ docker, swarm, dashboard, observability ]
+tags: [docker, swarm, dashboard, observability]
 ---
 
 # Cetacean

@@ -96,7 +96,7 @@ capitalization everywhere. A variant spelled differently goes in `.vale/styles/C
 
 See the [README](README.md#architecture) for an overview. Key points:
 
-- All API endpoints are read-only GET requests
+- The API is read-mostly, and writes are gated by the operations level and per-resource grants
 - State lives in an in-memory cache fed by Docker event stream
 - No separate domain models—uses Docker Engine API types directly
 - Frontend uses per-resource SSE for real-time updates

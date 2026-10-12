@@ -2,7 +2,7 @@
 title: API
 description: REST endpoints, SSE streams, query parameters, write operations, and error codes.
 category: guide
-tags: [ api, rest, sse, json-ld, openapi ]
+tags: [api, rest, sse, json-ld, openapi]
 ---
 
 # API
@@ -11,8 +11,10 @@ Cetacean serves its cached view of the swarm over HTTP. Reads use `GET`; writes 
 `DELETE`, gated by [operations level][operations-level]. Authentication is
 [pluggable][authentication] via [`auth.mode`][auth.mode] and defaults to anonymous access.
 
-The OpenAPI spec is served as JSON at `GET /api`. Browsers get an interactive playground at the same path; the
-hosted copy is the [API explorer][api-explorer].
+The OpenAPI spec is served as JSON at `GET /api` and as YAML at `GET /api/openapi.yaml`. Browsers get an
+interactive playground at `/api`; the hosted copy is the [API explorer][api-explorer]. The event streams have a
+description of their own, an AsyncAPI 3.0 document at `GET /api/asyncapi`, with a YAML twin at
+`/api/asyncapi.yaml`.
 
 ## Authentication
 
@@ -23,6 +25,19 @@ header treat it exactly as they treat that person's session.
 
 A token minted for `/mcp` is refused here, and one minted for the API is refused there. The 401 names the metadata
 document for the resource you reached, so follow `resource_metadata` rather than assuming a location.
+
+## Cross-origin writes
+
+A browser attaches your session, certificate, or proxy-supplied identity to every request, whichever page started
+it. So Cetacean refuses a write that a browser marks as coming from another site, with `403` and code
+[`CSR001`](api/errors#CSR001). Anything other than `GET`, `HEAD`, and `OPTIONS` counts as a write.
+
+Two kinds of origin pass: the one at [`server.public_url`][server.public_url], and each one listed in
+[`server.cors.origins`][server.cors.origins]. A wildcard there lets browsers read from any origin but can't grant
+writes, so name every origin that should be allowed to make them.
+
+Requests that carry no browser headers, such as `curl` or a script, aren't affected. Neither are `/mcp` and the
+OAuth `token`, `revoke`, and `register` endpoints, which authenticate from the request itself.
 
 ## Content negotiation
 
@@ -37,25 +52,28 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
 
 ### Supported types
 
-| `Accept` value                     | Extension   | Result                                       |
-|------------------------------------|-------------|----------------------------------------------|
-| `application/json`                 | `.json`     | JSON                                         |
-| `application/vnd.cetacean.v1+json` |             | JSON, versioned alias of `application/json`  |
-| `application/ld+json`              |             | JSON—every JSON response is a JSON-LD document   |
-| `text/html`, `application/xhtml+xml` | `.html`   | The dashboard                                |
-| `text/event-stream`                |             | SSE, on endpoints that support it            |
-| `application/atom+xml`             | `.atom`     | Atom feed                                    |
-| `application/feed+json`            | `.feed`     | JSON Feed 1.1                                |
-| `text/csv`                         | `.csv`      | [CSV](#spreadsheets), on list endpoints      |
-| `application/vnd.jgf+json`         | `.jgf`      | JSON Graph Format, `/topology` only          |
-| `application/graphml+xml`          | `.graphml`  | GraphML, `/topology` only                    |
-| `text/vnd.graphviz`                | `.dot`      | Graphviz DOT, `/topology` only               |
-| `application/yaml`                 | `.yaml`, `.yml` | [Compose file](#compose-export), on a stack or a service |
+| `Accept` value | Extension | Result |
+|---|---|---|
+| `application/json` | `.json` | JSON |
+| `application/vnd.cetacean.v1+json` | | JSON, versioned alias of `application/json` |
+| `application/ld+json` | | JSON—every JSON response is a JSON-LD document |
+| `text/html`, `application/xhtml+xml` | `.html` | The dashboard |
+| `text/event-stream` | | SSE, on endpoints that support it |
+| `application/atom+xml` | `.atom` | Atom feed |
+| `application/feed+json` | `.feed` | JSON Feed 1.1 |
+| `text/csv` | `.csv` | [CSV](#spreadsheets), on list endpoints |
+| `application/vnd.jgf+json` | `.jgf` | JSON Graph Format, `/topology` only |
+| `application/graphml+xml` | `.graphml` | GraphML, `/topology` only |
+| `text/vnd.graphviz` | `.dot` | Graphviz DOT, `/topology` only |
+| `application/yaml` | `.yaml`, `.yml` | [Compose file](#compose-export) on a stack or a service; the API descriptions |
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint can't produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
 returns `406` with [`API001`](api/errors#API001). A graph format asked of a resource endpoint is refused the same
 way—the table says which endpoints serve one.
+
+The two API descriptions, `/api` and `/api/asyncapi`, also answer to the media types their specifications register,
+such as `application/vnd.oai.openapi+json`, and serve YAML for `.yaml` or `application/yaml`.
 
 The refusal is each endpoint's own. A document with a single representation—the
 [OpenSearch description](#browser-search), the [API catalog](#api-catalog), the JSON-LD context—answers a client
@@ -96,7 +114,7 @@ being used as [`If-Match`](#preconditions) on a write: the hash is always taken 
 validator obtained under compression and one obtained without it agree, and either is accepted verbatim.
 
 `/search` and its feeds are never compressed. The response repeats the query you sent back to you alongside content
-the ACL filtered for you, and compressed length would leak whether a guessed query matched something you can see.
+filtered by your grants, and compressed length would leak whether a guessed query matched something you can see.
 
 ## Feeds
 
@@ -123,10 +141,10 @@ Endpoints that produce no resource change data (write sub-resources, log streams
 Feeds page by cursor. The feed carries a `next` link while more entries exist, per
 [RFC 5005](https://www.rfc-editor.org/rfc/rfc5005).
 
-| Parameter | Description                                      |
-|-----------|--------------------------------------------------|
-| `before`  | Return entries older than this cursor ID         |
-| `limit`   | Entries per page (default 50, max 200)           |
+| Parameter | Description                              |
+|-----------|------------------------------------------|
+| `before`  | Return entries older than this cursor ID |
+| `limit`   | Entries per page (default 50, max 200)   |
 
 ```http tab
 GET /services.atom HTTP/1.1
@@ -258,14 +276,14 @@ List endpoints page by query parameter or by HTTP `Range` header.
 
 ### Query parameters
 
-| Parameter | Type   | Default | Description                                                    |
-|-----------|--------|---------|----------------------------------------------------------------|
-| `limit`   | int    | 50      | Items per page, capped at 200                                  |
-| `offset`  | int    | 0       | Starting position                                              |
-| `sort`    | string | none    | Sort field, varies by resource                                 |
-| `dir`     | string | `asc`   | Sort direction: `asc` or `desc`                                |
-| `search`  | string | none    | Case-insensitive substring match on name                       |
-| `filter`  | string | none    | [expr-lang](https://expr-lang.org/) expression, max 512 chars  |
+| Parameter | Type   | Default | Description                                                   |
+|-----------|--------|---------|---------------------------------------------------------------|
+| `limit`   | int    | 50      | Items per page, capped at 200                                 |
+| `offset`  | int    | 0       | Starting position                                             |
+| `sort`    | string | none    | Sort field, varies by resource                                |
+| `dir`     | string | `asc`   | Sort direction: `asc` or `desc`                               |
+| `search`  | string | none    | Case-insensitive substring match on name                      |
+| `filter`  | string | none    | [expr-lang](https://expr-lang.org/) expression, max 512 chars |
 
 ```http tab
 GET /services?limit=10&offset=20 HTTP/1.1
@@ -305,16 +323,16 @@ Every list response sets `Accept-Ranges: items`. An offset past the end returns 
 Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evaluate to a boolean. Operators: `==`,
 `!=`, `<`, `>`, `<=`, `>=`, `contains`, `startsWith`, `endsWith`, `in`, `not in`, `&&`, `||`, `!`.
 
-| Resource | Fields                                                                                                                                                                            |
-|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Nodes    | `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`)                                                |
-| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`                                                                                                                     |
-| Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code`, `error`, `service` (ID), `node` (ID), `slot` (int)                                                                            |
-| Stacks   | `name`, `services`, `configs`, `secrets`, `networks`, `volumes` (all counts)                                                                                                       |
-| Configs  | `id`, `name`                                                                                                                                                                       |
-| Secrets  | `id`, `name`                                                                                                                                                                       |
-| Networks | `id`, `name`, `driver`, `scope` (`swarm`/`local`)                                                                                                                                  |
-| Volumes  | `name`, `driver`, `scope`                                                                                                                                                          |
+| Resource | Fields                                                                                                                              |
+|----------|-------------------------------------------------------------------------------------------------------------------------------------|
+| Nodes    | `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`) |
+| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`                                                                      |
+| Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code`, `error`, `service` (ID), `node` (ID), `slot` (int)                            |
+| Stacks   | `name`, `services`, `configs`, `secrets`, `networks`, `volumes` (all counts)                                                        |
+| Configs  | `id`, `name`                                                                                                                        |
+| Secrets  | `id`, `name`                                                                                                                        |
+| Networks | `id`, `name`, `driver`, `scope` (`swarm`/`local`)                                                                                   |
+| Volumes  | `name`, `driver`, `scope`                                                                                                           |
 
 Task `state` takes the Docker task states: `new`, `allocated`, `pending`, `assigned`, `accepted`, `preparing`,
 `ready`, `starting`, `running`, `complete`, `shutdown`, `failed`, `rejected`, `remove`, `orphaned`. `exit_code` is
@@ -407,7 +425,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 |---|---|---|---|
 | Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
-| [ACL][authorization] denies read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| [Grants][authorization] deny read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
 | Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
@@ -434,11 +452,11 @@ SSE and streaming endpoints set no caching headers.
 ## Response headers
 
 `Allow` on `GET` and `HEAD` responses lists the methods available for that resource under the current
-[operations level][operations-level] and [ACL][authorization] grants. Inspect it before attempting a
+[operations level][operations-level] and your [grants][authorization]. Inspect it before attempting a
 write.
 
 `Accept-Patch` lists the patch formats a resource accepts, either `application/json-patch+json, application/merge-patch+json`
-or `application/merge-patch+json` alone. It appears only when the operations level and ACL permit writes.
+or `application/merge-patch+json` alone. It appears only when the operations level and your grants permit writes.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
@@ -482,8 +500,8 @@ progress line to deliver, so the `202` carries a body and doesn't name `return=m
 Whether that preference is honored therefore depends on how quickly the cluster settles. A client that hangs up
 cancels its own wait.
 
-The preferences apply to the six service endpoints that change what the cluster has to schedule: `scale`, `image`,
-`mode`, `endpoint-mode`, `rollback` and `restart`. Node availability takes no `wait`—draining is a different rule,
+The preferences apply to the five service endpoints that change what the cluster has to schedule: `scale`, `image`,
+`endpoint-mode`, `rollback` and `restart`. Node availability takes no `wait`—draining is a different rule,
 with a different notion of what "settled" means.
 
 ## Real-time events
@@ -597,10 +615,10 @@ Accept: text/event-stream
 curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step=15&range=3600"
 ```
 
-| Event     | Description                                                                  |
-|-----------|------------------------------------------------------------------------------|
+| Event     | Description                                                                 |
+|-----------|-----------------------------------------------------------------------------|
 | `initial` | Full range query result on connect, same shape as Prometheus `query_range`. |
-| `point`   | Single instant query result appended at each tick.                           |
+| `point`   | Single instant query result appended at each tick.                          |
 
 Append `point` events to the data you already hold to build a rolling window.
 
@@ -619,11 +637,11 @@ There's no general rate limiting. Concurrent streams are capped, and a request o
 `429 Too Many Requests` with a `Retry-After` of 5 to 14 seconds. The value steps between refusals, so clients
 turned away together aren't told to come back together; none is told less than 5.
 
-| Stream                                                 | Limit | Code     |
-|--------------------------------------------------------|-------|----------|
-| SSE event clients (`/events` and per-resource streams) | 256   | `SSE001` |
+| Stream                                                  | Limit | Code     |
+|---------------------------------------------------------|-------|----------|
+| SSE event clients (`/events` and per-resource streams)  | 256   | `SSE001` |
 | Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
-| Metrics streams (`/metrics` as SSE)                    | 64    | `MTR005` |
+| Metrics streams (`/metrics` as SSE)                     | 64    | `MTR005` |
 
 ## Endpoints
 
@@ -646,8 +664,9 @@ turned away together aren't told to come back together; none is told less than 5
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
 | Cross-resource | `/search?q=`, `/history`, `/events`, `/recommendations`, `/topology`, `/profile` |
 | Metrics | `/metrics`, `/metrics/status`, `/metrics/labels`, `/metrics/labels/{name}` |
-| Documentation | `/api`, `/api/context.jsonld`, `/api/errors`, `/api/errors/{code}` |
-| Identity | `/auth/whoami` |
+| Documentation | `/api`, `/api/openapi.yaml`, `/api/asyncapi`, `/api/asyncapi.yaml`, `/api/context.jsonld`, `/api/errors`, `/api/errors/{code}` |
+| Discovery | `/.well-known/api-catalog`, `/opensearch.xml` |
+| Identity | `/auth/whoami`, plus `/auth/login` and `/auth/callback` in OIDC mode |
 | Meta | `/-/health`, `/-/ready`, `/-/metrics`, `/-/licenses`, `/-/licenses/texts/{id}`, `/-/notices`, `/-/sbom.cdx`, `/-/docker-latest-version` |
 
 `GET /search` takes `q` (required, max 200 characters) and `limit` (per type, default 3; `0` or a value above 1000
@@ -655,15 +674,15 @@ returns up to 1000). `POST /-/resync` forces a full refetch from the Docker sock
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API,
 but it isn't gated on the operations level—it re-reads the cluster and never changes it.
 
-`GET /-/health` carries a `watcher` object reporting whether Cetacean is still tracking the cluster:
-`connected` for the Docker event stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last
-successful read. `/-/metrics` carries the same as `cetacean_watcher_connected`,
-`cetacean_cache_last_sync_timestamp_seconds` and `cetacean_cache_sync_failures_total`.
+`GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
+`watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event
+stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last successful read. `/-/metrics` carries the same as
+`cetacean_watcher_connected`, `cetacean_cache_last_sync_timestamp_seconds` and `cetacean_cache_sync_failures_total`.
 
 ### Writes
 
 Each row gives the minimum [operations level][operations-level] the endpoint needs. Every write also
-passes the per-resource [ACL][authorization] write check.
+passes the per-resource [write grant][authorization] check.
 
 | Endpoint | Level |
 |---|---|
@@ -719,6 +738,7 @@ passes the per-resource [ACL][authorization] write check.
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
 
+
 ### Preconditions
 
 Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request
@@ -763,7 +783,7 @@ almost nothing could ever satisfy.
 ## MCP server
 
 Cetacean can also serve its cluster view over the Model Context Protocol. Set [`mcp.enabled`][mcp.enabled] to
-`true` and the server mounts at `/mcp`. See [MCP Server][mcp] for transport, authorization, and prompts, and [MCP
+`true` and the server mounts at `/mcp`. See [MCP server][mcp] for transport, authorization, and prompts, and [MCP
 tools and resources][mcp-tools] for the catalog.
 
 ## Self-discovery
@@ -807,7 +827,7 @@ document naming every top-level collection, so knowing the origin is enough to f
     "nodes": { "@id": "/nodes" },
     "services": { "@id": "/services" }
   },
-  "version": "0.11.0"
+  "version": "0.14.0"
 }
 ```
 
@@ -835,12 +855,12 @@ URIs are absolute—set [`server.public_url`][server.public_url] behind a revers
 [authentication]: authentication
 [authorization]: authorization
 [dashboard]: dashboard
+[mcp]: mcp
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
-[server.public_url]: configuration#server.public_url
-[server.trusted_proxies]: configuration#server.trusted_proxies
-[mcp]: mcp
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [server.cors.origins]: configuration#server.cors.origins
+[server.public_url]: configuration#server.public_url
 [server.sse.batch_interval]: configuration#server.sse.batch_interval
+[server.trusted_proxies]: configuration#server.trusted_proxies

@@ -11,6 +11,12 @@ The dashboard updates itself: a scaled service or a downed node appears without 
 indicator in the nav bar shows when the last update arrived, and reconnects on its own if the connection drops.
 It also carries a resync button that makes Cetacean re-read the whole cluster from Docker.
 
+The indicator reads **Live**, **Reconnecting**, or **Stale**. Stale means your browser is connected to Cetacean but
+Cetacean has lost Docker, so everything on screen is the state it last read, not the cluster as it is now. The
+indicator switches to a warning color and shows how long ago that was; the dashboard catches up on its own once
+Docker answers.
+The same condition is available to alerting—see [Monitoring][monitoring].
+
 ## Navigation
 
 The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes, plus
@@ -25,28 +31,28 @@ the running version and commit, the licenses page, and a link to the API playgro
 
 Press `?` for the full list. Shortcuts are ignored while focus is in a text input.
 
-| Shortcut         | Action                                       |
-|------------------|----------------------------------------------|
-| `⌘ K` / `Ctrl K` | Toggle the command palette                   |
-| `/`              | Open the command palette                     |
-| `?`              | Toggle the shortcut list                     |
-| `Esc`            | Close the overlay, or go back                |
-| `g` `h`          | Cluster overview                             |
-| `g` `n`          | Nodes                                        |
-| `g` `k`          | Stacks                                       |
-| `g` `s`          | Services                                     |
-| `g` `a`          | Tasks                                        |
-| `g` `c`          | Configs                                      |
-| `g` `x`          | Secrets                                      |
-| `g` `w`          | Networks                                     |
-| `g` `v`          | Volumes                                      |
-| `g` `i`          | Swarm info                                   |
-| `g` `t`          | Topology                                     |
-| `g` `m`          | Metrics console                              |
-| `g` `r`          | Recommendations                              |
-| `j` / `↓`        | Next row in a table                          |
-| `k` / `↑`        | Previous row                                 |
-| `Enter`          | Open the selected row                        |
+| Shortcut         | Action                        |
+|------------------|-------------------------------|
+| `⌘ K` / `Ctrl K` | Toggle the command palette    |
+| `/`              | Open the command palette      |
+| `?`              | Toggle the shortcut list      |
+| `Esc`            | Close the overlay, or go back |
+| `g` `h`          | Cluster overview              |
+| `g` `n`          | Nodes                         |
+| `g` `k`          | Stacks                        |
+| `g` `s`          | Services                      |
+| `g` `a`          | Tasks                         |
+| `g` `c`          | Configs                       |
+| `g` `x`          | Secrets                       |
+| `g` `w`          | Networks                      |
+| `g` `v`          | Volumes                       |
+| `g` `i`          | Swarm info                    |
+| `g` `t`          | Topology                      |
+| `g` `m`          | Metrics console               |
+| `g` `r`          | Recommendations               |
+| `j` / `↓`        | Next row in a table           |
+| `k` / `↑`        | Previous row                  |
+| `Enter`          | Open the selected row         |
 
 The `g` shortcuts are chords: press `g`, release, then the second key within one second. Hovering a nav link shows
 its chord.
@@ -75,7 +81,7 @@ what you have chosen so far:
 | Force Remove Task | Pick a task                                                     |
 | Remove …          | Pick a service, node, stack, config, secret, network, or volume |
 
-Destructive actions ask for confirmation before they run. An action your [operations level][operations-level]
+Actions that remove or disrupt something ask for confirmation before they run. An action your [operations level][operations-level]
 or your [grants][authorization] don't allow is refused with a permission message, not a server error.
 
 ## List pages
@@ -85,6 +91,9 @@ sort are held in the URL (`?q=`, `?sort=`, `?dir=`), so a filtered list is a sha
 or grid is remembered per resource type; narrow screens always use the grid.
 
 Lists load more as you scroll, and stay current as resources come and go.
+
+Where your grants allow creating one, the config and secret lists carry a create form: a name, plus the content
+pasted in or read from a file. A secret's value can't be read back afterward.
 
 The API accepts expression filters through `?filter=` that the dashboard's search box doesn't build. See the
 [API guide][filter-fields-by-resource] for the fields available per resource type.
@@ -105,6 +114,15 @@ Where the operations level and your grants allow it, detail pages carry actions:
 restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,
 ports, update and rollback policy, and the log driver; availability and labels on a node; force removal on a task.
 Actions hidden by permissions aren't rendered.
+
+Configs, secrets, networks, volumes, services, stacks, nodes, and tasks can also be removed from their detail page,
+behind a confirmation. A config, secret, network, or volume that a service still uses can't be removed, and its
+button says why. When Docker refuses to remove a volume, the page offers **Force remove**.
+
+Service and stack pages end with a collapsed **Compose file** section. Expanding it renders the resource as a
+compose document, with buttons to copy it or download it as a `.yaml` file. It redeploys to the state the cluster
+is running now, so it isn't the file the stack was first deployed from, and it references secrets and configs
+rather than exporting their contents.
 
 ## Charts
 
@@ -144,11 +162,34 @@ it runs the view follows the bottom of the output, and scrolling up pauses that 
 
 The topology page has two views.
 
-- Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay network, listing the shared networks.
-  Hovering a card dims everything it isn't connected to, and the legend maps colors to stacks.
+- Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay
+  network, listing the shared networks. Hovering a card dims everything it isn't connected to, and the legend maps
+  colors to stacks.
 - Physical: one card per cluster node, listing the tasks placed on it.
 
 Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.
+
+## Swarm page
+
+The swarm info page shows the cluster's join tokens and its Raft, orchestration, dispatcher, CA, and encryption
+settings, each editable in place where the [operations level][operations-level] and your grants allow it. Rotating
+a join token asks for confirmation.
+
+Below the settings, a **Plugins** section lists the installed Docker plugins and links each to its own page, where
+you can enable, disable, configure, upgrade, or remove it. An **Install Plugin** button appears when your grants
+allow installing. It takes a remote reference and shows the privileges the plugin requests before you confirm.
+
+## Profile
+
+In every [authentication][authentication] mode except `none`, the identity badge opens a profile page. It shows
+how you're signed in, with your subject, email, and groups where the provider supplies them, and the certificate
+issuer and expiry in `cert` mode. Under `oidc` it carries the **Sign out** button.
+
+## Installing the dashboard
+
+Cetacean serves a web app manifest, so a browser that supports it offers to install the dashboard as an app with
+its own window and icon. It's the same dashboard—it still needs a connection to Cetacean, and nothing is cached
+for offline use.
 
 ## Atom feeds
 

@@ -79,6 +79,7 @@ repository:
 - [Monitoring](docs/monitoring.md)
 - [Authentication](docs/authentication.md) and [Authorization](docs/authorization.md)
 - [Dashboard](docs/dashboard.md)
+- [Integrations](docs/integrations.md) and [Recommendations](docs/recommendations.md)
 - [API guide](docs/api.md)
 - [MCP server](docs/mcp.md) and [MCP tools and resources](docs/mcp-tools.mdx)
 

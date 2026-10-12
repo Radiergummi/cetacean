@@ -2,18 +2,15 @@
 title: MCP tools and resources
 description: Reference for the resources, tools, prompts, and widgets Cetacean's MCP server exposes to an agent.
 category: reference
-tags: [ mcp, ai, agents, tools, reference ]
+tags: [mcp, ai, agents, tools, reference]
 ---
-
-
-
 
 import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
 This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 27 tools, 6 prompts, and 5
-widgets. For enabling the server, authorization, and configuration, see [MCP Server][mcp].
+widgets. For enabling the server, authorization, and configuration, see [MCP server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] isn't
 registered at all; a tool or resource the identity holds no grant for is hidden from the listing and refused at
@@ -21,13 +18,13 @@ call time.
 
 ## Tools
 
-Tools are gated by operations level ([`mcp.operations_level`][mcp.operations_level], inheriting `operations_level`)
-and by per-resource ACL write permission. Every MCP tool requires the same operations level as the API route for
+Tools are gated by operations level ([`mcp.operations_level`][mcp.operations_level], inheriting `server.operations_level`)
+and by per-resource write grants. Every MCP tool requires the same operations level as the API route for
 the same operation, so there's no MCP-specific scheme to learn.
 
-Each tool advertises the behavioural hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
+Each tool advertises the behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
 `openWorldHint`) clients use to gate confirmation prompts and an output schema the server validates results
-against. Mutating tools return `409` when someone else changed the resource first.
+against. A mutating tool returns an error when someone else changed the resource first, so re-read it and retry.
 
 > [!CAUTION]
 > Removals are irreversible: no spec history is retained after a service removal, and a config, secret, or
@@ -224,21 +221,18 @@ data it was writing to a dropped mount.
 
     Changes one section of a service's spec. `section` takes one of ten names, and `value` that section's new value:
 
-    | Section | Value | Semantics |
+    | Section           | Value                  | Semantics                                                                                                                                                                                             |
     |-------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-    | `env` | Merge-patch object | A string sets a key, `null` deletes it, an omitted key is preserved |
-    | `labels` | Merge-patch object | Same as `env`; the only service section that doesn't trigger a rolling deploy, along
-    with the two policies |
-    | `resources` | `ResourceRequirements` | CPU and memory limits and reservations |
-    | `placement` | `Placement` | Constraints, preferences, max replicas per node, platforms; may reschedule tasks |
-    | `ports` | Array of `PortConfig` | Drops connections to any port it removes or remaps |
-    | `update-policy` | `UpdateConfig` | Applies to the next spec change |
-    | `rollback-policy` | `UpdateConfig` | Applies to `rollback_service` |
-    | `log-driver` | `Driver` | Name plus options; routes subsequent log lines |
-    | `healthcheck` | Probe | `test` as an array (`["CMD-SHELL", "curl -f localhost \|\| exit 1"]`), plus `interval`,
-    `timeout`, `startPeriod`, `retries`. Durations are strings such as `"10s"`. An empty `test` removes the check |
-    | `command` | `command` plus `args` | The entrypoint and what follows it, the split Docker makes. Omitting one
-    clears it |
+    | `env`             | Merge-patch object     | A string sets a key, `null` deletes it, an omitted key is preserved                                                                                                                                   |
+    | `labels`          | Merge-patch object     | Same as `env`; the only service section that doesn't trigger a rolling deploy, along with the two policies                                                                                            |
+    | `resources`       | `ResourceRequirements` | CPU and memory limits and reservations                                                                                                                                                                |
+    | `placement`       | `Placement`            | Constraints, preferences, max replicas per node, platforms; may reschedule tasks                                                                                                                      |
+    | `ports`           | Array of `PortConfig`  | Drops connections to any port it removes or remaps                                                                                                                                                    |
+    | `update-policy`   | `UpdateConfig`         | Applies to the next spec change                                                                                                                                                                       |
+    | `rollback-policy` | `UpdateConfig`         | Applies to `rollback_service`                                                                                                                                                                         |
+    | `log-driver`      | `Driver`               | Name plus options; routes subsequent log lines                                                                                                                                                        |
+    | `healthcheck`     | Probe                  | `test` as an array (`["CMD-SHELL", "curl -f localhost \|\| exit 1"]`), plus `interval`, `timeout`, `startPeriod`, `retries`. Durations are strings such as `"10s"`. An empty `test` removes the check |
+    | `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
 
     Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
 
@@ -338,7 +332,7 @@ Where work is allowed to run, and who votes in Raft.
 
 ## Resources
 
-Resources are read-only views returned as `application/json`. Three are static, nine are URI templates.
+Resources are read-only views returned as `application/json`. Three are static, eleven are URI templates.
 
 | URI                          | Contents                                                                                                                                                                                                                  |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -353,25 +347,25 @@ cores.
 Templated resources return the same compact digest the `describe` tool builds. The exceptions are
 `services/{id}/logs`, a raw log stream, and the two `compose` documents, which are YAML rather than JSON.
 
-| URI template                    | Contents                                                                        |
-|---------------------------------|---------------------------------------------------------------------------------|
-| `cetacean://nodes/{id}`         | Node digest, by ID or hostname                                                  |
-| `cetacean://services/{id}`      | Service digest, by ID or name, with cross-references                            |
-| `cetacean://services/{id}/logs` | Service logs merged across replicas, subscribable; not a digest                 |
+| URI template                       | Contents                                                                        |
+|------------------------------------|---------------------------------------------------------------------------------|
+| `cetacean://nodes/{id}`            | Node digest, by ID or hostname                                                  |
+| `cetacean://services/{id}`         | Service digest, by ID or name, with cross-references                            |
+| `cetacean://services/{id}/logs`    | Service logs merged across replicas, subscribable; not a digest                 |
 | `cetacean://services/{id}/compose` | The service as a one-service Compose file; everything it references is external |
-| `cetacean://tasks/{id}`         | Task digest; the parent service and node are in `related`, not top-level fields |
-| `cetacean://stacks/{name}`      | Stack digest, rolling up its member resources                                   |
+| `cetacean://tasks/{id}`            | Task digest; the parent service and node are in `related`, not top-level fields |
+| `cetacean://stacks/{name}`         | Stack digest, rolling up its member resources                                   |
 | `cetacean://stacks/{name}/compose` | The stack as a Compose file; secrets and configs are referenced, never exported |
-| `cetacean://configs/{id}`       | Config digest; the payload's size in bytes, never the payload                   |
-| `cetacean://secrets/{id}`       | Secret digest; the payload is never read, not even its length                   |
-| `cetacean://networks/{id}`      | Network digest, with the attached services                                      |
-| `cetacean://volumes/{name}`     | Volume digest, keyed by name                                                    |
+| `cetacean://configs/{id}`          | Config digest; the payload's size in bytes, never the payload                   |
+| `cetacean://secrets/{id}`          | Secret digest; the payload is never read, not even its length                   |
+| `cetacean://networks/{id}`         | Network digest, with the attached services                                      |
+| `cetacean://volumes/{name}`        | Volume digest, keyed by name                                                    |
 
 ### Subscriptions
 
 Clients call `resources/subscribe` with a URI. When the underlying cluster state changes, the server sends
 `notifications/resources/updated` for that URI and the client re-reads.
-`notifications/resources/list_changed` fires when resources are created or removed. Both are ACL-filtered per
+`notifications/resources/list_changed` fires when resources are created or removed. Both are filtered by grants per
 notification: a client is only notified about resources its identity can read.
 
 ### Argument completion
@@ -429,12 +423,12 @@ per row, `describe` a `raw` object beside the digest.
 
 Prompts are named sequences a client offers from a menu. Picking one seeds the conversation with an
 investigation or a runbook. A prompt only seeds the conversation; every read and write it then describes goes
-through the normal tools, ACL checks included.
+through the normal tools, grant checks included.
 
 A prompt's level is the highest level of the tools it walks, so it's never offered where one of its steps
-would be refused. At the default level 1 you get the three diagnostic prompts plus `roll_back_service`.
+would be refused. At the default level 0 you get the three diagnostic prompts; level 1 adds `roll_back_service`.
 
-Prompts are filtered by ACL too, all or nothing: you are offered a prompt only if you can use every tool it
+Prompts are filtered by grants too, all or nothing: you are offered a prompt only if you can use every tool it
 walks and can read every resource type in its Reads column. A caller whose grants match nothing is offered
 none.
 
@@ -477,8 +471,8 @@ so a widget shows exactly what the calling identity's grants allow.
 [mcp.operations_level]:  configuration#mcp.operations_level
 [mcp.resources]:  mcp-tools#resources
 [mcp.tools.find]:  mcp-tools#find
-[mcp.tools.get_topology]:  mcp-tools#get_topology
 [mcp.tools.get_logs]:  mcp-tools#get_logs
+[mcp.tools.get_topology]:  mcp-tools#get_topology
 [mcp.tools.get_metrics]:  mcp-tools#get_metrics
 [mcp.tools.get_recommendations]:  mcp-tools#get_recommendations
 [operations-level]:  configuration#operations-level

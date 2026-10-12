@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
-- `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document—the channels, the messages each carries, and which cursor dialect its `id:` uses. Sixteen streams were previously described nowhere
+- `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document: its channels, messages, and cursor format
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
 - Any list can be downloaded as CSV—add `.csv` to the URL or ask for `text/csv`. Search, filters, and sorting apply; a download that asks for no page gets every row
 - The dashboard is installable as an app, with icons and a theme color that follows its own background
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /` answers a JSON client with an entry point naming every collection, so a deployment's address is enough to find the rest of the API; browsers still get the dashboard
 - Resources can be addressed by name as well as by ID: `GET /services/shop_web` redirects to its ID-addressed URL. The redirect keeps the method and body, so writes work by name with `curl -L`
 - Write operations accept an optional `If-Match` header and refuse with 412 if the resource changed since you read it
-- `Prefer: wait=30` holds a service write open until the cluster settles, answering `202 Accepted` with the rollout's progress if it runs out. `Prefer: respond-async` acknowledges immediately
+- `Prefer: wait` holds a service write open until the cluster settles, and `Prefer: respond-async` acknowledges it immediately
 - JSON, Atom feeds and topology exports above a kilobyte are served as zstd or gzip when the client accepts one
 - Cross-site request forgery protection covers every write. An origin must be in `server.cors.origins`; `server.public_url` is trusted automatically. A wildcard can't grant writes, so a read-everything deployment must now name its writers
 - Client certificate authentication works behind a TLS-terminating proxy that forwards the certificate in `Client-Cert` (RFC 9440)
@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** refresh tokens and approvals now live in `oauth-tokens.json` under `storage.data_dir`. The former `mcp-tokens.json` isn't read—delete it, and every client authorizes once more
 - **Breaking:** the `refresh_token` grant at `/oauth/token` requires `client_id`; a request without it is refused with `invalid_request`
 - Clients that registered dynamically stay registered across a restart, instead of having to register again
-- `/oauth/register` rejects oversized client metadata: a client name over 256 bytes, more than 10 redirect URIs, or a redirect URI over 2048 bytes
+- `/oauth/register` rejects a client name over 256 bytes, more than 10 redirect URIs, or a redirect URI over 2048 bytes
 - `/oauth/register` accepts only `token_endpoint_auth_method: none`; any other value is refused rather than stored and treated as public
 - **Upgrade note:** `X-Forwarded-Proto` and `X-Forwarded-Host` are honored only from an address in `server.trusted_proxies`. Behind a proxy without it set, absolute URLs now name the internal address—set `server.public_url` or list the proxy
 - Search, the resource lists and the topology view are faster on clusters with hundreds of services, and a stack's event stream costs less per connected browser
@@ -56,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Access tokens are signed with ES256 rather than HMAC, and the key is derived differently, so the published `kid` changes. Clients refresh once on upgrade; stop every replica before starting the new version
 - An endpoint with only one representation no longer answers 406 to an `Accept` header it doesn't recognize
 - **Breaking:** `server.operations_level` defaults to `0`, read-only. A deployment that never set it could perform operational writes, and on `auth.mode=none` could do so unauthenticated—set it to `1` to keep that
-- **Breaking:** A refused request answers `403` rather than `401` under `cert`, `tailscale`, and `headers`—no challenge can ask for the credential those modes read
+- **Breaking:** a refused request answers `403` rather than `401` under `cert`, `tailscale`, and `headers`—no challenge can ask for the credential those modes read
 - Signing in from an address ending in `.atom`, `.csv`, or `.json` returns to that resource's page, not the file
 
 ### Removed
@@ -75,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A repeated RFC 8707 `resource` parameter is refused with `invalid_target` instead of binding the token to whichever came first
 - A 401 names where a token comes from even when the request carried no credential, and no longer calls that `invalid_token`—RFC 6750 reserves that for a token actually sent, so cold discovery works off the challenge
 - An ACL grant written against an email address matches a token as well as a browser session. MCP clients were silently denied everything such a grant allowed
-- Refresh-token theft detection works in the configuration everyone runs: a replayed token revokes the grant family and the remembered approval, where two separate checks refused the request before detection could run
+- Refresh-token theft detection now runs: a replayed token revokes its grant family and the remembered approval
 - Everything that doesn't describe the cluster keeps working while the Docker daemon is unreachable—the dashboard's own icons and manifest, the API catalog, the OpenSearch description, `/profile`, and the OAuth endpoints that issue a token
 - A Docker Engine too old for Cetacean says so at startup instead of coming up and serving empty pages. Cetacean speaks Docker API 1.46, which means Engine 26.1 or newer
 - A recommendation that measured zero no longer reads as one that measured nothing—a service using essentially no CPU reported an empty `current`
@@ -90,14 +90,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A format an `Accept` header rules out with `;q=0` is refused with `406` instead of served anyway
 - `/favicon.ico` and the dashboard's other static files are no longer refused with `406` when a client asks for them as an image
 - Deep links into a service whose name contains a dot, such as `/services/web.api/logs`, open instead of answering 404
-- `/index.html` opens behind a hardened reverse proxy. It redirected to `/.html`, a dot-segment path nginx and Apache refuse by default, and the redirect was permanent; both spellings now serve the entry point directly
+- `/index.html` opens behind a hardened reverse proxy, instead of redirecting to a path nginx and Apache refuse
 - A transient hiccup in the five-minutely re-sync no longer reports the cluster as unreachable for the next five minutes. The stream ending is what marks a disconnection; a stalled cache still shows as stale
 - A cluster operation run as an MCP task can no longer outlive the process. Detaching it from the request dropped its deadline too, so a wedged Docker call held its goroutine and its connection open forever
 - A write that loses a race answers `409` naming the conflict, instead of a bare `500 Docker Engine Error`
 - A `PATCH` to a service's resources, health check, update policy, rollback policy, log driver, or container config no longer discards an edit made just before it
 - Every identifier a response hands out works under `server.base_path`. Listings and a task's links to its service and node no longer lead outside the deployment to a 404
-- Relabelling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
-- `POST /-/resync` requires authentication. It's still not gated on the operations level, so a read-only deployment keeps its refresh button
+- Relabeling a node needs operations level 2 over the API, matching MCP. It was gated with draining and demoting
+- `POST /-/resync` requires authentication but not an operations level, so a read-only deployment keeps its refresh button
 - A task no longer sits at `starting` for minutes after it's running, which also left the running count short and anything waiting for a service to settle waiting
 - Recommendations are complete right after a restart, instead of missing every sizing finding for the first five minutes
 - A rolling update no longer truncates whatever was in flight: shutdown waits up to five seconds for in-flight requests
@@ -121,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Deploying as a stack no longer needs an overlay network created first—`docker stack deploy -c compose.yaml cetacean` stands alone. Add `-c compose.prometheus.yaml` to connect the bundled Prometheus
-- Status colours are consistent across the dashboard and adapt to dark mode, drawing from one palette of five meanings
+- Status colors are consistent across the dashboard and adapt to dark mode, drawing from one palette of five meanings
 - The service and stack lists head their rollout column **Rollout** rather than **Status**, and no longer color a settled rollout green—it reports Docker's update state, not whether the service is running
 - MCP tools advertise the values each argument accepts, so a client can offer them. `get_logs` gained the `fatal` level
 - The MCP tool reference gives every tool its own linkable entry rather than a table per operations level
@@ -273,7 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP authorization metadata is also served at the OpenID Connect discovery path, for clients that look there
 - The MCP endpoint rejects a request carrying a disallowed `Origin` with 403, a DNS-rebinding defense. The allowlist is `CETACEAN_CORS_ORIGINS`; non-browser clients send no `Origin` and are unaffected
 - MCP tools return machine-readable results alongside the text form, so an agent need not scrape JSON out of a blob
-- Every MCP tool and resource carries a title, a description of when to use it, behavioural hints and an icon, so clients can render confirmation prompts accurately
+- Every MCP tool and resource carries a title, a description of when to use it, behavioral hints and an icon, so clients can render confirmation prompts accurately
 - The MCP server describes itself on connect: the read-mostly model, that writes are gated by operations tier and ACL, and to resolve a resource before acting on it
 - Open-source licenses page, linked from the footer, listing every bundled Go module and frontend dependency with search and per-ecosystem filtering. The bill of materials is at `/-/sbom.cdx.json`
 

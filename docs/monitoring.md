@@ -10,11 +10,11 @@ tags: [monitoring, prometheus, node-exporter, cadvisor, metrics]
 Cetacean runs without Prometheus. Without it you lose CPU and memory charts, resource gauges, capacity bars,
 per-task sparklines, stack drill-downs, and every sizing [recommendation][recommendations].
 
-| Component                                                        | Provides                               | Unlocks                                                    |
-| ---------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
-| [Prometheus](https://prometheus.io/)                             | Stores and queries metrics             | Anything metrics-related at all                            |
-| [node-exporter](https://github.com/prometheus/node_exporter)     | Host metrics (CPU, memory, disk)       | Node gauges, cluster capacity bars                         |
-| [cAdvisor](https://github.com/google/cadvisor)                   | Container metrics                      | Per-service charts, per-task sparklines, stack drill-downs |
+| Component                                                    | Provides                         | Unlocks                                                    |
+| ------------------------------------------------------------ | -------------------------------- | ---------------------------------------------------------- |
+| [Prometheus](https://prometheus.io/)                         | Stores and queries metrics       | Anything metrics-related at all                            |
+| [node-exporter](https://github.com/prometheus/node_exporter) | Host metrics (CPU, memory, disk) | Node gauges, cluster capacity bars                         |
+| [cAdvisor](https://github.com/google/cadvisor)               | Container metrics                | Per-service charts, per-task sparklines, stack drill-downs |
 
 ## Setup
 
@@ -47,8 +47,8 @@ The stack runs Prometheus on a manager node, with node-exporter and cAdvisor on 
 
 ## What Cetacean needs from the scrape
 
-If you already run Prometheus, set `prometheus.url` and check the scrape against the three requirements that follow. The
-bundled `prometheus.yml` and `compose.monitoring.yaml` already satisfy all three.
+If you already run Prometheus, set `prometheus.url` and check the scrape against the three requirements that
+follow. The bundled `prometheus.yml` and `compose.monitoring.yaml` already satisfy all three.
 
 ```mermaid
 flowchart TB
@@ -114,7 +114,8 @@ you are in, count the labeled series:
 count(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name!=""})
 ```
 
-One or zero means the factory didn't register. `docker service logs monitoring_cadvisor` names the socket it couldn't reach.
+One or zero means the factory didn't register. `docker service logs monitoring_cadvisor` names the socket it
+couldn't reach.
 
 ### ③ The cAdvisor scrape job must be named `cadvisor`
 
@@ -126,11 +127,11 @@ as unavailable and skips them on the service, task, and node pages. node-exporte
 
 The cluster overview and the metrics console show a banner when something is missing:
 
-| State                | Shown when                                                       | Banner                                                                          |
-| -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Healthy              | Prometheus answers and both exporters cover every node           | Nothing                                                                         |
-| Not configured       | `prometheus.url` is unset                                        | Deploy instructions. Dismissible                                                |
-| Unreachable          | `prometheus.url` is set but queries fail                         | Warning with the connection error. Not dismissible                              |
+| State                | Shown when                                                       | Banner                                                                         |
+| -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Healthy              | Prometheus answers and both exporters cover every node           | Nothing                                                                        |
+| Not configured       | `prometheus.url` is unset                                        | Deploy instructions. Dismissible                                               |
+| Unreachable          | `prometheus.url` is set but queries fail                         | Warning with the connection error. Not dismissible                             |
 | Partially configured | Prometheus answers, but an exporter covers no nodes or only some | One line per exporter naming what's missing and on how many nodes. Dismissible |
 
 The [MCP][mcp-tools] `get_metrics` tool reports the same gap rather than charting zeros. When every series comes
@@ -158,7 +159,31 @@ scrape_configs:
 
 Turn it off with [`server.self_metrics`][server.self_metrics].
 
+> [!WARNING]
+> `/-/metrics` skips [authentication][authentication], like the other `/-/*` paths. Keep it on the overlay network
+> your Prometheus shares with Cetacean, or turn it off.
+
+Three of these metrics say whether Cetacean is still tracking the cluster, which is what the dashboard's **Stale**
+indicator reports:
+
+| Metric                                       | Meaning                                                     |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| `cetacean_watcher_connected`                 | `1` while the Docker event stream is up, `0` while retrying |
+| `cetacean_cache_last_sync_timestamp_seconds` | When the last full sync with Docker succeeded               |
+| `cetacean_cache_sync_failures_total`         | Full syncs that failed                                      |
+
+Alert on the first, since a frozen dashboard is worse than a missing one:
+
+```yaml
+- alert: CetaceanLostDocker
+  expr: cetacean_watcher_connected == 0
+  for: 5m
+```
+
+The same state is available without Prometheus as the body of `GET /-/health`; see the [API reference][api].
+
 [api]: api
+[authentication]: authentication#exempt-paths
 [config-file]: configuration#config-file
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
