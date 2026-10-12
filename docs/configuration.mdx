@@ -394,10 +394,10 @@ atomic, so a crash mid-write can't corrupt the file.
 
 Two meta endpoints, exempt from authentication and content negotiation:
 
-| Endpoint        | Behavior                                        | Use for                              |
-|-----------------|-------------------------------------------------|--------------------------------------|
-| `GET /-/health` | Always 200 if the process is running            | Uptime monitoring, restart policies  |
-| `GET /-/ready`  | 200 after the first Docker sync; 503 until then | Load balancers, Docker health checks |
+| Endpoint        | Behavior                                                        | Use for                              |
+|-----------------|-----------------------------------------------------------------|--------------------------------------|
+| `GET /-/health` | Always 200 if the process is running                            | Uptime monitoring, restart policies  |
+| `GET /-/ready`  | 200 after the first sync that reaches the swarm; 503 until then | Load balancers, Docker health checks |
 
 `GET /-/health` also reports the version, the operations level, and whether Cetacean is still tracking the cluster;
 the [API][api] page has the fields.

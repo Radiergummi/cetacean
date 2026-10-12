@@ -126,7 +126,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /metrics` and `GET /metrics/labels` answer while Docker is unreachable
 - `manager-has-workloads` is raised only when a ready, active worker could take the manager's tasks, and `get_recommendations` no longer offers `update_node` as its fix
 - JSON log reads are capped like log streams (`429 LOG009`), and a `Prefer: wait` past its cap is answered as `respond-async` with a `Retry-After`
-- Pointed at a swarm worker instead of a manager, Cetacean reports itself not ready instead of serving an empty cluster as healthy
 - Pointed at a swarm worker, or at a manager before its swarm has a leader, Cetacean reports itself not ready until the swarm answers, instead of serving an empty cluster as healthy
 - The monitoring banner fits a phone screen, and the bundled monitoring stack pins cAdvisor to a release and digest instead of `latest`
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together

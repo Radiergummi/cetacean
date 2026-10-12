@@ -141,7 +141,8 @@ func (w *Watcher) waitForSettles() {
 }
 
 // Ready returns a channel that is closed after the watcher's first successful
-// full sync, startup or periodic; a manual resync does not count.
+// full sync, whichever of startup, reconnect or periodic reaches it first; a
+// manual resync does not count.
 func (w *Watcher) Ready() <-chan struct{} {
 	return w.ready
 }
@@ -188,8 +189,8 @@ func (w *Watcher) writeSnapshot() {
 
 // fullSync re-reads the cluster where no stream is yet proven — at startup and
 // on reconnect — so its outcome speaks for whether the engine is reachable at
-// all. The periodic tick inside watchEvents runs beside a live stream and does
-// not.
+// all. The periodic tick inside watchEvents speaks for it too on success, via
+// markTracking; only a failed periodic sync is left out.
 func (w *Watcher) fullSync(ctx context.Context) error {
 	if err := w.sync(ctx); err != nil {
 		w.setConnected(false)
@@ -333,7 +334,8 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	defer w.loopRunning.Store(false)
 
 	// Only the disconnection: Events returns its channels before the request
-	// behind them is made, so fullSync's success is what proves reachability.
+	// behind them is made, so a successful sync — fullSync's or the periodic
+	// tick's — is what proves reachability, not this call returning.
 	defer w.setConnected(false)
 
 	pending := make(map[eventKey]coalesced)
