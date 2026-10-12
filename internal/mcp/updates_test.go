@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -369,7 +370,7 @@ func TestUpdateServicePortsRejectsAPortWithNoTarget(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	if err := validatePorts(ports); err == nil {
+	if err := cluster.ValidatePorts(ports); err == nil {
 		t.Error("a port with TargetPort 0 was accepted")
 	}
 }
