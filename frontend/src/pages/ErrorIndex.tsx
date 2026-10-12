@@ -6,10 +6,8 @@ import { getErrorMessage } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-type ErrorDef = ErrorDefinition;
-
 export default function ErrorIndex() {
-  const [errors, setErrors] = useState<ErrorDef[] | null>(null);
+  const [errors, setErrors] = useState<ErrorDefinition[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,7 +47,7 @@ export default function ErrorIndex() {
     SEC: "Secrets",
   };
 
-  const grouped = new Map<string, ErrorDef[]>();
+  const grouped = new Map<string, ErrorDefinition[]>();
   for (const definition of errors) {
     const prefix = definition.code.slice(0, 3);
     const list = grouped.get(prefix);

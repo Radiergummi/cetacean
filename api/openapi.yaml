@@ -1686,7 +1686,9 @@ paths:
       operationId: getDiskUsage
       tags: [Cluster]
       summary: Docker disk usage
-      description: Summarized disk usage by category (images, containers, volumes, build cache).
+      description: >-
+        Summarized disk usage by category (images, containers, volumes, build cache).
+        The result is shared between callers and can be up to 30 seconds old.
       responses:
         "200":
           description: Disk usage summaries

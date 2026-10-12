@@ -849,8 +849,9 @@ func serveDualListeners(
 	}()
 
 	// Start meta server in background
-	// Exits like the main listener does: without it the image's HEALTHCHECK
-	// has nothing to reach, and Swarm restarts a container it cannot see.
+	// Exits like the main listener does: an exit fails the task at once, where a
+	// failing HEALTHCHECK takes the start period plus its retries, and outside
+	// Swarm nothing restarts a container for being unhealthy.
 	go func() {
 		slog.Info("meta server started", "addr", cfg.ListenAddr)
 		if tlsCfg.Enabled() {

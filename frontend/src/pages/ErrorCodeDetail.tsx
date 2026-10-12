@@ -6,11 +6,9 @@ import { getErrorMessage } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-type ErrorDef = ErrorDefinition;
-
 export default function ErrorCodeDetail() {
   const { code } = useParams<{ code: string }>();
-  const [errorDef, setErrorDef] = useState<ErrorDef | null>(null);
+  const [errorDef, setErrorDef] = useState<ErrorDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

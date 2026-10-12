@@ -9,8 +9,6 @@ vi.mock("@/api/client", async (importOriginal) => ({
   api: { errorDefinitions: vi.fn<() => Promise<unknown>>() },
 }));
 
-// Through the shared client, so an expired session redirects to sign-in here
-// as it does everywhere else.
 describe("ErrorIndex", () => {
   it("lists the definitions the client returns", async () => {
     vi.mocked(api.errorDefinitions).mockResolvedValue([

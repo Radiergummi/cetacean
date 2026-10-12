@@ -366,15 +366,20 @@ type DiskUsageSummary struct {
 	Reclaimable int64  `json:"reclaimable"`
 }
 
-// diskUsageTTL is how long a disk usage result is reused. The daemon walks
-// every image, container and volume to answer, and any grant may ask.
-const diskUsageTTL = 30 * time.Second
+const (
+	// diskUsageTTL is how long a disk usage result is reused. The daemon walks
+	// every image, container and volume to answer, and any grant may ask.
+	diskUsageTTL      = 30 * time.Second
+	diskUsageErrorTTL = 5 * time.Second
+	diskUsageTimeout  = 10 * time.Second
+)
 
-// diskUsageCache holds the last result; the lock is held across a fetch, so a
-// burst of callers waits for one daemon call instead of starting one each.
+// diskUsageCache holds the last result, failures included; the lock is held
+// across a fetch, so a burst of callers waits for one daemon call.
 type diskUsageCache struct {
 	mu        sync.Mutex
 	value     types.DiskUsage
+	err       error
 	fetchedAt time.Time
 }
 
@@ -385,18 +390,23 @@ func (c *diskUsageCache) get(
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.fetchedAt.IsZero() && time.Since(c.fetchedAt) < diskUsageTTL {
-		return c.value, nil
+	ttl := diskUsageTTL
+	if c.err != nil {
+		ttl = diskUsageErrorTTL
 	}
 
-	value, err := fetch(ctx)
-	if err != nil {
-		return value, err
+	if !c.fetchedAt.IsZero() && time.Since(c.fetchedAt) < ttl {
+		return c.value, c.err
 	}
 
-	c.value, c.fetchedAt = value, time.Now()
+	// Detached: callers queued on the lock share the result, so one leaving must not fail it.
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), diskUsageTimeout)
+	defer cancel()
 
-	return value, nil
+	c.value, c.err = fetch(fetchCtx)
+	c.fetchedAt = time.Now()
+
+	return c.value, c.err
 }
 
 func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
@@ -409,10 +419,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-
-	du, err := h.diskUsage.get(ctx, h.systemClient.DiskUsage)
+	du, err := h.diskUsage.get(r.Context(), h.systemClient.DiskUsage)
 	if err != nil {
 		slog.Error("disk usage failed", "error", err)
 		writeErrorCode(w, r, "SWM005", "disk usage failed")
