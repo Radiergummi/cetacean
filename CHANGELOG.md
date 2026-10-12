@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Saving the structured Traefik editor no longer deletes labels it doesn't show, such as TCP routers or `tls.options`, and a save without changes writes nothing
 - A Traefik `tls.domains[N]` label with a huge index no longer stalls a service's detail page
 - Links into the online demo, such as `/demo/nodes`, open the demo when shared or reloaded, its pages update live, and a badge marks the cluster as simulated
+- A `?filter=` expression that takes too long, grows a string past 1 MiB, or runs a costly pattern over a list is refused with `400 FLT004`, so one request can no longer hold a CPU core or its memory
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
