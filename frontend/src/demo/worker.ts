@@ -15,7 +15,7 @@ export { dataset, clients };
  */
 export async function startDemo() {
   await worker.start({
-    onUnhandledRequest: "bypass",
+    onUnhandledFrame: "bypass",
     serviceWorker: { url: "/demo/mockServiceWorker.js" },
   });
   startSimulator(dataset, clients);
