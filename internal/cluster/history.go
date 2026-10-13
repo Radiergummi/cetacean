@@ -1,15 +1,12 @@
-package mcp
+package cluster
 
-import (
-	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
-)
+import "github.com/radiergummi/cetacean/internal/cache"
 
-// nameHistoryTasks replaces the name on task history entries with the one Swarm
+// NameHistoryTasks replaces the name on task history entries with the one Swarm
 // shows. cache.ExtractName must keep recording a task's ID as its name, since
 // every read-side permission check is keyed on it — so this runs after
 // filtering, for presentation only. Naming is best-effort and falls back.
-func nameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.HistoryEntry {
+func NameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.HistoryEntry {
 	named := make([]cache.HistoryEntry, len(entries))
 	copy(named, entries)
 
@@ -24,7 +21,7 @@ func nameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.Hist
 
 		name, ok := names[e.ResourceID]
 		if !ok {
-			name = taskDisplayName(c, e.ResourceID)
+			name = TaskDisplayName(c, e.ResourceID)
 			names[e.ResourceID] = name
 		}
 
@@ -34,9 +31,9 @@ func nameHistoryTasks(c *cache.Cache, entries []cache.HistoryEntry) []cache.Hist
 	return named
 }
 
-// taskDisplayName resolves one task ID to "<service>.<slot>", falling back to
+// TaskDisplayName resolves one task ID to "<service>.<slot>", falling back to
 // the ID when either record has already gone.
-func taskDisplayName(c *cache.Cache, taskID string) string {
+func TaskDisplayName(c *cache.Cache, taskID string) string {
 	task, ok := c.GetTask(taskID)
 	if !ok {
 		return taskID
@@ -47,5 +44,5 @@ func taskDisplayName(c *cache.Cache, taskID string) string {
 		return taskID
 	}
 
-	return cluster.TaskName(task, &svc)
+	return TaskName(task, &svc)
 }
