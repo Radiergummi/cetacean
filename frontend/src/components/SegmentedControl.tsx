@@ -41,6 +41,7 @@ export default function SegmentedControl<T extends string>({
   size = "default",
   overflowIcon,
   overflowLabel,
+  overflowName = "More options",
   overflowActive,
   overflowContent,
 }: {
@@ -53,6 +54,8 @@ export default function SegmentedControl<T extends string>({
   overflowIcon?: ReactNode | undefined;
   /** Label shown next to the icon when the overflow is active. */
   overflowLabel?: ReactNode | undefined;
+  /** Accessible name for the overflow button while it shows no label. */
+  overflowName?: string | undefined;
   /** Whether the overflow button should appear in the active style. */
   overflowActive?: boolean | undefined;
   /** Custom popover content. Receives a `close` callback. When provided, the overflow button is always shown. */
@@ -112,6 +115,7 @@ export default function SegmentedControl<T extends string>({
         >
           <Menu.Trigger
             aria-current={isActive || undefined}
+            aria-label={overflowLabel || activeOverflow ? undefined : overflowName}
             className={cn(
               "inline-flex cursor-pointer items-center rounded-sm text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-current:bg-primary aria-current:text-primary-foreground aria-current:shadow-sm",
               scale.overflow,

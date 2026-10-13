@@ -1,6 +1,6 @@
 import SearchPalette from "./SearchPalette";
 import { api } from "@/api/client";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -63,6 +63,29 @@ describe("SearchPalette accessibility", () => {
       expect(active).toBeTruthy();
       expect(document.getElementById(active!)).toHaveAttribute("aria-selected", "true");
     });
+  });
+
+  it("names each result's state, not just its colour", async () => {
+    searchMock.mockResolvedValue({
+      results: {
+        services: [
+          { id: "s1", name: "api", detail: "nginx", state: "failed" },
+          { id: "s2", name: "web", detail: "nginx", state: "updating" },
+        ],
+      },
+      counts: { services: 2 },
+      total: 2,
+    } as Awaited<ReturnType<typeof api.search>>);
+    const user = userEvent.setup();
+    open();
+
+    await user.type(screen.getByRole("combobox"), "api");
+
+    const failed = await screen.findByRole("option", { name: /api/ }, { timeout: 3000 });
+    const updating = screen.getByRole("option", { name: /web/ });
+    expect(within(failed).getByRole("img", { name: "failed" })).toBeInTheDocument();
+    expect(updating).toHaveAccessibleName(/Updating/);
+    expect(within(updating).queryByRole("status")).not.toBeInTheDocument();
   });
 
   // Focus management is the half a fireEvent-based test cannot see: user-event

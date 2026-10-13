@@ -211,6 +211,7 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
         value={isCustomRange ? ("" as string) : range}
         onChange={(value) => setRange(value)}
         overflowIcon={<Calendar className="size-3" />}
+        overflowName="Custom range"
         overflowActive={isCustomRange}
         overflowLabel={
           isCustomRange ? (

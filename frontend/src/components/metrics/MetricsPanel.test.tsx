@@ -52,4 +52,9 @@ describe("MetricsPanel", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
     expect(screen.getByTitle("Pause live streaming")).toBeInTheDocument();
   });
+
+  it("names the custom range trigger", () => {
+    render(<MetricsPanel charts={charts} />, { wrapper });
+    expect(screen.getByRole("button", { name: "Custom range" })).toBeInTheDocument();
+  });
 });

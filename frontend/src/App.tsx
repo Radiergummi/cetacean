@@ -55,8 +55,18 @@ const VolumeList = lazy(() => import("./pages/VolumeList"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const Licenses = lazy(() => import("./pages/Licenses"));
 
-function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+  const [menuPathname, setMenuPathname] = useState(pathname);
+
+  // Any navigation closes the menu, including back and forward, which never
+  // pass through its links.
+  if (pathname !== menuPathname) {
+    setMenuPathname(pathname);
+    setMenuOpen(false);
+  }
+
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const navigate = useNavigate();
   const searchRef = useRef<GlobalSearchHandle>(null);

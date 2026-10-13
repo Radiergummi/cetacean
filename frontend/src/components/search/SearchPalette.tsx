@@ -14,20 +14,27 @@ import { getErrorMessage } from "../../lib/utils";
 import ResourceName from "../ResourceName";
 import { Spinner } from "../Spinner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ArrowRight, ChevronRight, Search, Zap } from "lucide-react";
+import { ArrowRight, ChevronRight, Loader2, Search, Zap } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 function StateOrb({ state }: { state: string }) {
   if (state === "updating") {
-    return <Spinner className="size-3 shrink-0 text-status-info" />;
+    return (
+      <Loader2
+        aria-label="Updating"
+        className="size-3 shrink-0 animate-spin text-status-info"
+      />
+    );
   }
 
   const color = statusColor(state);
 
   return (
     <span
+      role="img"
+      aria-label={state}
       className={`inline-block size-2 shrink-0 rounded-full ${color}`}
       title={state}
     />
