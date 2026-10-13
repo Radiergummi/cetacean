@@ -21,7 +21,7 @@ func TestServiceDigestReportsRestartCounts(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, running, nil, &ServiceRestarts{LastHour: 12, LastWeek: 840})
+	got := ServiceDigest(svc, running, nil, &ServiceRestarts{LastHour: 12, LastWeek: 840}, false)
 
 	if got.Restarts == nil {
 		t.Fatal("Restarts is nil; a caller cannot tell a flapping service from a healthy one")
@@ -43,7 +43,7 @@ func TestServiceDigestOmitsRestartsWhenUnknown(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 
-	got := ServiceDigest(svc, nil, nil, nil)
+	got := ServiceDigest(svc, nil, nil, nil, false)
 
 	if got.Restarts != nil {
 		t.Errorf("Restarts = %+v, want nil when no tracker was consulted", got.Restarts)
@@ -59,13 +59,46 @@ func TestServiceRestartsSeparatesRecentFromChronic(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 
-	newlyBroken := ServiceDigest(svc, nil, nil, &ServiceRestarts{LastHour: 20, LastWeek: 20})
-	longBroken := ServiceDigest(svc, nil, nil, &ServiceRestarts{LastHour: 20, LastWeek: 900})
+	newlyBroken := ServiceDigest(svc, nil, nil, &ServiceRestarts{LastHour: 20, LastWeek: 20}, false)
+	longBroken := ServiceDigest(svc, nil, nil, &ServiceRestarts{LastHour: 20, LastWeek: 900}, false)
 
 	if newlyBroken.Restarts.LastWeek != newlyBroken.Restarts.LastHour {
 		t.Error("a fault that started within the hour must not look chronic")
 	}
 	if longBroken.Restarts.LastWeek <= longBroken.Restarts.LastHour {
 		t.Error("a long-standing fault must be distinguishable from a new one")
+	}
+}
+
+// A crash loop caught with its replica up is "flapping", and says why: the
+// failure behind it is the reason, not a fault that is over.
+func TestServiceDigestExplainsAFlappingService(t *testing.T) {
+	one := uint64(1)
+	svc := swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "shop_flaky"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &one}},
+		},
+	}
+	tasks := []swarm.Task{
+		{ID: "t1", ServiceID: "svc1", Status: swarm.TaskStatus{State: swarm.TaskStateRunning}},
+		{
+			ID:        "t0",
+			ServiceID: "svc1",
+			Status: swarm.TaskStatus{
+				State: swarm.TaskStateFailed,
+				Err:   "task: non-zero exit (1)",
+			},
+		},
+	}
+
+	got := ServiceDigest(svc, tasks, nil, nil, true)
+
+	if got.State != "flapping" {
+		t.Errorf("State = %q, want flapping", got.State)
+	}
+	if got.Reason != "task: non-zero exit (1)" {
+		t.Errorf("Reason = %q, want the failure behind the loop", got.Reason)
 	}
 }

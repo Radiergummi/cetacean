@@ -81,7 +81,7 @@ var (
 			uri:         "cetacean://services/{id}",
 			name:        "service",
 			title:       "Service detail",
-			description: "Compact digest of one service by ID or name: derived state (running, pending, failed, updating) with the reason Swarm gave for an unhealthy one, desired and running replicas, image, reserved CPU in cores and memory in bytes, ports, placement constraints, environment variable names (never their values), the configs/secrets/networks/volumes it references, and the recent task failures behind a failing state. Same shape the describe tool returns; subscribe for updates. For the untouched service spec call describe with `raw: true`.",
+			description: "Compact digest of one service by ID or name: derived state (running, flapping, pending, failed, updating) with the reason Swarm gave for an unhealthy one, desired and running replicas, image, reserved CPU in cores and memory in bytes, ports, placement constraints, environment variable names (never their values), the configs/secrets/networks/volumes it references, and the recent task failures behind a failing state. Same shape the describe tool returns; subscribe for updates. For the untouched service spec call describe with `raw: true`.",
 		},
 		{
 			uri:         "cetacean://services/{id}/logs",

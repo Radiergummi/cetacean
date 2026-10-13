@@ -164,6 +164,7 @@ func PlacementGraph(
 	clusterNodes []swarm.Node,
 	tasks []swarm.Task,
 	services []swarm.Service,
+	flapping map[string]bool,
 ) TopologyGraph {
 	visibleNodes := make(map[string]struct{}, len(clusterNodes))
 	for _, n := range clusterNodes {
@@ -223,7 +224,10 @@ func PlacementGraph(
 	// a service that cannot be scheduled is exactly what an operator opens this
 	// view to find, and dropping it with its tasks would hide it.
 	for _, svc := range services {
-		nodes = append(nodes, serviceNode(svc, DeriveServiceState(svc, runningPerService[svc.ID])))
+		nodes = append(nodes, serviceNode(
+			svc,
+			DeriveServiceState(svc, runningPerService[svc.ID], flapping[svc.ID]),
+		))
 	}
 
 	edges := make([]TopologyEdge, 0, len(placed))

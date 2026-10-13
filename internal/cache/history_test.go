@@ -445,6 +445,36 @@ func TestListByResourceBeyondTheIndexRing(t *testing.T) {
 	}
 }
 
+// A service's timeline is mostly its tasks: a crash loop changes nothing on
+// the service itself. Both the index and the scan must return them.
+func TestListByResourceIncludesTheServicesTasks(t *testing.T) {
+	h := NewHistory(10000)
+
+	for range indexRingSize * 2 {
+		h.Append(HistoryEntry{Type: EventTask, ResourceID: "t", ServiceID: "svc1"})
+		h.Append(HistoryEntry{Type: EventTask, ResourceID: "u", ServiceID: "svc2"})
+	}
+	h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"})
+
+	for _, limit := range []int{10, 500} {
+		got := h.List(HistoryQuery{ResourceID: "svc1", Limit: limit})
+
+		if want := min(limit, indexRingSize*2+1); len(got) != want {
+			t.Errorf("limit %d: got %d entries, want %d", limit, len(got), want)
+		}
+
+		for _, e := range got {
+			if e.ResourceID != "svc1" && e.ServiceID != "svc1" {
+				t.Fatalf("limit %d: entry for %q leaked into svc1", limit, e.ResourceID)
+			}
+		}
+	}
+
+	if got := h.List(HistoryQuery{ResourceID: "t", Limit: 500}); len(got) != indexRingSize*2 {
+		t.Errorf("a task's own timeline: got %d entries, want %d", len(got), indexRingSize*2)
+	}
+}
+
 // Paging a single resource with a cursor must not stop at the index window
 // either. The Atom detail feeds page well under indexRingSize, so gating the
 // index on the limit alone left them reporting a resource's history exhausted

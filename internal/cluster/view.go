@@ -46,7 +46,11 @@ type Row struct {
 // are derived from tasks, not from the spec, so the counts come in — already
 // aggregated by cache.RunningTaskCounts under one read lock, rather than
 // cloning the whole task table here to reduce it to one integer per service.
-func RowsForServices(services []swarm.Service, running map[string]int) []Row {
+func RowsForServices(
+	services []swarm.Service,
+	running map[string]int,
+	flapping map[string]bool,
+) []Row {
 	rows := make([]Row, 0, len(services))
 
 	for _, svc := range services {
@@ -60,7 +64,7 @@ func RowsForServices(services []swarm.Service, running map[string]int) []Row {
 			Name:    svc.Spec.Name,
 			Type:    "service",
 			Stack:   svc.Spec.Labels["com.docker.stack.namespace"],
-			State:   DeriveServiceState(svc, running[svc.ID]),
+			State:   DeriveServiceState(svc, running[svc.ID], flapping[svc.ID]),
 			Detail:  image,
 			Desired: ReplicaCount(svc),
 			Running: running[svc.ID],
@@ -317,13 +321,14 @@ const maxRecentFailures = 5
 
 // ServiceDigest builds the detail view of one service. networks names its
 // attachments, which carry only an ID; an unmatched Target falls back to the
-// ID, since the slice may be ACL-filtered. restarts is passed in, nil included,
-// so this stays a pure function of the records handed to it.
+// ID, since the slice may be ACL-filtered. restarts and flapping are passed
+// in, nil included, so this stays a pure function of the records handed to it.
 func ServiceDigest(
 	svc swarm.Service,
 	tasks []swarm.Task,
 	networks []network.Summary,
 	restarts *ServiceRestarts,
+	flapping bool,
 ) Digest {
 	var (
 		running    int
@@ -390,7 +395,7 @@ func ServiceDigest(
 		failures = failures[:maxRecentFailures]
 	}
 
-	state := DeriveServiceState(svc, running)
+	state := DeriveServiceState(svc, running, flapping)
 
 	digest := Digest{
 		ID:             svc.ID,

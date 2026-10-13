@@ -168,13 +168,15 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 // stackStateRank orders service states from worst to best, so a single sorted
 // pass over a stack's members can find the worst one without a second scan
 // back through them to explain it.
-var stackStateRank = map[string]int{"failed": 0, "updating": 1, "pending": 2, "running": 3}
+var stackStateRank = map[string]int{
+	"failed": 0, "updating": 1, "pending": 2, "flapping": 3, "running": 4,
+}
 
 // StackDigest builds the detail view of one stack. A stack has no Swarm status,
 // so State and Reason derive from its members by the rule RowsForServices
 // applies, or a stack and its own services list could disagree. Related spans
 // all five member types, since a stack's membership crosses that many.
-func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
+func StackDigest(stack cache.StackDetail, tasks []swarm.Task, flapping map[string]bool) Digest {
 	// The same replica rule cache.RunningTaskCounts applies, so a stack's
 	// per-service counts and the service rows inside it cannot disagree: a
 	// task draining out of a rolling update reads Status.State: running for
@@ -200,7 +202,10 @@ func StackDigest(stack cache.StackDetail, tasks []swarm.Task) Digest {
 	)
 
 	for _, svc := range stack.Services {
-		members = append(members, member{svc: svc, state: DeriveServiceState(svc, running[svc.ID])})
+		members = append(members, member{
+			svc:   svc,
+			state: DeriveServiceState(svc, running[svc.ID], flapping[svc.ID]),
+		})
 		desiredTotal += ReplicaCount(svc)
 		runningTotal += running[svc.ID]
 

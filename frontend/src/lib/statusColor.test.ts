@@ -9,7 +9,7 @@ describe("statusTone", () => {
   });
 
   it("groups the failure states", () => {
-    for (const state of ["failed", "rejected", "down", "orphaned"]) {
+    for (const state of ["failed", "flapping", "rejected", "down", "orphaned"]) {
       expect(statusTone(state)).toBe("danger");
     }
   });

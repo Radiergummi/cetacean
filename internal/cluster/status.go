@@ -90,7 +90,7 @@ func BuildClusterStatus(
 
 	stalled := 0
 
-	for _, row := range RowsForServices(services, running) {
+	for _, row := range RowsForServices(services, running, snap.Flapping) {
 		svc := byID[row.ID]
 
 		// A stalled rollout is a rollout even though the service does not read
@@ -107,7 +107,7 @@ func BuildClusterStatus(
 
 		// Not exclusive with the above: a service failing mid-deploy is both a
 		// rollout and something wrong.
-		if row.State == "failed" || row.State == "pending" {
+		if row.State == "failed" || row.State == "pending" || row.State == "flapping" {
 			status.UnhealthyServices = append(status.UnhealthyServices, row)
 		}
 	}

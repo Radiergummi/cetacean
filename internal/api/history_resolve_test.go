@@ -50,6 +50,35 @@ func TestHandleHistoryResolvesANameToTheIDTheRingKeysBy(t *testing.T) {
 	}
 }
 
+// The dashboard asks for a service's timeline with type=service; a crash loop
+// changes only the service's tasks, and those have to come back with it.
+func TestHandleHistoryForAServiceIncludesItsTasks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_flaky"}},
+	})
+	c.SetTask(swarm.Task{
+		ID:        "t1",
+		ServiceID: "svc1",
+		Status:    swarm.TaskStatus{State: swarm.TaskStateFailed},
+	})
+	c.SetTask(swarm.Task{ID: "t2", ServiceID: "other"})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/history?type=service&resourceId=shop_flaky", nil)
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	items := historyItems(t, w)
+	if len(items) != 2 {
+		t.Fatalf("got %d entries, want the service and its task: %+v", len(items), items)
+	}
+	if items[0].ResourceID != "t1" || items[0].Type != cache.EventTask {
+		t.Errorf("newest = %+v, want task t1", items[0])
+	}
+}
+
 // Without a type the search spans every type, so the one name the dashboard
 // cannot label still resolves as long as nothing else claims it.
 func TestHandleHistoryResolvesANameWithoutAType(t *testing.T) {

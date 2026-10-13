@@ -15,6 +15,7 @@ func TestDeriveServiceState(t *testing.T) {
 		name         string
 		svc          swarm.Service
 		runningCount int
+		flapping     bool
 		want         string
 	}{
 		{
@@ -109,11 +110,48 @@ func TestDeriveServiceState(t *testing.T) {
 			runningCount: 2,
 			want:         "updating",
 		},
+		{
+			name: "replicated crash loop caught running",
+			svc: swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{
+						Replicated: &swarm.ReplicatedService{Replicas: replicas(1)},
+					},
+				},
+			},
+			runningCount: 1,
+			flapping:     true,
+			want:         "flapping",
+		},
+		{
+			name: "global crash loop",
+			svc: swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}},
+				},
+			},
+			runningCount: 2,
+			flapping:     true,
+			want:         "flapping",
+		},
+		{
+			name: "crash loop caught down stays failed",
+			svc: swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{
+						Replicated: &swarm.ReplicatedService{Replicas: replicas(1)},
+					},
+				},
+			},
+			runningCount: 0,
+			flapping:     true,
+			want:         "failed",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := cluster.DeriveServiceState(tc.svc, tc.runningCount)
+			got := cluster.DeriveServiceState(tc.svc, tc.runningCount, tc.flapping)
 			if got != tc.want {
 				t.Errorf("DeriveServiceState() = %q, want %q", got, tc.want)
 			}
@@ -147,7 +185,7 @@ func TestServiceConvergedWaitsOutRollback(t *testing.T) {
 				t.Errorf("reported converged during %s (status %q)", state, status)
 			}
 
-			if got := cluster.DeriveServiceState(svc, 2); got != "updating" {
+			if got := cluster.DeriveServiceState(svc, 2, false); got != "updating" {
 				t.Errorf("DeriveServiceState = %q, want %q — the two must agree", got, "updating")
 			}
 		})
@@ -184,7 +222,7 @@ func TestServiceConvergedRejectsSurplusRunningTasks(t *testing.T) {
 	// DeriveServiceState deliberately does not follow it here. It answers
 	// "is this service healthy", and a surplus replica is not a fault; only
 	// "has the mutation landed" cares that the count is above the spec.
-	if got := cluster.DeriveServiceState(svc, 3); got != "running" {
+	if got := cluster.DeriveServiceState(svc, 3, false); got != "running" {
 		t.Errorf("DeriveServiceState = %q, want %q", got, "running")
 	}
 }
