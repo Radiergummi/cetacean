@@ -111,6 +111,7 @@ func (p *TailscaleProvider) Authenticate(
 			"user_id":    int64(who.UserProfile.ID),
 			"login_name": who.UserProfile.LoginName,
 			"node_name":  who.Node.Name,
+			"caps":       decodeCapMap(who.CapMap),
 		},
 	}
 
@@ -156,6 +157,24 @@ func extractCapGroups(capMap tailcfg.PeerCapMap, capability peercap.Cap) []strin
 	}
 
 	return groups
+}
+
+// decodeCapMap turns each capability's JSON grant values into the generic
+// form the ACL grant source reads. A malformed value is skipped.
+func decodeCapMap(capMap tailcfg.PeerCapMap) map[string]any {
+	caps := make(map[string]any, len(capMap))
+	for capability, values := range capMap {
+		decoded := make([]any, 0, len(values))
+		for _, raw := range values {
+			var value any
+			if err := json.Unmarshal([]byte(raw), &value); err == nil {
+				decoded = append(decoded, value)
+			}
+		}
+		caps[string(capability)] = decoded
+	}
+
+	return caps
 }
 
 // validateTailscaleAddr checks that the remote address belongs to a Tailscale

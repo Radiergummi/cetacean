@@ -315,8 +315,9 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 		}
 	}
 
-	// Step 14: logo_uri must be https when present — it's rendered on the
-	// consent page so other schemes are an XSS / data-exfil vector.
+	// Step 14: logo_uri must be https when present. Nothing renders it: the
+	// consent page loads no third-party resources, so passing this check does
+	// not make the URI safe to embed.
 	if meta.LogoURI != "" {
 		u, err := url.Parse(meta.LogoURI)
 		if err != nil || u.Scheme != "https" {

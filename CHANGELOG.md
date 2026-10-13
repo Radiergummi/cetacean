@@ -130,6 +130,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The monitoring banner fits a phone screen, and the bundled monitoring stack pins cAdvisor to a release and digest instead of `latest`
 - Without `server.public_url`, the AsyncAPI document is sent with `Cache-Control: private`, since it names the host the request carried
 - A conditional request for `/services` or `/tasks` is answered with `304` before the list is built, as the other lists already were
+- Grants under `acl.tailscale_capability` now apply
+- The OAuth consent page lists every redirect URI the client registers
+- The API explorer at `/api` no longer tries to load hosted fonts or send telemetry
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
