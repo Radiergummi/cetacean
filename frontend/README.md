@@ -57,8 +57,9 @@ for React-specific lint rules:
 
 ```js
 // eslint.config.js
-import reactX from "eslint-plugin-react-x";
+
 import reactDom from "eslint-plugin-react-dom";
+import reactX from "eslint-plugin-react-x";
 
 export default defineConfig([
   globalIgnores(["dist"]),
