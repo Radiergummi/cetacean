@@ -23,3 +23,23 @@ export async function applyRecommendation(recommendation: Recommendation): Promi
     await api.updateNodeAvailability(targetId, "drain");
   }
 }
+
+/**
+ * The method a recommendation's fix needs, and the path of the resource it
+ * acts on, read from its fix action ("PUT /services/{id}/scale"), so a page
+ * can offer the fix only where the target's Allow header carries the method.
+ */
+export function fixTarget({ fixAction, targetId }: Recommendation): {
+  method: string;
+  path: string;
+} | null {
+  const [method, template] = fixAction?.split(" ") ?? [];
+
+  if (!method || !template) {
+    return null;
+  }
+
+  const [, collection] = template.split("/");
+
+  return collection ? { method, path: `/${collection}/${targetId}` } : null;
+}
