@@ -19,10 +19,10 @@ services:
     configs:
       - source: prometheus_config
         target: /etc/prometheus/prometheus.yml
+    # No published port: Cetacean reaches Prometheus over the overlay, and
+    # Prometheus has no authentication of its own.
     networks:
       - monitoring
-    ports:
-      - "9090:9090"
     healthcheck:
       test: [ "CMD", "wget",  "-q", "--spider", "http://localhost:9090" ]
       interval: 10s
