@@ -95,9 +95,14 @@ func (r *ResourceMap[T]) Get(key string) (T, bool) {
 // Delete removes a value by key, calling the onDelete hook.
 func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 	r.mu.Lock()
+	old, existed := r.items[key]
 	name := r.del(key)
 	r.mu.Unlock()
-	return Event{Type: eventType, Action: "remove", ID: key, Name: name}
+	event := Event{Type: eventType, Action: "remove", ID: key, Name: name}
+	if existed {
+		event.Resource = old
+	}
+	return event
 }
 
 // List returns all values as a slice, ordered by map key like list.

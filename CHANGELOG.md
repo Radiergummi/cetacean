@@ -103,6 +103,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Service pages no longer crash in browsers without `Intl.DurationFormat`
 - Icon-only controls (search, segment overflow) have accessible names, the search palette's state dots are announced, the log level filter is labeled, the log search toggles meet the minimum target size, and the mobile menu closes on back navigation
 - The skip link on the API explorer page reaches its content
+- `GET /events` applies `?types=` and, on reconnect with `Last-Event-ID`, replays missed events instead of always forcing a full sync
+- Node, service, and stack streams receive task removals, a stack stream also every removal of `docker stack rm`, and a service- or stack-scoped grant admits them on `GET /events`, its replay, and MCP subscriptions
+- Shutdown ends open `/events` and resource event streams first instead of waiting out the grace period and logging an error
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

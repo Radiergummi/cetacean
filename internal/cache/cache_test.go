@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/api/types/mount"
@@ -1420,5 +1421,84 @@ func TestRunningCountsIgnoreTasksDestinedForShutdown(t *testing.T) {
 
 	if got := c.Snapshot().RunningByService["svc"]; got != want {
 		t.Errorf("Snapshot RunningByService = %d, want %d", got, want)
+	}
+}
+
+// A reconnect resync can land between a `docker service rm`'s removal of the
+// service and of its tasks: the full sync drops the service while the task
+// survives, so the later task remove must still resolve its service.
+func TestReplaceAll_DroppedServiceWithRemainingTaskStaysResolvable(t *testing.T) {
+	c := New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
+
+	c.ReplaceAll(FullSyncData{
+		Services:    []swarm.Service{},
+		HasServices: true,
+		Tasks:       []swarm.Task{{ID: "t1", ServiceID: "svc1"}},
+		HasTasks:    true,
+	})
+
+	var removed Event
+	c.AddOnChangeListener(func(e Event) {
+		if e.Type == EventTask && e.Action == "remove" {
+			removed = e
+		}
+	})
+	c.DeleteTask("t1")
+
+	if removed.Service != "webapp" {
+		t.Errorf("removed task's Service = %q, want %q", removed.Service, "webapp")
+	}
+}
+
+// Two of a gone service's last tasks removed concurrently must each still
+// resolve that service: the lookup and the goneServices cleanup must not
+// interleave across the two calls.
+func TestDeleteTask_ConcurrentLastTasksOfGoneServiceResolveService(t *testing.T) {
+	for i := range 200 {
+		c := New(nil)
+		c.SetService(swarm.Service{
+			ID:   "svc1",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		})
+		c.SetTask(swarm.Task{ID: "ta", ServiceID: "svc1"})
+		c.SetTask(swarm.Task{ID: "tb", ServiceID: "svc1"})
+		c.DeleteService("svc1")
+
+		var mu sync.Mutex
+		results := make(map[string]string)
+		c.AddOnChangeListener(func(e Event) {
+			if e.Type == EventTask && e.Action == "remove" {
+				mu.Lock()
+				results[e.ID] = e.Service
+				mu.Unlock()
+			}
+		})
+
+		var wg sync.WaitGroup
+		for _, id := range []string{"ta", "tb"} {
+			wg.Add(1)
+			go func(id string) {
+				defer wg.Done()
+				c.DeleteTask(id)
+			}(id)
+		}
+		wg.Wait()
+
+		for _, id := range []string{"ta", "tb"} {
+			if results[id] != "webapp" {
+				t.Fatalf(
+					"iteration %d: task %s's Service = %q, want %q",
+					i,
+					id,
+					results[id],
+					"webapp",
+				)
+			}
+		}
 	}
 }
