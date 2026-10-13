@@ -1,8 +1,10 @@
 package cache
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,6 +118,33 @@ func TestWriteSnapshot_AtomicRename(t *testing.T) {
 
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
 		t.Error("temp file should not exist after successful write")
+	}
+}
+
+// A manual resync and the watcher's own sync both write the snapshot, through
+// the same temp path; neither may publish the other's half-written file.
+func TestWriteSnapshot_ConcurrentWriters(t *testing.T) {
+	c := New(nil)
+	for i := range 200 {
+		c.SetNode(swarm.Node{ID: fmt.Sprintf("n%d", i)})
+	}
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+
+	var writers sync.WaitGroup
+	for range 8 {
+		writers.Go(func() {
+			for range 20 {
+				if err := c.WriteToDisk(path); err != nil {
+					t.Errorf("WriteToDisk: %v", err)
+					return
+				}
+			}
+		})
+	}
+	writers.Wait()
+
+	if err := New(nil).LoadFromDisk(path); err != nil {
+		t.Errorf("published snapshot does not load: %v", err)
 	}
 }
 

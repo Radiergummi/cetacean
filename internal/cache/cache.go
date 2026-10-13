@@ -125,6 +125,10 @@ type Cache struct {
 	serviceRef     serviceRefIndex
 	restarts       *RestartTracker
 
+	// diskMu serializes snapshot writers, which share one temp path, and makes
+	// the later-taken snapshot the one that lands last.
+	diskMu sync.Mutex
+
 	// generation counts every change to the cache's contents, including a full
 	// resync. It is deliberately not the history sequence: history answers
 	// "which changes have I missed", which a resync cannot, and so does not
