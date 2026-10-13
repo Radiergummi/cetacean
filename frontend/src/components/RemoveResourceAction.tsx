@@ -1,4 +1,5 @@
 import { ApiError } from "@/api/client";
+import ForceRemoveButton from "@/components/ForceRemoveButton";
 import { Spinner } from "@/components/Spinner";
 import {
   AlertDialog,
@@ -105,19 +106,16 @@ export function RemoveResourceAction({
         <div className="flex items-center gap-2">
           <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
           {showForceRemove && (
-            <Button
-              variant="destructive"
-              size="sm"
+            <ForceRemoveButton
+              name={resourceName}
               disabled={remove.loading}
-              onClick={() => {
+              onConfirm={() => {
                 void remove.execute(async () => {
                   await onForceRemove();
                   navigate(listPath, { replace: true });
                 }, `Failed to force remove ${resourceType.toLowerCase()}`);
               }}
-            >
-              Force remove
-            </Button>
+            />
           )}
         </div>
       )}

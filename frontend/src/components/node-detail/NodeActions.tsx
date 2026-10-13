@@ -1,5 +1,6 @@
 import { api, ApiError } from "@/api/client";
 import type { Node } from "@/api/types";
+import ForceRemoveButton from "@/components/ForceRemoveButton";
 import { Spinner } from "@/components/Spinner";
 import {
   AlertDialog,
@@ -79,19 +80,16 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
         <div className="flex items-center gap-2">
           <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
           {showForceRemove && (
-            <Button
-              variant="destructive"
-              size="sm"
+            <ForceRemoveButton
+              name={hostname}
               disabled={remove.loading}
-              onClick={() => {
+              onConfirm={() => {
                 void remove.execute(async () => {
                   await api.removeNode(node.ID, true);
                   navigate("/nodes", { replace: true });
                 }, "Failed to force remove node");
               }}
-            >
-              Force remove
-            </Button>
+            />
           )}
         </div>
       )}

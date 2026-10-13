@@ -35,9 +35,16 @@ export default function CreateResourceDialog({
   const action = useAsyncAction({ toast: true });
   const navigate = useNavigate();
 
+  // The request cannot be cancelled, so the dialog that started it stays open
+  // until it settles and the outcome lands where the user is looking.
   function handleOpenChange(next: boolean) {
+    if (!next && action.loading) {
+      return;
+    }
+
     if (!next) {
       onReset();
+      action.reset();
     }
 
     setOpen(next);
@@ -92,12 +99,22 @@ export default function CreateResourceDialog({
         >
           {children}
 
+          {action.error && (
+            <p
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {action.error}
+            </p>
+          )}
+
           <DialogFooter>
             <DialogClose
               render={
                 <Button
                   variant="outline"
                   type="button"
+                  disabled={action.loading}
                 />
               }
             >
