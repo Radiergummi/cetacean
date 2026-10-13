@@ -128,6 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - JSON log reads are capped like log streams (`429 LOG009`), and a `Prefer: wait` past its cap is answered as `respond-async` with a `Retry-After`
 - Pointed at a swarm worker, or at a manager before its swarm has a leader, Cetacean reports itself not ready until the swarm answers, instead of serving an empty cluster as healthy
 - The monitoring banner fits a phone screen, and the bundled monitoring stack pins cAdvisor to a release and digest instead of `latest`
+- Without `server.public_url`, the AsyncAPI document is sent with `Cache-Control: private`, since it names the host the request carried
+- A conditional request for `/services` or `/tasks` is answered with `304` before the list is built, as the other lists already were
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
