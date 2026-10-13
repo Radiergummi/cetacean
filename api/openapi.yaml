@@ -9,6 +9,11 @@ info:
     Uses content negotiation — same URLs serve JSON, HTML (SPA), or SSE based on
     the Accept header. Append `.json` or `.html` to any path to force a content type.
 
+    The API is versioned by media type, not by path: `application/vnd.cetacean.v1+json`
+    pins version 1 and is answered as `application/json`, as is `application/ld+json`.
+    Neither is repeated under each operation. Endpoints that list an Atom feed also
+    serve JSON Feed, as `application/feed+json` or with a `.feed` suffix.
+
     All collection responses include JSON-LD `@context` and `@type` fields.
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
@@ -1145,8 +1150,7 @@ paths:
                 $ref: "#/components/schemas/AtomFeed"
             application/feed+json:
               schema:
-                type: object
-                description: JSON Feed 1.1 document
+                $ref: "#/components/schemas/JSONFeed"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -2192,6 +2196,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -2208,6 +2213,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -2242,13 +2249,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /nodes/{id}:
     get:
@@ -2302,6 +2327,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -2646,6 +2674,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -2662,6 +2691,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -2704,13 +2735,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /services/{id}:
     get:
@@ -2777,6 +2826,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             application/yaml:
               schema:
                 $ref: "#/components/schemas/ComposeDocument"
@@ -4447,6 +4499,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -4463,6 +4516,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -4491,13 +4546,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /tasks/{id}:
     get:
@@ -4566,6 +4639,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -4708,6 +4784,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
@@ -4727,6 +4806,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -4743,6 +4823,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -4765,13 +4847,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StackCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /stacks/summary:
     get:
@@ -4882,6 +4982,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             application/yaml:
               schema:
                 $ref: "#/components/schemas/ComposeDocument"
@@ -4897,7 +5000,12 @@ paths:
           color: red
       tags: [Stacks]
       summary: Remove a stack
-      description: Removes all services in the stack. Requires operations level 3.
+      description: |
+        Removes the stack's services, then its networks, secrets and configs, as
+        `docker stack rm` does. Volumes are kept. A resource that is already gone
+        is skipped; one that fails to go is reported under `errors` and does not
+        stop the rest, so a 200 can still leave part of the stack behind.
+        Requires operations level 3.
       parameters:
         - name: name
           in: path
@@ -4909,22 +5017,44 @@ paths:
         - $ref: "#/components/parameters/IfMatch"
       responses:
         "200":
-          description: Stack removal initiated
+          description: What was removed, and what could not be
           content:
             application/json:
               schema:
                 type: object
+                required: [removed]
                 properties:
                   removed:
+                    type: object
+                    description: How many of each type were removed
+                    required: [services, networks, configs, secrets]
+                    properties:
+                      services: { type: integer }
+                      networks: { type: integer }
+                      configs: { type: integer }
+                      secrets: { type: integer }
+                  errors:
                     type: array
+                    description: The resources that could not be removed. Absent when there are none.
                     items:
-                      type: string
-                    description: IDs of removed services
-                  failed:
-                    type: array
-                    items:
-                      type: string
-                    description: IDs of services that failed to remove
+                      type: object
+                      required: [type, id, error]
+                      properties:
+                        type:
+                          type: string
+                          enum: [service, network, secret, config]
+                        id:
+                          type: string
+                        error:
+                          type: string
+              example:
+                removed: { services: 2, networks: 1, configs: 1, secrets: 0 }
+                errors:
+                  - type: network
+                    id: n4k8x2m9p3q7
+                    error: network myapp_default has active endpoints
+        "204":
+          description: No content (Prefer return=minimal)
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -4944,6 +5074,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -4960,6 +5091,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -4985,13 +5118,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
     post:
       operationId: createConfig
       x-badges:
@@ -5099,6 +5250,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -5229,6 +5383,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -5245,6 +5400,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -5269,13 +5426,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
     post:
       operationId: createSecret
       x-badges:
@@ -5382,6 +5557,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -5512,6 +5690,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -5528,6 +5707,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -5553,13 +5734,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /networks/{id}:
     get:
@@ -5611,6 +5810,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -5651,6 +5853,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
         - name: sort
           in: query
           description: Field to sort the result list by
@@ -5667,6 +5870,8 @@ paths:
               $ref: "#/components/headers/ETag"
             Link:
               $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -5689,13 +5894,31 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VolumeCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /volumes/{name}:
     get:
@@ -5751,6 +5974,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "404":
@@ -5856,6 +6082,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
@@ -5957,6 +6186,9 @@ paths:
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
@@ -6069,6 +6301,21 @@ components:
         minimum: 0
         default: 0
 
+    Range:
+      name: Range
+      in: header
+      required: false
+      description: >
+        Pagination by item range, an alternative to `limit` and `offset`:
+        `items <first>-<last>`, both zero-based and inclusive, with the same
+        200-item cap. Ignored when either query parameter is present. A range
+        that is less than the whole list answers 206 with `Content-Range`; one
+        that starts past the end, or names several ranges, answers 416. JSON
+        only: a CSV download answers 200 with every row.
+      schema:
+        type: string
+      example: items 0-49
+
     dir:
       name: dir
       in: query
@@ -6151,6 +6398,20 @@ components:
       schema:
         type: string
         example: '</nodes?limit=50&offset=50>; rel="next"'
+
+    Accept-Ranges:
+      description: Always `items`, the unit a list's `Range` header takes
+      schema:
+        type: string
+        enum: [items]
+
+    Content-Range:
+      description: >
+        The items a 206 holds and the total, as `items <first>-<last>/<total>`;
+        on a 416 for a range past the end, `items */<total>`
+      schema:
+        type: string
+        example: items 0-49/120
 
     Retry-After:
       description: Seconds to wait before retrying
@@ -6322,6 +6583,26 @@ components:
             instance: /services/r8m2x5nk3p7q/env
             requestId: req_a1b2c3d4e5f6
 
+    RangeNotSatisfiable:
+      description: >
+        The `Range` starts past the last item, with `Content-Range: items */<total>`,
+        or names more than one range, with no `Content-Range`
+      headers:
+        Content-Range:
+          $ref: "#/components/headers/Content-Range"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            "@context": /api/context.jsonld
+            type: about:blank
+            title: Requested Range Not Satisfiable
+            status: 416
+            detail: range start is beyond the total number of items
+            instance: /tasks
+            requestId: req_a1b2c3d4e5f6
+
     BackendUnavailable:
       description: The Docker Engine could not be reached, so the request could not be evaluated
       content:
@@ -6439,6 +6720,24 @@ components:
         `Accept: application/atom+xml` header or `.atom` URL suffix.
 
         Pagination parameters: `?before=<cursor>&limit=<n>` (default 50, max 200).
+
+    JSONFeed:
+      type: object
+      description: |
+        JSON Feed 1.1 document carrying the same entries as the Atom feed.
+        Request via `Accept: application/feed+json` or the `.feed` URL suffix.
+      required: [version, title, items]
+      properties:
+        version:
+          type: string
+          const: https://jsonfeed.org/version/1.1
+        title:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+      additionalProperties: true
 
     # ── CSV ────────────────────────────────────────────────────────────
 
