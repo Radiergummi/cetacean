@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -288,7 +289,7 @@ func TestSetAllow_NilACL(t *testing.T) {
 // Fails while allow.go still calls a node PATCH impactful, which hides the
 // dashboard's labels editor on an API that accepts the edit. The gate is held to
 // the same tier elsewhere, but that reads no Allow header. The tier is asserted
-// rather than read from resourceWriteMethods, which would pass whatever it said.
+// rather than read from the routes, which would pass whatever they said.
 func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
@@ -328,7 +329,7 @@ func TestAllowSeamVariesByIdentity(t *testing.T) {
 		"setAllowList": func(w http.ResponseWriter) { h.setAllowList(w, r, "node") },
 		"setAllow":     func(w http.ResponseWriter) { h.setAllow(w, r, "node", "node-1") },
 		"setAllowSubResource": func(w http.ResponseWriter) {
-			h.setAllowSubResource(w, r, "PUT", config.OpsOperational, "node:node-1")
+			h.setAllowSubResource(w, r, "node:node-1")
 		},
 	}
 
@@ -409,5 +410,62 @@ func TestVaryByIdentityStatedOnce(t *testing.T) {
 
 	if got := w.Header().Values("Vary"); len(got) != 1 {
 		t.Errorf("Vary = %q, want a single value", got)
+	}
+}
+
+// Every method Allow offers on a resource must be routed at that path or below
+// it; POST creates a config or secret on the collection, never on one of them.
+func TestAllowOffersNoMethodWithoutARoute(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+
+	for _, tc := range []struct{ path, kind string }{
+		{"/secrets/s1", "secret"},
+		{"/configs/c1", "config"},
+	} {
+		w := httptest.NewRecorder()
+		h.setAllow(w, httptest.NewRequest("GET", tc.path, nil), tc.kind, "x")
+
+		if got := w.Header().Get("Allow"); got != "GET, HEAD, PATCH, DELETE" {
+			t.Errorf("Allow on %s = %q, want %q", tc.path, got, "GET, HEAD, PATCH, DELETE")
+		}
+	}
+}
+
+// Installing a plugin takes operations level 3, so level 2 must not offer it.
+func TestAllowOnPluginsOffersInstallOnlyAtTierThree(t *testing.T) {
+	for level, want := range map[config.OperationsLevel]string{
+		config.OpsConfiguration: "GET, HEAD",
+		config.OpsImpactful:     "GET, HEAD, POST",
+	} {
+		h := newTestHandlers(t, withOpsLevel(level))
+		w := httptest.NewRecorder()
+		h.setAllowList(w, httptest.NewRequest("GET", "/plugins", nil), "plugin")
+
+		if got := w.Header().Get("Allow"); got != want {
+			t.Errorf("Allow on /plugins at level %d = %q, want %q", level, got, want)
+		}
+	}
+}
+
+// A write route registered without a tiered chain would never reach Allow, and
+// the table Allow reads must be the one a configured router serves.
+func TestEveryWriteRouteReachesAllow(t *testing.T) {
+	_, routes := newRouter(testRouterConfig(t, nil))
+
+	if !slices.Equal(routes.tiered, routeTable().tiered) {
+		t.Errorf("a configured router's write routes differ from the table Allow reads")
+	}
+
+	for _, pattern := range routes.patterns {
+		method, path, _ := strings.Cut(pattern, " ")
+		if !slices.Contains(writeMethods, method) || pattern == "POST /-/resync" {
+			continue
+		}
+
+		if !slices.ContainsFunc(routes.tiered, func(route tieredRoute) bool {
+			return route.method == method && route.path == path
+		}) {
+			t.Errorf("%s is not registered through a tiered chain", pattern)
+		}
 	}
 }

@@ -13,7 +13,6 @@ import (
 	json "github.com/goccy/go-json"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +47,7 @@ func (h *Handlers) HandleGetServiceMode(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
+	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
 
 	h.writeServiceRepresentation(w, r, svc.ID, h.serviceModeRepresentation)
 }
@@ -58,7 +57,7 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	h.setAllowSubResource(w, r, "PUT", config.OpsImpactful, "service:"+svc.Spec.Name)
+	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
 
 	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEndpointModeRepresentation)
 }
