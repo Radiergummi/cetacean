@@ -170,6 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config, secret, network or volume page under a scoped grant updates live when a service starts or stops using it
 - Creating a config or secret answers with only the services the caller may read
 - An `If-Match` update to a service, node, config or secret is refused with `412` if the resource changes while the write is in flight, instead of overwriting the change
+- A Client ID Metadata Document is refused when its URL has `.` or `..` path segments, it declares `client_secret_jwt`, or its host resolves to a special-use address
+- **Breaking:** fetching a Client ID Metadata Document no longer follows redirects, and a document declaring any `token_endpoint_auth_method` other than `none` is refused instead of treated as a public client, as the draft requires
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
 - An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings

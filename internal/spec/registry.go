@@ -289,7 +289,12 @@ func (q *Requirement) validate() error {
 // Token canonicalises a specification's name to the one spelling the sweep
 // compares a document and its citations on: "RFC 7636" and "rfc-7636" become
 // "RFC7636", "SEP 2575" becomes "SEP-2575", and "OAuth 2.1" meets oauth-2-1.
+// An Internet-Draft drops its revision: every draft-x-NN is draft-x.
 func Token(name string) string {
+	if strings.HasPrefix(strings.ToLower(name), "draft-") {
+		name = draftRevision.ReplaceAllString(name, "")
+	}
+
 	upper := strings.ToUpper(strings.NewReplacer(" ", "", "-", "", ".", "").Replace(name))
 
 	if num, ok := strings.CutPrefix(upper, "SEP"); ok {
@@ -298,6 +303,8 @@ func Token(name string) string {
 
 	return upper
 }
+
+var draftRevision = regexp.MustCompile(`-[0-9]{2}$`)
 
 // Token is how this document is named in a comment.
 func (d *Document) Token() string { return Token(d.Name) }

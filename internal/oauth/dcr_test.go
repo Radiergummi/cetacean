@@ -34,6 +34,7 @@ func TestDCRRegister(t *testing.T) {
 		"oauth/rfc7591/client-id-required",
 		"oauth/rfc7591/client-id-issued-at-optional",
 		"oauth/rfc7591/public-clients-may-register",
+		"oauth/draft-ietf-oauth-client-id-metadata-document/generated-client-ids-are-not-https",
 	)
 
 	s := newTestServer(t)
