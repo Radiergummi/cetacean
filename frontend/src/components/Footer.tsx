@@ -32,7 +32,7 @@ function Footer() {
               href={`https://github.com/radiergummi/cetacean/commit/${commit}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-muted-foreground/70 transition hover:text-foreground"
+              className="font-mono text-muted-foreground transition hover:text-foreground"
             >
               ({shortCommit})
             </a>

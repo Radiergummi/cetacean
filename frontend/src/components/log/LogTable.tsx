@@ -124,14 +124,12 @@ function LogRow({
 
                 onTaskFilter(line.attrs!.taskId!);
               }}
-              className="cursor-pointer text-muted-foreground/60 hover:text-primary hover:underline"
+              className="cursor-pointer text-muted-foreground hover:text-primary hover:underline"
             >
               {line.attrs.taskId.slice(0, 8).trim()}
             </button>
           ) : (
-            <span className="text-muted-foreground/60">
-              {line.attrs?.taskId?.slice(0, 8).trim()}
-            </span>
+            <span className="text-muted-foreground">{line.attrs?.taskId?.slice(0, 8).trim()}</span>
           )}
         </td>
       )}
@@ -221,9 +219,7 @@ export function LogTable({
                 </td>
                 {showAttrs && (
                   <td className="py-px pe-2 align-top font-mono whitespace-nowrap">
-                    <span className="text-muted-foreground/60">
-                      {line.attrs?.taskId?.slice(0, 8)}
-                    </span>
+                    <span className="text-muted-foreground">{line.attrs?.taskId?.slice(0, 8)}</span>
                   </td>
                 )}
                 <td className="overflow-hidden py-px pe-2 text-ellipsis whitespace-pre text-foreground">

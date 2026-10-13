@@ -136,6 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The API explorer at `/api` no longer tries to load hosted fonts or send telemetry
 - Setting `com.docker.stack.namespace` on a service, config or secret needs write on the stack it names, so a stack grant can no longer move a resource into another team's stack
 - Only the identity that started an MCP task can read or cancel it; anyone else is told it doesn't exist
+- Recommendation count badges, the commit hash in the footer, gauge subtitles, log task IDs and muted captions are readable at WCAG AA contrast in both themes
+- Detail page sections are announced as headings in order, and the Metrics Console query box exposes a valid role to assistive technology
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

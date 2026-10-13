@@ -76,7 +76,7 @@ export function PluginEnvEditor({
                 <div className="font-mono text-xs text-muted-foreground">
                   {current ?? defaultValue ?? "—"}
                 </div>
-                {Description && <p className="text-xs text-muted-foreground/70">{Description}</p>}
+                {Description && <p className="text-xs text-muted-foreground">{Description}</p>}
               </div>
             );
           })}
@@ -92,7 +92,7 @@ export function PluginEnvEditor({
               <span className="flex items-baseline justify-between">
                 <span className="font-mono text-xs font-medium">{envName}</span>
                 {defaultValue && (
-                  <span className="text-[11px] text-muted-foreground/70">
+                  <span className="text-[11px] text-muted-foreground">
                     Default: <code className="rounded bg-muted px-1">{defaultValue}</code>
                   </span>
                 )}
