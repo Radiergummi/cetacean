@@ -128,8 +128,8 @@ type NodeWriter interface {
 	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 }
 
-// ResourceRemover is the subset of Docker delete operations exposed via Tier 1
-// (RemoveTask) and Tier 3 (Remove{Config,Secret,Network,Volume}) MCP tools.
+// ResourceRemover is the subset of Docker delete operations the tier 3 MCP
+// remove tools use.
 type ResourceRemover interface {
 	RemoveTask(ctx context.Context, id string) error
 	RemoveConfig(ctx context.Context, id string) error

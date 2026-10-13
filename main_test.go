@@ -133,3 +133,30 @@ func TestHealthcheckReachesTheTsnetMetaListener(t *testing.T) {
 		t.Errorf("probe: %v", err)
 	}
 }
+
+func TestMCPInClear(t *testing.T) {
+	tests := []struct {
+		name      string
+		mcp       bool
+		authMode  string
+		tls       bool
+		publicURL string
+		want      bool
+	}{
+		{"no public url", true, "oidc", false, "", true},
+		{"http public url", true, "oidc", false, "http://dash.example", true},
+		{"https public url", true, "oidc", false, "https://dash.example", false},
+		{"uppercase https scheme", true, "oidc", false, "HTTPS://dash.example", false},
+		{"tls", true, "oidc", true, "", false},
+		{"auth none", true, "none", false, "", false},
+		{"mcp disabled", false, "oidc", false, "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mcpInClear(tt.mcp, tt.authMode, tt.tls, tt.publicURL); got != tt.want {
+				t.Errorf("mcpInClear = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -6,7 +6,7 @@
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-blue.svg" alt="License"></a>
-    <img src="https://img.shields.io/badge/go-1.26+-00ADD8.svg" alt="Go 1.26+">
+    <img src="https://img.shields.io/badge/go-1.27+-00ADD8.svg" alt="Go 1.27+">
     <img src="https://img.shields.io/badge/react-19-61DAFB.svg" alt="React 19">
     <img src="https://img.shields.io/badge/docker-swarm-2496ED.svg" alt="Docker Swarm">
   </p>
@@ -85,7 +85,7 @@ repository:
 
 ## Build from source
 
-Requires Go 1.26+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard
+Requires Go 1.27+ and Node.js 24+. `make build` installs the frontend dependencies, builds the dashboard
 and the MCP widgets, and compiles the binary, which embeds both:
 
 ```bash

@@ -459,3 +459,34 @@ func TestCatalogCountsAreCurrent(t *testing.T) {
 		}
 	}
 }
+
+// The Resources section states its split in words and lists each URI in a
+// table; both must follow the catalog.
+func TestResourceSectionIsCurrent(t *testing.T) {
+	doc := catalogDoc(t)
+
+	words := map[string]int{
+		"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+		"seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+	}
+	split := regexp.MustCompile(`(?i)(\w+) are static,\s+(\w+) are URI templates`).
+		FindStringSubmatch(doc)
+	if split == nil {
+		t.Fatalf("no static/template sentence found in %s", catalogPath)
+	}
+	if words[strings.ToLower(split[1])] != len(staticResources) {
+		t.Errorf("the page says %s static resources; there are %d", split[1], len(staticResources))
+	}
+	if words[strings.ToLower(split[2])] != len(resourceTemplates) {
+		t.Errorf("the page says %s URI templates; there are %d", split[2], len(resourceTemplates))
+	}
+
+	rows := regexp.MustCompile("(?m)^\\| `cetacean://[^`]*\\{").FindAllString(doc, -1)
+	if len(rows) != len(resourceTemplates) {
+		t.Errorf(
+			"the table lists %d URI templates; there are %d",
+			len(rows),
+			len(resourceTemplates),
+		)
+	}
+}

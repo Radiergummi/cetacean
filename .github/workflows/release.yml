@@ -214,6 +214,7 @@ jobs:
             CHANGELOG.md > release-notes.md
           # Fall back to auto-generated notes if no section found
           if [ ! -s release-notes.md ]; then
+            echo "::warning title=No changelog section::CHANGELOG.md has no [${VERSION}] section; the release uses generated notes."
             echo "fallback=true" >> "$GITHUB_OUTPUT"
           fi
 
