@@ -258,7 +258,9 @@ func (h *Handlers) serveLogsSSE(
 		select {
 		case line, ok := <-ch:
 			if !ok {
-				<-done
+				if err := <-done; err != nil {
+					slog.Warn("log stream ended with an error", "error", err)
+				}
 				return
 			}
 			if streamFilter != "" && line.Stream != streamFilter {

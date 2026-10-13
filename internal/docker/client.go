@@ -436,7 +436,7 @@ func (c *Client) LocalNodeID(ctx context.Context) (string, error) {
 	return info.Swarm.NodeID, nil
 }
 
-// Logs fetches multiplexed logs for a service or task.
+// Logs fetches multiplexed or raw (TTY) logs for a service or task.
 func (c *Client) Logs(
 	ctx context.Context,
 	kind LogKind,
