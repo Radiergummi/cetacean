@@ -22,31 +22,6 @@ type searchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
-// searchACLPrefix maps cluster.Search's plural type keys to the ACL resource
-// prefix used elsewhere in the codebase (service_handlers.go etc.). Kept as
-// an explicit map so a future irregular plural ("policies") doesn't silently
-// produce a wrong ACL key.
-var searchACLPrefix = map[string]string{
-	"services": "service:",
-	"stacks":   "stack:",
-	"nodes":    "node:",
-	"tasks":    "task:",
-	"configs":  "config:",
-	"secrets":  "secret:",
-	"networks": "network:",
-	"volumes":  "volume:",
-}
-
-// aclResourceFor returns the ACL resource string for a search result.
-// Tasks key on the task ID, every other type keys on the resource name.
-func aclResourceFor(resourceType, name, id string) string {
-	prefix := searchACLPrefix[resourceType]
-	if resourceType == "tasks" {
-		return prefix + id
-	}
-	return prefix + name
-}
-
 // HandleSearch performs a cross-resource global search via the shared cluster
 // layer, then applies ACL filtering. Per-type counts and the grand total
 // reflect pre-cap matches (after ACL filtering) so the UI can show "X matches"
@@ -87,7 +62,7 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 			"read",
 			hits,
 			func(sr cluster.SearchResult) string {
-				return aclResourceFor(resourceType, sr.Name, sr.ID)
+				return cluster.SearchResultACLResource(resourceType, sr)
 			},
 		)
 		// Adjust the pre-cap count by the number of visible-page denials. We

@@ -68,7 +68,7 @@ func (s *Server) drainImpact(
 		return "", fmt.Errorf("no such node %q", identifier)
 	}
 
-	if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
+	if err := s.checkRead(ctx, "node", cluster.NodeACLName(node)); err != nil {
 		return "", err
 	}
 

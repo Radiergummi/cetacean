@@ -299,7 +299,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := s.checkRead(ctx, "node", nodeACLName(node)); err != nil {
+		if err := s.checkRead(ctx, "node", cluster.NodeACLName(node)); err != nil {
 			return nil, err
 		}
 		return node, nil

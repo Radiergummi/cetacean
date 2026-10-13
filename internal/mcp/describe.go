@@ -268,7 +268,7 @@ func (s *Server) readableNode(ctx context.Context, nodeID string) *swarm.Node {
 		return nil
 	}
 
-	if s.checkRead(ctx, "node", nodeACLName(node)) != nil {
+	if s.checkRead(ctx, "node", cluster.NodeACLName(node)) != nil {
 		return nil
 	}
 
