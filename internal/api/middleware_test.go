@@ -458,3 +458,78 @@ func TestRequestID_AcceptsSafeCharacters(t *testing.T) {
 		})
 	}
 }
+
+// Past basePathMiddleware the path is relative to the mount point, so the
+// redirect has to put the base path back or it leaves the deployment.
+func TestCleanPathsRedirectKeepsTheBasePath(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	req := httptest.NewRequest("GET", "/cetacean//nodes", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want 307", w.Code)
+	}
+	if got := w.Header().Get("Location"); got != "/cetacean/nodes" {
+		t.Errorf("Location = %q, want /cetacean/nodes", got)
+	}
+}
+
+// A derived well-known path is addressed from the host root, so its canonical
+// form stays there rather than gaining the base path.
+func TestCleanPathsRedirectLeavesADerivedWellKnownPathAtTheRoot(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean"), withOAuthRoutes("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	for request, want := range map[string]string{
+		"/.well-known/oauth-protected-resource//cetacean":     "/.well-known/oauth-protected-resource/cetacean",
+		"/.well-known/oauth-protected-resource/cetacean//mcp": "/.well-known/oauth-protected-resource/cetacean/mcp",
+	} {
+		t.Run(request, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("GET", request, nil))
+
+			if w.Code != http.StatusTemporaryRedirect {
+				t.Fatalf("status = %d, want 307", w.Code)
+			}
+			if got := w.Header().Get("Location"); got != want {
+				t.Errorf("Location = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// A dot-segment escape cleans to a path outside the well-known family, so it
+// must redirect into the mount like any other host-root path — not past it.
+func TestCleanPathsRedirectPrefixesADotSegmentEscapeFromTheWellKnownFamily(t *testing.T) {
+	router := newTestRouterWithConfig(
+		t,
+		[]routerOption{withBasePath("/cetacean"), withOAuthRoutes("/cetacean")},
+		withCache(cache.New(nil)),
+	)
+
+	for request, want := range map[string]string{
+		"/.well-known/oauth-protected-resource/../../nodes":           "/cetacean/nodes",
+		"/.well-known/oauth-protected-resource/../../oauth/authorize": "/cetacean/oauth/authorize",
+	} {
+		t.Run(request, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest("GET", request, nil))
+
+			if w.Code != http.StatusTemporaryRedirect {
+				t.Fatalf("status = %d, want 307", w.Code)
+			}
+			if got := w.Header().Get("Location"); got != want {
+				t.Errorf("Location = %q, want %q", got, want)
+			}
+		})
+	}
+}

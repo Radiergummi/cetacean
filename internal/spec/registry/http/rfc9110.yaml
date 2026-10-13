@@ -60,6 +60,10 @@ requirements:
       Recipients SHOULD process any parameter named "q" as weight, regardless
       of parameter ordering.
     url: https://www.rfc-editor.org/rfc/rfc9110#section-12.5.1
+    mutants:
+      - file: internal/api/negotiate.go
+        replace: "if len(param) > 2 && strings.EqualFold(param[:2], \"q=\") {"
+        with: "if strings.HasPrefix(param, \"q=\") {"
 
   - id: an-unacceptable-coding-falls-back-to-identity
     level: SHOULD
@@ -304,8 +308,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-14.2
     mutants:
       - file: internal/api/pagination.go
-        replace: "\tspec, ok := strings.CutPrefix(header, \"items \")\n\tif !ok {"
-        with: "\tspec, ok := strings.CutPrefix(header, \"items \")\n\tif spec, ok = strings.TrimPrefix(header, \"bytes \"), true; !ok {"
+        replace: "len(header) < len(unit) || !strings.EqualFold(header[:len(unit)], unit) {"
+        with: "len(header) < len(unit) {"
 
   - id: an-invalid-ranges-specifier-may-be-refused
     level: MAY

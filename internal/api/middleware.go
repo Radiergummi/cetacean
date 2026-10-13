@@ -112,6 +112,10 @@ func cleanPaths(next http.Handler) http.Handler {
 				cleaned += "?" + r.URL.RawQuery
 			}
 
+			if r.Context().Value(unstrippedCtxKey{}) == nil {
+				cleaned = absPath(r.Context(), cleaned)
+			}
+
 			// #nosec G710 -- path.Clean leaves one leading slash, so this is
 			// always a path on this origin, never a scheme-relative URL.
 			http.Redirect(w, r, cleaned, http.StatusTemporaryRedirect)

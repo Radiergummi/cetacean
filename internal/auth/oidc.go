@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -8,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -148,7 +151,7 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 	}
 
 	// 3. Browser request: redirect to OIDC authorize endpoint.
-	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+	if acceptsHTML(r.Header.Get("Accept")) {
 		redirect := p.basePath + r.URL.RequestURI()
 		if !isRelativePath(redirect) {
 			redirect = p.basePath + "/"
@@ -162,6 +165,23 @@ func (p *OIDCProvider) Authenticate(w http.ResponseWriter, r *http.Request) (*Id
 		Msg:             "authentication required",
 		WWWAuthenticate: "Bearer",
 	}
+}
+
+// acceptsHTML reports whether Accept names text/html at a non-zero weight.
+// Wildcards do not count: a client sending only */* is not a browser.
+func acceptsHTML(accept string) bool {
+	for part := range strings.SplitSeq(accept, ",") {
+		mediaType, params, err := mime.ParseMediaType(part)
+		if err != nil || mediaType != "text/html" {
+			continue
+		}
+
+		q, err := strconv.ParseFloat(cmp.Or(params["q"], "1"), 64)
+
+		return err == nil && q > 0
+	}
+
+	return false
 }
 
 // RegisterRoutes registers the OIDC auth routes on the given mux. Logout

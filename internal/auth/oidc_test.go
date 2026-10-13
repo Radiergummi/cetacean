@@ -164,6 +164,34 @@ func TestOIDCProvider_Authenticate_APIError(t *testing.T) {
 	}
 }
 
+// Media types and parameter names are case-insensitive, and a weight of zero
+// refuses a type (RFC 9110 §8.3.1, §12.5.1).
+func TestOIDCProvider_Authenticate_ReadsAcceptCaseInsensitively(t *testing.T) {
+	server := newMockOIDCServer(t)
+	p := newTestOIDCProvider(t, server.URL)
+
+	for accept, wantRedirect := range map[string]bool{
+		"TEXT/HTML":                       true,
+		"Text/Html;Q=0.9, */*;q=0.1":      true,
+		"text/html;q=0, application/json": false,
+		"text/html;Q=0":                   false,
+		"application/json, text/htmlfoo":  false,
+	} {
+		t.Run(accept, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+			r.Header.Set("Accept", accept)
+			w := httptest.NewRecorder()
+
+			_, err := p.Authenticate(w, r)
+			redirected := err == nil && w.Code == http.StatusFound
+			if redirected != wantRedirect {
+				t.Errorf("redirected = %v (status %d, err %v), want %v",
+					redirected, w.Code, err, wantRedirect)
+			}
+		})
+	}
+}
+
 func TestOIDCProvider_Authenticate_ValidSession(t *testing.T) {
 	server := newMockOIDCServer(t)
 	p := newTestOIDCProvider(t, server.URL)
