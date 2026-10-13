@@ -133,7 +133,7 @@ test-stack-race: build
 # exists to rule out. CETACEAN_OPERATIONS_LEVEL=3 is set because
 # frontend/e2e's specs assert write affordances (Remove buttons, editors) are
 # present unconditionally, not gated on CETACEAN_E2E_WRITE -- at the default
-# level 1 those assertions fail not because anything is broken, but because
+# level 0 those assertions fail not because anything is broken, but because
 # the Allow-header-gated buttons the specs look for are correctly absent.
 e2e-up: build
 	go run -tags e2e ./test/e2e/cmd/e2eenv

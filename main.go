@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"embed"
+	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -62,6 +64,9 @@ var scalarJS []byte
 
 func main() {
 	flags, err := config.ParseFlags(os.Args[1:])
+	if errors.Is(err, flag.ErrHelp) {
+		os.Exit(0)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "flag error: %v\n", err)
 		os.Exit(2)
@@ -114,7 +119,7 @@ func main() {
 	slog.SetDefault(slog.New(logHandler))
 
 	if configPath != "" {
-		slog.Info("loaded config file", "path", configPath)
+		slog.Info("loaded config file", "path", configPath, "discovered", flags.Config == "")
 	}
 
 	authCfg, err := config.LoadAuth(flags, fc, cfg.PublicURL, cfg.BasePath)
