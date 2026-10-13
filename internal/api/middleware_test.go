@@ -56,6 +56,18 @@ func TestStatusWriter_Flush(t *testing.T) {
 	}
 }
 
+// net/http ignores a second WriteHeader, so the log must keep the first.
+func TestStatusWriter_KeepsFirstStatus(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: rec, status: 200}
+
+	sw.WriteHeader(http.StatusCreated)
+	sw.WriteHeader(http.StatusOK)
+	if sw.status != http.StatusCreated {
+		t.Errorf("status = %d, want 201", sw.status)
+	}
+}
+
 func TestStatusWriter_Unwrap(t *testing.T) {
 	rec := httptest.NewRecorder()
 	sw := &statusWriter{ResponseWriter: rec, status: 200}

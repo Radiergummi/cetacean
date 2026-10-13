@@ -4846,3 +4846,27 @@ func TestHostAccessWritesRequireImpactfulLevel(t *testing.T) {
 		}
 	}
 }
+
+// A create sends one status, 201, as JSON.
+func TestCreateSecretWritesOneJSONStatus(t *testing.T) {
+	mock := &mockWriteClient{}
+	mock.createSecretFn = func(context.Context, swarm.SecretSpec) (string, error) { return "sec1", nil }
+	h := newTestHandlers(t, withWriteClient(mock))
+
+	req := httptest.NewRequest(
+		"POST",
+		"/secrets",
+		strings.NewReader(`{"name":"db","data":"aGVsbG8="}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	w := &statusWriter{ResponseWriter: recorder}
+	h.HandleCreateSecret(w, req)
+
+	if w.status != http.StatusCreated {
+		t.Errorf("recorded status = %d, want 201", w.status)
+	}
+	if ct := recorder.Result().Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("sent Content-Type = %q, want application/json", ct)
+	}
+}

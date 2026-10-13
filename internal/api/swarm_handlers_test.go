@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1553,5 +1554,24 @@ func TestHandlePostUnlockSwarm_Error(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// The unlock key decrypts the managers' Raft logs, so no cache may keep it,
+// and a shared one must not serve one caller's answer to another.
+func TestHandleGetUnlockKeyIsNeverStored(t *testing.T) {
+	h := newTestHandlers(t, withSystemClient(&mockSystemClient{
+		getUnlockKeyFn: func(context.Context) (string, error) { return "SWMKEY-1-secret", nil },
+	}))
+
+	req := httptest.NewRequest("GET", "/swarm/unlock-key", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetUnlockKey(w, req)
+
+	if got := w.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+	if !slices.Contains(w.Header().Values("Vary"), varyIdentity) {
+		t.Errorf("Vary = %v, want it to include %q", w.Header().Values("Vary"), varyIdentity)
 	}
 }

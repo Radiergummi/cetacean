@@ -390,6 +390,10 @@ func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The key decrypts the managers' Raft logs: no cache may keep it.
+	w.Header().Set("Cache-Control", "no-store")
+	varyByIdentity(w)
+
 	writeCachedJSON(
 		w,
 		r,

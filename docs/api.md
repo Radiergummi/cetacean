@@ -440,7 +440,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 
 ## Caching
 
-JSON responses carry an `ETag` and `Cache-Control: no-cache`. Use `If-None-Match` for conditional requests:
+JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. Use `If-None-Match` for conditional requests:
 
 ```bash
 curl -v http://localhost:9000/services
