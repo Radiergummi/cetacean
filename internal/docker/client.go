@@ -492,7 +492,7 @@ func (c *Client) ScaleService(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -520,7 +520,7 @@ func (c *Client) UpdateServiceImage(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -540,9 +540,13 @@ func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service,
 			fmt.Errorf("service has no previous spec to rollback to"),
 		)
 	}
-	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, swarm.ServiceUpdateOptions{
-		Rollback: "previous",
-	})
+	_, err = c.docker.ServiceUpdate(
+		ctx,
+		svc.ID,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
+		svc.Spec,
+		swarm.ServiceUpdateOptions{Rollback: "previous"},
+	)
 	if err != nil {
 		return swarm.Service{}, err
 	}
@@ -558,7 +562,7 @@ func (c *Client) RestartService(ctx context.Context, id string) (swarm.Service, 
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -578,7 +582,12 @@ func (c *Client) UpdateNodeAvailability(
 		return swarm.Node{}, err
 	}
 	node.Spec.Availability = availability
-	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	err = c.docker.NodeUpdate(
+		ctx,
+		node.ID,
+		writeVersion(ctx, "node", node.ID, node.Version),
+		node.Spec,
+	)
 	if err != nil {
 		return swarm.Node{}, err
 	}
@@ -595,7 +604,12 @@ func (c *Client) UpdateNodeRole(
 		return swarm.Node{}, err
 	}
 	node.Spec.Role = role
-	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	err = c.docker.NodeUpdate(
+		ctx,
+		node.ID,
+		writeVersion(ctx, "node", node.ID, node.Version),
+		node.Spec,
+	)
 	if err != nil {
 		return swarm.Node{}, err
 	}
@@ -667,7 +681,12 @@ func (c *Client) UpdateConfigLabels(
 		return swarm.Config{}, err
 	}
 	cfg.Spec.Labels = updated
-	err = c.docker.ConfigUpdate(ctx, cfg.ID, cfg.Version, cfg.Spec)
+	err = c.docker.ConfigUpdate(
+		ctx,
+		cfg.ID,
+		writeVersion(ctx, "config", cfg.ID, cfg.Version),
+		cfg.Spec,
+	)
 	if err != nil {
 		return swarm.Config{}, err
 	}
@@ -688,7 +707,12 @@ func (c *Client) UpdateSecretLabels(
 		return swarm.Secret{}, err
 	}
 	sec.Spec.Labels = updated
-	err = c.docker.SecretUpdate(ctx, sec.ID, sec.Version, sec.Spec)
+	err = c.docker.SecretUpdate(
+		ctx,
+		sec.ID,
+		writeVersion(ctx, "secret", sec.ID, sec.Version),
+		sec.Spec,
+	)
 	if err != nil {
 		return swarm.Secret{}, err
 	}
@@ -753,7 +777,7 @@ func (c *Client) UpdateServiceEnv(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -777,7 +801,12 @@ func (c *Client) UpdateNodeLabels(
 		return swarm.Node{}, err
 	}
 	node.Spec.Labels = updated
-	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	err = c.docker.NodeUpdate(
+		ctx,
+		node.ID,
+		writeVersion(ctx, "node", node.ID, node.Version),
+		node.Spec,
+	)
 	if err != nil {
 		return swarm.Node{}, err
 	}
@@ -801,7 +830,7 @@ func (c *Client) UpdateServiceLabels(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -829,7 +858,7 @@ func (c *Client) UpdateServiceHealthcheck(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -855,7 +884,7 @@ func (c *Client) UpdateServiceEndpointMode(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -886,7 +915,7 @@ func (c *Client) UpdateServiceSpec(
 	if _, err := c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	); err != nil {
@@ -909,7 +938,7 @@ func (c *Client) UpdateServiceResources(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -932,7 +961,7 @@ func (c *Client) UpdateServicePlacement(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -958,7 +987,7 @@ func (c *Client) UpdateServicePorts(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -981,7 +1010,7 @@ func (c *Client) UpdateServiceUpdatePolicy(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1004,7 +1033,7 @@ func (c *Client) UpdateServiceRollbackPolicy(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1027,7 +1056,7 @@ func (c *Client) UpdateServiceLogDriver(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1053,7 +1082,7 @@ func (c *Client) UpdateServiceConfigs(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1079,7 +1108,7 @@ func (c *Client) UpdateServiceSecrets(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1102,7 +1131,7 @@ func (c *Client) UpdateServiceNetworks(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1128,7 +1157,7 @@ func (c *Client) UpdateServiceMounts(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
@@ -1159,7 +1188,7 @@ func (c *Client) UpdateServiceContainerConfig(
 	_, err = c.docker.ServiceUpdate(
 		ctx,
 		svc.ID,
-		svc.Version,
+		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
 		swarm.ServiceUpdateOptions{},
 	)
