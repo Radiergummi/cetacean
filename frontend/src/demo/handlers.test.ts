@@ -19,7 +19,7 @@ const server = setupServer(...handlers);
 
 beforeAll(() =>
   server.listen({
-    onUnhandledRequest: "error",
+    onUnhandledFrame: "error",
   }),
 );
 afterEach(() => server.resetHandlers());

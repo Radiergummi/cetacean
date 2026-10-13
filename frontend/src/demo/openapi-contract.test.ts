@@ -23,7 +23,7 @@ const clients: SSEClients = { global: new Set(), byType: new Map(), byId: new Ma
 const handlers = createHandlers(dataset, clients);
 const server = setupServer(...handlers);
 
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "bypass" }));
 afterAll(() => server.close());
 
 interface OpenAPIOperation {
