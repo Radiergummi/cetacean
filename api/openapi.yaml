@@ -175,8 +175,8 @@ paths:
       tags: [Meta]
       summary: Readiness check
       description: |
-        Returns 200 after the initial Docker sync completes,
-        503 while still syncing.
+        Returns 200 after the first sync that reaches the swarm — startup,
+        reconnect or periodic — 503 until then.
       security: []
       responses:
         "200":
@@ -190,7 +190,7 @@ paths:
                     type: string
                     example: ready
         "503":
-          description: Not ready (initial sync in progress)
+          description: Not ready (no sync has reached the swarm yet)
           content:
             application/json:
               schema:
