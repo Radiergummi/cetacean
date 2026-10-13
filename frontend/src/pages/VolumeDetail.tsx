@@ -68,7 +68,6 @@ export default function VolumeDetail() {
             resourceName={volume.Name}
             listPath={resourceParentPath({ listPath: "/volumes", stack })}
             onRemove={() => api.removeVolume(volume.Name)}
-            onForceRemove={() => api.removeVolume(volume.Name, true)}
             canDelete={allowedMethods.has("DELETE")}
             disabled={services.length > 0}
             disabledTitle="Cannot remove a volume that is in use by services"

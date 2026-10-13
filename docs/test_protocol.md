@@ -113,7 +113,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] **Docker Disk Usage section**: shows disk usage breakdown (images, containers, volumes, build cache) with doughnut chart when available
 - [ ] ActivitySection shows recent change events
 - [ ] **Remove button**: only enabled when node state is `down`; confirmation dialog requires typing hostname; removes node and navigates back
-- [ ] **Force remove**: if normal remove fails with a specific error, a "Force remove" button appears inline; click force-removes the node
+- [ ] **Force remove**: if removing a worker fails because it is not down, a "Force remove" button appears inline; click force-removes the node. A manager gets no "Force remove" button
 - [ ] SSE: change node availability externally—page updates in real time
 
 ---
@@ -310,7 +310,7 @@ All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Vol
 - [ ] Labels displayed
 - [ ] "Mounted by Services" table with links
 - [ ] Activity section
-- [ ] **Remove button**: disabled if in use; "Force remove" fallback on error; confirmation dialog
+- [ ] **Remove button**: disabled if in use; confirmation dialog; no "Force remove" fallback on error
 
 ---
 

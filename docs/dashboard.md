@@ -117,7 +117,7 @@ Actions hidden by permissions aren't rendered.
 
 Configs, secrets, networks, volumes, services, stacks, nodes, and tasks can also be removed from their detail page,
 behind a confirmation. A config, secret, network, or volume that a service still uses can't be removed, and its
-button says why. When Docker refuses to remove a volume, the page offers **Force remove**.
+button says why.
 
 Service and stack pages end with a collapsed **Compose file** section. Expanding it renders the resource as a
 compose document, with buttons to copy it or download it as a `.yaml` file. It redeploys to the state the cluster
