@@ -107,6 +107,13 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		tail = min(limit*10, maxLogLimit)
 	}
 
+	if !tryAcquire(&h.activeLogReads, maxLogReads) {
+		w.Header().Set("Retry-After", sse.RetryAfter())
+		writeErrorCode(w, r, "LOG009", "too many log reads in flight")
+		return
+	}
+	defer h.activeLogReads.Add(-1)
+
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
