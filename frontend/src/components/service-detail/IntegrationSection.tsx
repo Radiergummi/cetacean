@@ -5,6 +5,7 @@ import SegmentedControl from "@/components/SegmentedControl";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { showErrorToast } from "@/lib/showErrorToast";
 import { getErrorMessage } from "@/lib/utils";
 import { Code, ExternalLink, Layers, Pencil } from "lucide-react";
@@ -69,6 +70,7 @@ export function IntegrationSection({
   const activeView: View = (editing || !visualContent) && view === "graph" ? "structured" : view;
 
   useEscapeCancel(editing && activeView === "structured", cancel);
+  useLeaveGuard(editing);
 
   async function save() {
     if (!onSave) {
