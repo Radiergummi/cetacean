@@ -125,6 +125,21 @@ func DrainImpactGraph(
 	return graph
 }
 
+// NoteHiddenNodes marks an assessment drawn from only the nodes the caller may
+// read: a service it calls stranded may be placeable on one of the others, and
+// the view exists to keep a drain from stranding work. A no-op when none hid.
+func NoteHiddenNodes(graph *TopologyGraph, visible, hidden int) {
+	if hidden <= 0 {
+		return
+	}
+
+	graph.Note = fmt.Sprintf(
+		"assessed against the %d node(s) you can read; %d more are hidden by "+
+			"your grants, so a service reported stranded may be placeable on one of them",
+		visible, hidden,
+	)
+}
+
 // placementFor decides where one affected service could go: its state, its
 // detail line, and the candidates to draw an edge to. A stranded service
 // reports why the *last* candidate failed, since they usually fail alike. Work
