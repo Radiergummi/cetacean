@@ -1052,7 +1052,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 	}
 	slog.Info("MCP server enabled",
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
-		"protocol_version", mcp.ProtocolVersion)
+		"protocol_versions", mcp.SupportedProtocolVersions)
 
 	// A browser-based MCP client needs its origin named: the Origin guard
 	// matches exactly, so neither an empty list nor "*" admits one.

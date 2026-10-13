@@ -34,32 +34,8 @@ func postRaw(
 	return result.StatusCode, env
 }
 
-// TestLegacyInitializeIsRejected is the point of dropping legacy support: a
-// client on an older revision must be told plainly, not served a session that
-// cannot receive notifications.
-func TestLegacyInitializeIsRejected(t *testing.T) {
-	handler := newTestServer(t).Handler()
-
-	status, env := postRaw(t, handler, `{
-		"jsonrpc":"2.0","id":1,"method":"initialize",
-		"params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"old","version":"1"}}
-	}`, nil)
-
-	if status == http.StatusOK && env.Error == nil {
-		t.Fatal("legacy initialize was accepted; the server no longer supports that protocol era")
-	}
-
-	if env.Error == nil {
-		t.Fatalf("expected a JSON-RPC error, got status %d", status)
-	}
-
-	if !strings.Contains(env.Error.Message, mcplib.LATEST_PROTOCOL_VERSION) {
-		t.Errorf("error should name the required protocol version, got %q", env.Error.Message)
-	}
-}
-
-// TestRequestWithoutProtocolVersionIsRejected covers the other legacy shape: a
-// bare call that never declares a version at all.
+// TestRequestWithoutProtocolVersionIsRejected — only the handshake may omit
+// the version; a bare call after it has none to go on.
 func TestRequestWithoutProtocolVersionIsRejected(t *testing.T) {
 	handler := newTestServer(t).Handler()
 
@@ -71,8 +47,8 @@ func TestRequestWithoutProtocolVersionIsRejected(t *testing.T) {
 	}
 }
 
-// TestLegacySessionHeaderIsRejected — Mcp-Session-Id has no meaning any more,
-// and honouring it would resurrect the session path we removed.
+// TestLegacySessionHeaderIsRejected — no session is ever minted, and honouring
+// one would resurrect the session path even the legacy subset does without.
 func TestLegacySessionHeaderIsRejected(t *testing.T) {
 	handler := newTestServer(t).Handler()
 
@@ -136,10 +112,10 @@ func TestModernRequestPassesTheGate(t *testing.T) {
 	}
 }
 
-// TestDiscoverAdvertisesOnlyTheSupportedVersion — server/discover is how a
+// TestDiscoverAdvertisesOnlyTheSupportedVersions — server/discover is how a
 // client learns what to speak. Advertising revisions the gate turns away would
 // send a well-behaved client straight into a rejection.
-func TestDiscoverAdvertisesOnlyTheSupportedVersion(t *testing.T) {
+func TestDiscoverAdvertisesOnlyTheSupportedVersions(t *testing.T) {
 	handler := newTestServer(t).Handler()
 
 	_, env := mcpModern(t, handler, 1, "server/discover", `{}`)
@@ -154,17 +130,20 @@ func TestDiscoverAdvertisesOnlyTheSupportedVersion(t *testing.T) {
 		t.Fatalf("decode server/discover: %v", err)
 	}
 
-	want := []string{mcplib.LATEST_PROTOCOL_VERSION}
-	if !slices.Equal(result.SupportedVersions, want) {
-		t.Fatalf("supportedVersions = %v, want %v", result.SupportedVersions, want)
+	if !slices.Equal(result.SupportedVersions, SupportedProtocolVersions) {
+		t.Fatalf(
+			"supportedVersions = %v, want %v",
+			result.SupportedVersions,
+			SupportedProtocolVersions,
+		)
 	}
 }
 
-// TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersion pins the payload a
-// client actually retries from. mcp-go treats anything sorting after the
+// TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersions pins the payload
+// a client actually retries from. mcp-go treats anything sorting after the
 // current revision as modern, so a later version reaches its own rejection —
-// which lists every revision the SDK knows, four of them refused here.
-func TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersion(t *testing.T) {
+// which lists every revision the SDK knows, three of them refused here.
+func TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersions(t *testing.T) {
 	handler := newTestServer(t).Handler()
 
 	for _, version := range []string{"2027-01-01", "v999.0.0"} {
@@ -196,9 +175,9 @@ func TestLaterVersionRejectionAdvertisesOnlyTheSupportedVersion(t *testing.T) {
 				t.Fatalf("version %q was accepted (status %d)", version, rec.Code)
 			}
 
-			want := []string{mcplib.LATEST_PROTOCOL_VERSION}
-			if !slices.Equal(envelope.Error.Data.Supported, want) {
-				t.Errorf("supported = %v, want %v", envelope.Error.Data.Supported, want)
+			if !slices.Equal(envelope.Error.Data.Supported, SupportedProtocolVersions) {
+				t.Errorf("supported = %v, want %v",
+					envelope.Error.Data.Supported, SupportedProtocolVersions)
 			}
 		})
 	}

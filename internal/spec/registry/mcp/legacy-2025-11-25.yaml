@@ -1,0 +1,72 @@
+# Hand-written: the 2025-11-25 revision, which /mcp serves in its stateless
+# subset beside 2026-07-28. The conformance suite publishes no requirement file
+# for it, so scripts/spec-genmcp does not touch this.
+
+source: MCP 2025-11-25
+title: Lifecycle and Streamable HTTP transport
+revision: "2025-11-25"
+reviewed: 2026-10-10
+url:
+  - https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle
+  - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+
+inventory:
+  from: >-
+    The statements addressed to the server in the lifecycle's "Version
+    Negotiation" and the transport's "Protocol Version Header"; item 3 of
+    "Listening for Messages from the Server"; and the statement addressed to
+    the server in item 5 of "Session Management".
+  count: 7
+
+requirements:
+  - id: initialize-echoes-a-supported-version
+    level: MUST
+    text: >-
+      If the server supports the requested protocol version, it MUST respond
+      with the same version.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation
+
+  - id: initialize-answers-a-supported-version
+    level: MUST
+    text: >-
+      Otherwise, the server MUST respond with another protocol version it
+      supports.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation
+
+  - id: initialize-answers-the-latest-version
+    level: SHOULD
+    text: >-
+      This SHOULD be the latest version supported by the server.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle#version-negotiation
+
+  - id: missing-header-assumes-2025-03-26
+    level: SHOULD
+    text: >-
+      For backwards compatibility, if the server does not receive an
+      MCP-Protocol-Version header, and has no other way to identify the
+      version - for example, by relying on the protocol version negotiated
+      during initialization - the server SHOULD assume protocol version
+      2025-03-26.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#protocol-version-header
+
+  - id: unsupported-version-header-is-400
+    level: MUST
+    text: >-
+      If the server receives a request with an invalid or unsupported
+      MCP-Protocol-Version, it MUST respond with 400 Bad Request.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#protocol-version-header
+
+  - id: get-is-a-stream-or-405
+    level: MUST
+    text: >-
+      The server MUST either return Content-Type: text/event-stream in response
+      to this HTTP GET, or else return HTTP 405 Method Not Allowed, indicating
+      that the server does not offer an SSE stream at this endpoint.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#listening-for-messages-from-the-server
+
+  - id: delete-may-be-405
+    level: MAY
+    text: >-
+      The server MAY respond to this request with HTTP 405 Method Not Allowed,
+      indicating that the server does not allow clients to terminate sessions.
+    url: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management

@@ -413,6 +413,7 @@ func (s *Server) installSubscriptionHooks() *mcpserver.Hooks {
 
 	s.installTaskTTLHook(h)
 	s.installTaskOwnerHooks(h)
+	installLegacyInitializeHooks(h)
 
 	// mcp-go tracks subscriptions by type-asserting the session to
 	// SessionWithResourceSubscriptions, which its streamable-HTTP session does
