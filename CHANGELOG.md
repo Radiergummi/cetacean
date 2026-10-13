@@ -118,6 +118,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Recommendation fix buttons and Force Rotate on the swarm's CA panel no longer appear for callers who can't use them
 - Logs of a service with a TTY are read instead of failing with `LOG007` or an empty live tail, and a service's own `--log-opt` labels no longer leave the raw label prefix in every message
 - The activity feed, `GET /history` and the history feeds name tasks as `service.slot`, as MCP does, instead of by their IDs
+- The consent page adds `frame-ancestors 'none'` to the global Content Security Policy instead of replacing it, and its nonce cookie is scoped to the OAuth paths under `server.base_path`
+- The API explorer's policy no longer allows inline scripts, and a caller's `traceparent` can no longer switch off tracing of its own requests
+- An OAuth client evicted at `oauth.dcr_max_clients` is logged; the docs describe the eviction as oldest-first, which it is
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
