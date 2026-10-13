@@ -5,6 +5,7 @@ import { EditablePanel } from "@/components/service-detail/EditablePanel";
 import { PlacementPanel } from "@/components/service-detail/PlacementPanel";
 import { Button } from "@/components/ui/button";
 import { NumberField } from "@/components/ui/number-field";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,10 +21,12 @@ export function PlacementEditor({
   onSaved,
   canEdit = false,
 }: PlacementEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/placement`);
   const [constraints, setConstraints] = useState<string[]>([]);
   const [maxReplicas, setMaxReplicas] = useState<number>(0);
 
   function resetForm() {
+    version.capture();
     setConstraints([...(placement?.Constraints ?? [])]);
     setMaxReplicas(placement?.MaxReplicas ?? 0);
   }
@@ -40,11 +43,15 @@ export function PlacementEditor({
     // Fetch fresh placement to avoid overwriting externally changed Preferences
     const current = await api.servicePlacement(serviceId);
 
-    await api.putServicePlacement(serviceId, {
-      Constraints: nonEmpty.length > 0 ? nonEmpty : undefined,
-      Preferences: current?.Preferences,
-      MaxReplicas: maxReplicas || undefined,
-    });
+    await api.putServicePlacement(
+      serviceId,
+      {
+        Constraints: nonEmpty.length > 0 ? nonEmpty : undefined,
+        Preferences: current?.Preferences,
+        MaxReplicas: maxReplicas || undefined,
+      },
+      await version.ifMatch(),
+    );
 
     onSaved();
   }

@@ -4,6 +4,7 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { RadioCard, RadioCardGroup } from "@/components/ui/radio-card";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { Globe, Pencil, Shuffle } from "lucide-react";
@@ -20,6 +21,7 @@ export function EndpointModeEditor({
   currentMode: EndpointMode;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/endpoint-mode`);
   const [editing, setEditing] = useState(false);
   const [mode, setMode] = useState<EndpointMode>(currentMode);
   useEscapeCancel(editing, () => setEditing(false));
@@ -27,6 +29,7 @@ export function EndpointModeEditor({
   const action = useAsyncAction({ toast: true });
 
   function openEdit() {
+    version.capture();
     setMode(currentMode);
     setEditing(true);
   }
@@ -39,7 +42,7 @@ export function EndpointModeEditor({
     }
 
     await action.execute(async () => {
-      await api.updateServiceEndpointMode(serviceId, mode);
+      await api.updateServiceEndpointMode(serviceId, mode, await version.ifMatch());
       setEditing(false);
     }, "Failed to update endpoint mode");
   }

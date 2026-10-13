@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { ContainerConfig } from "@/api/types";
 import { DescriptionRow } from "@/components/data";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { useState } from "react";
 
 export function DnsEditor({
@@ -17,11 +18,13 @@ export function DnsEditor({
   onSaved: (updated: ContainerConfig) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/container-config`);
   const [nameservers, setNameservers] = useState<string[]>([]);
   const [searchDomains, setSearchDomains] = useState<string[]>([]);
   const [resolverOptions, setResolverOptions] = useState<string[]>([]);
 
   function resetForm() {
+    version.capture();
     setNameservers(config.dnsConfig?.nameservers ?? []);
     setSearchDomains(config.dnsConfig?.search ?? []);
     setResolverOptions(config.dnsConfig?.options ?? []);
@@ -40,7 +43,11 @@ export function DnsEditor({
       };
     }
 
-    const updated = await api.patchServiceContainerConfig(serviceId, patch);
+    const updated = await api.patchServiceContainerConfig(
+      serviceId,
+      patch,
+      await version.ifMatch(),
+    );
     onSaved(updated);
   }
 

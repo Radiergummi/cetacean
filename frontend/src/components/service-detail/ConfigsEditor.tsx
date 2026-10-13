@@ -5,6 +5,7 @@ import ResourceName from "@/components/ResourceName";
 import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { splitStackPrefix } from "@/lib/searchConstants";
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
@@ -21,6 +22,7 @@ export function ConfigsEditor({
   onSaved,
   canEdit = false,
 }: ConfigsEditorProps & { canEdit?: boolean }) {
+  const version = useEditVersion(`/services/${serviceId}/configs`);
   const [availableConfigs, setAvailableConfigs] = useState<ComboboxOption[]>([]);
   const [newConfigId, setNewConfigId] = useState("");
   const [newTargetPath, setNewTargetPath] = useState("");
@@ -57,7 +59,10 @@ export function ConfigsEditor({
       columns={["Config", "Target"]}
       defaultOpen={configs.length > 0}
       editDisabled={!canEdit}
-      onEditStart={fetchConfigs}
+      onEditStart={() => {
+        version.capture();
+        fetchConfigs();
+      }}
       emptyLabel="No configs attached"
       emptyHint="Click Edit to attach Docker configs to this service."
       keyFn={({ configID }) => configID}
@@ -128,7 +133,7 @@ export function ConfigsEditor({
         setNewTargetPath("");
       }}
       onSave={async (items) => {
-        const result = await api.patchServiceConfigs(serviceId, items);
+        const result = await api.patchServiceConfigs(serviceId, items, await version.ifMatch());
         onSaved(result.configs);
       }}
     />

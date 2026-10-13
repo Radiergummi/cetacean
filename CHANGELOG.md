@@ -160,6 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Memory no longer grows with every task ID the event history has ever seen
 - Dashboard pages without charts or graphs no longer download the chart and graph code on first load
 - A finding picked in the recommendations widget reaches the model with its resource names and text quoted as a JSON value marked as cluster data
+- Saving an editor on a service, node, config or secret no longer overwrites a change someone made after you opened it; you are asked to reload instead
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
 - An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings

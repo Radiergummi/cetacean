@@ -57,7 +57,7 @@ export default function ConfigDetail() {
       history={history}
       allowedMethods={allowedMethods}
       onRemove={() => api.removeConfig(config.ID)}
-      onPatchLabels={(ops) => api.patchConfigLabels(config.ID, ops)}
+      onPatchLabels={(ops, ifMatch) => api.patchConfigLabels(config.ID, ops, ifMatch)}
     >
       {decoded != null && (
         <CollapsibleSection

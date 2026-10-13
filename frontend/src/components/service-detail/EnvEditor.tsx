@@ -2,6 +2,7 @@ import { api } from "@/api/client";
 import type { PatchOp } from "@/api/types";
 import { KeyValueEditor } from "@/components/KeyValueEditor";
 import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
+import { useEditVersion } from "@/hooks/useEditVersion";
 import { handleCopyWithTemplates, renderSwarmTemplate } from "@/lib/swarmTemplates";
 
 export function EnvEditor({
@@ -15,8 +16,10 @@ export function EnvEditor({
   onSaved: (updated: Record<string, string>) => void;
   canEdit?: boolean | undefined;
 }) {
+  const version = useEditVersion(`/services/${serviceId}/env`);
+
   async function handleSave(operations: PatchOp[]) {
-    const updated = await api.patchServiceEnv(serviceId, operations);
+    const updated = await api.patchServiceEnv(serviceId, operations, await version.ifMatch());
 
     onSaved(updated);
 
@@ -36,6 +39,7 @@ export function EnvEditor({
       keyPlaceholder="NEW_VAR"
       valuePlaceholder="value"
       onSave={handleSave}
+      onEditStart={version.capture}
       renderValue={renderSwarmTemplate}
       onCopyValue={handleCopyWithTemplates}
       editDisabled={!canEdit}

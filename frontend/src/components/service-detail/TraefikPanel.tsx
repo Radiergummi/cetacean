@@ -360,7 +360,7 @@ export function TraefikPanel({
     setMiddlewareForms(initMiddlewareForms(integration));
   }
 
-  async function handleSave() {
+  async function handleSave(ifMatch: string | undefined) {
     const before = serializeTraefikLabels(
       seed.enabled,
       initRouterForms(seed),
@@ -368,7 +368,7 @@ export function TraefikPanel({
       initMiddlewareForms(seed),
     );
     const after = serializeTraefikLabels(formEnabled, routerForms, serviceForms, middlewareForms);
-    await saveModelledLabels(rawLabels, before, after, serviceId, onSaved);
+    await saveModelledLabels(rawLabels, before, after, serviceId, onSaved, ifMatch);
   }
 
   function updateRouter(index: number, updated: RouterFormState) {

@@ -171,8 +171,8 @@ export function DiunPanel({
     return labels;
   }
 
-  async function handleSave() {
-    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
+  async function handleSave(ifMatch: string | undefined) {
+    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved, ifMatch);
   }
 
   function addMetadataEntry() {

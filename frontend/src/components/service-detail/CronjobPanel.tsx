@@ -90,12 +90,12 @@ export function CronjobPanel({
     return labels;
   }
 
-  async function handleSave() {
+  async function handleSave(ifMatch: string | undefined) {
     if (cronError) {
       throw new Error(cronError);
     }
 
-    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved);
+    await saveIntegrationLabels(rawLabels, serializeToLabels(), serviceId, onSaved, ifMatch);
   }
 
   const editForm = (
