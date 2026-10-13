@@ -2,8 +2,11 @@ package prometheus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,23 +33,18 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
-		return nil, err
+		return nil, invalidRequest(err)
 	}
 
 	resp, err := pc.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("prometheus query failed: %w", err)
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf(
-			"prometheus returned HTTP %d for %s: %s",
-			resp.StatusCode,
-			u,
-			string(preview),
-		)
+		return nil, statusError(resp.StatusCode, preview)
 	}
 
 	var body struct {
@@ -62,7 +60,7 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&body); err != nil {
-		return nil, fmt.Errorf("prometheus response parse error: %w", err)
+		return nil, &redactedError{message: "prometheus response parse error", cause: err}
 	}
 	if body.Status != "success" {
 		return nil, fmt.Errorf("prometheus error: %s: %s", body.ErrorType, body.Error)
@@ -155,19 +153,19 @@ func (pc *Client) RangeQueryRaw(
 		"&step=" + url.QueryEscape(step)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, invalidRequest(err)
 	}
 	resp, err := pc.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
+		return nil, statusError(resp.StatusCode, body)
 	}
 	return body, nil
 }
@@ -176,19 +174,60 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, invalidRequest(err)
 	}
 	resp, err := pc.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
-		return nil, err
+		return nil, unreachable(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("prometheus returned %d: %s", resp.StatusCode, string(body))
+		return nil, statusError(resp.StatusCode, body)
 	}
 	return body, nil
+}
+
+// redactedError is what callers relay to clients: a fixed message, since the
+// cause names the internal Prometheus address. Logging it records the cause.
+type redactedError struct {
+	message string
+	cause   error
+}
+
+func (e *redactedError) Error() string { return e.message }
+
+func (e *redactedError) Unwrap() error { return e.cause }
+
+func (e *redactedError) LogValue() slog.Value {
+	return slog.StringValue(e.message + ": " + e.cause.Error())
+}
+
+func unreachable(err error) error {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return &redactedError{message: "prometheus query timed out", cause: err}
+	}
+
+	return &redactedError{message: "prometheus unreachable", cause: err}
+}
+
+// statusError keeps the upstream body as the logged cause, since the message
+// drops a 5xx's text.
+func statusError(status int, body []byte) error {
+	if len(body) > 512 {
+		body = body[:512]
+	}
+
+	return &redactedError{
+		message: prometheusErrorDetail(status, body),
+		cause:   errors.New(string(body)),
+	}
+}
+
+func invalidRequest(err error) error {
+	return &redactedError{message: "failed to create prometheus request", cause: err}
 }

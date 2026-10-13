@@ -141,7 +141,7 @@ The cluster overview and the metrics console show a banner when something is mis
 | -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Healthy              | Prometheus answers and both exporters cover every node           | Nothing                                                                        |
 | Not configured       | `prometheus.url` is unset                                        | Deploy instructions. Dismissible                                               |
-| Unreachable          | `prometheus.url` is set but queries fail                         | Warning with the connection error. Not dismissible                             |
+| Unreachable          | `prometheus.url` is set but queries fail                         | Warning. The cause is in Cetacean's log. Not dismissible                       |
 | Partially configured | Prometheus answers, but an exporter covers no nodes or only some | One line per exporter naming what's missing and on how many nodes. Dismissible |
 
 The [MCP][mcp-tools] `get_metrics` tool reports the same gap rather than charting zeros. When every series comes
@@ -152,6 +152,9 @@ cluster" or the node-exporter equivalent.
 
 Browsers query Prometheus through Cetacean rather than directly, so Prometheus needs no CORS configuration and
 never has to be reachable from outside the swarm network. See the [API reference][api] for the proxy endpoints.
+
+Under an [ACL policy][authorization], only a caller with `read` on the bare resource `*` may use the proxy.
+Anyone else sees the dashboard without its charts and the query console without a query field.
 
 ## Self-metrics
 
@@ -194,6 +197,7 @@ The same state is available without Prometheus as the body of `GET /-/health`; s
 
 [api]: api
 [authentication]: authentication#exempt-paths
+[authorization]: authorization
 [config-file]: configuration#config-file
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools

@@ -248,14 +248,16 @@ func (s *Server) rankMetrics(
 	end := time.Now()
 	start := end.Add(-window.window)
 
+	query := fmt.Sprintf(spec.query, top, scope)
 	results, err := s.prom.RangeQuery(
 		ctx,
-		fmt.Sprintf(spec.query, top, scope),
+		query,
 		strconv.FormatInt(start.Unix(), 10),
 		strconv.FormatInt(end.Unix(), 10),
 		strconv.Itoa(int(window.step.Seconds()))+"s",
 	)
 	if err != nil {
+		logQueryError(ctx, query, err)
 		return "", fmt.Errorf("query metrics: %w", err)
 	}
 

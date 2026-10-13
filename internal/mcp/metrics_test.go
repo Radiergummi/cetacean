@@ -1,8 +1,11 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -289,6 +292,30 @@ func TestGetMetricsSaysWhenPrometheusIsUnconfigured(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "CETACEAN_PROMETHEUS_URL") {
 		t.Errorf("error = %q, want it to name the setting that enables metrics", err)
+	}
+}
+
+// The agent sees the query error's fixed message only, so its cause belongs in
+// the log, for a single chart and a ranking alike.
+func TestGetMetricsLogsTheCauseOfAFailedQuery(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	defer slog.SetDefault(previous)
+
+	srv := metricsServer(t, &fakeQuerier{err: errors.New("dial tcp 10.0.0.9:9090: refused")})
+
+	for _, args := range []map[string]any{
+		{"target": "service", "id": "svc1"},
+		{"target": "cluster", "top": float64(5)},
+	} {
+		logged.Reset()
+		if _, err := callGetMetrics(t, srv, args); err == nil {
+			t.Fatalf("%v: expected an error", args)
+		}
+		if !strings.Contains(logged.String(), "10.0.0.9:9090") {
+			t.Errorf("%v: the log omits the cause: %q", args, logged.String())
+		}
 	}
 }
 

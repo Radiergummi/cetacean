@@ -300,6 +300,7 @@ paths:
                   value:
                     prometheusConfigured: true
                     prometheusReachable: true
+                    queryable: true
                     nodeExporter: { targets: 3, nodes: 3 }
                     cadvisor: { targets: 3, nodes: 3 }
                 partial:
@@ -307,6 +308,7 @@ paths:
                   value:
                     prometheusConfigured: true
                     prometheusReachable: true
+                    queryable: true
                     nodeExporter: { targets: 2, nodes: 3 }
                     cadvisor: { targets: 3, nodes: 3 }
                 unreachable:
@@ -314,7 +316,8 @@ paths:
                   value:
                     prometheusConfigured: true
                     prometheusReachable: false
-                    error: "dial tcp: lookup prometheus on 127.0.0.11:53: no such host"
+                    queryable: true
+                    error: prometheus unreachable
                     nodeExporter: { targets: 0, nodes: 3 }
                     cadvisor: { targets: 0, nodes: 3 }
                 unconfigured:
@@ -322,8 +325,17 @@ paths:
                   value:
                     prometheusConfigured: false
                     prometheusReachable: false
+                    queryable: true
                     nodeExporter: { targets: 0, nodes: 3 }
                     cadvisor: { targets: 0, nodes: 3 }
+                notPermitted:
+                  summary: Caller lacks read on "*", so the dashboard hides its charts
+                  value:
+                    prometheusConfigured: true
+                    prometheusReachable: true
+                    queryable: false
+                    nodeExporter: { targets: 3, nodes: 3 }
+                    cadvisor: { targets: 3, nodes: 3 }
 
   /metrics/labels:
     get:
@@ -333,6 +345,8 @@ paths:
       description: |
         Proxied Prometheus label names endpoint. Returns all known label names,
         optionally filtered by series selectors via `match[]`.
+
+        Under an ACL policy, requires a `read` grant on the bare resource `*`.
       parameters:
         - name: match[]
           in: query
@@ -360,6 +374,8 @@ paths:
               schema:
                 type: object
                 description: Prometheus labels response (proxied as-is)
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           description: Prometheus not configured
 
@@ -371,6 +387,8 @@ paths:
       description: |
         Proxied Prometheus label values endpoint. Returns all known values
         for a given label name, optionally filtered by series selectors via `match[]`.
+
+        Under an ACL policy, requires a `read` grant on the bare resource `*`.
       parameters:
         - name: name
           in: path
@@ -395,6 +413,8 @@ paths:
                 description: Prometheus label values response (proxied as-is)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           description: Prometheus not configured
 
@@ -519,7 +539,8 @@ paths:
         - `text/html`: metrics console SPA
 
         Instant vs range is determined by presence of `start`+`end` parameters.
-        Returns 503 if Prometheus is not configured.
+        Returns 503 if Prometheus is not configured. Under an ACL policy, the JSON
+        and SSE forms require a `read` grant on the bare resource `*`.
       parameters:
         - name: query
           in: query
@@ -573,6 +594,8 @@ paths:
                   SSE stream with `initial` (full range) and `point` (single value) events
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
         "503":
@@ -7191,6 +7214,11 @@ components:
           type: boolean
         prometheusReachable:
           type: boolean
+        queryable:
+          type: boolean
+          description: |
+            Whether this caller may query the Prometheus proxy (`GET /metrics`,
+            `GET /metrics/labels`). Under an ACL policy, that needs `read` on `*`.
         error:
           type: string
           description: Diagnostic message when Prometheus is configured but unreachable.
@@ -7207,6 +7235,7 @@ components:
       example:
         prometheusConfigured: true
         prometheusReachable: true
+        queryable: true
         nodeExporter: { targets: 3, nodes: 3 }
         cadvisor: { targets: 3, nodes: 3 }
 

@@ -1316,6 +1316,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<MonitoringStatus>({
         prometheusConfigured: true,
         prometheusReachable: true,
+        queryable: true,
         nodeExporter: { targets: 3, nodes: 3 },
         cadvisor: { targets: 3, nodes: 3 },
       });

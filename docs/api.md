@@ -629,6 +629,9 @@ curl -H "Accept: text/event-stream" "http://localhost:9000/metrics?query=up&step
 
 Append `point` events to the data you already hold to build a rolling window.
 
+Under an [ACL policy][authorization], the stream and the Prometheus proxy (`GET /metrics`, `GET /metrics/labels`,
+`GET /metrics/labels/{name}`) answer `403 ACL001` unless the caller holds `read` on the bare resource `*`.
+
 ### Stream contract
 
 `GET /api/asyncapi` describes all twenty streams as an [AsyncAPI 3.0](https://www.asyncapi.com/) document: their

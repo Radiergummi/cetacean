@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - **Breaking:** adding a bind mount, named pipe, driver-configured volume or Linux capability to a service needs operations level 3, through the API, the dashboard and MCP; ones it already has stay editable at level 2
 - **Breaking:** the bundled monitoring stack no longer publishes Prometheus on port 9090 of every node; Cetacean reaches it over the overlay, and the monitoring docs show how to open its UI
+- **Breaking:** under an ACL policy, `GET /metrics`, its stream, and `GET /metrics/labels` need `read` on the bare resource `*`; anyone else gets `403` and the dashboard leaves out its charts. MCP `get_metrics` is unchanged
 - **Breaking:** MCP's `remove_task` needs operations level 3, matching `DELETE /tasks/{id}`; it was available from level 1
 - **Breaking:** the OAuth authorization server is opt-in—set `oauth.enabled`. Under any auth mode but `none`, MCP needs it or the active mode named in `mcp.auth_bypass`; startup refuses with neither. An mTLS deployment now runs no authorization server
 - **Breaking:** the authorization server's settings moved to their own `[oauth]` section and `CETACEAN_OAUTH_*` variables: `issuer`, `signing_key`, the three TTLs, `require_resource_indicator`, the `dcr_*` trio and `cimd_enabled`
@@ -121,6 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The consent page adds `frame-ancestors 'none'` to the global Content Security Policy instead of replacing it, and its nonce cookie is scoped to the OAuth paths under `server.base_path`
 - The API explorer's policy no longer allows inline scripts, and a caller's `traceparent` can no longer switch off tracing of its own requests
 - An OAuth client evicted at `oauth.dcr_max_clients` is logged; the docs describe the eviction as oldest-first, which it is
+- Metrics errors no longer name Prometheus's address, and relay its message only for a rejected query. When it's unreachable, fails, or times out, the banner, `GET /metrics/status`, the metrics stream, and MCP `get_metrics` say only that; the cause is logged
+- `GET /metrics` and `GET /metrics/labels` answer while Docker is unreachable
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of

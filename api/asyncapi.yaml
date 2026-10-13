@@ -620,7 +620,7 @@ components:
       examples:
         - name: prometheusUnreachable
           payload:
-            error: "prometheus request failed: connection refused"
+            error: prometheus unreachable
             errorType: server_error
 
   schemas:

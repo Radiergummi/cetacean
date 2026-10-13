@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"regexp"
 	"slices"
@@ -319,6 +320,14 @@ func (s *Server) requireExporter(
 	return fmt.Errorf("metrics are unavailable: %s", probe.missing)
 }
 
+// logQueryError records the cause the tool result omits. It logs err itself:
+// wrapped, its LogValue no longer resolves and the cause is lost.
+func logQueryError(ctx context.Context, query string, err error) {
+	if ctx.Err() == nil {
+		slog.Warn("MCP metrics query failed", "query", query, "error", err)
+	}
+}
+
 // queryMetricSeries runs one query and flattens what comes back. Every
 // catalogue query aggregates to a single series; if Prometheus returns several
 // anyway, their points are merged in time order rather than dropping all but
@@ -337,6 +346,7 @@ func (s *Server) queryMetricSeries(
 		strconv.Itoa(int(step.Seconds()))+"s",
 	)
 	if err != nil {
+		logQueryError(ctx, query, err)
 		return nil, fmt.Errorf("query metrics: %w", err)
 	}
 

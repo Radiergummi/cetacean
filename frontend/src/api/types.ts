@@ -573,6 +573,10 @@ export interface TargetStatus {
 export interface MonitoringStatus {
   prometheusConfigured: boolean;
   prometheusReachable: boolean;
+  /**
+   * Whether this caller may query the Prometheus proxy at all.
+   */
+  queryable: boolean;
   error?: string | undefined;
   nodeExporter: TargetStatus | null;
   cadvisor: TargetStatus | null;

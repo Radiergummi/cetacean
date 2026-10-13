@@ -14,6 +14,11 @@ interface Props {
 export default function MonitoringStatus({ status, source }: Props) {
   const [dismissed, setDismissed] = useState(() => readStoredValue(dismissKey) === "true");
 
+  // Nothing here is this caller's to fix; the charts are left out instead.
+  if (!status.queryable) {
+    return null;
+  }
+
   // Fully healthy — nothing to show
   if (status.prometheusConfigured && status.prometheusReachable) {
     const nodeExporterRunning =
@@ -64,9 +69,9 @@ export default function MonitoringStatus({ status, source }: Props) {
       >
         <p className="text-sm">
           <strong>Cannot reach Prometheus</strong> — metrics unavailable. Check that the Prometheus
-          service is running and reachable from Cetacean.
+          service is running and reachable from Cetacean; Cetacean's log has the cause.
         </p>
-        {status.error && (
+        {status.error && status.error !== "prometheus unreachable" && (
           <pre className="mt-2 max-w-full overflow-x-auto rounded bg-status-warning/15 px-2 py-1 text-xs">
             {status.error}
           </pre>

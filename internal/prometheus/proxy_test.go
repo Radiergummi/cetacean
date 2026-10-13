@@ -3,6 +3,7 @@ package prometheus
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -148,5 +149,63 @@ func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("status=%d, want 503", w.Code)
+	}
+}
+
+// A rejected query reaches the caller with Prometheus's reason, never with
+// the internal address the proxy forwarded it to.
+func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(
+			[]byte(
+				`{"status":"error","errorType":"bad_data","error":"parse error: unexpected end of input"}`,
+			),
+		)
+	}))
+	defer prom.Close()
+
+	proxy := NewProxy(prom.URL, noopErrorWriter)
+
+	req := httptest.NewRequest("GET", "/metrics?query=up%7B", nil)
+	w := httptest.NewRecorder()
+	proxy.HandleMetrics(w, req)
+
+	body := w.Body.String()
+	if strings.Contains(body, prom.URL) || strings.Contains(body, "127.0.0.1") {
+		t.Errorf("the error names the Prometheus address: %s", body)
+	}
+	if !strings.Contains(body, "parse error: unexpected end of input") {
+		t.Errorf("the error drops Prometheus's reason: %s", body)
+	}
+}
+
+// Prometheus's own query errors are 4xx and the caller's to fix; a 5xx may come
+// from a gateway in front of it, whose message can name internal addresses.
+func TestMetricsProxyHandler_ForwardsTheUpstreamReasonOnlyFor4xx(t *testing.T) {
+	const reason = "upstream 10.0.0.9:9090 refused"
+
+	for status, forwarded := range map[int]bool{
+		http.StatusBadRequest:          true,
+		http.StatusUnprocessableEntity: true,
+		http.StatusBadGateway:          false,
+		http.StatusServiceUnavailable:  false,
+	} {
+		prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			w.Write([]byte(`{"status":"error","errorType":"x","error":"` + reason + `"}`))
+		}))
+
+		w := httptest.NewRecorder()
+		NewProxy(prom.URL, noopErrorWriter).
+			HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		prom.Close()
+
+		if got := strings.Contains(w.Body.String(), reason); got != forwarded {
+			t.Errorf(
+				"HTTP %d: forwarded = %v, want %v: %s",
+				status, got, forwarded, w.Body.String(),
+			)
+		}
 	}
 }

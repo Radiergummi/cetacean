@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	json "github.com/goccy/go-json"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
@@ -98,10 +99,7 @@ func (p *Proxy) proxyTo(
 		"status", resp.StatusCode,
 		"body", string(preview),
 	)
-	p.writeError(w, r, "MTR002", fmt.Sprintf(
-		"prometheus returned HTTP %d for %s",
-		resp.StatusCode, targetURL,
-	))
+	p.writeError(w, r, "MTR002", prometheusErrorDetail(resp.StatusCode, preview))
 }
 
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.
@@ -177,4 +175,19 @@ func writeNilProxyError(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "prometheus not configured", http.StatusServiceUnavailable)
+}
+
+// prometheusErrorDetail is what a client sees of a Prometheus error: its own
+// message for a 4xx (a PromQL error is the caller's to fix), never the URL, and
+// never a 5xx's text, which a gateway in front of Prometheus may have written.
+func prometheusErrorDetail(status int, body []byte) string {
+	var parsed struct {
+		Error string `json:"error"`
+	}
+	if status >= 400 && status < 500 &&
+		json.Unmarshal(body, &parsed) == nil && parsed.Error != "" {
+		return fmt.Sprintf("prometheus returned HTTP %d: %s", status, parsed.Error)
+	}
+
+	return fmt.Sprintf("prometheus returned HTTP %d", status)
 }

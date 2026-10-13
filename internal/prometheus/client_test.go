@@ -1,10 +1,15 @@
 package prometheus
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestClient_InstantQuery(t *testing.T) {
@@ -133,5 +138,154 @@ func TestInstantQueryRaw_ConnectionRefused(t *testing.T) {
 	_, err := pc.InstantQueryRaw(context.Background(), "up")
 	if err == nil {
 		t.Fatal("expected error for connection refused")
+	}
+}
+
+// Query errors reach clients through /metrics/status and the stream, so none
+// may carry the Prometheus address or a page that stood in for its answer.
+func TestClient_ErrorsOmitThePrometheusAddress(t *testing.T) {
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte(`<html>upstream http://prometheus.internal:9090 is down</html>`))
+	}))
+	defer gateway.Close()
+
+	refused := httptest.NewServer(http.NotFoundHandler())
+	refused.Close()
+
+	// A connection reset mid-body fails the read with both endpoints' addresses.
+	reset := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, _ := w.(http.Hijacker).Hijack()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n{\"status\":")
+		buf.Flush()
+		_ = conn.(*net.TCPConn).SetLinger(0)
+		conn.Close()
+	}))
+	defer reset.Close()
+
+	// A prometheus.url that does not parse fails before any request is sent.
+	malformed := "http://[::1]:namedport"
+
+	for _, base := range []string{gateway.URL, refused.URL, reset.URL, malformed} {
+		pc := NewClient(base)
+		queries := map[string]func() error{
+			"InstantQuery": func() error {
+				_, err := pc.InstantQuery(context.Background(), "up")
+				return err
+			},
+			"InstantQueryRaw": func() error {
+				_, err := pc.InstantQueryRaw(context.Background(), "up")
+				return err
+			},
+			"RangeQueryRaw": func() error {
+				_, err := pc.RangeQueryRaw(context.Background(), "up", "0", "1", "1")
+				return err
+			},
+		}
+		for name, query := range queries {
+			err := query()
+			if err == nil {
+				t.Fatalf("%s against %s: expected an error", name, base)
+			}
+			msg := err.Error()
+			if strings.Contains(msg, base) || strings.Contains(msg, "127.0.0.1") ||
+				strings.Contains(msg, "prometheus.internal") {
+				t.Errorf("%s: the error names the Prometheus address: %s", name, msg)
+			}
+		}
+	}
+}
+
+func TestClient_StatusErrorKeepsThePrometheusReason(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"parse error"}`))
+	}))
+	defer prom.Close()
+
+	_, err := NewClient(prom.URL).InstantQueryRaw(context.Background(), "up{")
+	if err == nil || !strings.Contains(err.Error(), "parse error") {
+		t.Errorf("err = %v, want Prometheus's reason", err)
+	}
+}
+
+// The client leaves logging to its callers, which log the cause the message
+// omits; a stream retrying every tick would otherwise log each failure.
+func TestClient_UnreachableLogsItsCauseOnlyThroughTheCaller(t *testing.T) {
+	refused := httptest.NewServer(http.NotFoundHandler())
+	refused.Close()
+
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	defer slog.SetDefault(previous)
+
+	_, err := NewClient(refused.URL).InstantQueryRaw(context.Background(), "up")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if logged.Len() != 0 {
+		t.Errorf("the client logged on its own: %s", logged.String())
+	}
+
+	slog.Warn("query failed", "error", err)
+	if !strings.Contains(logged.String(), "connection refused") {
+		t.Errorf("the caller's log omits the cause: %s", logged.String())
+	}
+}
+
+// A query Prometheus is too slow to answer must not read as Prometheus being
+// down: the status poll may well reach it in the meantime.
+func TestClient_TimeoutIsNotReportedAsUnreachable(t *testing.T) {
+	release := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		<-release
+	}))
+	defer slow.Close()
+	defer close(release)
+
+	pc := NewClient(slow.URL)
+	pc.client.Timeout = 20 * time.Millisecond
+
+	_, err := pc.RangeQueryRaw(context.Background(), "up", "0", "1", "1")
+	if err == nil || err.Error() != "prometheus query timed out" {
+		t.Errorf("err = %v, want the fixed timeout message", err)
+	}
+}
+
+// A 5xx may be a gateway's answer rather than Prometheus's, so its text stays
+// out of the error a client sees and reaches only the caller's log.
+func TestClient_ServerErrorKeepsTheUpstreamReasonOutOfTheMessage(t *testing.T) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"status":"error","error":"upstream 10.0.0.9:9090 refused"}`))
+	}))
+	defer prom.Close()
+
+	pc := NewClient(prom.URL)
+	queries := map[string]func() error{
+		"InstantQuery": func() error {
+			_, err := pc.InstantQuery(context.Background(), "up")
+			return err
+		},
+		"RangeQueryRaw": func() error {
+			_, err := pc.RangeQueryRaw(context.Background(), "up", "0", "1", "1")
+			return err
+		},
+	}
+	for name, query := range queries {
+		err := query()
+		if err == nil {
+			t.Fatalf("%s: expected an error", name)
+		}
+		if strings.Contains(err.Error(), "10.0.0.9") {
+			t.Errorf("%s: the error forwards a 5xx's text: %s", name, err)
+		}
+
+		var logged bytes.Buffer
+		slog.New(slog.NewTextHandler(&logged, nil)).Warn("query failed", "error", err)
+		if !strings.Contains(logged.String(), "10.0.0.9") {
+			t.Errorf("%s: the log omits the upstream text: %s", name, logged.String())
+		}
 	}
 }

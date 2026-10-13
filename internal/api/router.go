@@ -291,13 +291,13 @@ func newRouter(cfg RouterConfig) (http.Handler, []string) {
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /metrics/labels", h.withAnyGrant(metricsProxy.HandleMetricsLabels))
+	mux.HandleFunc("GET /metrics/labels", h.withReadEverything(metricsProxy.HandleMetricsLabels))
 	mux.HandleFunc(
 		"GET /metrics/labels/{name}",
-		h.withAnyGrant(metricsProxy.HandleMetricsLabelValues),
+		h.withReadEverything(metricsProxy.HandleMetricsLabelValues),
 	)
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
-		h.withAnyGrant(metricsProxy.HandleMetrics),
+		h.withReadEverything(metricsProxy.HandleMetrics),
 		h.HandleMetricsStream,
 		feedHandlers{},
 		spa,
@@ -991,7 +991,10 @@ func readsClusterState(mux *routeRecorder, r *http.Request) bool {
 		path == "/",
 		path == "/index",
 		path == openSearchPath,
-		path == profilePath:
+		path == profilePath,
+		// The metrics proxy asks Prometheus, which is how an outage is diagnosed.
+		path == "/metrics",
+		strings.HasPrefix(path, "/metrics/labels"):
 		return false
 	default:
 		return true
