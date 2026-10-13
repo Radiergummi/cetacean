@@ -297,8 +297,8 @@ func TestMCPIntegration_ResourcesReadHonoursACL(t *testing.T) {
 			string(env.Result),
 		)
 	}
-	if !strings.Contains(env.Error.Message, "denied") {
-		t.Errorf("error = %q, want a denial message", env.Error.Message)
+	if env.Error.Message != "resource not found: cetacean://services/svc-secret" {
+		t.Errorf("error = %q, want the not-found a missing service gets", env.Error.Message)
 	}
 }
 

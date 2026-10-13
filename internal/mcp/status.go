@@ -16,6 +16,10 @@ func (s *Server) toolGetClusterStatus(
 	ctx context.Context,
 	_ mcplib.CallToolRequest,
 ) (string, error) {
+	if err := s.requireAnyGrant(ctx); err != nil {
+		return "", err
+	}
+
 	services := s.filterServices(ctx, s.cache.ListServices())
 	nodes := s.filterNodes(ctx, s.cache.ListNodes())
 

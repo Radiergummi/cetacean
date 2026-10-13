@@ -3,13 +3,16 @@ package api
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/radiergummi/cetacean/internal/acl"
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -155,6 +158,47 @@ func TestHandleAtomHistory_ReturnsGlobalFeed(t *testing.T) {
 	// Should contain entries for both service and node
 	if len(feed.Entries) != 2 {
 		t.Errorf("len(feed.Entries) = %d, want 2", len(feed.Entries))
+	}
+}
+
+// A restricted caller's page holds limit readable entries, not limit entries
+// of which it is shown the readable few.
+func TestHandleAtomHistory_FiltersBeforeThePageIsCut(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-pub",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "pub"}},
+	})
+	for i := range 10 {
+		c.SetService(swarm.Service{
+			ID:   fmt.Sprintf("svc-priv-%d", i),
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "priv"}},
+		})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:pub"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+	h := newTestHandlers(t, withCache(c), withACL(e))
+
+	req := httptest.NewRequest("GET", "/history?limit=5", nil)
+	req = withContentType(req, ContentTypeAtom)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "u"}))
+	w := httptest.NewRecorder()
+
+	h.handleFeedHistory(w, req, renderAtom)
+
+	var feed atomxml.Feed
+	if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("invalid XML: %v", err)
+	}
+	if len(feed.Entries) != 1 {
+		t.Errorf("len(feed.Entries) = %d, want the one readable entry", len(feed.Entries))
 	}
 }
 
