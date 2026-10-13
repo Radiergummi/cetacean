@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -365,6 +366,49 @@ type DiskUsageSummary struct {
 	Reclaimable int64  `json:"reclaimable"`
 }
 
+const (
+	// diskUsageTTL is how long a disk usage result is reused. The daemon walks
+	// every image, container and volume to answer, and any grant may ask.
+	diskUsageTTL      = 30 * time.Second
+	diskUsageErrorTTL = 5 * time.Second
+	diskUsageTimeout  = 10 * time.Second
+)
+
+// diskUsageCache holds the last result, failures included; the lock is held
+// across a fetch, so a burst of callers waits for one daemon call.
+type diskUsageCache struct {
+	mu        sync.Mutex
+	value     types.DiskUsage
+	err       error
+	fetchedAt time.Time
+}
+
+func (c *diskUsageCache) get(
+	ctx context.Context,
+	fetch func(context.Context) (types.DiskUsage, error),
+) (types.DiskUsage, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	ttl := diskUsageTTL
+	if c.err != nil {
+		ttl = diskUsageErrorTTL
+	}
+
+	if !c.fetchedAt.IsZero() && time.Since(c.fetchedAt) < ttl {
+		return c.value, c.err
+	}
+
+	// Detached: callers queued on the lock share the result, so one leaving must not fail it.
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), diskUsageTimeout)
+	defer cancel()
+
+	c.value, c.err = fetch(fetchCtx)
+	c.fetchedAt = time.Now()
+
+	return c.value, c.err
+}
+
 func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAnyGrant(w, r) {
 		return
@@ -375,10 +419,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-
-	du, err := h.systemClient.DiskUsage(ctx)
+	du, err := h.diskUsage.get(r.Context(), h.systemClient.DiskUsage)
 	if err != nil {
 		slog.Error("disk usage failed", "error", err)
 		writeErrorCode(w, r, "SWM005", "disk usage failed")

@@ -283,6 +283,14 @@ export const swarmSchema = z.looseObject({
   }),
 });
 
+export const errorDefinitionSchema = z.looseObject({
+  code: z.string(),
+  title: z.string(),
+  status: z.number(),
+  description: z.string(),
+  suggestion: z.string(),
+});
+
 export const identitySchema = z.looseObject({
   subject: z.string(),
   displayName: z.string(),

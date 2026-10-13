@@ -1,36 +1,20 @@
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { apiPath } from "@/lib/basePath";
+import { api, type ErrorDefinition } from "@/api/client";
+import { getErrorMessage } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-interface ErrorDef {
-  code: string;
-  title: string;
-  status: number;
-  description: string;
-  suggestion: string;
-}
-
 export default function ErrorIndex() {
-  const [errors, setErrors] = useState<ErrorDef[] | null>(null);
+  const [errors, setErrors] = useState<ErrorDefinition[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(apiPath("/api/errors"), { headers: { Accept: "application/json" } })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`${res.status} ${res.statusText}`);
-        }
-        return res.json();
-      })
-      // /api/errors answers with a JSON-LD CollectionResponse, so the
-      // definitions are under `items`. Passing the envelope itself to
-      // setErrors left the render iterating an object, which threw and put
-      // the page's ErrorBoundary on screen in place of the reference.
-      .then((body: { items: ErrorDef[] }) => setErrors(body.items))
-      .catch((caught) => setError(caught.message));
+    api
+      .errorDefinitions()
+      .then(setErrors)
+      .catch((caught: unknown) => setError(getErrorMessage(caught, "Failed to load error codes")));
   }, []);
 
   if (error) {
@@ -63,7 +47,7 @@ export default function ErrorIndex() {
     SEC: "Secrets",
   };
 
-  const grouped = new Map<string, ErrorDef[]>();
+  const grouped = new Map<string, ErrorDefinition[]>();
   for (const definition of errors) {
     const prefix = definition.code.slice(0, 3);
     const list = grouped.get(prefix);

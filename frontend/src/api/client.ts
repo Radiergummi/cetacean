@@ -552,7 +552,21 @@ function totalFromContentRange(header: string | null): number | null {
   return match ? Number(match[1]) : null;
 }
 
+export type ErrorDefinition = z.infer<typeof schema.errorDefinitionSchema>;
+
 export const api = {
+  errorDefinitions: () =>
+    fetchJSON<{ items: ErrorDefinition[] }>(
+      "/api/errors",
+      undefined,
+      schema.collectionOf(schema.errorDefinitionSchema),
+    ).then(({ data }) => data.items),
+  errorDefinition: (code: string) =>
+    fetchJSON<ErrorDefinition>(
+      `/api/errors/${encodeURIComponent(code)}`,
+      undefined,
+      schema.errorDefinitionSchema,
+    ).then(({ data }) => data),
   whoami: () =>
     fetchJSON<Identity>("/profile", undefined, schema.identitySchema).then(({ data }) => data),
   cluster: () =>
