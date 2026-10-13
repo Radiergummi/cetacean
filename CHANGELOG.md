@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `/api/errors/{code}` answers an unknown code with a problem document
 - `/topology`'s 406 lists every type it serves
 - CORS responses vary on `Origin` even when they grant nothing
+- In headers mode, a request carrying an identity header twice, as a proxy that appends rather than replaces would forward it, is refused instead of authenticating as the client's value; a groups header may name at most 256 groups
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - An MCP client on a revision newer than `2026-07-28` is told that one revision is supported, instead of four it would be refused on
 - Addressing a task as `web.1` reaches the replica running in that slot, not a replaced one Swarm still keeps a record of
