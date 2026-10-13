@@ -49,6 +49,12 @@ updates:
       docker:
         patterns:
           - "*"
+    # The frontend stage builds with the Node major that .nvmrc and the engines
+    # field pin, which is what CI builds with. A new major moves all three by hand.
+    ignore:
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: gomod
     directory: /
@@ -74,15 +80,6 @@ updates:
         update-types:
           - minor
           - patch
-    ignore:
-      # docker/docker periodically ships advisories (docker cp races, etc.)
-      # that target the daemon, not SDK consumers. Cetacean uses the SDK
-      # only for inspect/event/log calls and is not exposed. Skip the
-      # advisory-driven bump PRs so we don't churn on unfixable noise.
-      # Re-evaluate if we ever wire up docker cp / container archive APIs.
-      - dependency-name: "github.com/docker/docker"
-        update-types:
-          - version-update:semver-patch
 
   # The pnpm workspace: the dashboard SPA shipped to users and the Astro
   # docs site share one lockfile at the root, so one entry covers both.

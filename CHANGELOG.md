@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The documentation site is navigable by an agent: every page has a Markdown version, `/llms.txt` lists the site, and `/openapi.json` describes what it serves
 - A stack's page and a service's Traefik labels are each drawn as a graph
 - Each protected resource names itself in its discovery document, so a client's consent screen can show `Cetacean MCP` instead of a URL
+- The Docker Hub image carries the same build provenance as the GHCR one, so `gh attestation verify` works for either
 
 ### Changed
 - **Breaking:** adding a bind mount, named pipe, driver-configured volume or Linux capability to a service needs operations level 3, through the API, the dashboard and MCP; ones it already has stay editable at level 2
