@@ -22,7 +22,7 @@ func TestRowsForServicesCarryDerivedState(t *testing.T) {
 	svc := replicated("api", 3)
 	svc.Spec.Labels = map[string]string{"com.docker.stack.namespace": "demo"}
 
-	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2}, nil)
+	rows := RowsForServices([]swarm.Service{svc}, map[string]int{"svc-api": 2}, nil, nil)
 
 	if len(rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(rows))
@@ -539,6 +539,24 @@ func TestServiceDetailsOmitsAbsentPolicyAndPorts(t *testing.T) {
 	}
 }
 
+// MCP's describe and update-preview surface "mode" from here; it must name a
+// job the way the REST Mode column and DeriveServiceState now do.
+func TestServiceDetailsNamesJobModes(t *testing.T) {
+	replicatedJob := swarm.Service{Spec: swarm.ServiceSpec{
+		Mode: swarm.ServiceMode{ReplicatedJob: &swarm.ReplicatedJob{}},
+	}}
+	globalJob := swarm.Service{Spec: swarm.ServiceSpec{
+		Mode: swarm.ServiceMode{GlobalJob: &swarm.GlobalJob{}},
+	}}
+
+	if got := ServiceDetails(replicatedJob)["mode"]; got != "replicated-job" {
+		t.Errorf("mode = %v, want replicated-job", got)
+	}
+	if got := ServiceDetails(globalJob)["mode"]; got != "global-job" {
+		t.Errorf("mode = %v, want global-job", got)
+	}
+}
+
 // A crash loop is made entirely of tasks the orchestrator has already replaced:
 // Swarm marks a task for shutdown the instant it fails, so every failure the
 // digest can see is a replaced one and excluding them answers with an empty
@@ -609,7 +627,7 @@ func TestServiceDigestCountsReplicasTheWayFindDoes(t *testing.T) {
 
 	// One desired, none running: the same numbers DeriveServiceState sees on
 	// the list side, and so the same state.
-	if want := DeriveServiceState(svc, 0, false); got.State != want {
+	if want := DeriveServiceState(svc, 0, 0, false); got.State != want {
 		t.Errorf(
 			"state = %q, want %q — the draining task was counted as a replica",
 			got.State, want,

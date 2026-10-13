@@ -70,5 +70,5 @@ func serviceConvergedAt(c *cache.Cache, serviceID string, minVersion uint64) (bo
 		)
 	}
 
-	return ServiceConverged(svc, c.RunningTaskCount(svc.ID))
+	return ServiceConverged(svc, c.RunningTaskCount(svc.ID), c.CompletedJobTaskCount(svc.ID))
 }

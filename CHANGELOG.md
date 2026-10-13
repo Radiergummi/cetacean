@@ -152,6 +152,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Applying a drain from the Recommendations page asks for confirmation first, and the demo no longer offers writes a resource doesn't support
 - A service restarting in a loop reads `flapping` and counts as unhealthy in MCP's `get_cluster_status`, the overview page and search, instead of `running` whenever a replica is briefly up
 - A service's activity, `GET /history` and MCP's `get_events` include its tasks' changes, so a crash-looping service no longer shows an empty timeline
+- Job-mode services read `completed` once their run finishes instead of `running` forever, `Prefer: wait` and MCP's `watch` wait for the run, and the dashboard names their mode
+- A stack's page lists the configs, secrets, networks and volumes deployed with it straight away, instead of after the next full sync
+- Until the first sync, a restart serves the loaded snapshot to JSON, CSV and MCP clients as well as the dashboard, instead of answering `503`
+- Memory no longer grows with every task ID the event history has ever seen
 - A stream refused at its connection cap asks for a different `Retry-After` each time, so clients turned away together no longer return together
 - One user, or one address under `auth.mode = "none"`, can hold at most a quarter of the event-stream connections, so a single client can no longer lock everyone else out
 - An event stream reconnecting after Cetacean restarts is told to refetch, instead of being replayed unrelated events. Event `id:` values are now opaque strings

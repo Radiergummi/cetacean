@@ -48,7 +48,7 @@ type Row struct {
 // cloning the whole task table here to reduce it to one integer per service.
 func RowsForServices(
 	services []swarm.Service,
-	running map[string]int,
+	running, completed map[string]int,
 	flapping map[string]bool,
 ) []Row {
 	rows := make([]Row, 0, len(services))
@@ -64,7 +64,7 @@ func RowsForServices(
 			Name:    svc.Spec.Name,
 			Type:    "service",
 			Stack:   svc.Spec.Labels["com.docker.stack.namespace"],
-			State:   DeriveServiceState(svc, running[svc.ID], flapping[svc.ID]),
+			State:   DeriveServiceState(svc, running[svc.ID], completed[svc.ID], flapping[svc.ID]),
 			Detail:  image,
 			Desired: ReplicaCount(svc),
 			Running: running[svc.ID],
@@ -332,6 +332,7 @@ func ServiceDigest(
 ) Digest {
 	var (
 		running    int
+		completed  int
 		oldestFail time.Time
 		haveOldest bool
 	)
@@ -348,6 +349,12 @@ func ServiceDigest(
 		// what every list row counts with — excludes those.
 		if cache.CountsAsRunningReplica(task) {
 			running++
+
+			continue
+		}
+
+		if cache.CountsAsJobCompletion(svc, task) {
+			completed++
 
 			continue
 		}
@@ -395,7 +402,7 @@ func ServiceDigest(
 		failures = failures[:maxRecentFailures]
 	}
 
-	state := DeriveServiceState(svc, running, flapping)
+	state := DeriveServiceState(svc, running, completed, flapping)
 
 	digest := Digest{
 		ID:             svc.ID,
@@ -412,13 +419,14 @@ func ServiceDigest(
 	// dated from one. Swarm keeps a terminal record for every replica it has
 	// replaced, and dating a "running" service from a fault that is over is
 	// worse than not answering at all.
-	if haveOldest && state != "running" {
+	healthy := state == "running" || state == stateCompleted
+	if haveOldest && !healthy {
 		digest.Since = oldestFail.UTC().Format(time.RFC3339)
 	} else {
 		digest.Since = svc.UpdatedAt.UTC().Format(time.RFC3339)
 	}
 
-	if state != "running" {
+	if !healthy {
 		switch {
 		case len(failures) > 0:
 			digest.Reason = failures[0].Message
@@ -745,9 +753,14 @@ func updatePolicyDetails(cfg *swarm.UpdateConfig) map[string]any {
 // serviceMode names a service's scheduling mode without exposing the nested
 // Docker union a caller would otherwise have to interpret.
 func serviceMode(svc swarm.Service) string {
-	if svc.Spec.Mode.Global != nil {
+	switch {
+	case svc.Spec.Mode.ReplicatedJob != nil:
+		return "replicated-job"
+	case svc.Spec.Mode.GlobalJob != nil:
+		return "global-job"
+	case svc.Spec.Mode.Global != nil:
 		return "global"
+	default:
+		return "replicated"
 	}
-
-	return "replicated"
 }

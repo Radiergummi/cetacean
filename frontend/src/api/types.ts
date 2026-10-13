@@ -104,6 +104,10 @@ export interface Service {
     Mode: {
       Replicated?: { Replicas?: number } | undefined;
       Global?: Record<string, never> | undefined;
+      ReplicatedJob?:
+        | { MaxConcurrent?: number | undefined; TotalCompletions?: number | undefined }
+        | undefined;
+      GlobalJob?: Record<string, never> | undefined;
     };
     UpdateConfig?: {
       Parallelism: number;

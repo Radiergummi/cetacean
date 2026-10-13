@@ -12,6 +12,10 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestSPAServesPrecompressedVariants(t *testing.T) {
@@ -253,6 +257,85 @@ func TestUnreadySharesTheFrontendButNotTheCluster(t *testing.T) {
 				t.Errorf("GET %s body = %s, want the ENG001 problem", resource, rec.Body.String())
 			}
 		})
+	}
+}
+
+// A snapshot loaded off disk is what every representation serves until the
+// first sync lands — not only the dashboard and its streams, while a JSON
+// client of the same resource is told the daemon is unreachable.
+func TestUnreadyServesTheLoadedSnapshotToEveryRepresentation(t *testing.T) {
+	saved := cache.New(nil)
+	saved.SetNode(swarm.Node{ID: "node-1"})
+
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := saved.WriteToDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := cache.New(nil)
+	if err := loaded.LoadFromDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	router := newTestRouterWithConfig(
+		t,
+		nil,
+		withCache(loaded),
+		withReady(make(chan struct{})),
+	)
+
+	for _, accept := range []string{"application/json", "text/csv"} {
+		t.Run(accept, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/nodes", nil)
+			req.Header.Set("Accept", accept)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET /nodes (%s) = %d, want %d off the snapshot: %s",
+					accept, rec.Code, http.StatusOK, rec.Body.String())
+			}
+		})
+	}
+}
+
+// A snapshot answers a read; it must not wave a write through to a Docker
+// client that is not actually there yet, which the handler cannot survive.
+func TestUnreadyStillRefusesWritesDespiteALoadedSnapshot(t *testing.T) {
+	saved := cache.New(nil)
+	replicas := uint64(2)
+	saved.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+		},
+	})
+
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := saved.WriteToDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded := cache.New(nil)
+	if err := loaded.LoadFromDisk(path); err != nil {
+		t.Fatal(err)
+	}
+
+	router := newTestRouterWithConfig(
+		t,
+		nil,
+		withCache(loaded),
+		withReady(make(chan struct{})),
+	)
+
+	req := httptest.NewRequest("PUT", "/services/svc1/scale", strings.NewReader(`{"replicas":3}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("PUT scale while not ready = %d, want %d: %s",
+			rec.Code, http.StatusServiceUnavailable, rec.Body.String())
 	}
 }
 

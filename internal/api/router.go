@@ -961,12 +961,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Named as what it is not, so the next representation cannot be
-			// left out: the dashboard renders its own error, a stream says so
-			// by closing, and a type nothing serves is the endpoint's 406 to
-			// give whether or not Docker is up.
+			// A loaded snapshot is served to every representation of a read
+			// alike. Without one, the dashboard renders its own error, a stream
+			// says so by closing, and a type nothing serves is the endpoint's
+			// 406. A write still needs Docker itself, snapshot or not.
 			ct := ContentTypeFromContext(r.Context())
-			if !h.isReady() && readsClusterState(mux, r) &&
+			servedFromSnapshot := isSafeMethod(r.Method) && h.cache.Populated()
+			if !h.isReady() && !servedFromSnapshot && readsClusterState(mux, r) &&
 				ct != ContentTypeHTML && ct != ContentTypeSSE &&
 				ct != ContentTypeUnsupported {
 				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
@@ -975,6 +976,11 @@ func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handl
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// isSafeMethod reports whether r.Method only reads, never mutates Docker.
+func isSafeMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
 }
 
 // readsClusterState reports whether the endpoint answering this request reads

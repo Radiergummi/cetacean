@@ -91,6 +91,21 @@ function containerConfigFromSpec(
   };
 }
 
+/**
+ * A service's scheduling mode, named as `docker service create --mode` names it.
+ */
+export function serviceModeLabel(mode: Service["Spec"]["Mode"]): string {
+  if (mode.ReplicatedJob) {
+    return "replicated-job";
+  }
+
+  if (mode.GlobalJob) {
+    return "global-job";
+  }
+
+  return mode.Replicated ? "replicated" : "global";
+}
+
 const updateStatusLabels: Record<string, string> = {
   stable: "Stable",
   updating: "Updating",

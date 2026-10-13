@@ -105,6 +105,9 @@ type ClusterSnapshot struct {
 	// Flapping names the services in a restart loop, which count as degraded
 	// whatever their running count says at the moment it was taken.
 	Flapping map[string]bool `json:"-"`
+
+	// CompletedJobsByService is CompletedJobTaskCounts, from the same walk.
+	CompletedJobsByService map[string]int `json:"-"`
 }
 
 // FlappingServices returns the services currently in a restart loop.
@@ -246,6 +249,15 @@ func New(onChange OnChangeFunc) *Cache {
 }
 
 func (c *Cache) History() *History { return c.history }
+
+// Populated reports whether the cache holds cluster state, from a sync or from
+// a snapshot loaded off disk; a failed sync replaces nothing and leaves it unset.
+func (c *Cache) Populated() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return !c.lastSync.IsZero()
+}
 
 // RestartTrackingSince is the earliest moment the restart tracker can account
 // for. Reported beside every restart count, because a count is otherwise
@@ -850,9 +862,12 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 				continue
 			}
 
-			// Desired replicas
+			// Desired replicas. A job has none: its tasks run to completion, and
+			// counting one would call the stack degraded once the job is done.
 			replicas := 1
-			if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
+			if isJobService(svc) {
+				replicas = 0
+			} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
 			} else if svc.Spec.Mode.Global != nil {
 				replicas = len(c.nodes.items)
@@ -975,6 +990,62 @@ func (c *Cache) RunningTaskCounts() map[string]int {
 	return counts
 }
 
+// CountsAsJobCompletion reports whether a task completed its job service's
+// current run; false for a service that is not a job. A re-run bumps JobIteration
+// and leaves the earlier run's tasks behind, so those do not count.
+func CountsAsJobCompletion(svc swarm.Service, task swarm.Task) bool {
+	if !isJobService(svc) || task.Status.State != swarm.TaskStateComplete {
+		return false
+	}
+
+	if svc.JobStatus == nil || task.JobIteration == nil {
+		return true
+	}
+
+	return task.JobIteration.Index == svc.JobStatus.JobIteration.Index
+}
+
+func isJobService(svc swarm.Service) bool {
+	return svc.Spec.Mode.ReplicatedJob != nil || svc.Spec.Mode.GlobalJob != nil
+}
+
+// CompletedJobTaskCount returns how many tasks completed a job service's
+// current run; 0 for a service that is not a job.
+func (c *Cache) CompletedJobTaskCount(serviceID string) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	svc, ok := c.services[serviceID]
+	if !ok {
+		return 0
+	}
+
+	count := 0
+	for id := range c.tasksByService[serviceID] {
+		if t, ok := c.tasks[id]; ok && CountsAsJobCompletion(svc, t) {
+			count++
+		}
+	}
+
+	return count
+}
+
+// CompletedJobTaskCounts is CompletedJobTaskCount for every job service, in one
+// pass under one read lock, as RunningTaskCounts is for running tasks.
+func (c *Cache) CompletedJobTaskCounts() map[string]int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	counts := make(map[string]int)
+	for _, t := range c.tasks {
+		if svc, ok := c.services[t.ServiceID]; ok && CountsAsJobCompletion(svc, t) {
+			counts[t.ServiceID]++
+		}
+	}
+
+	return counts
+}
+
 func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 	c.mu.RLock()
 	ids := c.tasksByNode[nodeID]
@@ -1061,9 +1132,14 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	// Counted once and returned in the snapshot: BuildClusterStatus needs the
 	// same map to name the degraded services.
 	runningByService := make(map[string]int, len(c.services))
+	completedJobsByService := make(map[string]int)
 	for _, t := range c.tasks {
 		if CountsAsRunningReplica(t) {
 			runningByService[t.ServiceID]++
+		}
+
+		if svc, ok := c.services[t.ServiceID]; ok && CountsAsJobCompletion(svc, t) {
+			completedJobsByService[t.ServiceID]++
 		}
 	}
 
@@ -1113,6 +1189,8 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		LastSync:          c.lastSync,
 		RunningByService:  runningByService,
 		Flapping:          flapping,
+
+		CompletedJobsByService: completedJobsByService,
 	}
 }
 
