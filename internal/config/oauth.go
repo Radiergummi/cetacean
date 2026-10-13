@@ -232,40 +232,55 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		return OAuthConfig{}, err
 	}
 
+	enabled, err := resolveBool(nil, "CETACEAN_OAUTH_ENABLED", fo.Enabled, def.Enabled)
+	if err != nil {
+		return OAuthConfig{}, err
+	}
+
+	apiTokens, err := resolveBool(nil, "CETACEAN_OAUTH_API_TOKENS", fo.APITokens, def.APITokens)
+	if err != nil {
+		return OAuthConfig{}, err
+	}
+
+	requireResourceIndicator, err := resolveBool(
+		nil,
+		"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR",
+		fo.RequireResourceIndicator,
+		def.RequireResourceIndicator,
+	)
+	if err != nil {
+		return OAuthConfig{}, err
+	}
+
+	dcrEnabled, err := resolveBool(nil, "CETACEAN_OAUTH_DCR_ENABLED", fo.DCREnabled, def.DCREnabled)
+	if err != nil {
+		return OAuthConfig{}, err
+	}
+
+	cimdEnabled, err := resolveBool(
+		nil,
+		"CETACEAN_OAUTH_CIMD_ENABLED",
+		fo.CIMDEnabled,
+		def.CIMDEnabled,
+	)
+	if err != nil {
+		return OAuthConfig{}, err
+	}
+
 	return OAuthConfig{
-		Enabled:         resolveBool(nil, "CETACEAN_OAUTH_ENABLED", fo.Enabled, def.Enabled),
-		Issuer:          issuer,
-		SigningKey:      signingKey,
-		AccessTokenTTL:  accessTTL,
-		RefreshTokenTTL: refreshTTL,
-		ConsentTTL:      consentTTL,
-		APITokens: resolveBool(
-			nil,
-			"CETACEAN_OAUTH_API_TOKENS",
-			fo.APITokens,
-			def.APITokens,
-		),
-		TokenOperationsLevel: tokenOpsLevel,
-		RequireResourceIndicator: resolveBool(
-			nil,
-			"CETACEAN_OAUTH_REQUIRE_RESOURCE_INDICATOR",
-			fo.RequireResourceIndicator,
-			def.RequireResourceIndicator,
-		),
-		DCREnabled: resolveBool(
-			nil,
-			"CETACEAN_OAUTH_DCR_ENABLED",
-			fo.DCREnabled,
-			def.DCREnabled,
-		),
-		DCRRateLimit:  dcrRateLimit,
-		DCRMaxClients: dcrMaxClients,
-		CIMDEnabled: resolveBool(
-			nil,
-			"CETACEAN_OAUTH_CIMD_ENABLED",
-			fo.CIMDEnabled,
-			def.CIMDEnabled,
-		),
+		Enabled:                  enabled,
+		Issuer:                   issuer,
+		SigningKey:               signingKey,
+		AccessTokenTTL:           accessTTL,
+		RefreshTokenTTL:          refreshTTL,
+		ConsentTTL:               consentTTL,
+		APITokens:                apiTokens,
+		TokenOperationsLevel:     tokenOpsLevel,
+		RequireResourceIndicator: requireResourceIndicator,
+		DCREnabled:               dcrEnabled,
+		DCRRateLimit:             dcrRateLimit,
+		DCRMaxClients:            dcrMaxClients,
+		CIMDEnabled:              cimdEnabled,
 	}, nil
 }
 
