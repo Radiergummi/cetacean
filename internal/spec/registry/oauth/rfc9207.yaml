@@ -53,6 +53,10 @@ requirements:
       parameter from authorization responses they receive if the parameter is
       present.
     url: https://www.rfc-editor.org/rfc/rfc9207#section-2.4
+    mutants:
+      - file: internal/auth/oidc.go
+        replace: "\tiss := r.URL.Query().Get(\"iss\")"
+        with: "\tiss := \"\""
 
   - id: client-compares-iss-to-the-issuer
     level: MUST

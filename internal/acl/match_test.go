@@ -120,3 +120,15 @@ func TestMatchAudience_EmptySubject(t *testing.T) {
 		})
 	}
 }
+
+// validateGrant refuses a malformed audience before it can reach the matcher;
+// should one slip past, a pattern path.Match cannot parse matches no one.
+func TestMatchAudienceFailsClosedOnAMalformedGlob(t *testing.T) {
+	id := &auth.Identity{Subject: "[", Email: "[", Groups: []string{"["}}
+
+	for _, expression := range []string{"user:[", "group:["} {
+		if matchAudience(expression, id) {
+			t.Errorf("%q matched", expression)
+		}
+	}
+}
