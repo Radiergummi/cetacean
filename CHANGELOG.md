@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Writes with no `GET` at their own path, such as `PUT /services/{id}/scale` and the `/swarm` updates, refuse any `If-Match` with 412 instead of ignoring it. Clients must stop sending the header there
+- Below operations level 3, a service can mount a named volume only if the manager holds it as a plain `local` volume, so a bind-backed volume can't reach the host
+
+### Fixed
+- Tokens the authorization server issues carry the grants `acl.tailscale_capability` or `acl.headers_acl` gave you at consent, so API and MCP clients get the access your browser session has
+- `GET /auth/whoami` accepts a bearer token the authorization server issued, instead of refusing it as invalid
+- Behind `tailscale serve`, a name or capability grant with non-ASCII characters is read correctly instead of showing encoded or granting nothing
+- Fixed the container health check failing in `cert` mode when Cetacean terminates TLS. A client without a certificate reaches only the unauthenticated endpoints
+- Fixed an MCP client on protocol 2025-11-25 being able to list other callers' tasks by padding a `tasks/list` request
+- MCP write tools refuse an identifier that isn't a known ID or name, so a truncated ID can't reach a resource outside the caller's grants, and a denial no longer names a resource the caller can't read
+- The `Allow` header on a task and on a node with no hostname offers exactly the writes their grants permit
+- `GET /api/asyncapi`, `/api/context.jsonld`, `/metrics/status` and `/auth/whoami` answer 406 to a request that accepts none of their types, instead of sending JSON anyway
+- Fixed a list request whose `Range: items` header ends at the largest integer answering 500 instead of its first page
+- A `304 Not Modified` on a list no longer names a compressed variant the request didn't accept, which could let a shared cache serve it to a client that can't decode it
+- Fixed a service's or task's history, and its Atom feed, repeating the newest entry, which could send a feed reader paging in a loop
+- Fixed `POST /-/resync` sometimes restoring a resource deleted while it ran, and a hung Docker Engine stalling every later sync; a full sync now gives up after two minutes
+- Fixed the dashboard missing a cluster resync that happened just after its event stream reconnected
+- One caller can no longer take every log read or log stream slot: each gets a quarter of the cap, as with event streams
+- Stack removal and swarm updates no longer repeat the Docker Engine's error text unless it is a validation or availability error you can act on
+- The error Cetacean reports when no swarm list answers mentions a swarm that has lost its leader, not only a `docker.host` naming a worker
+- Fixed an open editor on a detail page carrying its draft over when you navigate straight to another resource of the same kind
+
 ## [0.15.0] - 2026-10-16
 
 ### Added
