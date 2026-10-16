@@ -91,6 +91,7 @@
 # tailscale_capability = ""                 # Tailscale CapMap key holding per-user grants
 # oidc_claim = ""                           # OIDC token claim holding grants
 # headers_acl = ""                          # HTTP header holding grants (JSON)
+# headers_capability = ""                   # Key of the grants array, if that header is an object
 
 # --- Recommendation sizing thresholds ---
 # See docs/recommendations.md for check categories.

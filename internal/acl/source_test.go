@@ -473,3 +473,45 @@ func TestHeadersSource(t *testing.T) {
 		})
 	}
 }
+
+func TestHeadersSourceCapability(t *testing.T) {
+	const capability = "example.com/cap/cetacean"
+	grant := `{"resources":["service:*"],"permissions":["read"]}`
+
+	tests := []struct {
+		name   string
+		header string
+		want   int
+	}{
+		{"key present", `{"` + capability + `":[` + grant + `]}`, 1},
+		{
+			"several entries",
+			`{"` + capability + `":[` + grant + `,{"resources":["*"],"permissions":["write"]}]}`,
+			2,
+		},
+		{"key absent", `{"example.com/cap/other":[` + grant + `]}`, 0},
+		{"bare array", `[` + grant + `]`, 0},
+		{"value not an array", `{"` + capability + `":` + grant + `}`, 0},
+		{"malformed", `{"` + capability + `":[`, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := HeadersSource{Header: "Tailscale-App-Capabilities", Capability: capability}
+			id := &auth.Identity{
+				Subject: "alice",
+				Raw:     map[string]any{"Tailscale-App-Capabilities": tt.header},
+			}
+			if got := src.GrantsFor(id); len(got) != tt.want {
+				t.Errorf("GrantsFor() returned %d grants, want %d", len(got), tt.want)
+			}
+		})
+	}
+
+	t.Run("unset keeps the bare array form", func(t *testing.T) {
+		src := HeadersSource{Header: "X-ACL"}
+		id := &auth.Identity{Subject: "alice", Raw: map[string]any{"X-ACL": `[` + grant + `]`}}
+		if got := src.GrantsFor(id); len(got) != 1 {
+			t.Errorf("GrantsFor() returned %d grants, want 1", len(got))
+		}
+	})
+}

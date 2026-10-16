@@ -507,6 +507,35 @@ http:
           - url: "http://cetacean:9000"
 ```
 
+### Behind Tailscale serve
+
+[`tailscale serve`](https://tailscale.com/kb/1312/serve) can be the proxy, with Cetacean reading identity from the
+`Tailscale-User-*` headers it sets and grants from the tailnet policy. Serve proxies from loopback, so trust only
+that, and run it with `accept-app-caps` naming your capability so it forwards `Tailscale-App-Capabilities`:
+
+```toml
+[server]
+trusted_proxies = "127.0.0.1/32"
+
+[auth]
+mode = "headers"
+
+[auth.headers]
+subject = "Tailscale-User-Login"
+name = "Tailscale-User-Name"
+email = "Tailscale-User-Login"
+
+[acl]
+policy = "grants: []"
+headers_acl = "Tailscale-App-Capabilities"
+headers_capability = "example.com/cap/cetacean"
+```
+
+Serve sends an object keyed by capability name; [`acl.headers_capability`][acl.headers_capability] picks the grants
+array out of it. Keep the empty [`acl.policy`][acl.policy]: without a policy, every authenticated identity has full
+access and the capability grants change nothing. A tagged device gets no `Tailscale-User-*` headers, so it is refused
+even when it holds the capability.
+
 ## Forwarding headers
 
 Behind a proxy listed in [`server.trusted_proxies`][server.trusted_proxies], Cetacean reads the client address
@@ -644,7 +673,9 @@ curl -s http://localhost:9000/auth/whoami | jq .
 `GET /profile` returns the same identity plus the effective grants. See the [API reference][api] for the
 response schemas.
 
+[acl.headers_capability]: configuration#acl.headers_capability
 [acl.oidc_claim]: configuration#acl.oidc_claim
+[acl.policy]: configuration#acl.policy
 [api]: api
 [auth.cert.ca]: configuration#auth.cert.ca
 [auth.headers.subject]: configuration#auth.headers.subject

@@ -436,7 +436,10 @@ func main() {
 			}
 		case "headers":
 			if aclCfg.HeadersACL != "" {
-				aclEval.SetSource(&acl.HeadersSource{Header: aclCfg.HeadersACL})
+				aclEval.SetSource(&acl.HeadersSource{
+					Header:     aclCfg.HeadersACL,
+					Capability: aclCfg.HeadersCapability,
+				})
 			}
 		}
 	}
