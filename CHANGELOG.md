@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Fixed an MCP client on protocol 2025-11-25 being able to list other callers' tasks with an oversized `tasks/list` request
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
