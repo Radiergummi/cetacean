@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Fixed a list request whose `Range: items` header ends at the largest integer answering 500 instead of its first page
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
