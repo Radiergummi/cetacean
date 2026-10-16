@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- `GET /api/asyncapi`, `/api/context.jsonld`, `/metrics/status` and `/auth/whoami` answer 406 to a request that accepts none of their types, instead of sending JSON anyway
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
