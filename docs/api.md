@@ -803,18 +803,19 @@ change in that instant goes unnoticed.
 `DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,
 `DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
 
-23 do not. Most of these are action-style endpoints with no `GET` at that exact path to compare
-an `ETag` against: `PUT /services/{id}/scale`, `PUT /services/{id}/image`,
-`POST /services/{id}/restart`, `POST /services/{id}/rollback`, `PUT /nodes/{id}/availability`,
-`POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`, `POST /plugins/{name}/upgrade`,
-`PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
-`PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`,
-`PATCH /swarm/raft`, `POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`,
-`POST /swarm/force-rotate-ca`, `POST /swarm/unlock`, and `POST /auth/logout`. The remaining
-three—`POST /configs`, `POST /secrets`, `POST /plugins`—are deliberately excluded for a
-different reason: their nearest `GET` is the collection listing, and its `ETag` turns over on any
-member change, which would make "create only if the collection is unchanged" a precondition
-almost nothing could ever satisfy.
+19 refuse every `If-Match`, `*` included, with `412`: they are action-style endpoints with no `GET` at that exact
+path, so there is no `ETag` the header could match. They are `PUT /services/{id}/scale`,
+`PUT /services/{id}/image`, `POST /services/{id}/restart`, `POST /services/{id}/rollback`,
+`PUT /nodes/{id}/availability`, `POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`,
+`POST /plugins/{name}/upgrade`, `PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
+`PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`, `PATCH /swarm/raft`,
+`POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`, `POST /swarm/force-rotate-ca`, and `POST /swarm/unlock`.
+A missing service, node or plugin still answers `404`. Send these without the header.
+
+Four ignore it. `POST /auth/logout` ends a session rather than changing the cluster. `POST /configs`,
+`POST /secrets` and `POST /plugins` are excluded deliberately: their nearest `GET` is the collection listing, and
+its `ETag` turns over on any member change, which would make "create only if the collection is unchanged" a
+precondition almost nothing could ever satisfy.
 
 ## MCP server
 

@@ -648,48 +648,36 @@ func awaitReplacementTask(
 
 // ─── focused cases ──────────────────────────────────────────────────────
 
-// TestUnpreconditionedWriteIgnoresIfMatch pins the other half of the documented
-// surface: the mutating endpoints that carry no precondition because no GET
-// serves their exact path simply do not evaluate the header. Driving one keeps
-// the sweep honest — every 412 it asserts has to come from the middleware.
-func TestUnpreconditionedWriteIgnoresIfMatch(t *testing.T) {
+// TestUnrepresentedWriteRefusesIfMatch drives a write whose path serves no GET:
+// with no representation to match, every If-Match is false, the wildcard too,
+// and the engine must be left untouched.
+func TestUnrepresentedWriteRefusesIfMatch(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
 
 	proc := startPreconditionLane(t, env)
 
-	name := deployThrowawayService(t, env, "precond-unguarded")
+	name := deployThrowawayService(t, env, "precond-unrepresented")
 	id := serviceID(t, proc, name)
 
-	out := precondRequest(
-		t, proc, http.MethodPut, "/services/"+id+"/scale",
-		map[string]string{"If-Match": staleValidator},
-		"application/json", `{"replicas":2}`,
-	)
+	for _, ifMatch := range []string{staleValidator, "*"} {
+		out := precondRequest(
+			t, proc, http.MethodPut, "/services/"+id+"/scale",
+			map[string]string{"If-Match": ifMatch},
+			"application/json", `{"replicas":2}`,
+		)
 
-	if out.status == http.StatusPreconditionFailed {
-		t.Fatalf("PUT /services/{id}/scale refused a stale If-Match; docs/api.md " +
-			"lists it among the endpoints that carry no precondition")
-	}
-
-	if out.status != http.StatusOK {
-		t.Fatalf("PUT /services/{id}/scale: status = %d, want 200 (body: %s)", out.status, out.body)
-	}
-
-	// The engine, not the response: a write that answered 200 without scaling
-	// would otherwise pass.
-	deadline := time.Now().Add(2 * time.Minute)
-	for time.Now().Before(deadline) {
-		svc := inspectService(t, env, name)
-		if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil &&
-			*svc.Spec.Mode.Replicated.Replicas == 2 {
-			return
+		if out.status != http.StatusPreconditionFailed {
+			t.Fatalf("PUT /services/{id}/scale with If-Match %s: status = %d, want 412 (body: %s)",
+				ifMatch, out.status, out.body)
 		}
-
-		time.Sleep(time.Second)
 	}
 
-	t.Errorf("service %s never reached 2 replicas on the engine", name)
+	svc := inspectService(t, env, name)
+	if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil &&
+		*svc.Spec.Mode.Replicated.Replicas == 2 {
+		t.Errorf("service %s was scaled although its precondition was refused", name)
+	}
 }
 
 // Drives RFC 9110 §8.8.3 as Cetacean resolves it: the coding suffix on an ETag
