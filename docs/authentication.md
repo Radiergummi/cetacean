@@ -413,8 +413,9 @@ curl -H "Authorization: Bearer eyJhbGci..." \
 A client obtains one the same way an [MCP][mcp] client does—discover, authorize with PKCE, exchange the code—and
 the [MCP flow diagram][mcp] applies unchanged. The difference is the resource it asks for. Getting the token is
 the client's job; obtaining it takes you through whichever provider is configured, and a consent screen naming the
-client, so the token carries **your** identity and nothing more. [Grants][authorization] apply to it exactly as they
-apply to your browser session.
+client, so the token carries **your** identity and nothing more. [Grants][authorization] apply to it as they apply
+to your browser session. Grants from the provider—a tailnet capability or a proxy header—are captured when you
+approve the client, and its tokens keep them until it authorizes again.
 
 ### Two resources, one server
 

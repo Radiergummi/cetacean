@@ -998,12 +998,13 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	}
 
 	srv := oauth.NewServer(oauth.ServerConfig{
-		Issuer:     d.issuer,
-		BasePath:   d.cfg.BasePath,
-		Resources:  resources,
-		OAuth:      d.cfg.OAuth,
-		SigningKey: signingKey,
-		StatePath:  statePath,
+		Issuer:        d.issuer,
+		BasePath:      d.cfg.BasePath,
+		Resources:     resources,
+		OAuth:         d.cfg.OAuth,
+		SigningKey:    signingKey,
+		StatePath:     statePath,
+		GrantSnapshot: d.acl.SnapshotGrants,
 	})
 
 	slog.Info("OAuth 2.1 authorization server enabled",

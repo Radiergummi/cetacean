@@ -62,6 +62,7 @@ type RefreshTokenSnapEntry struct {
 	Email          string    `json:"email,omitempty"`
 	DisplayName    string    `json:"name,omitempty"`
 	Groups         []string  `json:"groups,omitempty"`
+	Grants         []byte    `json:"grants,omitempty"`
 	ClientID       string    `json:"clientId"`
 	Resource       string    `json:"resource"`
 	GrantID        string    `json:"grantId"`
@@ -81,6 +82,7 @@ func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
 			Email:          entry.data.Email,
 			DisplayName:    entry.data.DisplayName,
 			Groups:         append([]string(nil), entry.data.Groups...),
+			Grants:         entry.data.Grants,
 			ClientID:       entry.data.ClientID,
 			Resource:       entry.data.Resource,
 			GrantID:        entry.data.grantID,
@@ -132,6 +134,7 @@ func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
 				Email:       entry.Email,
 				DisplayName: entry.DisplayName,
 				Groups:      append([]string(nil), entry.Groups...),
+				Grants:      entry.Grants,
 				ClientID:    entry.ClientID,
 				Resource:    entry.Resource,
 				grantID:     entry.GrantID,
