@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- One caller can no longer take every log read or log stream slot: each gets a quarter of the cap, as with event streams
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
