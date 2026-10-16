@@ -20,6 +20,13 @@ if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ]; then
   exit 0
 fi
 
+# go-git also refuses a repository with extensions.worktreeConfig set, which
+# `git worktree` tooling turns on in the main checkout too.
+if [ "$(git config --bool --get extensions.worktreeConfig)" = "true" ]; then
+  echo "pre-commit: extensions.worktreeConfig is set, which cyclonedx-gomod cannot read. Skipping SBOM regeneration (CI regenerates and commits it)." >&2
+  exit 0
+fi
+
 # Both generators are Go now — the tool directive pins cyclonedx-gomod, and
 # scripts/sbomnpm reads the lockfile — so only go and jq are needed, plus an
 # installed workspace. Skip (don't block) when anything is missing.
