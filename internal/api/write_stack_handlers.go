@@ -25,10 +25,22 @@ func removeAll(
 			if cerrdefs.IsNotFound(err) {
 				continue
 			}
-			message := err.Error()
+			// The daemon's text names hosts and internals the caller has no
+			// business reading, so it goes to the log and not the response.
+			message := "failed to remove " + resourceType + " " + id
 			if cluster.IsRemovalConflict(err, resourceType) {
 				slog.Info("removal refused", "resource", resourceType, "id", id, "error", err)
 				message = cluster.RemovalConflictDetail(resourceType, id)
+			} else {
+				slog.Warn(
+					"stack member removal failed",
+					"resource",
+					resourceType,
+					"id",
+					id,
+					"error",
+					err,
+				)
 			}
 			errs = append(errs, removeError{Type: resourceType, ID: id, Error: message})
 			continue
