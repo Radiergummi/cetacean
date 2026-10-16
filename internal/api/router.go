@@ -274,7 +274,10 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	}
 
 	authProvider.RegisterRoutes(mux.mux)
-	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider, writeIdentityJSONLD))
+	mux.HandleFunc(
+		"GET /auth/whoami",
+		auth.WhoamiHandler(authProvider, cfg.APITokens, writeIdentityJSONLD),
+	)
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
