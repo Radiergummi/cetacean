@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Below operations level 3, a service can mount a named volume only if the manager holds it as a plain `local` volume, so a bind-backed volume can't reach the host
 
 ### Fixed
+- A level-2 change to a service's mounts, secrets, configs or networks is refused if the service changed since Cetacean last read it, so it can't restore a bind mount or attachment that was just removed
 - Tokens the authorization server issues carry the grants `acl.tailscale_capability` or `acl.headers_acl` gave you at consent, so API and MCP clients get the access your browser session has
 - `GET /auth/whoami` accepts a bearer token the authorization server issued, instead of refusing it as invalid
 - Behind `tailscale serve`, a name or capability grant with non-ASCII characters is read correctly instead of showing encoded or granting nothing
