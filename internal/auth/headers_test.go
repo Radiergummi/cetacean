@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -514,5 +515,32 @@ func TestHeadersProvider_CapsTheGroupCount(t *testing.T) {
 
 	if _, err := p.Authenticate(httptest.NewRecorder(), request(maxGroups+1)); err == nil {
 		t.Error("a groups header over the cap was accepted")
+	}
+}
+
+// tailscale serve Q-encodes a non-ASCII value, the capability object included.
+// Read raw, a name renders as encoded words and the grants fail to parse.
+func TestHeadersProvider_DecodesEncodedWords(t *testing.T) {
+	const caps = `{"example.com/cap/cetacean":[{"resources":["stack:größe"],"permissions":["read"]}]}`
+
+	p := NewHeadersProvider(config.HeadersConfig{
+		Subject: "Tailscale-User-Login",
+		Name:    "Tailscale-User-Name",
+	}, "Tailscale-App-Capabilities")
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Tailscale-User-Login", "alice@example.com")
+	r.Header.Set("Tailscale-User-Name", mime.QEncoding.Encode("utf-8", "Jürgen"))
+	r.Header.Set("Tailscale-App-Capabilities", mime.QEncoding.Encode("utf-8", caps))
+
+	id, err := p.Authenticate(httptest.NewRecorder(), fromTrustedProxy(r))
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if id.DisplayName != "Jürgen" {
+		t.Errorf("display name = %q, want Jürgen", id.DisplayName)
+	}
+	if got := id.Raw["Tailscale-App-Capabilities"]; got != caps {
+		t.Errorf("capabilities = %v, want the decoded object", got)
 	}
 }

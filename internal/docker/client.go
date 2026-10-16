@@ -1215,7 +1215,10 @@ func fullSyncError(failed map[string]bool) error {
 		}
 	}
 
+	// A manager whose swarm has lost quorum refuses the same lists a worker
+	// does, so the message names both; each list's own error is in the log.
 	return errors.New(
-		"no swarm resource could be listed; docker.host must point at a swarm manager",
+		"no swarm resource could be listed: docker.host must point at a swarm manager, " +
+			"and the swarm must have a leader",
 	)
 }

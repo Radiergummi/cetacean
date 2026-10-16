@@ -216,7 +216,7 @@ func TestMetricsStream_LogsTheCauseOnceWhenQueriesStartFailing(t *testing.T) {
 // capped streams send.
 func TestLogStreamConnectionLimit(t *testing.T) {
 	h := &Handlers{}
-	h.activeLogSSEConns.Store(maxLogSSEConns)
+	occupy(t, &h.logStreams, maxLogSSEConns, maxLogSSEConns)
 
 	w := httptest.NewRecorder()
 	h.serveLogsSSE(w, httptest.NewRequest("GET", "/services/x/logs", nil), nil, "", "")

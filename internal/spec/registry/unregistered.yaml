@@ -5,6 +5,7 @@
 
 RFC1918: "Private IPv4 ranges; net.IP.IsPrivate() covers them in the CIMD SSRF guard. No behaviour of ours — stdlib does the check."
 RFC2045: "Defines media-type case-insensitivity generally. The concrete requirement we test is RFC7515 section 4.1.9's typ comparison; nothing to register against RFC2045 itself."
+RFC2047: "MIME encoded-words, which tailscale serve applies to a non-ASCII identity or capability header. internal/auth/headers.go decodes them with mime.WordDecoder; the decoding is the standard library's, and TestHeadersProvider_DecodesEncodedWords pins that we apply it."
 RFC2119: "Defines the MUST/SHOULD/MAY vocabulary our own spec.Level type borrows. It is the registry's own terminology, not a protocol we implement."
 RFC3339: "Timestamp format, used via time.RFC3339. No behaviour of ours to test."
 RFC3986: "URI Generic Syntax. The document carries no RFC 2119 keyword anywhere — it states its rules in ABNF and lowercase prose, so there is no clause to register a level against. §6.2.3's empty-path normalization is implemented for OAuth resource identifiers (internal/oauth/resource.go), pinned by TestTheRootIdentifierIsAcceptedWithATrailingSlash."

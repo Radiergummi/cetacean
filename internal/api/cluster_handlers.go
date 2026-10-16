@@ -238,6 +238,11 @@ type TargetStatus struct {
 }
 
 func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request) {
+	if !acceptable(r, ContentTypeJSON) {
+		notAcceptable(w, r, "application/json")
+		return
+	}
+
 	if !h.requireAnyGrant(w, r) {
 		return
 	}

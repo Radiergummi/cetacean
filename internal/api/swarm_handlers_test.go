@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
@@ -1598,5 +1600,41 @@ func TestHandleDiskUsageSharesARecentResult(t *testing.T) {
 
 	if calls != 1 {
 		t.Errorf("daemon called %d times, want 1", calls)
+	}
+}
+
+// A failure the caller cannot act on is logged, not repeated: the daemon's
+// text can name the hosts behind it.
+func TestHandleSwarmUpdateErrorKeepsTheDaemonsText(t *testing.T) {
+	cases := map[string]struct {
+		err  error
+		show bool
+	}{
+		"unknown": {errors.New("dial tcp 10.0.0.7:2377: connection refused"), false},
+		"invalid": {
+			fmt.Errorf("%w: snapshot interval 10.0.0.7 too small", cerrdefs.ErrInvalidArgument),
+			true,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			sc := &mockSystemClient{
+				swarmInspectFn: func(context.Context) (swarm.Swarm, error) { return validSwarm(), nil },
+				updateSwarmFn: func(context.Context, swarm.Spec, swarm.Version, swarm.UpdateFlags) error {
+					return tc.err
+				},
+			}
+			h := newSwarmHandlers(t, sc)
+
+			rec := httptest.NewRecorder()
+			h.HandlePatchSwarmOrchestration(
+				rec,
+				mergePatchRequest("/swarm/orchestration", `{"TaskHistoryRetentionLimit": 10}`),
+			)
+
+			if shown := strings.Contains(rec.Body.String(), "10.0.0.7"); shown != tc.show {
+				t.Errorf("daemon text shown = %v, want %v: %s", shown, tc.show, rec.Body.String())
+			}
+		})
 	}
 }

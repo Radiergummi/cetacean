@@ -238,8 +238,8 @@ type Handlers struct {
 	localNodeDone        bool
 	localNodeRetryAfter  *time.Time
 
-	activeLogSSEConns  atomic.Int64
-	activeLogReads     atomic.Int64
+	logStreams         sse.Slots
+	logReads           sse.Slots
 	activePreferWaits  atomic.Int64
 	metricsStreamCount atomic.Int32
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration

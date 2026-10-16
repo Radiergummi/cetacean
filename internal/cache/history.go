@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -385,14 +386,18 @@ func (h *History) listByResource(
 	result := make([]HistoryEntry, 0, min(limit, indexRingSize))
 	pastCursor := q.BeforeID == 0
 
+	// Newest first, the entries an index still names have falling IDs. A slot
+	// overwritten since it was indexed holds another resource's entry, or a
+	// newer one of this resource's that an earlier reference already yielded.
+	var last uint64 = math.MaxUint64
+
 	ring.iterNewest(func(idx int) bool {
 		e := h.entries[idx]
 
-		// Skip stale entries: the ring buffer slot may have been overwritten
-		// by a different resource's entry since the index was recorded.
-		if !e.about(q.ResourceID) {
+		if !e.about(q.ResourceID) || e.ID >= last {
 			return true
 		}
+		last = e.ID
 
 		if !pastCursor {
 			if e.ID == q.BeforeID {

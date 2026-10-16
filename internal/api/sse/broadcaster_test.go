@@ -682,6 +682,36 @@ func TestSSE_ReplayNoMatchingType_DoesNotDropLiveEvents(t *testing.T) {
 	}
 }
 
+// A resync after a replay carries the last entry's ID, which the replay just
+// sent; it is still a new sync, and the client must refetch on it.
+func TestSSE_LiveSyncAfterReplayIsDelivered(t *testing.T) {
+	h := cache.NewHistory(10)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s2"})
+
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/services", nil)
+	req.Header.Set("Last-Event-ID", b.epoch+"-1")
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, TypeMatcher(cache.EventService), cache.EventService)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, `"s2"`)
+
+	b.Broadcast(cache.Event{Type: cache.EventSync, Action: "full_sync", HistoryID: h.Count()})
+	waitForBody(t, w, "event: sync")
+
+	b.Close()
+	<-done
+}
+
 func TestSSE_EndToEnd_ReplayThenLive(t *testing.T) {
 	h := cache.NewHistory(100)
 	// Simulate 5 past events (IDs will be 1–5 assigned by Append)

@@ -274,7 +274,10 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	}
 
 	authProvider.RegisterRoutes(mux.mux)
-	mux.HandleFunc("GET /auth/whoami", auth.WhoamiHandler(authProvider, writeIdentityJSONLD))
+	mux.HandleFunc(
+		"GET /auth/whoami",
+		auth.WhoamiHandler(authProvider, cfg.APITokens, writeIdentityJSONLD),
+	)
 
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
@@ -1101,5 +1104,10 @@ func securityHeaders(tlsEnabled bool, inlineScriptHashes []string) Constructor {
 // writeIdentityJSONLD writes an auth identity as a JSON-LD DetailResponse.
 // Used by the /auth/whoami handler.
 func writeIdentityJSONLD(w http.ResponseWriter, r *http.Request, id *auth.Identity) {
+	if !acceptable(r, ContentTypeJSON) {
+		notAcceptable(w, r, "application/json")
+		return
+	}
+
 	writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
 }

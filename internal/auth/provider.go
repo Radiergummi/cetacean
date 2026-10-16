@@ -19,15 +19,18 @@ type Provider interface {
 // Implementations control the wire format (e.g. plain JSON vs JSON-LD).
 type WriteIdentityFunc func(http.ResponseWriter, *http.Request, *Identity)
 
-// WhoamiHandler returns an http.HandlerFunc that authenticates via the
-// provider and responds with the identity. Since /auth/* routes are exempt
-// from the auth middleware, this handler calls Authenticate directly rather
-// than reading identity from context. Callers pass writeIdentity to control
-// the response format (e.g. JSON-LD wrapping); pass WriteIdentityJSON for
-// plain JSON.
-func WhoamiHandler(p Provider, writeIdentity WriteIdentityFunc) http.HandlerFunc {
+// WhoamiHandler returns an http.HandlerFunc that authenticates as the auth
+// middleware does — a token of ours first, then the provider — and responds
+// with the identity. /auth/* routes are exempt from the middleware, so this
+// handler authenticates itself rather than reading identity from context.
+// Callers pass writeIdentity to control the response format (e.g. JSON-LD
+// wrapping); pass WriteIdentityJSON for plain JSON.
+func WhoamiHandler(p Provider, tokens APITokens, writeIdentity WriteIdentityFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := p.Authenticate(w, r)
+		id, err, fromToken := tokens.authenticate(r)
+		if !fromToken {
+			id, err = p.Authenticate(w, r)
+		}
 		if err != nil {
 			// Mirrors the middleware's own warning. /auth/* is exempt from
 			// the middleware, so this handler is the only place a failure
