@@ -218,7 +218,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "tailscale":
-		if authCfg.Tailscale.Mode == "tsnet" {
+		if tsnetMode {
 			authProvider, tsnetServer, tsnetLn, err = auth.NewTailscaleTsnetProvider(
 				authCfg.Tailscale.Hostname,
 				authCfg.Tailscale.AuthKey,
@@ -548,7 +548,7 @@ func main() {
 		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
 	}
 
-	if mcpInClear(cfg.MCP.Enabled, authCfg.Mode, tlsCfg.Enabled(), cfg.PublicURL) {
+	if mcpInClear(cfg.MCP.Enabled, authCfg.Mode, tlsCfg.Enabled() || tsnetMode, cfg.PublicURL) {
 		slog.Warn("MCP is enabled without TLS: credentials reach /mcp in clear text. " +
 			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
