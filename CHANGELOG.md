@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- Writes with no `GET` at their own path, such as `PUT /services/{id}/scale` and the `/swarm` updates, refuse any `If-Match` with 412 instead of ignoring it. Clients must stop sending the header there
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
