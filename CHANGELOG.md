@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Below operations level 3, a service can mount a named volume only if the manager holds it as a plain `local` volume, so a bind-backed volume can't reach the host
 
 ### Fixed
+- Event streams, log tails and MCP listens opened with a token the authorization server issued close when the token expires, instead of running on after it
 - Tokens the authorization server issues carry the grants `acl.tailscale_capability` or `acl.headers_acl` gave you at consent, so API and MCP clients get the access your browser session has
 - `GET /auth/whoami` accepts a bearer token the authorization server issued, instead of refusing it as invalid
 - Behind `tailscale serve`, a name or capability grant with non-ASCII characters is read correctly instead of showing encoded or granting nothing

@@ -417,6 +417,10 @@ client, so the token carries **your** identity and nothing more. [Grants][author
 to your browser session. Grants from the provider—a tailnet capability or a proxy header—are captured when you
 approve the client, and its tokens keep them until it authorizes again.
 
+A stream opened with a token—an event stream, a log tail, an MCP listen—closes when the token expires, after
+[`oauth.access_token_ttl`][oauth.access_token_ttl]. The client reconnects with a fresh token; one it can no longer
+refresh gets `401`.
+
 ### Two resources, one server
 
 The API and `/mcp` are separate protected resources with separate audiences:
@@ -707,6 +711,7 @@ response schemas.
 [mcp]: mcp
 [mcp.auth_bypass]: configuration#mcp.auth_bypass
 [mcp.enabled]: configuration#mcp.enabled
+[oauth.access_token_ttl]: configuration#oauth.access_token_ttl
 [oauth.api_tokens]: configuration#oauth.api_tokens
 [oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc

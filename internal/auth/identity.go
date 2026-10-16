@@ -1,6 +1,9 @@
 package auth
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Identity represents an authenticated user.
 type Identity struct {
@@ -10,6 +13,10 @@ type Identity struct {
 	Groups      []string       `json:"groups,omitempty"`
 	Provider    string         `json:"provider"`
 	Raw         map[string]any `json:"raw,omitempty"`
+
+	// ExpiresAt is when the credential behind the identity lapses, zero when
+	// nothing bounds it here. Only a token this deployment issued sets it.
+	ExpiresAt time.Time `json:"-"`
 }
 
 // ProviderToken is the Provider of an identity the middleware built from a
@@ -34,6 +41,17 @@ type ctxKey struct{}
 // ContextWithIdentity returns a new context with the given identity stored.
 func ContextWithIdentity(ctx context.Context, id *Identity) context.Context {
 	return context.WithValue(ctx, ctxKey{}, id)
+}
+
+// ContextUntilExpiry stores id in ctx and ends the context when id's credential
+// lapses, so a stream it opened cannot outlive the token. The caller cancels.
+func ContextUntilExpiry(ctx context.Context, id *Identity) (context.Context, context.CancelFunc) {
+	ctx = ContextWithIdentity(ctx, id)
+	if id == nil || id.ExpiresAt.IsZero() {
+		return ctx, func() {}
+	}
+
+	return context.WithDeadline(ctx, id.ExpiresAt)
 }
 
 // IdentityFromContext returns the identity from the context, or nil if none.

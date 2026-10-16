@@ -1,12 +1,14 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/spec"
 )
@@ -368,5 +370,45 @@ func TestAnIdentityKnowsWhetherATokenCarriedIt(t *testing.T) {
 	var absent *Identity
 	if absent.FromToken() {
 		t.Error("no identity at all claimed a token carried it")
+	}
+}
+
+// A stream holds its request open for as long as the client keeps it, so the
+// request's context is what has to end when the token behind it lapses.
+func TestARequestEndsWhenItsTokenLapses(t *testing.T) {
+	token := &Identity{
+		Subject:   "from-token",
+		Provider:  ProviderToken,
+		ExpiresAt: time.Now().Add(50 * time.Millisecond),
+	}
+
+	ended := make(chan struct{})
+	stream := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			close(ended)
+		case <-time.After(5 * time.Second):
+		}
+	})
+
+	handler := Middleware(&cookieProvider{},
+		APITokens{Verifier: &stubVerifier{identity: token}, Resource: "https://cetacean.test"},
+	)(stream)
+	handler.ServeHTTP(httptest.NewRecorder(), bearerRequest("a-token"))
+
+	select {
+	case <-ended:
+	default:
+		t.Fatal("the request outlived the token it was opened with")
+	}
+}
+
+// A session carries no expiry of its own here, so its requests are unbounded.
+func TestContextUntilExpiryLeavesAnUnboundedIdentity(t *testing.T) {
+	ctx, cancel := ContextUntilExpiry(context.Background(), &Identity{Subject: "session"})
+	defer cancel()
+
+	if _, ok := ctx.Deadline(); ok {
+		t.Error("an identity without an expiry got a deadline")
 	}
 }

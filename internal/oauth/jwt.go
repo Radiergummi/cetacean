@@ -53,6 +53,10 @@ type AccessTokenClaims struct {
 	Groups      []string        `json:"groups,omitempty"`
 	Grants      json.RawMessage `json:"grants,omitempty"`
 	ClientID    string          `json:"client_id,omitempty"`
+
+	// ExpiresAt is the verified token's exp. Ignored when issuing: the TTL
+	// passed to IssueAccessToken sets it.
+	ExpiresAt time.Time `json:"-"`
 }
 
 // audience accepts both shapes RFC 7519 §4.1.3 allows — an array, or a bare
@@ -339,5 +343,6 @@ func (t *TokenIssuer) VerifyAccessToken(
 		Groups:      payload.Groups,
 		Grants:      payload.Grants,
 		ClientID:    payload.ClientID,
+		ExpiresAt:   time.Unix(payload.ExpiresAt, 0),
 	}, nil
 }
