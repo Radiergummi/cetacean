@@ -22,11 +22,6 @@ const LegacyProtocolVersion = mcplib.LATEST_LEGACY_PROTOCOL_VERSION
 // newest first.
 var SupportedProtocolVersions = []string{ProtocolVersion, LegacyProtocolVersion}
 
-// maxIDSniffBytes bounds how much of a request body we read to recover its
-// JSON-RPC method and id. Both sit at the top of the envelope, so this is
-// generous; a body larger than this is malformed for our purposes anyway.
-const maxIDSniffBytes = 64 << 10
-
 // requireSupportedProtocol admits the revisions in SupportedProtocolVersions
 // and nothing else. No session is ever minted, so a request naming one is
 // refused whatever its version.
@@ -109,9 +104,10 @@ type envelope struct {
 	Method mcplib.MCPMethod `json:"method"`
 }
 
-// sniffEnvelope reads the method and id off the head of the body and puts what
-// it read back, so the handler behind still sees the whole message. A body it
-// cannot parse yields the zero envelope, whose id renders as null.
+// sniffEnvelope reads the method and id off the body and puts it back, so the
+// handler behind still sees the whole message. It parses all of a body limitBody
+// has bounded: JSON keys are unordered, so a prefix cannot name the method.
+// A body it cannot parse yields the zero envelope, whose id renders as null.
 func sniffEnvelope(r *http.Request) envelope {
 	var parsed envelope
 
@@ -119,11 +115,11 @@ func sniffEnvelope(r *http.Request) envelope {
 		return parsed
 	}
 
-	head, err := io.ReadAll(io.LimitReader(r.Body, maxIDSniffBytes))
-	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(head), r.Body))
+	body, err := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	if err == nil {
-		_ = json.Unmarshal(head, &parsed)
+		_ = json.Unmarshal(body, &parsed)
 	}
 
 	return parsed
