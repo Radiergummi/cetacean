@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -37,6 +38,7 @@ func attachmentTestCache(t *testing.T) *cache.Cache {
 		ID:   "c1",
 		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "nginx_conf"}},
 	})
+	c.SetVolume(volume.Volume{Name: "data", Driver: "local"})
 
 	return c
 }

@@ -303,7 +303,7 @@ func (s *Server) toolUpdateServiceMounts(
 
 	svc, _, _ := s.cache.ResolveService(id)
 	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
-	if err := cluster.CheckMounts(svc, mounts, level); err != nil {
+	if err := cluster.CheckMounts(svc, mounts, s.cache.GetVolume, level); err != nil {
 		return "", err
 	}
 

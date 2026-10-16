@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -22,10 +23,15 @@ func (e *HostAccessError) Error() string {
 }
 
 // CheckMounts refuses a mount that reaches the host below the impactful tier:
-// a bind or named pipe hands the container a host path, the Docker socket
-// included, and a volume driver's options can bind one too. One the service
-// already carries, unchanged, is exempt so tier 2 can edit the rest.
-func CheckMounts(svc swarm.Service, requested []mount.Mount, level config.OperationsLevel) error {
+// a bind, a named pipe, or a volume whose driver options could bind one. A named
+// volume lookup does not know, held by another node, counts as one. A mount the
+// service already carries, unchanged, is exempt so tier 2 can edit the rest.
+func CheckMounts(
+	svc swarm.Service,
+	requested []mount.Mount,
+	lookup func(name string) (volume.Volume, bool),
+	level config.OperationsLevel,
+) error {
 	if level >= config.OpsImpactful {
 		return nil
 	}
@@ -36,7 +42,7 @@ func CheckMounts(svc swarm.Service, requested []mount.Mount, level config.Operat
 	}
 
 	for _, m := range requested {
-		what := hostAccess(m)
+		what := hostAccess(m, lookup)
 		if what == "" {
 			continue
 		}
@@ -53,22 +59,35 @@ func CheckMounts(svc swarm.Service, requested []mount.Mount, level config.Operat
 
 // hostAccess names how a mount reaches the host, or returns "" if it does not.
 // It reads the type as Docker does: case-insensitively, empty meaning a bind.
-func hostAccess(m mount.Mount) string {
+func hostAccess(m mount.Mount, lookup func(string) (volume.Volume, bool)) string {
 	switch mount.Type(strings.ToLower(string(m.Type))) {
 	case "", mount.TypeBind:
 		return "a bind mount of " + m.Source
 	case mount.TypeNamedPipe:
 		return "a named pipe mount of " + m.Source
 	case mount.TypeVolume:
-		if m.VolumeOptions == nil || m.VolumeOptions.DriverConfig == nil {
-			return ""
+		if m.VolumeOptions != nil && m.VolumeOptions.DriverConfig != nil {
+			if m.Source == "" {
+				return "an anonymous volume mount with driver options"
+			}
+
+			return "a volume mount of " + m.Source + " with driver options"
 		}
 
 		if m.Source == "" {
-			return "an anonymous volume mount with driver options"
+			return ""
 		}
 
-		return "a volume mount of " + m.Source + " with driver options"
+		stored, ok := lookup(m.Source)
+		if !ok {
+			return "a mount of unknown volume " + m.Source
+		}
+
+		if stored.Driver != "local" || len(stored.Options) > 0 {
+			return "a volume mount of " + m.Source + " with driver options"
+		}
+
+		return ""
 	default:
 		return ""
 	}
