@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- `GET /auth/whoami` accepts a bearer token the authorization server issued, instead of refusing it as invalid
+
 ## [0.15.0] - 2026-10-16
 
 ### Added

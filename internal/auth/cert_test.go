@@ -445,7 +445,7 @@ func TestCertProvider_WhoamiCacheControl(t *testing.T) {
 		NotAfter:     time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 
-	handler := WhoamiHandler(p, WriteIdentityJSON)
+	handler := WhoamiHandler(p, APITokens{}, WriteIdentityJSON)
 
 	r := httptest.NewRequest("GET", "/", nil)
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
@@ -464,7 +464,7 @@ func TestCertProvider_WhoamiCacheControl(t *testing.T) {
 // it is the one route that can disagree with the rest about what a rejected
 // certificate answers.
 func TestCertProvider_WhoamiRefusesAsTheMiddlewareDoes(t *testing.T) {
-	handler := WhoamiHandler(&CertProvider{}, WriteIdentityJSON)
+	handler := WhoamiHandler(&CertProvider{}, APITokens{}, WriteIdentityJSON)
 
 	r := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
