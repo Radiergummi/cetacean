@@ -7,13 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-16
+
 ### Added
 - `acl.headers_capability` reads header-mode grants from a JSON object keyed by capability, so grants can come from the tailnet policy through `tailscale serve`'s `Tailscale-App-Capabilities` header
 - A History page at `/history` lists the cluster's recent changes, filterable by type and name, with a CSV download of the full log
 - `docker.tls.ca`, `docker.tls.cert` and `docker.tls.key` connect to a `tcp://` Docker Engine over TLS, with a client certificate for one started with `--tlsverify`
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
 - `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document: its channels, messages, and cursor format
-- `GET /api/asyncapi` describes every SSE stream as an AsyncAPI 3.0 document—the channels, the messages each carries, and which cursor dialect its `id:` uses
 - Both API descriptions are served as YAML as well as JSON, at `/api/openapi.yaml` and `/api/asyncapi.yaml` or by negotiating on `Accept`
 - Any list can be downloaded as CSV—add `.csv` to the URL or ask for `text/csv`. Search, filters, and sorting apply; a download that asks for no page gets every row
 - The dashboard is installable as an app, with icons and a theme color that follows its own background
