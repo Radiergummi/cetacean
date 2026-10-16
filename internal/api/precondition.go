@@ -19,6 +19,20 @@ import (
 // stacks and plugins a precondition at all. The subject is made current from
 // the engine first, or the header could only refuse what the cache already saw.
 func (h *Handlers) precond(rep representationFunc) Constructor {
+	return h.conditional(rep, true)
+}
+
+// unrepresented evaluates If-Match on a write whose path serves no GET. There is
+// no representation to match, so §13.1.1 makes every If-Match false, "*" too;
+// exists only says whether the subject is there, so a missing one still 404s.
+func (h *Handlers) unrepresented(exists representationFunc) Constructor {
+	return h.conditional(exists, false)
+}
+
+// subjectExists is an exists for a write whose subject is the cluster itself.
+func subjectExists(*http.Request) (any, error) { return struct{}{}, nil }
+
+func (h *Handlers) conditional(rep representationFunc, represented bool) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ifMatch := r.Header.Get("If-Match")
@@ -74,6 +88,16 @@ func (h *Handlers) precond(rep representationFunc) Constructor {
 
 				writeErrorCode(w, r, "ENG004",
 					"failed to read the current representation")
+				return
+			}
+
+			if !represented {
+				writeErrorCode(
+					w,
+					r,
+					"API013",
+					"If-Match cannot match: this endpoint serves no representation to compare it to",
+				)
 				return
 			}
 

@@ -262,6 +262,11 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	pluginWildTier3 := h.tiered(pluginWildACL, config.OpsImpactful)
 	swarmTier2 := h.tiered(swarmACL, config.OpsConfiguration)
 	swarmTier3 := h.tiered(swarmACL, config.OpsImpactful)
+	// For the writes whose path serves no GET, so If-Match can never match.
+	serviceExists := h.unrepresented(h.serviceRepresentation)
+	nodeExists := h.unrepresented(h.nodeRepresentation)
+	pluginExists := h.unrepresented(h.pluginRepresentation)
+	clusterExists := h.unrepresented(subjectExists)
 	// A create checks the write grant on the name it creates, in the handler.
 	createTier2 := tieredChain{
 		NewChain(h.requireLevel(config.OpsConfiguration)),
@@ -360,16 +365,43 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleClusterCapacity, feedHandlers{}, spa),
 	)
 	mux.HandleFunc("GET /swarm", contentNegotiated(h.HandleSwarm, feedHandlers{}, spa))
-	mux.Handle("PATCH /swarm/orchestration", swarmTier2.ThenFunc(h.HandlePatchSwarmOrchestration))
-	mux.Handle("PATCH /swarm/raft", swarmTier2.ThenFunc(h.HandlePatchSwarmRaft))
-	mux.Handle("PATCH /swarm/dispatcher", swarmTier2.ThenFunc(h.HandlePatchSwarmDispatcher))
-	mux.Handle("PATCH /swarm/ca", swarmTier3.ThenFunc(h.HandlePatchSwarmCAConfig))
-	mux.Handle("PATCH /swarm/encryption", swarmTier3.ThenFunc(h.HandlePatchSwarmEncryption))
-	mux.Handle("POST /swarm/rotate-token", swarmTier3.ThenFunc(h.HandlePostRotateToken))
-	mux.Handle("POST /swarm/rotate-unlock-key", swarmTier3.ThenFunc(h.HandlePostRotateUnlockKey))
-	mux.Handle("POST /swarm/force-rotate-ca", swarmTier3.ThenFunc(h.HandlePostForceRotateCA))
+	mux.Handle(
+		"PATCH /swarm/orchestration",
+		swarmTier2.Append(clusterExists).ThenFunc(h.HandlePatchSwarmOrchestration),
+	)
+	mux.Handle(
+		"PATCH /swarm/raft",
+		swarmTier2.Append(clusterExists).ThenFunc(h.HandlePatchSwarmRaft),
+	)
+	mux.Handle(
+		"PATCH /swarm/dispatcher",
+		swarmTier2.Append(clusterExists).ThenFunc(h.HandlePatchSwarmDispatcher),
+	)
+	mux.Handle(
+		"PATCH /swarm/ca",
+		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePatchSwarmCAConfig),
+	)
+	mux.Handle(
+		"PATCH /swarm/encryption",
+		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePatchSwarmEncryption),
+	)
+	mux.Handle(
+		"POST /swarm/rotate-token",
+		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostRotateToken),
+	)
+	mux.Handle(
+		"POST /swarm/rotate-unlock-key",
+		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostRotateUnlockKey),
+	)
+	mux.Handle(
+		"POST /swarm/force-rotate-ca",
+		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostForceRotateCA),
+	)
 	mux.Handle("GET /swarm/unlock-key", swarmTier3.ThenFunc(h.HandleGetUnlockKey))
-	mux.Handle("POST /swarm/unlock", swarmTier3.ThenFunc(h.HandlePostUnlockSwarm))
+	mux.Handle(
+		"POST /swarm/unlock",
+		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostUnlockSwarm),
+	)
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, feedHandlers{}, spa))
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa))
@@ -378,15 +410,30 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"GET /swarm/plugins",
 		contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa),
 	)
-	mux.Handle("POST /plugins/privileges", pluginWildTier3.ThenFunc(h.HandlePluginPrivileges))
+	mux.Handle(
+		"POST /plugins/privileges",
+		pluginWildTier3.Append(clusterExists).ThenFunc(h.HandlePluginPrivileges),
+	)
 	mux.Handle("POST /plugins", pluginWildTier3.ThenFunc(h.HandleInstallPlugin))
-	mux.Handle("POST /plugins/{name}/enable", pluginTier2.ThenFunc(h.HandleEnablePlugin))
-	mux.Handle("POST /plugins/{name}/disable", pluginTier2.ThenFunc(h.HandleDisablePlugin))
+	mux.Handle(
+		"POST /plugins/{name}/enable",
+		pluginTier2.Append(pluginExists).ThenFunc(h.HandleEnablePlugin),
+	)
+	mux.Handle(
+		"POST /plugins/{name}/disable",
+		pluginTier2.Append(pluginExists).ThenFunc(h.HandleDisablePlugin),
+	)
 	mux.Handle("DELETE /plugins/{name}",
 		pluginTier3.Append(h.precond(h.pluginRepresentation)).
 			ThenFunc(h.HandleRemovePlugin))
-	mux.Handle("POST /plugins/{name}/upgrade", pluginTier3.ThenFunc(h.HandleUpgradePlugin))
-	mux.Handle("PATCH /plugins/{name}/settings", pluginTier2.ThenFunc(h.HandleConfigurePlugin))
+	mux.Handle(
+		"POST /plugins/{name}/upgrade",
+		pluginTier3.Append(pluginExists).ThenFunc(h.HandleUpgradePlugin),
+	)
+	mux.Handle(
+		"PATCH /plugins/{name}/settings",
+		pluginTier2.Append(pluginExists).ThenFunc(h.HandleConfigurePlugin),
+	)
 
 	// Nodes
 	mux.HandleFunc(
@@ -471,7 +518,10 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 
 	// Node write operations
-	mux.Handle("PUT /nodes/{id}/availability", nodeTier3.ThenFunc(h.HandleUpdateNodeAvailability))
+	mux.Handle(
+		"PUT /nodes/{id}/availability",
+		nodeTier3.Append(nodeExists).ThenFunc(h.HandleUpdateNodeAvailability),
+	)
 	mux.HandleFunc(
 		"GET /nodes/{id}/labels",
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
@@ -491,10 +541,22 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			ThenFunc(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
-	mux.Handle("PUT /services/{id}/scale", svcTier1.ThenFunc(h.HandleScaleService))
-	mux.Handle("PUT /services/{id}/image", svcTier1.ThenFunc(h.HandleUpdateServiceImage))
-	mux.Handle("POST /services/{id}/rollback", svcTier1.ThenFunc(h.HandleRollbackService))
-	mux.Handle("POST /services/{id}/restart", svcTier1.ThenFunc(h.HandleRestartService))
+	mux.Handle(
+		"PUT /services/{id}/scale",
+		svcTier1.Append(serviceExists).ThenFunc(h.HandleScaleService),
+	)
+	mux.Handle(
+		"PUT /services/{id}/image",
+		svcTier1.Append(serviceExists).ThenFunc(h.HandleUpdateServiceImage),
+	)
+	mux.Handle(
+		"POST /services/{id}/rollback",
+		svcTier1.Append(serviceExists).ThenFunc(h.HandleRollbackService),
+	)
+	mux.Handle(
+		"POST /services/{id}/restart",
+		svcTier1.Append(serviceExists).ThenFunc(h.HandleRestartService),
+	)
 
 	// Service write operations — tier 2 (configuration)
 	mux.HandleFunc(

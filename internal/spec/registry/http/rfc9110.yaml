@@ -125,6 +125,9 @@ requirements:
       - file: internal/api/write_helpers.go
         replace: "if preconditioned(r.Context()) && strings.Contains"
         with: "if false && strings.Contains"
+      - file: internal/api/precondition.go
+        replace: "\t\t\tif !represented {"
+        with: "\t\t\tif false {"
 
   - id: a-failed-precondition-may-answer-412
     level: MAY

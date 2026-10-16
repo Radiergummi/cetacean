@@ -1332,6 +1332,8 @@ paths:
       tags: [Cluster]
       summary: Patch swarm orchestration config
       description: Updates the swarm orchestration configuration (task history retention limit). Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1364,6 +1366,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/raft:
     patch:
@@ -1375,6 +1379,8 @@ paths:
       tags: [Cluster]
       summary: Patch swarm raft config
       description: Updates the swarm Raft configuration (snapshot interval, log entries, election/heartbeat ticks). Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1420,6 +1426,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/dispatcher:
     patch:
@@ -1431,6 +1439,8 @@ paths:
       tags: [Cluster]
       summary: Patch swarm dispatcher config
       description: Updates the swarm dispatcher configuration (heartbeat period). Requires operations level 2.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1465,6 +1475,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/ca:
     patch:
@@ -1476,6 +1488,8 @@ paths:
       tags: [Cluster]
       summary: Patch swarm CA config
       description: Updates the swarm CA configuration (node cert expiry, external CAs). Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1510,6 +1524,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/encryption:
     patch:
@@ -1521,6 +1537,8 @@ paths:
       tags: [Cluster]
       summary: Patch swarm encryption config
       description: Toggles Raft data-at-rest encryption. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1554,6 +1572,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/rotate-token:
     post:
@@ -1565,6 +1585,8 @@ paths:
       tags: [Cluster]
       summary: Rotate join token
       description: Rotates the worker or manager join token. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1586,6 +1608,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/rotate-unlock-key:
     post:
@@ -1597,6 +1621,8 @@ paths:
       tags: [Cluster]
       summary: Rotate unlock key
       description: Rotates the swarm unlock key. Only works when autolock is enabled. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       responses:
         "204":
           description: Unlock key rotated. Retrieve the new key via GET /swarm/unlock-key.
@@ -1604,6 +1630,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/force-rotate-ca:
     post:
@@ -1615,6 +1643,8 @@ paths:
       tags: [Cluster]
       summary: Force CA certificate rotation
       description: Forces rotation of the cluster root CA certificate. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       responses:
         "204":
           description: CA rotation initiated
@@ -1622,6 +1652,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /swarm/plugins:
     get:
@@ -1690,6 +1722,8 @@ paths:
       description: |
         Unlocks a swarm that has been locked with autolock. The caller must provide
         the current unlock key. Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1710,6 +1744,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           description: Failed to unlock swarm
 
@@ -1868,6 +1904,8 @@ paths:
         Returns the list of privileges required by a remote plugin image.
         Used before installing a plugin to review requested permissions.
         Requires operations level 3.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -1917,6 +1955,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /plugins/{name}:
     get:
@@ -2034,6 +2074,7 @@ paths:
           schema:
             type: string
           example: vieux/sshfs:latest
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       responses:
         "204":
           description: Plugin enabled
@@ -2041,6 +2082,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /plugins/{name}/disable:
     post:
@@ -2060,6 +2103,7 @@ paths:
           schema:
             type: string
           example: vieux/sshfs:latest
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       responses:
         "204":
           description: Plugin disabled
@@ -2067,6 +2111,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /plugins/{name}/upgrade:
     post:
@@ -2088,6 +2134,7 @@ paths:
           schema:
             type: string
           example: vieux/sshfs:latest
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -2122,6 +2169,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /plugins/{name}/settings:
     patch:
@@ -2143,6 +2192,7 @@ paths:
           schema:
             type: string
           example: vieux/sshfs:latest
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -2185,6 +2235,8 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   # ── Nodes ────────────────────────────────────────────────────────────
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /nodes:
     get:
@@ -2552,6 +2604,7 @@ paths:
       description: Sets the availability of a node (active, drain, or pause).
       parameters:
         - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -2589,6 +2642,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /nodes/{id}/labels:
     get:
@@ -3088,6 +3143,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -3117,6 +3173,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/image:
     put:
@@ -3131,6 +3189,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       requestBody:
         required: true
         content:
@@ -3160,6 +3219,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/rollback:
     post:
@@ -3174,6 +3235,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       responses:
         "200":
           description: Service rollback initiated
@@ -3208,6 +3270,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/restart:
     post:
@@ -3222,6 +3286,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
       responses:
         "200":
           description: Service restart initiated
@@ -3251,6 +3316,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
 
   /services/{id}/env:
     get:
@@ -6355,6 +6422,18 @@ components:
         Optional RFC 9110 precondition. Supply the ETag from a GET on this
         same path; the write is refused with 412 if the resource has
         changed since. Omitting the header skips the check.
+      example: '"a1b2c3d4e5f6a1b2"'
+
+    IfMatchUnrepresented:
+      name: If-Match
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >
+        No GET serves this path, so there is no ETag for an If-Match to match:
+        any If-Match, `*` included, is refused with 412 unless the resource is
+        missing, which still answers 404. Omit the header.
       example: '"a1b2c3d4e5f6a1b2"'
 
     Prefer:
