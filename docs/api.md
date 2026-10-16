@@ -765,6 +765,10 @@ passes the per-resource [write grant][authorization] check.
 | `POST /plugins/{name}/upgrade` | 3 |
 | `DELETE /plugins/{name}` | 3 |
 
+`POST /plugins` and `POST /plugins/{name}/upgrade` grant only the privileges their body names, in the `privileges`
+array `POST /plugins/privileges` returned. A request without one is refused with `400` (`PLG005`), and one whose plugin
+now asks for a different set—a tag republished after the review—with `409` (`PLG006`).
+
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 

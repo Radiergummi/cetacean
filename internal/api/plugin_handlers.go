@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +128,39 @@ func (h *Handlers) HandleRemovePlugin(w http.ResponseWriter, r *http.Request) {
 
 type pluginRemoteRequest struct {
 	Remote string `json:"remote"`
+
+	// Privileges are the ones the caller reviewed and grants. Nil, not empty,
+	// when absent: a plugin needing none is granted with an empty list.
+	Privileges *types.PluginPrivileges `json:"privileges"`
+}
+
+// grantedPrivileges refuses an install or upgrade that names no privileges,
+// and answers a plugin whose privileges changed since they were reviewed.
+func grantedPrivileges(w http.ResponseWriter, r *http.Request, req pluginRemoteRequest) bool {
+	if req.Privileges == nil {
+		writeErrorCode(w, r, "PLG005",
+			"privileges is required: send what POST /plugins/privileges returned for this remote")
+
+		return false
+	}
+
+	return true
+}
+
+// writePluginWriteError is writeDockerError with the refusal for privileges
+// that no longer match the review.
+func writePluginWriteError(w http.ResponseWriter, r *http.Request, err error, name string) {
+	if errors.Is(err, docker.ErrPluginPrivilegesChanged) {
+		writeErrorCode(
+			w,
+			r,
+			"PLG006",
+			"the plugin's required privileges changed; review them again",
+		)
+		return
+	}
+
+	writeDockerError(w, r, err, "plugin", name)
 }
 
 type pluginConfigureRequest struct {
@@ -174,11 +209,15 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !grantedPrivileges(w, r, req) {
+		return
+	}
+
 	slog.Info("installing plugin", "remote", req.Remote)
 
-	plugin, err := h.pluginClient.PluginInstall(r.Context(), req.Remote)
+	plugin, err := h.pluginClient.PluginInstall(r.Context(), req.Remote, *req.Privileges)
 	if err != nil {
-		writeDockerError(w, r, err, "plugin", req.Remote)
+		writePluginWriteError(w, r, err, req.Remote)
 		return
 	}
 
@@ -203,10 +242,19 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !grantedPrivileges(w, r, req) {
+		return
+	}
+
 	slog.Info("upgrading plugin", "plugin", name, "remote", req.Remote)
 
-	if err := h.pluginClient.PluginUpgrade(r.Context(), name, req.Remote); err != nil {
-		writeDockerError(w, r, err, "plugin", name)
+	if err := h.pluginClient.PluginUpgrade(
+		r.Context(),
+		name,
+		req.Remote,
+		*req.Privileges,
+	); err != nil {
+		writePluginWriteError(w, r, err, name)
 		return
 	}
 
