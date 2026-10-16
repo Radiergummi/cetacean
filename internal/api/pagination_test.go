@@ -313,6 +313,8 @@ func TestParsePagination_RangeMaxClamp(t *testing.T) {
 }
 
 func TestParsePagination_RangeAtMaxIntClamps(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/large-range-numerals-do-not-overflow")
+
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("Range", "items 0-"+strconv.Itoa(math.MaxInt))
 
