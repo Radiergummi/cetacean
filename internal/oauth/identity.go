@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -38,13 +39,20 @@ func (s *Server) Identify(token, resource string) (*auth.Identity, error) {
 		return nil, err
 	}
 
-	return &auth.Identity{
+	id := &auth.Identity{
 		Subject:     claims.Subject,
 		DisplayName: claims.DisplayName,
 		Email:       claims.Email,
 		Groups:      claims.Groups,
 		Provider:    ProviderName,
-	}, nil
+	}
+
+	var grants any
+	if len(claims.Grants) > 0 && json.Unmarshal(claims.Grants, &grants) == nil {
+		id.Raw = map[string]any{auth.RawTokenGrants: grants}
+	}
+
+	return id, nil
 }
 
 // ResourceIdentifier is the identifier of the resource at path, which a resource

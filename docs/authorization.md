@@ -134,6 +134,10 @@ Tailscale serve][tailscale-serve] for the full configuration.
 > OIDC browser sessions don't carry raw token claims, so `acl.oidc_claim` grants apply to bearer-token requests
 > only. Grant browser users through the policy, matching on `group:` audiences.
 
+A token the [authorization server][oauth-tokens] issues carries the provider grants its user held when they approved
+the client, since none of the headers or claims a source reads arrive with it. Refreshing keeps them; a grant
+removed at the provider stops applying when the client authorizes again or its grant expires.
+
 ## Interaction with operations level
 
 [Operations level][operations-level] and grants are independent checks, and a write needs both to
@@ -258,6 +262,7 @@ caller can never use is left out of `tools/list`.
 [mcp]: mcp
 [mcp.tools.get_metrics]: mcp-tools#get_metrics
 [monitoring]: monitoring
+[oauth-tokens]: authentication#api-access-tokens
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [tailscale-serve]: authentication#behind-tailscale-serve

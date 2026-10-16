@@ -36,6 +36,16 @@ const (
 func mintTokenForIdentity(t *testing.T, s *Server) string {
 	t.Helper()
 
+	resp, _ := mintTokensForIdentity(t, s)
+
+	return resp.AccessToken
+}
+
+// mintTokensForIdentity is mintTokenForIdentity keeping the refresh token, and
+// the client it was issued to, for a test that refreshes.
+func mintTokensForIdentity(t *testing.T, s *Server) (tokenResponse, string) {
+	t.Helper()
+
 	subject, email := fixtureSubject, fixtureEmail
 
 	const (
@@ -88,7 +98,7 @@ func mintTokenForIdentity(t *testing.T, s *Server) string {
 		t.Fatalf("decode token response: %v", err)
 	}
 
-	return resp.AccessToken
+	return resp, clientID
 }
 
 // A grant is written against a person, not against a credential. The same human
@@ -140,5 +150,85 @@ func TestATokenCarriesTheIdentityTheProviderEstablished(t *testing.T) {
 	}
 	if fromToken.Subject != fixtureSubject {
 		t.Errorf("subject = %q, want %q", fromToken.Subject, fixtureSubject)
+	}
+}
+
+// fixtureSource grants what a provider would hand fixtureSubject through a
+// header or capability its session carries and its token does not.
+type fixtureSource struct{}
+
+func (fixtureSource) GrantsFor(id *auth.Identity) []acl.Grant {
+	if id.Subject != fixtureSubject || id.FromToken() {
+		return nil
+	}
+
+	return []acl.Grant{{Resources: []string{"service:web"}, Permissions: []string{"write"}}}
+}
+
+// Provider grants reach a token through the snapshot taken at consent, and
+// survive a refresh, which happens with no provider input at all.
+func TestATokenReachesTheProviderGrantsOfItsSession(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{})
+	evaluator.SetSource(fixtureSource{})
+
+	s := newTestServer(t)
+	s.cfg.GrantSnapshot = evaluator.SnapshotGrants
+
+	tokens, clientID := mintTokensForIdentity(t, s)
+
+	fromToken, err := s.Identify(tokens.AccessToken, s.resources.fallback)
+	if err != nil {
+		t.Fatalf("Identify: %v", err)
+	}
+	if !evaluator.Can(fromToken, "write", "service:web") {
+		t.Fatalf("a token is denied the provider grant its session holds: %+v", fromToken)
+	}
+	if evaluator.Can(fromToken, "write", "service:db") {
+		t.Errorf("a token reaches past the provider grant: %+v", fromToken)
+	}
+
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {tokens.RefreshToken},
+		"client_id":     {clientID},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	s.HandleToken(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("refresh: %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var refreshed tokenResponse
+	if err := json.NewDecoder(rec.Body).Decode(&refreshed); err != nil {
+		t.Fatalf("decode refresh response: %v", err)
+	}
+
+	fromRefresh, err := s.Identify(refreshed.AccessToken, s.resources.fallback)
+	if err != nil {
+		t.Fatalf("Identify refreshed: %v", err)
+	}
+	if !evaluator.Can(fromRefresh, "write", "service:web") {
+		t.Errorf("a refreshed token lost the provider grant: %+v", fromRefresh)
+	}
+}
+
+// Without a snapshot a token holds no provider grant, whatever its Raw says:
+// only a token this server signed can carry one.
+func TestATokenWithoutASnapshotHoldsNoProviderGrant(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{})
+	evaluator.SetSource(fixtureSource{})
+
+	s := newTestServer(t)
+
+	fromToken, err := s.Identify(mintTokenForIdentity(t, s), s.resources.fallback)
+	if err != nil {
+		t.Fatalf("Identify: %v", err)
+	}
+	if evaluator.Can(fromToken, "write", "service:web") {
+		t.Errorf("a token minted without a snapshot reached the provider grant: %+v", fromToken)
 	}
 }

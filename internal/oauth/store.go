@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -42,6 +43,7 @@ type AuthCodeData struct {
 	Email       string
 	DisplayName string
 	Groups      []string
+	Grants      json.RawMessage // provider grants at consent; read-only once set
 }
 
 type authCodeEntry struct {
@@ -120,6 +122,7 @@ type RefreshTokenData struct {
 	Email       string
 	DisplayName string
 	Groups      []string
+	Grants      json.RawMessage
 	ClientID    string
 	Resource    string // RFC 8707 — the resource URL this grant is bound to
 	grantID     string // assigned and tracked by the store; unexported

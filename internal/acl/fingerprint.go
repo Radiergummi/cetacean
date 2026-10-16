@@ -46,7 +46,7 @@ func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 		}
 	}
 	if e.source != nil && id != nil {
-		for _, g := range e.source.GrantsFor(id) {
+		for _, g := range e.sourceGrants(id) {
 			sum += grantHash(g)
 		}
 	}

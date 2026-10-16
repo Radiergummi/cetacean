@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Tokens the authorization server issues now carry the grants `acl.tailscale_capability` or `acl.headers_acl` gave you at consent, so API and MCP clients get the access your browser session has
+
 ## [0.15.0] - 2026-10-16
 
 ### Added
