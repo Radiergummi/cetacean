@@ -669,3 +669,63 @@ func TestAPreconditionDoesNotMaskAMissingResource(t *testing.T) {
 		}
 	}
 }
+
+// A write whose path serves no GET has no representation for If-Match to name,
+// so every If-Match is false there; only a missing resource still answers 404.
+func TestIfMatchOnAWriteWithNoRepresentation(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/if-match-is-evaluated-before-the-method",
+		"http/rfc9110/a-false-if-match-stops-the-method",
+		"http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx",
+	)
+
+	scaled := 0
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{}},
+		},
+	})
+	router := newTestRouterWithCache(t, c, withWriteClient(&mockWriteClient{
+		scaleServiceFn: func(_ context.Context, id string, _ uint64) (swarm.Service, error) {
+			scaled++
+			svc, _ := c.GetService(id)
+
+			return svc, nil
+		},
+	}))
+
+	scale := func(t *testing.T, id, ifMatch string) int {
+		t.Helper()
+
+		req := httptest.NewRequest(
+			http.MethodPut, "/services/"+id+"/scale", strings.NewReader(`{"replicas":2}`),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		if ifMatch != "" {
+			req.Header.Set("If-Match", ifMatch)
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec.Code
+	}
+
+	for _, ifMatch := range []string{`"whatever"`, "*"} {
+		if got := scale(t, "svc1", ifMatch); got != http.StatusPreconditionFailed {
+			t.Errorf("If-Match %s: status = %d, want 412", ifMatch, got)
+		}
+	}
+	if scaled != 0 {
+		t.Fatalf("a refused precondition still scaled the service %d times", scaled)
+	}
+
+	if got := scale(t, "gone", "*"); got != http.StatusNotFound {
+		t.Errorf("missing service with If-Match: status = %d, want 404", got)
+	}
+	if got := scale(t, "svc1", ""); got != http.StatusOK || scaled != 1 {
+		t.Errorf("without If-Match: status = %d after %d scales, want 200 after 1", got, scaled)
+	}
+}

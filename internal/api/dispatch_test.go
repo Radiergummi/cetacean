@@ -410,3 +410,46 @@ func TestAssembledRouterCarriesCSVParams(t *testing.T) {
 		})
 	}
 }
+
+// An endpoint that serves one type refuses a request admitting none of its
+// types, and answers one whose wildcard admits it, as a browser's does.
+func TestFixedTypeEndpointsRefuseWhatTheyCannotServe(t *testing.T) {
+	router := newTestRouterWithCache(t, cache.New(nil))
+	const browser = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+	get := func(t *testing.T, path, accept string) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	for _, path := range []string{
+		"/api/asyncapi", "/api/context.jsonld", "/metrics/status", "/auth/whoami",
+	} {
+		t.Run(path, func(t *testing.T) {
+			if rec := get(t, path, "text/csv"); rec.Code != http.StatusNotAcceptable {
+				t.Errorf("Accept: text/csv: status = %d, want 406", rec.Code)
+			}
+
+			rec := get(t, path, browser)
+			if rec.Code == http.StatusNotAcceptable ||
+				strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
+				t.Errorf("a browser's Accept: status = %d, type %q, want the JSON representation",
+					rec.Code, rec.Header().Get("Content-Type"))
+			}
+		})
+	}
+
+	for _, path := range []string{"/api/asyncapi.csv", "/api/asyncapi.atom"} {
+		if rec := get(t, path, ""); rec.Code != http.StatusNotAcceptable {
+			t.Errorf("%s: status = %d, want 406", path, rec.Code)
+		}
+	}
+}

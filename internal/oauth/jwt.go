@@ -47,11 +47,12 @@ type jwtHeaderClaims struct {
 // against subject or email: without them a grant matches one person's session
 // and not their token. Raw claims stay out, as they do from the session cookie.
 type AccessTokenClaims struct {
-	Subject     string   `json:"sub"`
-	Email       string   `json:"email,omitempty"`
-	DisplayName string   `json:"name,omitempty"`
-	Groups      []string `json:"groups,omitempty"`
-	ClientID    string   `json:"client_id,omitempty"`
+	Subject     string          `json:"sub"`
+	Email       string          `json:"email,omitempty"`
+	DisplayName string          `json:"name,omitempty"`
+	Groups      []string        `json:"groups,omitempty"`
+	Grants      json.RawMessage `json:"grants,omitempty"`
+	ClientID    string          `json:"client_id,omitempty"`
 }
 
 // audience accepts both shapes RFC 7519 §4.1.3 allows — an array, or a bare
@@ -100,6 +101,9 @@ type jwtPayload struct {
 	Email     string   `json:"email,omitempty"`
 	Name      string   `json:"name,omitempty"`
 	Groups    []string `json:"groups,omitempty"`
+
+	// The provider grants the identity held at consent, opaque to the issuer.
+	Grants json.RawMessage `json:"grants,omitempty"`
 
 	// No omitempty: RFC 9068 §2.2 requires the claim, and an empty one is
 	// refused at mint time rather than elided here.
@@ -215,6 +219,7 @@ func (t *TokenIssuer) IssueAccessToken(
 		Email:     claims.Email,
 		Name:      claims.DisplayName,
 		Groups:    claims.Groups,
+		Grants:    claims.Grants,
 		ClientID:  claims.ClientID,
 	}
 
@@ -332,6 +337,7 @@ func (t *TokenIssuer) VerifyAccessToken(
 		Email:       payload.Email,
 		DisplayName: payload.Name,
 		Groups:      payload.Groups,
+		Grants:      payload.Grants,
 		ClientID:    payload.ClientID,
 	}, nil
 }

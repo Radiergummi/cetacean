@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -264,11 +265,38 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 	return ContentTypeUnsupported, ""
 }
 
+// acceptable reports whether the request admits one of the types an endpoint
+// serves. The negotiated type is the best of every endpoint's; a client whose
+// wildcard admits one of these is answered with it, not refused. A suffix
+// names one type, so it is not second-guessed against the Accept header.
+func acceptable(r *http.Request, serves ...ContentType) bool {
+	if slices.Contains(serves, ContentTypeFromContext(r.Context())) {
+		return true
+	}
+	if extensionFromContext(r.Context()) != "" {
+		return false
+	}
+
+	ranges := parseAcceptRanges(r.Header.Get("Accept"))
+	for _, sup := range supportedTypes {
+		if slices.Contains(serves, sup.ct) && rangesAccept(ranges, sup.typ, sup.subtype) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable
 // quality (RFC 9110 §12.5.1): the most specific matching range carries the
 // weight, so "*/*, text/html;q=0" refuses it. The resolved ContentType cannot
 // answer this — it reports JSON for a wildcard and an explicit type alike.
 func rangesAcceptHTML(ranges []mediaRange) bool {
+	return rangesAccept(ranges, "text", "html")
+}
+
+// rangesAccept is rangesAcceptHTML for any one media type.
+func rangesAccept(ranges []mediaRange, typ, subtype string) bool {
 	if len(ranges) == 0 {
 		return true
 	}
@@ -276,7 +304,7 @@ func rangesAcceptHTML(ranges []mediaRange) bool {
 	specificity, quality := -1, 0.0
 
 	for _, mr := range ranges {
-		if !mr.matches("text", "html") {
+		if !mr.matches(typ, subtype) {
 			continue
 		}
 

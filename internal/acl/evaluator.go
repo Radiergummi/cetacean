@@ -268,7 +268,7 @@ func (e *Evaluator) collectGrants(id *auth.Identity, p *Policy) []Grant {
 
 	// Provider-sourced grants: skip audience check.
 	if e.source != nil && id != nil {
-		grants = append(grants, e.source.GrantsFor(id)...)
+		grants = append(grants, e.sourceGrants(id)...)
 	}
 
 	return grants

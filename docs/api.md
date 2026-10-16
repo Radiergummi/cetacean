@@ -657,7 +657,9 @@ turned away together aren't told to come back together; none is told less than 5
 | SSE event clients (`/events` and per-resource streams)  | 256   | `SSE001` |
 | SSE event clients from one caller                       | 64    | `SSE001` |
 | Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
+| Log streams from one caller                             | 32    | `LOG001` |
 | Log reads (the same paths as JSON)                      | 32    | `LOG009` |
+| Log reads from one caller                               | 8     | `LOG009` |
 | Metrics streams (`/metrics` as SSE)                     | 64    | `MTR005` |
 
 A caller is the signed-in identity, or the client address under the `none` auth mode. Behind a reverse proxy, set
@@ -770,9 +772,9 @@ now asks for a different set—a tag republished after the review—with `409` (
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
-Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a bind, named-pipe, or
-driver-configured volume mount the service doesn't already have, and `PATCH /services/{id}/container-config` a
-capability added to `capabilityAdd`.
+Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
+doesn't already have that is a bind, a named pipe, a volume with driver options, or a named volume the manager doesn't
+hold as a plain `local` volume; and `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`.
 
 ### Preconditions
 
@@ -807,18 +809,19 @@ change in that instant goes unnoticed.
 `DELETE /secrets/{id}`, `DELETE /networks/{id}`, `DELETE /volumes/{name}`,
 `DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
 
-23 do not. Most of these are action-style endpoints with no `GET` at that exact path to compare
-an `ETag` against: `PUT /services/{id}/scale`, `PUT /services/{id}/image`,
-`POST /services/{id}/restart`, `POST /services/{id}/rollback`, `PUT /nodes/{id}/availability`,
-`POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`, `POST /plugins/{name}/upgrade`,
-`PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
-`PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`,
-`PATCH /swarm/raft`, `POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`,
-`POST /swarm/force-rotate-ca`, `POST /swarm/unlock`, and `POST /auth/logout`. The remaining
-three—`POST /configs`, `POST /secrets`, `POST /plugins`—are deliberately excluded for a
-different reason: their nearest `GET` is the collection listing, and its `ETag` turns over on any
-member change, which would make "create only if the collection is unchanged" a precondition
-almost nothing could ever satisfy.
+19 refuse every `If-Match`, `*` included, with `412`: they are action-style endpoints with no `GET` at that exact
+path, so there is no `ETag` the header could match. They are `PUT /services/{id}/scale`,
+`PUT /services/{id}/image`, `POST /services/{id}/restart`, `POST /services/{id}/rollback`,
+`PUT /nodes/{id}/availability`, `POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`,
+`POST /plugins/{name}/upgrade`, `PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
+`PATCH /swarm/dispatcher`, `PATCH /swarm/encryption`, `PATCH /swarm/orchestration`, `PATCH /swarm/raft`,
+`POST /swarm/rotate-token`, `POST /swarm/rotate-unlock-key`, `POST /swarm/force-rotate-ca`, and `POST /swarm/unlock`.
+A missing service, node or plugin still answers `404`. Send these without the header.
+
+Four ignore it. `POST /auth/logout` ends a session rather than changing the cluster. `POST /configs`,
+`POST /secrets` and `POST /plugins` are excluded deliberately: their nearest `GET` is the collection listing, and
+its `ETag` turns over on any member change, which would make "create only if the collection is unchanged" a
+precondition almost nothing could ever satisfy.
 
 ## MCP server
 

@@ -11,6 +11,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // defaultAttachmentMode is the file mode Swarm gives a mounted secret or
@@ -143,7 +144,11 @@ func (s *Server) toolUpdateServiceSecrets(
 		})
 	}
 
-	updated, err := writeClient.UpdateServiceSecrets(ctx, id, resolved)
+	updated, err := writeClient.UpdateServiceSecrets(
+		docker.PinChecked(ctx, "service", svc.ID, svc.Version),
+		id,
+		resolved,
+	)
 	if err != nil {
 		return "", fmt.Errorf("update service secrets: %w", err)
 	}
@@ -212,7 +217,11 @@ func (s *Server) toolUpdateServiceConfigs(
 		})
 	}
 
-	updated, err := writeClient.UpdateServiceConfigs(ctx, id, resolved)
+	updated, err := writeClient.UpdateServiceConfigs(
+		docker.PinChecked(ctx, "service", svc.ID, svc.Version),
+		id,
+		resolved,
+	)
 	if err != nil {
 		return "", fmt.Errorf("update service configs: %w", err)
 	}
@@ -303,11 +312,15 @@ func (s *Server) toolUpdateServiceMounts(
 
 	svc, _, _ := s.cache.ResolveService(id)
 	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
-	if err := cluster.CheckMounts(svc, mounts, level); err != nil {
+	if err := cluster.CheckMounts(svc, mounts, s.cache.GetVolume, level); err != nil {
 		return "", err
 	}
 
-	updated, err := writeClient.UpdateServiceMounts(ctx, id, mounts)
+	updated, err := writeClient.UpdateServiceMounts(
+		docker.PinChecked(ctx, "service", svc.ID, svc.Version),
+		id,
+		mounts,
+	)
 	if err != nil {
 		return "", fmt.Errorf("update service mounts: %w", err)
 	}

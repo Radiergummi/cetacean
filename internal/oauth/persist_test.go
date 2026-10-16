@@ -77,6 +77,7 @@ func TestRefreshTokenSurvivesRestart(t *testing.T) {
 	token := s.Issue(RefreshTokenData{
 		Subject:  "user@example.com",
 		Groups:   []string{"ops"},
+		Grants:   []byte(`[{"resources":["service:web"],"permissions":["read"]}]`),
 		ClientID: "https://example.com/client",
 		Resource: "https://cetacean.example.com/resource",
 	}, time.Hour)
@@ -98,6 +99,9 @@ func TestRefreshTokenSurvivesRestart(t *testing.T) {
 	}
 	if len(data.Groups) != 1 || data.Groups[0] != "ops" {
 		t.Errorf("groups = %v", data.Groups)
+	}
+	if string(data.Grants) != `[{"resources":["service:web"],"permissions":["read"]}]` {
+		t.Errorf("grants = %s", data.Grants)
 	}
 }
 

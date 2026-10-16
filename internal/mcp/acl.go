@@ -261,69 +261,83 @@ func (s *Server) writePredicate(ctx context.Context) func(resource string) bool 
 	}
 }
 
-// checkServiceWrite resolves the service name from the cache so the ACL key
-// is `service:<name>` rather than `service:<id>`, matching REST behaviour.
+// checkResolvedWrite enforces write on the resource arg resolved to, by exact
+// ID or name. Docker also takes an ID prefix, which the ACL would have checked
+// as written, so an argument the cache does not resolve is refused as missing,
+// as is one the caller cannot read, which a denial would otherwise name.
+func (s *Server) checkResolvedWrite(
+	ctx context.Context,
+	resourceType, arg, name string,
+	found bool,
+	err error,
+) error {
+	if s.acl == nil {
+		return nil
+	}
+	identity := auth.IdentityFromContext(ctx)
+	if identity == nil {
+		return nil
+	}
+
+	if err != nil {
+		if s.acl.Can(identity, "read", resourceType+":"+arg) {
+			return err
+		}
+		found = false
+	}
+	if !found || !s.acl.Can(identity, "read", resourceType+":"+name) {
+		return fmt.Errorf("%s %q not found", resourceType, arg)
+	}
+
+	return s.checkWrite(ctx, resourceType, name)
+}
+
+// checkServiceWrite keys the ACL as `service:<name>`, matching REST behaviour.
 func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
-	name := id
-	if svc, ok := s.cache.GetService(id); ok && svc.Spec.Name != "" {
-		name = svc.Spec.Name
-	}
-	return s.checkWrite(ctx, "service", name)
+	svc, ok, err := s.cache.ResolveService(id)
+	return s.checkResolvedWrite(ctx, "service", id, svc.Spec.Name, ok, err)
 }
 
-// checkNodeWrite resolves the node hostname from the cache so the ACL key is
-// `node:<hostname>` rather than `node:<id>`, matching REST behaviour.
+// checkNodeWrite keys the ACL as `node:<hostname>`, matching REST behaviour.
 func (s *Server) checkNodeWrite(ctx context.Context, id string) error {
-	name := id
-	if node, ok := s.cache.GetNode(id); ok && node.Description.Hostname != "" {
-		name = node.Description.Hostname
-	}
-	return s.checkWrite(ctx, "node", name)
+	node, ok, err := s.cache.ResolveNode(id)
+	return s.checkResolvedWrite(ctx, "node", id, cluster.NodeACLName(node), ok, err)
 }
 
-// checkConfigWrite resolves the config Spec.Name from the cache so the ACL key
-// is `config:<name>` rather than `config:<id>`, matching REST behaviour.
+// checkConfigWrite keys the ACL as `config:<name>`, matching REST behaviour.
 func (s *Server) checkConfigWrite(ctx context.Context, id string) error {
-	name := id
-	if cfg, ok := s.cache.GetConfig(id); ok && cfg.Spec.Name != "" {
-		name = cfg.Spec.Name
-	}
-	return s.checkWrite(ctx, "config", name)
+	cfg, ok, err := s.cache.ResolveConfig(id)
+	return s.checkResolvedWrite(ctx, "config", id, cfg.Spec.Name, ok, err)
 }
 
-// checkSecretWrite resolves the secret Spec.Name from the cache so the ACL key
-// is `secret:<name>` rather than `secret:<id>`, matching REST behaviour.
+// checkSecretWrite keys the ACL as `secret:<name>`, matching REST behaviour.
 func (s *Server) checkSecretWrite(ctx context.Context, id string) error {
-	name := id
-	if sec, ok := s.cache.GetSecret(id); ok && sec.Spec.Name != "" {
-		name = sec.Spec.Name
-	}
-	return s.checkWrite(ctx, "secret", name)
+	sec, ok, err := s.cache.ResolveSecret(id)
+	return s.checkResolvedWrite(ctx, "secret", id, sec.Spec.Name, ok, err)
 }
 
-// checkNetworkWrite resolves the network Name from the cache so the ACL key is
-// `network:<name>` rather than `network:<id>`, matching REST behaviour.
+// checkNetworkWrite keys the ACL as `network:<name>`, matching REST behaviour.
 func (s *Server) checkNetworkWrite(ctx context.Context, id string) error {
-	name := id
-	if net, ok := s.cache.GetNetwork(id); ok && net.Name != "" {
-		name = net.Name
-	}
-	return s.checkWrite(ctx, "network", name)
+	net, ok, err := s.cache.ResolveNetwork(id)
+	return s.checkResolvedWrite(ctx, "network", id, net.Name, ok, err)
 }
 
 // checkTaskWrite routes the ACL check to the task's parent service so an MCP
 // `remove_task` evaluates the same key REST DELETE /tasks/{id} does
-// (`service:<name>`). Falls back to `task:<id>` when the cache cannot resolve
-// the parent service — that path is also what REST takes as a last resort.
+// (`service:<name>`), falling back to `task:<id>` as REST does when the cache
+// cannot resolve the parent service.
 func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
-	task, ok := s.cache.GetTask(id)
-	if !ok {
-		return s.checkWrite(ctx, "task", id)
+	task, ok, err := cluster.ResolveTask(s.cache, id)
+
+	svc, found := s.cache.GetService(task.ServiceID)
+	if !ok || !found || svc.Spec.Name == "" {
+		return s.checkResolvedWrite(ctx, "task", id, task.ID, ok, err)
 	}
-	svc, ok := s.cache.GetService(task.ServiceID)
-	if !ok || svc.Spec.Name == "" {
-		return s.checkWrite(ctx, "task", id)
+
+	if s.checkRead(ctx, "service", svc.Spec.Name) != nil {
+		return fmt.Errorf("task %q not found", id)
 	}
+
 	return s.checkWrite(ctx, "service", svc.Spec.Name)
 }
 

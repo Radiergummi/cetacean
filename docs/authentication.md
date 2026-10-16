@@ -364,7 +364,9 @@ secrets:
   - server-key.pem
 ```
 
-Clients without a certificate signed by that CA can't connect. Identity comes from the SPIFFE URI SAN, else the
+A client presenting a certificate that CA didn't sign can't connect. One presenting none can—so the container's
+health check works—but reaches only the endpoints exempt from authentication, such as `/-/ready` and the discovery
+documents, and is refused with 403 everywhere else. Identity comes from the SPIFFE URI SAN, else the
 Common Name, else the first email SAN—a certificate carrying none of the three is rejected, as is one carrying
 more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
 
@@ -411,8 +413,9 @@ curl -H "Authorization: Bearer eyJhbGci..." \
 A client obtains one the same way an [MCP][mcp] client does—discover, authorize with PKCE, exchange the code—and
 the [MCP flow diagram][mcp] applies unchanged. The difference is the resource it asks for. Getting the token is
 the client's job; obtaining it takes you through whichever provider is configured, and a consent screen naming the
-client, so the token carries **your** identity and nothing more. [Grants][authorization] apply to it exactly as they
-apply to your browser session.
+client, so the token carries **your** identity and nothing more. [Grants][authorization] apply to it as they apply
+to your browser session. Grants from the provider—a tailnet capability or a proxy header—are captured when you
+approve the client, and its tokens keep them until it authorizes again.
 
 ### Two resources, one server
 

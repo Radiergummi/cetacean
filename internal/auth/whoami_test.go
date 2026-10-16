@@ -18,7 +18,7 @@ func TestWhoamiHandler_ReturnsIdentityJSON(t *testing.T) {
 		Groups:  "X-Groups",
 	})
 
-	handler := WhoamiHandler(p, WriteIdentityJSON)
+	handler := WhoamiHandler(p, APITokens{}, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "alice")
 	r.Header.Set("X-Name", "Alice Smith")
@@ -61,7 +61,7 @@ func TestWhoamiHandler_Returns403WithoutHeaders(t *testing.T) {
 		Subject: "X-User",
 	})
 
-	handler := WhoamiHandler(p, WriteIdentityJSON)
+	handler := WhoamiHandler(p, APITokens{}, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	// No X-User header set.
 
@@ -80,7 +80,7 @@ func TestWhoamiHandler_ValidSecret(t *testing.T) {
 		SecretValue:  "s3cret",
 	})
 
-	handler := WhoamiHandler(p, WriteIdentityJSON)
+	handler := WhoamiHandler(p, APITokens{}, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "bob")
 	r.Header.Set("X-Proxy-Secret", "s3cret")
@@ -108,7 +108,7 @@ func TestWhoamiHandler_InvalidSecret_Returns403(t *testing.T) {
 		SecretValue:  "s3cret",
 	})
 
-	handler := WhoamiHandler(p, WriteIdentityJSON)
+	handler := WhoamiHandler(p, APITokens{}, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "bob")
 	r.Header.Set("X-Proxy-Secret", "wrong")
@@ -126,7 +126,7 @@ func TestWhoamiHandler_SetsCacheControlNoStore(t *testing.T) {
 		Subject: "X-User",
 	})
 
-	handler := WhoamiHandler(p, WriteIdentityJSON)
+	handler := WhoamiHandler(p, APITokens{}, WriteIdentityJSON)
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	r.Header.Set("X-User", "alice")
 
@@ -138,5 +138,35 @@ func TestWhoamiHandler_SetsCacheControlNoStore(t *testing.T) {
 	}
 	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
 		t.Errorf("Cache-Control = %q, want %q", cc, "no-store")
+	}
+}
+
+// A token this deployment issued is answered as the middleware answers it, not
+// handed to the provider, which in oidc mode would call a good token invalid.
+func TestWhoamiHandler_AnswersATokenWeIssued(t *testing.T) {
+	verifier := &stubVerifier{identity: &Identity{Subject: "alice", Provider: ProviderToken}}
+	provider := &cookieProvider{}
+
+	handler := WhoamiHandler(provider, APITokens{Verifier: verifier, Resource: "https://c.test"},
+		WriteIdentityJSON)
+	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
+	r.Header.Set("Authorization", "Bearer ours")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	if provider.asked {
+		t.Error("the provider was asked about a token this deployment issued")
+	}
+
+	var got Identity
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Subject != "alice" {
+		t.Errorf("subject = %q, want alice", got.Subject)
 	}
 }

@@ -37,6 +37,11 @@ var contextBody = newStaticBody([]byte(jsonLDContextDoc))
 
 // HandleContext serves the JSON-LD context document.
 func HandleContext(w http.ResponseWriter, r *http.Request) {
+	if !acceptable(r, ContentTypeJSON) {
+		notAcceptable(w, r, "application/ld+json")
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/ld+json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	contextBody.serve(w, r)

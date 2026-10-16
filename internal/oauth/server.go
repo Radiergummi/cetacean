@@ -52,6 +52,10 @@ type ServerConfig struct {
 	// registrations, so a restart does not force every client to authorize
 	// again. Empty keeps all three in memory, as an unwritable data dir does.
 	StatePath string
+
+	// GrantSnapshot returns the provider grants a consenting identity holds,
+	// as JSON its tokens carry; a token reaches none of the provider's input.
+	GrantSnapshot func(*auth.Identity) []byte
 }
 
 // Server is the OAuth 2.1 authorization server. Use NewServer to construct.
@@ -458,6 +462,7 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		Email:       codeData.Email,
 		DisplayName: codeData.DisplayName,
 		Groups:      codeData.Groups,
+		Grants:      codeData.Grants,
 		ClientID:    codeData.ClientID,
 	}, codeData.Resource, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
@@ -476,6 +481,7 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		Email:       codeData.Email,
 		DisplayName: codeData.DisplayName,
 		Groups:      codeData.Groups,
+		Grants:      codeData.Grants,
 		ClientID:    codeData.ClientID,
 		Resource:    codeData.Resource,
 	}, s.cfg.OAuth.RefreshTokenTTL)
@@ -584,6 +590,7 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		Email:       result.Data.Email,
 		DisplayName: result.Data.DisplayName,
 		Groups:      result.Data.Groups,
+		Grants:      result.Data.Grants,
 		ClientID:    result.Data.ClientID,
 	}, result.Data.Resource, s.cfg.OAuth.AccessTokenTTL)
 	if err != nil {
@@ -916,6 +923,7 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 			Email:         identity.Email,
 			DisplayName:   identity.DisplayName,
 			Groups:        identity.Groups,
+			Grants:        s.snapshotGrants(identity),
 		}, state)
 
 		return
@@ -1091,7 +1099,16 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		Email:         identity.Email,
 		DisplayName:   identity.DisplayName,
 		Groups:        identity.Groups,
+		Grants:        s.snapshotGrants(identity),
 	}, state)
+}
+
+func (s *Server) snapshotGrants(identity *auth.Identity) json.RawMessage {
+	if s.cfg.GrantSnapshot == nil {
+		return nil
+	}
+
+	return s.cfg.GrantSnapshot(identity)
 }
 
 // cimdDisabledMessage is shown when a client presents an https:// client_id

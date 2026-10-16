@@ -13,6 +13,7 @@ import (
 	json "github.com/goccy/go-json"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
@@ -967,7 +968,11 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("updating service configs", "service", id)
 
-	updated, err := h.serviceAttachment.UpdateServiceConfigs(r.Context(), id, configs)
+	updated, err := h.serviceAttachment.UpdateServiceConfigs(
+		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
+		id,
+		configs,
+	)
 	if err != nil {
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
@@ -1070,7 +1075,11 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 
 	slog.Info("updating service secrets", "service", id)
 
-	updated, err := h.serviceAttachment.UpdateServiceSecrets(r.Context(), id, secrets)
+	updated, err := h.serviceAttachment.UpdateServiceSecrets(
+		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
+		id,
+		secrets,
+	)
 	if err != nil {
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
@@ -1147,7 +1156,11 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	slog.Info("updating service networks", "service", id)
 
-	updated, err := h.serviceAttachment.UpdateServiceNetworks(r.Context(), id, networks)
+	updated, err := h.serviceAttachment.UpdateServiceNetworks(
+		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
+		id,
+		networks,
+	)
 	if err != nil {
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
@@ -1191,14 +1204,18 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := cluster.CheckMounts(svc, req.Mounts, h.levelFor(r)); err != nil {
+	if err := cluster.CheckMounts(svc, req.Mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
 		writeErrorCode(w, r, "OPS001", err.Error())
 		return
 	}
 
 	slog.Info("updating service mounts", "service", id, "count", len(req.Mounts))
 
-	updated, err := h.serviceAttachment.UpdateServiceMounts(r.Context(), id, req.Mounts)
+	updated, err := h.serviceAttachment.UpdateServiceMounts(
+		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
+		id,
+		req.Mounts,
+	)
 	if err != nil {
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return

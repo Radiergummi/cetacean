@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	json "github.com/goccy/go-json"
+
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
@@ -225,5 +227,43 @@ func BenchmarkFingerprint(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = e.Fingerprint(id)
+	}
+}
+
+// A token carrying the provider grants its session held sees what the session
+// sees, so the two share validators; one carrying none must not.
+func TestTokenFingerprintFollowsItsSnapshot(t *testing.T) {
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{})
+	e.SetSource(&HeadersSource{Header: "X-Grants"})
+
+	session := &auth.Identity{
+		Subject:  "alice",
+		Provider: "headers",
+		Raw: map[string]any{
+			"X-Grants": `[{"resources":["service:web"],"permissions":["read"]}]`,
+		},
+	}
+
+	var snapshot any
+	if err := json.Unmarshal(e.SnapshotGrants(session), &snapshot); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+
+	token := &auth.Identity{
+		Subject:  "alice",
+		Provider: auth.ProviderToken,
+		Raw:      map[string]any{auth.RawTokenGrants: snapshot},
+	}
+	bare := &auth.Identity{Subject: "alice", Provider: auth.ProviderToken}
+
+	if e.Fingerprint(token) != e.Fingerprint(session) {
+		t.Error("a token with its session's grants fingerprints differently from the session")
+	}
+	if e.Fingerprint(bare) == e.Fingerprint(session) {
+		t.Error("a token without grants fingerprints like a session holding some")
+	}
+	if !e.Can(token, "read", "service:web") || e.Can(bare, "read", "service:web") {
+		t.Error("the snapshot does not decide what the token may read")
 	}
 }

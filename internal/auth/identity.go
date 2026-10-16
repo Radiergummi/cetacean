@@ -18,6 +18,10 @@ type Identity struct {
 // import this package, and neither imports the other.
 const ProviderToken = "oauth"
 
+// RawTokenGrants is the Raw key holding the provider grants a token carries,
+// as the JSON array the issuer was handed at consent.
+const RawTokenGrants = "tokenGrants"
+
 // FromToken reports whether a bearer token carried this identity. What the
 // caller may do can depend on it: a token is a credential left on a device,
 // which a deployment may hold to less than the person it speaks for.

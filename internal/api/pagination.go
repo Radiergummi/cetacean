@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -117,7 +118,8 @@ func parseItemsRange(header string) (int, int, bool, error) {
 		return 0, 0, false, nil
 	}
 
-	limit := endN - startN + 1
+	// The span cannot overflow, but adding one to it can; the caller clamps.
+	limit := min(endN-startN, math.MaxInt-1) + 1
 	return limit, startN, true, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
@@ -702,7 +704,7 @@ func TestHandleServiceLogs_RefusesPastTheReadCap(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
-	h.activeLogReads.Store(maxLogReads)
+	occupy(t, &h.logReads, maxLogReads, maxLogReads)
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
@@ -717,7 +719,7 @@ func TestHandleServiceLogs_RefusesPastTheReadCap(t *testing.T) {
 			w.Header().Get("Retry-After"),
 		)
 	}
-	if got := h.activeLogReads.Load(); got != maxLogReads {
+	if got := h.logReads.InUse(); got != maxLogReads {
 		t.Errorf("a refused read changed the count to %d, want %d", got, maxLogReads)
 	}
 }
@@ -726,7 +728,7 @@ func TestHandleServiceLogs_ReleasesItsReadSlot(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
-	h.activeLogReads.Store(maxLogReads - 1)
+	occupy(t, &h.logReads, maxLogReads, maxLogReads-1)
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
@@ -737,7 +739,24 @@ func TestHandleServiceLogs_ReleasesItsReadSlot(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 with one slot free", w.Code)
 	}
-	if got := h.activeLogReads.Load(); got != maxLogReads-1 {
+	if got := h.logReads.InUse(); got != maxLogReads-1 {
 		t.Errorf("reads in flight = %d after the read, want %d", got, maxLogReads-1)
+	}
+}
+
+// occupy takes n of slots' max for as many callers, one slot each, none of
+// them the address httptest gives a request.
+func occupy(t *testing.T, slots *sse.Slots, max, n int) {
+	t.Helper()
+
+	for i := range n {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = fmt.Sprintf("10.0.%d.%d:1", i/256, i%256)
+
+		release, _, ok := slots.Acquire(r, max)
+		if !ok {
+			t.Fatalf("slot %d of %d refused", i+1, n)
+		}
+		t.Cleanup(release)
 	}
 }

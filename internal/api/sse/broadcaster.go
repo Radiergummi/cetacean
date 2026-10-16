@@ -253,7 +253,9 @@ func (b *Broadcaster) ServeSSE(
 			}
 			// Skip events already sent during replay. Only clear the dedup
 			// window once we see a definitive event beyond it (HistoryID > 0).
-			if skipBelow > 0 && e.HistoryID > 0 {
+			// A sync is never in a replay, and its HistoryID is the last entry
+			// that preceded it, so the window would swallow a live one.
+			if skipBelow > 0 && e.HistoryID > 0 && e.Type != cache.EventSync {
 				if e.HistoryID <= skipBelow {
 					continue
 				}

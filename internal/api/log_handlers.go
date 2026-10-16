@@ -107,12 +107,13 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		tail = min(limit*10, maxLogLimit)
 	}
 
-	if !tryAcquire(&h.activeLogReads, maxLogReads) {
+	release, callerFull, ok := h.logReads.Acquire(r, maxLogReads)
+	if !ok {
 		w.Header().Set("Retry-After", sse.RetryAfter())
-		writeErrorCode(w, r, "LOG009", "too many log reads in flight")
+		writeErrorCode(w, r, "LOG009", tooMany("log reads in flight", callerFull))
 		return
 	}
-	defer h.activeLogReads.Add(-1)
+	defer release()
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
@@ -194,18 +195,13 @@ func (h *Handlers) serveLogsSSE(
 	fetch logFetcher,
 	since, streamFilter string,
 ) {
-	for {
-		cur := h.activeLogSSEConns.Load()
-		if cur >= maxLogSSEConns {
-			w.Header().Set("Retry-After", sse.RetryAfter())
-			writeErrorCode(w, r, "LOG001", "too many active log streams")
-			return
-		}
-		if h.activeLogSSEConns.CompareAndSwap(cur, cur+1) {
-			break
-		}
+	release, callerFull, ok := h.logStreams.Acquire(r, maxLogSSEConns)
+	if !ok {
+		w.Header().Set("Retry-After", sse.RetryAfter())
+		writeErrorCode(w, r, "LOG001", tooMany("active log streams", callerFull))
+		return
 	}
-	defer h.activeLogSSEConns.Add(-1)
+	defer release()
 
 	// EventSource sends Last-Event-ID on reconnect; use it as fallback for since
 	if since == "" {
@@ -294,4 +290,13 @@ func (h *Handlers) serveLogsSSE(
 			return
 		}
 	}
+}
+
+// tooMany names which cap refused: the server's, or this caller's share of it.
+func tooMany(what string, callerFull bool) string {
+	if callerFull {
+		return "too many " + what + " from this client"
+	}
+
+	return "too many " + what
 }

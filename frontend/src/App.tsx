@@ -3,6 +3,7 @@ import ConnectionStatus from "./components/ConnectionStatus";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import { LoadingDetail } from "./components/LoadingSkeleton";
+import PerResource from "./components/PerResource";
 import { GlobalSearch, type GlobalSearchHandle } from "./components/search";
 import ShortcutsHelp from "./components/ShortcutsHelp";
 import ShortcutTooltip from "./components/ShortcutTooltip";
@@ -303,7 +304,11 @@ export default function App() {
                   />
                   <Route
                     path="/nodes/:id"
-                    element={<NodeDetail />}
+                    element={
+                      <PerResource>
+                        <NodeDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/stacks"
@@ -311,7 +316,11 @@ export default function App() {
                   />
                   <Route
                     path="/stacks/:name"
-                    element={<StackDetail />}
+                    element={
+                      <PerResource>
+                        <StackDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/services"
@@ -319,11 +328,19 @@ export default function App() {
                   />
                   <Route
                     path="/services/:id"
-                    element={<ServiceDetail />}
+                    element={
+                      <PerResource>
+                        <ServiceDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/services/:id/:subResource"
-                    element={<ServiceSubResource />}
+                    element={
+                      <PerResource>
+                        <ServiceSubResource />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/tasks"
@@ -331,7 +348,11 @@ export default function App() {
                   />
                   <Route
                     path="/tasks/:id"
-                    element={<TaskDetail />}
+                    element={
+                      <PerResource>
+                        <TaskDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/configs"
@@ -339,7 +360,11 @@ export default function App() {
                   />
                   <Route
                     path="/configs/:id"
-                    element={<ConfigDetail />}
+                    element={
+                      <PerResource>
+                        <ConfigDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/secrets"
@@ -347,7 +372,11 @@ export default function App() {
                   />
                   <Route
                     path="/secrets/:id"
-                    element={<SecretDetail />}
+                    element={
+                      <PerResource>
+                        <SecretDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/networks"
@@ -355,7 +384,11 @@ export default function App() {
                   />
                   <Route
                     path="/networks/:id"
-                    element={<NetworkDetail />}
+                    element={
+                      <PerResource>
+                        <NetworkDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/volumes"
@@ -363,7 +396,11 @@ export default function App() {
                   />
                   <Route
                     path="/volumes/:name"
-                    element={<VolumeDetail />}
+                    element={
+                      <PerResource>
+                        <VolumeDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/plugins"
@@ -371,7 +408,11 @@ export default function App() {
                   />
                   <Route
                     path="/plugins/:name"
-                    element={<PluginDetail />}
+                    element={
+                      <PerResource>
+                        <PluginDetail />
+                      </PerResource>
+                    }
                   />
                   <Route
                     path="/swarm"

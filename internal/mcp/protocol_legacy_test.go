@@ -182,15 +182,24 @@ func TestToolSchemaPropertiesAreObjects(t *testing.T) {
 // tasks/list would answer with every caller's tasks: stateless, it has no
 // session to scope them to. The capability is not advertised either.
 func TestLegacyTasksListIsNotFound(t *testing.T) {
-	_, env := postRaw(t, newTestServer(t).Handler(),
-		`{"jsonrpc":"2.0","id":3,"method":"tasks/list","params":{}}`, legacyHeaders)
+	bodies := map[string]string{
+		"plain": `{"jsonrpc":"2.0","id":3,"method":"tasks/list","params":{}}`,
+		"method after a large params": `{"jsonrpc":"2.0","id":3,"params":{"pad":"` +
+			strings.Repeat("A", 70<<10) + `"},"method":"tasks/list"}`,
+	}
 
-	if env.Error == nil || env.Error.Code != mcplib.METHOD_NOT_FOUND {
-		t.Fatalf(
-			"legacy tasks/list: got error %+v, want code %d",
-			env.Error,
-			mcplib.METHOD_NOT_FOUND,
-		)
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			_, env := postRaw(t, newTestServer(t).Handler(), body, legacyHeaders)
+
+			if env.Error == nil || env.Error.Code != mcplib.METHOD_NOT_FOUND {
+				t.Fatalf(
+					"legacy tasks/list: got error %+v, want code %d",
+					env.Error,
+					mcplib.METHOD_NOT_FOUND,
+				)
+			}
+		})
 	}
 }
 
