@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Fixed an open editor on a detail page carrying its draft over when you navigate straight to another resource of the same kind
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
