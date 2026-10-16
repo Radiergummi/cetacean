@@ -212,6 +212,24 @@ func (s *ConsentStore) Forget(key ConsentKey) {
 	s.writeThrough()
 }
 
+// ForgetSubject drops every approval subject gave, so a client whose grant was
+// revoked cannot be re-authorized without the consent screen.
+func (s *ConsentStore) ForgetSubject(subject string) {
+	s.mu.Lock()
+	forgot := false
+	for hash, record := range s.records {
+		if record.Subject == subject {
+			delete(s.records, hash)
+			forgot = true
+		}
+	}
+	s.mu.Unlock()
+
+	if forgot {
+		s.writeThrough()
+	}
+}
+
 // Snapshot returns the records in a stable order. Map iteration is random, and
 // an unsorted snapshot would rewrite the file with reordered records on every
 // unrelated change.

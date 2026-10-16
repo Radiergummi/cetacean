@@ -691,6 +691,16 @@ func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// RevokeSubject withdraws every client subject authorized: their refresh
+// grants, and the approvals that would let a client re-authorize silently.
+// Access tokens already issued run out their TTL. It returns the grants revoked.
+func (s *Server) RevokeSubject(subject string) int {
+	revoked := s.refreshTokens.RevokeSubject(subject)
+	s.consent.ForgetSubject(subject)
+
+	return revoked
+}
+
 // ---------------------------------------------------------------------------
 // Authorize endpoint
 // ---------------------------------------------------------------------------

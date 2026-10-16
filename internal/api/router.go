@@ -94,6 +94,16 @@ type RouterConfig struct {
 	// authorization server issued for the API. Its zero value accepts none, which
 	// is every deployment that runs no such server or has oauth.api_tokens off.
 	APITokens auth.APITokens
+
+	// TokenRevoker serves DELETE /tokens/{subject}, which withdraws every
+	// client a user authorized. Nil without an authorization server, and then
+	// the route answers 404, as for a resource that is not there.
+	TokenRevoker TokenRevoker
+}
+
+// TokenRevoker withdraws the grants the authorization server issued a subject.
+type TokenRevoker interface {
+	RevokeSubject(subject string) int
 }
 
 // listFeeds builds feedHandlers for a resource list endpoint. Every one of
@@ -405,6 +415,8 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"POST /swarm/unlock",
 		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostUnlockSwarm),
 	)
+	mux.Handle("DELETE /tokens/{subject}",
+		swarmTier3.Append(clusterExists).ThenFunc(HandleRevokeSubject(cfg.TokenRevoker)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, feedHandlers{}, spa))
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa))

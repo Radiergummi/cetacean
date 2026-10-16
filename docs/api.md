@@ -757,6 +757,7 @@ passes the per-resource [write grant][authorization] check.
 | `POST /swarm/force-rotate-ca` | 3 |
 | `GET /swarm/unlock-key` | 3 |
 | `POST /swarm/unlock` | 3 |
+| `DELETE /tokens/{subject}` | 3 |
 | `POST /plugins/{name}/enable` | 2 |
 | `POST /plugins/{name}/disable` | 2 |
 | `PATCH /plugins/{name}/settings` | 2 |

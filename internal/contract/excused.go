@@ -154,6 +154,7 @@ var excusedUncovered = map[string]string{
 	"POST /swarm/rotate-token":              "mutates through the Docker daemon; covered by the e2e write lane",
 	"POST /swarm/rotate-unlock-key":         "mutates through the Docker daemon; covered by the e2e write lane",
 	"POST /swarm/unlock":                    "mutates through the Docker daemon; covered by the e2e write lane",
+	"DELETE /tokens/{subject}":              "answers 404 without the authorization server, which no sweep lane enables; TestRevokeSubject* in internal/oauth and internal/api drive it",
 	"PUT /nodes/{id}/availability":          "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /nodes/{id}/role":                  "mutates through the Docker daemon; covered by the e2e write lane",
 	"PUT /services/{id}/endpoint-mode":      "mutates through the Docker daemon; covered by the e2e write lane",

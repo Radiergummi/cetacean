@@ -1749,6 +1749,46 @@ paths:
         "500":
           description: Failed to unlock swarm
 
+  /tokens/{subject}:
+    delete:
+      operationId: revokeSubjectTokens
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
+      tags: [Authentication]
+      summary: Revoke a user's issued tokens
+      description: |
+        Withdraws every client the subject authorized through the authorization
+        server: their refresh tokens stop working, and their remembered approvals
+        are forgotten, so a client can't re-authorize without the consent screen.
+        Access tokens already issued run out their `oauth.access_token_ttl`, and
+        streams opened with them close then. Requires operations level 3 and write
+        on `swarm:cluster`. Answers 404 when the authorization server is off.
+      parameters:
+        - name: subject
+          in: path
+          required: true
+          description: The subject the tokens were issued to, as `GET /auth/whoami` reports it
+          schema:
+            type: string
+          example: alice@example.com
+        - $ref: "#/components/parameters/IfMatchUnrepresented"
+      responses:
+        "204":
+          description: Revoked. A subject with nothing to revoke also answers 204.
+          headers:
+            Revoked-Grants:
+              description: How many grant families were revoked
+              schema:
+                type: integer
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
   /disk-usage:
     get:
       operationId: getDiskUsage

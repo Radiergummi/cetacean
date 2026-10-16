@@ -116,6 +116,7 @@ func newTestRouter(
 		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
+		TokenRevoker:      stubRevoker{},
 	})
 }
 
