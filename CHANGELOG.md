@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- A `304 Not Modified` on a list no longer names a compressed variant the request didn't accept, which could let a shared cache serve it to a client that can't decode it
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
