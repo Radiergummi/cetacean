@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 )
 
@@ -46,7 +47,7 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
+		writeSwarmError(w, r, err, "failed to update swarm")
 		return
 	}
 
@@ -101,7 +102,7 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
+		writeSwarmError(w, r, err, "failed to update swarm")
 		return
 	}
 
@@ -150,7 +151,7 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
+		writeSwarmError(w, r, err, "failed to update swarm")
 		return
 	}
 
@@ -199,7 +200,7 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
+		writeSwarmError(w, r, err, "failed to update swarm")
 		return
 	}
 
@@ -250,7 +251,7 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeErrorCode(w, r, "SWM003", "failed to update swarm: "+err.Error())
+		writeSwarmError(w, r, err, "failed to update swarm")
 		return
 	}
 
@@ -362,12 +363,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 		current.Version,
 		swarm.UpdateFlags{},
 	); err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"SWM003",
-			"failed to force CA rotation: "+err.Error(),
-		)
+		writeSwarmError(w, r, err, "failed to force CA rotation")
 		return
 	}
 
@@ -435,4 +431,17 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// writeSwarmError answers a failed swarm update. Only a refusal the caller can
+// act on keeps the daemon's text; anything else may name hosts and internals,
+// so it is logged and the response says only what failed.
+func writeSwarmError(w http.ResponseWriter, r *http.Request, err error, failed string) {
+	if cerrdefs.IsInvalidArgument(err) || cerrdefs.IsUnavailable(err) {
+		writeErrorCode(w, r, "SWM003", failed+": "+err.Error())
+		return
+	}
+
+	slog.Error(failed, "error", err)
+	writeErrorCode(w, r, "SWM003", failed)
 }

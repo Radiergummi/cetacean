@@ -2505,7 +2505,7 @@ func TestHandleRemoveStack_PartialFailure(t *testing.T) {
 	wc := &mockWriteClient{
 		removeServiceFn: func(_ context.Context, _ string) error { return nil },
 		removeNetworkFn: func(_ context.Context, _ string) error {
-			return fmt.Errorf("network is in use")
+			return fmt.Errorf("dial tcp 10.0.0.7:2377: connection refused")
 		},
 		removeConfigFn: func(_ context.Context, _ string) error { return nil },
 		removeSecretFn: func(_ context.Context, _ string) error { return nil },
@@ -2530,6 +2530,9 @@ func TestHandleRemoveStack_PartialFailure(t *testing.T) {
 	errs := resp["errors"].([]any)
 	if len(errs) != 1 {
 		t.Fatalf("errors length=%d, want 1", len(errs))
+	}
+	if msg := errs[0].(map[string]any)["error"].(string); strings.Contains(msg, "10.0.0.7") {
+		t.Errorf("the daemon's error text reached the response: %q", msg)
 	}
 }
 
