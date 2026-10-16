@@ -1227,6 +1227,55 @@ func TestToolRemoveTask_ACLKeyDelegatesToService(t *testing.T) {
 	}
 }
 
+// Docker resolves an ID prefix, which the ACL would check as written: a grant
+// that happens to match the prefix must not reach the service behind it.
+func TestToolWriteRefusesAnIDPrefix(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "abc1def",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "db"}},
+	})
+
+	removed := false
+	e := aclEvaluatorWithGrants("write", "service:*1")
+	wc := &fakeWriteClient{removeServiceFn: func(context.Context, string) error {
+		removed = true
+		return nil
+	}}
+	srv := newToolTestServer(t, c, wc, config.OpsImpactful,
+		func(o *Options) { o.ACL = e })
+	td, _ := srv.findTool("remove_service")
+
+	_, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("remove_service", map[string]any{"id": "abc1"}))
+	if err == nil || removed {
+		t.Fatalf("a prefix matching the grant reached the service: err=%v removed=%v", err, removed)
+	}
+}
+
+// A denied write names the resource only to a caller who can read it.
+func TestToolWriteDenialDoesNotNameAnUnreadableResource(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "secret-db"}},
+	})
+
+	e := aclEvaluatorWithGrants("read", "service:web")
+	srv := newToolTestServer(t, c, &fakeWriteClient{}, config.OpsImpactful,
+		func(o *Options) { o.ACL = e })
+	td, _ := srv.findTool("remove_service")
+
+	_, err := td.handler(ctxWithIdentity(),
+		newCallToolRequest("remove_service", map[string]any{"id": "svc1"}))
+	if err == nil {
+		t.Fatal("expected a denial")
+	}
+	if strings.Contains(err.Error(), "secret-db") {
+		t.Errorf("the denial named a service the caller cannot read: %v", err)
+	}
+}
+
 func TestToolUpdateServiceImage_RejectsBlankImage(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

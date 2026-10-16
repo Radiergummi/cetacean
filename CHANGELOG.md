@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- MCP write tools refuse an identifier that isn't a known ID or name, so a truncated ID can't reach a resource the caller's grants don't cover, and a denial no longer names a resource the caller can't read
+
 ## [0.15.0] - 2026-10-16
 
 ### Added
