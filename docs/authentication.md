@@ -364,7 +364,9 @@ secrets:
   - server-key.pem
 ```
 
-Clients without a certificate signed by that CA can't connect. Identity comes from the SPIFFE URI SAN, else the
+A client presenting a certificate that CA didn't sign can't connect. One presenting none can—so the container's
+health check works—but reaches only the endpoints exempt from authentication, such as `/-/ready` and the discovery
+documents, and is refused with 403 everywhere else. Identity comes from the SPIFFE URI SAN, else the
 Common Name, else the first email SAN—a certificate carrying none of the three is rejected, as is one carrying
 more than one SPIFFE SAN. Groups come from Organizational Unit (OU) fields.
 

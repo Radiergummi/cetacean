@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -114,6 +115,19 @@ func TestProbeReadyOverTLS(t *testing.T) {
 
 	if err := probeReady(server.URL+"/-/ready", true); err != nil {
 		t.Errorf("probe over TLS: %v", err)
+	}
+}
+
+func TestProbeReadyInCertMode(t *testing.T) {
+	server := httptest.NewUnstartedServer(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+	)
+	server.TLS = clientCertTLS(x509.NewCertPool())
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	if err := probeReady(server.URL+"/-/ready", true); err != nil {
+		t.Errorf("probe in cert mode: %v", err)
 	}
 }
 
