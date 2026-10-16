@@ -307,7 +307,7 @@ requirements:
         with: "\tendN, _ := strconv.Atoi(strings.TrimSpace(end))\n\tif err := error(nil); err != nil {"
       - file: internal/api/pagination.go
         replace: "limit := min(endN-startN, math.MaxInt-1) + 1"
-        with: "limit := endN - startN + 1"
+        with: "limit := min(endN-startN, math.MaxInt) + 1"
 
   - id: an-unknown-range-unit-is-ignored
     level: MUST
