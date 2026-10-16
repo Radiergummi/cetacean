@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Behind `tailscale serve`, a name or capability grant with non-ASCII characters is now read correctly instead of showing encoded or granting nothing
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
