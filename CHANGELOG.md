@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `PUT /services/{id}/mode`, and the mode switch in the service view it drove. Swarm refuses every service mode change, so both could only ever fail. `GET /services/{id}/mode` is unaffected
 
 ### Fixed
-- tsnet mode serves the app over HTTPS with the tailnet node's certificate, and serves `/-/metrics` on `server.listen_addr`, where a Prometheus in the swarm can scrape it. `tls.cert` and `tls.key` are now rejected in tsnet mode; unset them before upgrading
+- tsnet mode serves the app over HTTPS with the node's certificate, and `/-/metrics` on `server.listen_addr` for in-swarm scrapers. Before upgrading, unset `tls.cert` and `tls.key`, and set `server.public_url` if `oauth.enabled` is on
 - `GET /swarm` and the Swarm page reveal the join tokens only at operations level 3, to callers with write on `swarm:cluster`
 - Attaching a secret, config, or network to a service through the API needs read access to it, as it already did through MCP. An ID Cetacean doesn't know answers `400 SVC021`, and a network name several networks share answers `409 API015`
 - Creating a config or secret through the API checks the write grant on its name, so a grant like `secret:team-*` can create `team-db`

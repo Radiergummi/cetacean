@@ -292,15 +292,16 @@ volumes:
 
 Embeds a Tailscale node in the Cetacean process. No local Tailscale installation is needed. The full app is served over
 HTTPS on port 443 of the tailnet node, with the node's own certificate for its MagicDNS name, so the tailnet must have
-[MagicDNS and HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) enabled. Startup waits until the
-node is up and fails if either is off; the certificate is fetched on the first request.
+[MagicDNS and HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) enabled. Startup brings the node
+up and fetches its certificate, and exits if either is off or the two together take longer than two minutes.
 
 `/-/health`, `/-/ready` and `/-/metrics` stay on `server.listen_addr` in plain HTTP, at the root and under
 `server.base_path`, so Docker health checks and a Prometheus on the overlay network keep reaching them. Nothing else
 is served there.
 
-[`tls.cert`][tls.cert] and [`tls.key`][tls.key] are rejected at startup in tsnet mode. For MCP or the OAuth server,
-set [`server.public_url`][server.public_url] to the node's address, such as `https://cetacean.example-tailnet.ts.net`.
+[`tls.cert`][tls.cert] and [`tls.key`][tls.key] are rejected at startup in tsnet mode. The OAuth server needs
+[`server.public_url`][server.public_url] set to the node's address, such as `https://cetacean.example-tailnet.ts.net`;
+without it Cetacean refuses to start.
 
 ```yaml
 environment:

@@ -153,7 +153,7 @@ func main() {
 	}
 	tsnetMode := authCfg.Mode == "tailscale" && authCfg.Tailscale.Mode == "tsnet"
 	if tsnetMode {
-		if err := config.ValidateTsnetMode(tlsCfg.Enabled()); err != nil {
+		if err := cfg.ValidateTsnetMode(tlsCfg.Enabled()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
