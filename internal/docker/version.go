@@ -43,3 +43,15 @@ func writeVersion(ctx context.Context, kind, id string, read swarm.Version) swar
 
 	return read
 }
+
+// PinChecked pins the write to the version a check just read, unless a
+// precondition pinned one already. A check exempting what the service already
+// carries reads it from the cache; pinned, a write the engine has moved past
+// is refused instead of applied against a spec the check never saw.
+func PinChecked(ctx context.Context, kind, id string, version swarm.Version) context.Context {
+	if _, ok := PinnedVersion(ctx, kind, id); ok {
+		return ctx
+	}
+
+	return WithPinnedVersion(ctx, kind, id, version)
+}

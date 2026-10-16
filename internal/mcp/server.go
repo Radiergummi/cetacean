@@ -500,7 +500,9 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := auth.ContextWithIdentity(r.Context(), identity)
+		ctx, cancel := auth.ContextUntilExpiry(r.Context(), identity)
+		defer cancel()
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

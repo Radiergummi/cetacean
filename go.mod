@@ -2,6 +2,9 @@ module github.com/radiergummi/cetacean
 
 go 1.27.2
 
+// pnpm installs a package that ships Go sources, which ./... would build and test.
+ignore node_modules
+
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/CycloneDX/cyclonedx-go v0.12.0

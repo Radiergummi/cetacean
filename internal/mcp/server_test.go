@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -348,6 +349,11 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
 	req.Header.Set("Authorization", "Bearer "+token)
 	srv.bearerAuth(next).ServeHTTP(httptest.NewRecorder(), req)
+
+	if got == nil || got.ExpiresAt.IsZero() {
+		t.Fatalf("identity = %+v, want one carrying the token's exp", got)
+	}
+	got.ExpiresAt = time.Time{}
 
 	want := &auth.Identity{
 		Subject:  "user@example.com",
