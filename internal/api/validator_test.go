@@ -225,3 +225,31 @@ func TestWildcardDoesNotPreemptRequestValidation(t *testing.T) {
 		t.Errorf("If-None-Match: * on a valid list returned %d, want 304", good.Code)
 	}
 }
+
+// A 304 carries the tag it matched as its ETag, so it may match only a tag
+// this request could have been served: one in a coding it did not negotiate
+// would tell a cache to hand that coding to a client that cannot decode it.
+func TestMatchedValidatorKeepsToTheNegotiatedCoding(t *testing.T) {
+	const validator = `"abc"`
+	gzipTag := codedETag(validator, EncodingGzip)
+
+	match := func(acceptEncoding string) string {
+		r := httptest.NewRequest(http.MethodGet, "/services", nil)
+		r.Header.Set("If-None-Match", gzipTag)
+		if acceptEncoding != "" {
+			r.Header.Set("Accept-Encoding", acceptEncoding)
+		}
+
+		return matchedValidator(r, validator)
+	}
+
+	if got := match("gzip"); got != gzipTag {
+		t.Errorf("gzip negotiated: matched %q, want %q", got, gzipTag)
+	}
+	if got := match("identity"); got != "" {
+		t.Errorf("identity only: matched %q, want no match", got)
+	}
+	if got := match(""); got != "" {
+		t.Errorf("no Accept-Encoding: matched %q, want no match", got)
+	}
+}
