@@ -95,8 +95,9 @@ type Watcher struct {
 	settles sync.WaitGroup
 
 	// refreshes carries a one-resource re-read to the event loop, which applies
-	// every other write. See Refresh.
-	refreshes chan refreshRequest
+	// every other write. See Refresh. resyncRequests does the same for Resync.
+	refreshes      chan refreshRequest
+	resyncRequests chan chan error
 
 	// loopRunning reports whether the event loop is reading refreshes.
 	loopRunning atomic.Bool
@@ -132,6 +133,8 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 		settleDelay:  defaultSettleDelay,
 		syncInterval: defaultSyncInterval,
 		refreshes:    make(chan refreshRequest),
+
+		resyncRequests: make(chan chan error),
 	}
 }
 
@@ -223,6 +226,11 @@ func (w *Watcher) syncLocked(ctx context.Context) error {
 	start := time.Now()
 	slog.Info("starting full sync")
 
+	// Bounded: a hung engine would otherwise hold syncMu, and on the event
+	// loop every event behind it, for good.
+	ctx, cancel := context.WithTimeout(ctx, fullSyncTimeout)
+	defer cancel()
+
 	data, err := w.client.FullSync(ctx)
 	if err != nil {
 		slog.Error("full sync failed", "error", err)
@@ -255,18 +263,14 @@ func (w *Watcher) syncLocked(ctx context.Context) error {
 }
 
 // Resync triggers a full re-fetch of cluster state and overwrites the cache.
-// Exposed for manual recovery from drift via the admin API. It shares syncMu
-// with the periodic tick, which skips itself rather than wait behind this.
+// Exposed for manual recovery from drift via the admin API. It runs on the
+// event loop when there is one, for the reason Refresh does: a ReplaceAll from
+// beside it can put back a resource an event has just removed.
 func (w *Watcher) Resync(ctx context.Context) error {
 	// Detached: callers who joined this flight must not fail with the first,
 	// but each caller still stops waiting when its own context ends.
 	flight := w.resyncs.DoChan("resync", func() (any, error) {
-		if err := w.sync(context.WithoutCancel(ctx)); err != nil {
-			return nil, err
-		}
-		w.writeSnapshot()
-
-		return nil, nil
+		return nil, w.resyncOnLoop(context.WithoutCancel(ctx))
 	})
 
 	select {
@@ -275,6 +279,33 @@ func (w *Watcher) Resync(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// resyncOnLoop hands a manual resync to the event loop, or runs it here when no
+// loop is running and nothing applies events beside it.
+func (w *Watcher) resyncOnLoop(ctx context.Context) error {
+	if !w.loopRunning.Load() {
+		if err := w.sync(ctx); err != nil {
+			return err
+		}
+		w.writeSnapshot()
+
+		return nil
+	}
+
+	done := make(chan error, 1)
+
+	// The loop may be inside a periodic sync, which is bounded the same way.
+	handoff := time.NewTimer(fullSyncTimeout)
+	defer handoff.Stop()
+
+	select {
+	case w.resyncRequests <- done:
+	case <-handoff.C:
+		return errRefreshUnavailable
+	}
+
+	return <-done
 }
 
 const (
@@ -348,6 +379,19 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	syncTicker := time.NewTicker(w.syncInterval)
 	defer syncTicker.Stop()
 
+	// A full sync replaces the cache, so pending events are applied first.
+	flushPending := func() {
+		if timer != nil {
+			timer.Stop()
+			timerC = nil
+		}
+		if len(pending) > 0 {
+			batch := pending
+			pending = make(map[eventKey]coalesced)
+			w.processBatch(ctx, batch)
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -398,20 +442,20 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 			}
 		case req := <-w.refreshes:
 			req.done <- w.refreshNow(ctx, req.kind, req.id)
+		case done := <-w.resyncRequests:
+			flushPending()
+
+			err := w.sync(ctx)
+			if err == nil {
+				w.writeSnapshot()
+			}
+			done <- err
 		case <-syncTicker.C:
-			// Flush pending events before the full sync so we don't lose them.
-			if timer != nil {
-				timer.Stop()
-				timerC = nil
-			}
-			if len(pending) > 0 {
-				batch := pending
-				pending = make(map[eventKey]coalesced)
-				w.processBatch(ctx, batch)
-			}
-			// TryLock, not sync: a Resync already in flight (it holds syncMu
-			// too) refreshes everything this tick would, and waiting for it
-			// here would stall event processing behind it.
+			flushPending()
+
+			// TryLock, not sync: a Resync that started before this loop did
+			// (it holds syncMu too) refreshes everything this tick would, and
+			// waiting for it here would stall event processing behind it.
 			if !w.syncMu.TryLock() {
 				slog.Info("periodic full re-sync skipped: a sync is already running")
 				continue
@@ -661,6 +705,9 @@ func (w *Watcher) apply(resource any) {
 		w.store.SetVolume(v)
 	}
 }
+
+// fullSyncTimeout bounds one full sync, however it was started.
+var fullSyncTimeout = 2 * time.Minute
 
 // refreshHandoffTimeout bounds how long Refresh waits for the event loop to
 // take its request. Long enough that a loop busy with a burst of events still

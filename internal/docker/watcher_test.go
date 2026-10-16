@@ -65,7 +65,11 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	call := m.fullSyncs.Add(1)
 	if m.syncGate != nil {
-		<-m.syncGate
+		select {
+		case <-m.syncGate:
+		case <-ctx.Done():
+			return cache.FullSyncData{}, ctx.Err()
+		}
 	}
 	if m.fullSyncFn != nil {
 		return m.fullSyncFn(call)
