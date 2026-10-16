@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Stack removal and swarm updates no longer repeat the Docker Engine's error text unless it is a validation or availability error you can act on
-- The error Cetacean reports when no swarm list answers now mentions a swarm that has lost its leader, not only a `docker.host` naming a worker
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
