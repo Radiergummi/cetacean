@@ -31,6 +31,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
+	"github.com/radiergummi/cetacean/internal/metrics"
 	"github.com/radiergummi/cetacean/internal/oauth"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
@@ -150,6 +151,13 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	tsnetMode := authCfg.Mode == "tailscale" && authCfg.Tailscale.Mode == "tsnet"
+	if tsnetMode {
+		if err := cfg.ValidateTsnetMode(tlsCfg.Enabled()); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+	}
 
 	// Resolved before either setup so both read the same value, and adjudicated
 	// here because the answer depends only on configuration: the authorization
@@ -210,7 +218,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "tailscale":
-		if authCfg.Tailscale.Mode == "tsnet" {
+		if tsnetMode {
 			authProvider, tsnetServer, tsnetLn, err = auth.NewTailscaleTsnetProvider(
 				authCfg.Tailscale.Hostname,
 				authCfg.Tailscale.AuthKey,
@@ -540,7 +548,7 @@ func main() {
 		slog.Info("distributed tracing enabled", "endpoint", cfg.OTelEndpoint)
 	}
 
-	if mcpInClear(cfg.MCP.Enabled, authCfg.Mode, tlsCfg.Enabled(), cfg.PublicURL) {
+	if mcpInClear(cfg.MCP.Enabled, authCfg.Mode, tlsCfg.Enabled() || tsnetMode, cfg.PublicURL) {
 		slog.Warn("MCP is enabled without TLS: credentials reach /mcp in clear text. " +
 			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
@@ -605,7 +613,7 @@ func main() {
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,
 		CORS:               corsConfig,
-		TLSEnabled:         tlsCfg.Enabled(),
+		TLSEnabled:         tlsCfg.Enabled() || tsnetMode,
 		TrustedProxies:     cfg.TrustedProxies,
 		ForwardedHeaders:   cfg.ForwardedHeaders,
 		Resyncer:           watcher,
@@ -640,7 +648,7 @@ func main() {
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
-		serveDualListeners(ctx, cfg, tlsCfg, router, handlers, tsnetLn, broadcaster.Close)
+		serveDualListeners(ctx, cfg, router, handlers, tsnetLn, broadcaster.Close)
 		return
 	}
 
@@ -807,32 +815,45 @@ func probeReady(target string, tlsEnabled bool) error {
 }
 
 // newMetaMux serves the meta endpoints at the root and, as the full router
-// does, under the base path, where `cetacean healthcheck` probes.
-func newMetaMux(basePath string, health, ready http.HandlerFunc) *http.ServeMux {
+// does, under the base path, where `cetacean healthcheck` probes. A nil
+// metrics handler leaves /-/metrics unrouted.
+func newMetaMux(
+	basePath string,
+	health, ready http.HandlerFunc,
+	metrics http.Handler,
+) *http.ServeMux {
 	mux := http.NewServeMux()
 	for _, prefix := range slices.Compact([]string{"", basePath}) {
 		mux.HandleFunc("GET "+prefix+"/-/health", health)
 		mux.HandleFunc("GET "+prefix+"/-/ready", ready)
+		if metrics != nil {
+			mux.Handle("GET "+prefix+"/-/metrics", metrics)
+		}
 	}
 
 	return mux
 }
 
 // serveDualListeners runs two HTTP servers for tsnet mode:
-// - the full router on the tsnet listener (tailnet traffic)
-// - meta endpoints only on the regular listener (health checks from Docker)
+//   - the full router on the tsnet listener, which terminates TLS itself
+//   - meta endpoints only on the regular listener, in plain HTTP (health checks
+//     from Docker, scrapes from the overlay network)
 func serveDualListeners(
 	ctx context.Context,
 	cfg *config.Config,
-	tlsCfg config.TLSConfig,
 	router http.Handler,
 	h *api.Handlers,
 	tsnetLn net.Listener,
 	closeStreams func(),
 ) {
+	var selfMetrics http.Handler
+	if cfg.SelfMetrics {
+		selfMetrics = metrics.Handler()
+	}
+
 	metaServer := &http.Server{
 		Addr:        cfg.ListenAddr,
-		Handler:     newMetaMux(cfg.BasePath, h.HandleHealth, h.HandleReady),
+		Handler:     newMetaMux(cfg.BasePath, h.HandleHealth, h.HandleReady, selfMetrics),
 		ReadTimeout: 5 * time.Second,
 		IdleTimeout: 120 * time.Second,
 	}
@@ -869,19 +890,9 @@ func serveDualListeners(
 	// Swarm nothing restarts a container for being unhealthy.
 	go func() {
 		slog.Info("meta server started", "addr", cfg.ListenAddr)
-		if tlsCfg.Enabled() {
-			if err := metaServer.ListenAndServeTLS(
-				tlsCfg.Cert,
-				tlsCfg.Key,
-			); err != http.ErrServerClosed {
-				slog.Error("meta server error", "error", err)
-				os.Exit(1)
-			}
-		} else {
-			if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
-				slog.Error("meta server error", "error", err)
-				os.Exit(1)
-			}
+		if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
+			slog.Error("meta server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 

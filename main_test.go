@@ -121,7 +121,7 @@ func TestProbeReadyOverTLS(t *testing.T) {
 // answer where the probe asks once a base path is set.
 func TestHealthcheckReachesTheTsnetMetaListener(t *testing.T) {
 	ok := func(http.ResponseWriter, *http.Request) {}
-	server := httptest.NewServer(newMetaMux("/cetacean", ok, ok))
+	server := httptest.NewServer(newMetaMux("/cetacean", ok, ok, nil))
 	t.Cleanup(server.Close)
 
 	target, err := healthcheckURL(server.Listener.Addr().String(), "/cetacean", false)
@@ -131,6 +131,33 @@ func TestHealthcheckReachesTheTsnetMetaListener(t *testing.T) {
 
 	if err := probeReady(target, false); err != nil {
 		t.Errorf("probe: %v", err)
+	}
+}
+
+// The tailnet listener is out of reach of a Prometheus on the overlay network,
+// so self-metrics must answer on the meta listener as they do everywhere else.
+func TestTsnetMetaListenerServesSelfMetrics(t *testing.T) {
+	ok := func(http.ResponseWriter, *http.Request) {}
+	metrics := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+
+	for _, tt := range []struct {
+		name    string
+		metrics http.Handler
+		want    int
+	}{
+		{"enabled", metrics, http.StatusTeapot},
+		{"disabled", nil, http.StatusNotFound},
+	} {
+		mux := newMetaMux("/cetacean", ok, ok, tt.metrics)
+		for _, path := range []string{"/-/metrics", "/cetacean/-/metrics"} {
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			if rec.Code != tt.want {
+				t.Errorf("%s: GET %s = %d, want %d", tt.name, path, rec.Code, tt.want)
+			}
+		}
 	}
 }
 

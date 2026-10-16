@@ -610,6 +610,48 @@ func TestValidateCertMode(t *testing.T) {
 	}
 }
 
+func TestValidateTsnetMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		cfg        Config
+		tlsEnabled bool
+		wantErr    string
+	}{
+		{"plain", Config{}, false, ""},
+		{"tls.cert set", Config{}, true, "tls.cert"},
+		{
+			"OAuth without an issuer",
+			Config{OAuth: OAuthConfig{Enabled: true}},
+			false,
+			"server.public_url",
+		},
+		{
+			"OAuth with public_url",
+			Config{OAuth: OAuthConfig{Enabled: true}, PublicURL: "https://cetacean.example.ts.net"},
+			false,
+			"",
+		},
+		{
+			"OAuth with oauth.issuer",
+			Config{OAuth: OAuthConfig{Enabled: true, Issuer: "https://cetacean.example.ts.net"}},
+			false,
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.ValidateTsnetMode(tt.tlsEnabled)
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("ValidateTsnetMode = %v, want nil", err)
+			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
+				t.Errorf("ValidateTsnetMode = %v, want an error naming %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestRequireTrustedProxies(t *testing.T) {
 	tests := []struct {
 		name    string

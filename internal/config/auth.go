@@ -395,6 +395,28 @@ func ValidateCertMode(tlsEnabled bool, certCA string, trustedProxies []netip.Pre
 	)
 }
 
+// ValidateTsnetMode refuses tls.cert and tls.key in tsnet mode: the tailnet
+// listener serves the node's own certificate, and the regular listener stays
+// plain HTTP for health checks and scrapes. That listener serves no OAuth
+// routes either, so an issuer derived from server.listen_addr is never right.
+func (c *Config) ValidateTsnetMode(tlsEnabled bool) error {
+	if tlsEnabled {
+		return fmt.Errorf(
+			"tailscale tsnet mode serves HTTPS with the tailnet node's certificate; " +
+				"unset tls.cert and tls.key",
+		)
+	}
+
+	if c.OAuth.Enabled && c.OAuth.Issuer == "" && c.PublicURL == "" {
+		return fmt.Errorf(
+			"tailscale tsnet mode serves the OAuth server on the tailnet node, so oauth.enabled " +
+				"requires server.public_url, such as https://<hostname>.<tailnet>.ts.net",
+		)
+	}
+
+	return nil
+}
+
 // RequireTrustedProxies refuses a headers-mode deployment with no list. Headers
 // mode cannot authenticate anyone without one: every claim arrives in a header
 // that any client could have sent, so the list is what separates a proxy

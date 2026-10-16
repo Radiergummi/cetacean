@@ -7,11 +7,13 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"time"
 
 	json "github.com/goccy/go-json"
 
 	"tailscale.com/client/local"
 	"tailscale.com/client/tailscale/apitype"
+	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tailcfg"
 	"tailscale.com/tailcfg/peercap"
 	"tailscale.com/tsnet"
@@ -40,7 +42,7 @@ type TailscaleProvider struct {
 
 // NewTailscaleTsnetProvider creates a provider using an embedded tsnet node.
 // Returns the provider, the tsnet server (caller must close), and a net.Listener
-// that should be used for serving authenticated routes.
+// that terminates TLS with the node's MagicDNS certificate.
 func NewTailscaleTsnetProvider(
 	hostname, authKey, stateDir, capability string,
 ) (*TailscaleProvider, *tsnet.Server, net.Listener, error) {
@@ -50,23 +52,78 @@ func NewTailscaleTsnetProvider(
 		Dir:      stateDir,
 	}
 
-	ln, err := srv.Listen("tcp", ":443")
+	ctx, cancel := context.WithTimeout(context.Background(), tsnetStartTimeout)
+	defer cancel()
+
+	provider, ln, err := listenTsnet(ctx, tsnetServer{srv}, capability)
 	if err != nil {
 		srv.Close()
-		return nil, nil, nil, fmt.Errorf("tsnet listen: %w", err)
+		return nil, nil, nil, err
 	}
 
-	lc, err := srv.LocalClient()
+	return provider, srv, ln, nil
+}
+
+// tsnetStartTimeout bounds bringing the node up and obtaining its certificate.
+// Without it a node that never authenticates holds startup open indefinitely,
+// before the meta listener exists to report anything.
+const tsnetStartTimeout = 2 * time.Minute
+
+// tsnetNode is the part of *tsnet.Server the provider needs.
+type tsnetNode interface {
+	Up(ctx context.Context) (*ipnstate.Status, error)
+	ListenTLS(network, addr string) (net.Listener, error)
+	LocalClient() (tsnetClient, error)
+}
+
+type tsnetClient interface {
+	WhoIsClient
+	CertPair(ctx context.Context, domain string) (certPEM, keyPEM []byte, err error)
+}
+
+// tsnetServer adapts *tsnet.Server, whose LocalClient returns the concrete type.
+type tsnetServer struct{ *tsnet.Server }
+
+func (s tsnetServer) LocalClient() (tsnetClient, error) { return s.Server.LocalClient() }
+
+// listenTsnet brings the node up and fetches its certificate before returning,
+// so the first handshake does not wait out issuance under the read timeout.
+func listenTsnet(
+	ctx context.Context,
+	node tsnetNode,
+	capability string,
+) (*TailscaleProvider, net.Listener, error) {
+	status, err := node.Up(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("tsnet up: %w", err)
+	}
+
+	ln, err := node.ListenTLS("tcp", ":443")
+	if err != nil {
+		return nil, nil, fmt.Errorf("tsnet listen: %w", err)
+	}
+
+	lc, err := node.LocalClient()
 	if err != nil {
 		ln.Close()
-		srv.Close()
-		return nil, nil, nil, fmt.Errorf("tsnet local client: %w", err)
+		return nil, nil, fmt.Errorf("tsnet local client: %w", err)
+	}
+
+	if len(status.CertDomains) == 0 {
+		ln.Close()
+		return nil, nil, errors.New(
+			"tsnet: the node has no certificate domain; enable HTTPS on the tailnet",
+		)
+	}
+	if _, _, err := lc.CertPair(ctx, status.CertDomains[0]); err != nil {
+		ln.Close()
+		return nil, nil, fmt.Errorf("tsnet certificate: %w", err)
 	}
 
 	return &TailscaleProvider{
 		client:     lc,
 		capability: peercap.Cap(capability),
-	}, srv, ln, nil
+	}, ln, nil
 }
 
 // NewTailscaleLocalProvider creates a TailscaleProvider that uses the local
