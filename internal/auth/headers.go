@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"strings"
 	"unicode"
@@ -51,7 +52,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 		}
 	}
 
-	subject, err := singleHeader(r, p.cfg.Subject)
+	subject, err := identityHeader(r, p.cfg.Subject)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +62,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 
 	displayName := subject
 	if p.cfg.Name != "" {
-		v, err := singleHeader(r, p.cfg.Name)
+		v, err := identityHeader(r, p.cfg.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -72,14 +73,14 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 
 	var email string
 	if p.cfg.Email != "" {
-		if email, err = singleHeader(r, p.cfg.Email); err != nil {
+		if email, err = identityHeader(r, p.cfg.Email); err != nil {
 			return nil, err
 		}
 	}
 
 	var groups []string
 	if p.cfg.Groups != "" {
-		v, err := singleHeader(r, p.cfg.Groups)
+		v, err := identityHeader(r, p.cfg.Groups)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +103,7 @@ func (p *HeadersProvider) Authenticate(_ http.ResponseWriter, r *http.Request) (
 		"subject_header": p.cfg.Subject,
 	}
 	for _, h := range p.extraHeaders {
-		v, err := singleHeader(r, h)
+		v, err := identityHeader(r, h)
 		if err != nil {
 			return nil, err
 		}
@@ -143,6 +144,23 @@ func singleHeader(r *http.Request, name string) (string, error) {
 	}
 
 	return values[0], nil
+}
+
+// identityHeader is singleHeader for a value the proxy may have RFC 2047
+// encoded: tailscale serve sends a non-ASCII name, login or capability object
+// as encoded words, and read raw they would be the identity, or break its JSON.
+func identityHeader(r *http.Request, name string) (string, error) {
+	v, err := singleHeader(r, name)
+	if err != nil || !strings.Contains(v, "=?") {
+		return v, err
+	}
+
+	decoded, err := new(mime.WordDecoder).DecodeHeader(v)
+	if err != nil {
+		return "", fmt.Errorf("header %q is not valid RFC 2047: %w", name, err)
+	}
+
+	return decoded, nil
 }
 
 // validateSubject rejects an empty, over-long, or control-character subject.
