@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The `Allow` header on a task and on a node with no hostname now offers exactly the writes their grants permit
+
 ## [0.15.0] - 2026-10-16
 
 ### Added
