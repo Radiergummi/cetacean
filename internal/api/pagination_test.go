@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -307,6 +309,20 @@ func TestParsePagination_RangeMaxClamp(t *testing.T) {
 	}
 	if !p.RangeReq {
 		t.Error("expected RangeReq to be true")
+	}
+}
+
+func TestParsePagination_RangeAtMaxIntClamps(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Range", "items 0-"+strconv.Itoa(math.MaxInt))
+
+	p, err := parsePagination(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if p.Limit != 200 {
+		t.Errorf("expected limit clamped to 200, got %d", p.Limit)
 	}
 }
 
