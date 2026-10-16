@@ -2188,7 +2188,7 @@ func TestInstallPlugin_RequiresTypeWideWriteGrant(t *testing.T) {
 			req := httptest.NewRequest(
 				"POST",
 				"/plugins",
-				strings.NewReader(`{"remote":"team-plugin:latest"}`),
+				strings.NewReader(`{"remote":"team-plugin:latest","privileges":[]}`),
 			)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()

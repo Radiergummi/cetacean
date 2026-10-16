@@ -35,4 +35,26 @@ describe("InstallPluginDialog", () => {
     expect(screen.queryByRole("button", { name: "Install" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check Privileges" })).toBeInTheDocument();
   });
+
+  it("grants the privileges it showed", async () => {
+    const shown = [{ Name: "network", Description: "", Value: ["host"] }];
+    vi.mocked(api.pluginPrivileges).mockResolvedValue(shown as never);
+    vi.mocked(api.installPlugin).mockResolvedValue({} as never);
+    render(
+      <InstallPluginDialog
+        open
+        onOpenChange={() => {}}
+        onInstalled={() => {}}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("docker.io/library/plugin:latest");
+    fireEvent.change(input, { target: { value: "vieux/sshfs:latest" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check Privileges" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
+
+    await vi.waitFor(() =>
+      expect(api.installPlugin).toHaveBeenCalledWith(expect.any(String), shown),
+    );
+  });
 });

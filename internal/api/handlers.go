@@ -206,8 +206,12 @@ type DockerPluginClient interface {
 	PluginEnable(ctx context.Context, name string) error
 	PluginDisable(ctx context.Context, name string) error
 	PluginRemove(ctx context.Context, name string, force bool) error
-	PluginInstall(ctx context.Context, remote string) (*types.Plugin, error)
-	PluginUpgrade(ctx context.Context, name string, remote string) error
+	PluginInstall(
+		ctx context.Context,
+		remote string,
+		approved types.PluginPrivileges,
+	) (*types.Plugin, error)
+	PluginUpgrade(ctx context.Context, name, remote string, approved types.PluginPrivileges) error
 	PluginPrivileges(ctx context.Context, remote string) (types.PluginPrivileges, error)
 	PluginConfigure(ctx context.Context, name string, args []string) error
 }

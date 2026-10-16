@@ -11,6 +11,8 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/errdefs"
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 type mockPluginClient struct {
@@ -65,6 +67,7 @@ func (m *mockPluginClient) PluginRemove(ctx context.Context, name string, force 
 func (m *mockPluginClient) PluginInstall(
 	ctx context.Context,
 	remote string,
+	_ types.PluginPrivileges,
 ) (*types.Plugin, error) {
 	if m.pluginInstallFn != nil {
 		return m.pluginInstallFn(ctx, remote)
@@ -72,7 +75,11 @@ func (m *mockPluginClient) PluginInstall(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockPluginClient) PluginUpgrade(ctx context.Context, name string, remote string) error {
+func (m *mockPluginClient) PluginUpgrade(
+	ctx context.Context,
+	name, remote string,
+	_ types.PluginPrivileges,
+) error {
 	if m.pluginUpgradeFn != nil {
 		return m.pluginUpgradeFn(ctx, name, remote)
 	}
@@ -286,7 +293,7 @@ func TestHandlePluginPrivileges_OK(t *testing.T) {
 	}
 	h := newPluginHandlers(t, pc)
 
-	body := `{"remote":"example/plugin:latest"}`
+	body := `{"remote":"example/plugin:latest","privileges":[]}`
 	req := httptest.NewRequest("POST", "/plugins/privileges", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.HandlePluginPrivileges(w, req)
@@ -331,7 +338,7 @@ func TestHandleInstallPlugin_OK(t *testing.T) {
 	}
 	h := newPluginHandlers(t, pc)
 
-	body := `{"remote":"example/plugin:latest"}`
+	body := `{"remote":"example/plugin:latest","privileges":[]}`
 	req := httptest.NewRequest("POST", "/plugins", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	h.HandleInstallPlugin(w, req)
@@ -360,7 +367,7 @@ func TestHandleUpgradePlugin_OK(t *testing.T) {
 	}
 	h := newPluginHandlers(t, pc)
 
-	body := `{"remote":"example/plugin:v2"}`
+	body := `{"remote":"example/plugin:v2","privileges":[]}`
 	req := httptest.NewRequest("POST", "/plugins/my-plugin/upgrade", strings.NewReader(body))
 	req.SetPathValue("name", "my-plugin")
 	w := httptest.NewRecorder()
@@ -406,5 +413,50 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 	}
 	if resp["@type"] != "Plugin" {
 		t.Errorf("@type=%v, want Plugin", resp["@type"])
+	}
+}
+
+// An install that names no privileges grants nothing it has not reviewed, so
+// it is refused rather than accepting whatever the registry now asks for.
+func TestHandleInstallPlugin_RequiresThePrivilegesItGrants(t *testing.T) {
+	installed := false
+	h := newTestHandlers(t, withPluginClient(&mockPluginClient{
+		pluginInstallFn: func(context.Context, string) (*types.Plugin, error) {
+			installed = true
+			return &types.Plugin{Name: "p"}, nil
+		},
+	}))
+
+	req := httptest.NewRequest(
+		"POST",
+		"/plugins",
+		strings.NewReader(`{"remote":"example/plugin:latest"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleInstallPlugin(w, req)
+
+	if w.Code != http.StatusBadRequest || installed {
+		t.Errorf("status=%d installed=%v, want 400 and no install", w.Code, installed)
+	}
+}
+
+// A plugin whose privileges changed after the review is refused with 409, so
+// the caller knows to look at them again rather than retry.
+func TestHandleInstallPlugin_ChangedPrivilegesAreAConflict(t *testing.T) {
+	h := newTestHandlers(t, withPluginClient(&mockPluginClient{
+		pluginInstallFn: func(context.Context, string) (*types.Plugin, error) {
+			return nil, docker.ErrPluginPrivilegesChanged
+		},
+	}))
+
+	req := httptest.NewRequest("POST", "/plugins",
+		strings.NewReader(`{"remote":"example/plugin:latest","privileges":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleInstallPlugin(w, req)
+
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "PLG006") {
+		t.Errorf("status=%d body=%s, want 409 PLG006", w.Code, w.Body.String())
 	}
 }

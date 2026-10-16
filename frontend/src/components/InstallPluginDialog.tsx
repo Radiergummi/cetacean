@@ -70,14 +70,21 @@ export default function InstallPluginDialog({
   }
 
   function handleInstall() {
+    // Install is offered only once a check has put privileges on screen.
+    if (!privileges) {
+      return;
+    }
+
     void installAction.execute(
       async () => {
         const normalized = normalizeReference(remote);
 
+        // The server grants exactly these, the ones on screen, and refuses
+        // the install if the registry now asks for others.
         if (isUpgrade && pluginName) {
-          await api.upgradePlugin(pluginName, normalized);
+          await api.upgradePlugin(pluginName, normalized, privileges);
         } else {
-          await api.installPlugin(normalized);
+          await api.installPlugin(normalized, privileges);
         }
 
         onInstalled();

@@ -9,9 +9,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -236,10 +239,54 @@ func (c *Client) PluginRemove(ctx context.Context, name string, force bool) erro
 	return c.docker.PluginRemove(ctx, name, types.PluginRemoveOptions{Force: force})
 }
 
-func (c *Client) PluginInstall(ctx context.Context, remote string) (*types.Plugin, error) {
+// ErrPluginPrivilegesChanged reports a plugin that now requires privileges
+// other than the ones the caller reviewed and granted.
+var ErrPluginPrivilegesChanged = fmt.Errorf(
+	"the plugin requires different privileges from those granted: %w",
+	cerrdefs.ErrFailedPrecondition,
+)
+
+// grantOnly accepts exactly the privileges the caller reviewed. The engine
+// sends what it accepts to the pull and refuses a plugin needing any other
+// set, so a reference republished after the review cannot widen them.
+func grantOnly(approved types.PluginPrivileges) func(
+	context.Context,
+	types.PluginPrivileges,
+) (bool, error) {
+	return func(_ context.Context, required types.PluginPrivileges) (bool, error) {
+		if !samePrivileges(approved, required) {
+			return false, ErrPluginPrivilegesChanged
+		}
+
+		return true, nil
+	}
+}
+
+// samePrivileges compares two privilege sets regardless of order.
+func samePrivileges(a, b types.PluginPrivileges) bool {
+	key := func(privileges types.PluginPrivileges) []string {
+		keys := make([]string, 0, len(privileges))
+		for _, p := range privileges {
+			values := slices.Clone(p.Value)
+			slices.Sort(values)
+			keys = append(keys, p.Name+"\x00"+strings.Join(values, "\x00"))
+		}
+		slices.Sort(keys)
+
+		return keys
+	}
+
+	return slices.Equal(key(a), key(b))
+}
+
+func (c *Client) PluginInstall(
+	ctx context.Context,
+	remote string,
+	approved types.PluginPrivileges,
+) (*types.Plugin, error) {
 	rc, err := c.docker.PluginInstall(ctx, remote, types.PluginInstallOptions{
-		RemoteRef:            remote,
-		AcceptAllPermissions: true,
+		RemoteRef:             remote,
+		AcceptPermissionsFunc: grantOnly(approved),
 	})
 	if err != nil {
 		return nil, err
@@ -250,10 +297,14 @@ func (c *Client) PluginInstall(ctx context.Context, remote string) (*types.Plugi
 	return c.PluginInspect(ctx, remote)
 }
 
-func (c *Client) PluginUpgrade(ctx context.Context, name string, remote string) error {
+func (c *Client) PluginUpgrade(
+	ctx context.Context,
+	name, remote string,
+	approved types.PluginPrivileges,
+) error {
 	rc, err := c.docker.PluginUpgrade(ctx, name, types.PluginInstallOptions{
-		RemoteRef:            remote,
-		AcceptAllPermissions: true,
+		RemoteRef:             remote,
+		AcceptPermissionsFunc: grantOnly(approved),
 	})
 	if err != nil {
 		return err

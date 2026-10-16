@@ -1830,13 +1830,30 @@ paths:
           application/json:
             schema:
               type: object
-              required: [remote]
+              required: [remote, privileges]
               properties:
                 remote:
                   type: string
                   description: Plugin reference (e.g. "vieux/sshfs:latest")
+                privileges:
+                  type: array
+                  description: >
+                    The privileges the caller reviewed and grants, as
+                    POST /plugins/privileges returned them. The install is
+                    refused with 409 (PLG006) if the plugin now requires a
+                    different set; send [] for a plugin that requires none.
+                  items:
+                    type: object
+                    properties:
+                      Name: {type: string}
+                      Description: {type: string}
+                      Value: {type: array, items: {type: string}}
             example:
               remote: vieux/sshfs:latest
+              privileges:
+                - Name: network
+                  Description: permissions to access a network
+                  Value: [host]
       responses:
         "201":
           description: Plugin installed
@@ -1854,6 +1871,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          description: The plugin requires different privileges from the ones granted (PLG006)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
   /plugins/privileges:
     post:
@@ -2094,13 +2117,27 @@ paths:
           application/json:
             schema:
               type: object
-              required: [remote]
+              required: [remote, privileges]
               properties:
                 remote:
                   type: string
                   description: New plugin reference
+                privileges:
+                  type: array
+                  description: >
+                    The privileges the caller reviewed and grants, as
+                    POST /plugins/privileges returned them. The install is
+                    refused with 409 (PLG006) if the plugin now requires a
+                    different set; send [] for a plugin that requires none.
+                  items:
+                    type: object
+                    properties:
+                      Name: {type: string}
+                      Description: {type: string}
+                      Value: {type: array, items: {type: string}}
             example:
               remote: vieux/sshfs:v1.2.0
+              privileges: []
       responses:
         "200":
           description: Upgraded plugin detail
@@ -2122,6 +2159,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: The plugin requires different privileges from the ones granted (PLG006)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
   /plugins/{name}/settings:
     patch:

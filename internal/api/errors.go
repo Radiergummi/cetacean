@@ -407,6 +407,16 @@ var errorRegistry = map[string]ErrorDef{
 	"PLG004": {Code: "PLG004", Title: "Plugin Not Found", Status: http.StatusNotFound,
 		Description: "The requested plugin does not exist on this Docker host.",
 		Suggestion:  "Check the plugin name and verify it is installed."},
+	"PLG005": {Code: "PLG005", Title: "Plugin Privileges Required", Status: http.StatusBadRequest,
+		Description: "An install or upgrade must name the privileges it grants.",
+		Suggestion:  "Send the privileges POST /plugins/privileges returned for this remote."},
+	"PLG006": {
+		Code:        "PLG006",
+		Title:       "Plugin Privileges Changed",
+		Status:      http.StatusConflict,
+		Description: "The plugin now requires different privileges from the ones the request grants.",
+		Suggestion:  "Check the privileges again with POST /plugins/privileges and review the new set.",
+	},
 
 	// ── NOD: node operations ──────────────────────────────────────────
 	"NOD001": {
