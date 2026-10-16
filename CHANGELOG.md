@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Fixed the dashboard missing a cluster resync that happened just after its event stream reconnected
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
