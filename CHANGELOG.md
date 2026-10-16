@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Fixed `POST /-/resync` sometimes restoring a resource deleted while it ran, and a hung Docker Engine stalling every later sync; a full sync now gives up after two minutes
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
