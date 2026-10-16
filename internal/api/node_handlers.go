@@ -39,7 +39,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h.setAllow(w, r, "node", node.Description.Hostname)
+	h.setAllow(w, r, "node", cluster.NodeACLName(node))
 
 	rep, ok := representationOr404(w, r, "node", id, h.nodeRepresentation)
 	if !ok {

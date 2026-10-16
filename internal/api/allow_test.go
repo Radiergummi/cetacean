@@ -7,8 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -467,5 +470,43 @@ func TestEveryWriteRouteReachesAllow(t *testing.T) {
 		}) {
 			t.Errorf("%s is not registered through a tiered chain", pattern)
 		}
+	}
+}
+
+// Allow is computed on the name the write gate checks, or it offers what the
+// gate refuses, or hides what it permits.
+func TestDetailAllowUsesTheWriteGatesName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"}) // no hostname reported
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
+
+	allow := func(t *testing.T, path string, grants ...string) string {
+		t.Helper()
+
+		e := acl.NewEvaluator()
+		e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+			Resources: grants, Audience: []string{"*"}, Permissions: []string{"write"},
+		}}})
+		e.SetResolver(c)
+		router := newTestRouterWithCache(t, c, withACL(e), withOpsLevel(config.OpsImpactful))
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+
+		return rec.Header().Get("Allow")
+	}
+
+	if got := allow(t, "/nodes/node1", "node:node1"); !strings.Contains(got, "DELETE") {
+		t.Errorf("a hostname-less node writable by ID: Allow = %q, want DELETE", got)
+	}
+	if got := allow(t, "/tasks/task1", "task:*"); strings.Contains(got, "DELETE") {
+		t.Errorf("a task grant the DELETE gate does not read: Allow = %q, want no DELETE", got)
+	}
+	if got := allow(t, "/tasks/task1", "service:web"); !strings.Contains(got, "DELETE") {
+		t.Errorf("write on the task's service: Allow = %q, want DELETE", got)
 	}
 }
