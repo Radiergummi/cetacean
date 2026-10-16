@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- Below operations level 3, mounting a named volume now requires one the manager holds as a plain `local` volume, so a bind-backed volume can't reach the host
-
 ## [0.15.0] - 2026-10-16
 
 ### Added
