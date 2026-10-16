@@ -266,8 +266,8 @@ authenticated without a login flow. See [Tailscale configuration][tailscale] for
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | How it works                 | Queries the host's Tailscale daemon to identify peers                                             | Embeds a Tailscale node inside the Cetacean process                    |
 | Tailscale installed on host? | Yes, the daemon must be running                                                                   | No                                                                     |
-| Network binding              | Listens on [`server.listen_addr`][server.listen_addr]; only Tailscale addresses are authenticated | Serves the app on port 443 of the tailnet node                         |
-| Docker health checks         | Work normally, the health endpoint is auth-exempt                                                 | Work normally, `/-/health` and `/-/ready` stay on the regular listener |
+| Network binding              | Listens on [`server.listen_addr`][server.listen_addr]; only Tailscale addresses are authenticated | Serves the app over HTTPS on port 443 of the tailnet node              |
+| Docker health checks         | Work normally, the health endpoint is auth-exempt                                                 | Work normally, `/-/*` meta endpoints stay on the regular listener      |
 | Config complexity            | Minimal: `-auth-mode tailscale`                                                                   | Needs an auth key, a hostname, and a persistent state directory        |
 | Best for                     | Hosts already running Tailscale (bare metal, VMs)                                                 | Containers, Swarm services, or hosts without Tailscale installed       |
 
@@ -290,8 +290,17 @@ volumes:
 
 ### tsnet mode
 
-Embeds a Tailscale node in the Cetacean process. No local Tailscale installation is needed. The full app is served on
-port 443 of the tailnet node; `/-/health` and `/-/ready` stay on `server.listen_addr` for Docker health checks, at the root and under `server.base_path`.
+Embeds a Tailscale node in the Cetacean process. No local Tailscale installation is needed. The full app is served over
+HTTPS on port 443 of the tailnet node, with the node's own certificate for its MagicDNS name, so the tailnet must have
+[MagicDNS and HTTPS certificates](https://tailscale.com/kb/1153/enabling-https) enabled. Startup waits until the
+node is up and fails if either is off; the certificate is fetched on the first request.
+
+`/-/health`, `/-/ready` and `/-/metrics` stay on `server.listen_addr` in plain HTTP, at the root and under
+`server.base_path`, so Docker health checks and a Prometheus on the overlay network keep reaching them. Nothing else
+is served there.
+
+[`tls.cert`][tls.cert] and [`tls.key`][tls.key] are rejected at startup in tsnet mode. For MCP or the OAuth server,
+set [`server.public_url`][server.public_url] to the node's address, such as `https://cetacean.example-tailnet.ts.net`.
 
 ```yaml
 environment:
@@ -531,8 +540,8 @@ from configuration and no header can steer them.
 
 ## TLS
 
-TLS termination works in any auth mode and is required for `cert` mode. Set [`tls.cert`][tls.cert] and
-[`tls.key`][tls.key] to enable HTTPS.
+TLS termination works in every auth mode except tsnet, which brings its own certificate, and is required for `cert`
+mode. Set [`tls.cert`][tls.cert] and [`tls.key`][tls.key] to enable HTTPS.
 
 ## Deployment examples
 

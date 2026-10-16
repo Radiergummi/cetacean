@@ -40,7 +40,7 @@ type TailscaleProvider struct {
 
 // NewTailscaleTsnetProvider creates a provider using an embedded tsnet node.
 // Returns the provider, the tsnet server (caller must close), and a net.Listener
-// that should be used for serving authenticated routes.
+// that terminates TLS with the node's MagicDNS certificate.
 func NewTailscaleTsnetProvider(
 	hostname, authKey, stateDir, capability string,
 ) (*TailscaleProvider, *tsnet.Server, net.Listener, error) {
@@ -50,23 +50,37 @@ func NewTailscaleTsnetProvider(
 		Dir:      stateDir,
 	}
 
-	ln, err := srv.Listen("tcp", ":443")
+	provider, ln, err := listenTsnet(srv, capability)
 	if err != nil {
 		srv.Close()
-		return nil, nil, nil, fmt.Errorf("tsnet listen: %w", err)
+		return nil, nil, nil, err
 	}
 
-	lc, err := srv.LocalClient()
+	return provider, srv, ln, nil
+}
+
+// tsnetNode is the part of *tsnet.Server the provider needs.
+type tsnetNode interface {
+	ListenTLS(network, addr string) (net.Listener, error)
+	LocalClient() (*local.Client, error)
+}
+
+func listenTsnet(node tsnetNode, capability string) (*TailscaleProvider, net.Listener, error) {
+	ln, err := node.ListenTLS("tcp", ":443")
+	if err != nil {
+		return nil, nil, fmt.Errorf("tsnet listen: %w", err)
+	}
+
+	lc, err := node.LocalClient()
 	if err != nil {
 		ln.Close()
-		srv.Close()
-		return nil, nil, nil, fmt.Errorf("tsnet local client: %w", err)
+		return nil, nil, fmt.Errorf("tsnet local client: %w", err)
 	}
 
 	return &TailscaleProvider{
 		client:     lc,
 		capability: peercap.Cap(capability),
-	}, srv, ln, nil
+	}, ln, nil
 }
 
 // NewTailscaleLocalProvider creates a TailscaleProvider that uses the local

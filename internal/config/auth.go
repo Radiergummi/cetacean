@@ -395,6 +395,20 @@ func ValidateCertMode(tlsEnabled bool, certCA string, trustedProxies []netip.Pre
 	)
 }
 
+// ValidateTsnetMode refuses tls.cert and tls.key in tsnet mode: the tailnet
+// listener serves the node's own certificate, and the regular listener stays
+// plain HTTP so health checks and an in-swarm scraper keep reaching it.
+func ValidateTsnetMode(tlsEnabled bool) error {
+	if tlsEnabled {
+		return fmt.Errorf(
+			"tailscale tsnet mode serves HTTPS with the tailnet node's certificate; " +
+				"unset tls.cert and tls.key",
+		)
+	}
+
+	return nil
+}
+
 // RequireTrustedProxies refuses a headers-mode deployment with no list. Headers
 // mode cannot authenticate anyone without one: every claim arrives in a header
 // that any client could have sent, so the list is what separates a proxy

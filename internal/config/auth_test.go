@@ -610,6 +610,17 @@ func TestValidateCertMode(t *testing.T) {
 	}
 }
 
+func TestValidateTsnetMode(t *testing.T) {
+	if err := ValidateTsnetMode(false); err != nil {
+		t.Errorf("ValidateTsnetMode(false) = %v, want nil", err)
+	}
+
+	err := ValidateTsnetMode(true)
+	if err == nil || !strings.Contains(err.Error(), "tls.cert") {
+		t.Errorf("ValidateTsnetMode(true) = %v, want an error naming tls.cert", err)
+	}
+}
+
 func TestRequireTrustedProxies(t *testing.T) {
 	tests := []struct {
 		name    string
