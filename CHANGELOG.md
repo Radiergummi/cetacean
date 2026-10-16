@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Fixed the container health check failing in `cert` mode when Cetacean terminates TLS. A client without a certificate now reaches only the unauthenticated endpoints
+
 ## [0.15.0] - 2026-10-16
 
 ### Added

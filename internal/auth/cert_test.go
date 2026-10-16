@@ -151,7 +151,7 @@ func TestCertProvider_ExpiredCertificate(t *testing.T) {
 	r.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}
 
 	// Expired certs are accepted at the provider level — the TLS layer
-	// with RequireAndVerifyClientCert rejects them before reaching here.
+	// verifies a presented certificate and rejects them before reaching here.
 	id, err := p.Authenticate(httptest.NewRecorder(), r)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

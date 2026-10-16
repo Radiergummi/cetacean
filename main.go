@@ -643,10 +643,7 @@ func main() {
 			slog.Error("failed to parse CA cert")
 			os.Exit(1)
 		}
-		serverTLSConfig = &tls.Config{
-			ClientCAs:  caPool,
-			ClientAuth: tls.RequireAndVerifyClientCert,
-		}
+		serverTLSConfig = clientCertTLS(caPool)
 	}
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
@@ -784,6 +781,13 @@ func healthcheckURL(listenAddr, basePath string, tlsEnabled bool) (string, error
 	}
 
 	return target.String(), nil
+}
+
+// clientCertTLS verifies any certificate a client presents against pool, but
+// admits one that presents none: the healthcheck has no certificate, and
+// CertProvider refuses every authenticated route to a caller without one.
+func clientCertTLS(pool *x509.CertPool) *tls.Config {
+	return &tls.Config{ClientCAs: pool, ClientAuth: tls.VerifyClientCertIfGiven}
 }
 
 func probeReady(target string, tlsEnabled bool) error {
