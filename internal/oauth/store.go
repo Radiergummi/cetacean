@@ -330,6 +330,30 @@ func (s *RefreshTokenStore) RevokeGrant(token string) (RefreshTokenData, bool) {
 	return owner, revoked
 }
 
+// RevokeSubject revokes every grant family issued to subject and returns how
+// many there were, for an operator withdrawing a user's clients at once.
+func (s *RefreshTokenStore) RevokeSubject(subject string) int {
+	s.mu.Lock()
+
+	var families []string
+	for _, entry := range s.tokens {
+		if entry.data.Subject == subject {
+			families = append(families, entry.data.grantID)
+		}
+	}
+	for _, grantID := range families {
+		s.revokeGrantLocked(grantID)
+	}
+
+	s.mu.Unlock()
+
+	if len(families) > 0 {
+		s.writeThrough()
+	}
+
+	return len(families)
+}
+
 // revokeGrant revokes the family and reports whether one was found. A token
 // belonging to no known family is a no-op, and must not write.
 func (s *RefreshTokenStore) revokeGrant(token string) (RefreshTokenData, bool) {

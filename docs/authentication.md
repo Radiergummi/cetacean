@@ -417,6 +417,18 @@ client, so the token carries **your** identity and nothing more. [Grants][author
 to your browser session. Grants from the provider—a tailnet capability or a proxy header—are captured when you
 approve the client, and its tokens keep them until it authorizes again.
 
+A client keeps the identity it was approved with—groups and provider grants included—for as long as it refreshes, up
+to [`oauth.refresh_token_ttl`][oauth.refresh_token_ttl]. When someone leaves a group or loses access upstream, revoke
+what they authorized:
+
+```bash
+curl -X DELETE https://cetacean.example.com/tokens/alice%40example.com
+```
+
+That needs operations level 3 and write on `swarm:cluster`. Their clients' refresh tokens stop working at once and
+each client must show the consent screen again; access tokens already issued last until they expire, after
+[`oauth.access_token_ttl`][oauth.access_token_ttl].
+
 ### Two resources, one server
 
 The API and `/mcp` are separate protected resources with separate audiences:
@@ -707,7 +719,9 @@ response schemas.
 [mcp]: mcp
 [mcp.auth_bypass]: configuration#mcp.auth_bypass
 [mcp.enabled]: configuration#mcp.enabled
+[oauth.access_token_ttl]: configuration#oauth.access_token_ttl
 [oauth.api_tokens]: configuration#oauth.api_tokens
+[oauth.refresh_token_ttl]: configuration#oauth.refresh_token_ttl
 [oauth.enabled]: configuration#oauth.enabled
 [oidc]: configuration#oidc
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239

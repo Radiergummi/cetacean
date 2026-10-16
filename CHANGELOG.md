@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `DELETE /tokens/{subject}` revokes every client a user authorized through the authorization server, for when they leave a group or lose access upstream
+
 ### Changed
 - Writes with no `GET` at their own path, such as `PUT /services/{id}/scale` and the `/swarm` updates, refuse any `If-Match` with 412 instead of ignoring it. Clients must stop sending the header there
 - Below operations level 3, a service can mount a named volume only if the manager holds it as a plain `local` volume, so a bind-backed volume can't reach the host

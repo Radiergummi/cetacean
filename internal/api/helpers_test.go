@@ -282,6 +282,7 @@ func testRouterConfig(
 		EnableSelfMetrics: true,
 		AuthProvider:      &auth.NoneProvider{},
 		Resyncer:          stubResyncer{},
+		TokenRevoker:      stubRevoker{},
 	}
 
 	for _, opt := range routerOpts {

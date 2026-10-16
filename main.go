@@ -581,10 +581,11 @@ func main() {
 		tokenVerifier mcp.TokenVerifier
 		oauthRoutes   func(mux *http.ServeMux, basePath string)
 		apiTokens     auth.APITokens
+		tokenRevoker  api.TokenRevoker
 		mcpResource   string
 	)
 	if oauthSrv != nil {
-		tokenVerifier, oauthRoutes = oauthSrv, oauthSrv.RegisterRoutes
+		tokenVerifier, oauthRoutes, tokenRevoker = oauthSrv, oauthSrv.RegisterRoutes, oauthSrv
 		mcpResource = oauthSrv.ResourceIdentifier(mcp.MountPath)
 
 		// Only when the API is actually offered as a resource: without it there
@@ -625,6 +626,7 @@ func main() {
 		MCPHandler:         mcpHandler,
 		OAuthRoutes:        oauthRoutes,
 		APITokens:          apiTokens,
+		TokenRevoker:       tokenRevoker,
 	})
 
 	var serverTLSConfig *tls.Config

@@ -253,6 +253,7 @@ var pathFixtures = func() map[string]string {
 		// a label name the Prometheus proxy would forward.
 		"/-/licenses/texts/{id}": "/-/licenses/texts/" + licenseTextID,
 		"/metrics/labels/{name}": "/metrics/labels/job",
+		"/tokens/{subject}":      "/tokens/alice",
 	}
 
 	for template, id := range specFixtureIDs {
@@ -393,6 +394,7 @@ func preconditionedWriteEndpointChecks() []writeEndpointCheck {
 // backend and error; only h.precond ever answers 412, so any other status
 // proves the point.
 var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
+	{"DELETE", "/tokens/{subject}", "/tokens/alice", "", ""},
 	{"POST", "/configs", "/configs",
 		`{"name":"cfg2","data":"aGVsbG8="}`, "application/json"},
 	{"POST", "/secrets", "/secrets",
