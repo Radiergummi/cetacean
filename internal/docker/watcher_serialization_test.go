@@ -162,6 +162,82 @@ func TestARefreshIsSerializedWithEventProcessing(t *testing.T) {
 	<-streamed
 }
 
+// A manual resync runs on the event loop too. Fetching beside it let a remove
+// applied mid-fetch be undone by the stale lists the fetch then replaced the
+// cache with.
+func TestAResyncCannotUndoARemoveAppliedDuringItsFetch(t *testing.T) {
+	mc := newMockClient()
+	mc.services = []swarm.Service{{ID: "s1"}, {ID: "s2"}}
+
+	store := cache.New(nil)
+	w := NewWatcher(mc, store, "")
+	w.syncInterval = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := w.fullSync(ctx); err != nil {
+		t.Fatalf("fullSync: %v", err)
+	}
+
+	entered := make(chan struct{})
+	released := make(chan struct{})
+	mc.fullSyncFn = func(int64) (cache.FullSyncData, error) {
+		close(entered)
+		<-released
+
+		// What the engine listed before the remove below happened.
+		return cache.FullSyncData{
+			Services:    []swarm.Service{{ID: "s1"}, {ID: "s2"}},
+			HasServices: true,
+		}, nil
+	}
+
+	streamed := make(chan struct{})
+	go func() {
+		defer close(streamed)
+		w.watchEvents(ctx)
+	}()
+
+	for !w.loopRunning.Load() {
+		time.Sleep(time.Millisecond)
+	}
+
+	resynced := make(chan error, 1)
+	go func() { resynced <- w.Resync(ctx) }()
+
+	<-entered
+
+	mc.eventsCh <- events.Message{
+		Type:   events.ServiceEventType,
+		Action: "remove",
+		Actor:  events.Actor{ID: "s2"},
+	}
+	time.Sleep(20 * debounceWindow)
+
+	close(released)
+
+	if err := <-resynced; err != nil {
+		t.Fatalf("Resync: %v", err)
+	}
+
+	deadline := time.After(3 * time.Second)
+	for {
+		if _, ok := store.GetService("s2"); !ok {
+			break
+		}
+
+		select {
+		case <-deadline:
+			t.Fatal("the resync put back a service an event removed during its fetch")
+		case <-time.After(time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-streamed
+}
+
 // The loop can stop between Refresh's check and its send, and during an outage
 // it is gone for a whole reconnect interval. A request context has no deadline
 // of its own, so an unbounded send would hold the write this refresh precedes
@@ -189,5 +265,29 @@ func TestRefreshDoesNotWaitOutAnAbsentLoop(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Refresh never returned, so the write it precedes hangs with it")
+	}
+}
+
+// A hung engine fails a resync at the deadline instead of holding syncMu, and
+// every sync queued behind it, until the process restarts.
+func TestAResyncAgainstAHungEngineEnds(t *testing.T) {
+	original := fullSyncTimeout
+	fullSyncTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { fullSyncTimeout = original })
+
+	mc := newMockClient()
+	mc.syncGate = make(chan struct{}) // never opened: only the deadline ends it
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	done := make(chan error, 1)
+	go func() { done <- w.Resync(context.Background()) }()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a resync against a hung engine reported success")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a resync against a hung engine never returned")
 	}
 }
