@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -30,6 +31,11 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 	// provider label is spelled out rather than taken from the constant: it
 	// reaches an auth.Identity that other code may compare, so changing it
 	// should be a visible decision.
+	if lapse := time.Until(got.ExpiresAt); lapse <= 0 || lapse > s.cfg.OAuth.AccessTokenTTL {
+		t.Errorf("ExpiresAt = %v, want the token's exp, within its TTL", got.ExpiresAt)
+	}
+	got.ExpiresAt = time.Time{}
+
 	want := &auth.Identity{
 		Subject:  "alice@example.com",
 		Groups:   []string{"ops", "sre"},

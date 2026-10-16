@@ -45,6 +45,7 @@ func (s *Server) Identify(token, resource string) (*auth.Identity, error) {
 		Email:       claims.Email,
 		Groups:      claims.Groups,
 		Provider:    ProviderName,
+		ExpiresAt:   claims.ExpiresAt,
 	}
 
 	var grants any

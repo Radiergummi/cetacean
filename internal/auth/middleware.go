@@ -135,7 +135,9 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 				return
 			}
 
-			ctx := ContextWithIdentity(r.Context(), id)
+			ctx, cancel := ContextUntilExpiry(r.Context(), id)
+			defer cancel()
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
