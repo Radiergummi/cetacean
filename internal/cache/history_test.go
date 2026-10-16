@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -82,6 +83,41 @@ func TestHistory_FilterByResourceID(t *testing.T) {
 		if e.ResourceID != "s1" {
 			t.Errorf("expected resourceID 's1', got %q", e.ResourceID)
 		}
+	}
+}
+
+// A slot reused by another entry about the same service leaves two index
+// references to it; the stale one must not yield the newer entry again.
+func TestHistory_ReusedSlotIsListedOnce(t *testing.T) {
+	h := NewHistory(4)
+	task := func(id string) HistoryEntry {
+		return HistoryEntry{Type: "task", ResourceID: id, ServiceID: "svc"}
+	}
+	h.Append(task("t1"))
+	h.Append(task("t2"))
+	h.Append(HistoryEntry{Type: "service", ResourceID: "other"})
+	h.Append(HistoryEntry{Type: "service", ResourceID: "other"})
+	h.Append(task("t3"))
+
+	ids := func(q HistoryQuery) []uint64 {
+		var out []uint64
+		for _, e := range h.List(q) {
+			out = append(out, e.ID)
+		}
+
+		return out
+	}
+
+	if got := ids(HistoryQuery{ResourceID: "svc", Limit: 3}); !slices.Equal(got, []uint64{5, 2}) {
+		t.Errorf("svc timeline = %v, want [5 2]", got)
+	}
+	if got := ids(
+		HistoryQuery{ResourceID: "svc", Limit: 2, BeforeID: 5},
+	); !slices.Equal(
+		got,
+		[]uint64{2},
+	) {
+		t.Errorf("svc page before 5 = %v, want [2]", got)
 	}
 }
 

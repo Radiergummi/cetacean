@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Fixed a service's or task's history, and its Atom feed, repeating the newest entry, which could send a feed reader paging in a loop
+
 ## [0.15.0] - 2026-10-16
 
 ### Added
