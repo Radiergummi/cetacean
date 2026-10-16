@@ -13,6 +13,7 @@ func TestLoadACL_Defaults(t *testing.T) {
 		"CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY",
 		"CETACEAN_AUTH_OIDC_ACL_CLAIM",
 		"CETACEAN_AUTH_HEADERS_ACL",
+		"CETACEAN_AUTH_HEADERS_ACL_CAPABILITY",
 	} {
 		t.Setenv(key, "")
 		os.Unsetenv(key)
@@ -34,6 +35,9 @@ func TestLoadACL_Defaults(t *testing.T) {
 	if cfg.HeadersACL != "" {
 		t.Errorf("HeadersACL=%q, want empty", cfg.HeadersACL)
 	}
+	if cfg.HeadersCapability != "" {
+		t.Errorf("HeadersCapability=%q, want empty", cfg.HeadersCapability)
+	}
 }
 
 func TestLoadACL_EnvVars(t *testing.T) {
@@ -42,6 +46,7 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY", "example.com/cap/cetacean")
 	t.Setenv("CETACEAN_AUTH_OIDC_ACL_CLAIM", "cetacean_grants")
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL", "X-ACL")
+	t.Setenv("CETACEAN_AUTH_HEADERS_ACL_CAPABILITY", "example.com/cap/headers")
 
 	cfg := LoadACL(nil, nil)
 	if cfg.Policy != `{"grants":[]}` {
@@ -58,6 +63,9 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	}
 	if cfg.HeadersACL != "X-ACL" {
 		t.Errorf("HeadersACL=%q", cfg.HeadersACL)
+	}
+	if cfg.HeadersCapability != "example.com/cap/headers" {
+		t.Errorf("HeadersCapability=%q", cfg.HeadersCapability)
 	}
 }
 
@@ -89,6 +97,7 @@ func TestLoadACL_FileConfig(t *testing.T) {
 		"CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY",
 		"CETACEAN_AUTH_OIDC_ACL_CLAIM",
 		"CETACEAN_AUTH_HEADERS_ACL",
+		"CETACEAN_AUTH_HEADERS_ACL_CAPABILITY",
 	} {
 		t.Setenv(key, "")
 		os.Unsetenv(key)
@@ -99,6 +108,7 @@ func TestLoadACL_FileConfig(t *testing.T) {
 	tsCap := "ts-cap"
 	oidcClaim := "oidc-claim"
 	headersACL := "headers-acl"
+	headersCap := "headers-cap"
 
 	fc := &fileConfig{
 		ACL: &fileACL{
@@ -107,6 +117,7 @@ func TestLoadACL_FileConfig(t *testing.T) {
 			TailscaleCapability: &tsCap,
 			OIDCClaim:           &oidcClaim,
 			HeadersACL:          &headersACL,
+			HeadersCapability:   &headersCap,
 		},
 	}
 
@@ -125,5 +136,8 @@ func TestLoadACL_FileConfig(t *testing.T) {
 	}
 	if cfg.HeadersACL != "headers-acl" {
 		t.Errorf("HeadersACL=%q", cfg.HeadersACL)
+	}
+	if cfg.HeadersCapability != "headers-cap" {
+		t.Errorf("HeadersCapability=%q", cfg.HeadersCapability)
 	}
 }

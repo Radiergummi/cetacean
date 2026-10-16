@@ -7,6 +7,7 @@ var knownEnvVars = map[string]bool{
 	"CETACEAN_ACL_POLICY_FILE":                    true,
 	"CETACEAN_AUTH_CERT_CA":                       true,
 	"CETACEAN_AUTH_HEADERS_ACL":                   true,
+	"CETACEAN_AUTH_HEADERS_ACL_CAPABILITY":        true,
 	"CETACEAN_AUTH_HEADERS_EMAIL":                 true,
 	"CETACEAN_AUTH_HEADERS_GROUPS":                true,
 	"CETACEAN_AUTH_HEADERS_NAME":                  true,

@@ -7,6 +7,7 @@ type ACLConfig struct {
 	TailscaleCapability string // Tailscale capability key for per-user grants
 	OIDCClaim           string // OIDC token claim containing grants
 	HeadersACL          string // HTTP header containing grants (JSON)
+	HeadersCapability   string // key of the grants array when that header is an object
 }
 
 // LoadACL loads ACL configuration from flags, env vars, and config file.
@@ -16,13 +17,14 @@ func LoadACL(flags *Flags, fc *fileConfig) ACLConfig {
 	}
 
 	var fPolicy, fPolicyFile *string
-	var fTailscaleCap, fOIDCClaim, fHeadersACL *string
+	var fTailscaleCap, fOIDCClaim, fHeadersACL, fHeadersCap *string
 	if fc != nil && fc.ACL != nil {
 		fPolicy = fc.ACL.Policy
 		fPolicyFile = fc.ACL.PolicyFile
 		fTailscaleCap = fc.ACL.TailscaleCapability
 		fOIDCClaim = fc.ACL.OIDCClaim
 		fHeadersACL = fc.ACL.HeadersACL
+		fHeadersCap = fc.ACL.HeadersCapability
 	}
 
 	return ACLConfig{
@@ -41,5 +43,11 @@ func LoadACL(flags *Flags, fc *fileConfig) ACLConfig {
 		),
 		OIDCClaim:  resolve(nil, "CETACEAN_AUTH_OIDC_ACL_CLAIM", fOIDCClaim, ""),
 		HeadersACL: resolve(nil, "CETACEAN_AUTH_HEADERS_ACL", fHeadersACL, ""),
+		HeadersCapability: resolve(
+			nil,
+			"CETACEAN_AUTH_HEADERS_ACL_CAPABILITY",
+			fHeadersCap,
+			"",
+		),
 	}
 }

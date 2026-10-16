@@ -245,6 +245,10 @@ already grants, and each applies only to its own authentication mode.
   Name of the HTTP header holding grants as JSON, for example `X-Remote-Grants`. Read in `headers` mode only, and only from a request that passed the `server.trusted_proxies` check.
 </ConfigParam>
 
+<ConfigParam name="acl.headers_capability" env="CETACEAN_AUTH_HEADERS_ACL_CAPABILITY">
+  Key of the grants array when the `acl.headers_acl` header holds a JSON object rather than an array, for example `example.com/cap/cetacean` for the `Tailscale-App-Capabilities` header `tailscale serve` sends. A missing key or a value of the wrong shape grants nothing. Unset, the header must be a bare array.
+</ConfigParam>
+
 ## OAuth authorization server
 
 Cetacean can run an OAuth 2.1 authorization server, which issues the bearer tokens clients present to protected

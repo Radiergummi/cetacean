@@ -115,6 +115,21 @@ Each source expects a JSON array of grant objects carrying `resources` and `perm
 since a provider grant always applies to the identity carrying it. An invalid grant is dropped without an error, so
 check there first when a grant seems to have no effect.
 
+With [`acl.headers_capability`][acl.headers_capability] set, the header holds an object instead, and the array under
+that key is read. This is the shape `tailscale serve` sends in `Tailscale-App-Capabilities`, so grants can live in the
+tailnet policy:
+
+```json
+"app": {
+  "example.com/cap/cetacean": [{ "resources": ["*"], "permissions": ["read", "write"] }]
+}
+```
+
+Serve merges every matching tailnet grant into that one array, and each entry is added like any other provider
+grant. Pair it with `acl.policy = "grants: []"`: without a policy every authenticated identity has full access, and
+the capability grants change nothing. A missing key or a value of the wrong shape grants nothing. See [behind
+Tailscale serve][tailscale-serve] for the full configuration.
+
 > [!NOTE]
 > OIDC browser sessions don't carry raw token claims, so `acl.oidc_claim` grants apply to bearer-token requests
 > only. Grant browser users through the policy, matching on `group:` audiences.
@@ -233,6 +248,7 @@ The [MCP server][mcp] applies the same grants. Its tools and resources are filte
 caller can never use is left out of `tools/list`.
 
 [acl.headers_acl]: configuration#acl.headers_acl
+[acl.headers_capability]: configuration#acl.headers_capability
 [acl.oidc_claim]: configuration#acl.oidc_claim
 [acl.policy]: configuration#acl.policy
 [acl.policy_file]: configuration#acl.policy_file
@@ -244,3 +260,4 @@ caller can never use is left out of `tools/list`.
 [monitoring]: monitoring
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[tailscale-serve]: authentication#behind-tailscale-serve

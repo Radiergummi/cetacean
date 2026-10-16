@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `acl.headers_capability` reads header-mode grants from a JSON object keyed by capability, so grants can come from the tailnet policy through `tailscale serve`'s `Tailscale-App-Capabilities` header
 - A History page at `/history` lists the cluster's recent changes, filterable by type and name, with a CSV download of the full log
 - `docker.tls.ca`, `docker.tls.cert` and `docker.tls.key` connect to a `tcp://` Docker Engine over TLS, with a client certificate for one started with `--tlsverify`
 - A stack or a service can be exported as a Compose file, from its detail page or by adding `.yaml` to its URL. Secrets and configs are referenced, never exported
