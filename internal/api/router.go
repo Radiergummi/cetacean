@@ -1104,5 +1104,10 @@ func securityHeaders(tlsEnabled bool, inlineScriptHashes []string) Constructor {
 // writeIdentityJSONLD writes an auth identity as a JSON-LD DetailResponse.
 // Used by the /auth/whoami handler.
 func writeIdentityJSONLD(w http.ResponseWriter, r *http.Request, id *auth.Identity) {
+	if !acceptable(r, ContentTypeJSON) {
+		notAcceptable(w, r, "application/json")
+		return
+	}
+
 	writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
 }
