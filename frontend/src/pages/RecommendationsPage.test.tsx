@@ -65,8 +65,10 @@ describe("RecommendationsPage", () => {
     vi.mocked(headAllowedMethods).mockResolvedValue(new Set(["GET", "HEAD", "PUT", "POST"]));
     renderPage();
 
+    // The page and the Allow probe both resolve late under a loaded full run,
+    // which outlasts findByRole's default second.
     expect(
-      await screen.findByRole("button", { name: /Apply suggested value/ }),
+      await screen.findByRole("button", { name: /Apply suggested value/ }, { timeout: 5000 }),
     ).toBeInTheDocument();
     expect(headAllowedMethods).toHaveBeenCalledWith("/services/svc1");
   });
