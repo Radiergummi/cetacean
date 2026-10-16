@@ -82,18 +82,13 @@ func quoteETag(sum uint64) string {
 	return string(out)
 }
 
-// validatorCodings is every coding a rendered body could have been served
-// under, identity first. Built once: resolving a tag is the hot path this
-// whole file exists to make cheap.
-var validatorCodings = append([]Encoding{EncodingIdentity}, compressibleEncodings...)
-
 // matchedValidator returns the coded tag the request's If-None-Match matches,
 // or "" if none does.
 //
 // The content coding is part of a validator, and resolving which one this
 // response would carry needs a body length that a caller answering before it
-// renders does not have. Trying each coding the server applies covers the tags
-// a rendered body would have produced.
+// renders does not have. A body is identity under the threshold and otherwise
+// in the coding this request negotiated, so those two are the tags to try.
 //
 // A bare "*" is deliberately not honoured here. RFC 9110 §13.2.1 says a
 // precondition is ignored unless the unconditional response would have been a
@@ -106,7 +101,11 @@ func matchedValidator(r *http.Request, validator string) string {
 		return ""
 	}
 
-	for _, coding := range validatorCodings {
+	if tagged := codedETag(validator, EncodingIdentity); etagMatch(inm, tagged) {
+		return tagged
+	}
+
+	if coding := resolveEncoding(r); coding != EncodingIdentity && !compressionDisabled(r) {
 		if tagged := codedETag(validator, coding); etagMatch(inm, tagged) {
 			return tagged
 		}
