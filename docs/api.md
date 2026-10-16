@@ -766,9 +766,9 @@ passes the per-resource [write grant][authorization] check.
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
-Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a bind, named-pipe, or
-driver-configured volume mount the service doesn't already have, and `PATCH /services/{id}/container-config` a
-capability added to `capabilityAdd`.
+Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
+doesn't already have that is a bind, a named pipe, a volume with driver options, or a named volume the manager doesn't
+hold as a plain `local` volume; and `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`.
 
 ### Preconditions
 

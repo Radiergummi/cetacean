@@ -1191,7 +1191,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := cluster.CheckMounts(svc, req.Mounts, h.levelFor(r)); err != nil {
+	if err := cluster.CheckMounts(svc, req.Mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
 		writeErrorCode(w, r, "OPS001", err.Error())
 		return
 	}
