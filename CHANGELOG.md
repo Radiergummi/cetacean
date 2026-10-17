@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - One caller can no longer take every log read or log stream slot: each gets a quarter of the cap, as with event streams
 - Stack removal and swarm updates no longer repeat the Docker Engine's error text unless it is a validation or availability error you can act on
 - The error Cetacean reports when no swarm list answers mentions a swarm that has lost its leader, not only a `docker.host` naming a worker
+- The API reference describes a service's resources, placement, update policy and rollback policy as they are sent, with Docker's field names
 - Fixed an open editor on a detail page carrying its draft over when you navigate straight to another resource of the same kind
 
 ## [0.15.0] - 2026-10-16

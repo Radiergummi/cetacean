@@ -3516,11 +3516,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      resources:
-                        type: object
-                        description: Docker swarm.ResourceRequirements (Limits and Reservations)
+                  - $ref: "#/components/schemas/ServiceResources"
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -3542,8 +3538,7 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              type: object
-              description: Docker swarm.ResourceRequirements fields to merge
+              $ref: "#/components/schemas/ResourceRequirements"
             example:
               Limits:
                 NanoCPUs: 2000000000
@@ -3559,11 +3554,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      resources:
-                        type: object
-                        description: Docker swarm.ResourceRequirements (Limits and Reservations)
+                  - $ref: "#/components/schemas/ServiceResources"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -3589,11 +3580,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      placement:
-                        type: object
-                        description: Docker swarm.Placement object
+                  - $ref: "#/components/schemas/ServicePlacement"
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -3628,11 +3615,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      placement:
-                        type: object
-                        description: Docker swarm.Placement object
+                  - $ref: "#/components/schemas/ServicePlacement"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -3727,11 +3710,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      updatePolicy:
-                        type: object
-                        description: Docker swarm.UpdateConfig object
+                  - $ref: "#/components/schemas/ServiceUpdatePolicy"
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -3753,8 +3732,7 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              type: object
-              description: Docker swarm.UpdateConfig fields to merge
+              $ref: "#/components/schemas/UpdateConfig"
             example:
               Parallelism: 2
               Delay: 10000000000
@@ -3768,11 +3746,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      updatePolicy:
-                        type: object
-                        description: Docker swarm.UpdateConfig object
+                  - $ref: "#/components/schemas/ServiceUpdatePolicy"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -3800,11 +3774,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      rollbackPolicy:
-                        type: object
-                        description: Docker swarm.UpdateConfig object
+                  - $ref: "#/components/schemas/ServiceRollbackPolicy"
         "404":
           $ref: "#/components/responses/NotFound"
     patch:
@@ -3826,8 +3796,7 @@ paths:
         content:
           application/merge-patch+json:
             schema:
-              type: object
-              description: Docker swarm.UpdateConfig fields to merge
+              $ref: "#/components/schemas/UpdateConfig"
             example:
               Parallelism: 1
               Delay: 5000000000
@@ -3841,11 +3810,7 @@ paths:
               schema:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
-                  - type: object
-                    properties:
-                      rollbackPolicy:
-                        type: object
-                        description: Docker swarm.UpdateConfig object
+                  - $ref: "#/components/schemas/ServiceRollbackPolicy"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -8137,33 +8102,60 @@ components:
 
     ServiceResources:
       type: object
-      description: CPU and memory resource requirements for a service
+      description: |
+        A service's resource requirements. An unset requirement is an empty object.
+      required: [resources]
       properties:
-        cpuLimit:
-          type: integer
-          format: int64
-          description: CPU limit in nanoCPUs (null to unset)
-          nullable: true
-        cpuReservation:
-          type: integer
-          format: int64
-          description: CPU reservation in nanoCPUs (null to unset)
-          nullable: true
-        memoryLimit:
-          type: integer
-          format: int64
-          description: Memory limit in bytes (null to unset)
-          nullable: true
-        memoryReservation:
-          type: integer
-          format: int64
-          description: Memory reservation in bytes (null to unset)
-          nullable: true
+        resources:
+          $ref: "#/components/schemas/ResourceRequirements"
       example:
-        cpuLimit: 2000000000
-        cpuReservation: 500000000
-        memoryLimit: 536870912
-        memoryReservation: 268435456
+        resources:
+          Limits:
+            NanoCPUs: 2000000000
+            MemoryBytes: 536870912
+          Reservations:
+            NanoCPUs: 500000000
+            MemoryBytes: 268435456
+
+    ResourceRequirements:
+      type: object
+      description: |
+        Docker's swarm.ResourceRequirements. `PATCH /services/{id}/resources` takes it
+        as a JSON Merge Patch, so `null` removes a field.
+      properties:
+        Limits:
+          type: object
+          nullable: true
+          properties:
+            NanoCPUs:
+              type: integer
+              format: int64
+              description: CPU limit in billionths of a CPU
+            MemoryBytes:
+              type: integer
+              format: int64
+              description: Memory limit in bytes
+            Pids:
+              type: integer
+              format: int64
+              description: Maximum number of processes
+        Reservations:
+          type: object
+          nullable: true
+          properties:
+            NanoCPUs:
+              type: integer
+              format: int64
+              description: CPU reserved in billionths of a CPU
+            MemoryBytes:
+              type: integer
+              format: int64
+              description: Memory reserved in bytes
+            GenericResources:
+              type: array
+              description: Docker swarm.GenericResource entries, such as GPUs
+              items:
+                type: object
 
     ServicePlacement:
       type: object
@@ -8236,71 +8228,63 @@ components:
 
     ServiceUpdatePolicy:
       type: object
-      description: Rolling update configuration for a service
+      description: A service's rolling-update configuration. An unset policy is an empty object.
+      required: [updatePolicy]
       properties:
-        parallelism:
-          type: integer
-          format: int64
-          description: Number of tasks to update simultaneously
-        delay:
-          type: integer
-          format: int64
-          description: Delay between updates in nanoseconds
-        failureAction:
-          type: string
-          enum: [continue, pause, rollback]
-        monitor:
-          type: integer
-          format: int64
-          description: Duration after each task update to monitor for failure (nanoseconds)
-        maxFailureRatio:
-          type: number
-          format: float
-          description: Fraction of tasks that may fail during an update
-        order:
-          type: string
-          enum: [stop-first, start-first]
+        updatePolicy:
+          $ref: "#/components/schemas/UpdateConfig"
       example:
-        parallelism: 1
-        delay: 10000000000
-        failureAction: rollback
-        monitor: 5000000000
-        maxFailureRatio: 0
-        order: start-first
+        updatePolicy:
+          Parallelism: 1
+          Delay: 10000000000
+          FailureAction: rollback
+          Monitor: 5000000000
+          MaxFailureRatio: 0
+          Order: start-first
 
     ServiceRollbackPolicy:
       type: object
-      description: Rollback configuration for a service
+      description: A service's rollback configuration. An unset policy is an empty object.
+      required: [rollbackPolicy]
       properties:
-        parallelism:
+        rollbackPolicy:
+          $ref: "#/components/schemas/UpdateConfig"
+      example:
+        rollbackPolicy:
+          Parallelism: 1
+          FailureAction: pause
+          Monitor: 5000000000
+          Order: stop-first
+
+    UpdateConfig:
+      type: object
+      description: |
+        Docker's swarm.UpdateConfig, which configures both updates and rollbacks. Its
+        PATCH endpoints take it as a JSON Merge Patch, so `null` removes a field.
+      properties:
+        Parallelism:
           type: integer
           format: int64
-          description: Number of tasks to roll back simultaneously
-        delay:
+          description: Tasks updated at once; 0 updates them all at once
+        Delay:
           type: integer
           format: int64
-          description: Delay between rollback steps in nanoseconds
-        failureAction:
+          description: Delay between task updates, in nanoseconds
+        FailureAction:
           type: string
-          enum: [continue, pause]
-        monitor:
+          description: What happens when a task update fails; `rollback` applies to updates only
+          enum: [continue, pause, rollback]
+        Monitor:
           type: integer
           format: int64
-          description: Duration after each task rollback to monitor for failure (nanoseconds)
-        maxFailureRatio:
+          description: How long each updated task is watched for failure, in nanoseconds
+        MaxFailureRatio:
           type: number
           format: float
-          description: Fraction of tasks that may fail during a rollback
-        order:
+          description: Fraction of tasks that may fail before the failure action applies
+        Order:
           type: string
           enum: [stop-first, start-first]
-      example:
-        parallelism: 1
-        delay: 0
-        failureAction: pause
-        monitor: 5000000000
-        maxFailureRatio: 0
-        order: stop-first
 
     NullableStringArray:
       type: array
