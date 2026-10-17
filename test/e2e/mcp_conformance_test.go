@@ -552,27 +552,35 @@ func TestMCPConformanceResourceNotFound(t *testing.T) {
 
 	proc := startConformanceSUT(t)
 
-	const missing = "cetacean://service/no-such-service-for-conformance"
+	// mcp-go answers a URI no template matches itself; a stale ID under a real
+	// template comes back from Cetacean's handler, which names the uri in data
+	// as the spec's example does. mcp-go's own answer carries none.
+	for _, tc := range []struct {
+		name, uri string
+		namesURI  bool
+	}{
+		{"no template matches", "cetacean://service/no-such-service-for-conformance", false},
+		{"unknown id under a template", "cetacean://services/no-such-service-for-conformance", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := call(t, proc, conformanceRequest{
+				Method: "resources/read",
+				Params: map[string]any{"uri": tc.uri},
+			})
 
-	got := call(t, proc, conformanceRequest{
-		Method: "resources/read",
-		Params: map[string]any{"uri": missing},
-	})
+			if got.Body.Error == nil {
+				contents, _ := got.Body.Result["contents"].([]any)
+				t.Fatalf("a missing resource answered a result with %d contents", len(contents))
+			}
 
-	if got.Body.Error == nil {
-		contents, _ := got.Body.Result["contents"].([]any)
-		t.Fatalf("a missing resource answered a result with %d contents", len(contents))
-	}
+			if got.Body.Error.Code != -32602 {
+				t.Errorf("code = %d, want -32602: %s", got.Body.Error.Code, got.Raw)
+			}
 
-	if got.Body.Error.Code != -32602 {
-		t.Errorf("code = %d, want -32602: %s", got.Body.Error.Code, got.Raw)
-	}
-
-	// The spec's example error carries the requested URI in data, though no
-	// statement requires it and this server sends none. Pinned as it stands:
-	// when the field appears, this case fails rather than staying quiet.
-	if _, ok := got.Body.Error.Data["uri"]; ok {
-		t.Errorf("error data now names the uri — the SHOULD is met, so assert it: %s", got.Raw)
+			if uri, _ := got.Body.Error.Data["uri"].(string); (uri == tc.uri) != tc.namesURI {
+				t.Errorf("error data uri = %q, want it named: %v: %s", uri, tc.namesURI, got.Raw)
+			}
+		})
 	}
 }
 

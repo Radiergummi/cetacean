@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses
 - Stopping Cetacean ends open metrics streams, log follows and MCP listen sessions, so a connected client no longer holds shutdown for the whole grace period
 - A failed config or secret create is reported once, in the dialog, instead of also as a toast
+- MCP `resources/read` of an unknown ID answers `-32602`, or `-32002` on protocol 2025-11-25, instead of an internal error, and names the URI it couldn't find
+- An MCP client can no longer cancel another caller's in-flight request by sending `notifications/cancelled` with the same request ID
 
 ## [0.16.0] - 2026-10-17
 
