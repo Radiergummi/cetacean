@@ -91,3 +91,50 @@ func TestFilterResolvesEachItemOnceAtMost(t *testing.T) {
 		})
 	}
 }
+
+type countingSource struct {
+	grants []Grant
+	calls  int
+}
+
+func (s *countingSource) GrantsFor(*auth.Identity) []Grant {
+	s.calls++
+	return s.grants
+}
+
+// A source parses a header or claim on every call, and the SSE filter asks Can
+// for every event a subscriber is sent, so one identity derives its grants once.
+func TestSourceGrantsAreDerivedOncePerIdentity(t *testing.T) {
+	source := &countingSource{grants: []Grant{
+		{Resources: []string{"service:web"}, Permissions: []string{"read"}},
+	}}
+	e := NewEvaluator()
+	e.SetPolicy(&Policy{})
+	e.SetSource(source)
+
+	id := &auth.Identity{Subject: "alice"}
+	for range 3 {
+		if !e.Can(id, "read", "service:web") {
+			t.Fatal("the source's grant did not apply")
+		}
+	}
+	Filter(e, id, "read", []string{"service:web"}, func(s string) string { return s })
+	e.Fingerprint(id)
+
+	if source.calls != 1 {
+		t.Errorf("GrantsFor called %d times for one identity, want 1", source.calls)
+	}
+
+	if !e.Can(&auth.Identity{Subject: "bob"}, "read", "service:web") || source.calls != 2 {
+		t.Errorf("a second identity did not derive its own grants: %d calls", source.calls)
+	}
+
+	// Another evaluator's source answers for the same identity on its own.
+	other := &countingSource{}
+	e2 := NewEvaluator()
+	e2.SetPolicy(&Policy{})
+	e2.SetSource(other)
+	if e2.Can(id, "read", "service:web") || other.calls != 1 {
+		t.Errorf("a second source reused the first one's grants: %d calls", other.calls)
+	}
+}
