@@ -260,10 +260,7 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		field: func(spec *swarm.ServiceSpec) (**swarm.ResourceRequirements, error) {
 			return &spec.TaskTemplate.Resources, nil
 		},
-		// Unlike the GET, the write answers an unset field with null.
-		body: func(svc swarm.Service) any {
-			return map[string]any{"resources": svc.Spec.TaskTemplate.Resources}
-		},
+		body: serviceResourcesBody,
 	})
 }
 
@@ -1037,7 +1034,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	req, ok := decodeJSON[struct {
+	req, ok := decodeMergePatch[struct {
 		Mounts []mount.Mount `json:"mounts"`
 	}](w, r)
 	if !ok {
