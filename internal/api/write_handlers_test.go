@@ -1389,7 +1389,10 @@ func TestHandlePatchServiceResources_UnsetAnswersLikeTheGet(t *testing.T) {
 	}
 
 	if written == nil || written.Limits != nil || written.Reservations != nil {
-		t.Errorf("the writer was handed %+v, want the patch merged to an empty requirement", written)
+		t.Errorf(
+			"the writer was handed %+v, want the patch merged to an empty requirement",
+			written,
+		)
 	}
 
 	if resources, ok := resp["resources"].(map[string]any); !ok || len(resources) != 0 {
