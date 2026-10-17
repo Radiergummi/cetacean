@@ -211,6 +211,7 @@ function NavLinks({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
     { to: "/secrets", label: "Secrets", keys: ["g", "x"] },
     { to: "/networks", label: "Networks", keys: ["g", "w"] },
     { to: "/volumes", label: "Volumes", keys: ["g", "v"] },
+    { to: "/plugins", label: "Plugins", keys: ["g", "p"] },
     { to: "/swarm", label: "Swarm", keys: ["g", "i"] },
     { to: "/topology", label: "Topology", keys: ["g", "t"] },
     { to: "/metrics", label: "Metrics", keys: ["g", "m"] },
