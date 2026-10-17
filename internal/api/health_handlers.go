@@ -71,14 +71,11 @@ func HandleResync(r Resyncer) http.HandlerFunc {
 				return
 			}
 			slog.Warn("manual resync failed", "error", err)
+			code := "ENG006"
 			if errors.Is(err, context.DeadlineExceeded) {
-				writeProblem(w, req, http.StatusGatewayTimeout, err.Error())
-				return
+				code = "ENG005"
 			}
-			writeJSONStatus(w, http.StatusBadGateway, map[string]string{
-				"status": "error",
-				"error":  err.Error(),
-			})
+			writeErrorCode(w, req, code, err.Error())
 			return
 		}
 		writeJSONStatus(w, http.StatusOK, map[string]any{

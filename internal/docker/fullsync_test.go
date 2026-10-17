@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 )
@@ -25,9 +26,9 @@ func TestFullSyncError(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		failed := make(map[string]bool)
+		failed := make(map[string]error)
 		for _, name := range tc.failed {
-			failed[name] = true
+			failed[name] = errors.New("refused")
 		}
 
 		if err := fullSyncError(failed); (err != nil) != tc.wantErr {
@@ -38,16 +39,35 @@ func TestFullSyncError(t *testing.T) {
 
 // A sweep that ran out of time must say so, not only that the lists failed.
 func TestFullSyncReportsItsDeadline(t *testing.T) {
-	c, err := NewClient("tcp://127.0.0.1:1", TLS{})
+	listener, err := net.Listen("tcp", "127.0.0.1:0") // accepts and never answers
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	c, err := NewClient("tcp://"+listener.Addr().String(), TLS{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
 
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	if _, err := c.FullSync(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("err = %v, want it to wrap context.DeadlineExceeded", err)
+	}
+}
+
+// The error names what each list answered, so a caller learns why.
+func TestFullSyncErrorKeepsEachListsError(t *testing.T) {
+	refused := errors.New("this node is not a swarm manager")
+	failed := map[string]error{}
+	for _, name := range swarmResources {
+		failed[name] = refused
+	}
+
+	if err := fullSyncError(failed); !errors.Is(err, refused) {
+		t.Errorf("err = %v, want it to wrap the lists' error", err)
 	}
 }

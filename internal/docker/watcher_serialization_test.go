@@ -291,3 +291,18 @@ func TestAResyncAgainstAHungEngineEnds(t *testing.T) {
 		t.Fatal("a resync against a hung engine never returned")
 	}
 }
+
+// A loop too busy to take the resync held the caller as long as a hung sweep
+// would, so it reads as the same timeout.
+func TestAResyncTheLoopNeverTakesTimesOut(t *testing.T) {
+	original := fullSyncTimeout
+	fullSyncTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { fullSyncTimeout = original })
+
+	w := NewWatcher(newMockClient(), cache.New(nil), "")
+	w.loopRunning.Store(true) // and nothing reads resyncRequests
+
+	if err := w.Resync(context.Background()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want it to wrap context.DeadlineExceeded", err)
+	}
+}

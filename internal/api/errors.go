@@ -331,6 +331,20 @@ var errorRegistry = map[string]ErrorDef{
 	"ENG004": {Code: "ENG004", Title: "Docker Engine Error", Status: http.StatusInternalServerError,
 		Description: "An unexpected error occurred while communicating with the Docker Engine.",
 		Suggestion:  "Check the Cetacean and Docker daemon logs for details."},
+	"ENG005": {
+		Code:        "ENG005",
+		Title:       "Docker Engine Timeout",
+		Status:      http.StatusGatewayTimeout,
+		Description: "The Docker Engine did not answer within the time Cetacean allows for the operation.",
+		Suggestion:  "Check the daemon's load and logs, then retry.",
+	},
+	"ENG006": {
+		Code:        "ENG006",
+		Title:       "Cluster Re-sync Failed",
+		Status:      http.StatusBadGateway,
+		Description: "Cetacean could not read the cluster from the Docker Engine. The detail names what each list answered.",
+		Suggestion:  "Check that docker.host points at a swarm manager and that the swarm has a leader.",
+	},
 	// ── SWM: swarm operations ─────────────────────────────────────────
 	"SWM001": {
 		Code:        "SWM001",

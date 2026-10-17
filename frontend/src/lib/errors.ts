@@ -77,6 +77,15 @@ const errorDictionary: Record<string, ErrorInfo> = {
     suggestion: "Check the Cetacean and Docker daemon logs for details.",
     action: "retry",
   },
+  ENG005: {
+    title: "Docker Engine timeout",
+    suggestion: "Check the daemon's load and logs, then retry.",
+    action: "retry",
+  },
+  ENG006: {
+    title: "Cluster re-sync failed",
+    suggestion: "Check that docker.host points at a swarm manager and that the swarm has a leader.",
+  },
 
   // PLG: plugin operations
   PLG004: {

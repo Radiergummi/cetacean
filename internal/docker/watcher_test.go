@@ -78,31 +78,31 @@ func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var data cache.FullSyncData
-	failed := make(map[string]bool)
+	failed := make(map[string]error)
 	for name, err := range m.listErrors {
 		if err != nil {
-			failed[name] = true
+			failed[name] = err
 		}
 	}
-	if !failed["nodes"] {
+	if failed["nodes"] == nil {
 		data.Nodes, data.HasNodes = m.nodes, true
 	}
-	if !failed["services"] {
+	if failed["services"] == nil {
 		data.Services, data.HasServices = m.services, true
 	}
-	if !failed["tasks"] {
+	if failed["tasks"] == nil {
 		data.Tasks, data.HasTasks = m.tasks, true
 	}
-	if !failed["configs"] {
+	if failed["configs"] == nil {
 		data.Configs, data.HasConfigs = m.configs, true
 	}
-	if !failed["secrets"] {
+	if failed["secrets"] == nil {
 		data.Secrets, data.HasSecrets = m.secrets, true
 	}
-	if !failed["networks"] {
+	if failed["networks"] == nil {
 		data.Networks, data.HasNetworks = m.networks, true
 	}
-	if !failed["volumes"] {
+	if failed["volumes"] == nil {
 		data.Volumes, data.HasVolumes = m.volumes, true
 	}
 	return data, fullSyncError(failed)
