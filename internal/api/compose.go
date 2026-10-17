@@ -53,12 +53,13 @@ func (h *Handlers) HandleServiceCompose(w http.ResponseWriter, r *http.Request) 
 // that network's name in a document their grant does not cover; the projection
 // leaves an unresolved attachment as its ID and says so in the header.
 func (h *Handlers) readableNetworks(r *http.Request) []network.Summary {
-	return acl.Filter(
+	return acl.FilterInPlaceNamed(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		h.cache.ListNetworks(),
-		func(n network.Summary) string { return "network:" + n.Name },
+		"network",
+		func(n network.Summary) string { return n.Name },
 	)
 }
 

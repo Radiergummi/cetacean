@@ -2,9 +2,7 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -100,21 +98,23 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fAuthBypass = fm.AuthBypass
 	}
 
-	taskTTL, err := resolveNonNegativeDuration(
+	taskTTL, err := resolveDuration(
 		nil,
 		"CETACEAN_MCP_TASK_TTL",
 		fTaskTTL,
 		def.TaskTTL,
+		true,
 	)
 	if err != nil {
 		return MCPConfig{}, err
 	}
 
-	maxTaskTTL, err := resolveNonNegativeDuration(
+	maxTaskTTL, err := resolveDuration(
 		nil,
 		"CETACEAN_MCP_MAX_TASK_TTL",
 		fMaxTaskTTL,
 		def.MaxTaskTTL,
+		true,
 	)
 	if err != nil {
 		return MCPConfig{}, err
@@ -189,30 +189,6 @@ func checkAuthBypass(modes []string) error {
 // the file value, returning OpsInherit when neither is set. Unlike the global
 // ops level, OpsInherit (-1) is a valid result here.
 func resolveOpsCeiling(envKey string, file *int) (OperationsLevel, error) {
-	const min, max = int(OpsReadOnly), int(OpsImpactful)
-
-	if raw := os.Getenv(envKey); raw != "" {
-		v, err := strconv.Atoi(raw)
-		if err != nil {
-			return OpsInherit, fmt.Errorf("invalid integer from %s %q: %w", envKey, raw, err)
-		}
-
-		result, err := checkIntRange(v, min, max, envKey)
-		if err != nil {
-			return OpsInherit, err
-		}
-
-		return OperationsLevel(result), nil
-	}
-
-	if file != nil {
-		result, err := checkIntRange(*file, min, max, "config file")
-		if err != nil {
-			return OpsInherit, err
-		}
-
-		return OperationsLevel(result), nil
-	}
-
-	return OpsInherit, nil
+	v, err := resolveInt(nil, envKey, file, int(OpsInherit), int(OpsReadOnly), int(OpsImpactful))
+	return OperationsLevel(v), err
 }

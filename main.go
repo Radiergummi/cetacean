@@ -97,18 +97,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	configPath := flags.Config
-	if configPath == "" {
-		configPath = config.DiscoverConfigFile()
-	}
-
-	fc, err := config.LoadFile(configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-		os.Exit(1)
-	}
-
-	cfg, err := config.Load(fc, flags)
+	cfg, fc, configPath, err := config.LoadFlagged(flags)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
 		os.Exit(1)
@@ -657,9 +646,9 @@ func main() {
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      router,
-		ReadTimeout:  5 * time.Second,
+		ReadTimeout:  serverReadTimeout,
 		WriteTimeout: 0, // SSE requires no write timeout; per-request timeouts used instead
-		IdleTimeout:  120 * time.Second,
+		IdleTimeout:  serverIdleTimeout,
 		TLSConfig:    serverTLSConfig,
 	}
 
@@ -718,6 +707,13 @@ func main() {
 // accepts and then says nothing cannot hold startup open.
 const dockerProbeTimeout = 10 * time.Second
 
+// Every listener shares these; none sets a write timeout, since SSE streams
+// for as long as the client stays.
+const (
+	serverReadTimeout = 5 * time.Second
+	serverIdleTimeout = 120 * time.Second
+)
+
 // shutdownGrace bounds how long a signalled process waits for in-flight
 // requests, inside the ten seconds an orchestrator allows before SIGKILL.
 const shutdownGrace = 5 * time.Second
@@ -726,18 +722,7 @@ const shutdownGrace = 5 * time.Second
 // server itself would load, so a listen address, base path or TLS set in any
 // source is the one probed.
 func runHealthcheck(flags *config.Flags) int {
-	configPath := flags.Config
-	if configPath == "" {
-		configPath = config.DiscoverConfigFile()
-	}
-
-	fc, err := config.LoadFile(configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
-		return 1
-	}
-
-	cfg, err := config.Load(fc, flags)
+	cfg, fc, _, err := config.LoadFlagged(flags)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck failed: %v\n", err)
 		return 1
@@ -863,15 +848,15 @@ func serveDualListeners(
 	metaServer := &http.Server{
 		Addr:        cfg.ListenAddr,
 		Handler:     newMetaMux(cfg.BasePath, h.HandleHealth, h.HandleReady, selfMetrics),
-		ReadTimeout: 5 * time.Second,
-		IdleTimeout: 120 * time.Second,
+		ReadTimeout: serverReadTimeout,
+		IdleTimeout: serverIdleTimeout,
 	}
 
 	appServer := &http.Server{
 		Handler:      router,
-		ReadTimeout:  5 * time.Second,
+		ReadTimeout:  serverReadTimeout,
 		WriteTimeout: 0,
-		IdleTimeout:  120 * time.Second,
+		IdleTimeout:  serverIdleTimeout,
 	}
 	appServer.RegisterOnShutdown(closeStreams)
 

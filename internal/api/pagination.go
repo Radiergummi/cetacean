@@ -2,7 +2,6 @@ package api
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -121,15 +120,6 @@ func parseItemsRange(header string) (int, int, bool, error) {
 	// The span cannot overflow, but adding one to it can; the caller clamps.
 	limit := min(endN-startN, math.MaxInt-1) + 1
 	return limit, startN, true, nil
-}
-
-func applyPagination[T any](ctx context.Context, items []T, p PageParams) CollectionResponse[T] {
-	result := pageOf(items, p)
-	if result == nil {
-		result = []T{}
-	}
-
-	return NewCollectionResponse(ctx, result, len(items), p.Limit, p.Offset)
 }
 
 // pageOf is the slice the page names, clamped to what there is.

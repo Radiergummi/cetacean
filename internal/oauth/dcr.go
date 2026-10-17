@@ -423,14 +423,8 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// dcrErrorResponse is the RFC 7591 error response format.
-type dcrErrorResponse struct {
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description,omitempty"`
-}
-
 func writeDCRError(w http.ResponseWriter, status int, code, desc string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(dcrErrorResponse{Error: code, ErrorDescription: desc})
+	_ = json.NewEncoder(w).Encode(oauthErrorResponse{Error: code, ErrorDescription: desc})
 }

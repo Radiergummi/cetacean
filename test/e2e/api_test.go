@@ -46,24 +46,15 @@ func startNone(t *testing.T, opsLevel string) (*harness.Env, *sut.Process) {
 func serviceID(t *testing.T, proc *sut.Process, name string) string {
 	t.Helper()
 
-	var body struct {
-		Items []struct {
-			ID   string `json:"ID"`
-			Spec struct {
-				Name string `json:"Name"`
-			} `json:"Spec"`
-		} `json:"items"`
-	}
+	var body serviceList
 
 	resp := getJSON(t, proc, "/services", &body) //nolint:bodyclose // closed in getJSON
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /services: status = %d, want 200", resp.StatusCode)
 	}
 
-	for _, item := range body.Items {
-		if item.Spec.Name == name {
-			return item.ID
-		}
+	if id, ok := body.idOf(name); ok {
+		return id
 	}
 
 	t.Fatalf("service %q not found in /services", name)
@@ -71,7 +62,40 @@ func serviceID(t *testing.T, proc *sut.Process, name string) string {
 	return ""
 }
 
+// serviceList is as much of a /services listing as resolving a name needs.
+type serviceList struct {
+	Items []struct {
+		ID   string `json:"ID"`
+		Spec struct {
+			Name string `json:"Name"`
+		} `json:"Spec"`
+	} `json:"items"`
+}
+
+func (l serviceList) idOf(name string) (string, bool) {
+	for _, item := range l.Items {
+		if item.Spec.Name == name {
+			return item.ID, true
+		}
+	}
+
+	return "", false
+}
+
 func getJSON(t *testing.T, proc *sut.Process, path string, into any) *http.Response {
+	t.Helper()
+
+	return getJSONAs(t, proc, path, "", "", into)
+}
+
+// getJSONAs performs a GET as a headers-auth identity, decoding the JSON body
+// into into when the response is 200. An empty user or groups sends no header.
+func getJSONAs(
+	t *testing.T,
+	proc *sut.Process,
+	path, user, groups string,
+	into any,
+) *http.Response {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, proc.BaseURL+path, nil)
@@ -80,6 +104,14 @@ func getJSON(t *testing.T, proc *sut.Process, path string, into any) *http.Respo
 	}
 
 	req.Header.Set("Accept", "application/json")
+
+	if user != "" {
+		req.Header.Set("X-Auth-User", user)
+	}
+
+	if groups != "" {
+		req.Header.Set("X-Auth-Groups", groups)
+	}
 
 	resp, err := proc.Client().Do(req)
 	if err != nil {

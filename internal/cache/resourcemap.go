@@ -127,11 +127,17 @@ func (r *ResourceMap[T]) List() []T {
 	}
 	r.mu.RUnlock()
 
-	order := make([]int, len(keys))
+	return sortedByIndex(vals, func(a, b int) int { return cmp.Compare(keys[a], keys[b]) })
+}
+
+// sortedByIndex returns vals reordered by sorting their positions with compare,
+// so the sort swaps ints rather than the values themselves.
+func sortedByIndex[T any](vals []T, compare func(a, b int) int) []T {
+	order := make([]int, len(vals))
 	for i := range order {
 		order[i] = i
 	}
-	slices.SortFunc(order, func(a, b int) int { return cmp.Compare(keys[a], keys[b]) })
+	slices.SortFunc(order, compare)
 
 	out := make([]T, len(vals))
 	for i, j := range order {

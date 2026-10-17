@@ -1,7 +1,9 @@
 package cluster
 
+import "github.com/radiergummi/cetacean/internal/cache"
+
 // StackNamespaceLabel is the label a resource's stack membership is derived from.
-const StackNamespaceLabel = "com.docker.stack.namespace"
+const StackNamespaceLabel = cache.StackLabel
 
 // StackLabelDeniedError reports a relabel into a stack the caller may not write.
 type StackLabelDeniedError struct {

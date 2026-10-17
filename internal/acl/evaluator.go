@@ -2,6 +2,7 @@ package acl
 
 import (
 	"slices"
+	"strings"
 	"sync/atomic"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -65,50 +66,47 @@ func (e *Evaluator) SetSource(s GrantSource) {
 // resource is "type:name", e.g. "service:webapp-api".
 // A nil evaluator or nil policy means allow all.
 func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) bool {
-	if e == nil {
-		return true
-	}
-	p := e.policy.Load()
-	if p == nil {
-		return true
-	}
-
-	// Collect all matching grants.
-	grants := e.collectGrants(id, p)
-
-	// Check if any grant covers the resource and permission.
-	for _, g := range grants {
-		if !hasPermission(g, permission) {
-			continue
-		}
-		if e.grantMatchesResource(g, resource) {
-			return true
-		}
-	}
-	return false
+	return e.Checker(id, permission)(resource)
 }
 
 // Checker is Can with the identity's grants collected once, for a caller asking
 // about many resources. It answers under the policy current when it was made.
 func (e *Evaluator) Checker(id *auth.Identity, permission string) func(resource string) bool {
-	if e == nil {
+	grants, allowAll := e.grantsWith(id, permission)
+	if allowAll {
 		return func(string) bool { return true }
 	}
-	p := e.policy.Load()
-	if p == nil {
-		return func(string) bool { return true }
-	}
-
-	grants := e.collectGrants(id, p)
 
 	return func(resource string) bool {
 		for _, g := range grants {
-			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
+			if e.grantMatchesResource(g, resource) {
 				return true
 			}
 		}
 		return false
 	}
+}
+
+// grantsWith returns the identity's grants that carry permission, or allowAll
+// for a nil evaluator or no policy loaded.
+func (e *Evaluator) grantsWith(
+	id *auth.Identity,
+	permission string,
+) (grants []Grant, allowAll bool) {
+	if e == nil {
+		return nil, true
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return nil, true
+	}
+
+	for _, g := range e.collectGrants(id, p) {
+		if hasPermission(g, permission) {
+			grants = append(grants, g)
+		}
+	}
+	return grants, false
 }
 
 // Filter returns only items the identity can access with the given permission.
@@ -123,15 +121,10 @@ func Filter[T any](
 	items []T,
 	resourceFunc func(T) string,
 ) []T {
-	if e == nil {
+	grants, allowAll := e.grantsWith(id, permission)
+	if allowAll {
 		return items
 	}
-	p := e.policy.Load()
-	if p == nil {
-		return items
-	}
-
-	grants := e.collectGrants(id, p)
 
 	// Grown rather than sized for the whole input: a permissive policy pays
 	// for the growth, but sizing for every item costs a restrictive one far
@@ -140,7 +133,7 @@ func Filter[T any](
 	for _, item := range items {
 		resource := resourceFunc(item)
 		for _, g := range grants {
-			if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
+			if e.grantMatchesResource(g, resource) {
 				result = append(result, item)
 				break
 			}
@@ -162,21 +155,16 @@ func FilterInPlaceNamed[T any](
 	resourceType string,
 	nameFunc func(T) string,
 ) []T {
-	if e == nil {
+	grants, allowAll := e.grantsWith(id, permission)
+	if allowAll {
 		return items
 	}
-	p := e.policy.Load()
-	if p == nil {
-		return items
-	}
-
-	grants := e.collectGrants(id, p)
 
 	result := items[:0]
 	for _, item := range items {
 		name := nameFunc(item)
 		for _, g := range grants {
-			if hasPermission(g, permission) && e.grantMatchesParts(g, resourceType, name) {
+			if e.grantMatchesParts(g, resourceType, name) {
 				result = append(result, item)
 				break
 			}
@@ -438,12 +426,7 @@ func grantResourceType(expr string) (string, bool) {
 }
 
 func splitResource(resource string) (string, string, bool) {
-	for i := range resource {
-		if resource[i] == ':' {
-			return resource[:i], resource[i+1:], true
-		}
-	}
-	return "", "", false
+	return strings.Cut(resource, ":")
 }
 
 func audienceMatches(g Grant, id *auth.Identity) bool {

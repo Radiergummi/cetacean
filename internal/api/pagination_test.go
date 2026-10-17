@@ -67,55 +67,6 @@ func TestParsePagination_MaxLimit(t *testing.T) {
 	}
 }
 
-func TestApplyPagination(t *testing.T) {
-	items := make([]int, 10)
-	for i := range items {
-		items[i] = i
-	}
-
-	p := PageParams{Limit: 3, Offset: 2}
-	result := applyPagination(context.Background(), items, p)
-
-	if result.Total != 10 {
-		t.Errorf("expected total 10, got %d", result.Total)
-	}
-	if len(result.Items) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(result.Items))
-	}
-	if result.Items[0] != 2 || result.Items[1] != 3 || result.Items[2] != 4 {
-		t.Errorf("expected items [2,3,4], got %v", result.Items)
-	}
-	if result.Context != jsonLDContext {
-		t.Errorf("expected @context %s, got %s", jsonLDContext, result.Context)
-	}
-	if result.Type != "Collection" {
-		t.Errorf("expected @type Collection, got %s", result.Type)
-	}
-	if result.Limit != 3 {
-		t.Errorf("expected limit 3, got %d", result.Limit)
-	}
-	if result.Offset != 2 {
-		t.Errorf("expected offset 2, got %d", result.Offset)
-	}
-}
-
-func TestApplyPagination_BeyondEnd(t *testing.T) {
-	items := []int{1, 2, 3}
-
-	p := PageParams{Limit: 10, Offset: 100}
-	result := applyPagination(context.Background(), items, p)
-
-	if result.Total != 3 {
-		t.Errorf("expected total 3, got %d", result.Total)
-	}
-	if result.Items == nil {
-		t.Fatal("expected non-nil empty slice, got nil")
-	}
-	if len(result.Items) != 0 {
-		t.Errorf("expected 0 items, got %d", len(result.Items))
-	}
-}
-
 type testItem struct {
 	Name string
 }
@@ -573,7 +524,7 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 			return
 		}
 
-		resp := applyPagination(r.Context(), items, p)
+		resp := NewCollectionResponse(r.Context(), pageOf(items, p), len(items), p.Limit, p.Offset)
 		writeCollectionResponse(w, r, resp, p, "")
 	})
 

@@ -53,16 +53,18 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	services := acl.Filter(
+	services := acl.FilterInPlaceNamed(
 		h.acl, identity, "read",
 		h.cache.ListServices(),
-		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		"service",
+		func(s swarm.Service) string { return s.Spec.Name },
 	)
 	networks := h.readableNetworks(r)
-	clusterNodes := acl.Filter(
+	clusterNodes := acl.FilterInPlaceNamed(
 		h.acl, identity, "read",
 		h.cache.ListNodes(),
-		nodeResource,
+		"node",
+		cluster.NodeACLName,
 	)
 
 	contextURL := absPath(r.Context(), jsonLDContext)
@@ -112,10 +114,11 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 // identity, applying ACL filtering on services.
 func (h *Handlers) buildACLFilteredNetworkGraph(r *http.Request) jgf.Graph {
 	identity := auth.IdentityFromContext(r.Context())
-	services := acl.Filter(
+	services := acl.FilterInPlaceNamed(
 		h.acl, identity, "read",
 		h.cache.ListServices(),
-		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		"service",
+		func(s swarm.Service) string { return s.Spec.Name },
 	)
 	networks := h.readableNetworks(r)
 	contextURL := absPath(r.Context(), jsonLDContext)
@@ -225,7 +228,7 @@ func buildNetworkJGF(
 		}
 
 		// Track stack membership.
-		if stack := svc.Spec.Labels["com.docker.stack.namespace"]; stack != "" {
+		if stack := svc.Spec.Labels[cluster.StackNamespaceLabel]; stack != "" {
 			stacks[stack] = append(stacks[stack], urn)
 		}
 	}

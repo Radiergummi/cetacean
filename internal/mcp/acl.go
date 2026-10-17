@@ -183,19 +183,8 @@ func (s *Server) filterRecommendations(
 		auth.IdentityFromContext(ctx),
 		"read",
 		items,
-		recommendationACLResource,
+		cluster.RecommendationACLResource,
 	)
-}
-
-func recommendationACLResource(rec recommendations.Recommendation) string {
-	switch rec.Scope {
-	case recommendations.ScopeService:
-		return "service:" + rec.TargetName
-	case recommendations.ScopeNode:
-		return "node:" + rec.TargetName
-	default:
-		return "swarm:cluster"
-	}
 }
 
 // readableEnrichedTasks filters tasks to the ones the caller may read, then

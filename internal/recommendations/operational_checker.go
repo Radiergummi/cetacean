@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/prom"
 )
 
 // OperationalChecker implements Checker for Prometheus-based operational health recommendations.
@@ -41,30 +42,15 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 	tickCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	type queryResult struct {
-		results []queryEntry
-		err     error
-	}
-
-	diskCh := make(chan queryResult, 1)
-	memCh := make(chan queryResult, 1)
-
-	go func() {
-		query := `max by (instance)(` +
-			`(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / ` +
-			`node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) * 100)`
-		entries, err := queryEntries(tickCtx, oc.query, query, "instance")
-		diskCh <- queryResult{entries, err}
-	}()
-
-	go func() {
-		query := `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`
-		entries, err := queryEntries(tickCtx, oc.query, query, "instance")
-		memCh <- queryResult{entries, err}
-	}()
-
-	diskResult := <-diskCh
-	memResult := <-memCh
+	results := runQueries(
+		tickCtx,
+		oc.query,
+		`max by (instance)(`+
+			`(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / `+
+			`node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"}) * 100)`,
+		`(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`,
+	)
+	diskResult, memResult := results[0], results[1]
 
 	if diskResult.err != nil {
 		slog.Warn("operational: disk usage query failed", "error", diskResult.err)
@@ -75,13 +61,23 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 	}
 
 	if diskResult.err == nil {
-		recs = append(recs, oc.nodeRecs(diskResult.results, CategoryNodeDiskFull, "disk usage")...)
+		recs = append(
+			recs,
+			oc.nodeRecs(
+				entriesBy(diskResult.results, "instance"),
+				CategoryNodeDiskFull,
+				"disk usage",
+			)...)
 	}
 
 	if memResult.err == nil {
 		recs = append(
 			recs,
-			oc.nodeRecs(memResult.results, CategoryNodeMemPressure, "memory usage")...)
+			oc.nodeRecs(
+				entriesBy(memResult.results, "instance"),
+				CategoryNodeMemPressure,
+				"memory usage",
+			)...)
 	}
 
 	return recs
@@ -206,16 +202,8 @@ type queryEntry struct {
 	value float64
 }
 
-func queryEntries(
-	ctx context.Context,
-	query QueryFunc,
-	promQuery, labelKey string,
-) ([]queryEntry, error) {
-	results, err := query(ctx, promQuery)
-	if err != nil {
-		return nil, err
-	}
-
+// entriesBy keeps the results carrying labelKey, keyed by its value, in order.
+func entriesBy(results []prom.Result, labelKey string) []queryEntry {
 	entries := make([]queryEntry, 0, len(results))
 	for _, r := range results {
 		if key := r.Labels[labelKey]; key != "" {
@@ -223,5 +211,5 @@ func queryEntries(
 		}
 	}
 
-	return entries, nil
+	return entries
 }

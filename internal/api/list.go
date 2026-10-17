@@ -56,8 +56,7 @@ func listNotModified[T any](
 
 // handleList runs the full list pipeline and writes the JSON response.
 // Use this for resources that need no post-pagination transformation.
-// When spec.itemType and spec.idFunc are set, each item is wrapped with
-// JSON-LD @id and @type fields.
+// Each item is wrapped with JSON-LD @id and @type fields.
 func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec listSpec[T]) {
 	// A list is a pure function of the cache, the caller's grants and the
 	// request, so the validator is knowable before any of the work. Answering
@@ -79,23 +78,36 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 	}
 
 	writeLinkTemplate(w, r, spec.linkTemplate)
+	writeListPage(w, r, items, p, validator, spec.itemType, spec.idFunc, func(page []T) []T {
+		return page
+	})
+}
 
-	if spec.itemType != "" && spec.idFunc != nil {
-		raw := applyPagination(r.Context(), items, p)
-		wrapped := CollectionResponse[Item[T]]{
-			Context: raw.Context,
-			Type:    raw.Type,
-			Items:   wrapItems(r.Context(), raw.Items, spec.itemType, spec.idFunc),
-			Total:   raw.Total,
-			Limit:   raw.Limit,
-			Offset:  raw.Offset,
-		}
-		writeCollectionResponse(w, r, wrapped, p, validator)
-		return
-	}
-
-	resp := applyPagination(r.Context(), items, p)
-	writeCollectionResponse(w, r, resp, p, validator)
+// writeListPage writes the page of items p names as the JSON collection, each
+// entry wrapped with @id and @type; render turns the page into those entries.
+func writeListPage[T, U any](
+	w http.ResponseWriter,
+	r *http.Request,
+	items []T,
+	p PageParams,
+	validator string,
+	itemType string,
+	idFunc func(U) string,
+	render func(page []T) []U,
+) {
+	writeCollectionResponse(
+		w,
+		r,
+		NewCollectionResponse(
+			r.Context(),
+			wrapItems(r.Context(), render(pageOf(items, p)), itemType, idFunc),
+			len(items),
+			p.Limit,
+			p.Offset,
+		),
+		p,
+		validator,
+	)
 }
 
 // prepareList runs steps 1–7 of the list pipeline (allow header, cache fetch,

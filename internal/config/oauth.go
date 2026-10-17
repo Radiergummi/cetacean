@@ -163,6 +163,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		"CETACEAN_OAUTH_ACCESS_TOKEN_TTL",
 		fo.AccessTokenTTL,
 		def.AccessTokenTTL,
+		false,
 	)
 	if err != nil {
 		return OAuthConfig{}, err
@@ -173,6 +174,7 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 		"CETACEAN_OAUTH_REFRESH_TOKEN_TTL",
 		fo.RefreshTokenTTL,
 		def.RefreshTokenTTL,
+		false,
 	)
 	if err != nil {
 		return OAuthConfig{}, err
@@ -180,11 +182,12 @@ func loadOAuth(fo *fileOAuth) (OAuthConfig, error) {
 
 	// Non-negative rather than positive: zero is the documented way to turn
 	// remembered approvals off, and ConsentStore.Enabled() honours it.
-	consentTTL, err := resolveNonNegativeDuration(
+	consentTTL, err := resolveDuration(
 		nil,
 		"CETACEAN_OAUTH_CONSENT_TTL",
 		fo.ConsentTTL,
 		def.ConsentTTL,
+		true,
 	)
 	if err != nil {
 		return OAuthConfig{}, err

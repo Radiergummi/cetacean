@@ -2,11 +2,12 @@ package cache
 
 import "slices"
 
-const stackLabel = "com.docker.stack.namespace"
+// StackLabel is the label a resource's stack membership is derived from.
+const StackLabel = "com.docker.stack.namespace"
 
 // addToStack incrementally adds a resource to the appropriate stack. Must be called with c.mu held for writing.
 func (c *Cache) addToStack(resource EventType, id string, labels map[string]string) {
-	ns, ok := labels[stackLabel]
+	ns, ok := labels[StackLabel]
 	if !ok {
 		return
 	}
@@ -41,25 +42,25 @@ func (c *Cache) seedStack(ns string) Stack {
 	s := Stack{Name: ns}
 
 	for id, cfg := range c.configs.items {
-		if cfg.Spec.Labels[stackLabel] == ns {
+		if cfg.Spec.Labels[StackLabel] == ns {
 			s.Configs = append(s.Configs, id)
 		}
 	}
 
 	for id, sec := range c.secrets.items {
-		if sec.Spec.Labels[stackLabel] == ns {
+		if sec.Spec.Labels[StackLabel] == ns {
 			s.Secrets = append(s.Secrets, id)
 		}
 	}
 
 	for id, net := range c.networks.items {
-		if net.Labels[stackLabel] == ns {
+		if net.Labels[StackLabel] == ns {
 			s.Networks = append(s.Networks, id)
 		}
 	}
 
 	for name, vol := range c.volumes.items {
-		if vol.Labels[stackLabel] == ns {
+		if vol.Labels[StackLabel] == ns {
 			s.Volumes = append(s.Volumes, name)
 		}
 	}
@@ -74,7 +75,7 @@ func (c *Cache) seedStack(ns string) Stack {
 
 // removeFromStack incrementally removes a resource from its stack. Must be called with c.mu held for writing.
 func (c *Cache) removeFromStack(resource EventType, id string, labels map[string]string) {
-	ns, ok := labels[stackLabel]
+	ns, ok := labels[StackLabel]
 	if !ok {
 		return
 	}
@@ -155,35 +156,35 @@ func (c *Cache) rebuildStacks() {
 	// IDs come from map keys, so they are unique within each resource type.
 	// No need for appendUnique during a full rebuild.
 	for id, svc := range c.services {
-		if ns, ok := svc.Spec.Labels[stackLabel]; ok {
+		if ns, ok := svc.Spec.Labels[StackLabel]; ok {
 			s := ensure(ns)
 			s.Services = append(s.Services, id)
 		}
 	}
 
 	for id, cfg := range c.configs.items {
-		if ns, ok := cfg.Spec.Labels[stackLabel]; ok {
+		if ns, ok := cfg.Spec.Labels[StackLabel]; ok {
 			s := ensure(ns)
 			s.Configs = append(s.Configs, id)
 		}
 	}
 
 	for id, sec := range c.secrets.items {
-		if ns, ok := sec.Spec.Labels[stackLabel]; ok {
+		if ns, ok := sec.Spec.Labels[StackLabel]; ok {
 			s := ensure(ns)
 			s.Secrets = append(s.Secrets, id)
 		}
 	}
 
 	for id, net := range c.networks.items {
-		if ns, ok := net.Labels[stackLabel]; ok {
+		if ns, ok := net.Labels[StackLabel]; ok {
 			s := ensure(ns)
 			s.Networks = append(s.Networks, id)
 		}
 	}
 
 	for name, vol := range c.volumes.items {
-		if ns, ok := vol.Labels[stackLabel]; ok {
+		if ns, ok := vol.Labels[StackLabel]; ok {
 			s := ensure(ns)
 			s.Volumes = append(s.Volumes, name)
 		}

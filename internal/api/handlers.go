@@ -239,13 +239,12 @@ type Handlers struct {
 	refresher            ResourceRefresher
 	localNodeMu          sync.Mutex
 	localNodeID          string
-	localNodeDone        bool
 	localNodeRetryAfter  *time.Time
 
 	logStreams         sse.Slots
 	logReads           sse.Slots
 	activePreferWaits  atomic.Int64
-	metricsStreamCount atomic.Int32
+	metricsStreamCount atomic.Int64
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
 	dockerVersionCache *dockerVersionCache
 	diskUsage          diskUsageCache

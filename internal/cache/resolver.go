@@ -14,37 +14,35 @@ func (c *Cache) StackOf(resourceType, name string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	const label = "com.docker.stack.namespace"
-
 	switch resourceType {
 	case "service":
 		for _, s := range c.services {
 			if s.Spec.Name == name {
-				return s.Spec.Labels[label]
+				return s.Spec.Labels[StackLabel]
 			}
 		}
 	case "config":
 		for _, cfg := range c.configs.items {
 			if cfg.Spec.Name == name {
-				return cfg.Spec.Labels[label]
+				return cfg.Spec.Labels[StackLabel]
 			}
 		}
 	case "secret":
 		for _, s := range c.secrets.items {
 			if s.Spec.Name == name {
-				return s.Spec.Labels[label]
+				return s.Spec.Labels[StackLabel]
 			}
 		}
 	case "network":
 		for _, n := range c.networks.items {
 			if n.Name == name {
-				return n.Labels[label]
+				return n.Labels[StackLabel]
 			}
 		}
 	case "volume":
 		for _, v := range c.volumes.items {
 			if v.Name == name {
-				return v.Labels[label]
+				return v.Labels[StackLabel]
 			}
 		}
 	}
@@ -72,15 +70,15 @@ func (c *Cache) ServiceOfTask(taskID string) string {
 func (c *Cache) removedFrom(resource any) (service, stack string) {
 	switch r := resource.(type) {
 	case swarm.Service:
-		return "", r.Spec.Labels[stackLabel]
+		return "", r.Spec.Labels[StackLabel]
 	case swarm.Config:
-		return "", r.Spec.Labels[stackLabel]
+		return "", r.Spec.Labels[StackLabel]
 	case swarm.Secret:
-		return "", r.Spec.Labels[stackLabel]
+		return "", r.Spec.Labels[StackLabel]
 	case network.Summary:
-		return "", r.Labels[stackLabel]
+		return "", r.Labels[StackLabel]
 	case volume.Volume:
-		return "", r.Labels[stackLabel]
+		return "", r.Labels[StackLabel]
 	case swarm.Task:
 		c.mu.RLock()
 		service, stack = c.removedTaskFromLocked(r)
@@ -100,11 +98,11 @@ func (c *Cache) removedTaskFromLocked(t swarm.Task) (service, stack string) {
 	}
 
 	if ok {
-		return svc.Spec.Name, svc.Spec.Labels[stackLabel]
+		return svc.Spec.Name, svc.Spec.Labels[StackLabel]
 	}
 
 	if t.Spec.ContainerSpec != nil {
-		return "", t.Spec.ContainerSpec.Labels[stackLabel]
+		return "", t.Spec.ContainerSpec.Labels[StackLabel]
 	}
 
 	return "", ""

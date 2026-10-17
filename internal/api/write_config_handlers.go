@@ -57,10 +57,7 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 				return nil, false
 			}
 
-			return ConfigResponse{
-				Config:   cfg,
-				Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(id)),
-			}, true
+			return h.configBody(r, cfg), true
 		},
 	})
 }
@@ -77,18 +74,14 @@ func (h *Handlers) configLabelsSpec() getLabelsSpec[swarm.Config] {
 }
 
 func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, h.configLabelsSpec())
+	handleGetLabels(w, r, h, h.configLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Config]{
-		resource:     "config",
-		pathKey:      "id",
-		typeName:     "ConfigLabels",
-		getter:       h.cache.GetConfig,
-		getLabels:    func(c swarm.Config) map[string]string { return c.Spec.Labels },
-		update:       h.configWriter.UpdateConfigLabels,
-		conflictCode: "CFG005",
-		stackMember:  true,
+		getLabelsSpec: h.configLabelsSpec(),
+		update:        h.configWriter.UpdateConfigLabels,
+		conflictCode:  "CFG005",
+		stackMember:   true,
 	})
 }

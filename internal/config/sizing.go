@@ -92,7 +92,13 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 		)
 	}
 
-	lookback, err := resolveDuration(nil, "CETACEAN_SIZING_LOOKBACK", fLookback, 168*time.Hour)
+	lookback, err := resolveDuration(
+		nil,
+		"CETACEAN_SIZING_LOOKBACK",
+		fLookback,
+		168*time.Hour,
+		false,
+	)
 	if err != nil {
 		return nil, err
 	}

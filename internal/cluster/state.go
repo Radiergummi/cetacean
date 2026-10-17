@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // serviceUpdateInFlight reports whether a service's desired spec is still in
@@ -40,7 +42,7 @@ func ServiceConverged(svc swarm.Service, runningCount, completedCount int) (bool
 	}
 
 	// A job has nothing to keep running: it converges once its run completes.
-	if isJob(svc) {
+	if cache.IsJobService(svc) {
 		if jobState(svc, runningCount, completedCount) == stateCompleted {
 			return true, fmt.Sprintf("converged: job completed (%d tasks)", completedCount)
 		}
@@ -77,7 +79,7 @@ func DeriveServiceState(svc swarm.Service, runningCount, completedCount int, fla
 		return "updating"
 	}
 
-	if isJob(svc) {
+	if cache.IsJobService(svc) {
 		return jobState(svc, runningCount, completedCount)
 	}
 
@@ -107,10 +109,6 @@ func DeriveServiceState(svc swarm.Service, runningCount, completedCount int, fla
 		return "flapping"
 	}
 	return "running"
-}
-
-func isJob(svc swarm.Service) bool {
-	return svc.Spec.Mode.ReplicatedJob != nil || svc.Spec.Mode.GlobalJob != nil
 }
 
 // jobState applies the replicated rule — none running and not done is a

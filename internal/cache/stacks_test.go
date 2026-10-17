@@ -11,7 +11,7 @@ import (
 )
 
 func stackLabels(ns string) map[string]string {
-	return map[string]string{stackLabel: ns}
+	return map[string]string{StackLabel: ns}
 }
 
 func stackService(id, ns string) swarm.Service {

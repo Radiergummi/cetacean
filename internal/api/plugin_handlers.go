@@ -134,6 +134,20 @@ type pluginRemoteRequest struct {
 	Privileges *types.PluginPrivileges `json:"privileges"`
 }
 
+// decodePluginRemote decodes a request naming a remote, refusing one without.
+func decodePluginRemote(w http.ResponseWriter, r *http.Request) (pluginRemoteRequest, bool) {
+	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	if !ok {
+		return req, false
+	}
+	if req.Remote == "" {
+		writeErrorCode(w, r, "PLG002", "remote is required")
+		return req, false
+	}
+
+	return req, true
+}
+
 // grantedPrivileges refuses an install or upgrade that names no privileges,
 // and answers a plugin whose privileges changed since they were reviewed.
 func grantedPrivileges(w http.ResponseWriter, r *http.Request, req pluginRemoteRequest) bool {
@@ -169,12 +183,8 @@ type pluginConfigureRequest struct {
 }
 
 func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request) {
-	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	req, ok := decodePluginRemote(w, r)
 	if !ok {
-		return
-	}
-	if req.Remote == "" {
-		writeErrorCode(w, r, "PLG002", "remote is required")
 		return
 	}
 
@@ -200,12 +210,8 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	req, ok := decodePluginRemote(w, r)
 	if !ok {
-		return
-	}
-	if req.Remote == "" {
-		writeErrorCode(w, r, "PLG002", "remote is required")
 		return
 	}
 
@@ -224,21 +230,15 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 	writeJSONStatus(
 		w,
 		http.StatusCreated,
-		NewDetailResponse(r.Context(), "/plugins/"+plugin.Name, "Plugin", PluginResponse{
-			Plugin: *plugin,
-		}),
+		pluginDetail(r, plugin.Name, *plugin),
 	)
 }
 
 func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	req, ok := decodeJSON[pluginRemoteRequest](w, r)
+	req, ok := decodePluginRemote(w, r)
 	if !ok {
-		return
-	}
-	if req.Remote == "" {
-		writeErrorCode(w, r, "PLG002", "remote is required")
 		return
 	}
 
@@ -258,20 +258,7 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if preferMinimal(r) {
-		writePreferMinimal(w)
-		return
-	}
-
-	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
-	if err != nil {
-		writeDockerError(w, r, err, "plugin", name)
-		return
-	}
-
-	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
-		Plugin: *plugin,
-	}))
+	h.writePluginAfterWrite(w, r, name)
 }
 
 func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request) {
@@ -292,6 +279,12 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.writePluginAfterWrite(w, r, name)
+}
+
+// writePluginAfterWrite answers a plugin write with the plugin as it now is,
+// unless the client asked for a minimal response.
+func (h *Handlers) writePluginAfterWrite(w http.ResponseWriter, r *http.Request, name string) {
 	if preferMinimal(r) {
 		writePreferMinimal(w)
 		return
@@ -303,7 +296,5 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
-		Plugin: *plugin,
-	}))
+	writeJSON(w, pluginDetail(r, name, *plugin))
 }

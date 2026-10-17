@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	json "github.com/goccy/go-json"
-
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
@@ -210,45 +208,9 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	nonce := generateState() // same entropy, different purpose
 	verifier := oauth2.GenerateVerifier()
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_state",
-		Value:    state,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_nonce",
-		Value:    nonce,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_verifier",
-		Value:    verifier,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_redirect",
-		Value:    redirect,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	for i, value := range []string{state, nonce, verifier, redirect} {
+		http.SetCookie(w, p.flowCookie(authFlowCookies[i], value, 300))
+	}
 
 	http.Redirect(w, r, p.oauth2Config.AuthCodeURL(
 		state,
@@ -389,60 +351,33 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
+// authFlowCookies hold the state, nonce, PKCE verifier and redirect of one
+// authorization code flow, in that order.
+var authFlowCookies = []string{
+	"cetacean_auth_state",
+	"cetacean_auth_nonce",
+	"cetacean_auth_verifier",
+	"cetacean_auth_redirect",
+}
+
+func (p *OIDCProvider) flowCookie(name, value string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     p.basePath + "/auth",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
 // clearAuthFlowCookies deletes all temporary cookies used during the OIDC
 // authorization code flow.
 func (p *OIDCProvider) clearAuthFlowCookies(w http.ResponseWriter) {
-	for _, name := range []string{
-		"cetacean_auth_state",
-		"cetacean_auth_nonce",
-		"cetacean_auth_verifier",
-		"cetacean_auth_redirect",
-	} {
-		http.SetCookie(w, &http.Cookie{
-			Name:     name,
-			Path:     p.basePath + "/auth",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		})
+	for _, name := range authFlowCookies {
+		http.SetCookie(w, p.flowCookie(name, "", -1))
 	}
-}
-
-// authenticateQuiet checks session cookie and Bearer token without triggering
-// OIDC redirects. Returns the identity or an error.
-func (p *OIDCProvider) authenticateQuiet(r *http.Request) (*Identity, error) {
-	if id, err := p.session.Get(r); err == nil {
-		return id, nil
-	}
-
-	if token := ExtractBearerToken(r); token != "" {
-		idToken, err := p.verifier.Verify(r.Context(), token)
-		if err != nil {
-			return nil, fmt.Errorf("invalid bearer token: %w", err)
-		}
-		var claims map[string]any
-		if err := idToken.Claims(&claims); err != nil {
-			return nil, fmt.Errorf("failed to parse claims: %w", err)
-		}
-		if err := p.validateAzp(idToken, claims); err != nil {
-			return nil, fmt.Errorf("invalid bearer token: %w", err)
-		}
-		return claimsToIdentity(claims), nil
-	}
-
-	return nil, fmt.Errorf("authentication required")
-}
-
-func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
-	id, err := p.authenticateQuiet(r)
-	if err != nil {
-		writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(id) // best-effort: status already sent
 }
 
 // handleLogout clears the local session and, if the IdP supports it,

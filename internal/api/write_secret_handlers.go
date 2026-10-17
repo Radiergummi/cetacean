@@ -7,7 +7,6 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
@@ -58,12 +57,7 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 				return nil, false
 			}
 
-			sec = cluster.RedactSecret(sec)
-
-			return SecretResponse{
-				Secret:   sec,
-				Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(id)),
-			}, true
+			return h.secretBody(r, sec), true
 		},
 	})
 }
@@ -80,18 +74,14 @@ func (h *Handlers) secretLabelsSpec() getLabelsSpec[swarm.Secret] {
 }
 
 func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, h.secretLabelsSpec())
+	handleGetLabels(w, r, h, h.secretLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Secret]{
-		resource:     "secret",
-		pathKey:      "id",
-		typeName:     "SecretLabels",
-		getter:       h.cache.GetSecret,
-		getLabels:    func(s swarm.Secret) map[string]string { return s.Spec.Labels },
-		update:       h.secretWriter.UpdateSecretLabels,
-		conflictCode: "SEC005",
-		stackMember:  true,
+		getLabelsSpec: h.secretLabelsSpec(),
+		update:        h.secretWriter.UpdateSecretLabels,
+		conflictCode:  "SEC005",
+		stackMember:   true,
 	})
 }

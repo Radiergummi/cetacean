@@ -228,7 +228,7 @@ func ServiceEnv(s swarm.Service, m map[string]any) map[string]any {
 	m["name"] = s.Spec.Name
 	m["image"] = image
 	m["mode"] = mode
-	m["stack"] = s.Spec.Labels["com.docker.stack.namespace"]
+	m["stack"] = s.Spec.Labels[cache.StackLabel]
 	return m
 }
 

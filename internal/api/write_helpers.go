@@ -115,6 +115,20 @@ func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	return v, true
 }
 
+// decodeMergePatch is decodeJSON for a merge-patch body, which answers a
+// decode failure with API008. The caller checks the Content-Type itself.
+func decodeMergePatch[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	var v T
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+		writeErrorCode(w, r, "API008", "invalid JSON")
+		return v, false
+	}
+
+	return v, true
+}
+
 func writeDockerError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -337,6 +351,8 @@ func structMergePatch(
 	errCode string,
 	errMsg string,
 ) (func(current, target any) error, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	if !requireMergePatch(w, r) {
 		return nil, false
 	}
@@ -413,6 +429,8 @@ func parsePatchMutator(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (func(map[string]string) (map[string]string, error), bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	ct := r.Header.Get("Content-Type")
 	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")

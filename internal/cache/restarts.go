@@ -69,12 +69,24 @@ func (rt *RestartTracker) Flapping() map[string]bool {
 	out := make(map[string]bool)
 
 	for id, times := range rt.recent {
-		if len(times) == flappingRestarts && times[0].After(cutoff) {
+		if isFlapping(times, cutoff) {
 			out[id] = true
 		}
 	}
 
 	return out
+}
+
+// IsFlapping reports whether one service is in a restart loop.
+func (rt *RestartTracker) IsFlapping(serviceID string) bool {
+	rt.mu.RLock()
+	defer rt.mu.RUnlock()
+
+	return isFlapping(rt.recent[serviceID], time.Now().Add(-flappingWindow))
+}
+
+func isFlapping(recent []time.Time, cutoff time.Time) bool {
+	return len(recent) == flappingRestarts && recent[0].After(cutoff)
 }
 
 // TrackingSince is the earliest moment the tracker can account for, and so the

@@ -10,11 +10,7 @@ type ShepherdIntegration struct {
 }
 
 func detectShepherd(labels map[string]string) *ShepherdIntegration {
-	var (
-		found     bool
-		enableSet bool
-		enableVal string
-	)
+	var found bool
 
 	integration := &ShepherdIntegration{Name: "shepherd"}
 
@@ -26,11 +22,7 @@ func detectShepherd(labels map[string]string) *ShepherdIntegration {
 
 		found = true
 
-		switch suffix {
-		case "enable":
-			enableSet = true
-			enableVal = v
-		case "auth.config":
+		if suffix == "auth.config" {
 			integration.AuthConfig = v
 		}
 	}
@@ -39,7 +31,7 @@ func detectShepherd(labels map[string]string) *ShepherdIntegration {
 		return nil
 	}
 
-	integration.Enabled = !enableSet || enableVal == "true"
+	integration.Enabled = enabled(labels, "shepherd.")
 
 	return integration
 }

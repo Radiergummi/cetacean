@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -13,7 +14,7 @@ import (
 )
 
 const (
-	serviceLabelKey = "container_label_com_docker_swarm_service_name"
+	serviceLabelKey = prom.SwarmServiceLabel
 	serviceFilter   = `container_label_com_docker_swarm_service_id!=""`
 
 	cpuInstantQuery    = `avg by (` + serviceLabelKey + `)(rate(container_cpu_usage_seconds_total{` + serviceFilter + `}[5m])) * 100`
@@ -47,52 +48,26 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 	tickCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	type queryResult struct {
-		data map[string]float64
-		err  error
-	}
-
-	cpuCh := make(chan queryResult, 1)
-	memCh := make(chan queryResult, 1)
-	cpuP95Ch := make(chan queryResult, 1)
-	memP95Ch := make(chan queryResult, 1)
-
 	lookbackStr := formatPromDuration(sc.cfg.Lookback)
 
-	go func() {
-		data, err := queryByService(tickCtx, sc.query, cpuInstantQuery)
-		cpuCh <- queryResult{data, err}
-	}()
-
-	go func() {
-		data, err := queryByService(tickCtx, sc.query, memoryInstantQuery)
-		memCh <- queryResult{data, err}
-	}()
-
-	go func() {
-		query := fmt.Sprintf(
+	results := runQueries(
+		tickCtx,
+		sc.query,
+		cpuInstantQuery,
+		memoryInstantQuery,
+		fmt.Sprintf(
 			`quantile_over_time(0.95, (avg by (%s)(rate(container_cpu_usage_seconds_total{%s}[5m])))[%s:5m]) * 100`,
 			serviceLabelKey,
 			serviceFilter,
 			lookbackStr,
-		)
-		data, err := queryByService(tickCtx, sc.query, query)
-		cpuP95Ch <- queryResult{data, err}
-	}()
-
-	go func() {
-		query := fmt.Sprintf(
+		),
+		fmt.Sprintf(
 			`quantile_over_time(0.95, (avg by (%s)(container_memory_usage_bytes{%s}))[%s:5m])`,
 			serviceLabelKey, serviceFilter, lookbackStr,
-		)
-		data, err := queryByService(tickCtx, sc.query, query)
-		memP95Ch <- queryResult{data, err}
-	}()
-
-	cpuResult := <-cpuCh
-	memResult := <-memCh
-	cpuP95Result := <-cpuP95Ch
-	memP95Result := <-memP95Ch
+		),
+	)
+	cpuResult, memResult := results[0], results[1]
+	cpuP95Result, memP95Result := results[2], results[3]
 
 	if cpuResult.err != nil {
 		slog.Warn("sizing: CPU query failed", "error", cpuResult.err)
@@ -110,6 +85,9 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 		slog.Warn("sizing: p95 memory query failed", "error", memP95Result.err)
 	}
 
+	cpu, mem := byService(cpuResult.results), byService(memResult.results)
+	cpuP95, memP95 := byService(cpuP95Result.results), byService(memP95Result.results)
+
 	services := sc.cache.ListServices()
 
 	var recs []Recommendation
@@ -119,12 +97,12 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 
 		var instant *serviceMetrics
 		if cpuResult.err == nil && memResult.err == nil {
-			instant = measured(cpuResult.data, memResult.data, spec.name)
+			instant = measured(cpu, mem, spec.name)
 		}
 
 		var p95 *serviceMetrics
 		if cpuP95Result.err == nil && memP95Result.err == nil {
-			p95 = measured(cpuP95Result.data, memP95Result.data, spec.name)
+			p95 = measured(cpuP95, memP95, spec.name)
 		}
 
 		hints := evaluate(spec, instant, p95, sc.cfg)
@@ -180,22 +158,35 @@ func extractSpec(svc swarm.Service) serviceSpec {
 	return s
 }
 
-func queryByService(
-	ctx context.Context,
-	query QueryFunc,
-	promQuery string,
-) (map[string]float64, error) {
-	results, err := query(ctx, promQuery)
-	if err != nil {
-		return nil, err
+// byService keys results by service name; a later series wins a repeated name.
+func byService(results []prom.Result) map[string]float64 {
+	entries := entriesBy(results, serviceLabelKey)
+	out := make(map[string]float64, len(entries))
+	for _, e := range entries {
+		out[e.key] = e.value
 	}
 
-	out := make(map[string]float64, len(results))
-	for _, r := range results {
-		if name := r.Labels[serviceLabelKey]; name != "" {
-			out[name] = r.Value
-		}
-	}
+	return out
+}
 
-	return out, nil
+type queryResult struct {
+	results []prom.Result
+	err     error
+}
+
+// runQueries runs the queries concurrently and returns their outcomes in the
+// order they were given.
+func runQueries(ctx context.Context, query QueryFunc, promQueries ...string) []queryResult {
+	out := make([]queryResult, len(promQueries))
+
+	var wg sync.WaitGroup
+	for i, promQuery := range promQueries {
+		wg.Go(func() {
+			results, err := query(ctx, promQuery)
+			out[i] = queryResult{results, err}
+		})
+	}
+	wg.Wait()
+
+	return out
 }

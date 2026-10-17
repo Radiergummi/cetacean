@@ -139,17 +139,13 @@ func (h *Handlers) nodeLabelsSpec() getLabelsSpec[swarm.Node] {
 }
 
 func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, h.nodeLabelsSpec())
+	handleGetLabels(w, r, h, h.nodeLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Node]{
-		resource:     "node",
-		pathKey:      "id",
-		typeName:     "NodeLabels",
-		getter:       h.cache.GetNode,
-		getLabels:    func(n swarm.Node) map[string]string { return n.Spec.Labels },
-		update:       h.nodeWriter.UpdateNodeLabels,
-		conflictCode: "NOD002",
+		getLabelsSpec: h.nodeLabelsSpec(),
+		update:        h.nodeWriter.UpdateNodeLabels,
+		conflictCode:  "NOD002",
 	})
 }

@@ -62,11 +62,12 @@ func (h *Handlers) HandleNodeDrainImpact(w http.ResponseWriter, r *http.Request)
 
 	identity := auth.IdentityFromContext(r.Context())
 	all := h.cache.ListNodes()
-	nodes := acl.Filter(h.acl, identity, "read", all, nodeResource)
-	services := acl.Filter(
+	nodes := acl.FilterInPlaceNamed(h.acl, identity, "read", all, "node", cluster.NodeACLName)
+	services := acl.FilterInPlaceNamed(
 		h.acl, identity, "read",
 		h.cache.ListServices(),
-		func(s swarm.Service) string { return "service:" + s.Spec.Name },
+		"service",
+		func(s swarm.Service) string { return s.Spec.Name },
 	)
 	tasks := acl.FilterInPlaceNamed(
 		h.acl, identity, "read",

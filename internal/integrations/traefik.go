@@ -63,8 +63,6 @@ const maxTLSDomains = 100
 func detectTraefik(labels map[string]string) *TraefikIntegration {
 	var (
 		found      bool
-		enableSet  bool
-		enableVal  string
 		routerMap  map[string]*TraefikRouter
 		serviceMap map[string]*TraefikService
 		mwMap      map[string]*TraefikMiddleware
@@ -77,12 +75,6 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 		}
 
 		found = true
-
-		if suffix == "enable" {
-			enableSet = true
-			enableVal = v
-			continue
-		}
 
 		httpSuffix, ok := strings.CutPrefix(suffix, "http.")
 		if !ok {
@@ -129,7 +121,7 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 
 	integration := &TraefikIntegration{
 		Name:    "traefik",
-		Enabled: !enableSet || enableVal == "true",
+		Enabled: enabled(labels, "traefik."),
 	}
 
 	integration.Routers = sortedValues(routerMap, func(r TraefikRouter) string { return r.Name })

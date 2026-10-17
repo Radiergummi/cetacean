@@ -17,7 +17,7 @@ import (
 func (h *Handlers) getLocalNodeID() string {
 	h.localNodeMu.Lock()
 	defer h.localNodeMu.Unlock()
-	if h.localNodeDone {
+	if h.localNodeID != "" {
 		return h.localNodeID
 	}
 
@@ -37,7 +37,6 @@ func (h *Handlers) getLocalNodeID() string {
 			h.localNodeRetryAfter = &retryAt
 		} else if id != "" {
 			h.localNodeID = id
-			h.localNodeDone = true
 			h.localNodeRetryAfter = nil
 		}
 	}
@@ -87,7 +86,7 @@ func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	snap := h.cache.Snapshot()
+	nodes := h.cache.NodeTotals()
 	writeCachedJSON(
 		w,
 		r,
@@ -96,11 +95,11 @@ func (h *Handlers) HandleClusterCapacity(w http.ResponseWriter, r *http.Request)
 			"/cluster/capacity",
 			"ClusterCapacity",
 			ClusterCapacityResponse{
-				MaxNodeCPU:    snap.MaxNodeCPU,
-				MaxNodeMemory: snap.MaxNodeMemory,
-				TotalCPU:      snap.TotalCPU,
-				TotalMemory:   snap.TotalMemory,
-				NodeCount:     snap.NodeCount,
+				MaxNodeCPU:    nodes.MaxNodeCPU,
+				MaxNodeMemory: nodes.MaxNodeMemory,
+				TotalCPU:      nodes.TotalCPU,
+				TotalMemory:   nodes.TotalMemory,
+				NodeCount:     nodes.Count,
 			},
 		),
 	)
@@ -118,16 +117,17 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	snap := h.cache.Snapshot()
+	nodes := h.cache.NodeTotals()
 
-	var metrics ClusterMetrics
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(3)
+	// Each query writes only its own locals; the metrics are assembled after Wait.
+	var (
+		wg                   sync.WaitGroup
+		cpuPercent, memUsed  float64
+		cpuOK, memOK         bool
+		diskTotal, diskAvail float64
+	)
 
-	// CPU utilization
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(
 			ctx,
 			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`,
@@ -137,19 +137,11 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if len(results) > 0 {
-			mu.Lock()
-			metrics.CPU = ResourceMetric{
-				Used:    float64(snap.TotalCPU) * results[0].Value / 100,
-				Total:   float64(snap.TotalCPU),
-				Percent: results[0].Value,
-			}
-			mu.Unlock()
+			cpuPercent, cpuOK = results[0].Value, true
 		}
-	}()
+	})
 
-	// Memory utilization
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx,
 			`sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)`)
 		if err != nil {
@@ -157,65 +149,57 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if len(results) > 0 {
-			mu.Lock()
-			total := float64(snap.TotalMemory)
-			used := results[0].Value
-			pct := 0.0
-			if total > 0 {
-				pct = used / total * 100
-			}
-			metrics.Memory = ResourceMetric{Used: used, Total: total, Percent: pct}
-			mu.Unlock()
+			memUsed, memOK = results[0].Value, true
 		}
-	}()
+	})
 
-	// Disk utilization
-	go func() {
-		defer wg.Done()
-		type pair struct{ total, avail float64 }
-		var p pair
-		var pmu sync.Mutex
-		var dwg sync.WaitGroup
-		dwg.Add(2)
-		go func() {
-			defer dwg.Done()
-			r, err := h.promClient.InstantQuery(
-				ctx,
-				`sum(node_filesystem_size_bytes{mountpoint="/"})`,
-			)
-			if err == nil && len(r) > 0 {
-				pmu.Lock()
-				p.total = r[0].Value
-				pmu.Unlock()
-			}
-		}()
-		go func() {
-			defer dwg.Done()
-			r, err := h.promClient.InstantQuery(
-				ctx,
-				`sum(node_filesystem_avail_bytes{mountpoint="/"})`,
-			)
-			if err == nil && len(r) > 0 {
-				pmu.Lock()
-				p.avail = r[0].Value
-				pmu.Unlock()
-			}
-		}()
-		dwg.Wait()
-
-		if p.total > 0 {
-			used := p.total - p.avail
-			mu.Lock()
-			metrics.Disk = ResourceMetric{
-				Used:    used,
-				Total:   p.total,
-				Percent: used / p.total * 100,
-			}
-			mu.Unlock()
+	wg.Go(func() {
+		results, err := h.promClient.InstantQuery(
+			ctx,
+			`sum(node_filesystem_size_bytes{mountpoint="/"})`,
+		)
+		if err == nil && len(results) > 0 {
+			diskTotal = results[0].Value
 		}
-	}()
+	})
+
+	wg.Go(func() {
+		results, err := h.promClient.InstantQuery(
+			ctx,
+			`sum(node_filesystem_avail_bytes{mountpoint="/"})`,
+		)
+		if err == nil && len(results) > 0 {
+			diskAvail = results[0].Value
+		}
+	})
 
 	wg.Wait()
+
+	var metrics ClusterMetrics
+	if cpuOK {
+		metrics.CPU = ResourceMetric{
+			Used:    float64(nodes.TotalCPU) * cpuPercent / 100,
+			Total:   float64(nodes.TotalCPU),
+			Percent: cpuPercent,
+		}
+	}
+	if memOK {
+		total := float64(nodes.TotalMemory)
+		pct := 0.0
+		if total > 0 {
+			pct = memUsed / total * 100
+		}
+		metrics.Memory = ResourceMetric{Used: memUsed, Total: total, Percent: pct}
+	}
+	if diskTotal > 0 {
+		used := diskTotal - diskAvail
+		metrics.Disk = ResourceMetric{
+			Used:    used,
+			Total:   diskTotal,
+			Percent: used / diskTotal * 100,
+		}
+	}
+
 	writeCachedJSON(
 		w,
 		r,
@@ -265,51 +249,44 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	nodeCount := len(h.cache.ListNodes())
+	nodeCount := h.cache.NodeCount()
 
 	var status MonitoringStatus
 	status.PrometheusConfigured = true
 	status.Queryable = queryable
 
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	var anySuccess bool
-	wg.Add(2)
+	var (
+		wg                     sync.WaitGroup
+		nodeExporter, cadvisor *TargetStatus
+	)
 
 	// Detected by node-exporter's own metrics, never by a `job` label: the job
 	// name belongs to whoever wrote the Prometheus config. node_uname_info is
 	// emitted in every deployment, and is what maps a Swarm node to an instance
 	// label -- the question the UI actually depends on.
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `count by (instance) (node_uname_info)`)
 		if err != nil {
 			slog.Warn("monitoring status: node-exporter query failed", "error", err)
 			return
 		}
-		mu.Lock()
-		anySuccess = true
-		status.NodeExporter = &TargetStatus{Targets: len(results), Nodes: nodeCount}
-		mu.Unlock()
-	}()
+		nodeExporter = &TargetStatus{Targets: len(results), Nodes: nodeCount}
+	})
 
 	// Query cadvisor targets
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `up{job="cadvisor"}`)
 		if err != nil {
 			slog.Warn("monitoring status: cadvisor query failed", "error", err)
 			return
 		}
-		mu.Lock()
-		anySuccess = true
-		status.Cadvisor = &TargetStatus{Targets: len(results), Nodes: nodeCount}
-		mu.Unlock()
-	}()
+		cadvisor = &TargetStatus{Targets: len(results), Nodes: nodeCount}
+	})
 
 	wg.Wait()
+	status.NodeExporter, status.Cadvisor = nodeExporter, cadvisor
 
-	if anySuccess {
+	if nodeExporter != nil || cadvisor != nil {
 		status.PrometheusReachable = true
 	} else {
 		// Fallback connectivity check
@@ -345,12 +322,14 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerAddr := ""
-	for _, n := range h.cache.ListNodes() {
+	h.cache.EachNode(func(n swarm.Node) bool {
 		if n.ManagerStatus != nil && n.ManagerStatus.Leader {
 			managerAddr = n.ManagerStatus.Addr
-			break
+			return false
 		}
-	}
+
+		return true
+	})
 
 	h.setAllow(w, r, "swarm", "cluster")
 

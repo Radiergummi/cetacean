@@ -52,6 +52,19 @@ type Stack struct {
 	Volumes  []string `json:"volumes"`
 }
 
+// clone copies the ID lists, which the cache mutates in place. An empty list
+// stays non-nil, so it marshals as [] rather than null.
+func (s Stack) clone() Stack {
+	return Stack{
+		Name:     s.Name,
+		Services: append([]string{}, s.Services...),
+		Configs:  append([]string{}, s.Configs...),
+		Secrets:  append([]string{}, s.Secrets...),
+		Networks: append([]string{}, s.Networks...),
+		Volumes:  append([]string{}, s.Volumes...),
+	}
+}
+
 type StackDetail struct {
 	Name     string            `json:"name"`
 	Services []swarm.Service   `json:"services"`
@@ -113,6 +126,11 @@ type ClusterSnapshot struct {
 // FlappingServices returns the services currently in a restart loop.
 func (c *Cache) FlappingServices() map[string]bool {
 	return c.restarts.Flapping()
+}
+
+// IsFlapping reports whether one service is in a restart loop.
+func (c *Cache) IsFlapping(serviceID string) bool {
+	return c.restarts.IsFlapping(serviceID)
 }
 
 type OnChangeFunc func(Event)
@@ -570,8 +588,7 @@ func (c *Cache) ListServices() []swarm.Service {
 	// out is this caller's own copy, so the sort — the expensive half of the
 	// call on a large cluster — does not belong under the lock the watcher's
 	// writers are contending for.
-	slices.SortFunc(out, func(a, b swarm.Service) int { return cmp.Compare(a.ID, b.ID) })
-	return out
+	return sortedByIndex(out, func(a, b int) int { return cmp.Compare(out[a].ID, out[b].ID) })
 }
 
 // --- Tasks ---
@@ -701,8 +718,7 @@ func (c *Cache) ListTasks() []swarm.Task {
 	}
 	c.mu.RUnlock()
 
-	slices.SortFunc(out, compareTasks)
-	return out
+	return sortedByIndex(out, func(a, b int) int { return compareTasks(out[a], out[b]) })
 }
 
 // --- Configs ---
@@ -770,14 +786,7 @@ func (c *Cache) GetStack(name string) (Stack, bool) {
 	if !ok {
 		return Stack{}, false
 	}
-	return Stack{
-		Name:     s.Name,
-		Services: append([]string{}, s.Services...),
-		Configs:  append([]string{}, s.Configs...),
-		Secrets:  append([]string{}, s.Secrets...),
-		Networks: append([]string{}, s.Networks...),
-		Volumes:  append([]string{}, s.Volumes...),
-	}, true
+	return s.clone(), true
 }
 
 func (c *Cache) ListStacks() []Stack {
@@ -785,14 +794,7 @@ func (c *Cache) ListStacks() []Stack {
 	defer c.mu.RUnlock()
 	out := make([]Stack, 0, len(c.stacks))
 	for _, s := range c.stacks {
-		out = append(out, Stack{
-			Name:     s.Name,
-			Services: append([]string{}, s.Services...),
-			Configs:  append([]string{}, s.Configs...),
-			Secrets:  append([]string{}, s.Secrets...),
-			Networks: append([]string{}, s.Networks...),
-			Volumes:  append([]string{}, s.Volumes...),
-		})
+		out = append(out, s.clone())
 	}
 	sortByName(out, func(s Stack) string { return s.Name })
 	return out
@@ -876,7 +878,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 			// Desired replicas. A job has none: its tasks run to completion, and
 			// counting one would call the stack degraded once the job is done.
 			replicas := 1
-			if isJobService(svc) {
+			if IsJobService(svc) {
 				replicas = 0
 			} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
@@ -1005,7 +1007,7 @@ func (c *Cache) RunningTaskCounts() map[string]int {
 // current run; false for a service that is not a job. A re-run bumps JobIteration
 // and leaves the earlier run's tasks behind, so those do not count.
 func CountsAsJobCompletion(svc swarm.Service, task swarm.Task) bool {
-	if !isJobService(svc) || task.Status.State != swarm.TaskStateComplete {
+	if !IsJobService(svc) || task.Status.State != swarm.TaskStateComplete {
 		return false
 	}
 
@@ -1016,7 +1018,8 @@ func CountsAsJobCompletion(svc swarm.Service, task swarm.Task) bool {
 	return task.JobIteration.Index == svc.JobStatus.JobIteration.Index
 }
 
-func isJobService(svc swarm.Service) bool {
+// IsJobService reports whether a service runs to completion rather than forever.
+func IsJobService(svc swarm.Service) bool {
 	return svc.Spec.Mode.ReplicatedJob != nil || svc.Spec.Mode.GlobalJob != nil
 }
 
@@ -1108,43 +1111,16 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	tasksByState := make(map[string]int)
-	for _, t := range c.tasks {
-		tasksByState[string(t.Status.State)]++
-	}
-
-	var nodesReady, nodesDown, nodesDraining int
-	var totalNanoCPUs int64
-	var totalMemory int64
-	var maxNanoCPUs int64
-	var maxMemory int64
-	for _, n := range c.nodes.items {
-		switch n.Status.State {
-		case swarm.NodeStateReady:
-			nodesReady++
-		case swarm.NodeStateDown:
-			nodesDown++
-		default:
-			// Unknown/disconnected nodes are not counted separately.
-		}
-		if n.Spec.Availability == swarm.NodeAvailabilityDrain {
-			nodesDraining++
-		}
-		totalNanoCPUs += n.Description.Resources.NanoCPUs
-		totalMemory += n.Description.Resources.MemoryBytes
-		if n.Description.Resources.NanoCPUs > maxNanoCPUs {
-			maxNanoCPUs = n.Description.Resources.NanoCPUs
-		}
-		if n.Description.Resources.MemoryBytes > maxMemory {
-			maxMemory = n.Description.Resources.MemoryBytes
-		}
-	}
+	nodes := c.nodeTotalsLocked()
 
 	// Counted once and returned in the snapshot: BuildClusterStatus needs the
 	// same map to name the degraded services.
+	tasksByState := make(map[string]int)
 	runningByService := make(map[string]int, len(c.services))
 	completedJobsByService := make(map[string]int)
 	for _, t := range c.tasks {
+		tasksByState[string(t.Status.State)]++
+
 		if CountsAsRunningReplica(t) {
 			runningByService[t.ServiceID]++
 		}
@@ -1181,28 +1157,84 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	}
 
 	return ClusterSnapshot{
-		NodeCount:         len(c.nodes.items),
+		NodeCount:         nodes.Count,
 		ServiceCount:      len(c.services),
 		TaskCount:         len(c.tasks),
 		StackCount:        len(c.stacks),
 		TasksByState:      tasksByState,
-		NodesReady:        nodesReady,
-		NodesDown:         nodesDown,
-		NodesDraining:     nodesDraining,
-		TotalCPU:          int(totalNanoCPUs / 1e9),
-		TotalMemory:       totalMemory,
+		NodesReady:        nodes.Ready,
+		NodesDown:         nodes.Down,
+		NodesDraining:     nodes.Draining,
+		TotalCPU:          nodes.TotalCPU,
+		TotalMemory:       nodes.TotalMemory,
 		ServicesConverged: servicesConverged,
 		ServicesDegraded:  servicesDegraded,
 		ReservedCPU:       reservedCPU,
 		ReservedMemory:    reservedMemory,
-		MaxNodeCPU:        int(maxNanoCPUs / 1e9),
-		MaxNodeMemory:     maxMemory,
+		MaxNodeCPU:        nodes.MaxNodeCPU,
+		MaxNodeMemory:     nodes.MaxNodeMemory,
 		LastSync:          c.lastSync,
 		RunningByService:  runningByService,
 		Flapping:          flapping,
 
 		CompletedJobsByService: completedJobsByService,
 	}
+}
+
+// NodeTotals is the node half of a ClusterSnapshot, for a caller needing
+// nothing else; CPUs are whole cores.
+type NodeTotals struct {
+	Count         int
+	Ready         int
+	Down          int
+	Draining      int
+	TotalCPU      int
+	TotalMemory   int64
+	MaxNodeCPU    int
+	MaxNodeMemory int64
+}
+
+func (c *Cache) NodeTotals() NodeTotals {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.nodeTotalsLocked()
+}
+
+// NodeCount is len(ListNodes()) without the copy.
+func (c *Cache) NodeCount() int { return c.nodes.Len() }
+
+// nodeTotalsLocked expects c.mu held for reading.
+func (c *Cache) nodeTotalsLocked() NodeTotals {
+	var totals NodeTotals
+	var totalNanoCPUs, maxNanoCPUs int64
+	for _, n := range c.nodes.items {
+		switch n.Status.State {
+		case swarm.NodeStateReady:
+			totals.Ready++
+		case swarm.NodeStateDown:
+			totals.Down++
+		default:
+			// Unknown/disconnected nodes are not counted separately.
+		}
+		if n.Spec.Availability == swarm.NodeAvailabilityDrain {
+			totals.Draining++
+		}
+		totalNanoCPUs += n.Description.Resources.NanoCPUs
+		totals.TotalMemory += n.Description.Resources.MemoryBytes
+		if n.Description.Resources.NanoCPUs > maxNanoCPUs {
+			maxNanoCPUs = n.Description.Resources.NanoCPUs
+		}
+		if n.Description.Resources.MemoryBytes > totals.MaxNodeMemory {
+			totals.MaxNodeMemory = n.Description.Resources.MemoryBytes
+		}
+	}
+
+	totals.Count = len(c.nodes.items)
+	totals.TotalCPU = int(totalNanoCPUs / 1e9)
+	totals.MaxNodeCPU = int(maxNanoCPUs / 1e9)
+
+	return totals
 }
 
 // --- Bulk replace (for full sync) ---

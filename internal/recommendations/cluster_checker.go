@@ -31,8 +31,6 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 	for _, svc := range cc.cache.ListServices() {
 		if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil &&
 			*svc.Spec.Mode.Replicated.Replicas == 1 {
-			suggested := new(float64)
-			*suggested = 2.0
 			recs = append(recs, Recommendation{
 				Category:   CategorySingleReplica,
 				Severity:   SeverityInfo,
@@ -40,8 +38,8 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 				TargetID:   svc.ID,
 				TargetName: svc.Spec.Name,
 				Message:    "Service has only 1 replica (no redundancy)",
-				Suggested:  suggested,
-				FixAction:  func() *string { s := "PUT /services/{id}/scale"; return &s }(),
+				Suggested:  new(2.0),
+				FixAction:  new("PUT /services/{id}/scale"),
 			})
 		}
 	}
@@ -67,7 +65,7 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 				TargetID:   node.ID,
 				TargetName: node.Description.Hostname,
 				Message:    "Manager node has active availability (may run workloads)",
-				FixAction:  func() *string { s := "PUT /nodes/{id}/availability"; return &s }(),
+				FixAction:  new("PUT /nodes/{id}/availability"),
 			})
 		}
 	}

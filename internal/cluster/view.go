@@ -63,7 +63,7 @@ func RowsForServices(
 			ID:      svc.ID,
 			Name:    svc.Spec.Name,
 			Type:    "service",
-			Stack:   svc.Spec.Labels["com.docker.stack.namespace"],
+			Stack:   svc.Spec.Labels[StackNamespaceLabel],
 			State:   DeriveServiceState(svc, running[svc.ID], completed[svc.ID], flapping[svc.ID]),
 			Detail:  image,
 			Desired: ReplicaCount(svc),
@@ -71,15 +71,15 @@ func RowsForServices(
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
 
-// sortRows puts a list into a stable order. Callers build rows by ranging over
+// SortRows puts a list into a stable order. Callers build rows by ranging over
 // cache slices whose order is not guaranteed, and the result is marshalled into
 // an MCP result a client may cache by ETag.
-func sortRows(rows []Row) {
+func SortRows(rows []Row) {
 	slices.SortFunc(rows, func(a, b Row) int {
 		if c := strings.Compare(a.Name, b.Name); c != 0 {
 			return c
@@ -104,7 +104,7 @@ func RowsForNodes(nodes []swarm.Node) []Row {
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -139,7 +139,7 @@ func RowsForTasks(tasks []EnrichedTask, services []swarm.Service) []Row {
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -154,11 +154,11 @@ func RowsForConfigs(configs []swarm.Config) []Row {
 			ID:    cfg.ID,
 			Name:  cfg.Spec.Name,
 			Type:  "config",
-			Stack: cfg.Spec.Labels["com.docker.stack.namespace"],
+			Stack: cfg.Spec.Labels[StackNamespaceLabel],
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -173,11 +173,11 @@ func RowsForSecrets(secrets []swarm.Secret) []Row {
 			ID:    sec.ID,
 			Name:  sec.Spec.Name,
 			Type:  "secret",
-			Stack: sec.Spec.Labels["com.docker.stack.namespace"],
+			Stack: sec.Spec.Labels[StackNamespaceLabel],
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -191,12 +191,12 @@ func RowsForNetworks(networks []network.Summary) []Row {
 			ID:     net.ID,
 			Name:   net.Name,
 			Type:   "network",
-			Stack:  net.Labels["com.docker.stack.namespace"],
+			Stack:  net.Labels[StackNamespaceLabel],
 			Detail: net.Driver,
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -211,12 +211,12 @@ func RowsForVolumes(volumes []volume.Volume) []Row {
 			ID:     vol.Name,
 			Name:   vol.Name,
 			Type:   "volume",
-			Stack:  vol.Labels["com.docker.stack.namespace"],
+			Stack:  vol.Labels[StackNamespaceLabel],
 			Detail: vol.Driver,
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -236,7 +236,7 @@ func RowsForStacks(stacks []cache.Stack) []Row {
 		})
 	}
 
-	sortRows(rows)
+	SortRows(rows)
 
 	return rows
 }
@@ -504,7 +504,7 @@ func serviceRelated(svc swarm.Service, networks []network.Summary) []Related {
 }
 
 // sortRelated puts a Digest's cross-references into a stable order — the same
-// rule sortRows applies to a Row list, and for the same reason: every caller
+// rule SortRows applies to a Row list, and for the same reason: every caller
 // builds this from a map or an unordered slice, and the result is marshalled
 // into an MCP result a client may cache by ETag.
 func sortRelated(related []Related) {

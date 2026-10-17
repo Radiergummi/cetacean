@@ -70,90 +70,67 @@ func resolveBool(flag *bool, envKey string, file *bool, def bool) (bool, error) 
 	return def, nil
 }
 
+// pick returns the first source set in precedence order: flag > env > file.
+// A flag or file value comes back typed in v; an env value comes back as raw
+// text for the caller to parse. An empty source means none was set.
+func pick[T any](flag *T, envKey string, file *T) (v *T, raw, source string) {
+	switch envVal := os.Getenv(envKey); {
+	case flag != nil:
+		return flag, "", "flag"
+	case envVal != "":
+		return nil, envVal, envKey
+	case file != nil:
+		return file, "", "config file"
+	}
+	return nil, "", ""
+}
+
 // resolveDuration returns the first set value in precedence order:
-// flag > env > file > hardcoded default. Returns an error if any
-// explicitly set value is unparseable or non-positive.
+// flag > env > file > hardcoded default. Returns an error if any explicitly
+// set value is unparseable, negative, or zero when allowZero is false — for
+// settings where zero means "no default" or "no ceiling", it is not a mistake.
 func resolveDuration(
 	flag *string,
 	envKey string,
 	file *string,
 	def time.Duration,
+	allowZero bool,
 ) (time.Duration, error) {
-	// Check sources in precedence order; parse the first one found.
-	var raw string
-	var source string
-	switch envVal := os.Getenv(envKey); {
-	case flag != nil:
-		raw, source = *flag, "flag"
-	case envVal != "":
-		raw, source = envVal, envKey
-	case file != nil:
-		raw, source = *file, "config file"
-	default:
+	v, raw, source := pick(flag, envKey, file)
+	switch {
+	case source == "":
 		return def, nil
+	case v != nil:
+		raw = *v
 	}
 
 	d, err := time.ParseDuration(raw)
 	if err != nil {
 		return 0, fmt.Errorf("invalid duration from %s %q: %w", source, raw, err)
 	}
-	if d <= 0 {
+	if allowZero && d < 0 {
+		return 0, fmt.Errorf("invalid duration from %s %q: must not be negative", source, raw)
+	}
+	if !allowZero && d <= 0 {
 		return 0, fmt.Errorf("invalid duration from %s %q: must be positive", source, raw)
 	}
 	return d, nil
 }
 
-// resolveNonNegativeDuration is resolveDuration for settings where zero is a
-// meaning rather than a mistake — "no default", "no ceiling" — and only a
-// negative value is wrong.
-func resolveNonNegativeDuration(
-	flag *string,
-	envKey string,
-	file *string,
-	def time.Duration,
-) (time.Duration, error) {
-	var raw string
-	var source string
-	switch envVal := os.Getenv(envKey); {
-	case flag != nil:
-		raw, source = *flag, "flag"
-	case envVal != "":
-		raw, source = envVal, envKey
-	case file != nil:
-		raw, source = *file, "config file"
-	default:
-		return def, nil
-	}
-
-	d, err := time.ParseDuration(raw)
-	if err != nil {
-		return 0, fmt.Errorf("invalid duration from %s %q: %w", source, raw, err)
-	}
-	if d < 0 {
-		return 0, fmt.Errorf("invalid duration from %s %q: must not be negative", source, raw)
-	}
-	return d, nil
-}
-
 func resolveInt(flag *int, envKey string, file *int, def, min, max int) (int, error) {
-	var raw string
-	var source string
-	switch envVal := os.Getenv(envKey); {
-	case flag != nil:
-		return checkIntRange(*flag, min, max, "flag")
-	case envVal != "":
-		raw, source = envVal, envKey
-	case file != nil:
-		return checkIntRange(*file, min, max, "config file")
-	default:
+	v, raw, source := pick(flag, envKey, file)
+	switch {
+	case source == "":
 		return def, nil
+	case v != nil:
+		return checkIntRange(*v, min, max, source)
 	}
 
-	v, err := strconv.Atoi(raw)
+	n, err := strconv.Atoi(raw)
 	if err != nil {
 		return 0, fmt.Errorf("invalid integer from %s %q: %w", source, raw, err)
 	}
-	return checkIntRange(v, min, max, source)
+	return checkIntRange(n, min, max, source)
 }
 
 func checkIntRange(v, min, max int, source string) (int, error) {
@@ -172,24 +149,19 @@ func resolveFloat(
 	file *float64,
 	def, min, max float64,
 ) (float64, error) {
-	var raw string
-	var source string
-	switch envVal := os.Getenv(envKey); {
-	case flag != nil:
-		return checkFloatRange(*flag, min, max, "flag")
-	case envVal != "":
-		raw, source = envVal, envKey
-	case file != nil:
-		return checkFloatRange(*file, min, max, "config file")
-	default:
+	v, raw, source := pick(flag, envKey, file)
+	switch {
+	case source == "":
 		return def, nil
+	case v != nil:
+		return checkFloatRange(*v, min, max, source)
 	}
 
-	v, err := strconv.ParseFloat(raw, 64)
+	f, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid float from %s %q: %w", source, raw, err)
 	}
-	return checkFloatRange(v, min, max, source)
+	return checkFloatRange(f, min, max, source)
 }
 
 // resolveStringSlice returns the first set value split by commas in

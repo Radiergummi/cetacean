@@ -97,23 +97,13 @@ func serviceIdentAs(t *testing.T, proc *sut.Process, persona readPersona, name s
 		t.Fatalf("GET /services as %s: status = %d", persona.name, resp.StatusCode)
 	}
 
-	var body struct {
-		Items []struct {
-			ID   string `json:"ID"`
-			Spec struct {
-				Name string `json:"Name"`
-			} `json:"Spec"`
-		} `json:"items"`
-	}
-
+	var body serviceList
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode /services: %v", err)
 	}
 
-	for _, item := range body.Items {
-		if item.Spec.Name == name {
-			return item.ID
-		}
+	if id, ok := body.idOf(name); ok {
+		return id
 	}
 
 	t.Fatalf("service %q is not in /services as %s", name, persona.name)

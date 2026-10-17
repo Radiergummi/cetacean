@@ -98,7 +98,7 @@ func TestDCRRejectsSymmetricAuth(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", rec.Code)
 	}
-	var errResp dcrErrorResponse
+	var errResp oauthErrorResponse
 	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestDCRRejectsUnsupportedGrantType(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var errResp dcrErrorResponse
+	var errResp oauthErrorResponse
 	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestDCRRejectsUnsupportedResponseType(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var errResp dcrErrorResponse
+	var errResp oauthErrorResponse
 	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestDCRRejectsOversizedMetadata(t *testing.T) {
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 			}
-			var errResp dcrErrorResponse
+			var errResp oauthErrorResponse
 			if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
 				t.Fatalf("decode: %v", err)
 			}

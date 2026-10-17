@@ -30,21 +30,9 @@ func NewClient(baseURL string) *Client {
 }
 
 func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result, error) {
-	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	raw, err := pc.InstantQueryRaw(ctx, query)
 	if err != nil {
-		return nil, invalidRequest(err)
-	}
-
-	resp, err := pc.client.Do(req)
-	if err != nil {
-		return nil, unreachable(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, statusError(resp.StatusCode, preview)
+		return nil, err
 	}
 
 	var body struct {
@@ -59,7 +47,7 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 			} `json:"result"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(&body); err != nil {
+	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, &redactedError{message: "prometheus response parse error", cause: err}
 	}
 	if body.Status != "success" {
@@ -148,30 +136,20 @@ func (pc *Client) RangeQueryRaw(
 	ctx context.Context,
 	query, start, end, step string,
 ) ([]byte, error) {
-	u := pc.baseURL + "/api/v1/query_range?query=" + url.QueryEscape(query) +
-		"&start=" + url.QueryEscape(start) + "&end=" + url.QueryEscape(end) +
-		"&step=" + url.QueryEscape(step)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, invalidRequest(err)
-	}
-	resp, err := pc.client.Do(req)
-	if err != nil {
-		return nil, unreachable(err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
-	if err != nil {
-		return nil, unreachable(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, statusError(resp.StatusCode, body)
-	}
-	return body, nil
+	return pc.get(ctx, "/api/v1/query_range", url.Values{
+		"query": {query},
+		"start": {start},
+		"end":   {end},
+		"step":  {step},
+	})
 }
 
 func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, error) {
-	u := pc.baseURL + "/api/v1/query?query=" + url.QueryEscape(query)
+	return pc.get(ctx, "/api/v1/query", url.Values{"query": {query}})
+}
+
+func (pc *Client) get(ctx context.Context, path string, params url.Values) ([]byte, error) {
+	u := pc.baseURL + path + "?" + params.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, invalidRequest(err)
@@ -181,7 +159,7 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 		return nil, unreachable(err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, unreachable(err)
 	}

@@ -366,87 +366,28 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 
 	var data cache.FullSyncData
 	var mu sync.Mutex
-	ch := make(chan result, 7)
+	fetchers := []struct {
+		name string
+		fn   func() error
+	}{
+		{"nodes", fetchList(ctx, &mu, c.ListNodes, &data.Nodes, &data.HasNodes)},
+		{"services", fetchList(ctx, &mu, c.ListServices, &data.Services, &data.HasServices)},
+		{"tasks", fetchList(ctx, &mu, c.ListTasks, &data.Tasks, &data.HasTasks)},
+		{"configs", fetchList(ctx, &mu, c.ListConfigs, &data.Configs, &data.HasConfigs)},
+		{"secrets", fetchList(ctx, &mu, c.ListSecrets, &data.Secrets, &data.HasSecrets)},
+		{"networks", fetchList(ctx, &mu, c.ListNetworks, &data.Networks, &data.HasNetworks)},
+		{"volumes", fetchList(ctx, &mu, c.ListVolumes, &data.Volumes, &data.HasVolumes)},
+	}
 
-	fetch := func(name string, fn func() error) {
+	ch := make(chan result, len(fetchers))
+	for _, f := range fetchers {
 		go func() {
-			ch <- result{name, fn()}
+			ch <- result{f.name, f.fn()}
 		}()
 	}
 
-	fetch("nodes", func() error {
-		nodes, err := c.ListNodes(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Nodes, data.HasNodes = nodes, true
-		mu.Unlock()
-		return nil
-	})
-	fetch("services", func() error {
-		services, err := c.ListServices(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Services, data.HasServices = services, true
-		mu.Unlock()
-		return nil
-	})
-	fetch("tasks", func() error {
-		tasks, err := c.ListTasks(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Tasks, data.HasTasks = tasks, true
-		mu.Unlock()
-		return nil
-	})
-	fetch("configs", func() error {
-		configs, err := c.ListConfigs(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Configs, data.HasConfigs = configs, true
-		mu.Unlock()
-		return nil
-	})
-	fetch("secrets", func() error {
-		secrets, err := c.ListSecrets(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Secrets, data.HasSecrets = secrets, true
-		mu.Unlock()
-		return nil
-	})
-	fetch("networks", func() error {
-		networks, err := c.ListNetworks(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Networks, data.HasNetworks = networks, true
-		mu.Unlock()
-		return nil
-	})
-	fetch("volumes", func() error {
-		volumes, err := c.ListVolumes(ctx)
-		if err != nil {
-			return err
-		}
-		mu.Lock()
-		data.Volumes, data.HasVolumes = volumes, true
-		mu.Unlock()
-		return nil
-	})
-
 	failed := make(map[string]bool)
-	for range 7 {
+	for range fetchers {
 		r := <-ch
 		if r.err != nil {
 			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
@@ -455,6 +396,25 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	}
 
 	return data, fullSyncError(failed)
+}
+
+func fetchList[T any](
+	ctx context.Context,
+	mu *sync.Mutex,
+	list func(context.Context) ([]T, error),
+	dst *[]T,
+	has *bool,
+) func() error {
+	return func() error {
+		items, err := list(ctx)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		*dst, *has = items, true
+		mu.Unlock()
+		return nil
+	}
 }
 
 // Inspect fetches a single resource by its event type and ID. Returns the
@@ -530,27 +490,13 @@ func (c *Client) ScaleService(
 	id string,
 	replicas uint64,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.Mode.Replicated == nil {
-		return swarm.Service{}, errdefs.InvalidParameter(
-			fmt.Errorf("cannot scale a global-mode service"),
-		)
-	}
-	svc.Spec.Mode.Replicated.Replicas = &replicas
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		if spec.Mode.Replicated == nil {
+			return errdefs.InvalidParameter(fmt.Errorf("cannot scale a global-mode service"))
+		}
+		spec.Mode.Replicated.Replicas = &replicas
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceImage(
@@ -558,69 +504,33 @@ func (c *Client) UpdateServiceImage(
 	id string,
 	image string,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		return swarm.Service{}, errdefs.InvalidParameter(
-			fmt.Errorf("service has no container spec"),
-		)
-	}
-	svc.Spec.TaskTemplate.ContainerSpec.Image = image
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
+		cs.Image = image
+		return nil
+	})
 }
 
 func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.PreviousSpec == nil {
-		return swarm.Service{}, errdefs.InvalidParameter(
-			fmt.Errorf("service has no previous spec to rollback to"),
-		)
-	}
-	_, err = c.docker.ServiceUpdate(
+	return c.updateService(
 		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
+		id,
 		swarm.ServiceUpdateOptions{Rollback: "previous"},
+		func(svc *swarm.Service) error {
+			if svc.PreviousSpec == nil {
+				return errdefs.InvalidParameter(
+					fmt.Errorf("service has no previous spec to rollback to"),
+				)
+			}
+			return nil
+		},
 	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
 }
 
 func (c *Client) RestartService(ctx context.Context, id string) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.TaskTemplate.ForceUpdate++
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.TaskTemplate.ForceUpdate++
+		return nil
+	})
 }
 
 func (c *Client) UpdateNodeAvailability(
@@ -628,21 +538,10 @@ func (c *Client) UpdateNodeAvailability(
 	id string,
 	availability swarm.NodeAvailability,
 ) (swarm.Node, error) {
-	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
-	if err != nil {
-		return swarm.Node{}, err
-	}
-	node.Spec.Availability = availability
-	err = c.docker.NodeUpdate(
-		ctx,
-		node.ID,
-		writeVersion(ctx, "node", node.ID, node.Version),
-		node.Spec,
-	)
-	if err != nil {
-		return swarm.Node{}, err
-	}
-	return c.InspectNode(ctx, id)
+	return c.updateNodeSpec(ctx, id, func(spec *swarm.NodeSpec) error {
+		spec.Availability = availability
+		return nil
+	})
 }
 
 func (c *Client) UpdateNodeRole(
@@ -650,11 +549,26 @@ func (c *Client) UpdateNodeRole(
 	id string,
 	role swarm.NodeRole,
 ) (swarm.Node, error) {
+	return c.updateNodeSpec(ctx, id, func(spec *swarm.NodeSpec) error {
+		spec.Role = role
+		return nil
+	})
+}
+
+// updateNodeSpec is UpdateServiceSpec for nodes: mutate the live spec, write
+// it back pinned to the version it was read at, and return the node re-read.
+func (c *Client) updateNodeSpec(
+	ctx context.Context,
+	id string,
+	mutate func(spec *swarm.NodeSpec) error,
+) (swarm.Node, error) {
 	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
 	if err != nil {
 		return swarm.Node{}, err
 	}
-	node.Spec.Role = role
+	if err := mutate(&node.Spec); err != nil {
+		return swarm.Node{}, err
+	}
 	err = c.docker.NodeUpdate(
 		ctx,
 		node.ID,
@@ -782,7 +696,7 @@ type MapMutator = func(current map[string]string) (map[string]string, error)
 func envSliceToMap(env []string) map[string]string {
 	out := make(map[string]string, len(env))
 	for _, e := range env {
-		k, v, ok := splitEnvEntry(e)
+		k, v, ok := strings.Cut(e, "=")
 		if !ok {
 			continue
 		}
@@ -791,51 +705,24 @@ func envSliceToMap(env []string) map[string]string {
 	return out
 }
 
-func splitEnvEntry(s string) (string, string, bool) {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '=' {
-			return s[:i], s[i+1:], true
-		}
-	}
-	return "", "", false
-}
-
 func (c *Client) UpdateServiceEnv(
 	ctx context.Context,
 	id string,
 	mutate MapMutator,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		return swarm.Service{}, errdefs.InvalidParameter(
-			fmt.Errorf("service has no container spec"),
-		)
-	}
-	current := envSliceToMap(svc.Spec.TaskTemplate.ContainerSpec.Env)
-	updated, err := mutate(current)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	envSlice := make([]string, 0, len(updated))
-	for k, v := range updated {
-		envSlice = append(envSlice, k+"="+v)
-	}
-	sort.Strings(envSlice)
-	svc.Spec.TaskTemplate.ContainerSpec.Env = envSlice
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
+		updated, err := mutate(envSliceToMap(cs.Env))
+		if err != nil {
+			return err
+		}
+		envSlice := make([]string, 0, len(updated))
+		for k, v := range updated {
+			envSlice = append(envSlice, k+"="+v)
+		}
+		sort.Strings(envSlice)
+		cs.Env = envSlice
+		return nil
+	})
 }
 
 func (c *Client) UpdateNodeLabels(
@@ -843,25 +730,14 @@ func (c *Client) UpdateNodeLabels(
 	id string,
 	mutate MapMutator,
 ) (swarm.Node, error) {
-	node, _, err := c.docker.NodeInspectWithRaw(ctx, id)
-	if err != nil {
-		return swarm.Node{}, err
-	}
-	updated, err := mutate(node.Spec.Labels)
-	if err != nil {
-		return swarm.Node{}, err
-	}
-	node.Spec.Labels = updated
-	err = c.docker.NodeUpdate(
-		ctx,
-		node.ID,
-		writeVersion(ctx, "node", node.ID, node.Version),
-		node.Spec,
-	)
-	if err != nil {
-		return swarm.Node{}, err
-	}
-	return c.InspectNode(ctx, id)
+	return c.updateNodeSpec(ctx, id, func(spec *swarm.NodeSpec) error {
+		updated, err := mutate(spec.Labels)
+		if err != nil {
+			return err
+		}
+		spec.Labels = updated
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceLabels(
@@ -869,26 +745,14 @@ func (c *Client) UpdateServiceLabels(
 	id string,
 	mutate MapMutator,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	updated, err := mutate(svc.Spec.Labels)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.Labels = updated
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		updated, err := mutate(spec.Labels)
+		if err != nil {
+			return err
+		}
+		spec.Labels = updated
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceHealthcheck(
@@ -896,27 +760,10 @@ func (c *Client) UpdateServiceHealthcheck(
 	id string,
 	hc *container.HealthConfig,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		return swarm.Service{}, errdefs.InvalidParameter(
-			fmt.Errorf("service has no container spec"),
-		)
-	}
-	svc.Spec.TaskTemplate.ContainerSpec.Healthcheck = hc
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
+		cs.Healthcheck = hc
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceEndpointMode(
@@ -924,25 +771,13 @@ func (c *Client) UpdateServiceEndpointMode(
 	id string,
 	mode swarm.ResolutionMode,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.EndpointSpec == nil {
-		svc.Spec.EndpointSpec = &swarm.EndpointSpec{}
-	}
-	svc.Spec.EndpointSpec.Mode = mode
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		if spec.EndpointSpec == nil {
+			spec.EndpointSpec = &swarm.EndpointSpec{}
+		}
+		spec.EndpointSpec.Mode = mode
+		return nil
+	})
 }
 
 // UpdateServiceSpec applies mutate to the service spec as the engine currently
@@ -954,12 +789,23 @@ func (c *Client) UpdateServiceSpec(
 	id string,
 	mutate func(spec *swarm.ServiceSpec) error,
 ) (swarm.Service, error) {
+	return c.updateService(ctx, id, swarm.ServiceUpdateOptions{}, func(svc *swarm.Service) error {
+		return mutate(&svc.Spec)
+	})
+}
+
+func (c *Client) updateService(
+	ctx context.Context,
+	id string,
+	opts swarm.ServiceUpdateOptions,
+	mutate func(svc *swarm.Service) error,
+) (swarm.Service, error) {
 	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
 	if err != nil {
 		return swarm.Service{}, err
 	}
 
-	if err := mutate(&svc.Spec); err != nil {
+	if err := mutate(&svc); err != nil {
 		return swarm.Service{}, err
 	}
 
@@ -968,7 +814,7 @@ func (c *Client) UpdateServiceSpec(
 		svc.ID,
 		writeVersion(ctx, "service", svc.ID, svc.Version),
 		svc.Spec,
-		swarm.ServiceUpdateOptions{},
+		opts,
 	); err != nil {
 		return swarm.Service{}, err
 	}
@@ -976,27 +822,39 @@ func (c *Client) UpdateServiceSpec(
 	return c.InspectService(ctx, id)
 }
 
+// updateContainerSpec refuses a service without a container spec rather than
+// creating one: these writers edit an existing container, they do not add one.
+func (c *Client) updateContainerSpec(
+	ctx context.Context,
+	id string,
+	mutate func(cs *swarm.ContainerSpec) error,
+) (swarm.Service, error) {
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		if spec.TaskTemplate.ContainerSpec == nil {
+			return errdefs.InvalidParameter(fmt.Errorf("service has no container spec"))
+		}
+		return mutate(spec.TaskTemplate.ContainerSpec)
+	})
+}
+
+// ensureContainerSpec is for the reference lists, which a service may gain
+// before it has any other container settings.
+func ensureContainerSpec(spec *swarm.ServiceSpec) *swarm.ContainerSpec {
+	if spec.TaskTemplate.ContainerSpec == nil {
+		spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	return spec.TaskTemplate.ContainerSpec
+}
+
 func (c *Client) UpdateServiceResources(
 	ctx context.Context,
 	id string,
 	resources *swarm.ResourceRequirements,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.TaskTemplate.Resources = resources
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.TaskTemplate.Resources = resources
+		return nil
+	})
 }
 
 func (c *Client) UpdateServicePlacement(
@@ -1004,22 +862,10 @@ func (c *Client) UpdateServicePlacement(
 	id string,
 	placement *swarm.Placement,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.TaskTemplate.Placement = placement
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.TaskTemplate.Placement = placement
+		return nil
+	})
 }
 
 func (c *Client) UpdateServicePorts(
@@ -1027,25 +873,13 @@ func (c *Client) UpdateServicePorts(
 	id string,
 	ports []swarm.PortConfig,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.EndpointSpec == nil {
-		svc.Spec.EndpointSpec = &swarm.EndpointSpec{}
-	}
-	svc.Spec.EndpointSpec.Ports = ports
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		if spec.EndpointSpec == nil {
+			spec.EndpointSpec = &swarm.EndpointSpec{}
+		}
+		spec.EndpointSpec.Ports = ports
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceUpdatePolicy(
@@ -1053,22 +887,10 @@ func (c *Client) UpdateServiceUpdatePolicy(
 	id string,
 	policy *swarm.UpdateConfig,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.UpdateConfig = policy
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.UpdateConfig = policy
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceRollbackPolicy(
@@ -1076,22 +898,10 @@ func (c *Client) UpdateServiceRollbackPolicy(
 	id string,
 	policy *swarm.UpdateConfig,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.RollbackConfig = policy
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.RollbackConfig = policy
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceLogDriver(
@@ -1099,22 +909,10 @@ func (c *Client) UpdateServiceLogDriver(
 	id string,
 	driver *swarm.Driver,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.TaskTemplate.LogDriver = driver
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.TaskTemplate.LogDriver = driver
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceConfigs(
@@ -1122,25 +920,10 @@ func (c *Client) UpdateServiceConfigs(
 	id string,
 	configs []*swarm.ConfigReference,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
-	}
-	svc.Spec.TaskTemplate.ContainerSpec.Configs = configs
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		ensureContainerSpec(spec).Configs = configs
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceSecrets(
@@ -1148,25 +931,10 @@ func (c *Client) UpdateServiceSecrets(
 	id string,
 	secrets []*swarm.SecretReference,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
-	}
-	svc.Spec.TaskTemplate.ContainerSpec.Secrets = secrets
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		ensureContainerSpec(spec).Secrets = secrets
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceNetworks(
@@ -1174,22 +942,10 @@ func (c *Client) UpdateServiceNetworks(
 	id string,
 	networks []swarm.NetworkAttachmentConfig,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	svc.Spec.TaskTemplate.Networks = networks
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		spec.TaskTemplate.Networks = networks
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceMounts(
@@ -1197,25 +953,10 @@ func (c *Client) UpdateServiceMounts(
 	id string,
 	mounts []mount.Mount,
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		svc.Spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
-	}
-	svc.Spec.TaskTemplate.ContainerSpec.Mounts = mounts
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
+		ensureContainerSpec(spec).Mounts = mounts
+		return nil
+	})
 }
 
 func (c *Client) UpdateServiceContainerConfig(
@@ -1223,30 +964,10 @@ func (c *Client) UpdateServiceContainerConfig(
 	id string,
 	apply func(spec *swarm.ContainerSpec),
 ) (swarm.Service, error) {
-	svc, _, err := c.docker.ServiceInspectWithRaw(ctx, id, swarm.ServiceInspectOptions{})
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	// Guarded like every other writer reaching into the container spec: apply
-	// dereferences it, so a service without one panicked inside the handler
-	// rather than answering.
-	if svc.Spec.TaskTemplate.ContainerSpec == nil {
-		return swarm.Service{}, errdefs.InvalidParameter(
-			fmt.Errorf("service has no container spec"),
-		)
-	}
-	apply(svc.Spec.TaskTemplate.ContainerSpec)
-	_, err = c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		swarm.ServiceUpdateOptions{},
-	)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	return c.InspectService(ctx, id)
+	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
+		apply(cs)
+		return nil
+	})
 }
 
 // swarmResources are the lists only a manager answers. A worker still lists
