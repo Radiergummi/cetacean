@@ -227,6 +227,9 @@ type Server struct {
 	// streams ends the open listen streams at shutdown.
 	streams *sse.Lifetime
 
+	// inflight scopes notifications/cancelled to the caller's own requests.
+	inflight inflight
+
 	closeOnce sync.Once
 }
 
@@ -453,7 +456,7 @@ func (s *Server) Handler() http.Handler {
 	// The body cap, protocol gate and listen cap sit inside the origin and
 	// bearer checks so those answer first: an unauthenticated caller learns
 	// nothing about what we speak, and gets no body buffered.
-	h := limitBody(s.requireSupportedProtocol(s.limitListens(s.httpServer)))
+	h := limitBody(s.requireSupportedProtocol(s.limitListens(s.scopeCancels(s.httpServer))))
 
 	switch s.guard {
 	case guardBearer:
