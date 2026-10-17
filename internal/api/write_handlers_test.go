@@ -1352,6 +1352,40 @@ func TestHandlePatchServiceResources_Merge(t *testing.T) {
 	}
 }
 
+// The engine drops an emptied resource requirement, so the re-inspected service
+// can come back without one. The write answers what the GET would: {}, not null.
+func TestHandlePatchServiceResources_UnsetAnswersLikeTheGet(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	wc := &mockWriteClient{
+		updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
+			return replicatedService(id), nil
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	body := `{"Limits":null,"Reservations":null}`
+	req := httptest.NewRequest("PATCH", "/services/svc1/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceResources(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	if resources, ok := resp["resources"].(map[string]any); !ok || len(resources) != 0 {
+		t.Errorf("resources = %#v, want {} as the GET answers", resp["resources"])
+	}
+}
+
 func TestHandlePatchServiceResources_WrongContentType(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
