@@ -1,5 +1,6 @@
 import AtomFeedLink from "./components/AtomFeedLink";
 import ConnectionStatus from "./components/ConnectionStatus";
+import { ConnectionTracker } from "./components/ConnectionTracker";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import { LoadingDetail } from "./components/LoadingSkeleton";
@@ -13,9 +14,7 @@ import { AuthProvider } from "./hooks/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
-import { ConnectionProvider, sseEventTypes } from "./hooks/useResourceStream";
-import { apiPath, basePath } from "./lib/basePath";
-import { openEventStream } from "./lib/eventStream";
+import { basePath } from "./lib/basePath";
 import { queryClient } from "./lib/queryClient";
 import { navigationShortcuts } from "./lib/shortcuts";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -253,25 +252,6 @@ function UserBadge() {
       {identity.displayName || identity.email || identity.subject}
     </Link>
   );
-}
-
-function ConnectionTracker({ children }: { children: React.ReactNode }) {
-  const [connected, setConnected] = useState(true);
-  const [lastEventAt, setLastEventAt] = useState<number | null>(null);
-
-  useEffect(() => {
-    const touch = () => setLastEventAt(Date.now());
-
-    const stream = openEventStream(apiPath("/events"), {
-      listeners: Object.fromEntries([...sseEventTypes, "batch"].map((type) => [type, touch])),
-      onOpen: () => setConnected(true),
-      onDisconnected: () => setConnected(false),
-    });
-
-    return () => stream.close();
-  }, []);
-
-  return <ConnectionProvider value={{ connected, lastEventAt }}>{children}</ConnectionProvider>;
 }
 
 export default function App() {

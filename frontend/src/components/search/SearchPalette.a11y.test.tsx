@@ -1,9 +1,10 @@
 import SearchPalette from "./SearchPalette";
 import { api } from "@/api/client";
+import { MockEventSource } from "@/test/mocks";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/api/client")>("@/api/client");
@@ -22,7 +23,12 @@ function open() {
 }
 
 describe("SearchPalette accessibility", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
+    vi.stubGlobal("EventSource", MockEventSource);
     searchMock.mockReset();
     searchMock.mockResolvedValue({
       results: { services: [{ id: "s1", name: "api", detail: "nginx" }] },

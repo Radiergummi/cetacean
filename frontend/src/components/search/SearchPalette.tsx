@@ -1,5 +1,7 @@
 import { api, headAllowedMethods } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
+import { useLatestRef } from "../../hooks/useLatestRef";
+import { useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import {
   flattenSearchResults,
@@ -209,72 +211,94 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     inputRef.current?.focus();
   }, []);
 
-  // Poll every 2s to refresh state/detail on existing results (no reorder/add/remove)
-  useEffect(() => {
-    if (!hasResponse || !query.trim()) {
-      return;
-    }
+  // Refresh state/detail on the results already shown (no reorder/add/remove)
+  // when the cluster changes, debounced: a rollout is a burst of events.
+  const queryRef = useLatestRef(query);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshAbortRef = useRef<AbortController | null>(null);
+
+  const refresh = useCallback(() => {
+    refreshAbortRef.current?.abort();
+
     const controller = new AbortController();
-    const interval = setInterval(() => {
-      api
-        .search(query, undefined, controller.signal)
-        .then((fresh) => {
-          if (controller.signal.aborted) {
-            return;
+    refreshAbortRef.current = controller;
+    const refreshed = queryRef.current;
+
+    api
+      .search(refreshed, undefined, controller.signal)
+      .then((fresh) => {
+        if (controller.signal.aborted || refreshed !== queryRef.current) {
+          return;
+        }
+
+        setResponse((previous) => {
+          if (!previous) {
+            return previous;
           }
 
-          setResponse((previous) => {
-            if (!previous) {
-              return previous;
+          const updated = { ...previous, total: fresh.total, counts: fresh.counts };
+          const newResults: typeof previous.results = {};
+
+          for (const type of typeOrder) {
+            const prevItems = previous.results[type];
+
+            if (!prevItems) {
+              continue;
             }
 
-            const updated = { ...previous, total: fresh.total, counts: fresh.counts };
-            const newResults: typeof previous.results = {};
+            const freshItems = fresh.results[type];
 
-            for (const type of typeOrder) {
-              const prevItems = previous.results[type];
+            // Build lookup from fresh data
+            const freshMap = new Map<string, { detail: string; state?: string | undefined }>();
 
-              if (!prevItems) {
-                continue;
+            if (freshItems) {
+              for (const item of freshItems) {
+                freshMap.set(item.id, { detail: item.detail, state: item.state });
               }
-
-              const freshItems = fresh.results[type];
-
-              // Build lookup from fresh data
-              const freshMap = new Map<string, { detail: string; state?: string | undefined }>();
-
-              if (freshItems) {
-                for (const item of freshItems) {
-                  freshMap.set(item.id, { detail: item.detail, state: item.state });
-                }
-              }
-
-              // Update in-place: same order, same items, just refresh mutable fields
-              newResults[type] = prevItems.map((item) => {
-                const freshData = freshMap.get(item.id);
-
-                if (freshData) {
-                  return { ...item, detail: freshData.detail, state: freshData.state };
-                }
-
-                return item;
-              });
             }
 
-            updated.results = newResults;
+            // Update in-place: same order, same items, just refresh mutable fields
+            newResults[type] = prevItems.map((item) => {
+              const freshData = freshMap.get(item.id);
 
-            return updated;
-          });
-        })
-        .catch(() => {
-          /* ignore */
+              if (freshData) {
+                return { ...item, detail: freshData.detail, state: freshData.state };
+              }
+
+              return item;
+            });
+          }
+
+          updated.results = newResults;
+
+          return updated;
         });
-    }, 2_000);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }, [queryRef]);
+
+  useResourceStream(
+    hasResponse && query.trim() ? "/events" : undefined,
+    useCallback(() => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+
+      refreshTimerRef.current = setTimeout(refresh, 500);
+    }, [refresh]),
+  );
+
+  useEffect(() => {
     return () => {
-      controller.abort();
-      clearInterval(interval);
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+
+      refreshAbortRef.current?.abort();
     };
-  }, [query, hasResponse]);
+  }, []);
 
   const goTo = useCallback(
     ({ result: { id }, type }: FlatSearchItem) => {
