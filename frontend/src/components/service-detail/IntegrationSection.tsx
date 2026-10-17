@@ -168,7 +168,8 @@ export function IntegrationSection({
               <div className="ms-auto flex gap-2">
                 <Button
                   size="sm"
-                  onClick={save}
+                  // Without a writer, Save keeps the editor open as it was.
+                  onClick={onSave ? save : undefined}
                   disabled={saving}
                 >
                   {saving && <Spinner className="size-3" />}

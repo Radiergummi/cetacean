@@ -588,7 +588,9 @@ func (c *Cache) ListServices() []swarm.Service {
 	// out is this caller's own copy, so the sort — the expensive half of the
 	// call on a large cluster — does not belong under the lock the watcher's
 	// writers are contending for.
-	return sortedByIndex(out, func(a, b int) int { return cmp.Compare(out[a].ID, out[b].ID) })
+	sortByIndex(out, func(a, b int) int { return cmp.Compare(out[a].ID, out[b].ID) })
+
+	return out
 }
 
 // --- Tasks ---
@@ -718,7 +720,9 @@ func (c *Cache) ListTasks() []swarm.Task {
 	}
 	c.mu.RUnlock()
 
-	return sortedByIndex(out, func(a, b int) int { return compareTasks(out[a], out[b]) })
+	sortByIndex(out, func(a, b int) int { return compareTasks(out[a], out[b]) })
+
+	return out
 }
 
 // --- Configs ---

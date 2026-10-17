@@ -123,13 +123,17 @@ export default function TimeSeriesChart({
   });
 
   const tooltipRef = useLatestRef(setTooltip);
-  const unitRef = useLatestRef(unit);
   // Assigned during render, not through useLatestRef: <Line> redraws from its
-  // own effect, which runs before this component's effects would update it.
+  // own effect, which runs before this component's effects would update them,
+  // and the redraw replays the last pointer event into the tooltip hook.
   const thresholdsRef = useRef(thresholds);
   thresholdsRef.current = thresholds;
-  const dataRef = useLatestRef(data);
-  const stackedRef = useLatestRef(stacked);
+  const unitRef = useRef(unit);
+  unitRef.current = unit;
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const stackedRef = useRef(stacked);
+  stackedRef.current = stacked;
   const isolationRef = useLatestRef(isolation);
   const onSeriesDoubleClickRef = useLatestRef(onSeriesDoubleClick);
   const onRangeSelectRef = useLatestRef(onRangeSelect);

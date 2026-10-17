@@ -66,7 +66,22 @@ func (e *Evaluator) SetSource(s GrantSource) {
 // resource is "type:name", e.g. "service:webapp-api".
 // A nil evaluator or nil policy means allow all.
 func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) bool {
-	return e.Checker(id, permission)(resource)
+	if e == nil {
+		return true
+	}
+	p := e.policy.Load()
+	if p == nil {
+		return true
+	}
+
+	// Walked in place rather than through Checker: this runs for every event
+	// sent to every subscriber, and a Checker allocates its grants and closure.
+	for _, g := range e.collectGrants(id, p) {
+		if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
+			return true
+		}
+	}
+	return false
 }
 
 // Checker is Can with the identity's grants collected once, for a caller asking

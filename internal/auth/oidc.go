@@ -208,9 +208,10 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	nonce := generateState() // same entropy, different purpose
 	verifier := oauth2.GenerateVerifier()
 
-	for i, value := range []string{state, nonce, verifier, redirect} {
-		http.SetCookie(w, p.flowCookie(authFlowCookies[i], value, 300))
-	}
+	http.SetCookie(w, p.flowCookie(stateCookieName, state, 300))
+	http.SetCookie(w, p.flowCookie(nonceCookieName, nonce, 300))
+	http.SetCookie(w, p.flowCookie(verifierCookieName, verifier, 300))
+	http.SetCookie(w, p.flowCookie(redirectCookieName, redirect, 300))
 
 	http.Redirect(w, r, p.oauth2Config.AuthCodeURL(
 		state,
@@ -253,7 +254,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate state (constant-time comparison).
-	stateCookie, err := r.Cookie("cetacean_auth_state")
+	stateCookie, err := r.Cookie(stateCookieName)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "AUT003", "missing state cookie")
 		return
@@ -268,14 +269,14 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read nonce cookie for ID token verification.
-	nonceCookie, err := r.Cookie("cetacean_auth_nonce")
+	nonceCookie, err := r.Cookie(nonceCookieName)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "AUT003", "missing nonce cookie")
 		return
 	}
 
 	// Read PKCE verifier cookie.
-	verifierCookie, err := r.Cookie("cetacean_auth_verifier")
+	verifierCookie, err := r.Cookie(verifierCookieName)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "AUT003", "missing verifier cookie")
 		return
@@ -283,7 +284,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Read redirect URL before clearing cookies.
 	redirectURL := p.basePath + "/"
-	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && isRelativePath(c.Value) {
+	if c, err := r.Cookie(redirectCookieName); err == nil && isRelativePath(c.Value) {
 		redirectURL = c.Value
 	}
 
@@ -351,13 +352,19 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
-// authFlowCookies hold the state, nonce, PKCE verifier and redirect of one
-// authorization code flow, in that order.
+// The cookies holding one authorization code flow between login and callback.
+const (
+	stateCookieName    = "cetacean_auth_state"
+	nonceCookieName    = "cetacean_auth_nonce"
+	verifierCookieName = "cetacean_auth_verifier"
+	redirectCookieName = "cetacean_auth_redirect"
+)
+
 var authFlowCookies = []string{
-	"cetacean_auth_state",
-	"cetacean_auth_nonce",
-	"cetacean_auth_verifier",
-	"cetacean_auth_redirect",
+	stateCookieName,
+	nonceCookieName,
+	verifierCookieName,
+	redirectCookieName,
 }
 
 func (p *OIDCProvider) flowCookie(name, value string, maxAge int) *http.Cookie {

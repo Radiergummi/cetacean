@@ -30,10 +30,11 @@ func NewClient(baseURL string) *Client {
 }
 
 func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result, error) {
-	raw, err := pc.InstantQueryRaw(ctx, query)
+	respBody, err := pc.open(ctx, "/api/v1/query", url.Values{"query": {query}})
 	if err != nil {
 		return nil, err
 	}
+	defer respBody.Close()
 
 	var body struct {
 		Status    string `json:"status"`
@@ -47,7 +48,8 @@ func (pc *Client) InstantQuery(ctx context.Context, query string) ([]prom.Result
 			} `json:"result"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(raw, &body); err != nil {
+	err = json.NewDecoder(io.LimitReader(respBody, maxResponseBytes)).Decode(&body)
+	if err != nil {
 		return nil, &redactedError{message: "prometheus response parse error", cause: err}
 	}
 	if body.Status != "success" {
@@ -149,6 +151,21 @@ func (pc *Client) InstantQueryRaw(ctx context.Context, query string) ([]byte, er
 }
 
 func (pc *Client) get(ctx context.Context, path string, params url.Values) ([]byte, error) {
+	respBody, err := pc.open(ctx, path, params)
+	if err != nil {
+		return nil, err
+	}
+	defer respBody.Close()
+	body, err := io.ReadAll(io.LimitReader(respBody, maxResponseBytes))
+	if err != nil {
+		return nil, unreachable(err)
+	}
+	return body, nil
+}
+
+// open sends a GET and returns the body of a 200 for the caller to read and
+// close. Of any other status it reads only the preview statusError keeps.
+func (pc *Client) open(ctx context.Context, path string, params url.Values) (io.ReadCloser, error) {
 	u := pc.baseURL + path + "?" + params.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -158,15 +175,12 @@ func (pc *Client) get(ctx context.Context, path string, params url.Values) ([]by
 	if err != nil {
 		return nil, unreachable(err)
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return nil, unreachable(err)
-	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, statusError(resp.StatusCode, body)
+		defer resp.Body.Close()
+		preview, _ := io.ReadAll(io.LimitReader(resp.Body, statusPreviewBytes))
+		return nil, statusError(resp.StatusCode, preview)
 	}
-	return body, nil
+	return resp.Body, nil
 }
 
 // redactedError is what callers relay to clients: a fixed message, since the
@@ -196,8 +210,8 @@ func unreachable(err error) error {
 // statusError keeps the upstream body as the logged cause, since the message
 // drops a 5xx's text.
 func statusError(status int, body []byte) error {
-	if len(body) > 512 {
-		body = body[:512]
+	if len(body) > statusPreviewBytes {
+		body = body[:statusPreviewBytes]
 	}
 
 	return &redactedError{
@@ -205,6 +219,8 @@ func statusError(status int, body []byte) error {
 		cause:   errors.New(string(body)),
 	}
 }
+
+const statusPreviewBytes = 512
 
 func invalidRequest(err error) error {
 	return &redactedError{message: "failed to create prometheus request", cause: err}
