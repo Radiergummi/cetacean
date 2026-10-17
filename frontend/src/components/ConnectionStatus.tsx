@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import { formatSyncAge, useClusterFreshness } from "../hooks/useClusterFreshness";
 import { useConnection } from "../hooks/useResourceStream";
+import { showErrorToast } from "../lib/showErrorToast";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/button";
 import { RefreshCw } from "lucide-react";
@@ -66,7 +67,7 @@ export default function ConnectionStatus() {
     try {
       await api.resync();
     } catch (error) {
-      console.warn("resync failed", error);
+      showErrorToast(error, "Re-sync failed");
     } finally {
       setResyncing(false);
     }

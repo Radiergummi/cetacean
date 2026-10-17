@@ -2,8 +2,12 @@ import { ConnectionProvider } from "../hooks/useResourceStream";
 import ConnectionStatus from "./ConnectionStatus";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn<(message: string) => void>() } }));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -109,5 +113,37 @@ describe("ConnectionStatus cluster freshness", () => {
     await waitFor(() => {
       expect(screen.getByText("Live")).toBeInTheDocument();
     });
+  });
+
+  it("reports a failed resync instead of swallowing it", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url.endsWith("/-/resync")
+            ? new Response(
+                JSON.stringify({
+                  type: "about:blank",
+                  title: "Gateway Timeout",
+                  status: 504,
+                  detail: "listing tasks: context deadline exceeded",
+                }),
+                { status: 504, headers: { "Content-Type": "application/problem+json" } },
+              )
+            : new Response("{}", { headers: { "Content-Type": "application/json" } }),
+        ),
+      ),
+    );
+
+    render(<ConnectionStatus />, { wrapper: createWrapper(true, null) });
+    await userEvent.click(screen.getByRole("button", { name: "Resync from Docker" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("listing tasks: context deadline exceeded");
+    });
+    expect(timeout).toHaveBeenCalledWith(
+      expect.toSatisfy((milliseconds: number) => milliseconds > 240_000),
+    );
   });
 });
