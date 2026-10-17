@@ -423,6 +423,33 @@ func driveSubresource(pathFn func(baselineIDs) string) readDriveFunc {
 	return driveDetail(pathFn)
 }
 
+// driveReadEverything checks an endpoint that needs read on the bare resource
+// "*", as the Prometheus proxy does: oncall, whose grants are typed, is refused
+// with anonymous, and the personas reading everything are not.
+func driveReadEverything(path string) readDriveFunc {
+	return func(t *testing.T, proc *sut.Process, _ baselineIDs) {
+		for _, p := range readPersonas {
+			t.Run(p.name, func(t *testing.T) {
+				resp := readAs(t, proc, p, path, "")
+
+				if p.name == "anonymous" || p.name == "oncall" {
+					assertForbiddenWithCode(t, resp, path, p.name, "ACL001")
+					return
+				}
+
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusForbidden {
+					body, _ := io.ReadAll(resp.Body)
+					t.Errorf(
+						"%s as %s (reads everything): refused with 403: %s",
+						path, p.name, body,
+					)
+				}
+			})
+		}
+	}
+}
+
 // driveGrantGate checks a cluster-wide endpoint gated by requireAnyGrant:
 // anonymous is refused with ACL001 and no granted persona is, whatever else
 // the response is (200, or 503 from an unconfigured Prometheus here).
@@ -811,6 +838,9 @@ var drivenReadRoutes = map[string]readDriveFunc{
 	"GET /nodes/{id}/tasks": driveSubresource(
 		func(ids baselineIDs) string { return "/nodes/" + ids.nodeID + "/tasks" },
 	),
+	"GET /nodes/{id}/drain-impact": driveSubresource(
+		func(ids baselineIDs) string { return "/nodes/" + ids.nodeID + "/drain-impact" },
+	),
 
 	// Config/secret/task subresources.
 	"GET /configs/{id}/labels": driveSubresource(
@@ -830,9 +860,9 @@ var drivenReadRoutes = map[string]readDriveFunc{
 	"GET /disk-usage":            driveGrantGate("/disk-usage", ""),
 	"GET /history":               driveGrantGate("/history", ""),
 	"GET /recommendations":       driveGrantGate("/recommendations", ""),
-	"GET /metrics":               driveGrantGate("/metrics", ""),
-	"GET /metrics/labels":        driveGrantGate("/metrics/labels", ""),
-	"GET /metrics/labels/{name}": driveGrantGate("/metrics/labels/instance", ""),
+	"GET /metrics":               driveReadEverything("/metrics"),
+	"GET /metrics/labels":        driveReadEverything("/metrics/labels"),
+	"GET /metrics/labels/{name}": driveReadEverything("/metrics/labels/instance"),
 	"GET /metrics/status":        driveGrantGate("/metrics/status", ""),
 	"GET /topology":              driveGrantGate("/topology", "application/vnd.jgf+json"),
 

@@ -223,9 +223,11 @@ func TestMCPConformanceDiscover(t *testing.T) {
 	result := call(t, proc, conformanceRequest{Method: "server/discover"}).
 		ok(t, "server/discover")
 
+	// Newest first, then the stateless subset of 2025-11-25 the server also
+	// accepts.
 	versions, _ := result["supportedVersions"].([]any)
-	if len(versions) != 1 || versions[0] != conformanceVersion {
-		t.Errorf("supportedVersions = %v, want [%s]", versions, conformanceVersion)
+	if len(versions) != 2 || versions[0] != conformanceVersion || versions[1] != "2025-11-25" {
+		t.Errorf("supportedVersions = %v, want [%s 2025-11-25]", versions, conformanceVersion)
 	}
 
 	capabilities, ok := result["capabilities"].(map[string]any)
@@ -284,13 +286,12 @@ func TestMCPConformanceRequestMeta(t *testing.T) {
 		}}).refused(t, "protocolVersion omitted", http.StatusBadRequest, -32602)
 	})
 
-	// The suite reads SEP-2575 as requiring -32602 here and reports -32021 as a
-	// failure. The code is mcp-go's MISSING_REQUIRED_CLIENT_CAPABILITY, not
-	// ours; this pins what we actually answer so the day it changes is visible.
+	// The suite reads SEP-2575 as requiring -32602 here. mcp-go answered its
+	// own -32021 until it changed to -32602; pinned so a change back is visible.
 	t.Run("no clientCapabilities", func(t *testing.T) {
 		call(t, proc, conformanceRequest{Method: "tools/list", Meta: map[string]any{
 			"io.modelcontextprotocol/protocolVersion": conformanceVersion,
-		}}).refused(t, "clientCapabilities omitted", http.StatusBadRequest, -32021)
+		}}).refused(t, "clientCapabilities omitted", http.StatusBadRequest, -32602)
 	})
 
 	t.Run("clientInfo is optional", func(t *testing.T) {

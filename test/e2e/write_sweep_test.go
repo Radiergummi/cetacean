@@ -407,6 +407,9 @@ var excusedWriteRoutes = map[string]string{
 		"the shared engine; excused rather than forced",
 	"POST /swarm/unlock": "only meaningful with autolock enabled, which " +
 		"this environment does not configure; excused rather than forced",
+	"DELETE /tokens/{subject}": "answers 404 without the authorization server, " +
+		"which this lane does not run; TestRevokeSubject* in internal/oauth and " +
+		"internal/api drive it",
 
 	// The /plugins* family needs a plugin registry this fixture does not
 	// provide.
