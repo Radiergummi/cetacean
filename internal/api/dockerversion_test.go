@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -37,5 +38,16 @@ func TestDockerVersionFetchOutlivesTheCaller(t *testing.T) {
 	v, err := c.get(ctx)
 	if err != nil || v == nil || v.Version != "28.1.0" {
 		t.Fatalf("get with a cancelled caller = %+v, %v; want the fetched version", v, err)
+	}
+}
+
+// Turned off, the route is not served at all, so nothing can reach GitHub.
+func TestDockerLatestVersionUnservedWhenDisabled(t *testing.T) {
+	_, routes := newRouter(testRouterConfig(t, []routerOption{
+		func(cfg *RouterConfig) { cfg.EnableVersionCheck = false },
+	}))
+
+	if slices.Contains(routes.patterns, "GET /-/docker-latest-version") {
+		t.Error("GET /-/docker-latest-version is registered with the version check off")
 	}
 }

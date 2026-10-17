@@ -81,4 +81,5 @@ var knownEnvVars = map[string]bool{
 	"CETACEAN_TLS_CERT":                           true,
 	"CETACEAN_TLS_KEY":                            true,
 	"CETACEAN_TRUSTED_PROXIES":                    true,
+	"CETACEAN_VERSION_CHECK":                      true,
 }

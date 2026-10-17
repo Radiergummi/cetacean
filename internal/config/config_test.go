@@ -384,3 +384,23 @@ func TestLoad_OTelEndpoint_File(t *testing.T) {
 		t.Errorf("expected file value, got %q", cfg.OTelEndpoint)
 	}
 }
+
+func TestLoad_VersionCheck(t *testing.T) {
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.VersionCheck {
+		t.Error("VersionCheck=false by default, want true")
+	}
+
+	t.Setenv("CETACEAN_VERSION_CHECK", "false")
+
+	cfg, err = Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.VersionCheck {
+		t.Error("VersionCheck=true with CETACEAN_VERSION_CHECK=false, want false")
+	}
+}

@@ -20,6 +20,7 @@ type Flags struct {
 	LogFormat       *string
 	Pprof           *bool
 	SelfMetrics     *bool
+	VersionCheck    *bool
 	Recommendations *bool
 	BasePath        *string
 	PublicURL       *string
@@ -127,6 +128,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"self-metrics",
 		false,
 		"Enable self-metrics endpoint (env: CETACEAN_SELF_METRICS, default true)",
+	)
+	versionCheck := fs.Bool(
+		"version-check",
+		false,
+		"Check GitHub for the latest Docker Engine release (env: CETACEAN_VERSION_CHECK, default true)",
 	)
 	recs := fs.Bool(
 		"recommendations",
@@ -249,6 +255,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.SelfMetrics = selfMetrics
 		case "recommendations":
 			f.Recommendations = recs
+		case "version-check":
+			f.VersionCheck = versionCheck
 		case "base-path":
 			f.BasePath = basePath
 		case "auth-mode":

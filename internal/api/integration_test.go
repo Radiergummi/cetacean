@@ -44,14 +44,15 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 
 	specBytes, _ := os.ReadFile("../../api/openapi.yaml")
 	return NewRouter(RouterConfig{
-		Handlers:          h,
-		Broadcaster:       b,
-		SPA:               spa,
-		OpenAPISpec:       specBytes,
-		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
-		ScalarJS:          []byte("/* scalar */"),
-		EnableSelfMetrics: true,
-		AuthProvider:      &auth.NoneProvider{},
+		Handlers:           h,
+		Broadcaster:        b,
+		SPA:                spa,
+		OpenAPISpec:        specBytes,
+		AsyncAPISpec:       []byte("asyncapi: '3.0.0'"),
+		ScalarJS:           []byte("/* scalar */"),
+		EnableSelfMetrics:  true,
+		EnableVersionCheck: true,
+		AuthProvider:       &auth.NoneProvider{},
 	})
 }
 

@@ -430,7 +430,9 @@ paths:
       operationId: getDockerLatestVersion
       tags: [Meta]
       summary: Latest Docker Engine version
-      description: Returns the latest stable Docker Engine version from the GitHub releases API. Cached.
+      description: >
+        Returns the latest stable Docker Engine version from the GitHub releases API. Cached.
+        Not served when `server.version_check` is off.
       responses:
         "200":
           description: Latest version info

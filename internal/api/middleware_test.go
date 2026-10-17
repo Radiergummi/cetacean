@@ -322,14 +322,15 @@ func TestNewRouter_Smoke(t *testing.T) {
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(RouterConfig{
-		Handlers:          h,
-		Broadcaster:       b,
-		MetricsProxy:      prom,
-		SPA:               spa,
-		OpenAPISpec:       []byte("openapi: '3.1.0'"),
-		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
-		EnableSelfMetrics: true,
-		AuthProvider:      &auth.NoneProvider{},
+		Handlers:           h,
+		Broadcaster:        b,
+		MetricsProxy:       prom,
+		SPA:                spa,
+		OpenAPISpec:        []byte("openapi: '3.1.0'"),
+		AsyncAPISpec:       []byte("asyncapi: '3.0.0'"),
+		EnableSelfMetrics:  true,
+		EnableVersionCheck: true,
+		AuthProvider:       &auth.NoneProvider{},
 	})
 	if router == nil {
 		t.Fatal("NewRouter returned nil")
@@ -408,14 +409,15 @@ func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(RouterConfig{
-		Handlers:          h,
-		Broadcaster:       b,
-		SPA:               spa,
-		OpenAPISpec:       []byte("openapi: '3.1.0'"),
-		AsyncAPISpec:      []byte("asyncapi: '3.0.0'"),
-		EnableSelfMetrics: true,
-		AuthProvider:      &auth.NoneProvider{},
-		CORS:              &CORSConfig{AllowedOrigins: []string{"https://example.test"}},
+		Handlers:           h,
+		Broadcaster:        b,
+		SPA:                spa,
+		OpenAPISpec:        []byte("openapi: '3.1.0'"),
+		AsyncAPISpec:       []byte("asyncapi: '3.0.0'"),
+		EnableSelfMetrics:  true,
+		EnableVersionCheck: true,
+		AuthProvider:       &auth.NoneProvider{},
+		CORS:               &CORSConfig{AllowedOrigins: []string{"https://example.test"}},
 	})
 
 	req := httptest.NewRequest("GET", "/nodes", nil)
