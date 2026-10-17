@@ -696,7 +696,7 @@ returns up to 1000). `POST /-/resync` forces a full refetch from the Docker sock
 `/-/` endpoints it requires authentication and a grant, because each call sweeps the whole Docker API.
 A call made while a re-sync is already running waits for that one and shares its result, and it isn't
 gated on the operations level—it re-reads the cluster and never changes it. A re-sync that runs out of
-time answers `504` with problem details.
+time before Docker answered answers `504` with problem details.
 
 `GET /nodes/{id}/drain-impact` assesses a drain before you make it: each service with a task on the node is
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.

@@ -72,7 +72,7 @@ func HandleResync(r Resyncer) http.HandlerFunc {
 			}
 			slog.Warn("manual resync failed", "error", err)
 			if errors.Is(err, context.DeadlineExceeded) {
-				writeProblem(w, req, http.StatusGatewayTimeout, "the re-sync ran out of time")
+				writeProblem(w, req, http.StatusGatewayTimeout, err.Error())
 				return
 			}
 			writeJSONStatus(w, http.StatusBadGateway, map[string]string{

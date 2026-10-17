@@ -253,7 +253,7 @@ paths:
                   error:
                     type: string
         "504":
-          description: The re-sync ran out of time; the cache is unchanged
+          description: The re-sync ran out of time before Docker answered; the cache is unchanged
           content:
             application/problem+json:
               schema:

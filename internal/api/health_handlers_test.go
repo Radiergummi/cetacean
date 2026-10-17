@@ -49,3 +49,21 @@ func TestHandleResyncAnswersATimedOutSweepWith504(t *testing.T) {
 		t.Errorf("Content-Type = %q, want application/problem+json", ct)
 	}
 }
+
+type cancelledSweepResyncer struct{}
+
+func (cancelledSweepResyncer) Resync(context.Context) error {
+	return fmt.Errorf("full sync: %w", context.Canceled)
+}
+
+// Only a deadline is a timeout: a sweep cancelled at shutdown is a failure.
+func TestHandleResyncAnswersACancelledSweepWith502(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/-/resync", nil)
+	rec := httptest.NewRecorder()
+
+	HandleResync(cancelledSweepResyncer{})(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+}
