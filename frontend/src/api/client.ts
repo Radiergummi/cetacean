@@ -152,6 +152,12 @@ async function throwResponseError(response: Response): Promise<never> {
 const defaultTimeoutMilliseconds = 30_000;
 
 /**
+ * Outlasts the server's two bounds on a resync, two minutes each: waiting for
+ * the event loop, then the sweep. Shorter, the 504 would never arrive.
+ */
+const resyncTimeoutMilliseconds = 300_000;
+
+/**
  * Combines two AbortSignals so the fetch aborts if either fires.
  * Returns the timeout signal directly if no caller signal is provided.
  */
@@ -297,6 +303,7 @@ async function mutationFetch<T>(
   body?: unknown | undefined,
   contentType?: string | undefined,
   ifMatch?: string | undefined,
+  timeoutMilliseconds = defaultTimeoutMilliseconds,
 ): Promise<T> {
   const h: Record<string, string> = { Accept: "application/json" };
   if (contentType) {
@@ -309,7 +316,7 @@ async function mutationFetch<T>(
   const init: RequestInit = {
     method,
     headers: h,
-    signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
+    signal: AbortSignal.timeout(timeoutMilliseconds),
   };
 
   if (body !== undefined) {
@@ -612,7 +619,15 @@ export const api = {
     fetchJSON<ClusterSnapshot>("/cluster", undefined, schema.clusterSchema).then(
       ({ data }) => data,
     ),
-  resync: () => post<{ status: string; durationMs?: number }>("/-/resync"),
+  resync: () =>
+    mutationFetch<{ status: string; durationMs?: number }>(
+      "/-/resync",
+      "POST",
+      undefined,
+      undefined,
+      undefined,
+      resyncTimeoutMilliseconds,
+    ),
   swarm: () => fetchJSON<SwarmInfo>("/swarm", undefined, schema.swarmSchema),
   unlockKey: () =>
     fetchJSON<{ unlockKey: string }>("/swarm/unlock-key", undefined, schema.unlockKeySchema).then(
