@@ -1,5 +1,5 @@
+import { useUrlParam } from "./useUrlParam";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 
 const debounceMilliseconds = 300;
 
@@ -12,8 +12,7 @@ const debounceMilliseconds = 300;
  * - setInputValue: setter for both (clear button, etc.)
  */
 export function useSearchParam(key: string): [string, string, (value: string) => void] {
-  const [params, setParams] = useSearchParams();
-  const urlValue = params.get(key) ?? "";
+  const [urlValue, setUrlValue] = useUrlParam(key, "");
   const [inputValue, setInputValue] = useState(urlValue);
   const [lastUrlValue, setLastUrlValue] = useState(urlValue);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -31,24 +30,9 @@ export function useSearchParam(key: string): [string, string, (value: string) =>
       setInputValue(value);
       clearTimeout(timerRef.current);
 
-      timerRef.current = setTimeout(() => {
-        setParams(
-          (previous) => {
-            const next = new URLSearchParams(previous);
-
-            if (value) {
-              next.set(key, value);
-            } else {
-              next.delete(key);
-            }
-
-            return next;
-          },
-          { replace: true },
-        );
-      }, debounceMilliseconds);
+      timerRef.current = setTimeout(() => setUrlValue(value), debounceMilliseconds);
     },
-    [key, setParams],
+    [setUrlValue],
   );
 
   // Cleanup timer on Unmount

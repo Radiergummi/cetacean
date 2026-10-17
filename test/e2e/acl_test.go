@@ -3,7 +3,6 @@
 package e2e_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -215,55 +214,12 @@ func TestACLFiltersListings(t *testing.T) {
 	}
 }
 
-// getJSONAs performs a GET as a headers-auth identity, decoding the JSON body
-// into into when the response is 200. It mirrors getJSON (api_test.go), which
-// cannot be reused here because it never sets the auth headers headers mode
-// requires.
-func getJSONAs(
-	t *testing.T,
-	proc *sut.Process,
-	path, user, groups string,
-	into any,
-) *http.Response {
-	t.Helper()
-
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, proc.BaseURL+path, nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Auth-User", user)
-	req.Header.Set("X-Auth-Groups", groups)
-
-	resp, err := proc.Client().Do(req)
-	if err != nil {
-		t.Fatalf("GET %s: %v", path, err)
-	}
-	defer resp.Body.Close()
-
-	if into != nil && resp.StatusCode == http.StatusOK {
-		if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
-			t.Fatalf("decode %s: %v", path, err)
-		}
-	}
-
-	return resp
-}
-
 // viewerServiceID resolves a service's ID by name, authenticated as the
 // "viewers" group used throughout TestACLPolicyHotReload.
 func viewerServiceID(t *testing.T, proc *sut.Process, name string) string {
 	t.Helper()
 
-	var body struct {
-		Items []struct {
-			ID   string `json:"ID"`
-			Spec struct {
-				Name string `json:"Name"`
-			} `json:"Spec"`
-		} `json:"items"`
-	}
+	var body serviceList
 
 	//nolint:bodyclose // closed in getJSONAs
 	resp := getJSONAs(
@@ -278,10 +234,8 @@ func viewerServiceID(t *testing.T, proc *sut.Process, name string) string {
 		t.Fatalf("GET /services: status = %d, want 200", resp.StatusCode)
 	}
 
-	for _, item := range body.Items {
-		if item.Spec.Name == name {
-			return item.ID
-		}
+	if id, ok := body.idOf(name); ok {
+		return id
 	}
 
 	t.Fatalf("service %q not found in /services", name)

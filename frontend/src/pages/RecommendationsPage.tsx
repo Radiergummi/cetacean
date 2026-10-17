@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { invalidateRecommendations, useRecommendations } from "@/hooks/useRecommendations";
+import { useUrlParam } from "@/hooks/useUrlParam";
 import { applyRecommendation, fixTarget } from "@/lib/applyRecommendation";
 import {
   hintIcon,
@@ -28,7 +29,7 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { ChevronRight, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const categoryDetails: Record<RecommendationCategory, string> = {
   "no-healthcheck":
@@ -175,33 +176,15 @@ function RecommendationCard({ hint, applying, onApply }: CardProps) {
 
 export default function RecommendationsPage() {
   const { items } = useRecommendations();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [applying, setApplying] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [pendingDrain, setPendingDrain] = useState<Recommendation | null>(null);
 
-  const rawFilter = searchParams.get("filter") ?? "all";
+  const [rawFilter, setFilter] = useUrlParam("filter", "all");
   const activeFilter: FilterTab = filterTabs.includes(rawFilter as FilterTab)
     ? (rawFilter as FilterTab)
     : "all";
-
-  function setFilter(tab: FilterTab) {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-
-        if (tab === "all") {
-          next.delete("filter");
-        } else {
-          next.set("filter", tab);
-        }
-
-        return next;
-      },
-      { replace: true },
-    );
-  }
 
   const filteredItems = items.filter((hint) => {
     if (dismissed.has(recommendationKey(hint))) {

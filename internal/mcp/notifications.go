@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -237,27 +236,24 @@ type delivery struct {
 	identity *auth.Identity
 }
 
-func eventTypeToURIPrefix(t cache.EventType) string {
+// isResourceEvent reports whether an event type names a kind of resource, as
+// every type but sync does. Each such type is its ACL type as written.
+func isResourceEvent(t cache.EventType) bool {
 	switch t {
-	case cache.EventNode:
-		return "cetacean://nodes/"
-	case cache.EventService:
-		return "cetacean://services/"
-	case cache.EventTask:
-		return "cetacean://tasks/"
-	case cache.EventConfig:
-		return "cetacean://configs/"
-	case cache.EventSecret:
-		return "cetacean://secrets/"
-	case cache.EventNetwork:
-		return "cetacean://networks/"
-	case cache.EventVolume:
-		return "cetacean://volumes/"
-	case cache.EventStack:
-		return "cetacean://stacks/"
+	case cache.EventNode, cache.EventService, cache.EventTask, cache.EventConfig,
+		cache.EventSecret, cache.EventNetwork, cache.EventVolume, cache.EventStack:
+		return true
 	default:
+		return false
+	}
+}
+
+func eventTypeToURIPrefix(t cache.EventType) string {
+	if !isResourceEvent(t) {
 		return ""
 	}
+
+	return "cetacean://" + string(t) + "s/"
 }
 
 // startNotifications attaches the manager to the cache's event stream and
@@ -284,7 +280,7 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		return
 	}
 
-	hasResource := eventACLResource(event) != ""
+	hasResource := eventNamesResource(event)
 	for _, d := range s.notifications.matchingDeliveries(event) {
 		canRead := func(resource string) bool { return s.canRead(d.identity, resource) }
 		if hasResource && !cluster.CanReadEvent(event, canRead) {
@@ -301,7 +297,10 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		// streams that opted in. When ACL is in play, skip sessions whose
 		// identity cannot read any resource of the affected type — otherwise
 		// the notification leaks activity timing across tenancy boundaries.
-		aclType := strings.TrimSuffix(eventTypeToACLPrefix(event.Type), ":")
+		aclType := ""
+		if isResourceEvent(event.Type) {
+			aclType = string(event.Type)
+		}
 
 		for _, d := range s.notifications.listChangedTargets() {
 			if aclType != "" && s.acl != nil && !s.canReadAnyOfType(d.identity, aclType) {
@@ -360,49 +359,19 @@ func (s *Server) canRead(identity *auth.Identity, aclResource string) bool {
 	return s.acl.Can(identity, "read", aclResource)
 }
 
-// eventACLResource returns the ACL resource key for a cache event, or "" when
-// the event names no resource (sync, or a ref to one already gone). Mirrors the ACL key
-// convention used by lookupResource and tools.go.
-func eventACLResource(event cache.Event) string {
-	prefix := eventTypeToACLPrefix(event.Type)
-	if prefix == "" {
-		return ""
+// eventNamesResource reports whether an event names the resource it is checked
+// against: a task by ID, anything else by the Name the cache fills via
+// ExtractName. Sync, or a ref to a resource already gone, names none.
+func eventNamesResource(event cache.Event) bool {
+	if !isResourceEvent(event.Type) {
+		return false
 	}
-	// Tasks key on ID; everything else keys on Name (which the cache fills via
-	// ExtractName, matching the convention used by REST handlers).
-	if event.Type == cache.EventTask {
-		if event.ID == "" {
-			return ""
-		}
-		return prefix + event.ID
-	}
-	if event.Name == "" {
-		return ""
-	}
-	return prefix + event.Name
-}
 
-func eventTypeToACLPrefix(t cache.EventType) string {
-	switch t {
-	case cache.EventNode:
-		return "node:"
-	case cache.EventService:
-		return "service:"
-	case cache.EventTask:
-		return "task:"
-	case cache.EventConfig:
-		return "config:"
-	case cache.EventSecret:
-		return "secret:"
-	case cache.EventNetwork:
-		return "network:"
-	case cache.EventVolume:
-		return "volume:"
-	case cache.EventStack:
-		return "stack:"
-	default:
-		return ""
+	if event.Type == cache.EventTask {
+		return event.ID != ""
 	}
+
+	return event.Name != ""
 }
 
 // installSubscriptionHooks wires subscribe / unsubscribe / session lifecycle

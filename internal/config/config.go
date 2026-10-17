@@ -63,6 +63,28 @@ type Config struct {
 	OTelEndpoint string
 }
 
+// LoadFlagged loads the file flags.Config names, or the one DiscoverConfigFile
+// finds, and resolves the configuration from it. It returns the file and its
+// path too, for the section loaders that read the file on their own.
+func LoadFlagged(flags *Flags) (cfg *Config, fc *fileConfig, path string, err error) {
+	path = flags.Config
+	if path == "" {
+		path = DiscoverConfigFile()
+	}
+
+	fc, err = LoadFile(path)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	cfg, err = Load(fc, flags)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	return cfg, fc, path, nil
+}
+
 // Load merges configuration from flags, environment variables, a TOML
 // config file, and hardcoded defaults (in that precedence order).
 // Pass nil for fc and/or flags to skip those layers.
@@ -136,6 +158,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		"CETACEAN_SSE_BATCH_INTERVAL",
 		fSSEBatch,
 		100*time.Millisecond,
+		false,
 	)
 	if err != nil {
 		return nil, err

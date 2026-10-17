@@ -187,11 +187,12 @@ func writeCachedJSONStatusValidated(
 		validator = computeETag(body)
 	}
 
-	writeRenderedJSON(w, r, status, renderedDoc{body: body, etag: validator})
+	writeRenderedJSON(w, r, status, renderedDoc{body: body, etag: validator}, time.Time{})
 }
 
 // writeRenderedJSON sends a JSON body whose validator is already known,
-// negotiating a coding and answering a matching precondition with 304.
+// negotiating a coding and answering a matching precondition with 304. A
+// non-zero lastModified adds Last-Modified and evaluates If-Modified-Since.
 //
 // This is the tail of writeCachedJSONStatusValidated, split out for a memoised
 // document: a hit there has the bytes and the hash of them already, and the
@@ -203,6 +204,7 @@ func writeRenderedJSON(
 	r *http.Request,
 	status int,
 	doc renderedDoc,
+	lastModified time.Time,
 ) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
@@ -216,12 +218,43 @@ func writeRenderedJSON(
 		w.Header().Set("Cache-Control", "no-cache")
 	}
 
-	if etagMatch(r.Header.Get("If-None-Match"), etag) {
+	if !lastModified.IsZero() {
+		// RFC 9110 §8.8.2.1: a value later than the response's own origination
+		// date is replaced by it. The engine stamps these, and a manager whose
+		// clock runs ahead of this one would otherwise hand a cache a
+		// representation that never goes stale.
+		if now := time.Now(); lastModified.After(now) {
+			lastModified = now
+		}
+
+		w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+	}
+
+	if notModified(r, etag, lastModified) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 
 	writeEncodedJSON(w, status, doc.body, coding)
+}
+
+// notModified evaluates If-None-Match, or If-Modified-Since when that is absent
+// and lastModified is known, as RFC 9110 §13.1.3 orders them.
+func notModified(r *http.Request, etag string, lastModified time.Time) bool {
+	inm := r.Header.Get("If-None-Match")
+	if inm != "" || lastModified.IsZero() {
+		return etagMatch(inm, etag)
+	}
+
+	ims := r.Header.Get("If-Modified-Since")
+	if ims == "" {
+		return false
+	}
+
+	t, err := http.ParseTime(ims)
+
+	// HTTP dates have second precision; truncate for comparison.
+	return err == nil && !lastModified.Truncate(time.Second).After(t.Truncate(time.Second))
 }
 
 // jsonTerminator ends every JSON body written by writeEncodedJSON.
@@ -256,9 +289,6 @@ func writeEncodedJSON(w http.ResponseWriter, status int, body []byte, coding Enc
 // RFC 9110 §13.1.3, If-None-Match takes precedence over If-Modified-Since
 // when both are present.
 func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastModified time.Time) {
-	rc := http.NewResponseController(w)
-	_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Second))
-
 	body, err := json.Marshal(v)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
@@ -266,44 +296,14 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 		return
 	}
 
-	coding := negotiateCoding(w, r, body)
-	etag := codedETag(computeETag(body), coding)
-
-	w.Header().Set("ETag", etag)
-	setJSONContentType(w)
 	w.Header().Set("Cache-Control", "no-cache")
-
-	if !lastModified.IsZero() {
-		// RFC 9110 §8.8.2.1: a value later than the response's own origination
-		// date is replaced by it. The engine stamps these, and a manager whose
-		// clock runs ahead of this one would otherwise hand a cache a
-		// representation that never goes stale.
-		if now := time.Now(); lastModified.After(now) {
-			lastModified = now
-		}
-
-		w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
-	}
-
-	// RFC 9110 §13.1.3: If-None-Match takes precedence over If-Modified-Since.
-	if r.Header.Get("If-None-Match") != "" {
-		if etagMatch(r.Header.Get("If-None-Match"), etag) {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-	} else if !lastModified.IsZero() {
-		if ims := r.Header.Get("If-Modified-Since"); ims != "" {
-			if t, err := http.ParseTime(ims); err == nil {
-				// HTTP dates have second precision; truncate for comparison.
-				if !lastModified.Truncate(time.Second).After(t.Truncate(time.Second)) {
-					w.WriteHeader(http.StatusNotModified)
-					return
-				}
-			}
-		}
-	}
-
-	writeEncodedJSON(w, http.StatusOK, body, coding)
+	writeRenderedJSON(
+		w,
+		r,
+		http.StatusOK,
+		renderedDoc{body: body, etag: computeETag(body)},
+		lastModified,
+	)
 }
 
 // knownCodingSuffixes are the content-coding markers codedETag appends. They

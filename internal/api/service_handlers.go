@@ -81,34 +81,26 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paged := applyPagination(r.Context(), services, p)
-
-	items := make([]ServiceListItem, len(paged.Items))
-	for i, svc := range paged.Items {
-		items[i] = ServiceListItem{
-			Service:      svc,
-			RunningTasks: h.cache.RunningTaskCount(svc.ID),
-		}
-	}
-
 	writeLinkTemplate(w, r, spec.linkTemplate)
-	writeCollectionResponse(
+	writeListPage(
 		w,
 		r,
-		NewCollectionResponse(
-			r.Context(),
-			wrapItems(
-				r.Context(),
-				items,
-				"Service",
-				func(s ServiceListItem) string { return "/services/" + s.ID },
-			),
-			paged.Total,
-			paged.Limit,
-			paged.Offset,
-		),
+		services,
 		p,
 		validator,
+		"Service",
+		func(s ServiceListItem) string { return "/services/" + s.ID },
+		func(page []swarm.Service) []ServiceListItem {
+			items := make([]ServiceListItem, len(page))
+			for i, svc := range page {
+				items[i] = ServiceListItem{
+					Service:      svc,
+					RunningTasks: h.cache.RunningTaskCount(svc.ID),
+				}
+			}
+
+			return items
+		},
 	)
 }
 

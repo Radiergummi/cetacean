@@ -1,5 +1,10 @@
 package prom
 
+// SwarmServiceLabel is the label cAdvisor derives from Docker's own
+// com.docker.swarm.service.name, and is how a container is attributed to a
+// service.
+const SwarmServiceLabel = "container_label_com_docker_swarm_service_name"
+
 // Result holds a single Prometheus query result with metric labels and a scalar value.
 type Result struct {
 	Labels map[string]string

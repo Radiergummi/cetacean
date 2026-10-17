@@ -4,11 +4,9 @@ import { api } from "@/api/client";
 import type { ClusterCapacity, GenericResource } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { useEditSession } from "@/hooks/useEditSession";
 import { useEditVersion } from "@/hooks/useEditVersion";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
-import { getErrorMessage } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
@@ -100,12 +98,6 @@ export function ResourcesEditor({
   canEdit?: boolean | undefined;
 }) {
   const version = useEditVersion(`/services/${serviceId}/resources`);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  useEscapeCancel(editing, () => cancelEdit());
-  useLeaveGuard(editing);
-
   const [cpu, setCpu] = useState<{ reservation: number | undefined; limit: number | undefined }>({
     reservation: undefined,
     limit: undefined,
@@ -119,37 +111,41 @@ export function ResourcesEditor({
   });
   const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
   const [capacityError, setCapacityError] = useState(false);
+  const patch = buildResourcesPatch(cpu, memory);
 
-  function openEdit() {
-    version.capture();
-    setCpu({
-      reservation: Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined,
-      limit: Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined,
-    });
-    setMemory({
-      reservation:
-        Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
-      limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
-    });
+  const {
+    editing,
+    saving,
+    saveError,
+    open: openEdit,
+    cancel: cancelEdit,
+    save: submit,
+  } = useEditSession({
+    onOpen: () => {
+      version.capture();
+      setCpu({
+        reservation: Reservations?.NanoCPUs != null ? Reservations.NanoCPUs / 1e9 : undefined,
+        limit: Limits?.NanoCPUs != null ? Limits.NanoCPUs / 1e9 : undefined,
+      });
+      setMemory({
+        reservation:
+          Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
+        limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
+      });
 
-    setCapacity(null);
-    setCapacityError(false);
-    api
-      .clusterCapacity()
-      .then(setCapacity)
-      .catch(() => setCapacityError(true));
-    setSaveError(null);
-    setEditing(true);
-  }
+      setCapacity(null);
+      setCapacityError(false);
+      api
+        .clusterCapacity()
+        .then(setCapacity)
+        .catch(() => setCapacityError(true));
+    },
+    onSave: async () => {
+      onSaved(await api.patchServiceResources(serviceId, patch, await version.ifMatch()));
+    },
+  });
 
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
-
-  async function save() {
-    const patch = buildResourcesPatch(cpu, memory);
-
+  function save() {
     // No-op: nothing changed
     if (
       patch.Limits.NanoCPUs === (Limits?.NanoCPUs ?? null) &&
@@ -157,24 +153,12 @@ export function ResourcesEditor({
       patch.Reservations.NanoCPUs === (Reservations?.NanoCPUs ?? null) &&
       patch.Reservations.MemoryBytes === (Reservations?.MemoryBytes ?? null)
     ) {
-      setEditing(false);
+      cancelEdit();
 
       return;
     }
 
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      const updated = await api.patchServiceResources(serviceId, patch, await version.ifMatch());
-
-      onSaved(updated);
-      setEditing(false);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Save failed"));
-    } finally {
-      setSaving(false);
-    }
+    return submit();
   }
 
   const genericResources = Reservations?.GenericResources ?? [];

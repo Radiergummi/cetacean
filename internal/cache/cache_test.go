@@ -224,7 +224,7 @@ func TestCache_ReplaceNodes_RemovesStale(t *testing.T) {
 func TestCache_DeleteService(t *testing.T) {
 	c := New(nil)
 	svc := swarm.Service{ID: "svc1"}
-	svc.Spec.Labels = map[string]string{stackLabel: "mystack"}
+	svc.Spec.Labels = map[string]string{StackLabel: "mystack"}
 	c.SetService(svc)
 
 	c.DeleteService("svc1")
@@ -266,7 +266,7 @@ func TestCache_DeleteResource(t *testing.T) {
 			name: "config",
 			set: func(c *Cache) {
 				cfg := swarm.Config{ID: "cfg1"}
-				cfg.Spec.Labels = map[string]string{stackLabel: "mystack"}
+				cfg.Spec.Labels = map[string]string{StackLabel: "mystack"}
 				c.SetConfig(cfg)
 			},
 			delete: func(c *Cache) { c.DeleteConfig("cfg1") },
@@ -276,7 +276,7 @@ func TestCache_DeleteResource(t *testing.T) {
 			name: "secret",
 			set: func(c *Cache) {
 				sec := swarm.Secret{ID: "sec1"}
-				sec.Spec.Labels = map[string]string{stackLabel: "mystack"}
+				sec.Spec.Labels = map[string]string{StackLabel: "mystack"}
 				c.SetSecret(sec)
 			},
 			delete: func(c *Cache) { c.DeleteSecret("sec1") },
@@ -286,7 +286,7 @@ func TestCache_DeleteResource(t *testing.T) {
 			name: "network",
 			set: func(c *Cache) {
 				c.SetNetwork(
-					network.Summary{ID: "net1", Labels: map[string]string{stackLabel: "mystack"}},
+					network.Summary{ID: "net1", Labels: map[string]string{StackLabel: "mystack"}},
 				)
 			},
 			delete: func(c *Cache) { c.DeleteNetwork("net1") },
@@ -296,7 +296,7 @@ func TestCache_DeleteResource(t *testing.T) {
 			name: "volume",
 			set: func(c *Cache) {
 				c.SetVolume(
-					volume.Volume{Name: "vol1", Labels: map[string]string{stackLabel: "mystack"}},
+					volume.Volume{Name: "vol1", Labels: map[string]string{StackLabel: "mystack"}},
 				)
 			},
 			delete: func(c *Cache) { c.DeleteVolume("vol1") },
@@ -333,7 +333,7 @@ func TestCache_DeleteNonexistent(t *testing.T) {
 
 func TestCache_Stack_MultipleResourceTypes(t *testing.T) {
 	c := New(nil)
-	labels := map[string]string{stackLabel: "mystack"}
+	labels := map[string]string{StackLabel: "mystack"}
 
 	svc := swarm.Service{ID: "svc1"}
 	svc.Spec.Labels = labels
@@ -372,7 +372,7 @@ func TestCache_Stack_MultipleResourceTypes(t *testing.T) {
 
 func TestCache_Stack_PartialRemoval(t *testing.T) {
 	c := New(nil)
-	labels := map[string]string{stackLabel: "mystack"}
+	labels := map[string]string{StackLabel: "mystack"}
 
 	svc := swarm.Service{ID: "svc1"}
 	svc.Spec.Labels = labels
@@ -392,7 +392,7 @@ func TestCache_Stack_PartialRemoval(t *testing.T) {
 
 func TestCache_Stack_NoGhostAfterServiceDeletion(t *testing.T) {
 	c := New(nil)
-	labels := map[string]string{stackLabel: "mystack"}
+	labels := map[string]string{StackLabel: "mystack"}
 
 	svc := swarm.Service{ID: "svc1"}
 	svc.Spec.Labels = labels
@@ -430,11 +430,11 @@ func TestCache_Stack_ServiceUpdateChangesStack(t *testing.T) {
 	c := New(nil)
 
 	svc := swarm.Service{ID: "svc1"}
-	svc.Spec.Labels = map[string]string{stackLabel: "stackA"}
+	svc.Spec.Labels = map[string]string{StackLabel: "stackA"}
 	c.SetService(svc)
 
 	// Update same service to belong to a different stack
-	svc.Spec.Labels = map[string]string{stackLabel: "stackB"}
+	svc.Spec.Labels = map[string]string{StackLabel: "stackB"}
 	c.SetService(svc)
 
 	if _, ok := c.GetStack("stackA"); ok {
@@ -452,7 +452,7 @@ func TestCache_Stack_ServiceUpdateChangesStack(t *testing.T) {
 func TestCache_Stack_DuplicateAdd(t *testing.T) {
 	c := New(nil)
 	svc := swarm.Service{ID: "svc1"}
-	svc.Spec.Labels = map[string]string{stackLabel: "mystack"}
+	svc.Spec.Labels = map[string]string{StackLabel: "mystack"}
 
 	c.SetService(svc)
 	c.SetService(svc) // same service again
@@ -497,7 +497,7 @@ func TestCache_TaskIndex_EmptyServiceAndNode(t *testing.T) {
 
 func TestCache_GetStackDetail(t *testing.T) {
 	c := New(nil)
-	labels := map[string]string{stackLabel: "mystack"}
+	labels := map[string]string{StackLabel: "mystack"}
 
 	svc := swarm.Service{ID: "svc1"}
 	svc.Spec.Name = "mystack_web"
@@ -556,12 +556,12 @@ func TestCache_ReplaceServices_RebuildStacks(t *testing.T) {
 
 	// Set up initial state with a stack
 	svc1 := swarm.Service{ID: "svc1"}
-	svc1.Spec.Labels = map[string]string{stackLabel: "oldstack"}
+	svc1.Spec.Labels = map[string]string{StackLabel: "oldstack"}
 	c.SetService(svc1)
 
 	// Replace with different services
 	svc2 := swarm.Service{ID: "svc2"}
-	svc2.Spec.Labels = map[string]string{stackLabel: "newstack"}
+	svc2.Spec.Labels = map[string]string{StackLabel: "newstack"}
 	c.replaceServices([]swarm.Service{svc2})
 	c.rebuildStacksSynced()
 
@@ -605,7 +605,7 @@ func TestCache_ReplaceTasks_RebuildsIndexes(t *testing.T) {
 func TestCache_ReplaceConfigs_RebuildStacks(t *testing.T) {
 	c := New(nil)
 	cfg := swarm.Config{ID: "cfg1"}
-	cfg.Spec.Labels = map[string]string{stackLabel: "mystack"}
+	cfg.Spec.Labels = map[string]string{StackLabel: "mystack"}
 	c.SetConfig(cfg)
 
 	// Replace with empty — stack from configs should be gone
@@ -620,11 +620,11 @@ func TestCache_ReplaceConfigs_RebuildStacks(t *testing.T) {
 func TestCache_ReplaceSecrets_RebuildStacks(t *testing.T) {
 	c := New(nil)
 	sec := swarm.Secret{ID: "sec1"}
-	sec.Spec.Labels = map[string]string{stackLabel: "mystack"}
+	sec.Spec.Labels = map[string]string{StackLabel: "mystack"}
 	c.SetSecret(sec)
 
 	sec2 := swarm.Secret{ID: "sec2"}
-	sec2.Spec.Labels = map[string]string{stackLabel: "otherstack"}
+	sec2.Spec.Labels = map[string]string{StackLabel: "otherstack"}
 	c.replaceSecrets([]swarm.Secret{sec2})
 	c.rebuildStacksSynced()
 
@@ -638,10 +638,10 @@ func TestCache_ReplaceSecrets_RebuildStacks(t *testing.T) {
 
 func TestCache_ReplaceNetworks_RebuildStacks(t *testing.T) {
 	c := New(nil)
-	c.SetNetwork(network.Summary{ID: "net1", Labels: map[string]string{stackLabel: "mystack"}})
+	c.SetNetwork(network.Summary{ID: "net1", Labels: map[string]string{StackLabel: "mystack"}})
 
 	c.replaceNetworks([]network.Summary{
-		{ID: "net2", Labels: map[string]string{stackLabel: "newstack"}},
+		{ID: "net2", Labels: map[string]string{StackLabel: "newstack"}},
 	})
 	c.rebuildStacksSynced()
 
@@ -655,10 +655,10 @@ func TestCache_ReplaceNetworks_RebuildStacks(t *testing.T) {
 
 func TestCache_ReplaceVolumes_RebuildStacks(t *testing.T) {
 	c := New(nil)
-	c.SetVolume(volume.Volume{Name: "vol1", Labels: map[string]string{stackLabel: "mystack"}})
+	c.SetVolume(volume.Volume{Name: "vol1", Labels: map[string]string{StackLabel: "mystack"}})
 
 	c.replaceVolumes([]volume.Volume{
-		{Name: "vol2", Labels: map[string]string{stackLabel: "newstack"}},
+		{Name: "vol2", Labels: map[string]string{StackLabel: "newstack"}},
 	})
 	c.rebuildStacksSynced()
 
@@ -672,7 +672,7 @@ func TestCache_ReplaceVolumes_RebuildStacks(t *testing.T) {
 
 func TestCache_ReplaceStacks_CrossResourceRebuild(t *testing.T) {
 	c := New(nil)
-	labels := map[string]string{stackLabel: "mystack"}
+	labels := map[string]string{StackLabel: "mystack"}
 
 	// Add service and config to same stack
 	svc := swarm.Service{ID: "svc1"}

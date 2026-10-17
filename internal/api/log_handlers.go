@@ -148,17 +148,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 
 	// Docker ignores since/until for service logs, so enforce them here.
 	lines = logs.FilterSince(lines, since)
-
-	if cursor, ok := logs.ParseCursor(until); ok {
-		filtered := lines[:0]
-		for _, l := range lines {
-			if !logs.Older(l.Timestamp, cursor) {
-				continue
-			}
-			filtered = append(filtered, l)
-		}
-		lines = filtered
-	}
+	lines = logs.FilterBefore(lines, until)
 
 	// Apply stream filter before truncation so hasMore is accurate.
 	if streamFilter != "" {

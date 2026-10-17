@@ -17,11 +17,7 @@ type CronjobIntegration struct {
 }
 
 func detectCronjob(labels map[string]string) *CronjobIntegration {
-	var (
-		found     bool
-		enableSet bool
-		enableVal string
-	)
+	var found bool
 
 	integration := &CronjobIntegration{Name: "swarm-cronjob"}
 
@@ -34,9 +30,6 @@ func detectCronjob(labels map[string]string) *CronjobIntegration {
 		found = true
 
 		switch suffix {
-		case "enable":
-			enableSet = true
-			enableVal = v
 		case "schedule":
 			integration.Schedule = v
 		case "skip-running":
@@ -56,7 +49,7 @@ func detectCronjob(labels map[string]string) *CronjobIntegration {
 		return nil
 	}
 
-	integration.Enabled = !enableSet || enableVal == "true"
+	integration.Enabled = enabled(labels, "swarm.cronjob.")
 
 	return integration
 }

@@ -170,35 +170,22 @@ func TestCanReadAnyOfType_HonorsGrants(t *testing.T) {
 	}
 }
 
-func TestEventACLResource(t *testing.T) {
+func TestEventNamesResource(t *testing.T) {
 	tests := []struct {
 		name  string
 		event cache.Event
-		want  string
+		want  bool
 	}{
-		{
-			"service uses Name",
-			cache.Event{Type: cache.EventService, ID: "svc1", Name: "web"},
-			"service:web",
-		},
-		{
-			"task uses ID",
-			cache.Event{Type: cache.EventTask, ID: "task1", Name: "ignored"},
-			"task:task1",
-		},
-		{
-			"node uses Name",
-			cache.Event{Type: cache.EventNode, ID: "node1", Name: "worker-1"},
-			"node:worker-1",
-		},
-		{"missing name → empty", cache.Event{Type: cache.EventService, ID: "svc1"}, ""},
-		{"missing task id → empty", cache.Event{Type: cache.EventTask, Name: "x"}, ""},
-		{"sync → empty", cache.Event{Type: cache.EventSync}, ""},
+		{"service uses Name", cache.Event{Type: cache.EventService, ID: "svc1", Name: "web"}, true},
+		{"task uses ID", cache.Event{Type: cache.EventTask, ID: "task1"}, true},
+		{"node uses Name", cache.Event{Type: cache.EventNode, ID: "node1", Name: "worker-1"}, true},
+		{"missing name", cache.Event{Type: cache.EventService, ID: "svc1"}, false},
+		{"missing task id", cache.Event{Type: cache.EventTask, Name: "x"}, false},
+		{"sync", cache.Event{Type: cache.EventSync}, false},
 	}
 	for _, tc := range tests {
-		got := eventACLResource(tc.event)
-		if got != tc.want {
-			t.Errorf("%s: eventACLResource = %q, want %q", tc.name, got, tc.want)
+		if got := eventNamesResource(tc.event); got != tc.want {
+			t.Errorf("%s: eventNamesResource = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

@@ -198,8 +198,8 @@ requirements:
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
     mutants:
       - file: internal/oauth/server.go
-        replace: "\t\tAccessToken:  accessToken,\n\t\tTokenType:    \"Bearer\",\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
-        with: "\t\tTokenType:    \"Bearer\",\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n\t_ = accessToken\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
+        replace: "\twriteTokenResponse(w, tokenResponse{\n\t\tAccessToken:  accessToken,\n"
+        with: "\t_ = accessToken\n\twriteTokenResponse(w, tokenResponse{\n"
 
   - id: token-type-required-in-the-response
     level: MUST
@@ -209,8 +209,8 @@ requirements:
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-3.2.3
     mutants:
       - file: internal/oauth/server.go
-        replace: "\t\tAccessToken:  accessToken,\n\t\tTokenType:    \"Bearer\",\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
-        with: "\t\tAccessToken:  accessToken,\n\t\tExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),\n\t\tRefreshToken: refreshToken,\n\t})\n}\n\nfunc (s *Server) handleRefreshTokenGrant"
+        replace: "\t\tAccessToken:  accessToken,\n\t\tTokenType:    \"Bearer\",\n"
+        with: "\t\tAccessToken:  accessToken,\n"
 
   - id: expires-in-recommended
     level: SHOULD

@@ -10,7 +10,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
-	json "github.com/goccy/go-json"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
@@ -186,7 +185,6 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	// Cache lookup is for ACL + 404 only — the actual merge runs against the
 	// freshly-inspected service spec inside the writer (M-42). Pre-merging
@@ -213,16 +211,11 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var resultEnv []string
-	if result.Spec.TaskTemplate.ContainerSpec != nil {
-		resultEnv = result.Spec.TaskTemplate.ContainerSpec.Env
-	}
-	writeMutationResponse(w, r, NewDetailResponse(
-		r.Context(),
-		r.URL.Path,
-		"ServiceEnv",
-		map[string]any{"env": envSliceToMap(resultEnv)},
-	))
+	writeMutationResponse(
+		w,
+		r,
+		NewDetailResponse(r.Context(), r.URL.Path, "ServiceEnv", serviceEnvBody(result)),
+	)
 }
 
 func (h *Handlers) serviceLabelsSpec() getLabelsSpec[swarm.Service] {
@@ -237,19 +230,15 @@ func (h *Handlers) serviceLabelsSpec() getLabelsSpec[swarm.Service] {
 }
 
 func (h *Handlers) HandleGetServiceLabels(w http.ResponseWriter, r *http.Request) {
-	handleGetLabels(w, r, h.acl, h.serviceLabelsSpec())
+	handleGetLabels(w, r, h, h.serviceLabelsSpec())
 }
 
 func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Service]{
-		resource:     "service",
-		pathKey:      "id",
-		typeName:     "ServiceLabels",
-		getter:       h.cache.GetService,
-		getLabels:    func(s swarm.Service) map[string]string { return s.Spec.Labels },
-		update:       h.serviceSpec.UpdateServiceLabels,
-		conflictCode: "SVC001",
-		stackMember:  true,
+		getLabelsSpec: h.serviceLabelsSpec(),
+		update:        h.serviceSpec.UpdateServiceLabels,
+		conflictCode:  "SVC001",
+		stackMember:   true,
 	})
 }
 
@@ -262,35 +251,75 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
+	patchServiceSpecField(h, w, r, serviceSpecFieldPatch[swarm.ResourceRequirements]{
+		name:     "resources",
+		errCode:  "SVC011",
+		errMsg:   "invalid resource specification",
+		suffix:   "/resources",
+		typeName: "ServiceResources",
+		field: func(spec *swarm.ServiceSpec) (**swarm.ResourceRequirements, error) {
+			return &spec.TaskTemplate.Resources, nil
+		},
+		// Unlike the GET, the write answers an unset field with null.
+		body: func(svc swarm.Service) any {
+			return map[string]any{"resources": svc.Spec.TaskTemplate.Resources}
+		},
+	})
+}
+
+// serviceSpecFieldPatch describes a struct merge patch of one service spec
+// field: field locates it in the live spec, or refuses with a specPatchError.
+type serviceSpecFieldPatch[T any] struct {
+	name     string // for the log line, e.g. "update policy"
+	errCode  string
+	errMsg   string
+	suffix   string
+	typeName string
+	field    func(*swarm.ServiceSpec) (**T, error)
+	body     func(swarm.Service) any
+}
+
+// patchServiceSpecField merges a merge-patch body into one spec field, an
+// unset field counting as its zero value, and answers with the field's body.
+func patchServiceSpecField[T any](
+	h *Handlers,
+	w http.ResponseWriter,
+	r *http.Request,
+	patch serviceSpecFieldPatch[T],
+) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 
 	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
-	merge, ok := structMergePatch(w, r, "SVC011", "invalid resource specification")
+	merge, ok := structMergePatch(w, r, patch.errCode, patch.errMsg)
 	if !ok {
 		return
 	}
 
-	slog.Info("updating service resources", "service", id)
+	slog.Info("updating service "+patch.name, "service", id)
 
 	updated, err := h.serviceSpec.UpdateServiceSpec(
 		r.Context(),
 		id,
 		func(spec *swarm.ServiceSpec) error {
-			current := spec.TaskTemplate.Resources
-			if current == nil {
-				current = &swarm.ResourceRequirements{}
+			field, err := patch.field(spec)
+			if err != nil {
+				return err
 			}
 
-			var result swarm.ResourceRequirements
+			current := *field
+			if current == nil {
+				current = new(T)
+			}
+
+			var result T
 			if err := merge(current, &result); err != nil {
 				return err
 			}
 
-			spec.TaskTemplate.Resources = &result
+			*field = &result
 
 			return nil
 		},
@@ -299,13 +328,12 @@ func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Re
 		writeServiceSpecPatch(w, r, id, err)
 		return
 	}
+
 	writeMutationResponse(w, r, NewDetailResponse(
 		r.Context(),
-		"/services/"+id+"/resources",
-		"ServiceResources",
-		map[string]any{
-			"resources": updated.Spec.TaskTemplate.Resources,
-		},
+		"/services/"+id+patch.suffix,
+		patch.typeName,
+		patch.body(updated),
 	))
 }
 
@@ -338,7 +366,6 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if !requireMergePatch(w, r) {
 		return
@@ -348,11 +375,10 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var patch struct {
+	patch, ok := decodeMergePatch[struct {
 		Ports []swarm.PortConfig `json:"ports"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -369,20 +395,12 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var resultPorts []swarm.PortConfig
-	if updated.Spec.EndpointSpec != nil {
-		resultPorts = updated.Spec.EndpointSpec.Ports
-	}
-	if resultPorts == nil {
-		resultPorts = []swarm.PortConfig{}
-	}
-	writeMutationResponse(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/ports", "ServicePorts", map[string]any{
-			"ports": resultPorts,
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/ports",
+		"ServicePorts",
+		servicePortsBody(updated),
+	))
 }
 
 func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -414,18 +432,11 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var resultHC *container.HealthConfig
-	if updated.Spec.TaskTemplate.ContainerSpec != nil {
-		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
-	}
-
 	writeMutationResponse(w, r, NewDetailResponse(
 		r.Context(),
 		"/services/"+id+"/healthcheck",
 		"ServiceHealthcheck",
-		map[string]any{
-			"healthcheck": resultHC,
-		},
+		serviceHealthcheckBody(updated),
 	))
 }
 
@@ -458,18 +469,11 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resultPlacement := updated.Spec.TaskTemplate.Placement
-	if resultPlacement == nil {
-		resultPlacement = &swarm.Placement{}
-	}
-
 	writeMutationResponse(w, r, NewDetailResponse(
 		r.Context(),
 		"/services/"+id+"/placement",
 		"ServicePlacement",
-		map[string]any{
-			"placement": resultPlacement,
-		},
+		servicePlacementBody(updated),
 	))
 }
 
@@ -482,56 +486,17 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 }
 
 func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	merge, ok := structMergePatch(w, r, "SVC012", "invalid update policy specification")
-	if !ok {
-		return
-	}
-
-	slog.Info("updating service update policy", "service", id)
-
-	updated, err := h.serviceSpec.UpdateServiceSpec(
-		r.Context(),
-		id,
-		func(spec *swarm.ServiceSpec) error {
-			current := spec.UpdateConfig
-			if current == nil {
-				current = &swarm.UpdateConfig{}
-			}
-
-			var result swarm.UpdateConfig
-			if err := merge(current, &result); err != nil {
-				return err
-			}
-
-			spec.UpdateConfig = &result
-
-			return nil
+	patchServiceSpecField(h, w, r, serviceSpecFieldPatch[swarm.UpdateConfig]{
+		name:     "update policy",
+		errCode:  "SVC012",
+		errMsg:   "invalid update policy specification",
+		suffix:   "/update-policy",
+		typeName: "ServiceUpdatePolicy",
+		field: func(spec *swarm.ServiceSpec) (**swarm.UpdateConfig, error) {
+			return &spec.UpdateConfig, nil
 		},
-	)
-	if err != nil {
-		writeServiceSpecPatch(w, r, id, err)
-		return
-	}
-
-	resultPolicy := updated.Spec.UpdateConfig
-	if resultPolicy == nil {
-		resultPolicy = &swarm.UpdateConfig{}
-	}
-	writeMutationResponse(w, r, NewDetailResponse(
-		r.Context(),
-		"/services/"+id+"/update-policy",
-		"ServiceUpdatePolicy",
-		map[string]any{
-			"updatePolicy": resultPolicy,
-		},
-	))
+		body: serviceUpdatePolicyBody,
+	})
 }
 
 func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -543,55 +508,17 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 }
 
 func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	merge, ok := structMergePatch(w, r, "SVC013", "invalid rollback policy specification")
-	if !ok {
-		return
-	}
-
-	slog.Info("updating service rollback policy", "service", id)
-
-	updated, err := h.serviceSpec.UpdateServiceSpec(
-		r.Context(),
-		id,
-		func(spec *swarm.ServiceSpec) error {
-			current := spec.RollbackConfig
-			if current == nil {
-				current = &swarm.UpdateConfig{}
-			}
-
-			var result swarm.UpdateConfig
-			if err := merge(current, &result); err != nil {
-				return err
-			}
-
-			spec.RollbackConfig = &result
-
-			return nil
+	patchServiceSpecField(h, w, r, serviceSpecFieldPatch[swarm.UpdateConfig]{
+		name:     "rollback policy",
+		errCode:  "SVC013",
+		errMsg:   "invalid rollback policy specification",
+		suffix:   "/rollback-policy",
+		typeName: "ServiceRollbackPolicy",
+		field: func(spec *swarm.ServiceSpec) (**swarm.UpdateConfig, error) {
+			return &spec.RollbackConfig, nil
 		},
-	)
-	if err != nil {
-		writeServiceSpecPatch(w, r, id, err)
-		return
-	}
-
-	resultPolicy := updated.Spec.RollbackConfig
-	if resultPolicy == nil {
-		resultPolicy = &swarm.UpdateConfig{}
-	}
-	writeMutationResponse(w, r, NewDetailResponse(r.Context(),
-		"/services/"+id+"/rollback-policy",
-		"ServiceRollbackPolicy",
-		map[string]any{
-			"rollbackPolicy": resultPolicy,
-		},
-	))
+		body: serviceRollbackPolicyBody,
+	})
 }
 
 func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -603,110 +530,35 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	merge, ok := structMergePatch(w, r, "SVC019", "invalid log driver specification")
-	if !ok {
-		return
-	}
-
-	slog.Info("updating service log driver", "service", id)
-
-	updated, err := h.serviceSpec.UpdateServiceSpec(
-		r.Context(),
-		id,
-		func(spec *swarm.ServiceSpec) error {
-			current := spec.TaskTemplate.LogDriver
-			if current == nil {
-				current = &swarm.Driver{}
-			}
-
-			var result swarm.Driver
-			if err := merge(current, &result); err != nil {
-				return err
-			}
-
-			spec.TaskTemplate.LogDriver = &result
-
-			return nil
+	patchServiceSpecField(h, w, r, serviceSpecFieldPatch[swarm.Driver]{
+		name:     "log driver",
+		errCode:  "SVC019",
+		errMsg:   "invalid log driver specification",
+		suffix:   "/log-driver",
+		typeName: "ServiceLogDriver",
+		field: func(spec *swarm.ServiceSpec) (**swarm.Driver, error) {
+			return &spec.TaskTemplate.LogDriver, nil
 		},
-	)
-	if err != nil {
-		writeServiceSpecPatch(w, r, id, err)
-		return
-	}
-
-	writeMutationResponse(w, r, NewDetailResponse(
-		r.Context(),
-		"/services/"+id+"/log-driver",
-		"ServiceLogDriver",
-		map[string]any{
-			"logDriver": updated.Spec.TaskTemplate.LogDriver,
-		},
-	))
+		body: serviceLogDriverBody,
+	})
 }
 
 func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	merge, ok := structMergePatch(w, r, "SVC014", "invalid healthcheck specification")
-	if !ok {
-		return
-	}
-
-	slog.Info("updating service healthcheck", "service", id)
-
-	updated, err := h.serviceSpec.UpdateServiceSpec(
-		r.Context(),
-		id,
-		func(spec *swarm.ServiceSpec) error {
+	patchServiceSpecField(h, w, r, serviceSpecFieldPatch[container.HealthConfig]{
+		name:     "healthcheck",
+		errCode:  "SVC014",
+		errMsg:   "invalid healthcheck specification",
+		suffix:   "/healthcheck",
+		typeName: "ServiceHealthcheck",
+		field: func(spec *swarm.ServiceSpec) (**container.HealthConfig, error) {
 			if spec.TaskTemplate.ContainerSpec == nil {
-				return errNoContainerSpec
+				return nil, errNoContainerSpec
 			}
 
-			current := spec.TaskTemplate.ContainerSpec.Healthcheck
-			if current == nil {
-				current = &container.HealthConfig{}
-			}
-
-			var result container.HealthConfig
-			if err := merge(current, &result); err != nil {
-				return err
-			}
-
-			spec.TaskTemplate.ContainerSpec.Healthcheck = &result
-
-			return nil
+			return &spec.TaskTemplate.ContainerSpec.Healthcheck, nil
 		},
-	)
-	if err != nil {
-		writeServiceSpecPatch(w, r, id, err)
-		return
-	}
-
-	var resultHC *container.HealthConfig
-	if updated.Spec.TaskTemplate.ContainerSpec != nil {
-		resultHC = updated.Spec.TaskTemplate.ContainerSpec.Healthcheck
-	}
-
-	writeMutationResponse(w, r, NewDetailResponse(
-		r.Context(),
-		"/services/"+id+"/healthcheck",
-		"ServiceHealthcheck",
-		map[string]any{
-			"healthcheck": resultHC,
-		},
-	))
+		body: serviceHealthcheckBody,
+	})
 }
 
 type containerConfigResponse struct {
@@ -777,7 +629,6 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
@@ -847,12 +698,11 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	result := containerConfigFromSpec(updated.Spec.TaskTemplate.ContainerSpec)
 	writeMutationResponse(w, r, NewDetailResponse(
 		r.Context(),
 		r.URL.Path,
 		"ServiceContainerConfig",
-		map[string]any{"containerConfig": result},
+		serviceContainerConfigBody(updated),
 	))
 }
 
@@ -916,7 +766,6 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 
 func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if !requireMergePatch(w, r) {
 		return
@@ -927,11 +776,10 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var patch struct {
+	patch, ok := decodeMergePatch[struct {
 		Configs []serviceConfigRef `json:"configs"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -978,13 +826,12 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeMutationResponse(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/configs", "ServiceConfigs", map[string]any{
-			"configs": extractConfigRefs(updated.Spec.TaskTemplate.ContainerSpec),
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/configs",
+		"ServiceConfigs",
+		serviceConfigsBody(updated),
+	))
 }
 
 // checkAttachable writes an error unless the caller may attach the resource.
@@ -1023,7 +870,6 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 
 func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if !requireMergePatch(w, r) {
 		return
@@ -1034,11 +880,10 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var patch struct {
+	patch, ok := decodeMergePatch[struct {
 		Secrets []serviceSecretRef `json:"secrets"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -1085,13 +930,12 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeMutationResponse(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", map[string]any{
-			"secrets": extractSecretRefs(updated.Spec.TaskTemplate.ContainerSpec),
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/secrets",
+		"ServiceSecrets",
+		serviceSecretsBody(updated),
+	))
 }
 
 func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1105,7 +949,6 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 
 func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	if !requireMergePatch(w, r) {
 		return
@@ -1116,11 +959,10 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var patch struct {
+	patch, ok := decodeMergePatch[struct {
 		Networks []serviceNetworkRef `json:"networks"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -1170,9 +1012,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		r.Context(),
 		"/services/"+id+"/networks",
 		"ServiceNetworks",
-		map[string]any{
-			"networks": extractNetworkRefs(updated.Spec.TaskTemplate.Networks),
-		},
+		serviceNetworksBody(updated),
 	))
 }
 
@@ -1221,19 +1061,10 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var mounts []mount.Mount
-	if updated.Spec.TaskTemplate.ContainerSpec != nil {
-		mounts = updated.Spec.TaskTemplate.ContainerSpec.Mounts
-	}
-	if mounts == nil {
-		mounts = []mount.Mount{}
-	}
-
-	writeMutationResponse(
-		w,
-		r,
-		NewDetailResponse(r.Context(), "/services/"+id+"/mounts", "ServiceMounts", map[string]any{
-			"mounts": mounts,
-		}),
-	)
+	writeMutationResponse(w, r, NewDetailResponse(
+		r.Context(),
+		"/services/"+id+"/mounts",
+		"ServiceMounts",
+		serviceMountsBody(updated),
+	))
 }

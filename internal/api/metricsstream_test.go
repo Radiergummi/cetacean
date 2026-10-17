@@ -42,7 +42,7 @@ func TestMetricsStream_ConnectionLimit(t *testing.T) {
 	defer srv.Close()
 
 	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
-	h.metricsStreamCount.Store(int32(maxMetricsStreamClients))
+	h.metricsStreamCount.Store(maxMetricsStreamClients)
 	defer h.metricsStreamCount.Store(0)
 	req := httptest.NewRequest("GET", "/-/metrics/query_range?query=up", nil)
 	w := httptest.NewRecorder()

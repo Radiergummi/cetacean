@@ -1,19 +1,20 @@
 package contract
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"sync"
 )
 
 // packageStringConsts returns every package-level string constant declared
-// beside the given source file. A pattern built from one — "GET "+profilePath —
-// is as fully determined as a literal, and refusing it would report the route
-// as invisible.
+// beside the given source file, test files aside. A pattern built from one —
+// "GET "+profilePath — is as fully determined as a literal, and refusing it
+// would report the route as invisible.
 func packageStringConsts(path string) map[string]string {
 	dir := filepath.Dir(path)
 
@@ -27,7 +28,7 @@ func packageStringConsts(path string) map[string]string {
 
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") {
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
 
@@ -40,6 +41,25 @@ func packageStringConsts(path string) map[string]string {
 	}
 
 	return values
+}
+
+// routerFile is routerSource parsed once, with the constants beside it, for
+// every inventory read from it.
+var routerFile = sync.OnceValues(func() (parsedSource, error) {
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, routerSource, nil, 0)
+	if err != nil {
+		return parsedSource{}, fmt.Errorf("parse %s: %w", routerSource, err)
+	}
+
+	return parsedSource{fset, file, packageStringConsts(routerSource)}, nil
+})
+
+type parsedSource struct {
+	fset   *token.FileSet
+	file   *ast.File
+	consts map[string]string
 }
 
 // fileStringConsts is the same for one parsed file, which is all a parser
@@ -80,13 +100,7 @@ func collectStringConsts(file *ast.File, into map[string]string) {
 func constStringValue(expr ast.Expr, known map[string]string) (string, bool) {
 	switch e := expr.(type) {
 	case *ast.BasicLit:
-		if e.Kind != token.STRING {
-			return "", false
-		}
-
-		raw, err := strconv.Unquote(e.Value)
-
-		return raw, err == nil
+		return stringLiteralValue(e)
 
 	case *ast.Ident:
 		value, ok := known[e.Name]

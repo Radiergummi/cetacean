@@ -70,7 +70,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		scope:       name,
 	}
 	if doc, ok := h.stackDocs.get(key); ok {
-		writeRenderedJSON(w, r, http.StatusOK, doc)
+		writeRenderedJSON(w, r, http.StatusOK, doc, time.Time{})
 
 		return
 	}
@@ -93,7 +93,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	doc := renderedDoc{body: slices.Clip(body), etag: computeETag(body)}
 	h.stackDocs.put(key, doc)
 
-	writeRenderedJSON(w, r, http.StatusOK, doc)
+	writeRenderedJSON(w, r, http.StatusOK, doc, time.Time{})
 }
 
 const stackNamespaceLabel = "container_label_com_docker_stack_namespace"
@@ -103,14 +103,13 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	summaries := h.cache.ListStackSummaries()
-	summaries = acl.Filter(
+	summaries = acl.FilterInPlaceNamed(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		summaries,
-		func(s cache.StackSummary) string {
-			return "stack:" + s.Name
-		},
+		"stack",
+		func(s cache.StackSummary) string { return s.Name },
 	)
 
 	if h.promClient != nil && len(summaries) > 0 {

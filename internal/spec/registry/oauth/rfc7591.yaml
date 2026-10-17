@@ -162,8 +162,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc7591#section-3.2.2
     mutants:
       - file: internal/oauth/dcr.go
-        replace: "\t_ = json.NewEncoder(w).Encode(dcrErrorResponse{Error: code, ErrorDescription: desc})"
-        with: "\t_ = json.NewEncoder(w).Encode(dcrErrorResponse{ErrorDescription: desc})"
+        replace: "Encode(oauthErrorResponse{Error: code, ErrorDescription: desc})"
+        with: "Encode(oauthErrorResponse{ErrorDescription: desc})"
 
   - id: error-description-optional
     level: MAY

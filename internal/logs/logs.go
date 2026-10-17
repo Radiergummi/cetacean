@@ -329,6 +329,25 @@ func FilterSince(lines []LogLine, since string) []LogLine {
 	return filtered
 }
 
+// FilterBefore returns the lines strictly older than the given cursor, the
+// until counterpart of FilterSince.
+func FilterBefore(lines []LogLine, until string) []LogLine {
+	cursor, ok := ParseCursor(until)
+	if !ok {
+		return lines
+	}
+
+	filtered := lines[:0]
+	for _, line := range lines {
+		if !Older(line.Timestamp, cursor) {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+
+	return filtered
+}
+
 // BacklogFilter drops the lines a resumed follow stream has already delivered.
 // Only the replayed backlog can hold them, so live output passes through
 // whatever its timestamp says: a task's clock is its node's. A task's backlog

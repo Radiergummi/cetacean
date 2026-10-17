@@ -168,7 +168,8 @@ func (s *Server) findAcrossTypes(
 		}
 	}
 
-	sortFindRows(rows)
+	// Hits is a map, so the rows come out in no particular order.
+	cluster.SortRows(rows)
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
 
@@ -176,20 +177,6 @@ func (s *Server) findAcrossTypes(
 		Items:  rows,
 		Total:  results.Total,
 		Counts: results.Counts,
-	})
-}
-
-// sortFindRows puts a cross-type row list into a stable order. Rows are built
-// by ranging over results.Hits, a map, whose iteration order is not
-// guaranteed, and the result is marshalled into an MCP result a client may
-// cache by ETag.
-func sortFindRows(rows []cluster.Row) {
-	slices.SortFunc(rows, func(a, b cluster.Row) int {
-		if c := strings.Compare(a.Name, b.Name); c != 0 {
-			return c
-		}
-
-		return strings.Compare(a.ID, b.ID)
 	})
 }
 
@@ -340,104 +327,83 @@ func labelMatches(labels map[string]string, filter string) bool {
 	return got == value
 }
 
-// labelsFor collects each row's labels from the raw slice, keyed by the ID
-// cluster.Row uses, since the compact Row does not carry them. A type with
-// nothing resembling a label is absent, and labelMatches reads a missing
-// entry as no match.
-func labelsFor(listed any) map[string]map[string]string {
-	out := map[string]map[string]string{}
+// listedRecord is one record of a lookupResource listing, under the ID its
+// cluster.Row carries. labels is nil for a type with nothing resembling one,
+// and labelMatches reads that as no match.
+type listedRecord struct {
+	id     string
+	labels map[string]string
+	raw    any
+}
 
+func listedRecords(listed any) []listedRecord {
 	switch items := listed.(type) {
 	case []swarm.Service:
-		for _, svc := range items {
-			out[svc.ID] = svc.Spec.Labels
-		}
-
+		return recordsOf(items, func(svc swarm.Service) listedRecord {
+			return listedRecord{svc.ID, svc.Spec.Labels, svc}
+		})
 	case []swarm.Node:
-		for _, n := range items {
-			out[n.ID] = n.Spec.Labels
-		}
-
+		return recordsOf(items, func(n swarm.Node) listedRecord {
+			return listedRecord{n.ID, n.Spec.Labels, n}
+		})
 	case []cluster.EnrichedTask:
-		for _, t := range items {
+		return recordsOf(items, func(t cluster.EnrichedTask) listedRecord {
+			var labels map[string]string
 			if t.Spec.ContainerSpec != nil {
-				out[t.ID] = t.Spec.ContainerSpec.Labels
+				labels = t.Spec.ContainerSpec.Labels
 			}
-		}
-
+			return listedRecord{t.ID, labels, t}
+		})
+	case []cache.Stack:
+		return recordsOf(items, func(st cache.Stack) listedRecord {
+			return listedRecord{st.Name, nil, st}
+		})
 	case []swarm.Config:
-		for _, cfg := range items {
-			out[cfg.ID] = cfg.Spec.Labels
-		}
-
+		return recordsOf(items, func(cfg swarm.Config) listedRecord {
+			return listedRecord{cfg.ID, cfg.Spec.Labels, cfg}
+		})
 	case []swarm.Secret:
-		for _, sec := range items {
-			out[sec.ID] = sec.Spec.Labels
-		}
-
+		return recordsOf(items, func(sec swarm.Secret) listedRecord {
+			return listedRecord{sec.ID, sec.Spec.Labels, sec}
+		})
 	case []network.Summary:
-		for _, n := range items {
-			out[n.ID] = n.Labels
-		}
-
+		return recordsOf(items, func(n network.Summary) listedRecord {
+			return listedRecord{n.ID, n.Labels, n}
+		})
 	case []volume.Volume:
-		for _, v := range items {
-			out[v.Name] = v.Labels
-		}
+		return recordsOf(items, func(v volume.Volume) listedRecord {
+			return listedRecord{v.Name, v.Labels, v}
+		})
+	default:
+		return nil
 	}
+}
 
+func recordsOf[T any](items []T, record func(T) listedRecord) []listedRecord {
+	out := make([]listedRecord, len(items))
+	for i, item := range items {
+		out[i] = record(item)
+	}
 	return out
 }
 
-// rawItemsByID indexes the raw slice by the ID cluster.Row.ID carries — the
-// identity labelsFor keys by, plus stacks, which have no labels but still need
-// one. It is what lets raw mode filter by the Row's identity and return the
-// untouched record, since every RowsFor* builder sorts its own output.
+// labelsFor collects each row's labels, since the compact Row does not carry
+// them.
+func labelsFor(listed any) map[string]map[string]string {
+	out := map[string]map[string]string{}
+	for _, r := range listedRecords(listed) {
+		out[r.id] = r.labels
+	}
+	return out
+}
+
+// rawItemsByID is what lets raw mode filter by the Row's identity and return
+// the untouched record, since every RowsFor* builder sorts its own output.
 func rawItemsByID(listed any) map[string]any {
 	out := map[string]any{}
-
-	switch items := listed.(type) {
-	case []swarm.Service:
-		for _, svc := range items {
-			out[svc.ID] = svc
-		}
-
-	case []swarm.Node:
-		for _, n := range items {
-			out[n.ID] = n
-		}
-
-	case []cluster.EnrichedTask:
-		for _, t := range items {
-			out[t.ID] = t
-		}
-
-	case []cache.Stack:
-		for _, st := range items {
-			out[st.Name] = st
-		}
-
-	case []swarm.Config:
-		for _, cfg := range items {
-			out[cfg.ID] = cfg
-		}
-
-	case []swarm.Secret:
-		for _, sec := range items {
-			out[sec.ID] = sec
-		}
-
-	case []network.Summary:
-		for _, n := range items {
-			out[n.ID] = n
-		}
-
-	case []volume.Volume:
-		for _, v := range items {
-			out[v.Name] = v
-		}
+	for _, r := range listedRecords(listed) {
+		out[r.id] = r.raw
 	}
-
 	return out
 }
 

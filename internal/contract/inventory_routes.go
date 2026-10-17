@@ -44,21 +44,17 @@ var (
 // patterns, and because the source is what a reviewer edits.
 func Routes() ([]Route, error) {
 	routesOnce.Do(func() {
-		routes, routesErr = parseRoutesFile(routerSource)
+		src, err := routerFile()
+		if err != nil {
+			routesErr = err
+
+			return
+		}
+
+		routes, routesErr = collectRoutes(src.fset, src.file, routerSource, src.consts)
 	})
 
 	return routes, routesErr
-}
-
-func parseRoutesFile(path string) ([]Route, error) {
-	fset := token.NewFileSet()
-
-	file, err := parser.ParseFile(fset, path, nil, 0)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-
-	return collectRoutes(fset, file, path, packageStringConsts(path))
 }
 
 // parseRoutesFromSource parses routes out of source text rather than a file. It

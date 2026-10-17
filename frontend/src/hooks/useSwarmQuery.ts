@@ -1,8 +1,8 @@
 import type { FetchResult } from "../api/client";
-import { emptyMethods } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useLatestRef } from "./useLatestRef";
 import { useResourceStream } from "./useResourceStream";
+import { useStableMethods } from "./useStableMethods";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -76,16 +76,7 @@ export function useSwarmQuery<T>(
   const lastPage = query.data?.pages[query.data.pages.length - 1];
   const total = lastPage?.data.total ?? 0;
 
-  // Stabilize allowedMethods by reference — the Set is recreated on every
-  // fetch response, but its contents rarely change. Without this, every SSE
-  // refetch would cause unnecessary re-renders in consumers. Keying a memo on
-  // the sorted contents gives a stable identity without reading a ref during
-  // render.
-  const methodsKey = [...(lastPage?.allowedMethods ?? emptyMethods)].sort().join(",");
-  const allowedMethods = useMemo(
-    () => new Set(methodsKey === "" ? [] : methodsKey.split(",")),
-    [methodsKey],
-  );
+  const allowedMethods = useStableMethods(lastPage?.allowedMethods);
 
   const ssePath = ssePathMap[sseType] ?? `/events?types=${sseType}`;
 

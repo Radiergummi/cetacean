@@ -255,7 +255,7 @@ func TestResolveDuration(t *testing.T) {
 		t.Setenv("TEST_DUR", "200ms")
 		flag := "50ms"
 		file := "300ms"
-		got, err := resolveDuration(&flag, "TEST_DUR", &file, time.Second)
+		got, err := resolveDuration(&flag, "TEST_DUR", &file, time.Second, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -266,7 +266,7 @@ func TestResolveDuration(t *testing.T) {
 
 	t.Run("env wins when no flag", func(t *testing.T) {
 		t.Setenv("TEST_DUR", "200ms")
-		got, err := resolveDuration(nil, "TEST_DUR", nil, time.Second)
+		got, err := resolveDuration(nil, "TEST_DUR", nil, time.Second, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -278,7 +278,7 @@ func TestResolveDuration(t *testing.T) {
 	t.Run("file wins when no flag or env", func(t *testing.T) {
 		t.Setenv("TEST_DUR", "")
 		file := "300ms"
-		got, err := resolveDuration(nil, "TEST_DUR", &file, time.Second)
+		got, err := resolveDuration(nil, "TEST_DUR", &file, time.Second, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -289,7 +289,7 @@ func TestResolveDuration(t *testing.T) {
 
 	t.Run("default when nothing set", func(t *testing.T) {
 		t.Setenv("TEST_DUR", "")
-		got, err := resolveDuration(nil, "TEST_DUR", nil, time.Second)
+		got, err := resolveDuration(nil, "TEST_DUR", nil, time.Second, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -300,7 +300,7 @@ func TestResolveDuration(t *testing.T) {
 
 	t.Run("invalid duration returns error", func(t *testing.T) {
 		t.Setenv("TEST_DUR", "invalid")
-		_, err := resolveDuration(nil, "TEST_DUR", nil, time.Second)
+		_, err := resolveDuration(nil, "TEST_DUR", nil, time.Second, false)
 		if err == nil {
 			t.Error("expected error for invalid duration")
 		}
@@ -308,7 +308,7 @@ func TestResolveDuration(t *testing.T) {
 
 	t.Run("non-positive duration returns error", func(t *testing.T) {
 		t.Setenv("TEST_DUR", "-5ms")
-		_, err := resolveDuration(nil, "TEST_DUR", nil, time.Second)
+		_, err := resolveDuration(nil, "TEST_DUR", nil, time.Second, false)
 		if err == nil {
 			t.Error("expected error for negative duration")
 		}

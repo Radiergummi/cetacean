@@ -1,7 +1,7 @@
 import { useLatestRef } from "./useLatestRef";
 import { apiPath } from "@/lib/basePath";
 import { openEventStream } from "@/lib/eventStream";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
 
 export interface SSEEvent {
   type: string;
@@ -26,10 +26,8 @@ export const sseEventTypes = [
 
 /**
  * Opens an EventSource to the given path and dispatches parsed events.
- * Returns connection status for use by the ConnectionStatus component.
  */
 export function useResourceStream(path: string | undefined, listener: SSEListener) {
-  const [connected, setConnected] = useState(true);
   const listenerRef = useLatestRef(listener);
 
   useEffect(() => {
@@ -64,8 +62,6 @@ export function useResourceStream(path: string | undefined, listener: SSEListene
         ...Object.fromEntries(sseEventTypes.map((type) => [type, handler])),
         batch: batchHandler,
       },
-      onOpen: () => setConnected(true),
-      onDisconnected: () => setConnected(false),
       // A stream we reopened ourselves missed everything that happened while
       // it was down, and cannot ask the server to replay it. A sync tells
       // every consumer to refetch, which is what they already do when the
@@ -75,8 +71,6 @@ export function useResourceStream(path: string | undefined, listener: SSEListene
 
     return () => stream.close();
   }, [path, listenerRef]);
-
-  return { connected };
 }
 
 const ConnectionContext = createContext<{ connected: boolean; lastEventAt: number | null }>({

@@ -326,7 +326,8 @@ func (s *Server) HandleMetadata(w http.ResponseWriter, r *http.Request) {
 // Token endpoint (RFC 6749 / OAuth 2.1)
 // ---------------------------------------------------------------------------
 
-// oauthErrorResponse is the RFC 6749 §5.2 error response format.
+// oauthErrorResponse is the RFC 6749 §5.2 error response format, which RFC
+// 7591 §3.2.2 reuses for registration.
 type oauthErrorResponse struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description,omitempty"`
@@ -456,45 +457,23 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Issue access token.
-	accessToken, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
+	s.respondWithTokens(w, AccessTokenClaims{
 		Subject:     codeData.Subject,
 		Email:       codeData.Email,
 		DisplayName: codeData.DisplayName,
 		Groups:      codeData.Groups,
 		Grants:      codeData.Grants,
 		ClientID:    codeData.ClientID,
-	}, codeData.Resource, s.cfg.OAuth.AccessTokenTTL)
-	if err != nil {
-		writeTokenError(
-			w,
-			http.StatusInternalServerError,
-			"server_error",
-			"failed to issue access token",
-		)
-		return
-	}
-
-	// Issue refresh token.
-	refreshToken := s.refreshTokens.Issue(RefreshTokenData{
-		Subject:     codeData.Subject,
-		Email:       codeData.Email,
-		DisplayName: codeData.DisplayName,
-		Groups:      codeData.Groups,
-		Grants:      codeData.Grants,
-		ClientID:    codeData.ClientID,
-		Resource:    codeData.Resource,
-	}, s.cfg.OAuth.RefreshTokenTTL)
-
-	// No scope in the response, and none read from the request. RFC 6749 §5.1
-	// requires the parameter only when the granted scope differs from the
-	// requested one; this server defines none, so both reduce to the empty set.
-	// Adding a scope means revisiting that, and scopes_supported with it.
-	writeTokenResponse(w, tokenResponse{
-		AccessToken:  accessToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),
-		RefreshToken: refreshToken,
+	}, codeData.Resource, func() string {
+		return s.refreshTokens.Issue(RefreshTokenData{
+			Subject:     codeData.Subject,
+			Email:       codeData.Email,
+			DisplayName: codeData.DisplayName,
+			Groups:      codeData.Groups,
+			Grants:      codeData.Grants,
+			ClientID:    codeData.ClientID,
+			Resource:    codeData.Resource,
+		}, s.cfg.OAuth.RefreshTokenTTL)
 	})
 }
 
@@ -584,15 +563,29 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Issue new access token.
-	accessToken, err := s.tokenIssuer.IssueAccessToken(AccessTokenClaims{
+	s.respondWithTokens(w, AccessTokenClaims{
 		Subject:     result.Data.Subject,
 		Email:       result.Data.Email,
 		DisplayName: result.Data.DisplayName,
 		Groups:      result.Data.Groups,
 		Grants:      result.Data.Grants,
 		ClientID:    result.Data.ClientID,
-	}, result.Data.Resource, s.cfg.OAuth.AccessTokenTTL)
+	}, result.Data.Resource, func() string { return result.NewToken })
+}
+
+// respondWithTokens issues an access token for claims and writes it beside the
+// refresh token, which is only produced once the access token exists.
+func (s *Server) respondWithTokens(
+	w http.ResponseWriter,
+	claims AccessTokenClaims,
+	resource string,
+	refreshToken func() string,
+) {
+	accessToken, err := s.tokenIssuer.IssueAccessToken(
+		claims,
+		resource,
+		s.cfg.OAuth.AccessTokenTTL,
+	)
 	if err != nil {
 		writeTokenError(
 			w,
@@ -603,11 +596,15 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// No scope in the response, and none read from the request. RFC 6749 §5.1
+	// requires the parameter only when the granted scope differs from the
+	// requested one; this server defines none, so both reduce to the empty set.
+	// Adding a scope means revisiting that, and scopes_supported with it.
 	writeTokenResponse(w, tokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(s.cfg.OAuth.AccessTokenTTL.Seconds()),
-		RefreshToken: result.NewToken,
+		RefreshToken: refreshToken(),
 	})
 }
 

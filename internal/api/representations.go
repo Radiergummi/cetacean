@@ -99,67 +99,127 @@ func (h *Handlers) serviceSubResource(
 
 // --- Service sub-resources ---
 
-func (h *Handlers) serviceEnvRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/env", "ServiceEnv", func(svc swarm.Service) any {
-		var env []string
-		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			env = svc.Spec.TaskTemplate.ContainerSpec.Env
-		}
+// The service*Body functions render a sub-resource's body; the GET and the
+// write that answers with the same sub-resource share them.
 
-		return EnvResponse{Env: envSliceToMap(env)}
-	})
+func serviceEnvBody(svc swarm.Service) any {
+	var env []string
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		env = svc.Spec.TaskTemplate.ContainerSpec.Env
+	}
+
+	return EnvResponse{Env: envSliceToMap(env)}
+}
+
+func serviceResourcesBody(svc swarm.Service) any {
+	resources := svc.Spec.TaskTemplate.Resources
+	if resources == nil {
+		resources = &swarm.ResourceRequirements{}
+	}
+
+	return map[string]any{"resources": resources}
+}
+
+func servicePortsBody(svc swarm.Service) any {
+	var ports []swarm.PortConfig
+	if svc.Spec.EndpointSpec != nil {
+		ports = svc.Spec.EndpointSpec.Ports
+	}
+	if ports == nil {
+		ports = []swarm.PortConfig{}
+	}
+
+	return map[string]any{"ports": ports}
+}
+
+func serviceHealthcheckBody(svc swarm.Service) any {
+	var hc *container.HealthConfig
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		hc = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
+	}
+
+	return map[string]any{"healthcheck": hc}
+}
+
+func servicePlacementBody(svc swarm.Service) any {
+	placement := svc.Spec.TaskTemplate.Placement
+	if placement == nil {
+		placement = &swarm.Placement{}
+	}
+
+	return map[string]any{"placement": placement}
+}
+
+func serviceUpdatePolicyBody(svc swarm.Service) any {
+	policy := svc.Spec.UpdateConfig
+	if policy == nil {
+		policy = &swarm.UpdateConfig{}
+	}
+
+	return map[string]any{"updatePolicy": policy}
+}
+
+func serviceRollbackPolicyBody(svc swarm.Service) any {
+	policy := svc.Spec.RollbackConfig
+	if policy == nil {
+		policy = &swarm.UpdateConfig{}
+	}
+
+	return map[string]any{"rollbackPolicy": policy}
+}
+
+func serviceLogDriverBody(svc swarm.Service) any {
+	return map[string]any{"logDriver": svc.Spec.TaskTemplate.LogDriver}
+}
+
+func serviceContainerConfigBody(svc swarm.Service) any {
+	return map[string]any{
+		"containerConfig": containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec),
+	}
+}
+
+func serviceConfigsBody(svc swarm.Service) any {
+	return map[string]any{"configs": extractConfigRefs(svc.Spec.TaskTemplate.ContainerSpec)}
+}
+
+func serviceSecretsBody(svc swarm.Service) any {
+	return map[string]any{"secrets": extractSecretRefs(svc.Spec.TaskTemplate.ContainerSpec)}
+}
+
+func serviceNetworksBody(svc swarm.Service) any {
+	return map[string]any{"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks)}
+}
+
+func serviceMountsBody(svc swarm.Service) any {
+	var mounts []mount.Mount
+	if svc.Spec.TaskTemplate.ContainerSpec != nil {
+		mounts = svc.Spec.TaskTemplate.ContainerSpec.Mounts
+	}
+	if mounts == nil {
+		mounts = []mount.Mount{}
+	}
+
+	return map[string]any{"mounts": mounts}
+}
+
+func (h *Handlers) serviceEnvRepresentation(r *http.Request) (any, error) {
+	return h.serviceSubResource(r, "/env", "ServiceEnv", serviceEnvBody)
 }
 
 func (h *Handlers) serviceResourcesRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/resources", "ServiceResources", func(svc swarm.Service) any {
-		resources := svc.Spec.TaskTemplate.Resources
-		if resources == nil {
-			resources = &swarm.ResourceRequirements{}
-		}
-
-		return map[string]any{"resources": resources}
-	})
+	return h.serviceSubResource(r, "/resources", "ServiceResources", serviceResourcesBody)
 }
 
 func (h *Handlers) servicePortsRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/ports", "ServicePorts", func(svc swarm.Service) any {
-		var ports []swarm.PortConfig
-		if svc.Spec.EndpointSpec != nil {
-			ports = svc.Spec.EndpointSpec.Ports
-		}
-		if ports == nil {
-			ports = []swarm.PortConfig{}
-		}
-
-		return map[string]any{"ports": ports}
-	})
+	return h.serviceSubResource(r, "/ports", "ServicePorts", servicePortsBody)
 }
 
 func (h *Handlers) serviceHealthcheckRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(
-		r,
-		"/healthcheck",
-		"ServiceHealthcheck",
-		func(svc swarm.Service) any {
-			var hc *container.HealthConfig
-			if svc.Spec.TaskTemplate.ContainerSpec != nil {
-				hc = svc.Spec.TaskTemplate.ContainerSpec.Healthcheck
-			}
-
-			return map[string]any{"healthcheck": hc}
-		},
-	)
+	return h.serviceSubResource(r, "/healthcheck", "ServiceHealthcheck", serviceHealthcheckBody)
 }
 
 func (h *Handlers) servicePlacementRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/placement", "ServicePlacement", func(svc swarm.Service) any {
-		placement := svc.Spec.TaskTemplate.Placement
-		if placement == nil {
-			placement = &swarm.Placement{}
-		}
-
-		return map[string]any{"placement": placement}
-	})
+	return h.serviceSubResource(r, "/placement", "ServicePlacement", servicePlacementBody)
 }
 
 func (h *Handlers) serviceUpdatePolicyRepresentation(r *http.Request) (any, error) {
@@ -167,14 +227,7 @@ func (h *Handlers) serviceUpdatePolicyRepresentation(r *http.Request) (any, erro
 		r,
 		"/update-policy",
 		"ServiceUpdatePolicy",
-		func(svc swarm.Service) any {
-			policy := svc.Spec.UpdateConfig
-			if policy == nil {
-				policy = &swarm.UpdateConfig{}
-			}
-
-			return map[string]any{"updatePolicy": policy}
-		},
+		serviceUpdatePolicyBody,
 	)
 }
 
@@ -183,21 +236,12 @@ func (h *Handlers) serviceRollbackPolicyRepresentation(r *http.Request) (any, er
 		r,
 		"/rollback-policy",
 		"ServiceRollbackPolicy",
-		func(svc swarm.Service) any {
-			policy := svc.Spec.RollbackConfig
-			if policy == nil {
-				policy = &swarm.UpdateConfig{}
-			}
-
-			return map[string]any{"rollbackPolicy": policy}
-		},
+		serviceRollbackPolicyBody,
 	)
 }
 
 func (h *Handlers) serviceLogDriverRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/log-driver", "ServiceLogDriver", func(svc swarm.Service) any {
-		return map[string]any{"logDriver": svc.Spec.TaskTemplate.LogDriver}
-	})
+	return h.serviceSubResource(r, "/log-driver", "ServiceLogDriver", serviceLogDriverBody)
 }
 
 func (h *Handlers) serviceContainerConfigRepresentation(r *http.Request) (any, error) {
@@ -205,50 +249,24 @@ func (h *Handlers) serviceContainerConfigRepresentation(r *http.Request) (any, e
 		r,
 		"/container-config",
 		"ServiceContainerConfig",
-		func(svc swarm.Service) any {
-			return map[string]any{
-				"containerConfig": containerConfigFromSpec(svc.Spec.TaskTemplate.ContainerSpec),
-			}
-		},
+		serviceContainerConfigBody,
 	)
 }
 
 func (h *Handlers) serviceConfigsRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/configs", "ServiceConfigs", func(svc swarm.Service) any {
-		return map[string]any{
-			"configs": extractConfigRefs(svc.Spec.TaskTemplate.ContainerSpec),
-		}
-	})
+	return h.serviceSubResource(r, "/configs", "ServiceConfigs", serviceConfigsBody)
 }
 
 func (h *Handlers) serviceSecretsRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/secrets", "ServiceSecrets", func(svc swarm.Service) any {
-		return map[string]any{
-			"secrets": extractSecretRefs(svc.Spec.TaskTemplate.ContainerSpec),
-		}
-	})
+	return h.serviceSubResource(r, "/secrets", "ServiceSecrets", serviceSecretsBody)
 }
 
 func (h *Handlers) serviceNetworksRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/networks", "ServiceNetworks", func(svc swarm.Service) any {
-		return map[string]any{
-			"networks": extractNetworkRefs(svc.Spec.TaskTemplate.Networks),
-		}
-	})
+	return h.serviceSubResource(r, "/networks", "ServiceNetworks", serviceNetworksBody)
 }
 
 func (h *Handlers) serviceMountsRepresentation(r *http.Request) (any, error) {
-	return h.serviceSubResource(r, "/mounts", "ServiceMounts", func(svc swarm.Service) any {
-		var mounts []mount.Mount
-		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			mounts = svc.Spec.TaskTemplate.ContainerSpec.Mounts
-		}
-		if mounts == nil {
-			mounts = []mount.Mount{}
-		}
-
-		return map[string]any{"mounts": mounts}
-	})
+	return h.serviceSubResource(r, "/mounts", "ServiceMounts", serviceMountsBody)
 }
 
 func (h *Handlers) serviceModeRepresentation(r *http.Request) (any, error) {
@@ -308,11 +326,13 @@ func (h *Handlers) nodeRoleRepresentation(r *http.Request) (any, error) {
 // node role representation reports alongside the role itself.
 func (h *Handlers) managerCount() int {
 	count := 0
-	for _, n := range h.cache.ListNodes() {
+	h.cache.EachNode(func(n swarm.Node) bool {
 		if n.Spec.Role == swarm.NodeRoleManager {
 			count++
 		}
-	}
+
+		return true
+	})
 
 	return count
 }
@@ -359,10 +379,15 @@ func (h *Handlers) configRepresentation(r *http.Request) (any, error) {
 		return nil, errNoRepresentation
 	}
 
-	return NewDetailResponse(r.Context(), "/configs/"+id, "Config", ConfigResponse{
+	return NewDetailResponse(r.Context(), "/configs/"+id, "Config", h.configBody(r, cfg)), nil
+}
+
+// configBody is the body the config GET and the create response share.
+func (h *Handlers) configBody(r *http.Request, cfg swarm.Config) ConfigResponse {
+	return ConfigResponse{
 		Config:   cfg,
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(id)),
-	}), nil
+		Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID)),
+	}
 }
 
 func (h *Handlers) secretRepresentation(r *http.Request) (any, error) {
@@ -373,13 +398,16 @@ func (h *Handlers) secretRepresentation(r *http.Request) (any, error) {
 		return nil, errNoRepresentation
 	}
 
-	// Never expose secret data — clear it before responding.
-	sec = cluster.RedactSecret(sec)
+	return NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", h.secretBody(r, sec)), nil
+}
 
-	return NewDetailResponse(r.Context(), "/secrets/"+id, "Secret", SecretResponse{
-		Secret:   sec,
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(id)),
-	}), nil
+// secretBody is the body the secret GET and the create response share. It
+// clears the secret data: never expose it.
+func (h *Handlers) secretBody(r *http.Request, sec swarm.Secret) SecretResponse {
+	return SecretResponse{
+		Secret:   cluster.RedactSecret(sec),
+		Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID)),
+	}
 }
 
 func (h *Handlers) networkRepresentation(r *http.Request) (any, error) {

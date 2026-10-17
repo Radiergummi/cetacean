@@ -1,4 +1,12 @@
+import type { Segment } from "../SegmentedControl";
 import { createContext, useContext } from "react";
+
+const ranges = ["1h", "6h", "24h", "7d"] as const;
+
+export const rangeSegments: Segment<string>[] = ranges.map((value) => ({
+  label: value.toUpperCase(),
+  value,
+}));
 
 export interface MetricsPanelContextValue {
   range: string;

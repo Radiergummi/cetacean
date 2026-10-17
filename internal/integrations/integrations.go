@@ -23,3 +23,10 @@ func Detect(labels map[string]string) []any {
 
 	return integrations
 }
+
+// enabled reads an integration's <prefix>enable label: present but anything
+// other than "true" disables it, and absent leaves it enabled.
+func enabled(labels map[string]string, prefix string) bool {
+	v, ok := labels[prefix+"enable"]
+	return !ok || v == "true"
+}

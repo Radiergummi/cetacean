@@ -428,7 +428,7 @@ func VolumeDigest(vol volume.Volume, users []cache.ServiceRef) Digest {
 func stackScopedDetails(labels map[string]string) map[string]any {
 	details := make(map[string]any)
 
-	if stack := labels["com.docker.stack.namespace"]; stack != "" {
+	if stack := labels[StackNamespaceLabel]; stack != "" {
 		details["stack"] = stack
 	}
 

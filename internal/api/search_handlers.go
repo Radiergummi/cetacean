@@ -21,6 +21,21 @@ type searchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
+// searchQuery reads the required ?q=, refusing one missing or over 200 bytes.
+func searchQuery(w http.ResponseWriter, r *http.Request) (string, bool) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
+		return "", false
+	}
+	if len(q) > 200 {
+		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
+		return "", false
+	}
+
+	return q, true
+}
+
 // HandleSearch performs a cross-resource global search via the shared cluster
 // layer. Per-type counts and the grand total reflect the readable pre-cap
 // matches so the UI can show "X matches" even when only the first N are displayed.
@@ -29,13 +44,8 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" {
-		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
-		return
-	}
-	if len(q) > 200 {
-		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
+	q, ok := searchQuery(w, r)
+	if !ok {
 		return
 	}
 

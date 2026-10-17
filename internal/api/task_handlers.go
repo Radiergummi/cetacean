@@ -70,21 +70,16 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paged := applyPagination(r.Context(), tasks, p)
-	enriched := cluster.EnrichTasks(h.cache, paged.Items)
 	writeLinkTemplate(w, r, spec.linkTemplate)
-	writeCollectionResponse(
+	writeListPage(
 		w,
 		r,
-		NewCollectionResponse(
-			r.Context(),
-			wrapItems(r.Context(), enriched, "Task", enrichedTaskID),
-			paged.Total,
-			paged.Limit,
-			paged.Offset,
-		),
+		tasks,
 		p,
 		validator,
+		"Task",
+		enrichedTaskID,
+		func(page []swarm.Task) []cluster.EnrichedTask { return cluster.EnrichTasks(h.cache, page) },
 	)
 }
 

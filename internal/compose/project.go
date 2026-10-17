@@ -11,10 +11,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// stackNamespaceLabel marks the stack a resource was deployed under; compose's
-// deploy.labels/labels already say that, so it is redundant on the document.
-const stackNamespaceLabel = "com.docker.stack.namespace"
-
 // notAContainerService suffixes the warning both entry points emit for a
 // plugin or network-attachment task.
 const notAContainerService = ": not a container service, omitted"
@@ -179,7 +175,7 @@ func FromService(svc swarm.Service, networks []network.Summary) (File, []string)
 // owns reports whether a resource carries this stack's namespace label, the
 // only thing distinguishing one the stack created from one it adopted.
 func owns(labels map[string]string, stack string) bool {
-	return labels[stackNamespaceLabel] == stack
+	return labels[cache.StackLabel] == stack
 }
 
 // FromStack projects every member of a stack. A network or volume carrying
@@ -317,13 +313,13 @@ func reserveStack(n names, d cache.StackDetail) {
 // source map; it returns nil rather than an empty map when that was the only
 // key, since an empty map renders as "labels: {}".
 func stripNamespace(labels map[string]string) map[string]string {
-	if _, ok := labels[stackNamespaceLabel]; !ok {
+	if _, ok := labels[cache.StackLabel]; !ok {
 		return labels
 	}
 
 	out := make(map[string]string, len(labels)-1)
 	for k, v := range labels {
-		if k != stackNamespaceLabel {
+		if k != cache.StackLabel {
 			out[k] = v
 		}
 	}

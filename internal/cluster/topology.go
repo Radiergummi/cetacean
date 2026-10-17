@@ -107,7 +107,7 @@ func NetworkGraph(services []swarm.Service, networks []network.Summary) Topology
 			ID:     id,
 			Label:  n.Name,
 			Type:   "network",
-			Group:  n.Labels["com.docker.stack.namespace"],
+			Group:  n.Labels[StackNamespaceLabel],
 			Detail: n.Driver,
 			State:  n.Scope,
 		})
@@ -276,7 +276,7 @@ func serviceNode(svc swarm.Service, state string) TopologyNode {
 		ID:     svc.ID,
 		Label:  svc.Spec.Name,
 		Type:   "service",
-		Group:  svc.Spec.Labels["com.docker.stack.namespace"],
+		Group:  svc.Spec.Labels[StackNamespaceLabel],
 		Detail: image,
 		State:  state,
 	}

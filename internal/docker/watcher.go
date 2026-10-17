@@ -499,13 +499,7 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 		}
 
 		return eventKey{resourceType: "task", id: taskID}, "update"
-	case events.NetworkEventType:
-		action := string(msg.Action)
-		if action == "destroy" {
-			action = "remove"
-		}
-		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, action
-	case events.VolumeEventType:
+	case events.NetworkEventType, events.VolumeEventType:
 		action := string(msg.Action)
 		if action == "destroy" {
 			action = "remove"

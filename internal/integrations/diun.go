@@ -23,8 +23,6 @@ type DiunIntegration struct {
 
 func detectDiun(labels map[string]string) *DiunIntegration {
 	var found bool
-	var enableVal string
-	var enableSet bool
 
 	integration := &DiunIntegration{Name: "diun"}
 
@@ -37,9 +35,6 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 		found = true
 
 		switch suffix {
-		case "enable":
-			enableSet = true
-			enableVal = v
 		case "watch_repo":
 			integration.WatchRepo = v == "true"
 		case "notify_on":
@@ -74,7 +69,7 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 		return nil
 	}
 
-	integration.Enabled = !enableSet || enableVal == "true"
+	integration.Enabled = enabled(labels, "diun.")
 
 	return integration
 }

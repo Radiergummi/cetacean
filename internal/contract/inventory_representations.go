@@ -39,18 +39,14 @@ var (
 // neither shape is an error, not a route reported as serving less than it does.
 func Representations() (map[string][]Representation, error) {
 	repsOnce.Do(func() {
-		fset := token.NewFileSet()
-
-		file, err := parser.ParseFile(fset, routerSource, nil, 0)
+		src, err := routerFile()
 		if err != nil {
-			repsErr = fmt.Errorf("parse %s: %w", routerSource, err)
+			repsErr = err
 
 			return
 		}
 
-		reps, repsErr = collectRepresentations(
-			fset, file, routerSource, packageStringConsts(routerSource),
-		)
+		reps, repsErr = collectRepresentations(src.fset, src.file, routerSource, src.consts)
 	})
 
 	return reps, repsErr

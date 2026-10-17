@@ -57,15 +57,7 @@ func (h *Handlers) feedListHandler(
 			return
 		}
 
-		beforeID, limit := parseFeedPagination(r)
-		entries := h.cache.History().List(cache.HistoryQuery{
-			Type:     eventType,
-			BeforeID: beforeID,
-			Limit:    limit,
-			Visible:  h.readableHistory(r),
-		})
-		entries = cluster.NameHistoryTasks(h.cache, entries)
-
+		entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{Type: eventType})
 		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
 	}
 }
@@ -85,16 +77,10 @@ func (h *Handlers) feedDetailHandler(
 
 		resourceID := r.PathValue(idParam)
 
-		beforeID, limit := parseFeedPagination(r)
-		entries := h.cache.History().List(cache.HistoryQuery{
+		entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{
 			Type:       eventType,
 			ResourceID: resourceID,
-			BeforeID:   beforeID,
-			Limit:      limit,
-			Visible:    h.readableHistory(r),
 		})
-		entries = cluster.NameHistoryTasks(h.cache, entries)
-
 		render(w, r, historyFeedData(r, nameFunc(resourceID), entries, beforeID, limit))
 	}
 }
@@ -109,15 +95,22 @@ func (h *Handlers) handleFeedHistory(
 		return
 	}
 
-	beforeID, limit := parseFeedPagination(r)
-	entries := h.cache.History().List(cache.HistoryQuery{
-		BeforeID: beforeID,
-		Limit:    limit,
-		Visible:  h.readableHistory(r),
-	})
-	entries = cluster.NameHistoryTasks(h.cache, entries)
-
+	entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{})
 	render(w, r, historyFeedData(r, "History", entries, beforeID, limit))
+}
+
+// queryHistoryFeed runs query for a feed page: the request's pagination, only
+// what the caller may read, and tasks named.
+func (h *Handlers) queryHistoryFeed(
+	r *http.Request,
+	query cache.HistoryQuery,
+) ([]cache.HistoryEntry, uint64, int) {
+	beforeID, limit := parseFeedPagination(r)
+	query.BeforeID = beforeID
+	query.Limit = limit
+	query.Visible = h.readableHistory(r)
+
+	return cluster.NameHistoryTasks(h.cache, h.cache.History().List(query)), beforeID, limit
 }
 
 // handleFeedSearch validates the search query, queries matching history entries,
@@ -131,25 +124,12 @@ func (h *Handlers) handleFeedSearch(
 		return
 	}
 
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" {
-		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
+	q, ok := searchQuery(w, r)
+	if !ok {
 		return
 	}
 
-	if len(q) > 200 {
-		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
-		return
-	}
-
-	beforeID, limit := parseFeedPagination(r)
-	entries := h.cache.History().List(cache.HistoryQuery{
-		BeforeID:     beforeID,
-		NameContains: q,
-		Limit:        limit,
-		Visible:      h.readableHistory(r),
-	})
-	entries = cluster.NameHistoryTasks(h.cache, entries)
+	entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{NameContains: q})
 
 	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
 	// the same BREACH shape HandleSearch opts out of, so it opts out too.
@@ -190,7 +170,7 @@ func (h *Handlers) handleFeedRecommendations(
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		h.recEngine.Results(),
-		recommendationResource,
+		cluster.RecommendationACLResource,
 	)
 
 	lastTick := h.recEngine.LastTick()

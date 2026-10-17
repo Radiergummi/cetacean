@@ -100,15 +100,32 @@ var notFoundCodes = map[string]string{
 	"stack":   "STK001",
 }
 
-// decodeJSON reads and decodes a JSON request body into T, enforcing a 1MB
-// size limit. Returns the decoded value and true on success. On failure, it
-// writes an API006 error response and returns the zero value and false.
+// maxWriteBody caps every write request body.
+const maxWriteBody = 1 << 20
+
+func limitWriteBody(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxWriteBody)
+}
+
+// decodeJSON reads and decodes a JSON request body into T, enforcing the body
+// limit. Returns the decoded value and true on success. On failure, it writes
+// an API006 error response and returns the zero value and false.
 func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	return decodeBody[T](w, r, "API006", "invalid request body")
+}
+
+// decodeMergePatch is decodeJSON for a merge-patch body, which answers a
+// decode failure with API008. The caller checks the Content-Type itself.
+func decodeMergePatch[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
+	return decodeBody[T](w, r, "API008", "invalid JSON")
+}
+
+func decodeBody[T any](w http.ResponseWriter, r *http.Request, code, message string) (T, bool) {
+	limitWriteBody(w, r)
 
 	var v T
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+		writeErrorCode(w, r, code, message)
 		return v, false
 	}
 
@@ -337,6 +354,8 @@ func structMergePatch(
 	errCode string,
 	errMsg string,
 ) (func(current, target any) error, bool) {
+	limitWriteBody(w, r)
+
 	if !requireMergePatch(w, r) {
 		return nil, false
 	}
@@ -413,6 +432,8 @@ func parsePatchMutator(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (func(map[string]string) (map[string]string, error), bool) {
+	limitWriteBody(w, r)
+
 	ct := r.Header.Get("Content-Type")
 	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
 	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")

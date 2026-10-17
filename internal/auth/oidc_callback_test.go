@@ -977,7 +977,7 @@ func TestWhoami_ValidSession(t *testing.T) {
 	r.AddCookie(sessionCookie)
 	w := httptest.NewRecorder()
 
-	p.handleWhoami(w, r)
+	WhoamiHandler(p, APITokens{}, WriteIdentityJSON)(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -1004,7 +1004,7 @@ func TestWhoami_NoSession(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil)
 	w := httptest.NewRecorder()
-	p.handleWhoami(w, r)
+	WhoamiHandler(p, APITokens{}, WriteIdentityJSON)(w, r)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
@@ -1038,8 +1038,6 @@ func TestLogout_ClearsSession(t *testing.T) {
 	}
 }
 
-// whoami reads a bearer token on its own path rather than through
-// Authenticate, so each outcome is pinned here separately.
 func TestWhoami_BearerToken(t *testing.T) {
 	idp := newMockIDP(t, "test-client")
 	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
@@ -1060,7 +1058,7 @@ func TestWhoami_BearerToken(t *testing.T) {
 			r.Header.Set("Authorization", "Bearer "+tc.token)
 			w := httptest.NewRecorder()
 
-			p.handleWhoami(w, r)
+			WhoamiHandler(p, APITokens{}, WriteIdentityJSON)(w, r)
 
 			if w.Code != tc.status {
 				t.Fatalf("status = %d, want %d", w.Code, tc.status)

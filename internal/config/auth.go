@@ -122,7 +122,7 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 				fileField(fo, func(o *fileAuthOIDC) *string { return o.RedirectURL }),
 				defaultRedirectURL(publicURL, basePath),
 			),
-			Scopes: parseScopes(
+			Scopes: splitComma(
 				resolve(
 					flags.OIDCScopes,
 					"CETACEAN_AUTH_OIDC_SCOPES",
@@ -345,17 +345,6 @@ func parseTrustedProxies(raw string) ([]netip.Prefix, error) {
 		)
 	}
 	return prefixes, nil
-}
-
-func parseScopes(s string) []string {
-	var scopes []string
-	for part := range strings.SplitSeq(s, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			scopes = append(scopes, part)
-		}
-	}
-	return scopes
 }
 
 // defaultRedirectURL builds the OIDC callback URL from server.public_url. The

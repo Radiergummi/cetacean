@@ -1,34 +1,27 @@
 import { api, emptyMethods } from "../api/client";
-import type { Plugin, SwarmInfo } from "../api/types";
-import { useCallback, useEffect, useState } from "react";
+import type { Plugin } from "../api/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+
+const emptyPlugins: Plugin[] = [];
 
 export function useSwarmPage() {
-  const [data, setData] = useState<SwarmInfo | null>(null);
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [error, setError] = useState(false);
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
+  const queryClient = useQueryClient();
+  const swarmQuery = useQuery({ queryKey: ["swarm"], queryFn: () => api.swarm() });
+  const pluginsQuery = useQuery({ queryKey: ["plugins"], queryFn: () => api.plugins() });
+
+  const data = swarmQuery.data?.data ?? null;
+  const allowedMethods = swarmQuery.data?.allowedMethods ?? emptyMethods;
+  const error = swarmQuery.isError;
+  const plugins = pluginsQuery.data?.data ?? emptyPlugins;
 
   const fetchSwarmInfo = useCallback(() => {
-    api
-      .swarm()
-      .then(({ data: swarmData, allowedMethods: methods }) => {
-        setData(swarmData);
-        setAllowedMethods(methods);
-      })
-      .catch(() => setError(true));
-  }, []);
+    void queryClient.invalidateQueries({ queryKey: ["swarm"] });
+  }, [queryClient]);
 
   const refetchPlugins = useCallback(() => {
-    api
-      .plugins()
-      .then(({ data: pluginsData }) => setPlugins(pluginsData))
-      .catch(console.warn);
-  }, []);
-
-  useEffect(() => {
-    fetchSwarmInfo();
-    refetchPlugins();
-  }, [fetchSwarmInfo, refetchPlugins]);
+    void queryClient.invalidateQueries({ queryKey: ["plugins"] });
+  }, [queryClient]);
 
   // Orchestration draft
   const [draftTaskHistoryLimit, setDraftTaskHistoryLimit] = useState(0);

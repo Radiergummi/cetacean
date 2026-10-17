@@ -174,8 +174,7 @@ func evaluate(
 
 	// --- At-limit / approaching-limit checks (instant metrics) ---
 
-	resourcesFixAction := new(string)
-	*resourcesFixAction = "PATCH /services/{id}/resources"
+	resourcesFixAction := new("PATCH /services/{id}/resources")
 
 	if instant != nil {
 		if !noCPULimit {

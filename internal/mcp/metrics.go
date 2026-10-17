@@ -40,10 +40,9 @@ const (
 	metricNetwork = "network"
 )
 
-// swarmServiceLabel is the label cAdvisor derives from Docker's own
-// com.docker.swarm.service.name, and is how a container is attributed to a
-// service. The dashboard queries by the same label.
-const swarmServiceLabel = "container_label_com_docker_swarm_service_name"
+// swarmServiceLabel attributes a container to a service. The dashboard and the
+// sizing recommendations query by the same label.
+const swarmServiceLabel = prom.SwarmServiceLabel
 
 // metricRange is a window and the resolution to sample it at. The steps keep
 // every window between 60 and 170 points: enough to see the shape, few enough
@@ -430,8 +429,10 @@ func instanceSelector(node swarm.Node) string {
 // the second line of defence rather than the first — but a service named with
 // a quote would otherwise produce a query that does not parse.
 func escapePromQLValue(value string) string {
-	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(value)
+	return promQLValueEscaper.Replace(value)
 }
+
+var promQLValueEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
 
 // promQLRegexValue quotes a value for a PromQL regex matcher. String escaping
 // alone is not enough, since `=~` compiles what it is given: "api.v2" would

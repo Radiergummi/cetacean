@@ -226,7 +226,7 @@ func (s *Server) servicesInScope(
 		}
 
 		for _, svc := range all {
-			if strings.EqualFold(svc.Spec.Labels["com.docker.stack.namespace"], target) {
+			if strings.EqualFold(svc.Spec.Labels[cluster.StackNamespaceLabel], target) {
 				picked = append(picked, svc)
 			}
 		}

@@ -224,6 +224,26 @@ func TestFilterSince(t *testing.T) {
 	})
 }
 
+func TestFilterBefore(t *testing.T) {
+	lines := func() []LogLine {
+		return []LogLine{
+			{Timestamp: "2024-01-01T00:00:00.000000000Z", Message: "before"},
+			{Timestamp: "2024-01-01T00:00:01.000000000Z", Message: "at cursor"},
+			{Timestamp: "2024-01-01T00:00:02.000000000Z", Message: "after"},
+			{Message: "no timestamp"},
+		}
+	}
+
+	got := FilterBefore(lines(), "2024-01-01T00:00:01.000000000Z")
+	if len(got) != 2 || got[0].Message != "before" || got[1].Message != "no timestamp" {
+		t.Errorf("FilterBefore = %v, want the earlier and the untimestamped line", got)
+	}
+
+	if got := FilterBefore(lines(), ""); len(got) != 4 {
+		t.Errorf("FilterBefore with empty cursor dropped lines: got %d, want 4", len(got))
+	}
+}
+
 // A multi-line log entry arrives as one frame whose continuation lines carry
 // neither Docker's timestamp prefix nor its detail labels. Without inheriting
 // them they cannot be ordered or cursored: every reconnect re-sends every stack

@@ -506,14 +506,14 @@ func TestParseScopes(t *testing.T) {
 		{",,,", nil},
 	}
 	for _, tt := range tests {
-		got := parseScopes(tt.input)
+		got := splitComma(tt.input)
 		if len(got) != len(tt.want) {
-			t.Errorf("parseScopes(%q): got %v, want %v", tt.input, got, tt.want)
+			t.Errorf("splitComma(%q): got %v, want %v", tt.input, got, tt.want)
 			continue
 		}
 		for i := range got {
 			if got[i] != tt.want[i] {
-				t.Errorf("parseScopes(%q)[%d]: got %q, want %q", tt.input, i, got[i], tt.want[i])
+				t.Errorf("splitComma(%q)[%d]: got %q, want %q", tt.input, i, got[i], tt.want[i])
 			}
 		}
 	}

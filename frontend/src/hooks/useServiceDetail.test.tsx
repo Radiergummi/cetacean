@@ -19,8 +19,6 @@ vi.mock("./useResourceStream", () => ({
   useResourceStream: (path: string | undefined, listener: (event: never) => void) => {
     streamPaths.push(path);
     subscriber = listener as (event: StreamEvent) => void;
-
-    return { connected: true };
   },
 }));
 

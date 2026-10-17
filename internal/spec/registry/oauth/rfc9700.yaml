@@ -187,8 +187,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9700#section-2.1
     mutants:
       - file: internal/auth/oidc.go
-        replace: "\tstateCookie, err := r.Cookie(\"cetacean_auth_state\")\n\tif err != nil {"
-        with: "\tstateCookie, err := r.Cookie(\"cetacean_auth_state\")\n\tif false && err != nil {"
+        replace: "\tstateCookie, err := r.Cookie(stateCookieName)\n\tif err != nil {"
+        with: "\tstateCookie, err := r.Cookie(stateCookieName)\n\tif false && err != nil {"
 
   - id: redirect-uri-compared-as-strings
     level: MUST
@@ -330,8 +330,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9700#section-4.7.1
     mutants:
       - file: internal/auth/oidc.go
-        replace: "\t\tName:     \"cetacean_auth_state\",\n\t\tValue:    state,"
-        with: "\t\tName:     \"cetacean_state\",\n\t\tValue:    state,"
+        replace: "\thttp.SetCookie(w, p.flowCookie(stateCookieName, state, 300))"
+        with: "\thttp.SetCookie(w, p.flowCookie(\"cetacean_state\", state, 300))"
 
   - id: pkce-support-detectable
     level: MUST

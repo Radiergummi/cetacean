@@ -258,14 +258,9 @@ function UserBadge() {
 function ConnectionTracker({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(true);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
-  const lastEventAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const touch = () => {
-      const now = Date.now();
-      lastEventAtRef.current = now;
-      setLastEventAt(now);
-    };
+    const touch = () => setLastEventAt(Date.now());
 
     const stream = openEventStream(apiPath("/events"), {
       listeners: Object.fromEntries([...sseEventTypes, "batch"].map((type) => [type, touch])),

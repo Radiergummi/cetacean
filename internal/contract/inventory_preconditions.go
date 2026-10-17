@@ -22,18 +22,14 @@ var (
 // chain variable registered twice, as the healthcheck methods do.
 func PreconditionedRoutes() ([]Route, error) {
 	precondOnce.Do(func() {
-		fset := token.NewFileSet()
-
-		file, err := parser.ParseFile(fset, routerSource, nil, 0)
+		src, err := routerFile()
 		if err != nil {
-			precondErr = fmt.Errorf("parse %s: %w", routerSource, err)
+			precondErr = err
 
 			return
 		}
 
-		preconds, precondErr = collectPreconditioned(
-			fset, file, routerSource, packageStringConsts(routerSource),
-		)
+		preconds, precondErr = collectPreconditioned(src.fset, src.file, routerSource, src.consts)
 	})
 
 	return preconds, precondErr

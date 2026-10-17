@@ -1,9 +1,7 @@
-// oxlint-disable react/refs -- `dataRef` is read from the cross-chart sync
-// subscription and from the isolate callback, both of which run outside render.
-// Depending on `data` instead would resubscribe on every streamed point.
 import { useChartSync } from "./ChartSyncProvider";
+import { useLatestRef } from "@/hooks/useLatestRef";
 import type { ParsedMetrics } from "@/lib/metricsParser.ts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface Options {
   chartId: string;
@@ -44,8 +42,7 @@ export function useSeriesIsolation({
   const controlled = isolatedLabel !== undefined;
   const [localLabel, setLocalLabel] = useState<string | null>(null);
 
-  const dataRef = useRef(data);
-  dataRef.current = data;
+  const dataRef = useLatestRef(data);
 
   const label = controlled ? (isolatedLabel ?? null) : localLabel;
 
@@ -81,7 +78,7 @@ export function useSeriesIsolation({
 
       set(known ? published : null);
     });
-  }, [chartId, sync, set]);
+  }, [chartId, sync, set, dataRef]);
 
   const isolate = useCallback(
     (next: number | null) => {
@@ -90,7 +87,7 @@ export function useSeriesIsolation({
       set(nextLabel);
       sync.publishIsolation(chartId, nextLabel);
     },
-    [chartId, set, sync],
+    [chartId, set, sync, dataRef],
   );
 
   return { index, isolate };

@@ -51,12 +51,9 @@ func (spec getLabelsSpec[T]) representation(r *http.Request) (any, error) {
 
 // patchLabelsSpec describes how to patch labels for a resource type.
 type patchLabelsSpec[T any] struct {
-	resource  string // e.g. "node", "service"
-	pathKey   string // path value key: "id" or "name"
-	typeName  string // JSON-LD type: "NodeLabels", "ServiceLabels", etc.
-	getter    func(string) (T, bool)
-	getLabels func(T) map[string]string
-	update    func(
+	getLabelsSpec[T]
+
+	update func(
 		ctx context.Context,
 		id string,
 		mutate func(current map[string]string) (map[string]string, error),
@@ -70,18 +67,13 @@ type patchLabelsSpec[T any] struct {
 func handleGetLabels[T any](
 	w http.ResponseWriter,
 	r *http.Request,
-	evaluator *acl.Evaluator,
+	h *Handlers,
 	spec getLabelsSpec[T],
 ) {
 	key := r.PathValue(spec.pathKey)
 
-	item, ok := lookupOr404(w, r, spec.resource, key, spec.getter)
+	item, ok := lookupACL(h, w, r, spec.resource, key, spec.getter, spec.aclResource)
 	if !ok {
-		return
-	}
-
-	if !evaluator.Can(auth.IdentityFromContext(r.Context()), "read", spec.aclResource(item)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
 		return
 	}
 
@@ -95,7 +87,6 @@ func handlePatchLabels[T any](
 	spec patchLabelsSpec[T],
 ) {
 	key := r.PathValue(spec.pathKey)
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	// Cache lookup is for the 404 only — the merge runs against the
 	// freshly-inspected spec inside the writer (M-42).
@@ -131,15 +122,5 @@ func handlePatchLabels[T any](
 		return
 	}
 
-	labels := spec.getLabels(result)
-	if labels == nil {
-		labels = map[string]string{}
-	}
-
-	writeMutationResponse(w, r, NewDetailResponse(
-		r.Context(),
-		r.URL.Path,
-		spec.typeName,
-		LabelsResponse{Labels: labels},
-	))
+	writeMutationResponse(w, r, spec.detail(r, result))
 }

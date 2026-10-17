@@ -116,7 +116,7 @@ func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 // map: Go stores map values larger than 128 bytes indirectly, so cloning one
 // allocates every value separately. Sorting an index permutation then keeps
 // the sort itself off the values, which are wide enough that swapping them
-// costs more than the extra slice.
+// costs more than the index.
 func (r *ResourceMap[T]) List() []T {
 	r.mu.RLock()
 	keys := make([]string, 0, len(r.items))
@@ -127,18 +127,39 @@ func (r *ResourceMap[T]) List() []T {
 	}
 	r.mu.RUnlock()
 
-	order := make([]int, len(keys))
+	sortByIndex(vals, func(a, b int) int { return cmp.Compare(keys[a], keys[b]) })
+
+	return vals
+}
+
+// sortByIndex reorders vals in place by sorting their positions with compare,
+// so the sort swaps ints rather than the values, and then moves each value at
+// most once by following the permutation's cycles — no second copy of vals.
+func sortByIndex[T any](vals []T, compare func(a, b int) int) {
+	order := make([]int, len(vals))
 	for i := range order {
 		order[i] = i
 	}
-	slices.SortFunc(order, func(a, b int) int { return cmp.Compare(keys[a], keys[b]) })
+	slices.SortFunc(order, compare)
 
-	out := make([]T, len(vals))
-	for i, j := range order {
-		out[i] = vals[j]
+	// Position i takes vals[order[i]]; a finished position is marked order[i] = i.
+	for start := range order {
+		if order[start] == start {
+			continue
+		}
+
+		held := vals[start]
+		for at := start; ; {
+			from := order[at]
+			order[at] = at
+			if from == start {
+				vals[at] = held
+				break
+			}
+			vals[at] = vals[from]
+			at = from
+		}
 	}
-
-	return out
 }
 
 // Each calls yield for every value in the same order List returns them,

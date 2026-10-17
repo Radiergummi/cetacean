@@ -1,25 +1,21 @@
 import FetchError from "../components/FetchError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { api, type ErrorDefinition } from "@/api/client";
+import { api } from "@/api/client";
 import { getErrorMessage } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 export default function ErrorCodeDetail() {
   const { code } = useParams<{ code: string }>();
-  const [errorDef, setErrorDef] = useState<ErrorDefinition | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .errorDefinition(code ?? "")
-      .then(setErrorDef)
-      .catch((caught: unknown) => setError(getErrorMessage(caught, "Failed to load error code")));
-  }, [code]);
+  const { data: errorDef, error } = useQuery({
+    queryKey: ["error-definition", code],
+    queryFn: () => api.errorDefinition(code ?? ""),
+    staleTime: Infinity,
+  });
 
   if (error) {
-    return <FetchError message={error} />;
+    return <FetchError message={getErrorMessage(error, "Failed to load error code")} />;
   }
 
   if (!errorDef) {

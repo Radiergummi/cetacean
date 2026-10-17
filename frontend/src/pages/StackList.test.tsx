@@ -1,9 +1,12 @@
 import type { StackSummary } from "../api/types";
-import { MockEventSource, localStorageStub } from "../test/mocks";
+import {
+  MockEventSource,
+  createTestQueryClient,
+  createWrapper,
+  localStorageStub,
+} from "../test/mocks";
 import StackList from "./StackList";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../api/client", () => ({
@@ -36,19 +39,14 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", localStorageStub);
   mockSummary.mockReset();
+  wrapper = createWrapper(createTestQueryClient());
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function wrapper({ children }: { children: ReactNode }) {
-  return (
-    <MemoryRouter>
-      <>{children}</>
-    </MemoryRouter>
-  );
-}
+let wrapper: ReturnType<typeof createWrapper>;
 
 describe("StackList", () => {
   it("renders stack summaries", async () => {

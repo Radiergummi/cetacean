@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	json "github.com/goccy/go-json"
-
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
@@ -210,45 +208,10 @@ func (p *OIDCProvider) redirectToLogin(w http.ResponseWriter, r *http.Request, r
 	nonce := generateState() // same entropy, different purpose
 	verifier := oauth2.GenerateVerifier()
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_state",
-		Value:    state,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_nonce",
-		Value:    nonce,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_verifier",
-		Value:    verifier,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "cetacean_auth_redirect",
-		Value:    redirect,
-		Path:     p.basePath + "/auth",
-		MaxAge:   300,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, p.flowCookie(stateCookieName, state, 300))
+	http.SetCookie(w, p.flowCookie(nonceCookieName, nonce, 300))
+	http.SetCookie(w, p.flowCookie(verifierCookieName, verifier, 300))
+	http.SetCookie(w, p.flowCookie(redirectCookieName, redirect, 300))
 
 	http.Redirect(w, r, p.oauth2Config.AuthCodeURL(
 		state,
@@ -291,7 +254,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate state (constant-time comparison).
-	stateCookie, err := r.Cookie("cetacean_auth_state")
+	stateCookie, err := r.Cookie(stateCookieName)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "AUT003", "missing state cookie")
 		return
@@ -306,14 +269,14 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read nonce cookie for ID token verification.
-	nonceCookie, err := r.Cookie("cetacean_auth_nonce")
+	nonceCookie, err := r.Cookie(nonceCookieName)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "AUT003", "missing nonce cookie")
 		return
 	}
 
 	// Read PKCE verifier cookie.
-	verifierCookie, err := r.Cookie("cetacean_auth_verifier")
+	verifierCookie, err := r.Cookie(verifierCookieName)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "AUT003", "missing verifier cookie")
 		return
@@ -321,7 +284,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Read redirect URL before clearing cookies.
 	redirectURL := p.basePath + "/"
-	if c, err := r.Cookie("cetacean_auth_redirect"); err == nil && isRelativePath(c.Value) {
+	if c, err := r.Cookie(redirectCookieName); err == nil && isRelativePath(c.Value) {
 		redirectURL = c.Value
 	}
 
@@ -389,60 +352,39 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
+// The cookies holding one authorization code flow between login and callback.
+const (
+	stateCookieName    = "cetacean_auth_state"
+	nonceCookieName    = "cetacean_auth_nonce"
+	verifierCookieName = "cetacean_auth_verifier"
+	redirectCookieName = "cetacean_auth_redirect"
+)
+
+var authFlowCookies = []string{
+	stateCookieName,
+	nonceCookieName,
+	verifierCookieName,
+	redirectCookieName,
+}
+
+func (p *OIDCProvider) flowCookie(name, value string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     p.basePath + "/auth",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
 // clearAuthFlowCookies deletes all temporary cookies used during the OIDC
 // authorization code flow.
 func (p *OIDCProvider) clearAuthFlowCookies(w http.ResponseWriter) {
-	for _, name := range []string{
-		"cetacean_auth_state",
-		"cetacean_auth_nonce",
-		"cetacean_auth_verifier",
-		"cetacean_auth_redirect",
-	} {
-		http.SetCookie(w, &http.Cookie{
-			Name:     name,
-			Path:     p.basePath + "/auth",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		})
+	for _, name := range authFlowCookies {
+		http.SetCookie(w, p.flowCookie(name, "", -1))
 	}
-}
-
-// authenticateQuiet checks session cookie and Bearer token without triggering
-// OIDC redirects. Returns the identity or an error.
-func (p *OIDCProvider) authenticateQuiet(r *http.Request) (*Identity, error) {
-	if id, err := p.session.Get(r); err == nil {
-		return id, nil
-	}
-
-	if token := ExtractBearerToken(r); token != "" {
-		idToken, err := p.verifier.Verify(r.Context(), token)
-		if err != nil {
-			return nil, fmt.Errorf("invalid bearer token: %w", err)
-		}
-		var claims map[string]any
-		if err := idToken.Claims(&claims); err != nil {
-			return nil, fmt.Errorf("failed to parse claims: %w", err)
-		}
-		if err := p.validateAzp(idToken, claims); err != nil {
-			return nil, fmt.Errorf("invalid bearer token: %w", err)
-		}
-		return claimsToIdentity(claims), nil
-	}
-
-	return nil, fmt.Errorf("authentication required")
-}
-
-func (p *OIDCProvider) handleWhoami(w http.ResponseWriter, r *http.Request) {
-	id, err := p.authenticateQuiet(r)
-	if err != nil {
-		writeError(w, r, http.StatusUnauthorized, "AUT001", "authentication required")
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(id) // best-effort: status already sent
 }
 
 // handleLogout clears the local session and, if the IdP supports it,

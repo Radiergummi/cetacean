@@ -1,12 +1,12 @@
 import { api, get } from "@/api/client";
-import type { Service } from "@/api/types";
 import FetchError from "@/components/FetchError";
 import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import SimpleTable from "@/components/SimpleTable";
 import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import { resourceBreadcrumbs } from "@/lib/resourceBreadcrumbs";
-import { useEffect, useState } from "react";
+import { getErrorMessage } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Navigate, useParams } from "react-router-dom";
 
 const subResources: Record<string, string> = {
@@ -31,55 +31,27 @@ export default function ServiceSubResource() {
 
   const label = subResource ? subResources[subResource] : undefined;
 
-  const [data, setData] = useState<unknown>(null);
-  const [service, setService] = useState<Service | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-
-  useEffect(() => {
-    if (!id || !subResource || !label) {
-      return;
-    }
-
-    // The two requests below are the external system; this is their own
-    // progress, not data derived from a prop.
-    // oxlint-disable-next-line react/set-state-in-effect -- loading state of a fetch
-    setLoading(true);
-    setError(null);
-
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    Promise.all([
-      get<unknown>(`/services/${id}/${subResource}`, signal).then(({ data }) => data),
-      api
-        .service(id, signal)
-        .then(({ data }) => data.service)
-        .catch(() => null),
-    ])
-      .then(([subData, serviceData]) => {
-        setData(subData);
-        setService(serviceData);
-        setLoading(false);
-      })
-      .catch((fetchError) => {
-        if (!signal.aborted) {
-          setError(fetchError.message || "Failed to load");
-          setLoading(false);
-        }
-      });
-
-    return () => controller.abort();
-    // `retryCount` is what the retry button increments: a trigger, not an input.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
-  }, [id, subResource, label, retryCount]);
+  const query = useQuery({
+    queryKey: ["service-sub-resource", id, subResource],
+    queryFn: ({ signal }) =>
+      Promise.all([
+        get<unknown>(`/services/${id}/${subResource}`, signal).then(({ data }) => data),
+        api
+          .service(id!, signal)
+          .then(({ data }) => data.service)
+          .catch(() => null),
+      ]),
+    enabled: !!id && !!subResource && !!label,
+  });
+  const [data, service] = query.data ?? [null, null];
+  const error = query.error ? getErrorMessage(query.error, "Failed to load") : null;
 
   if (!label) {
     return <Navigate to={`/services/${id}`} />;
   }
 
-  if (loading) {
+  // A retry after an error shows the skeleton again, as the first load does.
+  if (query.isPending || (query.isError && query.isFetching)) {
     return <LoadingDetail />;
   }
 
@@ -103,7 +75,7 @@ export default function ServiceSubResource() {
         {header}
         <FetchError
           message={error}
-          onRetry={() => setRetryCount((count) => count + 1)}
+          onRetry={() => query.refetch()}
         />
       </>
     );
