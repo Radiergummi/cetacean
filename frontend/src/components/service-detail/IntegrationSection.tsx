@@ -4,11 +4,8 @@ import { KeyValueEditor } from "@/components/KeyValueEditor";
 import SegmentedControl from "@/components/SegmentedControl";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
+import { useEditSession } from "@/hooks/useEditSession";
 import { useEditVersion } from "@/hooks/useEditVersion";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
-import { showErrorToast } from "@/lib/showErrorToast";
-import { getErrorMessage } from "@/lib/utils";
 import { Code, ExternalLink, Layers, Pencil } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -60,45 +57,27 @@ export function IntegrationSection({
 }) {
   const [view, setView] = useState<View>(visualContent ? "graph" : "structured");
   const version = useEditVersion(`/services/${serviceId}/labels`);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  function cancel() {
-    setEditing(false);
-    setSaveError(null);
-  }
+  const {
+    editing,
+    saving,
+    saveError,
+    open: startEditing,
+    cancel,
+    save,
+  } = useEditSession({
+    onOpen: () => {
+      version.capture();
+      onEditStart?.();
+    },
+    onSave: async () => {
+      await onSave?.(await version.ifMatch());
+    },
+    toast: true,
+    // The raw editor handles Escape itself; the graph view is closed while editing.
+    escapeCancels: view !== "raw",
+  });
 
   const activeView: View = (editing || !visualContent) && view === "graph" ? "structured" : view;
-
-  useEscapeCancel(editing && activeView === "structured", cancel);
-  useLeaveGuard(editing);
-
-  async function save() {
-    if (!onSave) {
-      return;
-    }
-
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      await onSave(await version.ifMatch());
-      setEditing(false);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Save failed"));
-      showErrorToast(error, "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function startEditing() {
-    version.capture();
-    onEditStart?.();
-    setSaveError(null);
-    setEditing(true);
-  }
 
   // Leaving the raw editor re-seeds the structured form from the labels the
   // user may have just rewritten there.
@@ -170,11 +149,11 @@ export function IntegrationSection({
           defaultOpen
           editDisabled={!editing}
           defaultEditing={editing}
-          onCancel={() => setEditing(false)}
+          onCancel={cancel}
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(serviceId, ops, await version.ifMatch());
             onRawSave(updated);
-            setEditing(false);
+            cancel();
             return updated;
           }}
         />

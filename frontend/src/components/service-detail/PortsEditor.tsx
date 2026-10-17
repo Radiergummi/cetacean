@@ -5,10 +5,8 @@ import { DockerDocsLink } from "@/components/service-detail/DockerDocsLink";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useEditSession } from "@/hooks/useEditSession";
 import { useEditVersion } from "@/hooks/useEditVersion";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
-import { getErrorMessage } from "@/lib/utils";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type MouseEvent } from "react";
 
@@ -32,24 +30,25 @@ export function PortsEditor({
   canEdit = false,
 }: PortsEditorProps & { canEdit?: boolean }) {
   const version = useEditVersion(`/services/${serviceId}/ports`);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<PortConfig[]>([]);
-  useEscapeCancel(editing, () => cancelEdit());
-  useLeaveGuard(editing);
-
-  function openEdit() {
-    version.capture();
-    setDraft(ports.map((port) => ({ ...port })));
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
+  const {
+    editing,
+    saving,
+    saveError,
+    open: openEdit,
+    cancel: cancelEdit,
+    save,
+  } = useEditSession({
+    onOpen: () => {
+      version.capture();
+      setDraft(ports.map((port) => ({ ...port })));
+    },
+    onSave: async () => {
+      const result = await api.patchServicePorts(serviceId, draft, await version.ifMatch());
+      onSaved(result.ports);
+    },
+    errorMessage: "Failed to update ports",
+  });
 
   function addPort() {
     setDraft([...draft, { ...defaultPort }]);
@@ -63,21 +62,6 @@ export function PortsEditor({
     const updated = [...draft];
     updated[index] = { ...updated[index], [field]: value };
     setDraft(updated);
-  }
-
-  async function save() {
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      const result = await api.patchServicePorts(serviceId, draft, await version.ifMatch());
-      setEditing(false);
-      onSaved(result.ports);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Failed to update ports"));
-    } finally {
-      setSaving(false);
-    }
   }
 
   const controls =

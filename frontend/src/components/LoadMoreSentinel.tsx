@@ -1,5 +1,5 @@
-import { useLatestRef } from "../hooks/useLatestRef";
-import { useEffect, useRef } from "react";
+import { useLoadMoreObserver } from "../hooks/useLoadMoreObserver";
+import { useRef } from "react";
 
 /**
  * Calls `onLoadMore` when scrolled into view, for layouts without DataTable's
@@ -8,26 +8,8 @@ import { useEffect, useRef } from "react";
  */
 export default function LoadMoreSentinel({ onLoadMore }: { onLoadMore: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const onLoadMoreRef = useLatestRef(onLoadMore);
 
-  useEffect(() => {
-    if (!ref.current) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some(({ isIntersecting }) => isIntersecting)) {
-          onLoadMoreRef.current();
-        }
-      },
-      { rootMargin: "200px" },
-    );
-
-    observer.observe(ref.current);
-
-    return () => observer.disconnect();
-  }, [onLoadMoreRef]);
+  useLoadMoreObserver(ref, onLoadMore);
 
   return (
     <div

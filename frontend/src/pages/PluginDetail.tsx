@@ -1,5 +1,4 @@
 import { api, emptyMethods } from "../api/client";
-import type { Plugin } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceId } from "../components/data";
 import FetchError from "../components/FetchError";
@@ -25,8 +24,10 @@ import {
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { joinCommand, parseCommand } from "../lib/parseCommand";
+import { getErrorMessage } from "../lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowUpCircle, Power, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const pluginTypeLabels: Record<string, string> = {
@@ -42,33 +43,24 @@ export default function PluginDetail() {
   const { name: rawName } = useParams<{ name: string }>();
   const name = decodeURIComponent(rawName!);
   const navigate = useNavigate();
-  const [allowedMethods, setAllowedMethods] = useState(emptyMethods);
-
-  const [plugin, setPlugin] = useState<Plugin | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const pluginQuery = useQuery({
+    queryKey: ["plugin", name],
+    queryFn: ({ signal }) => api.plugin(name, signal),
+  });
+  const plugin = pluginQuery.data?.data ?? null;
+  const allowedMethods = pluginQuery.data?.allowedMethods ?? emptyMethods;
+  const error = pluginQuery.error
+    ? getErrorMessage(pluginQuery.error, "Failed to load plugin")
+    : null;
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [draftArgs, setDraftArgs] = useState("");
 
   const enableAction = useAsyncAction({ toast: true });
   const removeAction = useAsyncAction({ toast: true });
 
-  const fetchPlugin = useCallback(() => {
-    setError(null);
-    api
-      .plugin(name)
-      .then(({ data: result, allowedMethods: methods }) => {
-        setPlugin(result);
-        setAllowedMethods(methods);
-      })
-      .catch((thrown) => {
-        setError(thrown instanceof Error ? thrown.message : "Failed to load plugin");
-      });
-  }, [name]);
-
-  useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect -- the fetch is the external system
-    fetchPlugin();
-  }, [fetchPlugin]);
+  const fetchPlugin = () => {
+    void pluginQuery.refetch();
+  };
 
   if (error) {
     return (

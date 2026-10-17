@@ -18,8 +18,6 @@ let subscriber: ((event: StreamEvent) => void) | undefined;
 vi.mock("../hooks/useResourceStream", () => ({
   useResourceStream: (_path: string, listener: (event: never) => void) => {
     subscriber = listener as (event: StreamEvent) => void;
-
-    return { connected: true };
   },
 }));
 

@@ -1,7 +1,7 @@
 import ErrorIndex from "./ErrorIndex";
 import { api } from "@/api/client";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -21,11 +21,7 @@ describe("ErrorIndex", () => {
       },
     ]);
 
-    render(
-      <MemoryRouter>
-        <ErrorIndex />
-      </MemoryRouter>,
-    );
+    render(<ErrorIndex />, { wrapper: createWrapper(createTestQueryClient()) });
 
     expect(await screen.findByText("ACL001")).toBeInTheDocument();
   });

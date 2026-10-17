@@ -1,4 +1,4 @@
-import { useLatestRef } from "@/hooks/useLatestRef";
+import { useLoadMoreObserver } from "@/hooks/useLoadMoreObserver";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   type KeyboardEvent,
@@ -35,6 +35,55 @@ interface Props<T> {
 const virtualThreshold = 100;
 const rowHeightEstimate = 48;
 
+function DataRow<T>({
+  item,
+  index,
+  columns,
+  rowClassName,
+  onRowClick,
+  selected,
+  last,
+  rowId,
+  measureElement,
+}: Pick<Props<T>, "columns" | "rowClassName" | "onRowClick"> & {
+  item: T;
+  index: number;
+  selected: boolean;
+  last: boolean;
+  rowId: (index: number) => string;
+  /** Present on a virtualized row, which stripes and measures itself. */
+  measureElement?: ((node: HTMLTableRowElement | null) => void) | undefined;
+}) {
+  const virtual = measureElement !== undefined;
+
+  return (
+    <tr
+      ref={measureElement}
+      id={rowId(index)}
+      data-index={virtual ? index : undefined}
+      data-virtual-row={virtual ? "" : undefined}
+      data-stripe={(virtual && index % 2 === 1) || undefined}
+      data-clickable={onRowClick ? "" : undefined}
+      data-selected={selected || undefined}
+      aria-selected={onRowClick ? selected : undefined}
+      data-last={last || undefined}
+      className={`border-b data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-last:border-b-0 data-selected:bg-accent data-selected:text-accent-foreground ${
+        rowClassName?.(item) ?? ""
+      }`}
+      onClick={onRowClick ? () => onRowClick(item) : undefined}
+    >
+      {columns.map((column, columnIndex) => (
+        <td
+          key={columnIndex}
+          className={`p-3 text-sm whitespace-nowrap ${column.className ?? ""}`}
+        >
+          {column.cell(item)}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
 function PlainBody<T>({
   columns,
   data,
@@ -47,26 +96,17 @@ function PlainBody<T>({
   return (
     <tbody>
       {data.map((item, index) => (
-        <tr
+        <DataRow
           key={keyFn(item)}
-          id={rowId(index)}
-          data-clickable={onRowClick ? "" : undefined}
-          data-selected={index === selectedIndex || undefined}
-          aria-selected={onRowClick ? index === selectedIndex : undefined}
-          className={`border-b last:border-b-0 data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-selected:bg-accent data-selected:text-accent-foreground ${
-            rowClassName?.(item) ?? ""
-          }`}
-          onClick={onRowClick ? () => onRowClick(item) : undefined}
-        >
-          {columns.map((column, colIndex) => (
-            <td
-              key={colIndex}
-              className={`p-3 text-sm whitespace-nowrap ${column.className ?? ""}`}
-            >
-              {column.cell(item)}
-            </td>
-          ))}
-        </tr>
+          item={item}
+          index={index}
+          columns={columns}
+          rowClassName={rowClassName}
+          onRowClick={onRowClick}
+          selected={index === selectedIndex}
+          last={index === data.length - 1}
+          rowId={rowId}
+        />
       ))}
     </tbody>
   );
@@ -129,31 +169,18 @@ function VirtualBody<T>({
         }
 
         return (
-          <tr
+          <DataRow
             key={keyFn(item)}
-            ref={virtualizer.measureElement}
-            id={rowId(index)}
-            data-index={index}
-            data-virtual-row=""
-            data-stripe={index % 2 === 1 || undefined}
-            data-clickable={onRowClick ? "" : undefined}
-            data-selected={index === selectedIndex || undefined}
-            aria-selected={onRowClick ? index === selectedIndex : undefined}
-            data-last={index === data.length - 1 || undefined}
-            className={`border-b data-clickable:cursor-pointer data-clickable:hover:bg-muted/50 data-last:border-b-0 data-selected:bg-accent data-selected:text-accent-foreground ${
-              rowClassName?.(item) ?? ""
-            }`}
-            onClick={onRowClick ? () => onRowClick(item) : undefined}
-          >
-            {columns.map((column, columnIndex) => (
-              <td
-                key={columnIndex}
-                className={`p-3 text-sm whitespace-nowrap ${column.className ?? ""}`}
-              >
-                {column.cell(item)}
-              </td>
-            ))}
-          </tr>
+            item={item}
+            index={index}
+            columns={columns}
+            rowClassName={rowClassName}
+            onRowClick={onRowClick}
+            selected={index === selectedIndex}
+            last={index === data.length - 1}
+            rowId={rowId}
+            measureElement={virtualizer.measureElement}
+          />
         );
       })}
       {lastVirtualItem && (
@@ -224,28 +251,7 @@ export default function DataTable<T>({
     row?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, useVirtual]);
 
-  const onLoadMoreRef = useLatestRef(onLoadMore);
-
-  useEffect(() => {
-    if (!hasMore || !onLoadMoreRef.current || !sentinelRef.current) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            onLoadMoreRef.current?.();
-          }
-        }
-      },
-      { root: scrollRef.current, rootMargin: "200px" },
-    );
-
-    observer.observe(sentinelRef.current);
-
-    return () => observer.disconnect();
-  }, [hasMore, onLoadMoreRef]);
+  useLoadMoreObserver(sentinelRef, onLoadMore, { rootRef: scrollRef, enabled: !!hasMore });
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent) => {

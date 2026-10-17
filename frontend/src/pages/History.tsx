@@ -7,11 +7,11 @@ import SegmentedControl from "../components/SegmentedControl";
 import { buttonVariants } from "../components/ui/button";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
+import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
 
 /** The most entries `GET /history` returns in one response. */
 const historyLimit = 200;
@@ -35,9 +35,8 @@ function isTypeFilter(value: string | null): value is TypeFilter {
 }
 
 export default function History() {
-  const [params, setParams] = useSearchParams();
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
-  const requestedType = params.get("type");
+  const [requestedType, setType] = useUrlParam("type", "all");
   const type: TypeFilter = isTypeFilter(requestedType) ? requestedType : "all";
   const resourceType = type === "all" ? undefined : type;
 
@@ -61,23 +60,6 @@ export default function History() {
       ? entries
       : entries.filter(({ name }) => name.toLowerCase().includes(needle));
   }, [entries, debouncedSearch]);
-
-  function setType(next: TypeFilter) {
-    setParams(
-      (previous) => {
-        const updated = new URLSearchParams(previous);
-
-        if (next === "all") {
-          updated.delete("type");
-        } else {
-          updated.set("type", next);
-        }
-
-        return updated;
-      },
-      { replace: true },
-    );
-  }
 
   const csvHref = apiPath(`/history.csv${resourceType ? `?type=${resourceType}` : ""}`);
 

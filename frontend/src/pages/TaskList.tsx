@@ -15,14 +15,14 @@ import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useListPage } from "../hooks/useListPage";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { useUrlParam } from "../hooks/useUrlParam";
 import { sortColumn } from "../lib/sortColumn";
-import { useCallback, useMemo } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function TaskList() {
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const stateFilter = params.get("state");
+  const [stateFilter, setStateFilter] = useUrlParam("state");
 
   const {
     data: tasks,
@@ -76,26 +76,6 @@ export default function TaskList() {
 
     return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [filteredTasks]);
-
-  const setStateFilter = useCallback(
-    (state: string | null) => {
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous);
-
-          if (state) {
-            next.set("state", state);
-          } else {
-            next.delete("state");
-          }
-
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setParams],
-  );
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);

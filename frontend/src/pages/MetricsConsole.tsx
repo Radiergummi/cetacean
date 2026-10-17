@@ -2,34 +2,26 @@ import { api } from "@/api/client";
 import type { PrometheusResponse } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { rangeSegments } from "@/components/metrics/MetricsPanelContext";
 import MonitoringStatus from "@/components/metrics/MonitoringStatus";
 import { QueryInput } from "@/components/metrics/QueryInput";
 import QueryResultTable from "@/components/metrics/QueryResultTable";
 import TimeSeriesChart from "@/components/metrics/TimeSeriesChart";
 import { useQueryCompletion } from "@/components/metrics/useQueryCompletion";
 import PageHeader from "@/components/PageHeader";
-import type { Segment } from "@/components/SegmentedControl";
 import SegmentedControl from "@/components/SegmentedControl";
 import { useMonitoringStatus } from "@/hooks/useMonitoringStatus";
+import { useUrlParam } from "@/hooks/useUrlParam";
 import { getErrorMessage } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-
-const ranges = ["1h", "6h", "24h", "7d"] as const;
-const rangeSegments: Segment<string>[] = ranges.map((value) => ({
-  label: value.toUpperCase(),
-  value,
-}));
 
 export default function MetricsConsole() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [input, setInput] = useState(searchParams.get("q") ?? "");
-  const range = searchParams.get("range") ?? "1h";
+  const [urlQuery, setUrlQuery] = useUrlParam("q");
+  const [range, setRange] = useUrlParam("range", "1h");
+  const [input, setInput] = useState(urlQuery ?? "");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [activeQuery, setActiveQuery] = useState<string | null>(
-    searchParams.get("q")?.trim() || null,
-  );
+  const [activeQuery, setActiveQuery] = useState<string | null>(urlQuery?.trim() || null);
   const monitoring = useMonitoringStatus();
   const queryable = monitoring?.queryable === true;
   const completion = useQueryCompletion(!!monitoring?.prometheusReachable && queryable);
@@ -55,38 +47,13 @@ export default function MetricsConsole() {
       return;
     }
 
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        next.set("q", query);
-        return next;
-      },
-      { replace: true },
-    );
-
+    setUrlQuery(query);
     setActiveQuery(query);
     setRefreshKey((key) => key + 1);
 
     // Force refetch if the same query is re-run (key doesn't change).
     void queryClient.invalidateQueries({ queryKey: ["metrics-instant", query] });
-  }, [input, setSearchParams, queryClient]);
-
-  const setRange = (value: string) => {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-
-        if (value === "1h") {
-          next.delete("range");
-        } else {
-          next.set("range", value);
-        }
-
-        return next;
-      },
-      { replace: true },
-    );
-  };
+  }, [input, setUrlQuery, queryClient]);
 
   if (monitoring && !queryable) {
     return (

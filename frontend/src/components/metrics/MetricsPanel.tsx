@@ -1,9 +1,12 @@
 import CollapsibleSection from "../CollapsibleSection";
 import { IconButton } from "../IconButton";
-import type { Segment } from "../SegmentedControl";
 import SegmentedControl from "../SegmentedControl";
 import { ChartSyncProvider } from "./ChartSyncProvider";
-import { MetricsPanelContext, type MetricsPanelContextValue } from "./MetricsPanelContext";
+import {
+  MetricsPanelContext,
+  type MetricsPanelContextValue,
+  rangeSegments,
+} from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X } from "lucide-react";
@@ -57,12 +60,6 @@ interface Props {
   header?: React.ReactNode | undefined;
   stackable?: boolean | undefined;
 }
-
-const ranges = ["1h", "6h", "24h", "7d"] as const;
-const rangeSegments: Segment<string>[] = ranges.map((value) => ({
-  label: value.toLocaleUpperCase(),
-  value,
-}));
 
 export default function MetricsPanel({ charts, children, header, stackable }: Props) {
   const [params, setParams] = useSearchParams();

@@ -3,22 +3,18 @@ import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import { api, type ErrorDefinition } from "@/api/client";
 import { getErrorMessage } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 export default function ErrorIndex() {
-  const [errors, setErrors] = useState<ErrorDefinition[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .errorDefinitions()
-      .then(setErrors)
-      .catch((caught: unknown) => setError(getErrorMessage(caught, "Failed to load error codes")));
-  }, []);
+  const { data: errors, error } = useQuery({
+    queryKey: ["error-definitions"],
+    queryFn: () => api.errorDefinitions(),
+    staleTime: Infinity,
+  });
 
   if (error) {
-    return <FetchError message={error} />;
+    return <FetchError message={getErrorMessage(error, "Failed to load error codes")} />;
   }
 
   if (!errors) {

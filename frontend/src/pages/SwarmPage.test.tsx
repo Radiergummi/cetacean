@@ -1,8 +1,8 @@
 import SwarmPage from "./SwarmPage";
 import { api } from "@/api/client";
 import { buildDataset } from "@/demo/dataset";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -28,11 +28,7 @@ describe("SwarmPage", () => {
   it("hides the join dialogs when the caller may not POST to the swarm", async () => {
     respondWith(["GET", "HEAD", "PATCH"]);
 
-    render(
-      <MemoryRouter>
-        <SwarmPage />
-      </MemoryRouter>,
-    );
+    render(<SwarmPage />, { wrapper: createWrapper(createTestQueryClient()) });
 
     expect(await screen.findByText("Cluster ID")).toBeInTheDocument();
     expect(screen.queryByText("Join Worker")).not.toBeInTheDocument();
@@ -42,11 +38,7 @@ describe("SwarmPage", () => {
   it("offers the join dialogs when the caller may POST to the swarm", async () => {
     respondWith(["GET", "HEAD", "PATCH", "POST"]);
 
-    render(
-      <MemoryRouter>
-        <SwarmPage />
-      </MemoryRouter>,
-    );
+    render(<SwarmPage />, { wrapper: createWrapper(createTestQueryClient()) });
 
     expect(await screen.findByText("Join Worker")).toBeInTheDocument();
     expect(screen.getByText("Join Manager")).toBeInTheDocument();

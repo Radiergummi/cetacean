@@ -1,12 +1,8 @@
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
-import { showErrorToast } from "@/lib/showErrorToast";
-import { getErrorMessage } from "@/lib/utils";
+import { useEditSession } from "@/hooks/useEditSession";
 import { Pencil } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
-import { useState } from "react";
 
 interface EditablePanelProps {
   /** Read-only display content */
@@ -46,38 +42,15 @@ export function EditablePanel({
   canEdit = false,
   headerActions,
 }: EditablePanelProps) {
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
-
-  useEscapeCancel(editing, cancelEdit);
-  useLeaveGuard(editing);
+  const { editing, saving, saveError, open, cancel, save } = useEditSession({
+    onOpen,
+    onSave,
+    toast: true,
+  });
 
   function openEdit(event: MouseEvent) {
     event.stopPropagation();
-    onOpen();
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  async function save() {
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      await onSave();
-      setEditing(false);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Save failed"));
-      showErrorToast(error, "Save failed");
-    } finally {
-      setSaving(false);
-    }
+    open();
   }
 
   if (empty && !canEdit && !editing) {
@@ -135,7 +108,7 @@ export function EditablePanel({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={cancelEdit}
+                onClick={cancel}
                 disabled={saving}
               >
                 Cancel

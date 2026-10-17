@@ -7,44 +7,31 @@ import { HealthDot, ReplicaHealth } from "../components/HealthIndicator";
 import ListToolbar from "../components/ListToolbar";
 import { SkeletonTable } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import { useResourceStream } from "../hooks/useResourceStream";
+import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useViewMode } from "../hooks/useViewMode";
 import { formatBytes, formatPercentage } from "../lib/format";
 import { stackHealth } from "../lib/stackHealth";
 import { cardGridClass } from "../lib/styles";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function StackList() {
   const [search, , setSearch] = useSearchParam("q");
-  const [summaries, setSummaries] = useState<StackSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const {
+    data: summaries = [],
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["stacks-summary"],
+    queryFn: () => api.stacksSummary(),
+  });
   const [viewMode, setViewMode] = useViewMode("stacks");
   const navigate = useNavigate();
 
-  const load = useCallback(() => {
-    api
-      .stacksSummary()
-      .then((data) => {
-        setSummaries(data);
-        setError(null);
-      })
-      .catch(setError)
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useResourceStream(
-    "/stacks",
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  useDebouncedInvalidation("/stacks", [["stacks-summary"]]);
 
   const filtered = search
     ? summaries.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase()))
@@ -110,7 +97,7 @@ export default function StackList() {
     return (
       <FetchError
         message={error.message}
-        onRetry={load}
+        onRetry={() => refetch()}
       />
     );
   }

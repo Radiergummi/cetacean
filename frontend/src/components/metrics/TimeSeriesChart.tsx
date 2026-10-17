@@ -14,6 +14,7 @@ import ChartTooltipOverlay, { type TooltipData } from "./ChartTooltipOverlay";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
 import { useMetricsSeries } from "./useMetricsSeries";
 import { useSeriesIsolation } from "./useSeriesIsolation";
+import { useLatestRef } from "@/hooks/useLatestRef";
 import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
 import { getSemanticChartColor } from "@/lib/chartColors.ts";
 import {
@@ -121,22 +122,17 @@ export default function TimeSeriesChart({
     onIsolationChange,
   });
 
-  const tooltipRef = useRef(setTooltip);
-  tooltipRef.current = setTooltip;
-  const unitRef = useRef(unit);
-  unitRef.current = unit;
+  const tooltipRef = useLatestRef(setTooltip);
+  const unitRef = useLatestRef(unit);
+  // Assigned during render, not through useLatestRef: <Line> redraws from its
+  // own effect, which runs before this component's effects would update it.
   const thresholdsRef = useRef(thresholds);
   thresholdsRef.current = thresholds;
-  const dataRef = useRef(data);
-  dataRef.current = data;
-  const stackedRef = useRef(stacked);
-  stackedRef.current = stacked;
-  const isolationRef = useRef(isolation);
-  isolationRef.current = isolation;
-  const onSeriesDoubleClickRef = useRef(onSeriesDoubleClick);
-  onSeriesDoubleClickRef.current = onSeriesDoubleClick;
-  const onRangeSelectRef = useRef(onRangeSelect);
-  onRangeSelectRef.current = onRangeSelect;
+  const dataRef = useLatestRef(data);
+  const stackedRef = useLatestRef(stacked);
+  const isolationRef = useLatestRef(isolation);
+  const onSeriesDoubleClickRef = useLatestRef(onSeriesDoubleClick);
+  const onRangeSelectRef = useLatestRef(onRangeSelect);
 
   const justZoomedRef = useRef(false);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,7 +158,7 @@ export default function TimeSeriesChart({
 
       chartRef.current?.draw();
     });
-  }, [chartId, sync]);
+  }, [chartId, sync, dataRef]);
 
   const chartData = useMemo(() => {
     if (!data) {
@@ -405,7 +401,7 @@ export default function TimeSeriesChart({
         ctx.restore();
       },
     }),
-    [chartId, sync],
+    [chartId, sync, dataRef, tooltipRef, onSeriesDoubleClickRef, isolationRef, stackedRef, unitRef],
   );
 
   const options = useMemo<ChartOptions<"line">>(
@@ -478,7 +474,7 @@ export default function TimeSeriesChart({
         point: { radius: 0 },
       },
     }),
-    [yMin, suggestedMax, stacked, isMobile],
+    [yMin, suggestedMax, stacked, isMobile, dataRef, onRangeSelectRef],
   );
 
   const plugins = useMemo(

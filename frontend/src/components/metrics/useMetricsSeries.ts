@@ -1,10 +1,6 @@
-// oxlint-disable react/refs -- the props mirrored here are read from inside a
-// fetch callback and a stream listener, both of which run outside React's
-// render and would otherwise close over the values of the render that started
-// them. This is the suppression TimeSeriesChart.tsx already carried; it moved
-// with the code it covers.
 import { api } from "@/api/client.ts";
 import type { PrometheusResponse } from "@/api/types.ts";
+import { useLatestRef } from "@/hooks/useLatestRef";
 import { openEventStream } from "@/lib/eventStream.ts";
 import { appendMetricPoint, type ParsedMetrics, parseRangeResult } from "@/lib/metricsParser.ts";
 import { generateMockSeries } from "@/lib/mockChartData.ts";
@@ -86,24 +82,21 @@ export function useMetricsSeries({
   const [data, setData] = useState<ParsedMetrics | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
-  const dataRef = useRef(data);
-  dataRef.current = data;
-  const titleRef = useRef(title);
-  titleRef.current = title;
-  const unitRef = useRef(unit);
-  unitRef.current = unit;
-  const colorRef = useRef(color);
-  colorRef.current = color;
-  const onSeriesInfoRef = useRef(onSeriesInfo);
-  onSeriesInfoRef.current = onSeriesInfo;
+  const titleRef = useLatestRef(title);
+  const unitRef = useLatestRef(unit);
+  const colorRef = useLatestRef(color);
+  const onSeriesInfoRef = useLatestRef(onSeriesInfo);
 
   const key = `${query}|${range}|${from ?? ""}|${to ?? ""}`;
 
-  const publish = useCallback((parsed: ParsedMetrics) => {
-    setData(parsed);
-    onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
-    setState("data");
-  }, []);
+  const publish = useCallback(
+    (parsed: ParsedMetrics) => {
+      setData(parsed);
+      onSeriesInfoRef.current?.(parsed.series.map(({ color, label }) => ({ color, label })));
+      setState("data");
+    },
+    [onSeriesInfoRef],
+  );
 
   const fetchData = useCallback(() => {
     setState("loading");
@@ -150,7 +143,7 @@ export function useMetricsSeries({
     return () => {
       cancelled = true;
     };
-  }, [query, range, from, to, title, color, key, publish]);
+  }, [query, range, from, to, title, color, key, publish, unitRef]);
 
   // Holds the canceller of a fetch started outside the effect below — the tab
   // coming back, or the refresh button. That effect cancels only the fetch it
@@ -180,14 +173,13 @@ export function useMetricsSeries({
   // Reopened on demand: closing the stream when the tab hides frees a
   // connection slot nobody is watching, and showing it again needs a fresh one.
   const [streamKey, setStreamKey] = useState(0);
-  const fetchDataRef = useRef(fetchData);
-  fetchDataRef.current = fetchData;
+  const fetchDataRef = useLatestRef(fetchData);
 
   /** Starts a fetch outside the effect above, superseding any it started. */
   const startFetch = useCallback(() => {
     pendingFetchCancel.current?.();
     pendingFetchCancel.current = fetchDataRef.current();
-  }, []);
+  }, [fetchDataRef]);
 
   useEffect(() => {
     return () => {
@@ -267,7 +259,7 @@ export function useMetricsSeries({
     // connection this effect closed. Dropping it leaves the tab with no stream
     // until the range changes.
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- re-run trigger
-  }, [live, query, range, streamKey, publish, startFetch]);
+  }, [live, query, range, streamKey, publish, startFetch, titleRef, colorRef]);
 
   const refetch = startFetch;
 

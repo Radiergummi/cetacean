@@ -7,10 +7,8 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useEditSession } from "@/hooks/useEditSession";
 import { useEditVersion } from "@/hooks/useEditVersion";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
-import { getErrorMessage } from "@/lib/utils";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
@@ -58,24 +56,25 @@ export function MountsEditor({
   canEdit = false,
 }: MountsEditorProps & { canEdit?: boolean }) {
   const version = useEditVersion(`/services/${serviceId}/mounts`);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServiceMount[]>([]);
-  useEscapeCancel(editing, () => cancelEdit());
-  useLeaveGuard(editing);
-
-  function openEdit() {
-    version.capture();
-    setDraft(mounts.map((mount) => structuredClone(mount)));
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
+  const {
+    editing,
+    saving,
+    saveError,
+    open: openEdit,
+    cancel: cancelEdit,
+    save,
+  } = useEditSession({
+    onOpen: () => {
+      version.capture();
+      setDraft(mounts.map((mount) => structuredClone(mount)));
+    },
+    onSave: async () => {
+      const result = await api.patchServiceMounts(serviceId, draft, await version.ifMatch());
+      onSaved(result.mounts);
+    },
+    errorMessage: "Failed to update mounts",
+  });
 
   function addMount() {
     setDraft([...draft, { ...defaultMount }]);
@@ -106,21 +105,6 @@ export function MountsEditor({
     };
 
     updateMount(index, updated);
-  }
-
-  async function save() {
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      const result = await api.patchServiceMounts(serviceId, draft, await version.ifMatch());
-      setEditing(false);
-      onSaved(result.mounts);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Failed to update mounts"));
-    } finally {
-      setSaving(false);
-    }
   }
 
   const controls =

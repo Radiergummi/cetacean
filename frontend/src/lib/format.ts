@@ -99,16 +99,6 @@ export function formatDuration(nanoseconds: number, precise = false): string {
   return formatUnit(Math.round(hours / 24), "day");
 }
 
-export function formatTimeRange(start: Date, end: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    fractionalSecondDigits: 2,
-    timeStyle: "medium",
-  }).formatRange(start, end);
-}
-
 /**
  * Format a metric value with appropriate units for chart display.
  */

@@ -1,9 +1,7 @@
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
-import { getErrorMessage } from "@/lib/utils";
+import { useEditSession } from "@/hooks/useEditSession";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -74,28 +72,38 @@ export function EditableTable<T>({
   onEditStart,
   onCancel,
 }: EditableTableProps<T>) {
-  const [editing, setEditing] = useState(defaultEditing);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<T[]>(defaultEditing ? [...items] : []);
   const [adding, setAdding] = useState(false);
 
-  useEscapeCancel(editing, () => cancelEdit());
-  useLeaveGuard(editing);
+  const {
+    editing,
+    saving,
+    saveError,
+    open: openEdit,
+    cancel: cancelEdit,
+    save,
+  } = useEditSession({
+    onOpen: () => {
+      setDraft([...items]);
+      setAdding(items.length === 0);
+      onEditStart?.();
+    },
+    onSave: () => {
+      let effectiveDraft = draft;
 
-  function openEdit() {
-    setDraft([...items]);
-    setAdding(items.length === 0);
-    setSaveError(null);
-    setEditing(true);
-    onEditStart?.();
-  }
+      if (adding && canAdd) {
+        const result = onAddCommit();
 
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-    onCancel?.();
-  }
+        if (result !== null) {
+          effectiveDraft = [...draft, result];
+        }
+      }
+
+      return onSave(effectiveDraft);
+    },
+    onCancel,
+    initialEditing: defaultEditing,
+  });
 
   function removeRow(index: number) {
     setDraft((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
@@ -114,30 +122,6 @@ export function EditableTable<T>({
     }
 
     setAdding(true);
-  }
-
-  async function save() {
-    let effectiveDraft = draft;
-
-    if (adding && canAdd) {
-      const result = onAddCommit();
-
-      if (result !== null) {
-        effectiveDraft = [...draft, result];
-      }
-    }
-
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      await onSave(effectiveDraft);
-      setEditing(false);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Save failed"));
-    } finally {
-      setSaving(false);
-    }
   }
 
   const hasControls = (editing && titleExtra) || (!editing && !editDisabled);

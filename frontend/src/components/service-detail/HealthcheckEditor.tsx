@@ -7,12 +7,11 @@ import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { NumberField } from "@/components/ui/number-field";
+import { useEditSession } from "@/hooks/useEditSession";
 import { useEditVersion } from "@/hooks/useEditVersion";
-import { useEscapeCancel } from "@/hooks/useEscapeCancel";
-import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { formatDuration, nanosToSeconds } from "@/lib/format";
 import { joinCommand, parseCommand } from "@/lib/parseCommand";
-import { cn, getErrorMessage } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Pencil } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useState } from "react";
@@ -133,46 +132,31 @@ export function HealthcheckEditor({
   canEdit?: boolean | undefined;
 }) {
   const version = useEditVersion(`/services/${serviceId}/healthcheck`);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
-  useEscapeCancel(editing, () => cancelEdit());
-  useLeaveGuard(editing);
-
-  function updateForm(partial: Partial<FormState>) {
-    setForm((previous) => ({ ...previous, ...partial }));
-  }
-
-  function openEdit() {
-    version.capture();
-    setForm(formFromHealthcheck(healthcheck));
-    setSaveError(null);
-    setEditing(true);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setSaveError(null);
-  }
-
-  async function save() {
-    setSaving(true);
-    setSaveError(null);
-
-    try {
+  const {
+    editing,
+    saving,
+    saveError,
+    open: openEdit,
+    cancel: cancelEdit,
+    save,
+  } = useEditSession({
+    onOpen: () => {
+      version.capture();
+      setForm(formFromHealthcheck(healthcheck));
+    },
+    onSave: async () => {
       const result = await api.putServiceHealthcheck(
         serviceId,
         formToHealthcheck(form),
         await version.ifMatch(),
       );
       onSaved(result.healthcheck);
-      setEditing(false);
-    } catch (error) {
-      setSaveError(getErrorMessage(error, "Save failed"));
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  function updateForm(partial: Partial<FormState>) {
+    setForm((previous) => ({ ...previous, ...partial }));
   }
 
   const disabled = isDisabled(healthcheck);

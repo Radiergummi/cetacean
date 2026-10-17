@@ -27,27 +27,28 @@ import { deriveServiceSubResources } from "../lib/deriveServiceState";
 import { integrationLabelPrefix } from "../lib/integrationLabels";
 import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 // Stable empties, so an absent list does not remount every consumer.
 const emptyChanges: SpecChange[] = [];
 const emptyIntegrations: Integration[] = [];
+const emptyTasks: Task[] = [];
 
 /**
- * A request the page replaced, or navigated away from, is not a failure.
+ * PromQL summing a service's usage across all of its running containers.
  */
-function ignoreUnlessAborted(signal: AbortSignal) {
-  return (error: unknown) => {
-    if (!signal.aborted) {
-      console.warn(error);
-    }
+function serviceUsageQueries(serviceName: string) {
+  const selector = `container_label_com_docker_swarm_service_name="${escapePromQL(serviceName)}"`;
+
+  return {
+    cpu: `sum(rate(container_cpu_usage_seconds_total{${selector}}[5m])) * 100`,
+    memory: `sum(container_memory_usage_bytes{${selector}})`,
   };
 }
 
 export function useServiceDetail(id: string | undefined) {
   const queryClient = useQueryClient();
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
   const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
   const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
@@ -60,11 +61,7 @@ export function useServiceDetail(id: string | undefined) {
   const hasPrometheus = isPrometheusReady(monitoring);
   const hasCadvisor = isCadvisorReady(monitoring);
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
-  const [cpuActual, setCpuActual] = useState<number | undefined>();
-  const [memActual, setMemActual] = useState<number | undefined>();
   const { items: recommendations } = useRecommendations();
-
-  const sseAbortRef = useRef<AbortController | null>(null);
 
   const applyDerivedState = useCallback((service: Service) => {
     const {
@@ -87,27 +84,20 @@ export function useServiceDetail(id: string | undefined) {
 
   // Tasks are the one side request this page still owns: they are a
   // collection of their own rather than part of the detail response.
-  const fetchTasks = useCallback(
-    (signal: AbortSignal) => {
-      if (!id) {
-        return;
-      }
-
-      api.serviceTasks(id, signal).then(setTasks).catch(ignoreUnlessAborted(signal));
-    },
-    [id],
-  );
+  const tasksKey = useMemo(() => ["service-tasks", id] as const, [id]);
+  const extraQueryKeys = useMemo(() => [tasksKey], [tasksKey]);
+  const tasksQuery = useQuery({
+    queryKey: tasksKey,
+    queryFn: ({ signal }) => api.serviceTasks(id!, signal),
+    enabled: !!id,
+  });
+  const tasks = tasksQuery.data ?? emptyTasks;
 
   // The per-service stream also delivers task events for this service's tasks,
   // so only treat `resource` as a Service when the event is a service event —
   // otherwise the page's own resource would be replaced with a Task.
   const onEvent = useCallback(
     (event: SSEEvent, { setData, refetch }: DetailResourceActions<ServiceDetail>) => {
-      sseAbortRef.current?.abort();
-      const controller = new AbortController();
-      sseAbortRef.current = controller;
-      fetchTasks(controller.signal);
-
       if (event.type === "service" && event.resource) {
         setData((previous) => ({ ...previous, service: event.resource as Service }));
       } else if (event.type === "service" || event.type === "sync") {
@@ -123,7 +113,7 @@ export function useServiceDetail(id: string | undefined) {
         void queryClient.invalidateQueries({ queryKey: [...composeQueryKey(`service:${id}`)] });
       }
     },
-    [fetchTasks, id, queryClient],
+    [id, queryClient],
   );
 
   const {
@@ -132,7 +122,10 @@ export function useServiceDetail(id: string | undefined) {
     error,
     retry: refetchService,
     allowedMethods,
-  } = useDetailResource<ServiceDetail>(id, api.service, "/services", { onEvent });
+  } = useDetailResource<ServiceDetail>(id, api.service, "/services", {
+    onEvent,
+    extraQueryKeys,
+  });
 
   const service = detail?.service ?? null;
   const changes = detail?.changes ?? emptyChanges;
@@ -183,21 +176,6 @@ export function useServiceDetail(id: string | undefined) {
       .catch(() => {});
   }, [id]);
 
-  useEffect(() => {
-    if (!id) {
-      return;
-    }
-
-    const controller = new AbortController();
-    fetchTasks(controller.signal);
-
-    return () => controller.abort();
-  }, [id, fetchTasks]);
-
-  useEffect(() => {
-    return () => sseAbortRef.current?.abort();
-  }, []);
-
   const serviceName = service?.Spec.Name || "";
   const taskMetrics = useTaskMetrics(
     serviceName
@@ -206,44 +184,26 @@ export function useServiceDetail(id: string | undefined) {
     hasCadvisor && !!serviceName,
   );
 
-  useEffect(() => {
-    if (!serviceName || !hasCadvisor) {
-      return;
-    }
+  const usageQuery = useQuery({
+    queryKey: ["service-usage", serviceName],
+    queryFn: async () => {
+      const queries = serviceUsageQueries(serviceName);
+      const [cpuResponse, memoryResponse] = await Promise.all([
+        api.metricsQuery(queries.cpu),
+        api.metricsQuery(queries.memory),
+      ]);
+      const cpu = cpuResponse.data?.result?.[0]?.value?.[1];
+      const memory = memoryResponse.data?.result?.[0]?.value?.[1];
 
-    let cancelled = false;
-    const escaped = escapePromQL(serviceName);
-
-    Promise.all([
-      api.metricsQuery(
-        `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escaped}"}[5m])) * 100`,
-      ),
-      api.metricsQuery(
-        `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escaped}"})`,
-      ),
-    ])
-      .then(([cpuResp, memResp]) => {
-        if (cancelled) {
-          return;
-        }
-
-        const cpuVal = cpuResp.data?.result?.[0]?.value?.[1];
-        const memVal = memResp.data?.result?.[0]?.value?.[1];
-
-        if (cpuVal != null) {
-          setCpuActual(Number(cpuVal));
-        }
-
-        if (memVal != null) {
-          setMemActual(Number(memVal));
-        }
-      })
-      .catch(console.warn);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [serviceName, hasCadvisor]);
+      return {
+        cpu: cpu != null ? Number(cpu) : undefined,
+        memory: memory != null ? Number(memory) : undefined,
+      };
+    },
+    enabled: !!serviceName && hasCadvisor,
+  });
+  const cpuActual = usageQuery.data?.cpu;
+  const memActual = usageQuery.data?.memory;
 
   const name = service?.Spec.Name || service?.ID || "";
 
@@ -263,16 +223,14 @@ export function useServiceDetail(id: string | undefined) {
         ? [
             {
               title: "CPU Usage",
-              query: `sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name="${escapePromQL(
-                name,
-              )}"}[5m])) * 100`,
+              query: serviceUsageQueries(name).cpu,
               unit: "%",
               thresholds: cpuThresholds(service, thresholdReplicas),
               yMin: 0,
             },
             {
               title: "Memory Usage",
-              query: `sum(container_memory_usage_bytes{container_label_com_docker_swarm_service_name="${escapePromQL(name)}"})`,
+              query: serviceUsageQueries(name).memory,
               unit: "bytes",
               thresholds: memoryThresholds(service, thresholdReplicas),
               yMin: 0,

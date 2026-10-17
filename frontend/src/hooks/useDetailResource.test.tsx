@@ -9,8 +9,6 @@ const streamPaths: (string | undefined)[] = [];
 vi.mock("./useResourceStream", () => ({
   useResourceStream: (path: string | undefined) => {
     streamPaths.push(path);
-
-    return { connected: true };
   },
 }));
 
