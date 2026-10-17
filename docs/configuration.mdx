@@ -78,6 +78,10 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Expose a Prometheus-compatible metrics endpoint at `/-/metrics` with internal counters for SSE connections, cache operations, and HTTP request latency.
 </ConfigParam>
 
+<ConfigParam name="server.version_check" flag="-version-check" env="CETACEAN_VERSION_CHECK" default="true">
+  Ask `api.github.com` for the latest Docker Engine release, so a node's page can point out a newer one. Turn it off where Cetacean must not reach the internet; the node page then shows no update hint.
+</ConfigParam>
+
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
   Enable the recommendation engine, which periodically analyzes swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
 </ConfigParam>

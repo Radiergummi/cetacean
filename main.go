@@ -613,6 +613,7 @@ func main() {
 		ScalarJS:           scalarJS,
 		EnablePprof:        cfg.Pprof,
 		EnableSelfMetrics:  cfg.SelfMetrics,
+		EnableVersionCheck: cfg.VersionCheck,
 		AuthProvider:       authProvider,
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,

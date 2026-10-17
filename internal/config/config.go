@@ -51,6 +51,7 @@ type Config struct {
 	Pprof            bool             // CETACEAN_PPROF, default false
 	SelfMetrics      bool             // CETACEAN_SELF_METRICS, default true
 	Recommendations  bool             // CETACEAN_RECOMMENDATIONS, default true
+	VersionCheck     bool             // CETACEAN_VERSION_CHECK, default true
 	OperationsLevel  OperationsLevel  // CETACEAN_OPERATIONS_LEVEL
 	CORSOrigins      []string         // CETACEAN_CORS_ORIGINS, default empty (disabled)
 	TrustedProxies   []netip.Prefix   // CETACEAN_TRUSTED_PROXIES
@@ -99,6 +100,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fPprof            *bool
 		fSelfMetrics      *bool
 		fRecommendations  *bool
+		fVersionCheck     *bool
 		fSSEBatch         *string
 		fDockerHost       *string
 		fDocker           *fileDocker
@@ -121,6 +123,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fPprof = fc.Server.Pprof
 			fSelfMetrics = fc.Server.SelfMetrics
 			fRecommendations = fc.Server.Recommendations
+			fVersionCheck = fc.Server.VersionCheck
 			fOpsLevel = fc.Server.OperationsLevel
 			fBasePath = fc.Server.BasePath
 			fPublicURL = fc.Server.PublicURL
@@ -201,6 +204,16 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 
+	versionCheck, err := resolveBool(
+		flags.VersionCheck,
+		"CETACEAN_VERSION_CHECK",
+		fVersionCheck,
+		true,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	logLevel := strings.ToLower(resolve(flags.LogLevel, "CETACEAN_LOG_LEVEL", fLogLevel, "info"))
 	if !slices.Contains([]string{"debug", "info", "warn", "error"}, logLevel) {
 		return nil, fmt.Errorf("logging.level %q: want debug, info, warn or error", logLevel)
@@ -238,6 +251,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		Pprof:            pprof,
 		SelfMetrics:      selfMetrics,
 		Recommendations:  recommendations,
+		VersionCheck:     versionCheck,
 		OperationsLevel:  OperationsLevel(opsLevel),
 		CORSOrigins: resolveStringSlice(
 			flags.CORSOrigins,

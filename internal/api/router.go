@@ -56,11 +56,13 @@ type RouterConfig struct {
 	ScalarJS          []byte
 	EnablePprof       bool
 	EnableSelfMetrics bool
-	AuthProvider      auth.Provider
-	BasePath          string
-	PublicURL         string
-	CORS              *CORSConfig
-	TLSEnabled        bool
+	// EnableVersionCheck serves /-/docker-latest-version, which calls GitHub.
+	EnableVersionCheck bool
+	AuthProvider       auth.Provider
+	BasePath           string
+	PublicURL          string
+	CORS               *CORSConfig
+	TLSEnabled         bool
 
 	// InlineScriptHashes are CSP `'sha256-…'` tokens for the SPA's inline
 	// scripts, from InlineScriptHashes. Empty means no inline script runs.
@@ -292,7 +294,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	// Meta endpoints (no content negotiation, no discovery links)
 	mux.HandleFunc("GET /-/health", h.HandleHealth)
 	mux.HandleFunc("GET /-/ready", h.HandleReady)
-	mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
+	if cfg.EnableVersionCheck {
+		mux.HandleFunc("GET /-/docker-latest-version", h.HandleDockerLatestVersion)
+	}
 	mux.HandleFunc("GET /-/licenses", HandleLicenses)
 	mux.HandleFunc("GET /-/licenses/texts/{id}", HandleLicenseText)
 	mux.HandleFunc("GET /-/notices", HandleNotices)
