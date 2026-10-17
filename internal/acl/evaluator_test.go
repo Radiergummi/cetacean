@@ -10,13 +10,17 @@ import (
 type stubResolver struct {
 	stacks   map[string]string // "type:id" -> stack name
 	services map[string]string // taskID -> service name
+
+	stackLookups, serviceLookups int
 }
 
 func (r *stubResolver) StackOf(resourceType, resourceID string) string {
+	r.stackLookups++
 	return r.stacks[resourceType+":"+resourceID]
 }
 
 func (r *stubResolver) ServiceOfTask(taskID string) string {
+	r.serviceLookups++
 	return r.services[taskID]
 }
 
@@ -740,7 +744,7 @@ func typeAgreementResolver() *stubResolver {
 }
 
 // The guard on impliedTypes. TypeGrants states at the type level what
-// grantMatchesResource works out per resource, so the two rules live in
+// matches works out per resource, so the two rules live in
 // different functions and would otherwise drift. The fixture names a real
 // resource for every pattern, so a disagreement either way is a bug.
 func TestTypeGrantsAgreesWithCan(t *testing.T) {
