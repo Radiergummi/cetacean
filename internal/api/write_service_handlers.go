@@ -1034,7 +1034,7 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	req, ok := decodeJSON[struct {
+	req, ok := decodeMergePatch[struct {
 		Mounts []mount.Mount `json:"mounts"`
 	}](w, r)
 	if !ok {

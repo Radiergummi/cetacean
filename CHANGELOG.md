@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The error Cetacean reports when no swarm list answers mentions a swarm that has lost its leader, not only a `docker.host` naming a worker
 - The API reference describes a service's resources, placement, update policy and rollback policy as they are sent, with Docker's field names
 - `PATCH /services/{id}/resources` answers an unset requirement with `{}`, as the `GET` does, instead of `null`
+- `PATCH /services/{id}/mounts` answers a body that isn't JSON with `API008`, like the other merge-patch endpoints
 - Fixed an open editor on a detail page carrying its draft over when you navigate straight to another resource of the same kind
 
 ## [0.15.0] - 2026-10-16

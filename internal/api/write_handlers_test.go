@@ -1358,9 +1358,16 @@ func TestHandlePatchServiceResources_UnsetAnswersLikeTheGet(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(replicatedService("svc1"))
 
+	var written *swarm.ResourceRequirements
 	wc := &mockWriteClient{
-		updateServiceSpecFn: func(_ context.Context, id string, _ swarm.ServiceSpec) (swarm.Service, error) {
-			return replicatedService(id), nil
+		updateServiceSpecFn: func(_ context.Context, id string, spec swarm.ServiceSpec) (swarm.Service, error) {
+			written = spec.TaskTemplate.Resources
+			s := replicatedService(id)
+			// As the engine does: an empty requirement is stored as none.
+			if written != nil && *written != (swarm.ResourceRequirements{}) {
+				s.Spec.TaskTemplate.Resources = written
+			}
+			return s, nil
 		},
 	}
 	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
@@ -1379,6 +1386,10 @@ func TestHandlePatchServiceResources_UnsetAnswersLikeTheGet(t *testing.T) {
 	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
+	}
+
+	if written == nil || written.Limits != nil || written.Reservations != nil {
+		t.Errorf("the writer was handed %+v, want the patch merged to an empty requirement", written)
 	}
 
 	if resources, ok := resp["resources"].(map[string]any); !ok || len(resources) != 0 {
@@ -3373,6 +3384,24 @@ func TestHandlePatchServiceMounts_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d, want 404", w.Code)
+	}
+}
+
+// Mounts is a merge-patch endpoint like ports, configs, secrets and networks,
+// and answers a body that is not JSON the way they do.
+func TestHandlePatchServiceMounts_MalformedBodyIsAPI008(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
+
+	req := httptest.NewRequest("PATCH", "/services/svc1/mounts", strings.NewReader(`{bad`))
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	h.HandlePatchServiceMounts(w, req)
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "API008") {
+		t.Errorf("status=%d body=%s, want 400 naming API008", w.Code, w.Body.String())
 	}
 }
 
