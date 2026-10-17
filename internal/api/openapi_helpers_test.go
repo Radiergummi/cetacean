@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -168,6 +169,28 @@ func populateSpecFixtures(c *cache.Cache) {
 			},
 			TaskTemplate: swarm.TaskSpec{
 				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.27"},
+				// Set, so the sub-resource bodies carry every documented field.
+				Resources: &swarm.ResourceRequirements{
+					Limits:       &swarm.Limit{NanoCPUs: 2e9, MemoryBytes: 512 << 20, Pids: 100},
+					Reservations: &swarm.Resources{NanoCPUs: 5e8, MemoryBytes: 256 << 20},
+				},
+				Placement: &swarm.Placement{
+					Constraints: []string{"node.role == worker"},
+					MaxReplicas: 2,
+				},
+			},
+			UpdateConfig: &swarm.UpdateConfig{
+				Parallelism:     1,
+				Delay:           10 * time.Second,
+				FailureAction:   swarm.UpdateFailureActionRollback,
+				Monitor:         5 * time.Second,
+				MaxFailureRatio: 0.1,
+				Order:           swarm.UpdateOrderStartFirst,
+			},
+			RollbackConfig: &swarm.UpdateConfig{
+				Parallelism:   1,
+				FailureAction: swarm.UpdateFailureActionPause,
+				Order:         swarm.UpdateOrderStopFirst,
 			},
 		},
 	})
