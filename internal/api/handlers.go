@@ -242,6 +242,7 @@ type Handlers struct {
 	localNodeRetryAfter  *time.Time
 
 	logStreams         sse.Slots
+	streams            *sse.Lifetime // ends the metrics stream and log follows at shutdown
 	logReads           sse.Slots
 	activePreferWaits  atomic.Int64
 	metricsStreamCount atomic.Int64
@@ -300,6 +301,11 @@ func NewHandlers(
 // deployment runs at. Already narrowed by the global level when it arrives.
 func (h *Handlers) SetTokenOperationsLevel(level config.OperationsLevel) {
 	h.tokenOperationsLevel = level
+}
+
+// SetStreamLifetime ends the metrics stream and log follows when l ends.
+func (h *Handlers) SetStreamLifetime(l *sse.Lifetime) {
+	h.streams = l
 }
 
 // requireAnyGrant checks that the identity has at least one grant.

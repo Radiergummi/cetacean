@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -236,5 +237,73 @@ func assertRetryAfter(t *testing.T, value string) {
 		seconds >= sse.RetryAfterFloor+sse.RetryAfterWindow {
 		t.Errorf("Retry-After = %q, want delta-seconds in [%d, %d)",
 			value, sse.RetryAfterFloor, sse.RetryAfterFloor+sse.RetryAfterWindow)
+	}
+}
+
+// Shutdown waits for every handler; a metrics stream whose client stays must
+// still end when the server stops.
+func TestMetricsStream_EndsAtShutdown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[]}}`))
+	}))
+	defer srv.Close()
+
+	lifetime := sse.NewLifetime()
+	h := &Handlers{
+		promClient:     promapi.NewClient(srv.URL),
+		tickerInterval: 10 * time.Millisecond,
+		streams:        lifetime,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		req := httptest.NewRequest("GET", "/-/metrics/query_range?query=up&step=15", nil)
+		h.HandleMetricsStream(httptest.NewRecorder(), req)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	lifetime.End()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the metrics stream outlived shutdown")
+	}
+}
+
+// As the metrics stream: a log follow ends at shutdown, not when its client leaves.
+func TestLogFollow_EndsAtShutdown(t *testing.T) {
+	lifetime := sse.NewLifetime()
+	h := &Handlers{streams: lifetime}
+
+	pipeReader, pipeWriter := io.Pipe()
+	defer pipeWriter.Close()
+
+	fetch := func(ctx context.Context, _ string, _ bool, _, _ string) (LogStream, error) {
+		context.AfterFunc(ctx, func() { pipeWriter.CloseWithError(ctx.Err()) })
+		return pipeReader, nil
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.serveLogsSSE(
+			httptest.NewRecorder(),
+			httptest.NewRequest("GET", "/services/x/logs", nil),
+			fetch,
+			"",
+			"",
+		)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	lifetime.End()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the log follow outlived shutdown")
 	}
 }

@@ -19,6 +19,7 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -223,6 +224,9 @@ type Server struct {
 	// Nil disables the bound, as for watches.
 	listens chan struct{}
 
+	// streams ends the open listen streams at shutdown.
+	streams *sse.Lifetime
+
 	closeOnce sync.Once
 }
 
@@ -261,6 +265,10 @@ type Options struct {
 	// leaves mcp-go's noop tracer in place, which is the zero-config path:
 	// tracing costs nothing until CETACEAN_OTEL_ENDPOINT is set.
 	Tracer oteltrace.Tracer
+
+	// Streams ends open subscriptions/listen streams when it ends. Nil leaves
+	// them to their clients.
+	Streams *sse.Lifetime
 }
 
 // Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
@@ -304,6 +312,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		notifications:  NewNotificationManager(),
 		watches:        make(chan struct{}, maxConcurrentWatches),
 		listens:        make(chan struct{}, maxListenStreams),
+		streams:        opts.Streams,
 	}
 
 	serverOptions := []mcpserver.ServerOption{

@@ -66,6 +66,9 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	flusher.Flush()
 
+	r, release := h.streams.Bind(r)
+	defer release()
+
 	ctx := r.Context()
 
 	now := strconv.FormatInt(time.Now().Unix(), 10)
