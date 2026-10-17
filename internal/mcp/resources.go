@@ -3,10 +3,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -183,7 +185,7 @@ func (s *Server) handleReadResource(
 	uri := req.Params.URI
 	body, mime, err := s.readResourceContents(ctx, uri)
 	if err != nil {
-		return nil, err
+		return nil, asReadError(ctx, err)
 	}
 	return []mcplib.ResourceContents{
 		mcplib.TextResourceContents{
@@ -433,7 +435,44 @@ func (s *Server) readServiceLogs(ctx context.Context, serviceID string) (any, er
 }
 
 func notFound(uri string) error {
-	return fmt.Errorf("resource not found: %s", uri)
+	return resourceNotFound{uri: uri}
+}
+
+// resourceNotFound is a read of a resource that does not exist or that the
+// caller may not read. code is set only where the error leaves a resource read.
+type resourceNotFound struct {
+	uri  string
+	code int
+}
+
+func (e resourceNotFound) Error() string { return "resource not found: " + e.uri }
+
+func (e resourceNotFound) JSONRPCError() mcplib.JSONRPCError {
+	return mcplib.JSONRPCError{
+		JSONRPC: mcplib.JSONRPC_VERSION,
+		Error: mcplib.JSONRPCErrorDetails{
+			Code:    e.code,
+			Message: e.Error(),
+			Data:    map[string]string{"uri": e.uri},
+		},
+	}
+}
+
+// asReadError gives a not-found the code mcp-go gives a URI no template
+// matches, which it cannot see through a matched template's handler: -32602
+// from 2026-07-28 on (SEP-2164), -32002 before.
+func asReadError(ctx context.Context, err error) error {
+	var missing resourceNotFound
+	if !errors.As(err, &missing) {
+		return err
+	}
+
+	missing.code = mcplib.RESOURCE_NOT_FOUND
+	if mcplib.IsModernProtocol(mcpserver.RequestProtocolVersion(ctx)) {
+		missing.code = mcplib.INVALID_PARAMS
+	}
+
+	return mcpserver.NewHandlerError(missing)
 }
 
 // checkReadable is checkRead for the resource at uri, answering a denial with
