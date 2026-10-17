@@ -136,3 +136,45 @@ func TestServiceOfTask_ServiceNotInCache(t *testing.T) {
 		t.Fatalf("expected empty when service is missing, got %q", got)
 	}
 }
+
+// StackOf answers for a service through a name index, so the index has to follow
+// every write: a rename, a removal, and both bulk replacements.
+func TestStackOf_ServiceFollowsEveryWrite(t *testing.T) {
+	service := func(id, name, stack string) swarm.Service {
+		return swarm.Service{ID: id, Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{
+			Name:   name,
+			Labels: map[string]string{StackLabel: stack},
+		}}}
+	}
+
+	c := New(nil)
+	c.SetService(service("svc1", "web", "shop"))
+	c.SetService(service("svc1", "web-renamed", "shop"))
+
+	if got := c.StackOf("service", "web"); got != "" {
+		t.Errorf("after rename, StackOf(old name) = %q, want empty", got)
+	}
+	if got := c.StackOf("service", "web-renamed"); got != "shop" {
+		t.Errorf("after rename, StackOf(new name) = %q, want shop", got)
+	}
+
+	c.DeleteService("svc1")
+	if got := c.StackOf("service", "web-renamed"); got != "" {
+		t.Errorf("after delete, StackOf = %q, want empty", got)
+	}
+
+	c.replaceServices([]swarm.Service{service("svc2", "api", "billing")})
+	if got := c.StackOf("service", "api"); got != "billing" {
+		t.Errorf("after replaceServices, StackOf(api) = %q, want billing", got)
+	}
+
+	c.ReplaceAll(
+		FullSyncData{Services: []swarm.Service{service("svc3", "db", "data")}, HasServices: true},
+	)
+	if got := c.StackOf("service", "api"); got != "" {
+		t.Errorf("after ReplaceAll, StackOf(dropped service) = %q, want empty", got)
+	}
+	if got := c.StackOf("service", "db"); got != "data" {
+		t.Errorf("after ReplaceAll, StackOf(db) = %q, want data", got)
+	}
+}

@@ -64,7 +64,11 @@ func TestFilterResolvesEachItemOnceAtMost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolver := &stubResolver{}
+			// Every task has a parent service, so a task walks the whole way up.
+			resolver := &stubResolver{services: map[string]string{}}
+			for _, name := range names {
+				resolver.services[name] = "parent-" + name
+			}
 			e := NewEvaluator()
 			e.SetResolver(resolver)
 			e.SetPolicy(&Policy{Grants: tt.grants})

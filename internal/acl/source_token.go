@@ -7,16 +7,16 @@ import (
 )
 
 // sourceGrants is what the provider gives id, derived once per identity and
-// source: a source parses a header or claim on every call.
+// evaluator: a source parses a header or claim on every call.
 func (e *Evaluator) sourceGrants(id *auth.Identity) []Grant {
-	grants, _ := id.Derived(sourceGrantsKey{e.source}, func() any {
+	grants, _ := id.Derived(sourceGrantsKey{e}, func() any {
 		return e.deriveSourceGrants(id)
 	}).([]Grant)
 
 	return grants
 }
 
-type sourceGrantsKey struct{ source GrantSource }
+type sourceGrantsKey struct{ evaluator *Evaluator }
 
 // deriveSourceGrants is sourceGrants uncached. A token this deployment issued
 // carries none of the headers or claims a source reads, so it answers with the
@@ -38,7 +38,7 @@ func (e *Evaluator) SnapshotGrants(id *auth.Identity) []byte {
 		return nil
 	}
 
-	grants := e.source.GrantsFor(id)
+	grants := e.sourceGrants(id)
 	if len(grants) == 0 {
 		return nil
 	}

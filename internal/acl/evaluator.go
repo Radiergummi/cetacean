@@ -54,7 +54,8 @@ func (e *Evaluator) SetResolver(r ResourceResolver) {
 	e.resolver = r
 }
 
-// SetSource sets the provider-specific grant source.
+// SetSource sets the provider-specific grant source. Grants are derived once
+// per identity and evaluator, so it is set before the evaluator serves.
 func (e *Evaluator) SetSource(s GrantSource) {
 	if e == nil {
 		return
@@ -98,6 +99,26 @@ func (e *Evaluator) grantsWith(
 		return grantSet{}, true
 	}
 
+	if id == nil {
+		return e.grantSetOf(id, p, permission), false
+	}
+
+	// Constant for one identity under one policy, and asked for again on every
+	// event an SSE subscriber is sent.
+	gs, _ := id.Derived(grantSetKey{e, p, permission}, func() any {
+		return e.grantSetOf(id, p, permission)
+	}).(grantSet)
+
+	return gs, false
+}
+
+type grantSetKey struct {
+	evaluator  *Evaluator
+	policy     *Policy
+	permission string
+}
+
+func (e *Evaluator) grantSetOf(id *auth.Identity, p *Policy, permission string) (grants grantSet) {
 	for _, g := range e.collectGrants(id, p) {
 		if !hasPermission(g, permission) {
 			continue
@@ -109,7 +130,7 @@ func (e *Evaluator) grantsWith(
 			grants.stacks = grants.stacks || exprType == "stack" || exprType == "*"
 		}
 	}
-	return grants, false
+	return grants
 }
 
 // Filter returns only items the identity can access with the given permission.
@@ -292,19 +313,27 @@ func (e *Evaluator) matchesParts(gs grantSet, resType, resID string) bool {
 		return false
 	}
 
-	// Tasks inherit from their parent service, and through it from its stack.
-	if resType == "task" && (gs.services || gs.stacks) {
-		if svcName := e.resolver.ServiceOfTask(resID); svcName != "" {
-			if gs.services && anyCovers(gs.grants, "service", svcName) {
-				return true
-			}
-			if gs.stacks {
-				stackName := e.resolver.StackOf("service", svcName)
-				if stackName != "" && anyCovers(gs.grants, "stack", stackName) {
-					return true
-				}
-			}
+	// Tasks inherit from their parent service, and through it from its stack;
+	// a task has no stack of its own.
+	if resType == "task" {
+		if !gs.services && !gs.stacks {
+			return false
 		}
+
+		svcName := e.resolver.ServiceOfTask(resID)
+		if svcName == "" {
+			return false
+		}
+		if gs.services && anyCovers(gs.grants, "service", svcName) {
+			return true
+		}
+		if !gs.stacks {
+			return false
+		}
+
+		stackName := e.resolver.StackOf("service", svcName)
+
+		return stackName != "" && anyCovers(gs.grants, "stack", stackName)
 	}
 
 	if !gs.stacks {
