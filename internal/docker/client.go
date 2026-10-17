@@ -395,7 +395,12 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 		}
 	}
 
-	return data, fullSyncError(failed)
+	err := fullSyncError(failed)
+	if err != nil && ctx.Err() != nil {
+		err = fmt.Errorf("%w: %w", err, ctx.Err())
+	}
+
+	return data, err
 }
 
 func fetchList[T any](

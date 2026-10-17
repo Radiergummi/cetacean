@@ -252,6 +252,12 @@ paths:
                     example: error
                   error:
                     type: string
+        "504":
+          description: The re-sync ran out of time; the cache is unchanged
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
   /-/metrics:
     get:

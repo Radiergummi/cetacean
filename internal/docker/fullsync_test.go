@@ -1,6 +1,11 @@
 package docker
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+)
 
 // A worker answers its node-local networks and volumes and refuses every
 // swarm list, which must not read as a healthy, empty cluster.
@@ -28,5 +33,20 @@ func TestFullSyncError(t *testing.T) {
 		if err := fullSyncError(failed); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
 		}
+	}
+}
+
+// A sweep that ran out of time must say so, not only that the lists failed.
+func TestFullSyncReportsItsDeadline(t *testing.T) {
+	c, err := NewClient("tcp://127.0.0.1:1", TLS{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	if _, err := c.FullSync(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want it to wrap context.DeadlineExceeded", err)
 	}
 }
