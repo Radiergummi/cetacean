@@ -45,4 +45,16 @@ describe("Layout", () => {
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getAllByRole("link", { name: "Nodes" })).toHaveLength(1);
   });
+
+  it("links the plugin list, and marks it current on a plugin's page", () => {
+    render(
+      <MemoryRouter initialEntries={["/plugins/vieux/sshfs:latest"]}>
+        <Layout>{null}</Layout>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "Plugins" });
+    expect(link).toHaveAttribute("href", "/plugins");
+    expect(link).toHaveAttribute("aria-current", "page");
+  });
 });

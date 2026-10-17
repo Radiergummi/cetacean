@@ -19,8 +19,8 @@ The same condition is available to alerting—see [Monitoring][monitoring].
 
 ## Navigation
 
-The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes, plus
-the swarm info, topology, and metrics pages. On narrow screens they collapse behind a menu button.
+The nav bar links every resource type: nodes, stacks, services, tasks, configs, secrets, networks, volumes,
+plugins, plus the swarm info, topology, and metrics pages. On narrow screens they collapse behind a menu button.
 
 To the right of the search box sit the shortcut help button, a [recommendations][recommendations] indicator badged
 with the current finding count, the theme toggle (light, dark, system), and, in every
@@ -46,6 +46,7 @@ Press `?` for the full list. Shortcuts are ignored while focus is in a text inpu
 | `g` `x`          | Secrets                       |
 | `g` `w`          | Networks                      |
 | `g` `v`          | Volumes                       |
+| `g` `p`          | Plugins                       |
 | `g` `i`          | Swarm info                    |
 | `g` `t`          | Topology                      |
 | `g` `m`          | Metrics console               |
