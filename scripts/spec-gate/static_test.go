@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -189,5 +192,42 @@ func TestNested(t *testing.T) {
 	errs = checkObservations(claims, observations)
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "s_test.go:14") {
 		t.Fatalf("errors = %v, want one for the sibling's observation at line 14", errs)
+	}
+}
+
+// A refactor that moves a mutant's target is caught here, in a second, rather
+// than by the mutant run that takes minutes.
+func TestAMutantWhosePatternIsGoneFailsTheGate(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(root, "a.go"),
+		[]byte("x := 1\ny := 2\ny := 2\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	reg := registryWith(t, spec.Requirement{
+		ID: "a", Level: spec.MUST, Text: "x",
+		Mutants: []spec.Mutant{
+			{File: "a.go", Replace: "x := 1", With: "x := 0"},
+			{File: "a.go", Replace: "z := 3", With: "z := 0"},
+			{File: "a.go", Replace: "y := 2", With: "y := 0"},
+			{File: "gone.go", Replace: "x", With: "y"},
+		},
+	})
+
+	errs := checkMutantPatterns(root, reg)
+	if len(errs) != 3 {
+		t.Fatalf("errors = %v, want three: a missing pattern, a repeated one, a missing file", errs)
+	}
+
+	for _, want := range []string{"pattern not found", "occurs 2 times", "gone.go"} {
+		if !slices.ContainsFunc(
+			errs,
+			func(e error) bool { return strings.Contains(e.Error(), want) },
+		) {
+			t.Errorf("errors = %v, want one mentioning %q", errs, want)
+		}
 	}
 }

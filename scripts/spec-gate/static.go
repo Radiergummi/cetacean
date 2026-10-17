@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -20,6 +21,7 @@ func runStatic(root string) error {
 	errs = append(errs, unknown(reg, observations)...)
 	errs = append(errs, checkStatic(reg, claims)...)
 	errs = append(errs, checkObservations(claims, observations)...)
+	errs = append(errs, checkMutantPatterns(root, reg)...)
 
 	if len(errs) > 0 {
 		report(errs)
@@ -157,6 +159,38 @@ func unknown(reg *spec.Registry, records []Claim) []error {
 				"%s:%d: names %q, which the registry does not have",
 				c.File, c.Line, c.ID,
 			))
+		}
+	}
+
+	return errs
+}
+
+// checkMutantPatterns reports every mutant whose pattern its file no longer
+// holds exactly once, the check the mutant run would otherwise make minutes in.
+func checkMutantPatterns(root string, reg *spec.Registry) []error {
+	sources := map[string]string{}
+
+	var errs []error
+
+	for _, q := range reg.All() {
+		for _, m := range q.Mutants {
+			src, ok := sources[m.File]
+			if !ok {
+				body, err := os.ReadFile(
+					filepath.Join(root, m.File),
+				) // #nosec G304 -- a path from the embedded registry
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s: %s: %w", q.FullID(), m.File, err))
+					continue
+				}
+
+				src = string(body)
+				sources[m.File] = src
+			}
+
+			if _, err := applyMutant(src, m); err != nil {
+				errs = append(errs, fmt.Errorf("%s: %s: %w", q.FullID(), m.File, err))
+			}
 		}
 	}
 
