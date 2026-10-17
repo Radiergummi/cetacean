@@ -8,14 +8,15 @@ inventory:
     RFC 9110 §5.6.4, §8.8, §12, §13 and §14 in full — the quoted-string
     production, validators, content negotiation, conditional requests and
     range requests. These are the parts of HTTP this API implements rather
-    than inherits. Everything else is excluded and belongs to net/http: §3 to
+    than inherits, plus §15.5.6, because the catch-all writes its own 405.
+    Everything else is excluded and belongs to net/http: §3 to
     §7 are message framing, routing and field syntax, §9 the methods, §10 the
-    header fields it parses for us, §11 authentication, §15 the status codes,
+    header fields it parses for us, §11 authentication, the rest of §15 the status codes,
     §16 the registries and §17 security considerations for the stack beneath.
     This document also obsoletes RFC 7230, RFC 7231 and RFC 7233, so the
     quoted-string, negotiation and range rules the tree cited under those
     numbers are registered here.
-  count: 87
+  count: 88
 
 requirements:
   - id: a-quoted-pair-only-escapes-what-it-must
@@ -369,6 +370,17 @@ requirements:
       byte-range request SHOULD send a Content-Range header field with an
       unsatisfied-range value.
     url: https://www.rfc-editor.org/rfc/rfc9110#section-14.4
+
+  - id: 405-sends-allow
+    level: MUST
+    text: >-
+      The origin server MUST generate an Allow header field in a 405 response
+      containing a list of the target resource's currently supported methods.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6
+    mutants:
+      - file: internal/api/router.go
+        replace: "\t\t\t\tw.Header().Set(\"Allow\", strings.Join(allow, \", \"))"
+        with: "\t\t\t\tw.Header().Set(\"Allow\", \"\")"
 
 dismissed:
   a-range-on-an-unsupported-method-is-ignored: >-

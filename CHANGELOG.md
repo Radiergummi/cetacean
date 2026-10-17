@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - The resync button reports a failed re-sync, and waits long enough for a slow Docker Engine to answer instead of giving up after 30 seconds
+- An unknown or disabled `/-/` endpoint answers `404`, and one asked with the wrong method `405` with `Allow`, instead of serving the dashboard
 - Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses
 - Stopping Cetacean ends open metrics streams, log follows and MCP listen sessions, so a connected client no longer holds shutdown for the whole grace period
 - A failed config or secret create is reported once, in the dialog, instead of also as a toast

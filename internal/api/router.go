@@ -193,6 +193,22 @@ func (r *routeRecorder) serves(req *http.Request) bool {
 	return pattern != "" && pattern != "/"
 }
 
+// allows lists the methods a route of its own answers at req's path.
+func (r *routeRecorder) allows(req *http.Request) []string {
+	var methods []string
+
+	for _, method := range []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"} {
+		probe := req.Clone(req.Context())
+		probe.Method = method
+
+		if r.serves(probe) {
+			methods = append(methods, method)
+		}
+	}
+
+	return methods
+}
+
 func NewRouter(cfg RouterConfig) http.Handler {
 	handler, _ := newRouter(cfg)
 
@@ -1002,6 +1018,19 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		// this route knows nothing matched: `spa` is also the text/html arm of
 		// every contentNegotiated endpoint, where web.json is a real resource.
 		if hasMidPathExtension(r.URL.Path) {
+			writeProblem(w, r, http.StatusNotFound, "no such resource")
+			return
+		}
+
+		// The SPA has no route under /-/: what reaches here is a wrong method
+		// or a disabled or unknown endpoint, never the dashboard.
+		if strings.HasPrefix(r.URL.Path, "/-/") {
+			if allow := mux.allows(r); len(allow) > 0 {
+				w.Header().Set("Allow", strings.Join(allow, ", "))
+				writeProblem(w, r, http.StatusMethodNotAllowed, r.Method+" is not allowed here")
+				return
+			}
+
 			writeProblem(w, r, http.StatusNotFound, "no such resource")
 			return
 		}
