@@ -302,7 +302,10 @@ func (w *Watcher) resyncOnLoop(ctx context.Context) error {
 	select {
 	case w.resyncRequests <- done:
 	case <-handoff.C:
-		return errRefreshUnavailable
+		return fmt.Errorf(
+			"the event loop did not take the re-sync in time: %w",
+			context.DeadlineExceeded,
+		)
 	}
 
 	return <-done

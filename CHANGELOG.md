@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
+
 ### Fixed
 - Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses
 - Stopping Cetacean ends open metrics streams, log follows and MCP listen sessions, so a connected client no longer holds shutdown for the whole grace period

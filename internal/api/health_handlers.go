@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -69,10 +71,11 @@ func HandleResync(r Resyncer) http.HandlerFunc {
 				return
 			}
 			slog.Warn("manual resync failed", "error", err)
-			writeJSONStatus(w, http.StatusBadGateway, map[string]string{
-				"status": "error",
-				"error":  err.Error(),
-			})
+			code := "ENG006"
+			if errors.Is(err, context.DeadlineExceeded) {
+				code = "ENG005"
+			}
+			writeErrorCode(w, req, code, err.Error())
 			return
 		}
 		writeJSONStatus(w, http.StatusOK, map[string]any{

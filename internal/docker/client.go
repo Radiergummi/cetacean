@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -386,12 +385,12 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 		}()
 	}
 
-	failed := make(map[string]bool)
+	failed := make(map[string]error)
 	for range fetchers {
 		r := <-ch
 		if r.err != nil {
 			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
-			failed[r.name] = true
+			failed[r.name] = r.err
 		}
 	}
 
@@ -974,23 +973,44 @@ func (c *Client) UpdateServiceContainerConfig(
 // its own networks and volumes, so a sync that reached one is not a success.
 var swarmResources = []string{"nodes", "services", "tasks", "configs", "secrets"}
 
+// syncedResources is every list a full sync reads, in the order its error names them.
+var syncedResources = []string{
+	"nodes", "services", "tasks", "configs", "secrets", "networks", "volumes",
+}
+
 // fullSyncError decides whether a sync with these resources failed counts as
-// a failure: every one of them, or every swarm resource.
-func fullSyncError(failed map[string]bool) error {
-	if len(failed) == 7 {
-		return errors.New("all resource syncs failed")
+// a failure: every one of them, or every swarm resource. The error wraps each
+// list's own, so a caller can tell a timeout from a refusal.
+func fullSyncError(failed map[string]error) error {
+	var summary string
+
+	switch {
+	case len(failed) == len(syncedResources):
+		summary = "all resource syncs failed"
+	case !slices.ContainsFunc(swarmResources, func(name string) bool { return failed[name] == nil }):
+		// A manager whose swarm has lost quorum refuses the same lists a worker does.
+		summary = "no swarm resource could be listed: docker.host must point at a swarm manager, " +
+			"and the swarm must have a leader"
+	default:
+		return nil
 	}
 
-	for _, name := range swarmResources {
-		if !failed[name] {
-			return nil
+	causes := make([]error, 0, len(failed))
+	for _, name := range syncedResources {
+		if err := failed[name]; err != nil {
+			causes = append(causes, fmt.Errorf("%s: %w", name, err))
+			summary += "; " + causes[len(causes)-1].Error()
 		}
 	}
 
-	// A manager whose swarm has lost quorum refuses the same lists a worker
-	// does, so the message names both; each list's own error is in the log.
-	return errors.New(
-		"no swarm resource could be listed: docker.host must point at a swarm manager, " +
-			"and the swarm must have a leader",
-	)
+	return &fullSyncFailure{summary, causes}
 }
+
+// fullSyncFailure keeps its causes on one line, where errors.Join would not.
+type fullSyncFailure struct {
+	message string
+	causes  []error
+}
+
+func (e *fullSyncFailure) Error() string   { return e.message }
+func (e *fullSyncFailure) Unwrap() []error { return e.causes }

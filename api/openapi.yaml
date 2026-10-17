@@ -241,17 +241,19 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "502":
-          description: The re-sync failed; the cache is unchanged
+          description: >
+            The re-sync failed (`ENG006`); the cache is unchanged. The detail names what each
+            list Docker refused answered.
           content:
-            application/json:
+            application/problem+json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: error
-                  error:
-                    type: string
+                $ref: "#/components/schemas/ProblemDetail"
+        "504":
+          description: The re-sync ran out of time before Docker answered (`ENG005`); the cache is unchanged
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
   /-/metrics:
     get:
