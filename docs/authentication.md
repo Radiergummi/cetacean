@@ -97,8 +97,8 @@ the authorization server can't run under the `none` mode—there would be no one
 Exempt means anyone who can reach the port can read these. `/-/sbom.cdx`, with or without `.json`, lists
 every component in the build with its exact version, which tells a scanner which advisories apply without a
 credential, and `/-/docker-latest-version` makes Cetacean call GitHub. If the port is reachable from a network you don't trust,
-block both at your reverse proxy, or turn the version check off with [`server.version_check`][server.version_check]—nothing
-in the dashboard needs the SBOM, and without the version check a node's page just shows no update hint. `/-/metrics` reports request and cache counters; restrict it to your Prometheus
+block both at your reverse proxy—nothing in the dashboard needs the SBOM, and without the version check a node's
+page just shows no update hint. [`server.version_check`][server.version_check] also turns the version check off at the source. `/-/metrics` reports request and cache counters; restrict it to your Prometheus
 the same way.
 
 ## Refused requests

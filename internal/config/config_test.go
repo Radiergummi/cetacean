@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -386,6 +388,8 @@ func TestLoad_OTelEndpoint_File(t *testing.T) {
 }
 
 func TestLoad_VersionCheck(t *testing.T) {
+	t.Setenv("CETACEAN_VERSION_CHECK", "")
+
 	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -394,13 +398,34 @@ func TestLoad_VersionCheck(t *testing.T) {
 		t.Error("VersionCheck=false by default, want true")
 	}
 
-	t.Setenv("CETACEAN_VERSION_CHECK", "false")
-
-	cfg, err = Load(nil, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[server]\nversion_check = false\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if cfg.VersionCheck {
-		t.Error("VersionCheck=true with CETACEAN_VERSION_CHECK=false, want false")
+	fc, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	flags, err := ParseFlags([]string{"-version-check=false"})
+	if err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+
+	for name, load := range map[string]func() (*Config, error){
+		"file": func() (*Config, error) { return Load(fc, nil) },
+		"flag": func() (*Config, error) { return Load(nil, flags) },
+		"env": func() (*Config, error) {
+			t.Setenv("CETACEAN_VERSION_CHECK", "false")
+			defer t.Setenv("CETACEAN_VERSION_CHECK", "")
+			return Load(nil, nil)
+		},
+	} {
+		cfg, err := load()
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", name, err)
+		}
+		if cfg.VersionCheck {
+			t.Errorf("%s: VersionCheck=true, want false", name)
+		}
 	}
 }

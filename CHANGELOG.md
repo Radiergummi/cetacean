@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `server.version_check` turns off the call to `api.github.com` for the latest Docker Engine release, for deployments that must not reach the internet
+- `server.version_check` turns off the call to `api.github.com` for the latest Docker Engine release
 
 ### Changed
 - **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
