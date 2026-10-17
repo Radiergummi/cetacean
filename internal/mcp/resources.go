@@ -439,15 +439,19 @@ func notFound(uri string) error {
 }
 
 // resourceNotFound is a read of a resource that does not exist or that the
-// caller may not read. code is set only where the error leaves a resource read.
-type resourceNotFound struct {
-	uri  string
-	code int
-}
+// caller may not read.
+type resourceNotFound struct{ uri string }
 
 func (e resourceNotFound) Error() string { return "resource not found: " + e.uri }
 
-func (e resourceNotFound) JSONRPCError() mcplib.JSONRPCError {
+// readError is a not-found leaving a resource read, with the JSON-RPC code it
+// is answered with.
+type readError struct {
+	resourceNotFound
+	code int
+}
+
+func (e readError) JSONRPCError() mcplib.JSONRPCError {
 	return mcplib.JSONRPCError{
 		JSONRPC: mcplib.JSONRPC_VERSION,
 		Error: mcplib.JSONRPCErrorDetails{
@@ -467,12 +471,12 @@ func asReadError(ctx context.Context, err error) error {
 		return err
 	}
 
-	missing.code = mcplib.RESOURCE_NOT_FOUND
+	code := mcplib.RESOURCE_NOT_FOUND
 	if mcplib.IsModernProtocol(mcpserver.RequestProtocolVersion(ctx)) {
-		missing.code = mcplib.INVALID_PARAMS
+		code = mcplib.INVALID_PARAMS
 	}
 
-	return mcpserver.NewHandlerError(missing)
+	return mcpserver.NewHandlerError(readError{resourceNotFound: missing, code: code})
 }
 
 // checkReadable is checkRead for the resource at uri, answering a denial with

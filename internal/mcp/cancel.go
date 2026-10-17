@@ -2,72 +2,64 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 )
 
-// inflight records who sent each request still being served, by JSON-RPC id.
-// The stateless transport has no session to scope an id to, so mcp-go cancels
-// whichever request holds it; scopeCancels lets a caller name only its own.
+// inflight holds a cancel for every request being served, by caller and id.
+// The stateless transport has no session to scope an id to, so mcp-go keys its
+// own by id alone; scopeCancels cancels through this instead.
 type inflight struct {
-	mu     sync.Mutex
-	owners map[string]map[string]int // request id -> owner -> requests open
+	mu      sync.Mutex
+	cancels map[string]map[*context.CancelFunc]struct{}
 }
 
-func (f *inflight) add(id, owner string) func() {
+func (f *inflight) add(key string, cancel context.CancelFunc) func() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.owners == nil {
-		f.owners = map[string]map[string]int{}
+	if f.cancels == nil {
+		f.cancels = map[string]map[*context.CancelFunc]struct{}{}
 	}
-	if f.owners[id] == nil {
-		f.owners[id] = map[string]int{}
+	if f.cancels[key] == nil {
+		f.cancels[key] = map[*context.CancelFunc]struct{}{}
 	}
-	f.owners[id][owner]++
+	f.cancels[key][&cancel] = struct{}{}
 
 	return func() {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 
-		if f.owners[id][owner]--; f.owners[id][owner] == 0 {
-			delete(f.owners[id], owner)
-		}
-		if len(f.owners[id]) == 0 {
-			delete(f.owners, id)
+		delete(f.cancels[key], &cancel)
+		if len(f.cancels[key]) == 0 {
+			delete(f.cancels, key)
 		}
 	}
 }
 
-// heldByOthers reports whether a request with id is open for a caller other
-// than owner, whose cancel could then reach it.
-func (f *inflight) heldByOthers(id, owner string) bool {
+func (f *inflight) cancel(key string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	for held := range f.owners[id] {
-		if held != owner {
-			return true
-		}
+	for cancel := range f.cancels[key] {
+		(*cancel)()
 	}
-
-	return false
 }
 
-// requestKey folds a JSON-RPC id to the text mcp-go keys it by, where 7 and
-// "7" collide.
-func requestKey(raw json.RawMessage) string {
-	return strings.Trim(string(bytes.TrimSpace(raw)), `"`)
+// inflightKey scopes a JSON-RPC id, folded as mcp-go folds it, to its caller.
+func inflightKey(owner string, id any) string {
+	return owner + "\x00" + fmt.Sprintf("%v", id)
 }
 
-// scopeCancels drops a notifications/cancelled naming a request another caller
-// has open, answering 202 as for any notification; a receiver may ignore a
-// cancel. It sits inside the bearer check, which puts the caller in r.
+// scopeCancels serves notifications/cancelled itself: it ends the sender's own
+// requests with that id, answers 202, and never passes the cancel to mcp-go.
+// It sits inside the bearer check, which puts the caller in r.
 func (s *Server) scopeCancels(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -83,12 +75,12 @@ func (s *Server) scopeCancels(next http.Handler) http.Handler {
 
 		r.Body = io.NopCloser(bytes.NewReader(body))
 
+		// Decoded as mcp-go decodes it, so both see the same method and id:
+		// the envelope through a struct, a notification's params as a map.
 		var envelope struct {
-			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
-			Params struct {
-				RequestID json.RawMessage `json:"requestId"`
-			} `json:"params"`
+			ID     any             `json:"id"`
+			Params json.RawMessage `json:"params"`
 		}
 		if json.Unmarshal(body, &envelope) != nil {
 			next.ServeHTTP(w, r)
@@ -97,14 +89,25 @@ func (s *Server) scopeCancels(next http.Handler) http.Handler {
 
 		owner := taskOwner(r.Context())
 
-		switch {
-		case envelope.Method == string(mcplib.MethodNotificationCancelled):
-			if s.inflight.heldByOthers(requestKey(envelope.Params.RequestID), owner) {
-				w.WriteHeader(http.StatusAccepted)
-				return
+		if envelope.Method == string(mcplib.MethodNotificationCancelled) {
+			var params map[string]any
+			if json.Unmarshal(envelope.Params, &params) == nil {
+				if id, ok := params["requestId"]; ok {
+					s.inflight.cancel(inflightKey(owner, id))
+				}
 			}
-		case len(envelope.ID) > 0 && string(envelope.ID) != "null":
-			defer s.inflight.add(requestKey(envelope.ID), owner)()
+
+			w.WriteHeader(http.StatusAccepted)
+
+			return
+		}
+
+		if envelope.ID != nil {
+			ctx, cancel := context.WithCancel(r.Context())
+			defer cancel()
+			defer s.inflight.add(inflightKey(owner, envelope.ID), cancel)()
+
+			r = r.WithContext(ctx)
 		}
 
 		next.ServeHTTP(w, r)
