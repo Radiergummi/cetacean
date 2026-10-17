@@ -32,7 +32,8 @@ export default function CreateResourceDialog({
   canCreate = false,
 }: CreateResourceDialogProps) {
   const [open, setOpen] = useState(false);
-  const action = useAsyncAction({ toast: true });
+  // A failure shows inline, beside the form that caused it; a toast would say it twice.
+  const action = useAsyncAction();
   const navigate = useNavigate();
 
   // The request cannot be cancelled, so the dialog that started it stays open

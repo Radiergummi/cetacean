@@ -1,10 +1,16 @@
 import CreateResourceDialog from "./CreateResourceDialog";
 import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { toast } from "sonner";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("CreateResourceDialog", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("shows a failed create in the dialog until it is closed", async () => {
+    const toastError = vi.spyOn(toast, "error");
     render(
       <CreateResourceDialog
         resourceType="Config"
@@ -22,6 +28,8 @@ describe("CreateResourceDialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Create" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("name conflicts");
+    // Inline beside the form that caused it, and only there.
+    expect(toastError).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     fireEvent.click(await screen.findByRole("button", { name: "Create" }));
