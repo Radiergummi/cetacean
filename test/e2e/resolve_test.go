@@ -101,6 +101,19 @@ func awaitHistory(
 // resourceIDs reduces entries to the IDs they carry, which is what two
 // timelines reached by different identifiers have to agree on. Comparing whole
 // entries would compare timestamps the two reads are not guaranteed to share.
+// serviceEntries drops the task entries a service's timeline also carries, so a
+// crash loop shows there, leaving the ones about the service itself.
+func serviceEntries(entries []historyEntry) []historyEntry {
+	own := make([]historyEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.Type == "service" {
+			own = append(own, e)
+		}
+	}
+
+	return own
+}
+
 func resourceIDs(entries []historyEntry) []string {
 	ids := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -193,7 +206,7 @@ func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 			)
 		}
 
-		for _, entry := range byName {
+		for _, entry := range serviceEntries(byName) {
 			if entry.ResourceID != id {
 				t.Errorf("entry resourceId = %q, want the service ID %q", entry.ResourceID, id)
 			}
@@ -206,7 +219,7 @@ func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 		// a resource without saying what it is.
 		entries := awaitHistory(t, proc, "", service)
 
-		for _, entry := range entries {
+		for _, entry := range serviceEntries(entries) {
 			if entry.ResourceID != id {
 				t.Errorf("entry resourceId = %q, want the service ID %q", entry.ResourceID, id)
 			}
@@ -228,7 +241,7 @@ func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 	})
 
 	t.Run("get_events agrees with the REST timeline", func(t *testing.T) {
-		rest := awaitHistory(t, proc, "service", id)
+		rest := serviceEntries(awaitHistory(t, proc, "service", id))
 
 		var events struct {
 			StructuredContent struct {
@@ -303,13 +316,22 @@ func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 		}
 
 		globalID := serviceID(t, proc, global)
+		own := 0
 		for _, entry := range entries {
+			if entry.Type != "service" {
+				continue
+			}
+			own++
 			if entry.ResourceID != globalID {
 				t.Errorf(
 					"get_events resourceId = %q, want the service ID %q",
 					entry.ResourceID, globalID,
 				)
 			}
+		}
+
+		if own == 0 {
+			t.Errorf("get_events(resource: %q) returned no entry about the service itself", global)
 		}
 	})
 }

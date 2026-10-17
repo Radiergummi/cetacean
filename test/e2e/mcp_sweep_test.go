@@ -18,6 +18,7 @@ import (
 
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/test/e2e/fixtures"
@@ -198,16 +199,16 @@ func decodeToolCall(t *testing.T, env mcpEnvelope) toolCallResult {
 	return call
 }
 
-// isACLDenial reports whether a tool call's error content names an ACL
-// denial (internal/mcp/acl.go's checkRead/checkWrite text) rather than some
-// other failure: a hidden tool must fail this way specifically, not merely
-// fail somehow.
+// isACLDenial reports whether a tool call's error content is an ACL denial
+// rather than some other failure. A resource the caller cannot read is refused
+// as not found, so the denial does not confirm it exists; the sweep's targets
+// all do, so for them "not found" is the denial.
 func isACLDenial(call toolCallResult) bool {
 	if !call.IsError {
 		return false
 	}
 	for _, c := range call.Content {
-		if strings.Contains(c.Text, "access denied") {
+		if strings.Contains(c.Text, "access denied") || strings.Contains(c.Text, "not found") {
 			return true
 		}
 	}
@@ -982,6 +983,10 @@ func driveRemoveNetwork(t *testing.T, env *harness.Env, proc *sut.Process, _ bas
 	}
 	netID := resp.ID
 
+	// MCP's write tools resolve their target through the cache, as REST's do;
+	// without this, a refusal below could be the watcher lagging, not the ACL.
+	awaitCachedAs(t, proc, opsPersona, "/networks/"+netID)
+
 	removed := false
 	t.Cleanup(func() {
 		if removed {
@@ -1222,15 +1227,14 @@ func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids ba
 	// the positive case (Docker reschedules the task, which is harmless for
 	// a replicated service) while every denied persona is checked against
 	// the same task ID without ever reaching Docker.
-	before := serviceTaskIDs(t, env, mustServiceInspectID(t, env, serviceName))
-	var taskID string
-	for id := range before {
-		taskID = id
-		break
-	}
+	// A running task: after the rollback above the engine still lists the ones
+	// it shut down, which the cache does not keep, so the write tools refuse them.
+	taskID := runningTaskOf(t, env, mustServiceInspectID(t, env, serviceName))
 	if taskID == "" {
-		t.Fatal("throwaway service has no tasks to drive remove_task with")
+		t.Fatal("throwaway service has no running task to drive remove_task with")
 	}
+
+	awaitCachedAs(t, proc, opsPersona, "/tasks/"+taskID)
 
 	for _, p := range deniedPersonas {
 		t.Run("remove_task/"+p.name, func(t *testing.T) {
@@ -1492,4 +1496,28 @@ func TestEveryMCPToolIsDrivenOrExcused(t *testing.T) {
 	}
 
 	t.Logf("mcp sweep: %d of %d tools driven, 0 excused", len(drivenMCPTools), wantTotal)
+}
+
+// runningTaskOf waits for one of the service's tasks to be running and returns
+// its ID, or "" if none starts within a minute: a rollback replaces the task.
+func runningTaskOf(t *testing.T, env *harness.Env, serviceID string) string {
+	t.Helper()
+
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
+		tasks, err := env.Docker.TaskList(t.Context(), swarm.TaskListOptions{})
+		if err != nil {
+			t.Fatalf("TaskList: %v", err)
+		}
+
+		for _, task := range tasks {
+			if task.ServiceID == serviceID && task.Status.State == swarm.TaskStateRunning &&
+				task.DesiredState == swarm.TaskStateRunning {
+				return task.ID
+			}
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return ""
 }

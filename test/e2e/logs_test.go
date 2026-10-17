@@ -22,7 +22,7 @@ import (
 // This file drives the two log endpoints — GET /services/{id}/logs and
 // GET /tasks/{id}/logs — against containers whose output this suite wrote
 // itself: frame decoding, the stream and cursor parameters and their refusals,
-// the SSE tail and its resume, and the 128-stream cap. It reserves port 19015.
+// the SSE tail, its resume, and a caller's share of the stream cap. Port 19015.
 
 const logsPort = 19015
 
@@ -31,6 +31,11 @@ const logsPort = 19015
 // docs/api.md publish. There is no exported way to read it from here, so a
 // change to it fails this lane rather than going unnoticed.
 const maxLogSSEConnsRef = 128
+
+// logStreamsPerCallerRef is one caller's share of maxLogSSEConnsRef, a quarter,
+// as docs/api.md publishes it. Every request in this lane comes from one
+// address under auth none, so it is one caller, and its share is the cap it hits.
+const logStreamsPerCallerRef = maxLogSSEConnsRef / 4
 
 // burstLines is how many stdout/stderr pairs the burst fixture writes. It is
 // past the 500-line default limit so a plain read is a truncated one.
@@ -620,10 +625,10 @@ func TestLogSSETailsLiveOutputAndResumes(t *testing.T) {
 	}
 }
 
-// Drives the published stream cap. The counter increments before the Docker call
-// that precedes the response head, so a stream whose headers arrived is already
-// counted. The last two are opened serially: one proves the cap is not lower
-// than published, the next that it is not higher.
+// Drives one caller's published share of the stream cap. A slot is taken before
+// the Docker call that precedes the response head, so a stream whose headers
+// arrived is already counted. The last two are opened serially: one proves the
+// share is not lower than published, the next that it is not higher.
 func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -650,8 +655,8 @@ func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	// minutes on a limit that is about concurrency, not order.
 	var wg sync.WaitGroup
 
-	held := make([]*http.Response, maxLogSSEConnsRef-1)
-	errs := make([]error, maxLogSSEConnsRef-1)
+	held := make([]*http.Response, logStreamsPerCallerRef-1)
+	errs := make([]error, logStreamsPerCallerRef-1)
 
 	for i := range held {
 		wg.Go(func() {
@@ -663,7 +668,7 @@ func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 
 	for i, resp := range held {
 		if errs[i] != nil {
-			t.Fatalf("open stream %d of %d: %v", i+1, maxLogSSEConnsRef, errs[i])
+			t.Fatalf("open stream %d of %d: %v", i+1, logStreamsPerCallerRef, errs[i])
 		}
 
 		t.Cleanup(func() { resp.Body.Close() })
@@ -671,23 +676,23 @@ func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf(
 				"stream %d of %d was refused with %d; the handler ran out of room "+
-					"before the published cap",
-				i+1, maxLogSSEConnsRef, resp.StatusCode,
+					"before its published share",
+				i+1, logStreamsPerCallerRef, resp.StatusCode,
 			)
 		}
 	}
 
 	last, err := open()
 	if err != nil {
-		t.Fatalf("open stream %d: %v", maxLogSSEConnsRef, err)
+		t.Fatalf("open stream %d: %v", logStreamsPerCallerRef, err)
 	}
 
 	t.Cleanup(func() { last.Body.Close() })
 
 	if last.StatusCode != http.StatusOK {
 		t.Fatalf(
-			"stream %d was refused with %d, one short of the published cap",
-			maxLogSSEConnsRef, last.StatusCode,
+			"stream %d was refused with %d, one short of its published share",
+			logStreamsPerCallerRef, last.StatusCode,
 		)
 	}
 
@@ -696,16 +701,16 @@ func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 	// client's own timeout instead of the surplus that caused it.
 	refused, err := open()
 	if err != nil {
-		t.Fatalf("open stream %d: %v", maxLogSSEConnsRef+1, err)
+		t.Fatalf("open stream %d: %v", logStreamsPerCallerRef+1, err)
 	}
 
 	defer refused.Body.Close()
 
 	if refused.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf(
-			"stream %d: status = %d, want 429; the handler admitted more than the "+
-				"published cap of %d",
-			maxLogSSEConnsRef+1, refused.StatusCode, maxLogSSEConnsRef,
+			"stream %d: status = %d, want 429; the handler admitted more than one "+
+				"caller's published share of %d",
+			logStreamsPerCallerRef+1, refused.StatusCode, logStreamsPerCallerRef,
 		)
 	}
 
@@ -728,6 +733,10 @@ func TestLogSSEConnectionCapRefusesWithRetryAfter(t *testing.T) {
 
 	if !strings.Contains(string(body), "LOG001") {
 		t.Errorf("the refusal does not name LOG001: %s", body)
+	}
+
+	if !strings.Contains(string(body), "from this client") {
+		t.Errorf("the refusal does not say the caller's share is what is full: %s", body)
 	}
 }
 
