@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses
+
 ## [0.16.0] - 2026-10-17
 
 ### Added

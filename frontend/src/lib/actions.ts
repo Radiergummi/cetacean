@@ -8,6 +8,13 @@ export interface PaletteAction {
   steps: PaletteStep[];
   execute: (...args: any[]) => Promise<void>;
   destructive?: boolean | undefined;
+  /** Shown with the confirmation, under the label. */
+  note?: string | undefined;
+  /**
+   * Offered, behind its own confirmation, when this action fails with an error
+   * the catalogue marks as one forcing would get past.
+   */
+  forceFallback?: PaletteAction | undefined;
   /** HTTP method required to execute this action (checked via HEAD). */
   requiredMethod?: string | undefined;
 }
@@ -22,13 +29,26 @@ export interface PaletteStep {
 
 const removeTargets = [
   { type: "service", remove: (resource: SearchResult) => api.removeService(resource.id) },
-  { type: "node", remove: (resource: SearchResult) => api.removeNode(resource.id, true) },
+  { type: "node", remove: (resource: SearchResult) => api.removeNode(resource.id) },
   { type: "stack", remove: (resource: SearchResult) => api.removeStack(resource.id) },
   { type: "config", remove: (resource: SearchResult) => api.removeConfig(resource.id) },
   { type: "secret", remove: (resource: SearchResult) => api.removeSecret(resource.id) },
   { type: "network", remove: (resource: SearchResult) => api.removeNetwork(resource.id) },
   { type: "volume", remove: (resource: SearchResult) => api.removeVolume(resource.id) },
 ] as const;
+
+const forceRemoveNode: PaletteAction = {
+  id: "force-remove-node",
+  label: "Force Remove Node",
+  keywords: [],
+  requiredMethod: "DELETE",
+  steps: [{ type: "resource", resourceType: "node", label: "Node" }],
+  destructive: true,
+  note: "Docker refused the normal remove. Forcing it skips that check and can't be undone.",
+  execute: async (node: SearchResult) => {
+    await api.removeNode(node.id, true);
+  },
+};
 
 const removeActions: PaletteAction[] = removeTargets.map(({ type, remove }) => {
   const label = type.charAt(0).toUpperCase() + type.slice(1);
@@ -40,6 +60,7 @@ const removeActions: PaletteAction[] = removeTargets.map(({ type, remove }) => {
     requiredMethod: "DELETE",
     steps: [{ type: "resource" as const, resourceType: type, label }],
     destructive: true,
+    forceFallback: type === "node" ? forceRemoveNode : undefined,
     execute: async (resource: SearchResult) => {
       await remove(resource);
     },

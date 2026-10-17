@@ -1,7 +1,8 @@
-import { api, headAllowedMethods } from "../../api/client";
+import { ApiError, api, headAllowedMethods } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
+import { getErrorInfo } from "../../lib/errors";
 import {
   flattenSearchResults,
   resourcePath,
@@ -362,6 +363,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         onClose();
       } catch (err) {
         setActionError(getErrorMessage(err, String(err)));
+
+        const code = err instanceof ApiError ? err.code : null;
+
+        if (action.forceFallback && getErrorInfo(code)?.action === "force-remove") {
+          setPendingConfirm({ action: action.forceFallback, args });
+          return;
+        }
+
         showErrorToast(err, "Action failed");
       } finally {
         setActionLoading(false);
@@ -627,7 +636,14 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
         {pendingConfirm && (
           <div className="flex items-center justify-between border-b bg-destructive/5 px-3 py-2.5">
-            <span className="text-sm text-foreground">Confirm: {pendingConfirm.action.label}?</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm text-foreground">
+                Confirm: {pendingConfirm.action.label}?
+              </span>
+              {pendingConfirm.action.note && (
+                <span className="text-xs text-muted-foreground">{pendingConfirm.action.note}</span>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 type="button"
