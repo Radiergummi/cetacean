@@ -248,6 +248,15 @@ func main() {
 	)
 	defer broadcaster.Close()
 
+	// The metrics stream, log follows and MCP listens end with it at shutdown,
+	// as broadcaster.Close ends the event streams.
+	streams := sse.NewLifetime()
+
+	closeStreams := func() {
+		broadcaster.Close()
+		streams.End()
+	}
+
 	// Wire cache changes to SSE broadcaster.
 	// The cancel function is intentionally dropped: the broadcaster and cache
 	// share the process lifetime, so there is no window in which detaching the
@@ -469,6 +478,7 @@ func main() {
 	handlers.SetTokenOperationsLevel(
 		cfg.OAuth.EffectiveTokenOperationsLevel(cfg.OperationsLevel),
 	)
+	handlers.SetStreamLifetime(streams)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
@@ -559,6 +569,7 @@ func main() {
 		rec:          recEngine,
 		prometheus:   promClient,
 		tracer:       mcpTracer,
+		streams:      streams,
 	}
 
 	oauthSrv := setupOAuth(deps)
@@ -639,7 +650,7 @@ func main() {
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
-		serveDualListeners(ctx, cfg, router, handlers, tsnetLn, broadcaster.Close)
+		serveDualListeners(ctx, cfg, router, handlers, tsnetLn, closeStreams)
 		return
 	}
 
@@ -652,9 +663,9 @@ func main() {
 		TLSConfig:    serverTLSConfig,
 	}
 
-	// Shutdown waits for every handler to return, and an SSE stream never
-	// does on its own: end them first, or each deploy waits out the grace.
-	server.RegisterOnShutdown(broadcaster.Close)
+	// Shutdown waits for every handler to return, and a stream never does on
+	// its own: end them first, or each deploy waits out the grace.
+	server.RegisterOnShutdown(closeStreams)
 
 	// Graceful shutdown. ListenAndServe returns ErrServerClosed as soon as
 	// Shutdown closes the listeners, so main waits on drained rather than
@@ -928,6 +939,7 @@ type mcpDeps struct {
 	rec         mcp.RecommendationEngine
 	prometheus  *promapi.Client
 	tracer      oteltrace.Tracer
+	streams     *sse.Lifetime
 }
 
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
@@ -1051,6 +1063,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
+		Streams:         d.streams,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)

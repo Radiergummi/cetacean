@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses
+- Stopping Cetacean ends open metrics streams, log follows and MCP listen sessions, so a connected client no longer holds shutdown for the whole grace period
 
 ## [0.16.0] - 2026-10-17
 

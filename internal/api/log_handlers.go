@@ -193,6 +193,9 @@ func (h *Handlers) serveLogsSSE(
 	}
 	defer release()
 
+	r, unbind := h.streams.Bind(r)
+	defer unbind()
+
 	// EventSource sends Last-Event-ID on reconnect; use it as fallback for since
 	if since == "" {
 		if v := r.Header.Get("Last-Event-ID"); validLogTimestamp(v) {

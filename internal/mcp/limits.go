@@ -83,6 +83,9 @@ func (s *Server) limitListens(next http.Handler) http.Handler {
 			return
 		}
 
+		r, release := s.streams.Bind(r)
+		defer release()
+
 		next.ServeHTTP(w, r)
 	})
 }
