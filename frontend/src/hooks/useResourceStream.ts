@@ -31,22 +31,28 @@ export function streamListeners(
   dispatch: SSEListener,
 ): Record<string, (event: MessageEvent) => void> {
   const handler = (event: MessageEvent) => {
+    let parsed: SSEEvent;
+
     try {
-      dispatch(JSON.parse(event.data) as SSEEvent);
+      parsed = JSON.parse(event.data) as SSEEvent;
     } catch {
-      // ignore malformed events
+      return; // ignore malformed events
     }
+
+    dispatch(parsed);
   };
 
   const batchHandler = (event: MessageEvent) => {
-    try {
-      const events = JSON.parse(event.data) as SSEEvent[];
+    let events: SSEEvent[];
 
-      for (const event of events) {
-        dispatch(event);
-      }
+    try {
+      events = JSON.parse(event.data) as SSEEvent[];
     } catch {
-      // ignore parse errors
+      return; // ignore parse errors
+    }
+
+    for (const event of events) {
+      dispatch(event);
     }
   };
 
@@ -64,18 +70,33 @@ export function streamListeners(
 export const reopenedSync: SSEEvent = { type: "sync", action: "sync", id: "" };
 
 /**
- * Subscribes a listener to the app-wide `/events` stream; returns the unsubscribe.
+ * Hands event to each listener, so one that throws neither stops the others
+ * nor the rest of a batch.
  */
-export type EventsSubscribe = (listener: SSEListener) => () => void;
+export function deliver(listeners: Iterable<SSEListener>, event: SSEEvent) {
+  for (const listener of listeners) {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error("SSE listener failed:", error);
+    }
+  }
+}
+
+/**
+ * Subscribes a listener to the shared stream for a path; returns the unsubscribe.
+ */
+export type EventsSubscribe = (path: string, listener: SSEListener) => () => void;
 
 const SharedEventsContext = createContext<EventsSubscribe | null>(null);
 
 export const SharedEventsProvider = SharedEventsContext.Provider;
 
 /**
- * Opens an EventSource to the given path and dispatches parsed events. `/events`
- * goes through the app-wide stream when one is mounted: every stream holds a
- * slot under the server's cap, and a second one to the same path buys nothing.
+ * Opens an EventSource to the given path and dispatches parsed events, through
+ * the stream a ConnectionTracker shares for that path when one is mounted:
+ * every stream holds a slot under the server's cap, and a second one to the
+ * same path buys nothing.
  */
 export function useResourceStream(path: string | undefined, listener: SSEListener) {
   const listenerRef = useLatestRef(listener);
@@ -88,15 +109,15 @@ export function useResourceStream(path: string | undefined, listener: SSEListene
       return;
     }
 
-    const dispatch: SSEListener = (event) => listenerRef.current(event);
+    const listener: SSEListener = (event) => listenerRef.current(event);
 
-    if (path === "/events" && subscribeShared) {
-      return subscribeShared(dispatch);
+    if (subscribeShared) {
+      return subscribeShared(path, listener);
     }
 
     const stream = openEventStream(apiPath(path), {
-      listeners: streamListeners(dispatch),
-      onReopened: () => dispatch(reopenedSync),
+      listeners: streamListeners((event) => deliver([listener], event)),
+      onReopened: () => deliver([listener], reopenedSync),
     });
 
     return () => stream.close();

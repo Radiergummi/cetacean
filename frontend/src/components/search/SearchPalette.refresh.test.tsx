@@ -70,4 +70,73 @@ describe("SearchPalette refresh", () => {
     expect(searchMock.mock.calls.length).toBe(searches + 1);
     expect(screen.getByText("nginx:2")).toBeInTheDocument();
   });
+
+  async function openWithResults() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+
+    render(
+      <MemoryRouter>
+        <ConnectionTracker>
+          <SearchPalette onClose={vi.fn<() => void>()} />
+        </ConnectionTracker>
+      </MemoryRouter>,
+    );
+
+    const input = screen.getByRole("combobox");
+    await user.type(input, "api");
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    await screen.findByText("nginx:1");
+
+    return { user, input };
+  }
+
+  function emit(id: string) {
+    act(() => {
+      MockEventSource.instance.simulateEvent("task", { type: "task", action: "update", id });
+    });
+  }
+
+  it("keeps refreshing through a steady stream of events, no faster than every 2s", async () => {
+    await openWithResults();
+    const searches = searchMock.mock.calls.length;
+
+    for (let tick = 0; tick < 20; tick++) {
+      emit(`t${tick}`);
+      await act(() => vi.advanceTimersByTimeAsync(300));
+    }
+
+    const refreshes = searchMock.mock.calls.length - searches;
+    expect(refreshes).toBeGreaterThanOrEqual(2);
+    expect(refreshes).toBeLessThanOrEqual(4);
+  });
+
+  it("drops a queued refresh when the query is cleared", async () => {
+    const { user, input } = await openWithResults();
+    const searches = searchMock.mock.calls.length;
+
+    emit("a");
+    await user.clear(input);
+    await act(() => vi.advanceTimersByTimeAsync(3_000));
+
+    expect(searchMock.mock.calls.slice(searches).map(([query]) => query)).not.toContain("");
+    expect(searchMock.mock.calls.length).toBe(searches);
+  });
+
+  it("refreshes the query its results answer, not one still being typed", async () => {
+    const { user, input } = await openWithResults();
+    const searches = searchMock.mock.calls.length;
+
+    // The search for what is typed now is still in flight when the refresh runs.
+    searchMock.mockImplementation((query) =>
+      query === "api" ? Promise.resolve(response("nginx:2")) : new Promise(() => {}),
+    );
+
+    emit("a");
+    await user.type(input, "x");
+    await act(() => vi.advanceTimersByTimeAsync(600));
+
+    expect(searchMock.mock.calls.slice(searches).map(([query]) => query)).toEqual(["apix", "api"]);
+    expect(screen.getByText("nginx:2")).toBeInTheDocument();
+  });
 });

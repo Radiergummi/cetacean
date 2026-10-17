@@ -1,6 +1,5 @@
 import { api, headAllowedMethods } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
-import { useLatestRef } from "../../hooks/useLatestRef";
 import { useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import {
@@ -96,6 +95,12 @@ function ActionBreadcrumbs({
   );
 }
 
+/** How long cluster events settle before the palette refreshes its results. */
+const refreshSettle = 500;
+
+/** The longest a refresh waits after an event, and the least between two. */
+const refreshMaxWait = 2_000;
+
 export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [response, setResponse] = useState<SearchResponse | null>(null);
@@ -107,6 +112,8 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const optionId = useCallback((index: number) => `${paletteId}-option-${index}`, [paletteId]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // The query the shown response answers, which the typed one runs ahead of.
+  const shownQueryRef = useRef("");
   const navigate = useNavigate();
 
   // Action mode state
@@ -168,6 +175,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       .search(query, undefined, controller.signal)
       .then((r) => {
         if (!controller.signal.aborted) {
+          shownQueryRef.current = query;
           setResponse(r);
           setHighlightIndex(0);
           setSearching(false);
@@ -212,22 +220,35 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   }, []);
 
   // Refresh state/detail on the results already shown (no reorder/add/remove)
-  // when the cluster changes, debounced: a rollout is a burst of events.
-  const queryRef = useLatestRef(query);
+  // when the cluster changes: within refreshMaxWait of the first event, but no
+  // sooner than refreshMaxWait after the last refresh, so a rollout's stream of
+  // events neither starves the refresh nor drives it faster than that.
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshAbortRef = useRef<AbortController | null>(null);
+  const lastRefreshRef = useRef(0);
+
+  const cancelRefresh = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    refreshAbortRef.current?.abort();
+  }, []);
 
   const refresh = useCallback(() => {
+    refreshTimerRef.current = null;
+    lastRefreshRef.current = Date.now();
     refreshAbortRef.current?.abort();
 
     const controller = new AbortController();
     refreshAbortRef.current = controller;
-    const refreshed = queryRef.current;
+    const shown = shownQueryRef.current;
 
     api
-      .search(refreshed, undefined, controller.signal)
+      .search(shown, undefined, controller.signal)
       .then((fresh) => {
-        if (controller.signal.aborted || refreshed !== queryRef.current) {
+        if (controller.signal.aborted || shown !== shownQueryRef.current) {
           return;
         }
 
@@ -277,28 +298,31 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       .catch(() => {
         /* ignore */
       });
-  }, [queryRef]);
+  }, []);
+
+  const watching = hasResponse && query.trim() !== "";
 
   useResourceStream(
-    hasResponse && query.trim() ? "/events" : undefined,
+    watching ? "/events" : undefined,
     useCallback(() => {
       if (refreshTimerRef.current) {
-        clearTimeout(refreshTimerRef.current);
+        return;
       }
 
-      refreshTimerRef.current = setTimeout(refresh, 500);
+      const sinceLast = Date.now() - lastRefreshRef.current;
+      const delay = Math.max(refreshSettle, refreshMaxWait - sinceLast);
+      refreshTimerRef.current = setTimeout(refresh, delay);
     }, [refresh]),
   );
 
+  // A refresh queued for results no longer shown would search for nothing.
   useEffect(() => {
-    return () => {
-      if (refreshTimerRef.current) {
-        clearTimeout(refreshTimerRef.current);
-      }
+    if (!watching) {
+      cancelRefresh();
+    }
+  }, [watching, cancelRefresh]);
 
-      refreshAbortRef.current?.abort();
-    };
-  }, []);
+  useEffect(() => cancelRefresh, [cancelRefresh]);
 
   const goTo = useCallback(
     ({ result: { id }, type }: FlatSearchItem) => {
