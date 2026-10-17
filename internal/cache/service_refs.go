@@ -15,9 +15,11 @@ type ServiceRef struct {
 }
 
 // serviceRefIndex maintains reverse indexes from resource IDs (config,
-// secret, network, volume) to the set of service IDs that reference them.
+// secret, network, volume) to the set of service IDs that reference them, and
+// from service name to ID, which swarm keeps unique.
 // All methods assume the caller holds the appropriate lock on Cache.mu.
 type serviceRefIndex struct {
+	byName    map[string]string              // service name -> serviceID
 	byConfig  map[string]map[string]struct{} // configID -> set of serviceIDs
 	bySecret  map[string]map[string]struct{} // secretID -> set of serviceIDs
 	byNetwork map[string]map[string]struct{} // networkID -> set of serviceIDs
@@ -26,6 +28,7 @@ type serviceRefIndex struct {
 
 func newServiceRefIndex() serviceRefIndex {
 	return serviceRefIndex{
+		byName:    make(map[string]string),
 		byConfig:  make(map[string]map[string]struct{}),
 		bySecret:  make(map[string]map[string]struct{}),
 		byNetwork: make(map[string]map[string]struct{}),
@@ -35,6 +38,7 @@ func newServiceRefIndex() serviceRefIndex {
 
 // add populates the reverse indexes for a service's resource references.
 func (idx *serviceRefIndex) add(s swarm.Service) {
+	idx.byName[s.Spec.Name] = s.ID
 	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
 		for _, cfg := range cs.Configs {
 			addRef(idx.byConfig, cfg.ConfigID, s.ID)
@@ -55,6 +59,9 @@ func (idx *serviceRefIndex) add(s swarm.Service) {
 
 // remove removes a service from all reverse indexes.
 func (idx *serviceRefIndex) remove(s swarm.Service) {
+	if idx.byName[s.Spec.Name] == s.ID {
+		delete(idx.byName, s.Spec.Name)
+	}
 	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
 		for _, cfg := range cs.Configs {
 			removeRef(idx.byConfig, cfg.ConfigID, s.ID)
@@ -75,6 +82,7 @@ func (idx *serviceRefIndex) remove(s swarm.Service) {
 
 // rebuild clears and repopulates all indexes from the given service map.
 func (idx *serviceRefIndex) rebuild(services map[string]swarm.Service) {
+	idx.byName = make(map[string]string, len(services))
 	idx.byConfig = make(map[string]map[string]struct{})
 	idx.bySecret = make(map[string]map[string]struct{})
 	idx.byNetwork = make(map[string]map[string]struct{})

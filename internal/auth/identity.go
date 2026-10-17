@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,21 @@ type Identity struct {
 	// ExpiresAt is when the credential behind the identity lapses, zero when
 	// nothing bounds it here. Only a token this deployment issued sets it.
 	ExpiresAt time.Time `json:"-"`
+
+	derived sync.Map
+}
+
+// Derived returns what derive computes from i under key, computing it once. An
+// identity does not change once built, so neither does anything derived from it
+// alone; a caller racing the first computation may compute it again, unused.
+func (i *Identity) Derived(key any, derive func() any) any {
+	if v, ok := i.derived.Load(key); ok {
+		return v
+	}
+
+	v, _ := i.derived.LoadOrStore(key, derive())
+
+	return v
 }
 
 // ProviderToken is the Provider of an identity the middleware built from a

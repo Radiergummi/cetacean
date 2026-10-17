@@ -47,7 +47,7 @@ func TestImpliedStackTypesMatchTheResolver(t *testing.T) {
 	resolver.SetTask(swarm.Task{ID: memberName, ServiceID: "service1"})
 
 	// A task belongs to a stack through its parent service, which StackOf does
-	// not do in one hop — grantMatchesResource walks task → service → stack
+	// not do in one hop — matchesParts walks task → service → stack
 	// itself. So the resolver correctly reports no stack for it while a stack
 	// grant still reaches it.
 	const twoHop = "task"

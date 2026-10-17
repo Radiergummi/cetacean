@@ -54,7 +54,8 @@ func (e *Evaluator) SetResolver(r ResourceResolver) {
 	e.resolver = r
 }
 
-// SetSource sets the provider-specific grant source.
+// SetSource sets the provider-specific grant source. Grants are derived once
+// per identity and evaluator, so it is set before the evaluator serves.
 func (e *Evaluator) SetSource(s GrantSource) {
 	if e == nil {
 		return
@@ -66,22 +67,11 @@ func (e *Evaluator) SetSource(s GrantSource) {
 // resource is "type:name", e.g. "service:webapp-api".
 // A nil evaluator or nil policy means allow all.
 func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) bool {
-	if e == nil {
-		return true
-	}
-	p := e.policy.Load()
-	if p == nil {
-		return true
-	}
+	grants, allowAll := e.grantsWith(id, permission)
 
-	// Walked in place rather than through Checker: this runs for every event
-	// sent to every subscriber, and a Checker allocates its grants and closure.
-	for _, g := range e.collectGrants(id, p) {
-		if hasPermission(g, permission) && e.grantMatchesResource(g, resource) {
-			return true
-		}
-	}
-	return false
+	// Matched directly rather than through Checker: this runs for every event
+	// sent to every subscriber, and a Checker allocates a closure.
+	return allowAll || e.matches(grants, resource)
 }
 
 // Checker is Can with the identity's grants collected once, for a caller asking
@@ -92,14 +82,7 @@ func (e *Evaluator) Checker(id *auth.Identity, permission string) func(resource 
 		return func(string) bool { return true }
 	}
 
-	return func(resource string) bool {
-		for _, g := range grants {
-			if e.grantMatchesResource(g, resource) {
-				return true
-			}
-		}
-		return false
-	}
+	return func(resource string) bool { return e.matches(grants, resource) }
 }
 
 // grantsWith returns the identity's grants that carry permission, or allowAll
@@ -107,21 +90,47 @@ func (e *Evaluator) Checker(id *auth.Identity, permission string) func(resource 
 func (e *Evaluator) grantsWith(
 	id *auth.Identity,
 	permission string,
-) (grants []Grant, allowAll bool) {
+) (grants grantSet, allowAll bool) {
 	if e == nil {
-		return nil, true
+		return grantSet{}, true
 	}
 	p := e.policy.Load()
 	if p == nil {
-		return nil, true
+		return grantSet{}, true
 	}
 
+	if id == nil {
+		return e.grantSetOf(id, p, permission), false
+	}
+
+	// Constant for one identity under one policy, and asked for again on every
+	// event an SSE subscriber is sent.
+	gs, _ := id.Derived(grantSetKey{e, p, permission}, func() any {
+		return e.grantSetOf(id, p, permission)
+	}).(grantSet)
+
+	return gs, false
+}
+
+type grantSetKey struct {
+	evaluator  *Evaluator
+	policy     *Policy
+	permission string
+}
+
+func (e *Evaluator) grantSetOf(id *auth.Identity, p *Policy, permission string) (grants grantSet) {
 	for _, g := range e.collectGrants(id, p) {
-		if hasPermission(g, permission) {
-			grants = append(grants, g)
+		if !hasPermission(g, permission) {
+			continue
+		}
+		grants.grants = append(grants.grants, g)
+		for _, expr := range g.Resources {
+			exprType, _, _ := strings.Cut(expr, ":")
+			grants.services = grants.services || exprType == "service" || exprType == "*"
+			grants.stacks = grants.stacks || exprType == "stack" || exprType == "*"
 		}
 	}
-	return grants, false
+	return grants
 }
 
 // Filter returns only items the identity can access with the given permission.
@@ -146,12 +155,8 @@ func Filter[T any](
 	// more — and a restrictive policy is the reason to run one at all.
 	var result []T
 	for _, item := range items {
-		resource := resourceFunc(item)
-		for _, g := range grants {
-			if e.grantMatchesResource(g, resource) {
-				result = append(result, item)
-				break
-			}
+		if e.matches(grants, resourceFunc(item)) {
+			result = append(result, item)
 		}
 	}
 
@@ -177,12 +182,8 @@ func FilterInPlaceNamed[T any](
 
 	result := items[:0]
 	for _, item := range items {
-		name := nameFunc(item)
-		for _, g := range grants {
-			if e.grantMatchesParts(g, resourceType, name) {
-				result = append(result, item)
-				break
-			}
+		if e.matchesParts(grants, resourceType, nameFunc(item)) {
+			result = append(result, item)
 		}
 	}
 
@@ -277,54 +278,77 @@ func (e *Evaluator) collectGrants(id *auth.Identity, p *Policy) []Grant {
 	return grants
 }
 
-// grantMatchesResource checks if a grant covers the given resource,
-// including stack resolution and task inheritance.
-func (e *Evaluator) grantMatchesResource(g Grant, resource string) bool {
+// grantSet is the grants carrying one permission, with whether any of them can
+// name a service or a stack: the resolver is asked only when an answer could
+// match, and once per resource rather than once per grant.
+type grantSet struct {
+	grants           []Grant
+	services, stacks bool
+}
+
+// matches reports whether any grant covers the resource, including stack
+// resolution and task inheritance.
+func (e *Evaluator) matches(gs grantSet, resource string) bool {
 	resType, resID, ok := splitResource(resource)
 	if !ok {
 		// Nothing to match a pattern against, but a bare wildcard still covers
 		// it — see matchResource.
-		return slices.Contains(g.Resources, "*")
+		return slices.ContainsFunc(gs.grants, func(g Grant) bool {
+			return slices.Contains(g.Resources, "*")
+		})
 	}
 
-	return e.grantMatchesParts(g, resType, resID)
+	return e.matchesParts(gs, resType, resID)
 }
 
-// grantMatchesParts is grantMatchesResource for a caller holding the two halves
-// already, so that filtering a list need not build a "type:name" string per
-// item for the direct comparison to split straight back apart.
-func (e *Evaluator) grantMatchesParts(g Grant, resType, resID string) bool {
-	if grantCovers(g, resType, resID) {
+// matchesParts is matches for a caller holding the two halves already, so that
+// filtering a list need not build a "type:name" string per item for the direct
+// comparison to split straight back apart.
+func (e *Evaluator) matchesParts(gs grantSet, resType, resID string) bool {
+	if anyCovers(gs.grants, resType, resID) {
 		return true
 	}
 
-	// Stack resolution: if no direct match, check if the resource belongs
-	// to a stack that a grant covers.
 	if e.resolver == nil {
 		return false
 	}
 
-	// Task inheritance: tasks inherit from their parent service.
+	// Tasks inherit from their parent service, and through it from its stack;
+	// a task has no stack of its own.
 	if resType == "task" {
-		if svcName := e.resolver.ServiceOfTask(resID); svcName != "" {
-			if grantCovers(g, "service", svcName) {
-				return true
-			}
-			// Also check the parent service's stack (task→service→stack).
-			if stackName := e.resolver.StackOf("service", svcName); stackName != "" {
-				if grantCovers(g, "stack", stackName) {
-					return true
-				}
-			}
+		if !gs.services && !gs.stacks {
+			return false
 		}
+
+		svcName := e.resolver.ServiceOfTask(resID)
+		if svcName == "" {
+			return false
+		}
+		if gs.services && anyCovers(gs.grants, "service", svcName) {
+			return true
+		}
+		if !gs.stacks {
+			return false
+		}
+
+		stackName := e.resolver.StackOf("service", svcName)
+
+		return stackName != "" && anyCovers(gs.grants, "stack", stackName)
 	}
 
-	// Stack membership: check if the resource belongs to a matching stack.
-	if stackName := e.resolver.StackOf(resType, resID); stackName != "" {
-		return grantCovers(g, "stack", stackName)
+	if !gs.stacks {
+		return false
 	}
 
-	return false
+	stackName := e.resolver.StackOf(resType, resID)
+
+	return stackName != "" && anyCovers(gs.grants, "stack", stackName)
+}
+
+func anyCovers(grants []Grant, resType, resName string) bool {
+	return slices.ContainsFunc(grants, func(g Grant) bool {
+		return grantCovers(g, resType, resName)
+	})
 }
 
 // grantCovers reports whether any of the grant's resource patterns matches.
@@ -339,7 +363,7 @@ func grantCovers(g Grant, resType, resName string) bool {
 }
 
 // impliedTypes names, for a grant's resource type, the other types it covers —
-// the type-level shadow of grantMatchesResource's resolver walk, with
+// the type-level shadow of matchesParts' resolver walk, with
 // cache.StackOf as the authority on the stack list. The expansion is
 // unconditional where that walk is not, so it widens a listing, never a call.
 var impliedTypes = map[string][]string{
@@ -349,7 +373,7 @@ var impliedTypes = map[string][]string{
 
 // TypeAccess is the type-level projection of an identity's grants: which
 // resource *types* it may exercise a permission on, for callers filtering a
-// catalog with no resource name to give grantMatchesResource. It answers "could
+// catalog with no resource name to give matches. It answers "could
 // this identity ever read a service?", never "may it read this one".
 type TypeAccess struct {
 	// granted is keyed by permission and resource type, already expanded, so

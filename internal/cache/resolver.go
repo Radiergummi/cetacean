@@ -16,10 +16,9 @@ func (c *Cache) StackOf(resourceType, name string) string {
 
 	switch resourceType {
 	case "service":
-		for _, s := range c.services {
-			if s.Spec.Name == name {
-				return s.Spec.Labels[StackLabel]
-			}
+		// Indexed: the ACL matcher asks for every service it filters.
+		if s, ok := c.services[c.serviceRef.byName[name]]; ok {
+			return s.Spec.Labels[StackLabel]
 		}
 	case "config":
 		for _, cfg := range c.configs.items {
