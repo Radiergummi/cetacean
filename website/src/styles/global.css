@@ -700,9 +700,20 @@
       @apply flex-1 min-h-0;
     }
 
-    /* Room past the drawing is where an enlarged one is shown. */
+    /**
+     * Room past the drawing is where an enlarged one is shown. At rest it fits
+     * both ways, by the proportions the plugin writes, so a tall layout is not
+     * stretched to the width and cut off.
+     */
+    /*noinspection CssUnresolvedCustomProperty*/
     .mermaid-canvas {
-      @apply flex size-full items-center;
+      @apply flex size-full items-center justify-center;
+
+      container-type: size;
+
+      svg {
+        width: min(100%, 100cqh * var(--diagram-ratio, 1));
+      }
     }
   }
 
@@ -735,23 +746,6 @@
 
   svg {
     @apply block w-full h-auto;
-  }
-}
-
-/**
- * The narrow layout below the width `src/lib/mermaid-diagrams.ts` renders one for,
- * the wide one above it. Important, because a layout for another width stays
- * hidden whatever display the canvas takes otherwise, fullscreen included.
- */
-@container (width >= 640px) {
-  .prose .mermaid-canvas[data-layout="narrow"] {
-    display: none !important;
-  }
-}
-
-@container (width < 640px) {
-  .prose .mermaid-canvas[data-layout="wide"]:has(+ [data-layout="narrow"]) {
-    display: none !important;
   }
 }
 

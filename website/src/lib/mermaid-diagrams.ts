@@ -17,12 +17,14 @@ import type { VFile } from "vfile";
 const fontSize = 14;
 
 /**
- * A diagram wider than the breakpoint is also laid out for a phone, where Pele
- * turns a flowchart that runs across to run down, and wraps a sequence diagram's
- * messages. `global.css` swaps the two at the same width; keep them in step.
+ * Each diagram is also laid out for a 375px phone's column less the canvas's
+ * padding, where Pele turns a flowchart to run down and wraps a sequence diagram's
+ * messages. It is kept only if clearly narrower, and shown once the wide layout
+ * would draw below `smallestScale`: a breakpoint per diagram, not one for all.
  */
-const narrowBreakpoint = 640;
-const narrowWidth = 360;
+const narrowWidth = 300;
+const smallestScale = 0.75;
+const canvasPadding = 48;
 
 /**
  * Pele bakes the box each label fits into the SVG, so it has to lay out with
@@ -112,16 +114,13 @@ export const rehypeMermaid = function rehypeMermaid() {
         return;
       }
 
-      const prefix = `diagram-${count++}`;
-      let layouts: RenderResult[];
+      const id = `diagram-${count++}`;
+      let wide: RenderResult;
+      let narrow: RenderResult;
 
       try {
-        const wide = draw(source, `${prefix}-wide`);
-
-        layouts =
-          wide.width > narrowBreakpoint
-            ? [wide, draw(source, `${prefix}-narrow`, { maxWidth: narrowWidth })]
-            : [wide];
+        wide = draw(source, `${id}-wide`);
+        narrow = draw(source, `${id}-narrow`, { maxWidth: narrowWidth });
       } catch (error) {
         const position =
           error instanceof PeleError && error.line !== undefined ? ` (line ${error.line})` : "";
@@ -132,7 +131,11 @@ export const rehypeMermaid = function rehypeMermaid() {
       // A parent is the root or an element, and TypeScript will not write to
       // the union of their two children arrays as one, though a figure is
       // content both of them hold.
-      (parent.children as ElementContent[])[index] = figure(layouts);
+      (parent.children as ElementContent[])[index] = figure(
+        id,
+        wide,
+        narrow.width < wide.width * smallestScale ? narrow : undefined,
+      );
     });
   };
 } satisfies Plugin<[], Root, Root>;
@@ -150,29 +153,61 @@ function draw(source: string, idPrefix: string, options: RenderOptions = {}): Re
   });
 }
 
-function figure(layouts: RenderResult[]): Element {
+function figure(id: string, wide: RenderResult, narrow: RenderResult | undefined): Element {
   return {
     type: "element",
     tagName: "figure",
-    properties: { className: ["mermaid-figure"] },
+    properties: { id, className: ["mermaid-figure"] },
     children: [
       {
         type: "element",
         tagName: "div",
         properties: { className: ["mermaid-viewport"] },
-        children: layouts.map((diagram, index): Element => ({
-          type: "element",
-          // The element the enhancement script zooms. Pele reads the drawing
-          // from its first child, so the SVG has to be exactly that.
-          tagName: "div",
-          properties: {
-            className: ["mermaid-canvas"],
-            dataLayout: index === 0 ? "wide" : "narrow",
-            // The width Pele laid the diagram out at, which it is never scaled past.
-            style: `--diagram-width: ${Math.ceil(diagram.width)}px`,
-          },
-          children: [{ type: "raw", value: diagram.svg } as unknown as Element],
-        })),
+        children: [
+          canvas(wide, "wide"),
+          ...(narrow ? [canvas(narrow, "narrow"), switchAt(id, wide)] : []),
+        ],
+      },
+    ],
+  };
+}
+
+function canvas({ svg, width, height }: RenderResult, layout: string): Element {
+  return {
+    type: "element",
+    // The element the enhancement script zooms. Pele reads the drawing from its
+    // first child, so the SVG has to be exactly that.
+    tagName: "div",
+    properties: {
+      className: ["mermaid-canvas"],
+      dataLayout: layout,
+      // The size Pele laid the diagram out at: never scaled past its width, and
+      // fitted by its proportions in fullscreen.
+      style: `--diagram-width: ${Math.ceil(width)}px; --diagram-ratio: ${width / height}`,
+    },
+    children: [{ type: "raw", value: svg } as unknown as Element],
+  };
+}
+
+/**
+ * Which layout shows is the viewport's container query, at the width below which
+ * the wide one would draw under `smallestScale`. Important, so a layout for the
+ * other width stays hidden whatever display the canvas takes, fullscreen included.
+ */
+function switchAt(id: string, wide: RenderResult): Element {
+  const breakpoint = Math.ceil(wide.width * smallestScale + canvasPadding);
+  const hide = (layout: string) => `#${id} [data-layout="${layout}"] { display: none !important; }`;
+
+  return {
+    type: "element",
+    tagName: "style",
+    properties: {},
+    children: [
+      {
+        type: "text",
+        value:
+          `@container (width >= ${breakpoint}px) { ${hide("narrow")} } ` +
+          `@container (width < ${breakpoint}px) { ${hide("wide")} }`,
       },
     ],
   };

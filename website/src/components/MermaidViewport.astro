@@ -42,22 +42,26 @@ const controls = [
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
     /**
-     * Pele sets a zoom in one step. This eases it there instead, by a constant
-     * factor a frame, so enlarging reads as even. Returns what cancels it.
+     * Pele sets a zoom in one step. This eases it there instead, with a cubic
+     * ease-out on the scale's logarithm, so equal steps read as equal. Timed from
+     * the first frame, whose timestamp can predate the click that asked for it.
      */
-    function animate(zoom: Zoom, target: number): () => void {
+    function animate(zoom: Zoom, target: number, done: () => void): () => void {
         const from = zoom.scale;
-        const start = performance.now();
+        let start: number | undefined;
         let frame = 0;
 
         const tick = (now: number) => {
-            const progress = reducedMotion.matches ? 1 : Math.min(1, (now - start) / duration);
-            const eased = 1 - (1 - progress) ** 3;
+            start ??= now;
 
-            zoom.zoomTo(from * (target / from) ** eased);
+            const progress = reducedMotion.matches ? 1 : Math.min(1, (now - start) / duration);
+
+            zoom.zoomTo(from * (target / from) ** (1 - (1 - progress) ** 3));
 
             if (progress < 1) {
                 frame = requestAnimationFrame(tick);
+            } else {
+                done();
             }
         };
 
@@ -125,9 +129,15 @@ const controls = [
             const resetAction = button("reset");
 
             // However the reader zooms — buttons, pinch, wheel, keys — it ends in a
-            // new `viewBox`, so that is what the buttons follow.
-            const update = () => {
-                const {zoom} = shown();
+            // new `viewBox`, so that is what the buttons follow, read off the drawing
+            // that changed rather than by measuring which one shows.
+            const update = (records: MutationRecord[]) => {
+                const zoom = layouts.find(({svg}) => svg === records.at(-1)?.target)?.zoom;
+
+                if (!zoom) {
+                    return;
+                }
+
                 const resting = zoom.scale <= zoom.fit * 1.001;
 
                 if (zoomInAction) {
@@ -149,23 +159,37 @@ const controls = [
 
             teardown.push(() => observer.disconnect());
 
+            // The scale a zoom still easing in is headed for, which a second click
+            // steps on from rather than from wherever the first had got to.
+            let pending: number | undefined;
             let cancel = () => {};
-            const zoomTo = (target: number) => {
+            const stop = () => {
                 cancel();
-                cancel = animate(shown().zoom, target);
+                pending = undefined;
+            };
+            const zoomTo = (scale: (zoom: Zoom, from: number) => number) => {
+                const {zoom} = shown();
+                const target = scale(zoom, pending ?? zoom.scale);
+
+                cancel();
+                pending = target;
+                cancel = animate(zoom, target, () => (pending = undefined));
             };
 
-            // A pinch or a drag takes over from a zoom still easing in.
-            figure.addEventListener("pointerdown", () => cancel(), {signal: swapped.signal});
+            // Any other way of zooming takes over from one still easing in, which
+            // would otherwise overwrite it on its next frame.
+            for (const type of ["pointerdown", "wheel", "keydown", "gesturestart"]) {
+                figure
+                    .querySelector(".mermaid-viewport")
+                    ?.addEventListener(type, stop, {capture: true, signal: swapped.signal});
+            }
 
-            zoomInAction?.addEventListener("click", () => {
-                const {zoom} = shown();
-
-                zoomTo(Math.min(zoom.scale * step, Math.max(zoom.fit, maxScale)));
-            });
-            zoomOutAction?.addEventListener("click", () => zoomTo(shown().zoom.scale / step));
+            zoomInAction?.addEventListener("click", () =>
+                zoomTo((zoom, from) => Math.min(from * step, Math.max(zoom.fit, maxScale))),
+            );
+            zoomOutAction?.addEventListener("click", () => zoomTo((zoom, from) => Math.max(zoom.fit, from / step)));
             // Pele settles a drawing eased down to the scale that fits.
-            resetAction?.addEventListener("click", () => zoomTo(shown().zoom.fit));
+            resetAction?.addEventListener("click", () => zoomTo((zoom) => zoom.fit));
 
             const expand = (expanded: boolean) => {
                 if (expanded === figure.hasAttribute("data-expanded")) {
