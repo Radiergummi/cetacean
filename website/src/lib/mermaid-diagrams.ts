@@ -74,24 +74,21 @@ function fail(file: VFile, message: string): never {
   file.fail(message);
 }
 
-function isMermaidBlock(node: Element): boolean {
+/** The source of a mermaid code block, or `undefined` for any other element. */
+function mermaidSource(node: Element): string | undefined {
   if (node.tagName !== "pre") {
-    return false;
+    return undefined;
   }
 
   const code = node.children.find(
     (child): child is Element => "tagName" in child && child.tagName === "code",
   );
 
-  return Boolean(code?.properties?.className?.includes("language-mermaid"));
-}
+  if (!code?.properties?.className?.includes("language-mermaid")) {
+    return undefined;
+  }
 
-function sourceOf(node: Element) {
-  const code = node.children.find(
-    (child): child is Element => "tagName" in child && child.tagName === "code",
-  );
-
-  return (code?.children ?? [])
+  return code.children
     .map((child) => ("value" in child && child.value ? child.value : ""))
     .join("");
 }
@@ -101,11 +98,12 @@ export const rehypeMermaid = function rehypeMermaid() {
     let count = 0;
 
     visit(tree, "element", (node, index, parent: Parents | undefined) => {
-      if (!parent || index === undefined || !isMermaidBlock(node)) {
+      const source = mermaidSource(node);
+
+      if (!parent || index === undefined || source === undefined) {
         return;
       }
 
-      const source = sourceOf(node);
       let diagram: RenderResult;
 
       try {

@@ -99,12 +99,10 @@ const controls = [
                     zoomInAction.disabled = zoom.scale >= Math.max(zoom.fit, maxScale) * 0.999;
                 }
 
-                if (zoomOutAction) {
-                    zoomOutAction.disabled = resting;
-                }
-
-                if (resetAction) {
-                    resetAction.disabled = resting;
+                for (const action of [zoomOutAction, resetAction]) {
+                    if (action) {
+                        action.disabled = resting;
+                    }
                 }
             };
             const observer = new MutationObserver(update);

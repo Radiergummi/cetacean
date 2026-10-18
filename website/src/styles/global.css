@@ -68,7 +68,6 @@
   --overlay-shadow: 0 16px 48px oklch(0 0 0 / 50%);
   --popover-shadow: 0 4px 16px oklch(0 0 0 / 40%);
 
-  /* Only the dot grid needs a dark value; diagrams follow the tokens they name. */
   --mermaid-dot: oklch(0.3 0 0);
 }
 
