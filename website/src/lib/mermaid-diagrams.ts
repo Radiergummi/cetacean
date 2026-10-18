@@ -18,11 +18,11 @@ const fontSize = 14;
 
 /**
  * Pele bakes the box each label fits into the SVG, so it has to lay out with
- * the widths the browser will draw. These are static cuts of the weights
- * `global.css` sets diagram text in; the two have to be kept in step.
+ * the widths the browser will draw: Pele's regular weight, and the bold one
+ * `global.css` sets through `--pele-bold-weight`. Keep the two in step.
  */
 const fonts = {
-  regular: loadFont(500),
+  regular: loadFont(400),
   bold: loadFont(600),
 };
 

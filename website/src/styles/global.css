@@ -681,17 +681,10 @@
   --pele-radius: 8px;
   --pele-font: --theme(--font-sans);
 
-  /**
-   * The weights `src/lib/mermaid-diagrams.ts` measures labels at, which have to be the
-   * ones drawn. Bold text names its weight in an attribute; the rest is set here.
-   */
+  /* The bold weight `src/lib/mermaid-diagrams.ts` measures labels at; keep in step. */
   --pele-bold-weight: 600;
   --pele-title-weight: 600;
   --pele-heading-weight: 600;
-
-  text:not([font-weight]) {
-    font-weight: 500;
-  }
 
   &:fullscreen {
     @apply flex flex-col bg-background;
