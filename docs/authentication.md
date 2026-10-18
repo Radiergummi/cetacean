@@ -475,9 +475,11 @@ configuration][trusted-proxy-headers] for the optional name, email, and groups h
 > required and restricts which source addresses may set identity headers, accepting individual IPs and CIDRs.
 > Without it Cetacean refuses to start.
 
-The proxy must replace these headers, not append to them. A request carrying any identity header, the secret
-header, or a header a grant source reads more than once is refused, because one of the values came from the
-client. A groups header may name at most 256 groups.
+The proxy must replace these headers, not append to them. A request that carries the subject, name, email, groups,
+secret, or [`acl.headers_acl`][acl.headers_acl] header more than once is refused, since one of the copies came from
+the client. That check can't see a proxy that joins its value onto the client's within a single header, as in
+`admins,users`: Cetacean reads that as one value the proxy set. Configure the proxy to drop or overwrite whatever
+the client sent. A groups header may name at most 256 groups.
 
 For defense in depth, require a shared secret on every proxied request:
 
@@ -702,6 +704,7 @@ curl -s http://localhost:9000/auth/whoami | jq .
 `GET /profile` returns the same identity plus the effective grants. See the [API reference][api] for the
 response schemas.
 
+[acl.headers_acl]: configuration#acl.headers_acl
 [acl.headers_capability]: configuration#acl.headers_capability
 [acl.oidc_claim]: configuration#acl.oidc_claim
 [acl.policy]: configuration#acl.policy
