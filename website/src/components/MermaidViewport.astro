@@ -1,18 +1,15 @@
 ---
 /**
-    * Turns the build-time diagram SVGs into pannable, zoomable figures.
-    *
-    * Everything here is an enhancement: the SVG is already in the page and already
-    * matches the active theme, so a reader without JavaScript loses the controls
-    * and nothing else. Panzoom is behind a dynamic import guarded on a diagram
-    * actually being present, so the pages without one pay nothing for it.
+    * Makes the build-time diagram SVGs zoomable, through Pele's zoom, under the site's
+    * own toolbar. Everything here is an enhancement: a reader without JavaScript loses
+    * the controls and nothing else, and pages without a diagram never load the module.
     */
 import {Maximize, Undo2, ZoomIn, ZoomOut} from "@lucide/astro";
 import IconButton from "./IconButton.astro";
 
 const controls = [
     {action: "zoom-in", label: "Zoom in", Icon: ZoomIn, disabled: false},
-    {action: "zoom-out", label: "Zoom out", Icon: ZoomOut, disabled: false},
+    {action: "zoom-out", label: "Zoom out", Icon: ZoomOut, disabled: true},
     {action: "reset", label: "Reset view", Icon: Undo2, disabled: true},
     {action: "fullscreen", label: "Toggle fullscreen", Icon: Maximize, disabled: false},
 ];
@@ -37,6 +34,9 @@ const controls = [
 </template>
 
 <script>
+    const maxScale = 4;
+    const step = 1.5;
+
     document.addEventListener("astro:page-load", async () => {
         const figures = document.querySelectorAll<HTMLElement>(
             ".mermaid-figure:not([data-interactive])",
@@ -54,122 +54,75 @@ const controls = [
             return;
         }
 
-        const {default: Panzoom} = await import("@panzoom/panzoom");
+        const {enableZoom} = await import("pele/core");
 
-        // `document` outlives a view transition, so a listener left on it
-        // survives the figure that closed over it and every later pointerup
-        // reaches a Panzoom instance whose canvas is long detached. Astro
-        // swaps the page under us; this drops them as it does.
-        const swapped = new AbortController();
+        // Pele observes each canvas for resizes. Astro swaps the page under us
+        // without unloading it, so the observers are dropped as it does.
+        const teardown: (() => void)[] = [];
 
-        document.addEventListener("astro:before-swap", () => swapped.abort(), {once: true});
+        document.addEventListener(
+            "astro:before-swap",
+            () => teardown.forEach((destroy) => destroy()),
+            {once: true},
+        );
 
         figures.forEach((figure) => {
             const canvas = figure.querySelector<HTMLElement>(".mermaid-canvas");
-            const viewport = figure.querySelector<HTMLElement>(".mermaid-viewport");
+            const svg = canvas?.firstElementChild;
 
-            if (!canvas || !viewport) {
+            if (!canvas || !(svg instanceof SVGSVGElement)) {
                 return;
             }
 
             figure.setAttribute("data-interactive", "");
 
-            const panzoom = Panzoom(canvas, {
-                maxScale: 8,
-                minScale: 0.8,
-                startScale: 1,
-                animate: true,
-                pinchAndPan: true,
-                cursor: "grab",
-            });
-
-            // Panzoom writes `cursor` as an inline style on the canvas, so no
-            // stylesheet rule can swap it while dragging.
-            canvas.addEventListener("pointerdown", () => {
-                panzoom.setOptions({cursor: "grabbing"});
-            });
-
-            document.addEventListener(
-                "pointerup",
-                () => {
-                    panzoom.setOptions({cursor: "grab"});
-                },
-                {signal: swapped.signal},
-            );
-
-            // Plain scrolling stays page scrolling; zooming asks for a modifier,
-            // the way a map embedded in an article does.
-            viewport.addEventListener(
-                "wheel",
-                (event) => {
-                    if (event.ctrlKey || event.metaKey) {
-                        panzoom.zoomWithWheel(event);
-                    }
-                },
-                {passive: false},
-            );
-
+            const zoom = enableZoom(canvas, {always: true, maxScale, controls: false});
             const controls = template.content.cloneNode(true) as DocumentFragment;
-            const zoomInAction = controls.querySelector("[data-action=\"zoom-in\"]");
-            const zoomOutAction = controls.querySelector("[data-action=\"zoom-out\"]");
-            const resetAction = controls.querySelector("[data-action=\"reset\"]");
+            const button = (action: string) =>
+                controls.querySelector<HTMLButtonElement>(`[data-action="${action}"]`);
+            const zoomInAction = button("zoom-in");
+            const zoomOutAction = button("zoom-out");
+            const resetAction = button("reset");
 
-            let pristine = true;
+            // However the reader zooms — buttons, pinch, wheel, keys — it ends in a
+            // new `viewBox`, so that is what the buttons follow.
+            const update = () => {
+                const resting = zoom.scale <= zoom.fit * 1.001;
 
-            canvas.addEventListener("panzoomzoom", () => {
-                if (pristine) {
-                    pristine = false;
-
-                    return;
+                // Pele leaves a resting drawing one-finger vertical panning only, which
+                // would trap a diagram past its legibility floor: that one scrolls sideways.
+                if (resting) {
+                    svg.style.touchAction = "pan-x pan-y";
                 }
 
-                if (panzoom.getScale() === panzoom.getOptions().minScale) {
-                    zoomOutAction?.setAttribute("disabled", "");
-                } else if (panzoom.getScale() === panzoom.getOptions().maxScale) {
-                    zoomInAction?.setAttribute("disabled", "");
-                } else {
-                    zoomInAction?.removeAttribute("disabled");
-                    zoomOutAction?.removeAttribute("disabled");
+                if (zoomInAction) {
+                    zoomInAction.disabled = zoom.scale >= Math.max(zoom.fit, maxScale) * 0.999;
                 }
 
-                resetAction?.removeAttribute("disabled");
-            });
-            canvas.addEventListener("panzoompan", () => {
-                if (pristine) {
-                    pristine = false;
-
-                    return;
-                }
-
-                resetAction?.removeAttribute("disabled");
-            });
-            canvas.addEventListener("panzoomreset", () => {
-                if (pristine) {
-                    pristine = false;
-
-                    return;
-                }
-
-                resetAction?.setAttribute("disabled", "");
-                zoomInAction?.removeAttribute("disabled");
-                zoomOutAction?.removeAttribute("disabled");
-            });
-
-            zoomInAction?.addEventListener("click", () => panzoom.zoomIn());
-            zoomOutAction?.addEventListener("click", () => panzoom.zoomOut());
-            resetAction?.addEventListener("click", () => panzoom.reset());
-
-            controls
-                .querySelector("[data-action=\"fullscreen\"]")
-                ?.addEventListener("click", () => {
-                    if (document.fullscreenElement === figure) {
-                        document.exitFullscreen();
-                    } else {
-                        figure.requestFullscreen();
+                for (const action of [zoomOutAction, resetAction]) {
+                    if (action) {
+                        action.disabled = resting;
                     }
-                });
+                }
+            };
+            const observer = new MutationObserver(update);
+
+            observer.observe(svg, {attributeFilter: ["viewBox"]});
+            teardown.push(() => observer.disconnect(), () => zoom.destroy());
+
+            zoomInAction?.addEventListener("click", () => zoom.zoomBy(step));
+            zoomOutAction?.addEventListener("click", () => zoom.zoomBy(1 / step));
+            resetAction?.addEventListener("click", () => zoom.reset());
+            button("fullscreen")?.addEventListener("click", () => {
+                if (document.fullscreenElement === figure) {
+                    document.exitFullscreen();
+                } else {
+                    figure.requestFullscreen();
+                }
+            });
 
             figure.appendChild(controls);
+            update();
         });
     });
 </script>

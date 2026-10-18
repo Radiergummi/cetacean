@@ -46,41 +46,6 @@
   --overlay-shadow: 0 16px 48px oklch(0 0 0 / 16%);
   --popover-shadow: 0 4px 16px oklch(0 0 0 / 12%);
 
-  /**
-   * The palette `src/lib/mermaid-diagrams.ts` renders diagrams in. Mermaid bakes
-   * colours into the SVG at build time, so the plugin renders with a sentinel per
-   * role and swaps each for the property named here — which is the only reason
-   * these can be the site's own tokens rather than a second set of greys.
-   */
-  --mermaid-primary: var(--muted);
-  --mermaid-primary-text: var(--foreground);
-  --mermaid-primary-border: var(--border);
-  --mermaid-secondary: var(--accent);
-  --mermaid-secondary-border: var(--border);
-  --mermaid-text: var(--foreground);
-  --mermaid-line: var(--muted-foreground);
-  --mermaid-cluster: var(--sidebar-background);
-  --mermaid-cluster-border: var(--border);
-  --mermaid-tertiary: var(--sidebar-background);
-  --mermaid-tertiary-border: var(--border);
-  --mermaid-tertiary-text: var(--foreground);
-  --mermaid-edge-label: var(--background);
-  --mermaid-actor: var(--muted);
-  --mermaid-actor-border: var(--border);
-  --mermaid-actor-text: var(--foreground);
-  --mermaid-actor-line: var(--border);
-  --mermaid-signal: var(--muted-foreground);
-  --mermaid-signal-text: var(--foreground);
-  --mermaid-note: var(--sidebar-background);
-  --mermaid-note-border: var(--border);
-  --mermaid-note-text: var(--foreground);
-  --mermaid-label-box: var(--muted);
-  --mermaid-label-box-border: var(--border);
-  --mermaid-label-text: var(--foreground);
-  --mermaid-activation: var(--accent);
-  --mermaid-activation-border: var(--border);
-  /* Sits inside a circle filled with `--mermaid-line`, so it reads as the ground. */
-  --mermaid-sequence-number: var(--background);
   --mermaid-dot: oklch(0.86 0 0);
 }
 
@@ -103,7 +68,6 @@
   --overlay-shadow: 0 16px 48px oklch(0 0 0 / 50%);
   --popover-shadow: 0 4px 16px oklch(0 0 0 / 40%);
 
-  /* Only the dot grid needs a dark value; the rest follow the tokens they name. */
   --mermaid-dot: oklch(0.3 0 0);
 }
 
@@ -705,21 +669,33 @@
   /* Diagrams run wider than the measure prose is set at, so they reclaim the gutter. */
   @apply my-7 lg:-mx-12 overflow-hidden rounded-md border bg-sidebar-background;
 
-  /* Only ever added by the enhancement script, so it never traps a JS-less reader. */
+  /* Pele draws every colour, font and corner through these, so the SVG follows the theme. */
+  --pele-bg: var(--background);
+  --pele-fg: var(--foreground);
+  --pele-muted: var(--muted-foreground);
+  --pele-line: var(--muted-foreground);
+  --pele-surface: var(--muted);
+  --pele-surface-alt: var(--sidebar-background);
+  --pele-border: var(--border);
+  --pele-accent: var(--active);
+  --pele-radius: 8px;
+  --pele-font: --theme(--font-sans);
 
-  &[data-interactive] .mermaid-viewport {
-    @apply overflow-hidden cursor-grab;
-  }
+  /* The bold weight `src/lib/mermaid-diagrams.ts` measures labels at; keep in step. */
+  --pele-bold-weight: 600;
+  --pele-title-weight: 600;
+  --pele-heading-weight: 600;
 
   &:fullscreen {
     @apply flex flex-col bg-background;
 
     .mermaid-viewport {
-      @apply flex-1;
+      @apply flex-1 min-h-0;
     }
 
+    /* Room past the drawing is where an enlarged one is shown. */
     .mermaid-canvas {
-      @apply w-full;
+      @apply flex size-full items-center;
     }
   }
 }
@@ -737,10 +713,9 @@
 }
 
 /**
- * Fit the column, but never below `--diagram-floor` of the width mermaid laid
- * the diagram out at — past that the labels stop being readable, so the
- * viewport scrolls. The upper bound stops a small diagram being blown up to
- * fill the column.
+ * Fit the column, but never below `--diagram-floor` of the width Pele laid the
+ * diagram out at — past that the labels stop being readable, so the viewport
+ * scrolls. The upper bound stops a small diagram being blown up to fill the column.
  */
 /*noinspection CssUnresolvedCustomProperty*/
 .prose .mermaid-canvas {
@@ -753,26 +728,6 @@
   );
 
   @apply mx-auto;
-}
-
-/**
- * Mermaid sets neither a corner radius nor a label weight, so these reach it
- * without having to outrank its own rules, which are scoped by the diagram's ID.
- */
-.prose .mermaid-figure {
-  .node rect,
-  .cluster rect,
-  .label-container {
-    rx: 8px;
-    ry: 8px;
-  }
-
-  .nodeLabel,
-  .edgeLabel,
-  .cluster-label,
-  .actor {
-    @apply font-medium;
-  }
 }
 
 /* endregion */
