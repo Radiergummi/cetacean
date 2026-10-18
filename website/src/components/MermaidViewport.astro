@@ -34,8 +34,37 @@ const controls = [
 </template>
 
 <script>
+    import type {Zoom} from "pele/core";
+
     const maxScale = 4;
     const step = 1.5;
+    const duration = 200;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    /**
+     * Pele sets a zoom in one step. This eases it there instead, by a constant
+     * factor a frame, so enlarging reads as even. Returns what cancels it.
+     */
+    function animate(zoom: Zoom, target: number): () => void {
+        const from = zoom.scale;
+        const start = performance.now();
+        let frame = 0;
+
+        const tick = (now: number) => {
+            const progress = reducedMotion.matches ? 1 : Math.min(1, (now - start) / duration);
+            const eased = 1 - (1 - progress) ** 3;
+
+            zoom.zoomTo(from * (target / from) ** eased);
+
+            if (progress < 1) {
+                frame = requestAnimationFrame(tick);
+            }
+        };
+
+        frame = requestAnimationFrame(tick);
+
+        return () => cancelAnimationFrame(frame);
+    }
 
     document.addEventListener("astro:page-load", async () => {
         const figures = document.querySelectorAll<HTMLElement>(
@@ -59,7 +88,9 @@ const controls = [
         // Pele observes each canvas for resizes. Astro swaps the page under us
         // without unloading it, so the observers are dropped as it does.
         const teardown: (() => void)[] = [];
+        const swapped = new AbortController();
 
+        teardown.push(() => swapped.abort());
         document.addEventListener(
             "astro:before-swap",
             () => teardown.forEach((destroy) => destroy()),
@@ -67,16 +98,25 @@ const controls = [
         );
 
         figures.forEach((figure) => {
-            const canvas = figure.querySelector<HTMLElement>(".mermaid-canvas");
-            const svg = canvas?.firstElementChild;
+            // One canvas per layout, of which the stylesheet shows one at a time.
+            const layouts = [...figure.querySelectorAll<HTMLElement>(".mermaid-canvas")].flatMap(
+                (canvas) => {
+                    const svg = canvas.firstElementChild;
 
-            if (!canvas || !(svg instanceof SVGSVGElement)) {
+                    return svg instanceof SVGSVGElement
+                        ? [{canvas, svg, zoom: enableZoom(canvas, {always: true, maxScale, controls: false})}]
+                        : [];
+                },
+            );
+            const [first] = layouts;
+
+            if (!first) {
                 return;
             }
 
             figure.setAttribute("data-interactive", "");
 
-            const zoom = enableZoom(canvas, {always: true, maxScale, controls: false});
+            const shown = () => layouts.find(({canvas}) => canvas.getClientRects().length > 0) ?? first;
             const controls = template.content.cloneNode(true) as DocumentFragment;
             const button = (action: string) =>
                 controls.querySelector<HTMLButtonElement>(`[data-action="${action}"]`);
@@ -87,13 +127,8 @@ const controls = [
             // However the reader zooms — buttons, pinch, wheel, keys — it ends in a
             // new `viewBox`, so that is what the buttons follow.
             const update = () => {
+                const {zoom} = shown();
                 const resting = zoom.scale <= zoom.fit * 1.001;
-
-                // Pele leaves a resting drawing one-finger vertical panning only, which
-                // would trap a diagram past its legibility floor: that one scrolls sideways.
-                if (resting) {
-                    svg.style.touchAction = "pan-x pan-y";
-                }
 
                 if (zoomInAction) {
                     zoomInAction.disabled = zoom.scale >= Math.max(zoom.fit, maxScale) * 0.999;
@@ -107,22 +142,78 @@ const controls = [
             };
             const observer = new MutationObserver(update);
 
-            observer.observe(svg, {attributeFilter: ["viewBox"]});
-            teardown.push(() => observer.disconnect(), () => zoom.destroy());
+            for (const {svg, zoom} of layouts) {
+                observer.observe(svg, {attributeFilter: ["viewBox"]});
+                teardown.push(() => zoom.destroy());
+            }
 
-            zoomInAction?.addEventListener("click", () => zoom.zoomBy(step));
-            zoomOutAction?.addEventListener("click", () => zoom.zoomBy(1 / step));
-            resetAction?.addEventListener("click", () => zoom.reset());
+            teardown.push(() => observer.disconnect());
+
+            let cancel = () => {};
+            const zoomTo = (target: number) => {
+                cancel();
+                cancel = animate(shown().zoom, target);
+            };
+
+            // A pinch or a drag takes over from a zoom still easing in.
+            figure.addEventListener("pointerdown", () => cancel(), {signal: swapped.signal});
+
+            zoomInAction?.addEventListener("click", () => {
+                const {zoom} = shown();
+
+                zoomTo(Math.min(zoom.scale * step, Math.max(zoom.fit, maxScale)));
+            });
+            zoomOutAction?.addEventListener("click", () => zoomTo(shown().zoom.scale / step));
+            // Pele settles a drawing eased down to the scale that fits.
+            resetAction?.addEventListener("click", () => zoomTo(shown().zoom.fit));
+
+            const expand = (expanded: boolean) => {
+                if (expanded === figure.hasAttribute("data-expanded")) {
+                    return;
+                }
+
+                figure.toggleAttribute("data-expanded", expanded);
+
+                // The top layer: `main`'s view transition name makes it a stacking
+                // context, which would keep the sticky header over a fixed figure.
+                if ("showPopover" in figure) {
+                    if (expanded) {
+                        figure.popover = "manual";
+                        figure.showPopover();
+                    } else {
+                        figure.hidePopover();
+                        figure.removeAttribute("popover");
+                    }
+                }
+
+                document.documentElement.classList.toggle("overflow-hidden", expanded);
+            };
+
+            teardown.push(() => expand(false));
+
             button("fullscreen")?.addEventListener("click", () => {
-                if (document.fullscreenElement === figure) {
+                if (!document.fullscreenEnabled) {
+                    expand(!figure.hasAttribute("data-expanded"));
+                } else if (document.fullscreenElement === figure) {
                     document.exitFullscreen();
                 } else {
                     figure.requestFullscreen();
                 }
             });
 
+            // Escape leaves the stand-in as it leaves fullscreen, unless Pele took
+            // it to reset an enlarged drawing first.
+            document.addEventListener(
+                "keydown",
+                (event) => {
+                    if (event.key === "Escape" && !event.defaultPrevented) {
+                        expand(false);
+                    }
+                },
+                {signal: swapped.signal},
+            );
+
             figure.appendChild(controls);
-            update();
         });
     });
 </script>

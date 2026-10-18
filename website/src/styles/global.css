@@ -686,7 +686,8 @@
   --pele-title-weight: 600;
   --pele-heading-weight: 600;
 
-  &:fullscreen {
+  &:fullscreen,
+  &[data-expanded] {
     @apply flex flex-col bg-background;
 
     .mermaid-viewport {
@@ -698,14 +699,33 @@
       @apply flex size-full items-center;
     }
   }
+
+  /* Fullscreen where the browser offers none for a figure, as on an iPhone. */
+  &[data-expanded] {
+    @apply fixed inset-0 z-60 m-0 size-full max-w-none max-h-none p-0 rounded-none border-0 text-foreground;
+  }
 }
 
 .prose .mermaid-viewport {
-  @apply p-6 overflow-auto touch-pan-x touch-pan-y;
+  @apply overflow-hidden;
+
+  container-type: inline-size;
 
   /* The dot grid the topology view draws behind React Flow, at its 20px gap. */
   background-image: radial-gradient(circle, var(--mermaid-dot) 1px, transparent 1px);
   background-size: 20px 20px;
+}
+
+/**
+ * The padding is the zoomed element's own, not the viewport's: Pele carries an
+ * enlarged drawing over its element's padding to the edges. A diagram fits the
+ * column and is never scaled past the width Pele laid it out at.
+ */
+/*noinspection CssUnresolvedCustomProperty*/
+.prose .mermaid-canvas {
+  @apply mx-auto p-6;
+
+  width: min(100%, calc(var(--diagram-width, 100%) + 3rem));
 
   svg {
     @apply block w-full h-auto;
@@ -713,21 +733,20 @@
 }
 
 /**
- * Fit the column, but never below `--diagram-floor` of the width Pele laid the
- * diagram out at — past that the labels stop being readable, so the viewport
- * scrolls. The upper bound stops a small diagram being blown up to fill the column.
+ * The narrow layout below the width `src/lib/mermaid-diagrams.ts` renders one for,
+ * the wide one above it. Important, because a layout for another width stays
+ * hidden whatever display the canvas takes otherwise, fullscreen included.
  */
-/*noinspection CssUnresolvedCustomProperty*/
-.prose .mermaid-canvas {
-  --diagram-floor: 0.65;
+@container (width >= 640px) {
+  .prose .mermaid-canvas[data-layout="narrow"] {
+    display: none !important;
+  }
+}
 
-  width: clamp(
-    calc(var(--diagram-width, 100%) * var(--diagram-floor)),
-    100%,
-    var(--diagram-width, 100%)
-  );
-
-  @apply mx-auto;
+@container (width < 640px) {
+  .prose .mermaid-canvas[data-layout="wide"]:has(+ [data-layout="narrow"]) {
+    display: none !important;
+  }
 }
 
 /* endregion */
