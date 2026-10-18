@@ -667,10 +667,14 @@
 /* region Mermaid diagrams */
 .prose .mermaid-figure {
   /* Diagrams run wider than the measure prose is set at, so they reclaim the gutter. */
-  @apply my-7 lg:-mx-12 overflow-hidden rounded-md border bg-sidebar-background;
+  @apply my-7 lg:-mx-12 overflow-hidden rounded-md border bg-(--pele-bg);
 
-  /* Pele draws every colour, font and corner through these, so the SVG follows the theme. */
-  --pele-bg: var(--background);
+  /**
+   * Pele draws every colour, font and corner through these, so the SVG follows the
+   * theme. Its background is the figure's own, as the ground the backing behind
+   * each label is cut from: a different one draws every label as a box.
+   */
+  --pele-bg: var(--sidebar-background);
   --pele-fg: var(--foreground);
   --pele-muted: var(--muted-foreground);
   --pele-line: var(--muted-foreground);
@@ -688,7 +692,9 @@
 
   &:fullscreen,
   &[data-expanded] {
-    @apply flex flex-col bg-background;
+    --pele-bg: var(--background);
+
+    @apply flex flex-col;
 
     .mermaid-viewport {
       @apply flex-1 min-h-0;
