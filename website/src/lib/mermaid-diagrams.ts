@@ -2,7 +2,7 @@ import type { Element, ElementContent, Parents, Root } from "hast";
 import { create, type Font } from "fontkit";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { PeleError, render, type RenderResult, type TextMeasurer } from "pele";
+import { PeleError, render, type RenderOptions, type RenderResult, type TextMeasurer } from "pele";
 import type { Plugin } from "unified";
 import { visit } from "unist-util-visit";
 import type { VFile } from "vfile";
@@ -15,6 +15,16 @@ import type { VFile } from "vfile";
  */
 
 const fontSize = 14;
+
+/**
+ * Each diagram is also laid out for a 375px phone's column less the canvas's
+ * padding, where Pele turns a flowchart to run down and wraps a sequence diagram's
+ * messages. It is kept only if clearly narrower, and shown once the wide layout
+ * would draw below `smallestScale`: a breakpoint per diagram, not one for all.
+ */
+const narrowWidth = 300;
+const smallestScale = 0.75;
+const canvasPadding = 48;
 
 /**
  * Pele bakes the box each label fits into the SVG, so it has to lay out with
@@ -104,18 +114,13 @@ export const rehypeMermaid = function rehypeMermaid() {
         return;
       }
 
-      let diagram: RenderResult;
+      const id = `diagram-${count++}`;
+      let wide: RenderResult;
+      let narrow: RenderResult;
 
       try {
-        diagram = render(source, {
-          measurer: geistMeasurer,
-          fontSize,
-          // Ids have to be unique across the page, not only within the diagram:
-          // the title and description are referenced by them.
-          idPrefix: `diagram-${count++}`,
-          // The stylesheet sizes the SVG; Pele's inline sizing would outrank it.
-          responsive: false,
-        });
+        wide = draw(source, `${id}-wide`);
+        narrow = draw(source, `${id}-narrow`, { maxWidth: narrowWidth });
       } catch (error) {
         const position =
           error instanceof PeleError && error.line !== undefined ? ` (line ${error.line})` : "";
@@ -126,37 +131,83 @@ export const rehypeMermaid = function rehypeMermaid() {
       // A parent is the root or an element, and TypeScript will not write to
       // the union of their two children arrays as one, though a figure is
       // content both of them hold.
-      (parent.children as ElementContent[])[index] = figure(diagram);
+      (parent.children as ElementContent[])[index] = figure(
+        id,
+        wide,
+        narrow.width < wide.width * smallestScale ? narrow : undefined,
+      );
     });
   };
 } satisfies Plugin<[], Root, Root>;
 
-function figure(diagram: RenderResult): Element {
+function draw(source: string, idPrefix: string, options: RenderOptions = {}): RenderResult {
+  return render(source, {
+    measurer: geistMeasurer,
+    fontSize,
+    // Ids have to be unique across the page, not only within the diagram: the
+    // title and description are referenced by them.
+    idPrefix,
+    // The stylesheet sizes the SVG; Pele's inline sizing would outrank it.
+    responsive: false,
+    ...options,
+  });
+}
+
+function figure(id: string, wide: RenderResult, narrow: RenderResult | undefined): Element {
   return {
     type: "element",
     tagName: "figure",
-    properties: {
-      className: ["mermaid-figure"],
-      // The width Pele laid the diagram out at. The stylesheet scales down to
-      // fit the column but stops at a legibility floor and scrolls past it,
-      // and never scales a small diagram up.
-      style: `--diagram-width: ${Math.ceil(diagram.width)}px`,
-    },
+    properties: { id, className: ["mermaid-figure"] },
     children: [
       {
         type: "element",
         tagName: "div",
         properties: { className: ["mermaid-viewport"] },
         children: [
-          {
-            type: "element",
-            // The element the enhancement script zooms. Pele reads the drawing
-            // from its first child, so the SVG has to be exactly that.
-            tagName: "div",
-            properties: { className: ["mermaid-canvas"] },
-            children: [{ type: "raw", value: diagram.svg } as unknown as Element],
-          },
+          canvas(wide, "wide"),
+          ...(narrow ? [canvas(narrow, "narrow"), switchAt(id, wide)] : []),
         ],
+      },
+    ],
+  };
+}
+
+function canvas({ svg, width, height }: RenderResult, layout: string): Element {
+  return {
+    type: "element",
+    // The element the enhancement script zooms. Pele reads the drawing from its
+    // first child, so the SVG has to be exactly that.
+    tagName: "div",
+    properties: {
+      className: ["mermaid-canvas"],
+      dataLayout: layout,
+      // The size Pele laid the diagram out at: never scaled past its width, and
+      // fitted by its proportions in fullscreen.
+      style: `--diagram-width: ${Math.ceil(width)}px; --diagram-ratio: ${width / height}`,
+    },
+    children: [{ type: "raw", value: svg } as unknown as Element],
+  };
+}
+
+/**
+ * Which layout shows is the viewport's container query, at the width below which
+ * the wide one would draw under `smallestScale`. Important, so a layout for the
+ * other width stays hidden whatever display the canvas takes, fullscreen included.
+ */
+function switchAt(id: string, wide: RenderResult): Element {
+  const breakpoint = Math.ceil(wide.width * smallestScale + canvasPadding);
+  const hide = (layout: string) => `#${id} [data-layout="${layout}"] { display: none !important; }`;
+
+  return {
+    type: "element",
+    tagName: "style",
+    properties: {},
+    children: [
+      {
+        type: "text",
+        value:
+          `@container (width >= ${breakpoint}px) { ${hide("narrow")} } ` +
+          `@container (width < ${breakpoint}px) { ${hide("wide")} }`,
       },
     ],
   };
