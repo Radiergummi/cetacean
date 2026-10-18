@@ -149,9 +149,13 @@ requirements:
       caching client metadata, but MAY define its own upper and/or lower
       bounds on an acceptable cache lifetime as well.
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-5.2
-    deferred: >-
-      Every document is cached for exactly cimdCacheTTL, whatever its response
-      says: the bound is applied, the headers are not read.
+    mutants:
+      - file: internal/oauth/cimd.go
+        replace: "\tf.cachePut(clientID, &meta, cacheLifetime(resp.Header, time.Now()))"
+        with: "\tf.cachePut(clientID, &meta, cimdCacheTTL)"
+      - file: internal/oauth/cimd.go
+        replace: "\t\tif value, ok := directives[name]; ok && value == \"\" {"
+        with: "\t\tif value, ok := directives[name]; false && ok && value == \"\" {"
 
   - id: error-responses-not-cached
     level: MUST
@@ -207,10 +211,10 @@ requirements:
       the authorization interface, in addition to displaying the fetched
       client information if any.
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-client-id-metadata-document-02.html#section-8.5
-    deferred: >-
-      The consent page names the client by its self-asserted client_name, a
-      Verified badge and the redirect URI. The client_id rides along only in a
-      hidden form field.
+    mutants:
+      - file: internal/oauth/server.go
+        replace: "\t\tdata.ClientHost = u.Host"
+        with: "\t\t_ = u"
 
   - id: special-use-addresses-not-fetched
     level: MUST
@@ -301,7 +305,8 @@ dismissed:
     A MAY. This server associates a Client Identifier URL with metadata only
     by fetching it.
   metadata-may-be-cached: >-
-    A MAY. This server caches a document for cimdCacheTTL.
+    A MAY. This server caches a document for as long as its response allows,
+    within cimdMaxCacheTTL.
   supported-parameter-declaration: >-
     The declaration of the parameter itself. Its presence is
     oauth/draft-ietf-oauth-client-id-metadata-document/metadata-advertises-support.
