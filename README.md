@@ -12,11 +12,13 @@
   </p>
 </p>
 
-<!-- TODO: Replace with actual screenshots
 <p align="center">
-  <img src="docs/screenshots/overview.png" alt="Cluster Overview" width="800">
+  <img src="docs/screenshots/overview.png" alt="The cluster overview: node, service and task health, capacity, and resource usage by stack" width="800">
 </p>
--->
+<p align="center">
+  <img src="docs/screenshots/service.png" alt="A service's detail page, with its image, replicas, tasks and metrics" width="49%">
+  <img src="docs/screenshots/topology.png" alt="The logical topology: services grouped by stack, joined by the overlay networks they share" width="49%">
+</p>
 
 ## Why Cetacean?
 

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
 
 ### Fixed
+- The demo's topology view shows each service's running replicas instead of reporting every service down
 - The resync button reports a failed re-sync, and waits long enough for a slow Docker Engine to answer instead of giving up after 30 seconds
 - An unknown or disabled `/-/` endpoint answers `404`, and one asked with the wrong method `405` with `Allow`, instead of serving the dashboard
 - Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses

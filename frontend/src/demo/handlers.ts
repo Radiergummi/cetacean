@@ -614,6 +614,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             replicas:
               service.Spec.Mode.Replicated?.Replicas ??
               (service.Spec.Mode.Global ? dataset.nodes.length : 1),
+            runningReplicas: countRunningTasks(dataset, service.ID),
             image: (service.Spec.TaskTemplate!.ContainerSpec?.Image ?? "").split("@")[0],
             mode: service.Spec.Mode.Replicated ? "replicated" : "global",
             ...(ports.length > 0 ? { ports } : {}),
