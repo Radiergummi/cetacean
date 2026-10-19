@@ -24,8 +24,8 @@ func FuzzFilterCompile(f *testing.F) {
 		f.Add(s)
 	}
 
-	// Env shaped like ServiceEnv's output, plus a labels map — filter
-	// expressions commonly index into labels (e.g. labels["env"]).
+	// ServiceEnv's fields plus two it does not set, which only an expression
+	// that slips past the type check could read.
 	env := map[string]any{
 		"id":       "svc1",
 		"name":     "web",
@@ -44,7 +44,7 @@ func FuzzFilterCompile(f *testing.F) {
 	f.Fuzz(func(t *testing.T, expression string) {
 		start := time.Now()
 
-		prog, err := Compile(expression)
+		prog, err := Compile(expression, Services)
 		if err != nil {
 			return
 		}

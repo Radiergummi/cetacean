@@ -1737,19 +1737,13 @@ func TestHandleList_FilterMissingField(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "n1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
 	h := newTestHandlers(t, withCache(c))
 
-	// expr treats missing env keys as nil, so this evaluates to false (no match)
 	w := httptest.NewRecorder()
 	h.HandleListNodes(w, filterReq("/nodes", `nonexistent == "value"`))
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	var resp CollectionResponse[swarm.Node]
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Errorf("failed to decode response body: %v", err)
-	}
-	if resp.Total != 0 {
-		t.Errorf("expected 0 nodes for missing field filter, got %d", resp.Total)
+	body := w.Body.String()
+	if w.Code != http.StatusBadRequest || !strings.Contains(body, "FLT002") ||
+		!strings.Contains(body, "nonexistent") {
+		t.Errorf("status = %d, want 400 FLT002 naming the field: %s", w.Code, body)
 	}
 }
 

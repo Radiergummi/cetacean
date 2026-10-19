@@ -46,7 +46,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		linkTemplate: "/tasks/{id}",
 		list:         h.cache.ListTasks,
 		aclName:      func(t swarm.Task) string { return t.ID },
-		filterEnv:    filter.TaskEnv,
+		filterEnv:    filter.Tasks,
 		sortKeys: map[string]func(swarm.Task) string{
 			"state":   func(t swarm.Task) string { return taskStateSortKey(t.Status.State) },
 			"service": func(t swarm.Task) string { return t.ServiceID },

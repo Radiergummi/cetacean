@@ -12,7 +12,8 @@ import (
 // counts, so only a check inside the expression's own loop can stop it.
 func TestEvaluateContextStopsInsideOneRun(t *testing.T) {
 	prog, err := Compile(
-		`len(reduce(1..20000, #acc + "` + strings.Repeat("a", 300) + `", "")) > 0`,
+		`len(reduce(1..20000, #acc + "`+strings.Repeat("a", 300)+`", "")) > 0`,
+		Services,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +32,7 @@ func TestEvaluateContextStopsInsideOneRun(t *testing.T) {
 }
 
 func TestEvaluateContextKeepsPredicates(t *testing.T) {
-	prog, err := Compile(`all(["web", "api"], {# != name}) && any(1..3, {# == 2})`)
+	prog, err := Compile(`all(["web", "api"], {# != name}) && any(1..3, {# == 2})`, Services)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +43,7 @@ func TestEvaluateContextKeepsPredicates(t *testing.T) {
 }
 
 func TestBudgetKeepsPredicateTypeChecking(t *testing.T) {
-	if _, err := Compile(`all(1..3, {# + 1})`); err == nil {
+	if _, err := Compile(`all(1..3, {# + 1})`, Services); err == nil {
 		t.Error("a predicate returning an int compiled")
 	}
 }
@@ -52,7 +53,7 @@ func TestEvaluateContextCannotBeDisarmed(t *testing.T) {
 		`let $ctx = nil; all(1..3, {true})`,
 		`let budgetContext = nil; all(1..3, {true})`,
 	} {
-		prog, err := Compile(expression)
+		prog, err := Compile(expression, Services)
 		if err != nil {
 			continue
 		}
@@ -76,7 +77,7 @@ func TestEvaluateContextBoundsOneStep(t *testing.T) {
 		{"doubling", `let a = repeat("a", 999999); let b = a + a; let c = b + b; len(c + c) > 0`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			prog, err := Compile(tc.expression)
+			prog, err := Compile(tc.expression, patterns)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -93,7 +94,10 @@ func TestEvaluateContextBoundsOneStep(t *testing.T) {
 }
 
 func TestEvaluateContextKeepsOrdinaryMatchesAndConcatenation(t *testing.T) {
-	prog, err := Compile(`name + "-1" == "web-1" && name matches "^w[a-z]+$" && 1 + 2 == 3`)
+	prog, err := Compile(
+		`name + "-1" == "web-1" && name matches "^w[a-z]+$" && 1 + 2 == 3`,
+		Services,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +105,12 @@ func TestEvaluateContextKeepsOrdinaryMatchesAndConcatenation(t *testing.T) {
 	if err != nil || !ok {
 		t.Errorf("ok, err = %v, %v; want true, nil", ok, err)
 	}
-	if _, err := Compile(`name matches "["`); err == nil {
+	if _, err := Compile(`name matches "["`, Services); err == nil {
 		t.Error("an invalid constant pattern compiled")
 	}
 }
+
+// patterns sets one field, p, for a match against a pattern that is not a constant.
+var patterns = newEnv(func(p string, _ map[string]any) map[string]any {
+	return map[string]any{"p": p}
+})

@@ -38,7 +38,7 @@ func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {
 		list:         h.cache.ListVolumes,
 		aclName:      func(v volume.Volume) string { return v.Name },
 		searchName:   func(v volume.Volume) string { return v.Name },
-		filterEnv:    filter.VolumeEnv,
+		filterEnv:    filter.Volumes,
 		sortKeys: map[string]func(volume.Volume) string{
 			"name":   func(v volume.Volume) string { return v.Name },
 			"driver": func(v volume.Volume) string { return v.Driver },

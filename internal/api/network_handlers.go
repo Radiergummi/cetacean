@@ -44,7 +44,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		list:         h.cache.ListNetworks,
 		aclName:      func(n network.Summary) string { return n.Name },
 		searchName:   func(n network.Summary) string { return n.Name },
-		filterEnv:    filter.NetworkEnv,
+		filterEnv:    filter.Networks,
 		sortKeys: map[string]func(network.Summary) string{
 			"name":   func(n network.Summary) string { return n.Name },
 			"driver": func(n network.Summary) string { return n.Driver },
