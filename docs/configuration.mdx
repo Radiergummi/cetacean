@@ -316,7 +316,7 @@ consent screen, so one would only sit unused.
 </ConfigParam>
 
 <ConfigParam name="oauth.cimd_enabled" env="CETACEAN_OAUTH_CIMD_ENABLED" default="true">
-  Accept Client ID Metadata Documents, where a client identifies itself by an `https://` URL Cetacean fetches. Fetches pass an SSRF blocklist and are cached for an hour.
+  Accept Client ID Metadata Documents, where a client identifies itself by an `https://` URL Cetacean fetches. Fetches pass an SSRF blocklist and are cached as the response's `Cache-Control` or `Expires` allows, for at most a day, or an hour when it says nothing.
 </ConfigParam>
 
 ## MCP server

@@ -354,7 +354,7 @@ func TestCIMDCacheIsBounded(t *testing.T) {
 	f := &CIMDFetcher{}
 
 	for i := range cimdCacheMaxEntries * 2 {
-		f.cachePut(fmt.Sprintf("https://client.example/%d", i), &ClientMetadata{})
+		f.cachePut(fmt.Sprintf("https://client.example/%d", i), &ClientMetadata{}, cimdCacheTTL)
 	}
 
 	if got := len(f.cache); got > cimdCacheMaxEntries {
@@ -367,16 +367,16 @@ func TestCIMDCacheIsBounded(t *testing.T) {
 func TestCIMDCacheEvictsLapsedEntriesFirst(t *testing.T) {
 	f := &CIMDFetcher{cache: make(map[string]cachedEntry)}
 
-	stale := time.Now().Add(-2 * cimdCacheTTL)
+	stale := time.Now().Add(-cimdCacheTTL)
 	for i := range cimdCacheMaxEntries {
 		f.cache[fmt.Sprintf("https://lapsed.example/%d", i)] = cachedEntry{
-			meta:      &ClientMetadata{},
-			fetchedAt: stale,
+			meta:    &ClientMetadata{},
+			expires: stale,
 		}
 	}
 
 	const live = "https://live.example/id"
-	f.cachePut(live, &ClientMetadata{})
+	f.cachePut(live, &ClientMetadata{}, cimdCacheTTL)
 
 	if f.cacheGet(live) == nil {
 		t.Fatal("the entry that triggered eviction was not stored")
@@ -393,12 +393,12 @@ func TestCIMDCacheReplacesWithoutEvicting(t *testing.T) {
 
 	for i := range cimdCacheMaxEntries {
 		f.cache[fmt.Sprintf("https://client.example/%d", i)] = cachedEntry{
-			meta:      &ClientMetadata{},
-			fetchedAt: time.Now(),
+			meta:    &ClientMetadata{},
+			expires: time.Now().Add(cimdCacheTTL),
 		}
 	}
 
-	f.cachePut("https://client.example/0", &ClientMetadata{ClientName: "renamed"})
+	f.cachePut("https://client.example/0", &ClientMetadata{ClientName: "renamed"}, cimdCacheTTL)
 
 	if got := len(f.cache); got != cimdCacheMaxEntries {
 		t.Errorf("cache holds %d entries, want %d", got, cimdCacheMaxEntries)
@@ -713,22 +713,100 @@ func TestCIMDRefusesAuthenticatedClientDocuments(t *testing.T) {
 	}
 }
 
-func TestCIMDCacheEntryLapsesAtItsTTL(t *testing.T) {
+func TestCIMDCacheEntryLapsesAtItsExpiry(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/draft-ietf-oauth-client-id-metadata-document/client-metadata-is-re-fetched",
-		"oauth/draft-ietf-oauth-client-id-metadata-document/cache-headers-respected",
 	)
 
-	fetched := time.Unix(1_700_000_000, 0)
-	entry := cachedEntry{meta: &ClientMetadata{}, fetchedAt: fetched}
+	expires := time.Unix(1_700_000_000, 0)
+	entry := cachedEntry{meta: &ClientMetadata{}, expires: expires}
 
-	if !entry.lapsed(fetched.Add(cimdCacheTTL)) {
-		t.Error("an entry exactly cimdCacheTTL old is still fresh")
+	if entry.lapsed(expires.Add(-time.Second)) {
+		t.Error("an entry a second short of its expiry has lapsed")
+	}
+	if !entry.lapsed(expires) {
+		t.Error("an entry at its expiry is still fresh")
 	}
 
 	f := &CIMDFetcher{cache: map[string]cachedEntry{"https://example.com/client": entry}}
 	if f.cacheGet("https://example.com/client") != nil {
 		t.Error("a lapsed entry was served from the cache")
+	}
+}
+
+func TestCIMDCacheLifetimeFollowsTheResponseHeaders(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/cache-headers-respected",
+	)
+
+	now := time.Unix(1_700_000_000, 0)
+	date := now.UTC().Format(http.TimeFormat)
+
+	for _, tc := range []struct {
+		name   string
+		header http.Header
+		want   time.Duration
+	}{
+		{"silent", http.Header{}, cimdCacheTTL},
+		{"max-age", http.Header{"Cache-Control": {"max-age=60"}}, time.Minute},
+		{"directive names ignore case", http.Header{"Cache-Control": {"Max-Age=60"}}, time.Minute},
+		{"quoted value", http.Header{"Cache-Control": {`max-age="60"`}}, time.Minute},
+		{"s-maxage wins", http.Header{"Cache-Control": {"max-age=60, s-maxage=120"}}, 2 * time.Minute},
+		{"first occurrence wins", http.Header{"Cache-Control": {"max-age=60", "max-age=600"}}, time.Minute},
+		{"max-age over Expires", http.Header{
+			"Cache-Control": {"max-age=60"},
+			"Date":          {date},
+			"Expires":       {now.Add(time.Hour).UTC().Format(http.TimeFormat)},
+		}, time.Minute},
+		{"Expires less Date", http.Header{
+			"Date":    {date},
+			"Expires": {now.Add(10 * time.Minute).UTC().Format(http.TimeFormat)},
+		}, 10 * time.Minute},
+		{"invalid Expires is stale", http.Header{"Expires": {"0"}}, 0},
+		{"invalid max-age is stale", http.Header{"Cache-Control": {"max-age=soon"}}, 0},
+		{"Age is spent", http.Header{"Cache-Control": {"max-age=600"}, "Age": {"540"}}, time.Minute},
+		{"older than its lifetime", http.Header{"Cache-Control": {"max-age=60"}, "Age": {"120"}}, 0},
+		{"overflowing Age", http.Header{"Cache-Control": {"max-age=99999999999"}, "Age": {"99999999999"}}, 0},
+		{"capped", http.Header{"Cache-Control": {"max-age=31536000"}}, cimdMaxCacheTTL},
+		{"overflow is capped", http.Header{"Cache-Control": {"max-age=99999999999999999999"}}, cimdMaxCacheTTL},
+		{"no-store", http.Header{"Cache-Control": {"max-age=600, no-store"}}, 0},
+		{"no-cache", http.Header{"Cache-Control": {"no-cache"}}, 0},
+		{"private", http.Header{"Cache-Control": {"private, max-age=600"}}, 0},
+		{"qualified no-cache", http.Header{"Cache-Control": {`no-cache="Set-Cookie", max-age=60`}}, time.Minute},
+		{"qualified private", http.Header{"Cache-Control": {`private="Set-Cookie"`}}, cimdCacheTTL},
+	} {
+		if got := cacheLifetime(tc.header, now); got != tc.want {
+			t.Errorf("%s: lifetime = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The lifetime reaches the cache: a document its response forbids storing is
+// fetched again on the next authorization.
+func TestCIMDFetchHonoursNoStore(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/cache-headers-respected",
+	)
+
+	var calls atomic.Int32
+	var serverURL string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Cache-Control", "no-store")
+		serveMetadata(serverURL+r.URL.Path, validDocument(""))(w, r)
+	}))
+	defer srv.Close()
+	serverURL = srv.URL
+
+	fetcher := &CIMDFetcher{Client: srv.Client(), AllowLoopback: true}
+	for range 2 {
+		if _, err := fetcher.Fetch(t.Context(), srv.URL+"/client"); err != nil {
+			t.Fatalf("fetch failed: %v", err)
+		}
+	}
+
+	if n := calls.Load(); n != 2 {
+		t.Errorf("server was called %d times, want 2", n)
 	}
 }
 

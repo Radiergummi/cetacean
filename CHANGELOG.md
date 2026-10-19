@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - `server.version_check` turns off the call to `api.github.com` for the latest Docker Engine release
 - The nav bar links the plugin list, and `g` `p` opens it
+- The consent page shows the host an MCP client's `https://` client ID lives on, beside the name the client gives itself
 
 ### Changed
+- A Client ID Metadata Document is cached as its response's `Cache-Control` or `Expires` allows, for at most a day, instead of always an hour
 - **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
 
 ### Fixed

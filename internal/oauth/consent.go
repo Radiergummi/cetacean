@@ -26,6 +26,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
   h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
   .client { background: #f4f4f5; border-radius: 8px; padding: 16px; margin: 20px 0; }
   .client-name { font-weight: 600; font-size: 1.1rem; }
+  .client-host { font-family: ui-monospace, monospace; font-weight: 600; margin-top: 6px; word-break: break-all; }
   .badge { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; }
   .badge-verified { background: #dcfce7; color: #15803d; }
   .badge-self { background: #fef9c3; color: #854d0e; }
@@ -48,6 +49,7 @@ var consentTemplate = template.Must(template.New("consent").Parse(`<!DOCTYPE htm
     <span class="client-name">{{.ClientName}}</span>
     {{if .Verified}}<span class="badge badge-verified">Verified</span>{{else}}<span class="badge badge-self">Self-registered</span>{{end}}
   </div>
+  {{if .ClientHost}}<div class="client-host">{{.ClientHost}}</div>{{end}}
   <div class="redirect">Redirect: {{.RedirectURI}}</div>
   {{if gt (len .RegisteredRedirectURIs) 1}}<div class="redirect">Registered redirects:<ul>{{range .RegisteredRedirectURIs}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
 </div>
@@ -102,6 +104,10 @@ var errorTemplate = template.Must(template.New("error").Parse(`<!DOCTYPE html>
 type consentData struct {
 	ClientName string
 	Verified   bool
+
+	// ClientHost is the host of a CIMD client's client_id. Unlike ClientName
+	// it is not the client's to assert. Empty for a DCR client.
+	ClientHost string
 
 	// RememberedFor is how long this approval will be remembered, already
 	// humanized. Empty when it will not be remembered at all, which is what

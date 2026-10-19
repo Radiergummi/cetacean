@@ -800,6 +800,10 @@ func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 		data.RememberedFor = humanizeDuration(s.consent.TTL())
 	}
 
+	if u, err := url.Parse(data.ClientID); data.Verified && err == nil {
+		data.ClientHost = u.Host
+	}
+
 	data.ResourcePath = s.resources.resourceFor(data.ResourceID).Path
 
 	data.CSRFToken, _ = issueCSRFNonce(
