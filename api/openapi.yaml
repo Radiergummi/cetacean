@@ -2797,8 +2797,7 @@ paths:
             schema:
               type: object
               additionalProperties:
-                type: string
-                nullable: true
+                type: [string, "null"]
               description: Label keys to set (string value) or remove (null value)
             example:
               env: staging
@@ -3470,8 +3469,7 @@ paths:
             schema:
               type: object
               additionalProperties:
-                type: string
-                nullable: true
+                type: [string, "null"]
               description: Environment variables to set (string value) or remove (null value)
             example:
               LOG_LEVEL: debug
@@ -3947,8 +3945,7 @@ paths:
             schema:
               type: object
               additionalProperties:
-                type: string
-                nullable: true
+                type: [string, "null"]
               description: Label keys to set (string value) or remove (null value)
             example:
               team: backend
@@ -4001,9 +3998,8 @@ paths:
                   - type: object
                     properties:
                       healthcheck:
-                        type: object
+                        type: [object, "null"]
                         description: Docker container.HealthConfig object
-                        nullable: true
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -4619,8 +4615,7 @@ paths:
                         type: string
                         enum: [replicated, global]
                       replicas:
-                        type: integer
-                        nullable: true
+                        type: [integer, "null"]
                         minimum: 0
               example:
                 "@context": /api/context.jsonld
@@ -5570,8 +5565,7 @@ paths:
             schema:
               type: object
               additionalProperties:
-                type: string
-                nullable: true
+                type: [string, "null"]
               description: Label keys to set (string value) or remove (null value)
             example:
               environment: production
@@ -5878,8 +5872,7 @@ paths:
             schema:
               type: object
               additionalProperties:
-                type: string
-                nullable: true
+                type: [string, "null"]
               description: Label keys to set (string value) or remove (null value)
             example:
               rotated-at: "2026-04-13"
@@ -7793,14 +7786,14 @@ components:
           type: string
           description: Diagnostic message when Prometheus is configured but unreachable.
         nodeExporter:
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/TargetStatus"
-          nullable: true
+            - type: "null"
           description: Null when node-exporter targets cannot be detected.
         cadvisor:
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/TargetStatus"
-          nullable: true
+            - type: "null"
           description: Null when cAdvisor targets cannot be detected.
       example:
         prometheusConfigured: true
@@ -8128,8 +8121,7 @@ components:
         as a JSON Merge Patch, so `null` removes a field.
       properties:
         Limits:
-          type: object
-          nullable: true
+          type: [object, "null"]
           properties:
             NanoCPUs:
               type: integer
@@ -8144,8 +8136,7 @@ components:
               format: int64
               description: Maximum number of processes
         Reservations:
-          type: object
-          nullable: true
+          type: [object, "null"]
           properties:
             NanoCPUs:
               type: integer
@@ -8291,8 +8282,7 @@ components:
           enum: [stop-first, start-first]
 
     NullableStringArray:
-      type: array
-      nullable: true
+      type: [array, "null"]
       items:
         type: string
 
@@ -8315,8 +8305,7 @@ components:
         hostname:
           type: string
         init:
-          type: boolean
-          nullable: true
+          type: [boolean, "null"]
         tty:
           type: boolean
         readOnly:
@@ -8324,9 +8313,8 @@ components:
         stopSignal:
           type: string
         stopGracePeriod:
-          type: integer
+          type: [integer, "null"]
           format: int64
-          nullable: true
           description: Grace period in nanoseconds
         capabilityAdd:
           $ref: "#/components/schemas/NullableStringArray"
@@ -8337,8 +8325,7 @@ components:
         hosts:
           $ref: "#/components/schemas/NullableStringArray"
         dnsConfig:
-          type: object
-          nullable: true
+          type: [object, "null"]
           properties:
             nameservers:
               $ref: "#/components/schemas/NullableStringArray"
@@ -8352,9 +8339,8 @@ components:
       description: Log driver configuration for a service
       properties:
         logDriver:
-          type: object
+          type: [object, "null"]
           description: Docker driver configuration
-          nullable: true
           properties:
             Name:
               type: string
