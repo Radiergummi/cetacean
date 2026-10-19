@@ -264,3 +264,37 @@ describe("preconditions", () => {
     await expect(api.patchServiceResources("svc1", {}, '"old"')).rejects.toThrow(/reload/i);
   });
 });
+
+describe("api.historyPage", () => {
+  const collection = {
+    "@context": "/api/context.jsonld",
+    items: [],
+    total: 0,
+    limit: 2,
+    offset: 0,
+  };
+
+  it("follows the next link the server sends", async () => {
+    mockFetch.mockReturnValue(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        url: "http://localhost/history?limit=2",
+        json: () => Promise.resolve(collection),
+        headers: new Headers({ Link: '</history?limit=2&before=4>; rel="next"' }),
+      }),
+    );
+
+    const { next } = await api.historyPage("/history?limit=2");
+
+    expect(next).toBe("/history?limit=2&before=4");
+  });
+
+  it("has no next page without a next link", async () => {
+    mockFetch.mockReturnValue(jsonResponse(collection));
+
+    const { next } = await api.historyPage("/history?limit=2");
+
+    expect(next).toBeUndefined();
+  });
+});

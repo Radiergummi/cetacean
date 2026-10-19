@@ -308,6 +308,23 @@ List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with 
 Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
 */142`. Query parameters take precedence when both are present.
 
+### History pagination
+
+`/history` pages by cursor rather than offset, because new entries arrive at the front while you read. A full page
+carries a `Link` with `rel="next"`, whose `before` names the oldest entry on it. `search` matches names across the
+whole log, not only the page you have, and stays on the `next` link along with `type` and `resourceId`.
+
+```http tab
+GET /history?search=web&limit=50 HTTP/1.1
+
+GET /history?search=web&before=<entry-id>&limit=50 HTTP/1.1
+```
+
+```bash tab
+curl "http://localhost:9000/history?search=web&limit=50"
+curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
+```
+
 ### Sort fields by resource
 
 | Resource | Sortable fields                              |

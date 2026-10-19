@@ -43,6 +43,7 @@ import type {
   VolumeDetail,
 } from "./types";
 import { apiPath, stripBasePath } from "@/lib/basePath";
+import { linkTarget } from "@/lib/linkHeader";
 import { z } from "zod";
 
 const headers = { Accept: "application/json" };
@@ -591,6 +592,64 @@ async function fetchRange<T>(
   return { data, allowedMethods };
 }
 
+export interface HistoryPage {
+  items: HistoryEntry[];
+
+  /** The path of the next, older page, while the server says one exists. */
+  next?: string | undefined;
+}
+
+/** The path of the first `/history` page for these filters. */
+function historyPath(
+  params?: { type?: string; resourceId?: string; search?: string; limit?: number } | undefined,
+): string {
+  const queryParams = new URLSearchParams();
+
+  if (params?.type) {
+    queryParams.set("type", params.type);
+  }
+
+  if (params?.resourceId) {
+    queryParams.set("resourceId", params.resourceId);
+  }
+
+  if (params?.search) {
+    queryParams.set("search", params.search);
+  }
+
+  if (params?.limit) {
+    queryParams.set("limit", String(params.limit));
+  }
+
+  const query = queryParams.toString();
+
+  return `/history${query ? `?${query}` : ""}`;
+}
+
+/**
+ * Fetches one `/history` page. The `next` link pages by cursor, and it is
+ * followed as the server wrote it rather than rebuilt from the last entry.
+ */
+async function fetchHistoryPage(
+  path: string,
+  signal?: AbortSignal | undefined,
+): Promise<HistoryPage> {
+  const response = await request(path, headers, signal);
+  const data = (await response.json()) as CollectionResponse<HistoryEntry>;
+
+  checkShape(path, schema.collectionOf(schema.historyEntrySchema), data);
+
+  const target = linkTarget(response.headers.get("Link"), "next");
+
+  if (target === undefined) {
+    return { items: data.items };
+  }
+
+  const next = new URL(target, response.url || window.location.href);
+
+  return { items: data.items, next: stripBasePath(next.pathname) + next.search };
+}
+
 /** Reads the total out of an unsatisfied range response's Content-Range header. */
 function totalFromContentRange(header: string | null): number | null {
   const match = /^items \*\/(\d+)$/.exec(header?.trim() ?? "");
@@ -785,29 +844,12 @@ export const api = {
     params?: { type?: string; resourceId?: string; limit?: number } | undefined,
     signal?: AbortSignal | undefined,
   ) => {
-    const queryParams = new URLSearchParams();
+    const { items } = await fetchHistoryPage(historyPath(params), signal);
 
-    if (params?.type) {
-      queryParams.set("type", params.type);
-    }
-
-    if (params?.resourceId) {
-      queryParams.set("resourceId", params.resourceId);
-    }
-
-    if (params?.limit) {
-      queryParams.set("limit", String(params.limit));
-    }
-
-    const query = queryParams.toString();
-    const { data } = await fetchJSON<CollectionResponse<HistoryEntry>>(
-      `/history${query ? `?${query}` : ""}`,
-      signal,
-      schema.collectionOf(schema.historyEntrySchema),
-    );
-
-    return data.items;
+    return items;
   },
+  historyPath,
+  historyPage: fetchHistoryPage,
   topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),
   nodeTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(

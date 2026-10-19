@@ -4,16 +4,16 @@ import FetchError from "../components/FetchError";
 import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
-import { buttonVariants } from "../components/ui/button";
+import { Button, buttonVariants } from "../components/ui/button";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { useMemo } from "react";
 
-/** The most entries `GET /history` returns in one response. */
+/** The most entries `GET /history` returns in one page. */
 const historyLimit = 200;
 
 const typeSegments = [
@@ -40,26 +40,25 @@ export default function History() {
   const type: TypeFilter = isTypeFilter(requestedType) ? requestedType : "all";
   const resourceType = type === "all" ? undefined : type;
 
-  const {
-    data: entries = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["history", { type: resourceType, limit: historyLimit }],
-    queryFn: ({ signal }) =>
-      api.history({ ...(resourceType ? { type: resourceType } : {}), limit: historyLimit }, signal),
-  });
+  const filters = {
+    ...(resourceType ? { type: resourceType } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    limit: historyLimit,
+  };
+
+  // Filtered on the server, so a match on a page not yet loaded still shows.
+  const { data, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ["history", filters],
+      queryFn: ({ pageParam, signal }) => api.historyPage(pageParam, signal),
+      initialPageParam: api.historyPath(filters),
+      getNextPageParam: ({ next }) => next,
+      placeholderData: keepPreviousData,
+    });
 
   useDebouncedInvalidation("/events", [["history"]], 2_000);
 
-  const visible = useMemo(() => {
-    const needle = debouncedSearch.toLowerCase();
-
-    return needle === ""
-      ? entries
-      : entries.filter(({ name }) => name.toLowerCase().includes(needle));
-  }, [entries, debouncedSearch]);
+  const entries = useMemo(() => data?.pages.flatMap(({ items }) => items) ?? [], [data]);
 
   const csvHref = apiPath(`/history.csv${resourceType ? `?type=${resourceType}` : ""}`);
 
@@ -101,17 +100,24 @@ export default function History() {
       ) : (
         <div className="rounded-lg border bg-card p-4">
           <ActivityFeed
-            entries={visible}
+            entries={entries}
             loading={isLoading}
             hideType={resourceType !== undefined}
           />
         </div>
       )}
 
-      {entries.length >= historyLimit && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Showing the latest {historyLimit} events. The CSV download holds the full log.
-        </p>
+      {hasNextPage && (
+        <div className="mt-3 flex justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isFetchingNextPage}
+            onClick={() => fetchNextPage()}
+          >
+            {isFetchingNextPage ? "Loading…" : "Load older events"}
+          </Button>
+        </div>
       )}
     </div>
   );

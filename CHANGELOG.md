@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- The History page loads older events past the latest 200, and its name filter searches the whole log rather than the loaded page
+- `GET /history` takes `search` and a `before` cursor, and a full page links the next one with `rel="next"`
 - `server.version_check` turns off the call to `api.github.com` for the latest Docker Engine release
 - The nav bar links the plugin list, and `g` `p` opens it
 - The consent page shows the host an MCP client's `https://` client ID lives on, beside the name the client gives itself
