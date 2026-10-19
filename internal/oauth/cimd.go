@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,9 +24,14 @@ var cimdDialer = &net.Dialer{
 	KeepAlive: 30 * time.Second,
 }
 
-// cimdCacheTTL is how long a successfully fetched metadata document is cached.
-// Expired entries are evicted on the next read; there is no background sweep.
+// cimdCacheTTL is how long a document is cached when its response says
+// nothing about it. Expired entries are evicted on the next read; there is no
+// background sweep.
 const cimdCacheTTL = time.Hour
+
+// cimdMaxCacheTTL caps the lifetime a response asks for, so a document is
+// re-read at least daily however long its publisher says it stays fresh.
+const cimdMaxCacheTTL = 24 * time.Hour
 
 // cimdCacheMaxEntries bounds the cache. client_id is the caller's to choose and
 // the document is served by a host they control, so an authorize loop over
@@ -112,13 +118,13 @@ func (m *ClientMetadata) HasRedirectURI(uri string) bool {
 
 // cachedEntry is a single in-memory cache slot.
 type cachedEntry struct {
-	meta      *ClientMetadata
-	fetchedAt time.Time
+	meta    *ClientMetadata
+	expires time.Time
 }
 
 // lapsed reports whether the entry has aged out as of now.
 func (e cachedEntry) lapsed(now time.Time) bool {
-	return now.Sub(e.fetchedAt) >= cimdCacheTTL
+	return !now.Before(e.expires)
 }
 
 // CIMDFetcher fetches and validates OAuth Client ID Metadata Documents.
@@ -243,7 +249,7 @@ func (f *CIMDFetcher) ssrfTransport(base http.RoundTripper) http.RoundTripper {
 // Fetch retrieves the Client ID Metadata Document for a client_id URL: it
 // validates the URL, guards against SSRF in the dialer, caps the size and
 // checks the document's structural invariants. Successful results are cached
-// for cimdCacheTTL; failed fetches never are.
+// for as long as their response allows; failed fetches never are.
 func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetadata, error) {
 	// Step 1–2: validate URL structure (scheme, path, fragment, userinfo).
 	if err := f.validateURL(clientID); err != nil {
@@ -344,7 +350,7 @@ func (f *CIMDFetcher) Fetch(ctx context.Context, clientID string) (*ClientMetada
 
 	// Cache on success only. Negative results are never cached so an attacker
 	// cannot poison the cache with a single failed fetch.
-	f.cachePut(clientID, &meta)
+	f.cachePut(clientID, &meta, cacheLifetime(resp.Header, time.Now()))
 
 	return &meta, nil
 }
@@ -444,10 +450,15 @@ func (f *CIMDFetcher) cacheGet(clientID string) *ClientMetadata {
 	return entry.meta
 }
 
-// cachePut stores a metadata entry. Only called on successful fetches.
-func (f *CIMDFetcher) cachePut(clientID string, meta *ClientMetadata) {
+// cachePut stores a metadata entry for lifetime, or drops the client's entry
+// when lifetime is not positive. Only called on successful fetches.
+func (f *CIMDFetcher) cachePut(clientID string, meta *ClientMetadata, lifetime time.Duration) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if lifetime <= 0 {
+		delete(f.cache, clientID)
+		return
+	}
 	if f.cache == nil {
 		f.cache = make(map[string]cachedEntry)
 	}
@@ -457,13 +468,86 @@ func (f *CIMDFetcher) cachePut(clientID string, meta *ClientMetadata) {
 		f.evictFor(now)
 	}
 
-	f.cache[clientID] = cachedEntry{meta: meta, fetchedAt: now}
+	f.cache[clientID] = cachedEntry{meta: meta, expires: now.Add(lifetime)}
+}
+
+// cacheLifetime is how long a response may stay cached, read as a shared cache
+// reads it: none at all under no-store, no-cache or private, else s-maxage,
+// max-age or Expires less Date, less Age. cimdCacheTTL stands in when the
+// headers name no lifetime, and cimdMaxCacheTTL caps any they do.
+func cacheLifetime(h http.Header, now time.Time) time.Duration {
+	directives := cacheControl(h)
+
+	for _, name := range []string{"no-store", "no-cache", "private"} {
+		// A qualified no-cache or private only withholds the fields it names.
+		if value, ok := directives[name]; ok && value == "" {
+			return 0
+		}
+	}
+
+	var lifetime time.Duration
+
+	if value, ok := directives["s-maxage"]; ok {
+		lifetime = deltaSeconds(value)
+	} else if value, ok := directives["max-age"]; ok {
+		lifetime = deltaSeconds(value)
+	} else if values := h.Values("Expires"); len(values) > 0 {
+		date, err := http.ParseTime(h.Get("Date"))
+		if err != nil {
+			date = now
+		}
+
+		// An Expires that does not parse is a time in the past.
+		if expires, err := http.ParseTime(values[0]); err == nil {
+			lifetime = expires.Sub(date)
+		}
+	} else {
+		lifetime = cimdCacheTTL
+	}
+
+	lifetime -= deltaSeconds(h.Get("Age"))
+
+	return min(max(lifetime, 0), cimdMaxCacheTTL)
+}
+
+// cacheControl folds every Cache-Control line into its directives, names
+// lowercased and quotes stripped. The first occurrence of a directive wins.
+func cacheControl(h http.Header) map[string]string {
+	directives := make(map[string]string)
+
+	for _, line := range h.Values("Cache-Control") {
+		for directive := range strings.SplitSeq(line, ",") {
+			name, value, _ := strings.Cut(strings.TrimSpace(directive), "=")
+			name = strings.ToLower(strings.TrimSpace(name))
+			if _, seen := directives[name]; name == "" || seen {
+				continue
+			}
+
+			directives[name] = strings.Trim(strings.TrimSpace(value), `"`)
+		}
+	}
+
+	return directives
+}
+
+// deltaSeconds parses a delta-seconds value. One past 2^31 saturates there
+// rather than fails, and one that is not a number at all reads as zero.
+func deltaSeconds(value string) time.Duration {
+	seconds, err := strconv.ParseUint(value, 10, 31)
+	if errors.Is(err, strconv.ErrRange) {
+		return 1 << 31 * time.Second
+	}
+	if err != nil {
+		return 0
+	}
+
+	return time.Duration(seconds) * time.Second
 }
 
 // evictFor makes room for one new entry, called with the mutex held. Lapsed
 // entries go first, since dropping them costs nothing; only if the cache is
-// still full does a live one go, oldest first. Re-fetching an evicted client
-// costs one request, so the cap trades a cold start for a bounded map.
+// still full does a live one go, the soonest to lapse. A re-fetch costs an
+// evicted client one request, so the cap trades a cold start for a bounded map.
 func (f *CIMDFetcher) evictFor(now time.Time) {
 	if len(f.cache) < cimdCacheMaxEntries {
 		return
@@ -481,13 +565,13 @@ func (f *CIMDFetcher) evictFor(now time.Time) {
 		return
 	}
 
-	oldestID := ""
-	var oldest time.Time
+	soonestID := ""
+	var soonest time.Time
 	for id, entry := range f.cache {
-		if oldestID == "" || entry.fetchedAt.Before(oldest) {
-			oldestID, oldest = id, entry.fetchedAt
+		if soonestID == "" || entry.expires.Before(soonest) {
+			soonestID, soonest = id, entry.expires
 		}
 	}
 
-	delete(f.cache, oldestID)
+	delete(f.cache, soonestID)
 }

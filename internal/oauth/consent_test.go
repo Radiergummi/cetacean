@@ -71,7 +71,6 @@ func TestConsentPageRender(t *testing.T) {
 		"oauth/rfc9700/clickjacking-prevented",
 		"oauth/rfc9700/csp-used-against-framing",
 		"oauth/rfc9700/csp-combined-with-a-legacy-defence",
-		"oauth/draft-ietf-oauth-client-id-metadata-document/hostname-displayed-on-consent",
 	)
 
 	s := newTestServer(t)
@@ -121,6 +120,37 @@ func TestConsentPageRender(t *testing.T) {
 	}
 	if !slices.Contains(names, "oauth_csrf_nonce") {
 		t.Errorf("cookies = %q, want one named oauth_csrf_nonce", names)
+	}
+}
+
+// A client_name is the client's to choose, so the page also names the host its
+// client_id lives on, which it is not. A DCR client_id is no URL and has none.
+func TestConsentPageShowsTheClientIDHost(t *testing.T) {
+	spec.Satisfies(t,
+		"oauth/draft-ietf-oauth-client-id-metadata-document/hostname-displayed-on-consent",
+	)
+
+	s, clientID, redirectURI, _ := cimdServer(t)
+	u, err := url.Parse(clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := authorizeGET(t, s, clientID, redirectURI)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	want := `<div class="client-host">` + u.Host + `</div>`
+	if !strings.Contains(w.Body.String(), want) {
+		t.Errorf("consent page does not show %s", want)
+	}
+
+	dcr := newTestServer(t)
+	dcrClient := registeredClient(t, dcr, []string{"http://localhost:9999/cb"})
+	w = authorizeGET(t, dcr, dcrClient, "http://localhost:9999/cb")
+	if strings.Contains(w.Body.String(), `class="client-host"`) {
+		t.Error("a DCR client's page shows a client_id host")
 	}
 }
 
