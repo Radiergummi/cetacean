@@ -7,11 +7,6 @@ on:
   # based on the branch below it, and filtering by base leaves every branch in a
   # stack untested until it reaches the front of the queue.
   pull_request:
-  # For the chore/sbom-sync branch: a pull request opened with GITHUB_TOKEN
-  # raises no pull_request event, so its required checks would never run.
-  # workflow_dispatch is the documented exception, and scripts/open-sbom-pr.sh
-  # asks for the run.
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -266,16 +261,9 @@ jobs:
     # to; they merge with the SBOM stale, and the push-to-main run below opens
     # a pull request that repairs it. A fork PR is reported on for a different
     # reason: its token is read-only, so nothing can be written either way.
+    # Writes go through the App token below, so GITHUB_TOKEN only reads.
     permissions:
-      contents: write
-      pull-requests: write
-      # Both write paths dispatch ci.yml afterwards, because nothing authored
-      # with GITHUB_TOKEN raises an event of its own: open-sbom-pr.sh for the
-      # pull request it opens, commit-sbom.sh for the commit it lands on a
-      # branch. Either way the required checks would otherwise never report.
-      # Dispatching needs actions:write, and a job-level block replaces the
-      # default rather than adding to it.
-      actions: write
+      contents: read
     # One sync per branch: two concurrent runs would race the same commit.
     # The workflow-level group above still cancels this job on a new pull
     # request push, which is safe: createCommitOnBranch either landed or it
@@ -303,23 +291,35 @@ jobs:
           path: frontend
       - run: make sbom
 
+      # A commit or pull request made with GITHUB_TOKEN raises no event, and one
+      # pushed to a pull request leaves runs waiting for approval that hide the
+      # required checks. The App's writes trigger CI like anyone else's.
+      - name: Create App token
+        id: app-token
+        if: >-
+          (github.event_name == 'pull_request' &&
+           github.event.pull_request.head.repo.full_name == github.repository &&
+           github.event.pull_request.user.login != 'dependabot[bot]') ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.SBOM_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SBOM_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       # Same-repo pull request: commit the result. createCommitOnBranch is used
       # rather than `git push` because GitHub signs commits authored through the
       # API, so the result is Verified with no signing key in CI secrets, and
       # because expectedHeadOid makes the write fail rather than clobber a
       # branch that moved since checkout.
-      #
-      # The script also dispatches a run for the branch afterwards. A commit
-      # authored with GITHUB_TOKEN raises no event, so without that the pull
-      # request sits blocked on required checks that passed one commit earlier
-      # and can never appear on the new head.
       - name: Commit regenerated SBOM
         if: >-
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           github.event.pull_request.user.login != 'dependabot[bot]'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           # Via the environment, not interpolated into the script: a branch name
           # is attacker-controlled and would otherwise be a shell injection.
@@ -345,15 +345,7 @@ jobs:
       - name: Open SBOM sync pull request
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           BASE_SHA: ${{ github.sha }}
         run: ./scripts/open-sbom-pr.sh "$BASE_SHA"
-
-      # Anything else — notably the dispatched run for chore/sbom-sync itself,
-      # which exists to put the required checks on that branch. Nothing to
-      # commit; the branch either fixed the drift or it did not.
-      - name: Verify SBOM is current
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          make sbom-verify
