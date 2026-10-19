@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS frontend
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS frontend
 WORKDIR /app
 # The workspace resolves from the root, so the manifests that describe it have
 # to arrive before the install and ahead of the sources that invalidate it.
@@ -15,7 +15,7 @@ RUN pnpm build
 # MCP Apps widget bundles; main.go embeds frontend/dist-widgets.
 RUN pnpm build:widgets
 
-FROM golang:1.27-alpine@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa AS backend
+FROM golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS backend
 ARG VERSION=dev
 ARG COMMIT=unknown
 WORKDIR /app
