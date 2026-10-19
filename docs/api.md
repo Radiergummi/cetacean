@@ -330,7 +330,7 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 |----------|-------------------------------------------------------------------------------------------------------------------------------------|
 | Nodes    | `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`) |
 | Services | `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`                                                                      |
-| Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code`, `error`, `service` (ID), `node` (ID), `slot` (int)                            |
+| Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code` (int), `error`, `service` (ID), `node` (ID), `slot` (int)                      |
 | Stacks   | `name`, `services`, `configs`, `secrets`, `networks`, `volumes` (all counts)                                                        |
 | Configs  | `id`, `name`                                                                                                                        |
 | Secrets  | `id`, `name`                                                                                                                        |
@@ -339,11 +339,13 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 
 Task `state` takes the Docker task states: `new`, `allocated`, `pending`, `assigned`, `accepted`, `preparing`,
 `ready`, `starting`, `running`, `complete`, `shutdown`, `failed`, `rejected`, `remove`, `orphaned`. `exit_code` is
-a string, empty until the task reaches a terminal state, so compare it quoted: `exit_code != "0"`.
+a number, `0` until the task reaches a terminal state, so `exit_code > 0` selects the tasks that exited with an error.
+A task that exited cleanly needs its state as well: `state == "complete" && exit_code == 0`.
 
-A field name that isn't in the table evaluates to `nil` rather than failing, so a typo such as `staet == "failed"`
-matches nothing. An expression that takes too long to evaluate over the whole list, builds a string longer than
-1 MiB, or runs a costly pattern over a long string is refused with `400 FLT004`.
+An expression that names a field the resource doesn't have, such as the typo `staet == "failed"`, or compares
+values of different types, such as `exit_code != "0"`, is refused with `400 FLT002`. An expression that takes too
+long to evaluate over the whole list, builds a string longer than 1 MiB, or runs a costly pattern over a long string
+is refused with `400 FLT004`.
 
 ```http tab
 GET /nodes?filter=role+%3D%3D+%22manager%22+%26%26+state+%3D%3D+%22ready%22 HTTP/1.1

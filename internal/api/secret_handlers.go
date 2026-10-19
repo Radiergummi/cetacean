@@ -37,7 +37,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		list:         h.cache.ListSecrets,
 		aclName:      func(s swarm.Secret) string { return s.Spec.Name },
 		searchName:   func(s swarm.Secret) string { return s.Spec.Name },
-		filterEnv:    filter.SecretEnv,
+		filterEnv:    filter.Secrets,
 		prepare:      cluster.RedactSecrets,
 		sortKeys: map[string]func(swarm.Secret) string{
 			"name":    func(s swarm.Secret) string { return s.Spec.Name },

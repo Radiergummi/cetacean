@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"regexp/syntax"
-	"strconv"
 	"sync"
 
 	"github.com/docker/docker/api/types/network"
@@ -22,14 +21,43 @@ import (
 // Program is a compiled filter expression.
 type Program = *vm.Program
 
-// Compile parses and compiles a filter expression string.
-// Returns an error if the expression is syntactically invalid.
-func Compile(expression string) (Program, error) {
-	if prog, ok := compileCache.get(expression); ok {
+// Env is one resource type's filter environment. Build must set every field
+// whatever the item holds, since the fields it sets are all a filter may name.
+type Env[T any] struct {
+	Build func(T, map[string]any) map[string]any
+	types map[string]any
+}
+
+// newEnv takes the field types from Build's output for the zero value.
+func newEnv[T any](build func(T, map[string]any) map[string]any) Env[T] {
+	var zero T
+	types := build(zero, nil)
+	types[budgetContext] = context.Background()
+	return Env[T]{Build: build, types: types}
+}
+
+var (
+	Nodes    = newEnv(NodeEnv)
+	Services = newEnv(ServiceEnv)
+	Tasks    = newEnv(TaskEnv)
+	Configs  = newEnv(ConfigEnv)
+	Secrets  = newEnv(SecretEnv)
+	Networks = newEnv(NetworkEnv)
+	Volumes  = newEnv(VolumeEnv)
+	Stacks   = newEnv(StackEnv)
+)
+
+// Compile parses and type-checks a filter expression against env. It returns
+// an error if the expression is invalid, names an unknown field, or is not a
+// predicate over env's field types.
+func Compile[T any](expression string, env Env[T]) (Program, error) {
+	key := cacheKey{reflect.TypeFor[T](), expression}
+	if prog, ok := compileCache.get(key); ok {
 		return prog, nil
 	}
 	prog, err := expr.Compile(
 		expression,
+		expr.Env(env.types),
 		expr.AsBool(),
 		expr.Function(budgetCall, checkBudget),
 		expr.Function(budgetSize, checkSize),
@@ -39,8 +67,14 @@ func Compile(expression string) (Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	compileCache.put(expression, prog)
+	compileCache.put(key, prog)
 	return prog, nil
+}
+
+// A program is typed for one environment, so the item type is part of its key.
+type cacheKey struct {
+	item       reflect.Type
+	expression string
 }
 
 const compileCacheSize = 64
@@ -49,22 +83,22 @@ var compileCache = newProgramCache(compileCacheSize)
 
 type programCache struct {
 	mu      sync.RWMutex
-	entries map[string]Program
+	entries map[cacheKey]Program
 	cap     int
 }
 
 func newProgramCache(cap int) *programCache {
-	return &programCache{entries: make(map[string]Program, cap), cap: cap}
+	return &programCache{entries: make(map[cacheKey]Program, cap), cap: cap}
 }
 
-func (c *programCache) get(key string) (Program, bool) {
+func (c *programCache) get(key cacheKey) (Program, bool) {
 	c.mu.RLock()
 	p, ok := c.entries[key]
 	c.mu.RUnlock()
 	return p, ok
 }
 
-func (c *programCache) put(key string, prog Program) {
+func (c *programCache) put(key cacheKey, prog Program) {
 	c.mu.Lock()
 	if len(c.entries) >= c.cap {
 		// Evict one random entry.
@@ -242,11 +276,11 @@ func TaskEnv(t swarm.Task, m map[string]any) map[string]any {
 		image = t.Spec.ContainerSpec.Image
 	}
 	// ExitCode is meaningless until the task reaches a terminal state — Docker
-	// often reports -1 mid-run. Suppressing it here keeps filters like
-	// `exit_code != "0"` from matching every running task.
-	exitCode := emptyString
+	// often reports -1 mid-run. Reporting 0 until then keeps filters like
+	// `exit_code != 0` from matching every running task.
+	exitCode := 0
 	if t.Status.ContainerStatus != nil && cache.IsTerminalState(t.Status.State) {
-		exitCode = strconv.Itoa(t.Status.ContainerStatus.ExitCode)
+		exitCode = t.Status.ContainerStatus.ExitCode
 	}
 	m["id"] = t.ID
 	m["state"] = boxedOr(taskStates, t.Status.State)

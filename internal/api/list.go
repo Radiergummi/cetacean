@@ -6,23 +6,24 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/filter"
 )
 
 // listSpec describes a resource list endpoint. The generic helpers handleList
 // and prepareList use it to drive the standard filter → search → expr-filter →
 // sort → paginate → respond pipeline.
 type listSpec[T any] struct {
-	resourceType string                                 // for setAllowList / Allow header
-	linkTemplate string                                 // for Link-Template header (e.g. "/services/{id}")
-	list         func() []T                             // cache list method
-	aclName      func(T) string                         // maps item → its ACL name; resourceType supplies the type
-	searchName   func(T) string                         // nil = no search support
-	filterEnv    func(T, map[string]any) map[string]any // filter.XxxEnv
-	sortKeys     map[string]func(T) string              // sort field accessors
-	prepare      func([]T) []T                          // optional pre-filter transform (e.g. strip secret data)
-	itemType     string                                 // JSON-LD @type for each item (e.g. "Node")
-	idFunc       func(T) string                         // extracts JSON-LD @id path for each item
-	rows         func([]T) []cluster.Row                // builds the CSV rendering; required
+	resourceType string                    // for setAllowList / Allow header
+	linkTemplate string                    // for Link-Template header (e.g. "/services/{id}")
+	list         func() []T                // cache list method
+	aclName      func(T) string            // maps item → its ACL name; resourceType supplies the type
+	searchName   func(T) string            // nil = no search support
+	filterEnv    filter.Env[T]             // filter.Nodes, filter.Tasks, …
+	sortKeys     map[string]func(T) string // sort field accessors
+	prepare      func([]T) []T             // optional pre-filter transform (e.g. strip secret data)
+	itemType     string                    // JSON-LD @type for each item (e.g. "Node")
+	idFunc       func(T) string            // extracts JSON-LD @id path for each item
+	rows         func([]T) []cluster.Row   // builds the CSV rendering; required
 }
 
 // listNotModified answers a matching conditional request with 304, and reports

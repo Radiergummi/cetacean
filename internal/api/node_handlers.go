@@ -20,7 +20,7 @@ func (h *Handlers) HandleListNodes(w http.ResponseWriter, r *http.Request) {
 		list:         h.cache.ListNodes,
 		aclName:      cluster.NodeACLName,
 		searchName:   func(n swarm.Node) string { return n.Description.Hostname },
-		filterEnv:    filter.NodeEnv,
+		filterEnv:    filter.Nodes,
 		sortKeys: map[string]func(swarm.Node) string{
 			"hostname":     func(n swarm.Node) string { return n.Description.Hostname },
 			"role":         func(n swarm.Node) string { return string(n.Spec.Role) },

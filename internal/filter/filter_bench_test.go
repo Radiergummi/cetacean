@@ -12,33 +12,42 @@ func BenchmarkCompile(b *testing.B) {
 		for b.Loop() {
 			// Reset cache to measure cold compile.
 			compileCache = newProgramCache(compileCacheSize)
-			_, _ = Compile(`name == "test"`)
+			_, _ = Compile(`name == "test"`, Nodes)
 		}
 	})
 	b.Run("complex", func(b *testing.B) {
 		for b.Loop() {
 			compileCache = newProgramCache(compileCacheSize)
-			_, _ = Compile(`state == "running" and (role == "worker" or availability == "active")`)
+			_, _ = Compile(
+				`state == "running" and (role == "worker" or availability == "active")`,
+				Nodes,
+			)
 		}
 	})
 	b.Run("cached_simple", func(b *testing.B) {
 		compileCache = newProgramCache(compileCacheSize)
-		_, _ = Compile(`name == "test"`) // warm the cache
+		_, _ = Compile(`name == "test"`, Nodes) // warm the cache
 		for b.Loop() {
-			_, _ = Compile(`name == "test"`)
+			_, _ = Compile(`name == "test"`, Nodes)
 		}
 	})
 	b.Run("cached_complex", func(b *testing.B) {
 		compileCache = newProgramCache(compileCacheSize)
-		_, _ = Compile(`state == "running" and (role == "worker" or availability == "active")`)
+		_, _ = Compile(
+			`state == "running" and (role == "worker" or availability == "active")`,
+			Nodes,
+		)
 		for b.Loop() {
-			_, _ = Compile(`state == "running" and (role == "worker" or availability == "active")`)
+			_, _ = Compile(
+				`state == "running" and (role == "worker" or availability == "active")`,
+				Nodes,
+			)
 		}
 	})
 }
 
 func BenchmarkEvaluate(b *testing.B) {
-	prog, _ := Compile(`state == "running" and role == "worker"`)
+	prog, _ := Compile(`state == "running" and role == "worker"`, Nodes)
 	b.Run("hit", func(b *testing.B) {
 		env := map[string]any{
 			"id": "n1", "name": "node-1", "state": "running",
@@ -80,7 +89,7 @@ func BenchmarkServiceEnv(b *testing.B) {
 }
 
 func BenchmarkFilterPipeline(b *testing.B) {
-	prog, _ := Compile(`state == "running"`)
+	prog, _ := Compile(`state == "running"`, Tasks)
 	tasks := make([]swarm.Task, 1000)
 	for i := range tasks {
 		state := swarm.TaskStateRunning

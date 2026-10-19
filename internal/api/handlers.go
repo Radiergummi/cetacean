@@ -379,7 +379,7 @@ const filterBudget = 250 * time.Millisecond
 func exprFilter[T any](
 	items []T,
 	expr string,
-	env func(T, map[string]any) map[string]any,
+	env filter.Env[T],
 	w http.ResponseWriter,
 	r *http.Request,
 ) ([]T, bool) {
@@ -390,7 +390,7 @@ func exprFilter[T any](
 		writeErrorCode(w, r, "FLT001", "filter expression too long")
 		return nil, false
 	}
-	prog, err := filter.Compile(expr)
+	prog, err := filter.Compile(expr, env)
 	if err != nil {
 		writeErrorCode(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
@@ -403,7 +403,7 @@ func exprFilter[T any](
 	ctx, cancel := context.WithTimeout(r.Context(), filterBudget)
 	defer cancel()
 	for _, item := range items {
-		m = env(item, m)
+		m = env.Build(item, m)
 		ok, err := filter.EvaluateContext(ctx, prog, m)
 		if errors.Is(err, filter.ErrBudget) {
 			writeErrorCode(

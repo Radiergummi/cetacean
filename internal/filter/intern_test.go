@@ -67,7 +67,7 @@ func TestServiceEnvModes(t *testing.T) {
 
 // Filtering has to keep working end to end, since the env is what it reads.
 func TestFilterMatchesInternedFields(t *testing.T) {
-	prog, err := Compile(`state == "ready" && role == "manager"`)
+	prog, err := Compile(`state == "ready" && role == "manager"`, Nodes)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}

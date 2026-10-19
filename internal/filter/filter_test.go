@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/network"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestCompile_Valid(t *testing.T) {
-	prog, err := Compile(`name == "test"`)
+	prog, err := Compile(`name == "test"`, Services)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -21,14 +22,14 @@ func TestCompile_Valid(t *testing.T) {
 }
 
 func TestCompile_Invalid(t *testing.T) {
-	_, err := Compile(`name ===`)
+	_, err := Compile(`name ===`, Services)
 	if err == nil {
 		t.Fatal("expected error for invalid expression")
 	}
 }
 
 func TestEvaluate_True(t *testing.T) {
-	prog, _ := Compile(`name == "web"`)
+	prog, _ := Compile(`name == "web"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"name": "web"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -39,7 +40,7 @@ func TestEvaluate_True(t *testing.T) {
 }
 
 func TestEvaluate_False(t *testing.T) {
-	prog, _ := Compile(`name == "web"`)
+	prog, _ := Compile(`name == "web"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"name": "api"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -50,7 +51,7 @@ func TestEvaluate_False(t *testing.T) {
 }
 
 func TestEvaluate_Contains(t *testing.T) {
-	prog, _ := Compile(`image contains "nginx"`)
+	prog, _ := Compile(`image contains "nginx"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"image": "nginx:1.25-alpine"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -61,7 +62,7 @@ func TestEvaluate_Contains(t *testing.T) {
 }
 
 func TestEvaluate_NotEqual(t *testing.T) {
-	prog, _ := Compile(`state != "running"`)
+	prog, _ := Compile(`state != "running"`, Tasks)
 	ok, err := Evaluate(prog, map[string]any{"state": "failed"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -72,8 +73,8 @@ func TestEvaluate_NotEqual(t *testing.T) {
 }
 
 func TestEvaluate_And(t *testing.T) {
-	prog, _ := Compile(`state == "failed" && exit_code != "0"`)
-	ok, err := Evaluate(prog, map[string]any{"state": "failed", "exit_code": "1"})
+	prog, _ := Compile(`state == "failed" && exit_code != 0`, Tasks)
+	ok, err := Evaluate(prog, map[string]any{"state": "failed", "exit_code": 1})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,7 +84,7 @@ func TestEvaluate_And(t *testing.T) {
 }
 
 func TestEvaluate_Or(t *testing.T) {
-	prog, _ := Compile(`state == "failed" || state == "rejected"`)
+	prog, _ := Compile(`state == "failed" || state == "rejected"`, Tasks)
 	ok, err := Evaluate(prog, map[string]any{"state": "rejected"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -182,7 +183,7 @@ func TestTaskEnv(t *testing.T) {
 	if env["desired_state"] != "running" {
 		t.Errorf("desired_state=%v", env["desired_state"])
 	}
-	if env["exit_code"] != "1" {
+	if env["exit_code"] != 1 {
 		t.Errorf("exit_code=%v", env["exit_code"])
 	}
 	if env["error"] != "exit code 1" {
@@ -311,8 +312,8 @@ func TestTaskEnv_NilContainerSpec(t *testing.T) {
 	if env["image"] != "" {
 		t.Errorf("image=%v, want empty", env["image"])
 	}
-	if env["exit_code"] != "" {
-		t.Errorf("exit_code=%v, want empty", env["exit_code"])
+	if env["exit_code"] != 0 {
+		t.Errorf("exit_code=%v, want 0", env["exit_code"])
 	}
 }
 
@@ -343,7 +344,7 @@ func TestServiceEnv_NoStackLabel(t *testing.T) {
 // --- Expression operator coverage ---
 
 func TestEvaluate_StartsWith(t *testing.T) {
-	prog, _ := Compile(`name startsWith "web-"`)
+	prog, _ := Compile(`name startsWith "web-"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"name": "web-frontend"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -354,7 +355,7 @@ func TestEvaluate_StartsWith(t *testing.T) {
 }
 
 func TestEvaluate_EndsWith(t *testing.T) {
-	prog, _ := Compile(`name endsWith "-prod"`)
+	prog, _ := Compile(`name endsWith "-prod"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"name": "api-prod"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -365,7 +366,7 @@ func TestEvaluate_EndsWith(t *testing.T) {
 }
 
 func TestEvaluate_NumericComparison(t *testing.T) {
-	prog, _ := Compile(`services > 2`)
+	prog, _ := Compile(`services > 2`, Stacks)
 	ok, err := Evaluate(prog, map[string]any{"services": 5})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -375,21 +376,36 @@ func TestEvaluate_NumericComparison(t *testing.T) {
 	}
 }
 
-func TestEvaluate_MissingEnvKey(t *testing.T) {
-	prog, _ := Compile(`role == "manager"`)
-	// env has no "role" key — expr treats missing keys as nil
-	ok, err := Evaluate(prog, map[string]any{"name": "web"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// The field types come from a zero item, so a populated one must set no other.
+func TestBuildSetsTheFieldsOfAZeroItem(t *testing.T) {
+	task := swarm.Task{
+		Spec: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "app:v2"}},
+		Status: swarm.TaskStatus{
+			State:           swarm.TaskStateFailed,
+			ContainerStatus: &swarm.ContainerStatus{ExitCode: 1},
+		},
 	}
-	// nil != "manager", so should be false
-	if ok {
-		t.Error("expected false for missing env key")
+	service := swarm.Service{Spec: swarm.ServiceSpec{
+		Mode:         swarm.ServiceMode{Global: &swarm.GlobalService{}},
+		TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "app:v2"}},
+	}}
+	for name, pair := range map[string][2]map[string]any{
+		"task":    {Tasks.Build(task, nil), Tasks.types},
+		"service": {Services.Build(service, nil), Services.types},
+	} {
+		if len(pair[0])+1 != len(pair[1]) {
+			t.Errorf(
+				"%s: populated item sets %d fields, zero item %d",
+				name,
+				len(pair[0]),
+				len(pair[1])-1,
+			)
+		}
 	}
 }
 
 func TestEvaluate_Matches(t *testing.T) {
-	prog, _ := Compile(`name matches "^web-[0-9]+$"`)
+	prog, _ := Compile(`name matches "^web-[0-9]+$"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"name": "web-42"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -400,7 +416,7 @@ func TestEvaluate_Matches(t *testing.T) {
 }
 
 func TestEvaluate_Matches_NoMatch(t *testing.T) {
-	prog, _ := Compile(`name matches "^web-[0-9]+$"`)
+	prog, _ := Compile(`name matches "^web-[0-9]+$"`, Services)
 	ok, err := Evaluate(prog, map[string]any{"name": "api-server"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -411,7 +427,7 @@ func TestEvaluate_Matches_NoMatch(t *testing.T) {
 }
 
 func TestEvaluate_Not(t *testing.T) {
-	prog, _ := Compile(`!(state == "running")`)
+	prog, _ := Compile(`!(state == "running")`, Tasks)
 	ok, err := Evaluate(prog, map[string]any{"state": "failed"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -422,7 +438,7 @@ func TestEvaluate_Not(t *testing.T) {
 }
 
 func TestEvaluate_In(t *testing.T) {
-	prog, _ := Compile(`state in ["failed", "rejected", "orphaned"]`)
+	prog, _ := Compile(`state in ["failed", "rejected", "orphaned"]`, Tasks)
 	ok, err := Evaluate(prog, map[string]any{"state": "rejected"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -433,12 +449,64 @@ func TestEvaluate_In(t *testing.T) {
 }
 
 func TestEvaluate_In_NoMatch(t *testing.T) {
-	prog, _ := Compile(`state in ["failed", "rejected"]`)
+	prog, _ := Compile(`state in ["failed", "rejected"]`, Tasks)
 	ok, err := Evaluate(prog, map[string]any{"state": "running"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if ok {
 		t.Error("expected false for not-in-list")
+	}
+}
+
+func TestCompile_UnknownField(t *testing.T) {
+	_, err := Compile(`staet == "failed"`, Tasks)
+	if err == nil || !strings.Contains(err.Error(), "staet") {
+		t.Fatalf("err = %v, want one naming staet", err)
+	}
+}
+
+func TestCompile_MismatchedType(t *testing.T) {
+	for _, expression := range []string{`exit_code != "0"`, `name > 1`, `name`} {
+		if _, err := Compile(expression, Tasks); err == nil {
+			t.Errorf("%s compiled against tasks", expression)
+		}
+	}
+}
+
+// The cache holds typed programs, so one expression must answer per type.
+func TestCompile_CachesPerType(t *testing.T) {
+	if _, err := Compile(`slot == 1`, Tasks); err != nil {
+		t.Fatalf("tasks: %v", err)
+	}
+	if _, err := Compile(`slot == 1`, Services); err == nil {
+		t.Error("slot compiled against services after compiling against tasks")
+	}
+	if _, err := Compile(`slot == 1`, Tasks); err != nil {
+		t.Errorf("tasks after services: %v", err)
+	}
+}
+
+func TestExitCodeOrdersAcrossStates(t *testing.T) {
+	prog, err := Compile(`exit_code > 0`, Tasks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	running := swarm.Task{Status: swarm.TaskStatus{
+		State:           swarm.TaskStateRunning,
+		ContainerStatus: &swarm.ContainerStatus{ExitCode: -1},
+	}}
+	failed := swarm.Task{Status: swarm.TaskStatus{
+		State:           swarm.TaskStateFailed,
+		ContainerStatus: &swarm.ContainerStatus{ExitCode: 137},
+	}}
+	for _, tc := range []struct {
+		task swarm.Task
+		want bool
+	}{{running, false}, {failed, true}} {
+		got, err := Evaluate(prog, Tasks.Build(tc.task, nil))
+		if err != nil || got != tc.want {
+			t.Errorf("%s: got %v, %v; want %v", tc.task.Status.State, got, err, tc.want)
+		}
 	}
 }

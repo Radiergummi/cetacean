@@ -36,7 +36,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		list:         h.cache.ListConfigs,
 		aclName:      func(c swarm.Config) string { return c.Spec.Name },
 		searchName:   func(c swarm.Config) string { return c.Spec.Name },
-		filterEnv:    filter.ConfigEnv,
+		filterEnv:    filter.Configs,
 		sortKeys: map[string]func(swarm.Config) string{
 			"name":    func(c swarm.Config) string { return c.Spec.Name },
 			"created": func(c swarm.Config) string { return c.CreatedAt.String() },

@@ -202,12 +202,12 @@ var filterCases = []filterCase{
 			return fmt.Sprintf(`image == %q && state == "running"`, f.webImage)
 		},
 		lit(`image == "nginx:latest"`)},
-	// Documented as empty until the task reaches a terminal state, which is
-	// why the running replica is addressed by the empty value and excluded by
-	// the crash-looping fixture's.
+	// Documented as 0 until the task reaches a terminal state, which is why
+	// the running replica is addressed by 0 and excluded by the crash-looping
+	// fixture's.
 	{"exit_code", "/tasks",
 		func(f filterFixtures) string { return f.taskID },
-		lit(`exit_code == "" && state == "running"`), lit(`exit_code == "1"`)},
+		lit(`exit_code == 0 && state == "running"`), lit(`exit_code > 0`)},
 	{"error", "/tasks",
 		func(f filterFixtures) string { return f.taskID },
 		lit(`error == "" && state == "running"`), lit(`error != ""`)},
@@ -473,10 +473,13 @@ func TestFilterRefusesMalformedExpressions(t *testing.T) {
 		{"too long", strings.Repeat("a", 513), "FLT001"},
 		{"syntax error", `name ==`, "FLT002"},
 		{"unbalanced parenthesis", `(name == "x"`, "FLT002"},
-		// Compiles — expr cannot know the env's types without one — and fails
-		// when the string it yields turns out not to be a bool.
-		{"not a predicate", `name`, "FLT003"},
-		{"comparing a string to a number", `name > 1`, "FLT003"},
+		{"not a predicate", `name`, "FLT002"},
+		{"comparing a string to a number", `name > 1`, "FLT002"},
+		{"unknown field", `no_such_field == "shop"`, "FLT002"},
+		{"a field of another resource type", `slot == 1`, "FLT002"},
+		// Type-checks, since int() accepts a string, and fails on a name that
+		// is not a number.
+		{"a conversion that fails", `int(name) > 0`, "FLT003"},
 	}
 
 	for _, c := range cases {
@@ -515,19 +518,10 @@ func TestFilterRefusesMalformedExpressions(t *testing.T) {
 			}
 		})
 	}
-
-	// A field no env builder emits is not an error: expr resolves it to nil,
-	// and nil equals nothing. The result is an empty collection, which is the
-	// documented behaviour and the reason a mistyped field name looks like a
-	// cluster with nothing in it.
-	empty := filterCollection(t, proc, "/services", `no_such_field == "shop"`)
-	if empty.Total != 0 {
-		t.Errorf("an unknown field selected %d services, want 0", empty.Total)
-	}
 }
 
 // TestFilterSharesOneCompileCacheAcrossTypes covers internal/filter's
-// process-wide program cache, keyed by expression text alone: the same
+// process-wide program cache, keyed by resource type and expression: the same
 // expression evaluated against two resource types must answer for each, and
 // the random single-entry eviction at 64 entries must not change an answer.
 func TestFilterSharesOneCompileCacheAcrossTypes(t *testing.T) {

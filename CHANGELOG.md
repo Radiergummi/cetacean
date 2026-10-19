@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The consent page shows the host an MCP client's `https://` client ID lives on, beside the name the client gives itself
 
 ### Changed
+- **Breaking:** `?filter=` refuses a field the resource doesn't have, or a comparison of mismatched types, with `400` (`FLT002`). Task `exit_code` is a number, `0` until the task ends: write `exit_code != 0`, not `"0"`
 - A Client ID Metadata Document is cached as its response's `Cache-Control` or `Expires` allows, for at most a day, instead of always an hour
 - **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
 

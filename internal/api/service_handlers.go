@@ -44,7 +44,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		list:         h.cache.ListServices,
 		aclName:      func(s swarm.Service) string { return s.Spec.Name },
 		searchName:   func(s swarm.Service) string { return s.Spec.Name },
-		filterEnv:    filter.ServiceEnv,
+		filterEnv:    filter.Services,
 		sortKeys: map[string]func(swarm.Service) string{
 			"name": func(s swarm.Service) string { return s.Spec.Name },
 			"mode": func(s swarm.Service) string {
