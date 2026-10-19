@@ -44,8 +44,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@types/unist": "^3.0.3",
-    "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.88.0",
     "typescript": "^6.0.3",
     "unified": "^11.0.5",
     "vfile": "^6.0.3",
