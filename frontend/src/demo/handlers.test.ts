@@ -226,6 +226,22 @@ describe("topology endpoint shapes", () => {
     }
   });
 
+  it("the network graph counts each service's running replicas", async () => {
+    const data = await fetchJSON("/topology");
+    const network = (data.graphs as Record<string, unknown>[]).find(({ id }) => id === "network")!;
+    const nodes = Object.values(network.nodes as Record<string, { metadata: object }>);
+
+    expect(nodes.length).toBeGreaterThan(0);
+
+    for (const { metadata } of nodes) {
+      expect(metadata).toHaveProperty("runningReplicas", expect.any(Number));
+    }
+
+    expect(
+      nodes.some(({ metadata }) => (metadata as { runningReplicas: number }).runningReplicas > 0),
+    ).toBe(true);
+  });
+
   it("the placement graph carries a task list per service", async () => {
     const data = await fetchJSON("/topology");
     const placement = (data.graphs as Record<string, unknown>[]).find(
