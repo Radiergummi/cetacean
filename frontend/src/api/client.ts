@@ -43,7 +43,7 @@ import type {
   VolumeDetail,
 } from "./types";
 import { apiPath, stripBasePath } from "@/lib/basePath";
-import { linkTarget } from "@/lib/linkHeader";
+import { linkTarget, linkTargets } from "@/lib/linkHeader";
 import { z } from "zod";
 
 const headers = { Accept: "application/json" };
@@ -77,11 +77,39 @@ export interface FetchResult<T> {
   allowedMethods: Set<string>;
 
   /**
+   * The sub-resources the caller may write, by name (`scale`, `labels`), read
+   * from the response's `rel="edit"` links. Its own methods are in `Allow`.
+   */
+  editable?: Set<string> | undefined;
+
+  /**
    * The resource's canonical path, read from the response's JSON-LD `@id`.
    * Absent where the response carries none, which the demo handlers and the
    * endpoints outside the resource model both do.
    */
   canonicalPath?: string | undefined;
+}
+
+/**
+ * Names the sub-resources a response links with `rel="edit"`, relative to the
+ * path it was served from after any redirect, so a page reached by a name
+ * matches the links its canonical path produced.
+ */
+function editableOf(response: Response): Set<string> {
+  const base = response.url || window.location.href;
+  const self = new URL(base).pathname;
+  const names = new Set<string>();
+
+  for (const target of linkTargets(response.headers.get("Link"), "edit")) {
+    const path = new URL(target, base).pathname;
+    const name = path.slice(self.length + 1);
+
+    if (path.startsWith(`${self}/`) && name !== "" && !name.includes("/")) {
+      names.add(name);
+    }
+  }
+
+  return names;
 }
 
 function parseAllowHeader(response: Response): Set<string> {
@@ -261,7 +289,12 @@ async function fetchJSON<T>(
 
   checkShape(path, responseSchema, data);
 
-  return { data, allowedMethods, canonicalPath: canonicalPathOf(data) };
+  return {
+    data,
+    allowedMethods,
+    editable: editableOf(response),
+    canonicalPath: canonicalPathOf(data),
+  };
 }
 
 /**
@@ -414,14 +447,22 @@ export function setsEqual(a: Set<string>, b: Set<string>): boolean {
   return true;
 }
 
-export async function headAllowedMethods(path: string): Promise<Set<string>> {
+export interface Capabilities {
+  /** The resource's own methods, from `Allow`. */
+  methods: Set<string>;
+
+  /** The sub-resources the caller may write, from `rel="edit"` links. */
+  editable: Set<string>;
+}
+
+export async function headCapabilities(path: string): Promise<Capabilities> {
   const response = await fetch(apiPath(path), {
     method: "HEAD",
     headers,
     signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
   });
 
-  return parseAllowHeader(response);
+  return { methods: parseAllowHeader(response), editable: editableOf(response) };
 }
 
 export interface LogLine {

@@ -62,13 +62,13 @@ function ConfirmAction({
 }
 
 export function SwarmActions({
-  allowedMethods,
+  editable,
   onRotated,
 }: {
-  allowedMethods: Set<string>;
+  editable: ReadonlySet<string>;
   onRotated: () => void;
 }) {
-  const canImpact = allowedMethods.has("POST");
+  const canImpact = editable.has("rotate-token");
 
   const rotateWorker = useAsyncAction({ toast: true });
   const rotateManager = useAsyncAction({ toast: true });

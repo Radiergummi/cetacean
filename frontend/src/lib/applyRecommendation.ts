@@ -25,21 +25,16 @@ export async function applyRecommendation(recommendation: Recommendation): Promi
 }
 
 /**
- * The method a recommendation's fix needs, and the path of the resource it
- * acts on, read from its fix action ("PUT /services/{id}/scale"), so a page
- * can offer the fix only where the target's Allow header carries the method.
+ * The resource a recommendation's fix acts on and the sub-resource it writes,
+ * read from its fix action ("PUT /services/{id}/scale"), so a page can offer
+ * the fix only where the target links that sub-resource as editable.
  */
 export function fixTarget({ fixAction, targetId }: Recommendation): {
-  method: string;
   path: string;
+  subResource: string;
 } | null {
-  const [method, template] = fixAction?.split(" ") ?? [];
+  const [, template] = fixAction?.split(" ") ?? [];
+  const [, collection, , subResource] = template?.split("/") ?? [];
 
-  if (!method || !template) {
-    return null;
-  }
-
-  const [, collection] = template.split("/");
-
-  return collection ? { method, path: `/${collection}/${targetId}` } : null;
+  return collection && subResource ? { path: `/${collection}/${targetId}`, subResource } : null;
 }

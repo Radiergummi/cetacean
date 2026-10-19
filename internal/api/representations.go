@@ -31,7 +31,7 @@ type representationFunc func(*http.Request) (any, error)
 
 // writeServiceRepresentation is the tail every service sub-resource GET shares:
 // build the representation, answer 404 if the service vanished since the ACL
-// check, and write it with its ETag.
+// check, and write it with its Allow and ETag.
 func (h *Handlers) writeServiceRepresentation(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -41,6 +41,9 @@ func (h *Handlers) writeServiceRepresentation(
 	value, ok := representationOr404(w, r, "service", serviceID, rep)
 	if !ok {
 		return
+	}
+	if svc, found := h.cache.GetService(serviceID); found {
+		h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
 	}
 
 	writeCachedJSON(w, r, value)

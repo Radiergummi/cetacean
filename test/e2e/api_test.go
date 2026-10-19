@@ -262,11 +262,10 @@ func TestTopologyRenderingsAgree(t *testing.T) {
 	}
 }
 
-// Checks the Allow header on a service *detail* endpoint: setAllowList adds POST
-// only for config/secret/plugin, so /services answers "GET, HEAD" at every level
-// and cannot tell tier gating from a broken one. Both halves are asserted, since
-// tier 0 having no PUT/POST is unfalsifiable on its own.
-func TestAllowHeaderReflectsOperationsLevel(t *testing.T) {
+// Checks the edit links on a service *detail* endpoint: /services answers
+// "GET, HEAD" at every level and cannot tell tier gating from a broken one. Both
+// halves are asserted, since tier 0 linking nothing is unfalsifiable on its own.
+func TestEditLinksReflectOperationsLevel(t *testing.T) {
 	t.Run("ops level 0 denies writes", func(t *testing.T) {
 		_, proc := startNone(t, "0")
 		id := serviceID(t, proc, "shop_web")
@@ -276,13 +275,18 @@ func TestAllowHeaderReflectsOperationsLevel(t *testing.T) {
 			t.Fatalf("GET /services/%s: status = %d, want 200", id, resp.StatusCode)
 		}
 
-		allow := resp.Header.Get("Allow")
-		if allow == "" {
+		if resp.Header.Get("Allow") == "" {
 			t.Fatal("no Allow header on /services/{id}")
 		}
 
-		if strings.Contains(allow, "PUT") || strings.Contains(allow, "POST") {
-			t.Errorf("Allow = %q at ops level 0; want no PUT/POST", allow)
+		if links := strings.Join(
+			resp.Header.Values("Link"),
+			", ",
+		); strings.Contains(
+			links,
+			`rel="edit"`,
+		) {
+			t.Errorf("Link = %q at ops level 0; want no edit links", links)
 		}
 	})
 
@@ -295,9 +299,10 @@ func TestAllowHeaderReflectsOperationsLevel(t *testing.T) {
 			t.Fatalf("GET /services/%s: status = %d, want 200", id, resp.StatusCode)
 		}
 
-		allow := resp.Header.Get("Allow")
-		if !strings.Contains(allow, "PUT") || !strings.Contains(allow, "POST") {
-			t.Errorf("Allow = %q at ops level 1; want PUT and POST present", allow)
+		links := strings.Join(resp.Header.Values("Link"), ", ")
+		if !strings.Contains(links, `/scale>; rel="edit"`) ||
+			!strings.Contains(links, `/restart>; rel="edit"`) {
+			t.Errorf("Link = %q at ops level 1; want scale and restart linked", links)
 		}
 	})
 }

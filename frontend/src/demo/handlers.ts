@@ -54,17 +54,61 @@ function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
 
 /**
  * The demo visitor is an operator at operations level 3 holding every grant, so
- * each path offers the writes the server routes at or below it.
+ * each path offers the writes the server routes at it, and links every
+ * sub-resource beneath it that takes one.
  */
 const writesByPath: [RegExp, string][] = [
-  [/\/services\/[^/]+$/, "PUT, POST, PATCH, DELETE"],
+  [/\/services\/[^/]+$/, "DELETE"],
   [/\/services\/[^/]+\/endpoint-mode$/, "PUT"],
-  [/\/nodes\/[^/]+$/, "PUT, PATCH, DELETE"],
-  [/\/(configs|secrets)\/[^/]+$/, "PATCH, DELETE"],
+  [/\/nodes\/[^/]+$/, "DELETE"],
+  [/\/(configs|secrets)\/[^/]+$/, "DELETE"],
   [/\/(configs|secrets|plugins)$/, "POST"],
-  [/\/plugins\/[^/]+$/, "POST, PATCH, DELETE"],
+  [/\/plugins\/[^/]+$/, "DELETE"],
   [/\/(tasks|stacks|networks|volumes)\/[^/]+$/, "DELETE"],
-  [/\/swarm$/, "POST, PATCH"],
+];
+
+const editableByPath: [RegExp, string[]][] = [
+  [
+    /\/services\/[^/]+$/,
+    [
+      "scale",
+      "image",
+      "rollback",
+      "restart",
+      "env",
+      "labels",
+      "resources",
+      "healthcheck",
+      "placement",
+      "ports",
+      "update-policy",
+      "rollback-policy",
+      "log-driver",
+      "configs",
+      "secrets",
+      "networks",
+      "mounts",
+      "container-config",
+      "endpoint-mode",
+    ],
+  ],
+  [/\/nodes\/[^/]+$/, ["availability", "role", "labels"]],
+  [/\/(configs|secrets)\/[^/]+$/, ["labels"]],
+  [/\/plugins\/[^/]+$/, ["enable", "disable", "settings", "upgrade"]],
+  [
+    /\/swarm$/,
+    [
+      "ca",
+      "dispatcher",
+      "encryption",
+      "force-rotate-ca",
+      "orchestration",
+      "raft",
+      "rotate-token",
+      "rotate-unlock-key",
+      "unlock",
+    ],
+  ],
 ];
 
 function allowFor(url: string) {
@@ -72,6 +116,14 @@ function allowFor(url: string) {
   const writes = writesByPath.find(([pattern]) => pattern.test(pathname))?.[1];
 
   return writes ? `GET, HEAD, ${writes}` : "GET, HEAD";
+}
+
+/** The `rel="edit"` links the server sends on a detail response. */
+function editLinksFor(url: string) {
+  const { pathname } = new URL(url);
+  const names = editableByPath.find(([pattern]) => pattern.test(pathname))?.[1] ?? [];
+
+  return names.map((name) => `<${pathname}/${name}>; rel="edit"`).join(", ");
 }
 
 /**
@@ -84,6 +136,12 @@ function get(
   return http.get(path, async (info) => {
     const response = await resolver(info);
     response.headers.set("Allow", allowFor(info.request.url));
+
+    const links = editLinksFor(info.request.url);
+
+    if (links) {
+      response.headers.set("Link", links);
+    }
 
     return response;
   });
@@ -1812,7 +1870,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     http.head("*", ({ request }) => {
       return new HttpResponse(null, {
         status: 200,
-        headers: { Allow: allowFor(request.url) },
+        headers: { Allow: allowFor(request.url), Link: editLinksFor(request.url) },
       });
     }),
   ];

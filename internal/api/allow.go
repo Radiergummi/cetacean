@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -72,9 +73,8 @@ var (
 var writeMethods = []string{"PUT", "POST", "PATCH", "DELETE"}
 
 // allowedMethods lists GET, HEAD and every write method routed at the path r
-// matched that the caller's level reaches. With below, the routes under that
-// path count too: a resource's Allow speaks for its sub-resources' writes.
-func (h *Handlers) allowedMethods(r *http.Request, below bool) []string {
+// matched that the caller's level reaches.
+func (h *Handlers) allowedMethods(r *http.Request) []string {
 	routes := routeTable()
 	_, pattern := routes.mux.Handler(r)
 	_, path, routed := strings.Cut(pattern, " ")
@@ -82,8 +82,7 @@ func (h *Handlers) allowedMethods(r *http.Request, below bool) []string {
 
 	offered := make(map[string]bool)
 	for _, route := range routes.tiered {
-		at := route.path == path || below && strings.HasPrefix(route.path, path+"/")
-		if routed && at && level >= route.level {
+		if routed && route.path == path && level >= route.level {
 			offered[route.method] = true
 		}
 	}
@@ -98,16 +97,39 @@ func (h *Handlers) allowedMethods(r *http.Request, below bool) []string {
 	return methods
 }
 
-// resourceAcceptPatch maps resource types to their Accept-Patch header value.
-// Resources with map-patch sub-endpoints (env, labels) accept both JSON Patch
-// and JSON Merge Patch; others accept only JSON Merge Patch.
-var resourceAcceptPatch = map[string]string{
-	"service": AcceptPatch,
-	"node":    AcceptPatch,
-	"config":  AcceptPatch,
-	"secret":  AcceptPatch,
-	"swarm":   AcceptMergePatch,
-	"plugin":  AcceptMergePatch,
+// writableBelow names the sub-resources directly under the path r matched that
+// route a write the caller's level reaches.
+func (h *Handlers) writableBelow(r *http.Request) []string {
+	routes := routeTable()
+	_, pattern := routes.mux.Handler(r)
+	_, path, routed := strings.Cut(pattern, " ")
+	if !routed {
+		return nil
+	}
+	level := h.levelFor(r)
+
+	var names []string
+	for _, route := range routes.tiered {
+		name, below := strings.CutPrefix(route.path, path+"/")
+		if !below || strings.ContainsAny(name, "/{") || level < route.level ||
+			!slices.Contains(writeMethods, route.method) || slices.Contains(names, name) {
+			continue
+		}
+		names = append(names, name)
+	}
+
+	return names
+}
+
+// acceptPatch is the Accept-Patch of a path that takes PATCH: labels and
+// service env apply JSON Patch to a map, every other patch is a merge.
+func acceptPatch(path string) string {
+	switch path[strings.LastIndex(path, "/")+1:] {
+	case "labels", "env":
+		return AcceptPatch
+	default:
+		return AcceptMergePatch
+	}
 }
 
 const varyIdentity = "Authorization, Cookie"
@@ -125,27 +147,27 @@ func varyByIdentity(w http.ResponseWriter) {
 	w.Header().Add("Vary", varyIdentity)
 }
 
-// setAllow sets the Allow response header for a detail endpoint based on the
-// configured operations level and ACL write permission.
+// setAllow sets a detail endpoint's Allow from the operations level and the
+// caller's write grant, and links each sub-resource the caller may write.
 func (h *Handlers) setAllow(
 	w http.ResponseWriter,
 	r *http.Request,
 	resourceType, resourceName string,
 ) {
-	methods := []string{"GET", "HEAD"}
-
-	id := auth.IdentityFromContext(r.Context())
-	if h.acl.Can(id, "write", resourceType+":"+resourceName) {
-		methods = h.allowedMethods(r, true)
+	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceType+":"+resourceName) {
+		writeAllow(w, r, []string{"GET", "HEAD"})
+		return
 	}
 
-	w.Header().Set("Allow", strings.Join(methods, ", "))
-	varyByIdentity(w)
+	writeAllow(w, r, h.allowedMethods(r))
 
-	if slices.Contains(methods, "PATCH") {
-		if ap, ok := resourceAcceptPatch[resourceType]; ok {
-			w.Header().Set("Accept-Patch", ap)
-		}
+	self := absPath(r.Context(), r.URL.Path)
+	var links []string
+	for _, name := range h.writableBelow(r) {
+		links = append(links, fmt.Sprintf(`<%s/%s>; rel="edit"`, self, name))
+	}
+	if len(links) > 0 {
+		w.Header().Add("Link", strings.Join(links, ", "))
 	}
 }
 
@@ -157,10 +179,19 @@ func (h *Handlers) setAllowSubResource(
 ) {
 	methods := []string{"GET", "HEAD"}
 	if h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceExpr) {
-		methods = h.allowedMethods(r, false)
+		methods = h.allowedMethods(r)
 	}
+	writeAllow(w, r, methods)
+}
+
+// writeAllow writes Allow, and Accept-Patch when the methods take a PATCH.
+func writeAllow(w http.ResponseWriter, r *http.Request, methods []string) {
 	w.Header().Set("Allow", strings.Join(methods, ", "))
 	varyByIdentity(w)
+
+	if slices.Contains(methods, "PATCH") {
+		w.Header().Set("Accept-Patch", acceptPatch(r.URL.Path))
+	}
 }
 
 // createsByName lists the types whose create checks the write grant on the
@@ -174,7 +205,7 @@ func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resource
 	id := auth.IdentityFromContext(r.Context())
 	if createsByName[resourceType] && h.acl.TypeGrants(id).Can("write", resourceType) ||
 		h.acl.Can(id, "write", resourceType+":*") {
-		methods = h.allowedMethods(r, false)
+		methods = h.allowedMethods(r)
 	}
 
 	w.Header().Set("Allow", strings.Join(methods, ", "))

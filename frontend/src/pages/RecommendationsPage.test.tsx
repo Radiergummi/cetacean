@@ -1,5 +1,5 @@
 import RecommendationsPage from "./RecommendationsPage";
-import { api, headAllowedMethods } from "@/api/client";
+import { api, headCapabilities } from "@/api/client";
 import type { Recommendation } from "@/api/types";
 import { createWrapper } from "@/test/mocks";
 import { QueryClient } from "@tanstack/react-query";
@@ -45,9 +45,13 @@ vi.mock("@/api/client", async (importOriginal) => {
       ...actual.api,
       updateNodeAvailability: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     },
-    headAllowedMethods: vi.fn<(path: string) => Promise<Set<string>>>(),
+    headCapabilities: vi.fn<typeof actual.headCapabilities>(),
   };
 });
+
+function capabilities(...editable: string[]) {
+  return { methods: new Set(["GET", "HEAD"]), editable: new Set(editable) };
+}
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -57,12 +61,12 @@ function renderPage() {
 
 describe("RecommendationsPage", () => {
   beforeEach(() => {
-    vi.mocked(headAllowedMethods).mockReset();
+    vi.mocked(headCapabilities).mockReset();
     items = [scaleHint];
   });
 
-  it("offers a fix the target's Allow admits", async () => {
-    vi.mocked(headAllowedMethods).mockResolvedValue(new Set(["GET", "HEAD", "PUT", "POST"]));
+  it("offers a fix the target links as editable", async () => {
+    vi.mocked(headCapabilities).mockResolvedValue(capabilities("scale", "restart"));
     renderPage();
 
     // The page and the Allow probe both resolve late under a loaded full run,
@@ -70,21 +74,21 @@ describe("RecommendationsPage", () => {
     expect(
       await screen.findByRole("button", { name: /Apply suggested value/ }, { timeout: 5000 }),
     ).toBeInTheDocument();
-    expect(headAllowedMethods).toHaveBeenCalledWith("/services/svc1");
+    expect(headCapabilities).toHaveBeenCalledWith("/services/svc1");
   });
 
-  it("withholds a fix the target's Allow does not admit", async () => {
-    vi.mocked(headAllowedMethods).mockResolvedValue(new Set(["GET", "HEAD"]));
+  it("withholds a fix the target does not link", async () => {
+    vi.mocked(headCapabilities).mockResolvedValue(capabilities());
     renderPage();
 
-    await vi.waitFor(() => expect(headAllowedMethods).toHaveBeenCalled());
+    await vi.waitFor(() => expect(headCapabilities).toHaveBeenCalled());
     await screen.findByText(scaleHint.message);
     expect(screen.queryByRole("button", { name: /Apply suggested value/ })).not.toBeInTheDocument();
   });
 
   it("asks before draining a node", async () => {
     items = [drainManager];
-    vi.mocked(headAllowedMethods).mockResolvedValue(new Set(["GET", "HEAD", "PUT"]));
+    vi.mocked(headCapabilities).mockResolvedValue(capabilities("availability"));
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: /apply suggested value/i }));

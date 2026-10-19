@@ -82,14 +82,12 @@ type Mode = "replicated" | "global";
 export function ReplicaCard({
   service,
   tasks,
-  allowedMethods,
+  canScale,
 }: {
   service: Service;
   tasks: Task[];
-  allowedMethods: Set<string>;
+  canScale: boolean;
 }) {
-  const canScale = allowedMethods.has("PUT");
-
   const currentMode: Mode = service.Spec.Mode.Replicated ? "replicated" : "global";
   const currentReplicas = service.Spec.Mode.Replicated?.Replicas ?? 0;
 

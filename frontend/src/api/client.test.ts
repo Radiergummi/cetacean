@@ -126,7 +126,7 @@ describe("api client", () => {
   it("fetches a single node (unwraps JSON-LD wrapper)", async () => {
     mockFetch.mockReturnValue(jsonResponse({ node: { ID: "n1" } }));
     const result = await api.node("n1");
-    expect(result).toEqual({ data: { ID: "n1" }, allowedMethods: new Set() });
+    expect(result).toEqual({ data: { ID: "n1" }, allowedMethods: new Set(), editable: new Set() });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes/n1",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
@@ -296,5 +296,31 @@ describe("api.historyPage", () => {
     const { next } = await api.historyPage("/history?limit=2");
 
     expect(next).toBeUndefined();
+  });
+});
+
+describe("editable sub-resources", () => {
+  it("names the direct children a response links with rel=edit, after a redirect", async () => {
+    mockFetch.mockReturnValue(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        url: "http://localhost/services/abc123",
+        json: () => Promise.resolve({ service: { ID: "abc123" } }),
+        headers: new Headers({
+          Link: [
+            '</services/abc123/scale>; rel="edit"',
+            '</services/abc123/labels>; rel="edit"',
+            '</services/other/scale>; rel="edit"',
+            '</services/abc123/a/b>; rel="edit"',
+            '</services/abc123/logs>; rel="alternate"',
+          ].join(", "),
+        }),
+      }),
+    );
+
+    const { editable } = await api.service("web");
+
+    expect(editable).toEqual(new Set(["scale", "labels"]));
   });
 });

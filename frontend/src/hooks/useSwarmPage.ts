@@ -11,7 +11,8 @@ export function useSwarmPage() {
   const pluginsQuery = useQuery({ queryKey: ["plugins"], queryFn: () => api.plugins() });
 
   const data = swarmQuery.data?.data ?? null;
-  const allowedMethods = swarmQuery.data?.allowedMethods ?? emptyMethods;
+  const editable = swarmQuery.data?.editable ?? emptyMethods;
+  const canInstallPlugins = pluginsQuery.data?.allowedMethods.has("POST") ?? false;
   const error = swarmQuery.isError;
   const plugins = pluginsQuery.data?.data ?? emptyPlugins;
 
@@ -38,7 +39,8 @@ export function useSwarmPage() {
     data,
     plugins,
     error,
-    allowedMethods,
+    editable,
+    canInstallPlugins,
     fetchSwarmInfo,
     refetchPlugins,
     draftTaskHistoryLimit,

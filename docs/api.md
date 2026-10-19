@@ -479,12 +479,22 @@ SSE and streaming endpoints set no caching headers.
 
 `Allow` on `GET` and `HEAD` responses lists the methods available for that resource under the current
 [operations level][operations-level] and your [grants][authorization]. Inspect it before attempting a
-write. On a resource such as `/services/{id}`, it also covers the writes on its sub-resources: `PUT`
-there means `PUT /services/{id}/scale` is open to you. A sub-resource or a collection lists only its own
-methods.
+write. It names the resource's own methods only: `DELETE` on `/services/{id}` removes the service.
 
-`Accept-Patch` lists the patch formats a resource accepts, either `application/json-patch+json, application/merge-patch+json`
-or `application/merge-patch+json` alone. It appears only when the operations level and your grants permit writes.
+A resource's sub-resources are linked instead. A detail response carries a `Link` with `rel="edit"` for each
+sub-resource you may write, so `</services/{id}/scale>; rel="edit"` means `PUT /services/{id}/scale` is open to
+you. A sub-resource the operations level or your grants close isn't linked.
+
+```http
+Allow: GET, HEAD, DELETE
+Link: </services/abc/scale>; rel="edit", </services/abc/labels>; rel="edit"
+```
+
+`Accept-Patch` lists the patch formats a resource accepts, and appears where its own `Allow` carries `PATCH`. Labels and
+service `env` take `application/json-patch+json, application/merge-patch+json`; every other patchable sub-resource takes
+`application/merge-patch+json` alone.
+
+A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated

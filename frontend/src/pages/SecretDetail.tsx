@@ -7,7 +7,7 @@ import { useParams } from "react-router-dom";
 
 export default function SecretDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry, allowedMethods } = useDetailResource(
+  const { data, history, error, retry, allowedMethods, editable } = useDetailResource(
     id,
     api.secret,
     "/secrets",
@@ -42,6 +42,7 @@ export default function SecretDetail() {
       services={services}
       history={history}
       allowedMethods={allowedMethods}
+      editable={editable}
       onRemove={() => api.removeSecret(secret.ID)}
       onPatchLabels={(ops, ifMatch) => api.patchSecretLabels(secret.ID, ops, ifMatch)}
     />

@@ -1,13 +1,23 @@
 /**
  * Returns the target of the first link in an RFC 8288 `Link` header whose
  * relation types include `relation`, or undefined when none does.
+ */
+export function linkTarget(header: string | null, relation: string): string | undefined {
+  return linkTargets(header, relation)[0];
+}
+
+/**
+ * Returns the targets of every link in a `Link` header whose relation types
+ * include `relation`, in order.
  *
  * Parameter names and relation types compare case-insensitively, `rel` may
  * list several space-separated types, and a quoted value may hold `,` or `;`.
  */
-export function linkTarget(header: string | null, relation: string): string | undefined {
+export function linkTargets(header: string | null, relation: string): string[] {
+  const targets: string[] = [];
+
   if (!header) {
-    return undefined;
+    return targets;
   }
 
   const wanted = relation.toLowerCase();
@@ -17,13 +27,13 @@ export function linkTarget(header: string | null, relation: string): string | un
     const open = header.indexOf("<", position);
 
     if (open === -1) {
-      return undefined;
+      break;
     }
 
     const close = header.indexOf(">", open);
 
     if (close === -1) {
-      return undefined;
+      break;
     }
 
     const target = header.slice(open + 1, close);
@@ -33,11 +43,11 @@ export function linkTarget(header: string | null, relation: string): string | un
     const relationTypes = (parameters.get("rel") ?? "").toLowerCase().split(/\s+/);
 
     if (relationTypes.includes(wanted)) {
-      return target;
+      targets.push(target);
     }
   }
 
-  return undefined;
+  return targets;
 }
 
 /**

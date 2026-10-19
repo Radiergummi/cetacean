@@ -118,6 +118,7 @@ export function useDetailResource<T>(
   const history = historyQuery.data ?? [];
 
   const allowedMethods = useStableMethods(resourceQuery.data?.allowedMethods);
+  const editable = useStableMethods(resourceQuery.data?.editable);
 
   const retry = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: detailKey });
@@ -133,5 +134,5 @@ export function useDetailResource<T>(
     }
   }, [queryClient, detailKey, historyKey, fetchHistory, extraQueryKeys]);
 
-  return { data, history, error, retry, allowedMethods };
+  return { data, history, error, retry, allowedMethods, editable };
 }

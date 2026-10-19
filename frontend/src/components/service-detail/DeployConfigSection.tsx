@@ -14,8 +14,7 @@ interface DeployConfigSectionProps {
   service: Service;
   serviceId: string;
   tasks: Task[];
-  canPatch: boolean;
-  canChangeEndpointMode: boolean;
+  editable: ReadonlySet<string>;
   serviceResources: ServiceResourceShape | null;
   onResourcesSaved: (resources: ServiceResourceShape) => void;
   onRefetch: () => void;
@@ -27,8 +26,7 @@ export function DeployConfigSection({
   service,
   serviceId,
   tasks,
-  canPatch,
-  canChangeEndpointMode,
+  editable,
   serviceResources,
   onResourcesSaved,
   onRefetch,
@@ -86,12 +84,12 @@ export function DeployConfigSection({
               <EndpointModeEditor
                 serviceId={serviceId}
                 currentMode={service.Spec.EndpointSpec.Mode as "vip" | "dnsrr"}
-                canEdit={canChangeEndpointMode}
+                canEdit={editable.has("endpoint-mode")}
               />
             </div>
           )}
 
-          {serviceResources !== null && (hasResourcesContent || canPatch) && (
+          {serviceResources !== null && (hasResourcesContent || editable.has("resources")) && (
             <div
               id="resources-section"
               className="flex flex-col gap-3 rounded-lg border p-3"
@@ -100,20 +98,20 @@ export function DeployConfigSection({
                 serviceId={serviceId}
                 resources={serviceResources}
                 onSaved={onResourcesSaved}
-                canEdit={canPatch}
+                canEdit={editable.has("resources")}
                 pids={taskTemplate?.Resources?.Limits?.Pids}
                 allocation={allocation}
               />
             </div>
           )}
 
-          {(hasPlacementContent || canPatch) && (
+          {(hasPlacementContent || editable.has("placement")) && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
               <PlacementEditor
                 serviceId={serviceId}
                 placement={taskTemplate?.Placement ?? null}
                 onSaved={onRefetch}
-                canEdit={canPatch}
+                canEdit={editable.has("placement")}
               />
             </div>
           )}
@@ -152,29 +150,29 @@ export function DeployConfigSection({
             serviceId={serviceId}
             logDriver={taskTemplate?.LogDriver ?? null}
             onSaved={onRefetch}
-            canEdit={canPatch}
+            canEdit={editable.has("log-driver")}
           />
 
-          {(service.Spec.UpdateConfig || canPatch) && (
+          {(service.Spec.UpdateConfig || editable.has("update-policy")) && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
               <PolicyEditor
                 type="update"
                 serviceId={serviceId}
                 policy={service.Spec.UpdateConfig ?? null}
                 onSaved={onRefetch}
-                canEdit={canPatch}
+                canEdit={editable.has("update-policy")}
               />
             </div>
           )}
 
-          {(service.Spec.RollbackConfig || canPatch) && (
+          {(service.Spec.RollbackConfig || editable.has("rollback-policy")) && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
               <PolicyEditor
                 type="rollback"
                 serviceId={serviceId}
                 policy={service.Spec.RollbackConfig ?? null}
                 onSaved={onRefetch}
-                canEdit={canPatch}
+                canEdit={editable.has("rollback-policy")}
               />
             </div>
           )}

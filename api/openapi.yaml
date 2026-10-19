@@ -6643,7 +6643,9 @@ components:
         example: zstd
 
     Link:
-      description: RFC 8288 pagination links (rel="next", rel="prev")
+      description: |
+        RFC 8288 links: pagination (rel="next", rel="prev") on a list, and on a
+        detail response one rel="edit" per sub-resource the caller may write
       schema:
         type: string
         example: '</nodes?limit=50&offset=50>; rel="next"'

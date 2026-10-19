@@ -1,4 +1,4 @@
-import { linkTarget } from "./linkHeader";
+import { linkTarget, linkTargets } from "./linkHeader";
 import { describe, expect, it } from "vitest";
 
 describe("linkTarget", () => {
@@ -32,5 +32,13 @@ describe("linkTarget", () => {
 
   it("keeps the first rel when a link repeats it", () => {
     expect(linkTarget('</a>; rel="prev"; rel="next"', "next")).toBeUndefined();
+  });
+});
+
+describe("linkTargets", () => {
+  it("lists every link with the relation, in order", () => {
+    const header = '</s/a/scale>; rel="edit", </x>; rel="next", </s/a/labels>; rel=edit';
+
+    expect(linkTargets(header, "edit")).toEqual(["/s/a/scale", "/s/a/labels"]);
   });
 });

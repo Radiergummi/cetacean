@@ -29,8 +29,8 @@ const writePolicy = `grants:
 
 // A grant listing only "read" must gate writes, and adding "write" to the same
 // audience without a restart must lift the gate — a unit test proves the parser
-// works, not that the watcher is wired to the evaluator. The Allow header is
-// asserted on a detail endpoint, since /services always answers "GET, HEAD".
+// works, not that the watcher is wired to the evaluator. The scale edit link
+// is asserted on a detail endpoint, since /services always answers "GET, HEAD".
 func TestACLPolicyHotReload(t *testing.T) {
 	env := harness.Up(t)
 	env.SwarmInit(t)
@@ -56,13 +56,8 @@ func TestACLPolicyHotReload(t *testing.T) {
 
 	id := viewerServiceID(t, proc, "shop_web")
 
-	allowBefore := viewerAllowHeader(t, proc, "/services/"+id)
-	if !strings.Contains(allowBefore, "GET") {
-		t.Fatalf("Allow = %q, want it to contain GET", allowBefore)
-	}
-
-	if strings.Contains(allowBefore, "PUT") {
-		t.Fatalf("Allow = %q under a read-only policy, want no PUT", allowBefore)
+	if links := viewerLinkHeader(t, proc, "/services/"+id); strings.Contains(links, scaleEdit) {
+		t.Fatalf("Link = %q under a read-only policy, want no scale edit link", links)
 	}
 
 	// Written in place, which is what os.WriteFile does: the file keeps its
@@ -71,11 +66,9 @@ func TestACLPolicyHotReload(t *testing.T) {
 		t.Fatalf("rewrite policy: %v", err)
 	}
 
-	waitForAllow(
+	waitForLinks(
 		t, proc, "/services/"+id,
-		func(allow string) bool {
-			return strings.Contains(allow, "PUT") && strings.Contains(allow, "GET")
-		},
+		func(links string) bool { return strings.Contains(links, scaleEdit) },
 		"a write grant written in place did not take effect",
 	)
 
@@ -85,19 +78,20 @@ func TestACLPolicyHotReload(t *testing.T) {
 	// distinguish the defect is platform-dependent; internal/acl has the proof.
 	replacePolicyViaRename(t, policy, readOnlyPolicy)
 
-	waitForAllow(
+	waitForLinks(
 		t, proc, "/services/"+id,
-		func(allow string) bool {
-			return !strings.Contains(allow, "PUT") && strings.Contains(allow, "GET")
-		},
+		func(links string) bool { return !strings.Contains(links, scaleEdit) },
 		"a read-only grant renamed over the policy did not take effect",
 	)
 }
 
-// waitForAllow polls the Allow header on path until ok accepts it, failing
+// scaleEdit is the tail of the edit link a service carries while it may be scaled.
+const scaleEdit = `/scale>; rel="edit"`
+
+// waitForLinks polls the Link header on path until ok accepts it, failing
 // with msg if that never happens. A policy reload is debounced and applied
 // asynchronously, so every assertion about one has to wait for it.
-func waitForAllow(
+func waitForLinks(
 	t *testing.T,
 	proc *sut.Process,
 	path string,
@@ -108,14 +102,14 @@ func waitForAllow(
 
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if allow := viewerAllowHeader(t, proc, path); ok(allow) {
+		if links := viewerLinkHeader(t, proc, path); ok(links) {
 			return
 		}
 
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	t.Errorf("%s within 10s; Allow is still %q", msg, viewerAllowHeader(t, proc, path))
+	t.Errorf("%s within 10s; Link is still %q", msg, viewerLinkHeader(t, proc, path))
 }
 
 // replacePolicyViaRename writes content beside the policy file and renames it
@@ -243,9 +237,9 @@ func viewerServiceID(t *testing.T, proc *sut.Process, name string) string {
 	return ""
 }
 
-// viewerAllowHeader reads the Allow header off a detail endpoint,
+// viewerLinkHeader reads the Link header off a detail endpoint,
 // authenticated as the "viewers" group.
-func viewerAllowHeader(t *testing.T, proc *sut.Process, path string) string {
+func viewerLinkHeader(t *testing.T, proc *sut.Process, path string) string {
 	t.Helper()
 
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, proc.BaseURL+path, nil)
@@ -263,5 +257,5 @@ func viewerAllowHeader(t *testing.T, proc *sut.Process, path string) string {
 	}
 	defer resp.Body.Close()
 
-	return resp.Header.Get("Allow")
+	return strings.Join(resp.Header.Values("Link"), ", ")
 }

@@ -12,7 +12,7 @@ import { useParams } from "react-router-dom";
 
 export default function ConfigDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, history, error, retry, allowedMethods } = useDetailResource(
+  const { data, history, error, retry, allowedMethods, editable } = useDetailResource(
     id,
     api.config,
     "/configs",
@@ -56,6 +56,7 @@ export default function ConfigDetail() {
       services={services}
       history={history}
       allowedMethods={allowedMethods}
+      editable={editable}
       onRemove={() => api.removeConfig(config.ID)}
       onPatchLabels={(ops, ifMatch) => api.patchConfigLabels(config.ID, ops, ifMatch)}
     >

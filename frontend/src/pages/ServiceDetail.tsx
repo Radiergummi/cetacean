@@ -87,13 +87,14 @@ export default function ServiceDetail() {
             service={service}
             serviceId={id!}
             allowedMethods={detail.allowedMethods}
+            editable={detail.editable}
           />
         }
       />
 
       <SizingBanner
         hints={detail.serviceRecommendations}
-        allowedMethods={detail.allowedMethods}
+        editable={detail.editable}
         onFixed={detail.refetchService}
       />
 
@@ -102,12 +103,12 @@ export default function ServiceDetail() {
         <ContainerImage
           image={containerSpec?.Image ?? ""}
           serviceId={id}
-          canEdit={detail.allowedMethods.has("PUT")}
+          canEdit={detail.editable.has("image")}
         />
         <ReplicaCard
           service={service}
           tasks={detail.tasks}
-          allowedMethods={detail.allowedMethods}
+          canScale={detail.editable.has("scale")}
         />
         <ServiceStatusCard service={service} />
         <ResourceLink
@@ -173,31 +174,31 @@ export default function ServiceDetail() {
               serviceId={id!}
               config={detail.containerConfig}
               onSaved={detail.onContainerConfigSaved}
-              canEdit={detail.canPatch}
+              canEdit={detail.editable.has("container-config")}
             />
             <RuntimeEditor
               serviceId={id!}
               config={detail.containerConfig}
               onSaved={detail.onContainerConfigSaved}
-              canEdit={detail.canPatch}
+              canEdit={detail.editable.has("container-config")}
             />
             <CapabilitiesEditor
               serviceId={id!}
               config={detail.containerConfig}
               onSaved={detail.onContainerConfigSaved}
-              canEdit={detail.canPatch}
+              canEdit={detail.editable.has("container-config")}
             />
             <ExtraHostsEditor
               serviceId={id!}
               config={detail.containerConfig}
               onSaved={detail.onContainerConfigSaved}
-              canEdit={detail.canPatch}
+              canEdit={detail.editable.has("container-config")}
             />
             <DnsEditor
               serviceId={id!}
               config={detail.containerConfig}
               onSaved={detail.onContainerConfigSaved}
-              canEdit={detail.canPatch}
+              canEdit={detail.editable.has("container-config")}
             />
           </div>
         ) : (
@@ -208,12 +209,12 @@ export default function ServiceDetail() {
       </CollapsibleSection>
 
       {/* Environment variables */}
-      {detail.envVars !== null && (hasEnvContent || detail.canPatch) && (
+      {detail.envVars !== null && (hasEnvContent || detail.editable.has("env")) && (
         <EnvEditor
           serviceId={id!}
           envVars={detail.envVars}
           onSaved={detail.onEnvSaved}
-          canEdit={detail.canPatch}
+          canEdit={detail.editable.has("env")}
         />
       )}
 
@@ -223,18 +224,18 @@ export default function ServiceDetail() {
         serviceLabels={detail.serviceLabels}
         serviceId={id!}
         onSaved={detail.onLabelsSaved}
-        editable={detail.canPatch}
+        editable={detail.editable.has("labels")}
       />
 
       {/* Labels */}
-      {detail.serviceLabels !== null && (hasLabelsContent || detail.canPatch) && (
+      {detail.serviceLabels !== null && (hasLabelsContent || detail.editable.has("labels")) && (
         <KeyValueEditor
           title="Labels"
           entries={detail.filteredLabels ?? {}}
           defaultOpen={Object.keys(detail.filteredLabels ?? {}).length > 0}
           keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
-          editDisabled={!detail.canPatch}
+          editDisabled={!detail.editable.has("labels")}
           isKeyReadOnly={isReservedLabelKey}
           validateKey={validateLabelKey}
           onEditStart={labelsVersion.capture}
@@ -247,22 +248,23 @@ export default function ServiceDetail() {
       )}
 
       {/* Healthcheck */}
-      {detail.healthcheck !== undefined && (hasHealthcheckContent || detail.canPatch) && (
-        <HealthcheckEditor
-          serviceId={id!}
-          healthcheck={detail.healthcheck}
-          onSaved={detail.onHealthcheckSaved}
-          canEdit={detail.canPatch}
-        />
-      )}
+      {detail.healthcheck !== undefined &&
+        (hasHealthcheckContent || detail.editable.has("healthcheck")) && (
+          <HealthcheckEditor
+            serviceId={id!}
+            healthcheck={detail.healthcheck}
+            onSaved={detail.onHealthcheckSaved}
+            canEdit={detail.editable.has("healthcheck")}
+          />
+        )}
 
       {/* Ports */}
-      {detail.specPorts !== null && (hasPortsContent || detail.canPatch) && (
+      {detail.specPorts !== null && (hasPortsContent || detail.editable.has("ports")) && (
         <PortsEditor
           serviceId={id!}
           ports={detail.specPorts}
           onSaved={detail.onPortsSaved}
-          canEdit={detail.canPatch}
+          canEdit={detail.editable.has("ports")}
         />
       )}
 
@@ -271,7 +273,7 @@ export default function ServiceDetail() {
           serviceId={id!}
           mounts={detail.serviceMounts}
           onSaved={detail.onMountsSaved}
-          canEdit={detail.canPatch}
+          canEdit={detail.editable.has("mounts")}
         />
       )}
 
@@ -283,7 +285,7 @@ export default function ServiceDetail() {
         )}
         networkNames={detail.networkNames}
         onSaved={detail.refetchService}
-        canEdit={detail.canPatch}
+        canEdit={detail.editable.has("networks")}
       />
 
       {/* Configs */}
@@ -295,7 +297,7 @@ export default function ServiceDetail() {
           fileName: cfg.File?.Name ?? "",
         }))}
         onSaved={detail.refetchService}
-        canEdit={detail.canPatch}
+        canEdit={detail.editable.has("configs")}
       />
 
       {/* Secrets */}
@@ -307,7 +309,7 @@ export default function ServiceDetail() {
           fileName: sec.File?.Name ?? "",
         }))}
         onSaved={detail.refetchService}
-        canEdit={detail.canPatch}
+        canEdit={detail.editable.has("secrets")}
       />
 
       {/* Deploy: Resources, Placement, Restart, Update, Rollback */}
@@ -315,8 +317,7 @@ export default function ServiceDetail() {
         service={service}
         serviceId={id!}
         tasks={detail.tasks}
-        canPatch={detail.canPatch}
-        canChangeEndpointMode={detail.canChangeEndpointMode}
+        editable={detail.editable}
         serviceResources={detail.serviceResources}
         onResourcesSaved={detail.onResourcesSaved}
         onRefetch={detail.refetchService}

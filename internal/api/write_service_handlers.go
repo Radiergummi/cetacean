@@ -47,8 +47,6 @@ func (h *Handlers) HandleGetServiceMode(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
-
 	h.writeServiceRepresentation(w, r, svc.ID, h.serviceModeRepresentation)
 }
 
@@ -57,8 +55,6 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
-
 	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEndpointModeRepresentation)
 }
 

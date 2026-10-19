@@ -24,7 +24,8 @@ interface DataResourceDetailProps {
   updatedAt: string;
   services: ServiceRef[];
   history: HistoryEntry[];
-  allowedMethods: Set<string>;
+  allowedMethods: ReadonlySet<string>;
+  editable: ReadonlySet<string>;
   onRemove: () => Promise<void>;
   onPatchLabels: (ops: PatchOp[], ifMatch: string | undefined) => Promise<Record<string, string>>;
   children?: ReactNode | undefined;
@@ -48,6 +49,7 @@ export default function DataResourceDetail({
   services,
   history,
   allowedMethods,
+  editable,
   onRemove,
   onPatchLabels,
   children,
@@ -114,7 +116,7 @@ export default function DataResourceDetail({
         defaultOpen={Object.keys(labels).length > 0}
         keyPlaceholder="com.example.my-label"
         valuePlaceholder="value"
-        editDisabled={!allowedMethods.has("PATCH")}
+        editDisabled={!editable.has("labels")}
         isKeyReadOnly={isReservedLabelKey}
         validateKey={validateLabelKey}
         onEditStart={labelsVersion.capture}

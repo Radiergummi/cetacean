@@ -91,12 +91,15 @@ export function ServiceActions({
   service,
   serviceId,
   allowedMethods,
+  editable,
 }: {
   service: Service;
   serviceId: string;
-  allowedMethods: Set<string>;
+  allowedMethods: ReadonlySet<string>;
+  editable: ReadonlySet<string>;
 }) {
-  const canWrite = allowedMethods.has("POST");
+  const canRollback = editable.has("rollback");
+  const canRestart = editable.has("restart");
   const canImpact = allowedMethods.has("DELETE");
 
   const navigate = useNavigate();
@@ -104,13 +107,13 @@ export function ServiceActions({
   const restart = useAsyncAction({ toast: true });
   const remove = useAsyncAction({ toast: true });
 
-  if (!canWrite && !canImpact) {
+  if (!canRollback && !canRestart && !canImpact) {
     return null;
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {canWrite && (
+      {canRollback && (
         <ConfirmAction
           icon={RotateCcw}
           label="Rollback"
@@ -125,7 +128,7 @@ export function ServiceActions({
         />
       )}
 
-      {canWrite && (
+      {canRestart && (
         <ConfirmAction
           icon={RefreshCw}
           label="Restart"

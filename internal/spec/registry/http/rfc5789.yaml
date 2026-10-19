@@ -45,8 +45,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc5789#section-3.1
     mutants:
       - file: internal/api/allow.go
-        replace: "\t\t\tw.Header().Set(\"Accept-Patch\", ap)"
-        with: "\t\t\t_ = ap"
+        replace: "\t\tw.Header().Set(\"Accept-Patch\", acceptPatch(r.URL.Path))"
+        with: "\t\t_ = acceptPatch(r.URL.Path)"
 
 dismissed:
   patch-may-create-a-resource: >-

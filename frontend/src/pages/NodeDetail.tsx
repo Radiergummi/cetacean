@@ -57,6 +57,7 @@ export default function NodeDetail() {
     history,
     error,
     allowedMethods,
+    editable,
   } = useDetailResource<Node>(id, api.node, "/nodes", { extraQueryKeys });
 
   const { data: tasks } = useQuery({
@@ -153,13 +154,13 @@ export default function NodeDetail() {
           currentRole={node.Spec?.Role ?? "worker"}
           isLeader={node.ManagerStatus?.Leader ?? false}
           managerCount={roleData?.managerCount ?? null}
-          canEdit={allowedMethods.has("PUT")}
+          canEdit={editable.has("role")}
         />
         <StatusCard state={node.Status?.State ?? "unknown"} />
         <AvailabilityEditor
           nodeId={node.ID}
           current={node.Spec?.Availability ?? "active"}
-          canEdit={allowedMethods.has("PUT")}
+          canEdit={editable.has("availability")}
         />
         {engineVersion && <EngineCard version={engineVersion} />}
         {platformOS && platformArch && (
@@ -237,7 +238,7 @@ export default function NodeDetail() {
           defaultOpen={Object.keys(nodeLabels).length > 0}
           keyPlaceholder="com.example.my-label"
           valuePlaceholder="value"
-          editDisabled={!allowedMethods.has("PATCH")}
+          editDisabled={!editable.has("labels")}
           isKeyReadOnly={isReservedLabelKey}
           validateKey={validateLabelKey}
           onEditStart={labelsVersion.capture}
