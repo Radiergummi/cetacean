@@ -2106,7 +2106,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/go-jose/go-jose/v4 v4.1.5
+github.com/go-jose/go-jose/v4 v4.1.6
 https://github.com/go-jose/go-jose
 License: Apache-2.0
 
@@ -3424,7 +3424,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/klauspost/compress v1.20.1
+github.com/klauspost/compress v1.20.3
 https://github.com/klauspost/compress
 License: Apache-2.0
 
@@ -9205,7 +9205,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/crypto v0.57.0
+golang.org/x/crypto v0.58.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9273,7 +9273,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/net v0.60.0
+golang.org/x/net v0.61.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9375,7 +9375,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/sys v0.48.0
+golang.org/x/sys v0.49.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9409,7 +9409,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/term v0.46.0
+golang.org/x/term v0.47.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -9443,7 +9443,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/text v0.42.0
+golang.org/x/text v0.43.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -13222,7 +13222,7 @@ would assert a copyright holder and year the authors never stated.
 
 ------------------------------------------------------------------------------
 
-@scalar/agent-chat 0.12.42
+@scalar/agent-chat 0.12.43
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13251,7 +13251,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/api-client 3.22.0
+@scalar/api-client 3.23.0
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13280,7 +13280,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/api-reference 1.73.1
+@scalar/api-reference 1.74.0
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13309,7 +13309,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/asyncapi-upgrader 0.1.16
+@scalar/asyncapi-upgrader 0.1.17
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13338,7 +13338,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/blocks 0.5.1
+@scalar/blocks 0.5.2
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13367,7 +13367,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/code-highlight 0.4.8
+@scalar/code-highlight 0.4.9
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13396,7 +13396,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/components 0.31.0
+@scalar/components 0.31.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13425,7 +13425,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/helpers 0.16.2
+@scalar/helpers 0.16.3
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13483,7 +13483,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/json-magic 0.15.6
+@scalar/json-magic 0.15.7
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13512,7 +13512,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/localization 0.2.6
+@scalar/localization 0.2.7
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13541,7 +13541,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/oas-utils 0.20.11
+@scalar/oas-utils 0.20.12
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13570,7 +13570,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-to-markdown 1.5.3
+@scalar/openapi-to-markdown 1.5.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13599,7 +13599,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-types 0.9.7
+@scalar/openapi-types 0.9.8
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13628,7 +13628,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-upgrader 0.4.3
+@scalar/openapi-upgrader 0.4.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13657,7 +13657,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/schemas 0.13.1
+@scalar/schemas 0.13.2
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13686,7 +13686,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/sidebar 0.11.13
+@scalar/sidebar 0.12.0
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13715,7 +13715,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/snippetz 0.10.7
+@scalar/snippetz 0.10.8
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13744,7 +13744,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/themes 0.19.0
+@scalar/themes 0.19.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13805,7 +13805,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/types 0.23.1
+@scalar/types 0.23.2
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13863,7 +13863,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/use-hooks 0.4.19
+@scalar/use-hooks 0.4.20
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13921,7 +13921,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/validation 0.6.6
+@scalar/validation 0.6.7
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13950,7 +13950,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/workspace-store 0.68.2
+@scalar/workspace-store 0.68.3
 https://github.com/scalar/scalar
 License: MIT
 
@@ -14215,7 +14215,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-@tanstack/query-core 5.104.1
+@tanstack/query-core 5.104.3
 https://tanstack.com/query
 License: MIT
 
@@ -14244,7 +14244,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-query 5.104.1
+@tanstack/react-query 5.104.3
 https://tanstack.com/query
 License: MIT
 
@@ -14273,7 +14273,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-virtual 3.14.14
+@tanstack/react-virtual 3.14.20
 https://tanstack.com/virtual
 License: MIT
 
@@ -14331,7 +14331,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/virtual-core 3.18.0
+@tanstack/virtual-core 3.19.5
 https://tanstack.com/virtual
 License: MIT
 
@@ -19289,7 +19289,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-lucide-react 1.54.0
+lucide-react 1.58.0
 https://lucide.dev
 License: ISC
 
@@ -21038,7 +21038,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-react 19.3.0
+react 19.3.1
 https://react.dev/
 License: MIT
 
@@ -21110,7 +21110,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-react-dom 19.3.0
+react-dom 19.3.1
 https://react.dev/
 License: MIT
 
@@ -23695,7 +23695,7 @@ THIS SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-zod 4.6.5
+zod 4.6.7
 https://zod.dev
 License: MIT
 
