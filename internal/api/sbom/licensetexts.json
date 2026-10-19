@@ -258,7 +258,7 @@
   "go:github.com/gaissmai/bart@v0.29.0": {
    "license": "8fc2dc86e3a004c34bf613d4f72365ca"
   },
-  "go:github.com/go-jose/go-jose/v4@v4.1.5": {
+  "go:github.com/go-jose/go-jose/v4@v4.1.6": {
    "license": "cfc7749b96f63bd31c3c42b5c471bf75"
   },
   "go:github.com/go-json-experiment/json@v0.0.0-20260820222146-c27c302e5fc3": {
@@ -300,7 +300,7 @@
   "go:github.com/jsimonetti/rtnetlink@v1.4.2": {
    "license": "1f61baf667aacf74c2d17abcfc0ba6e9"
   },
-  "go:github.com/klauspost/compress@v1.20.1": {
+  "go:github.com/klauspost/compress@v1.20.3": {
    "license": "0d9e582ee4bff57bf1189c9e514e6da7"
   },
   "go:github.com/mark3labs/mcp-go@v1.3.0": {
@@ -412,13 +412,13 @@
   "go:go4.org/netipx@v0.0.0-20260823151212-3075585bcbeb": {
    "license": "1bfc4f32f4ec8ca8fce54bd2d97784f0"
   },
-  "go:golang.org/x/crypto@v0.57.0": {
+  "go:golang.org/x/crypto@v0.58.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/exp@v0.0.0-20260908205506-85c1c2202aba": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/net@v0.60.0": {
+  "go:golang.org/x/net@v0.61.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/oauth2@v0.37.0": {
@@ -427,13 +427,13 @@
   "go:golang.org/x/sync@v0.24.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/sys@v0.48.0": {
+  "go:golang.org/x/sys@v0.49.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/term@v0.46.0": {
+  "go:golang.org/x/term@v0.47.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/text@v0.42.0": {
+  "go:golang.org/x/text@v0.43.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/time@v0.16.0": {
@@ -621,82 +621,82 @@
   "npm:@replit/codemirror-css-color-picker@6.3.0": {
    "license": "59835d018f6a700d065bda1e58072222"
   },
-  "npm:@scalar/agent-chat@0.12.42": {
+  "npm:@scalar/agent-chat@0.12.43": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/api-client@3.22.0": {
+  "npm:@scalar/api-client@3.23.0": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/api-reference@1.73.1": {
+  "npm:@scalar/api-reference@1.74.0": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/asyncapi-upgrader@0.1.16": {
+  "npm:@scalar/asyncapi-upgrader@0.1.17": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/blocks@0.5.1": {
+  "npm:@scalar/blocks@0.5.2": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/code-highlight@0.4.8": {
+  "npm:@scalar/code-highlight@0.4.9": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/components@0.31.0": {
+  "npm:@scalar/components@0.31.1": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/helpers@0.16.2": {
+  "npm:@scalar/helpers@0.16.3": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/icons@0.7.6": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/json-magic@0.15.6": {
+  "npm:@scalar/json-magic@0.15.7": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/localization@0.2.6": {
+  "npm:@scalar/localization@0.2.7": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/oas-utils@0.20.11": {
+  "npm:@scalar/oas-utils@0.20.12": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/openapi-to-markdown@1.5.3": {
+  "npm:@scalar/openapi-to-markdown@1.5.4": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/openapi-types@0.9.7": {
+  "npm:@scalar/openapi-types@0.9.8": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/openapi-upgrader@0.4.3": {
+  "npm:@scalar/openapi-upgrader@0.4.4": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/schemas@0.13.1": {
+  "npm:@scalar/schemas@0.13.2": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/sidebar@0.11.13": {
+  "npm:@scalar/sidebar@0.12.0": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/snippetz@0.10.7": {
+  "npm:@scalar/snippetz@0.10.8": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/themes@0.19.0": {
+  "npm:@scalar/themes@0.19.1": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/typebox@0.1.3": {
    "license": "be1a8539d969839a161f1efca9c3acda"
   },
-  "npm:@scalar/types@0.23.1": {
+  "npm:@scalar/types@0.23.2": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/use-codemirror@0.14.15": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/use-hooks@0.4.19": {
+  "npm:@scalar/use-hooks@0.4.20": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/use-toasts@0.10.5": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/validation@0.6.6": {
+  "npm:@scalar/validation@0.6.7": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/workspace-store@0.68.2": {
+  "npm:@scalar/workspace-store@0.68.3": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@standard-schema/spec@1.1.0": {
@@ -705,19 +705,19 @@
   "npm:@swc/helpers@0.5.23": {
    "license": "d96eba1f1881334d50ffc144276dfa98"
   },
-  "npm:@tanstack/query-core@5.104.1": {
+  "npm:@tanstack/query-core@5.104.3": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-query@5.104.1": {
+  "npm:@tanstack/react-query@5.104.3": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-virtual@3.14.14": {
+  "npm:@tanstack/react-virtual@3.14.20": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
   "npm:@tanstack/virtual-core@3.17.11": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/virtual-core@3.18.0": {
+  "npm:@tanstack/virtual-core@3.19.5": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
   "npm:@tanstack/vue-virtual@3.13.39": {
@@ -1084,7 +1084,7 @@
   "npm:lowlight@3.3.0": {
    "license": "dd1081884a92952802f4803110a6bb54"
   },
-  "npm:lucide-react@1.54.0": {
+  "npm:lucide-react@1.58.0": {
    "license": "b495047bd93a9b06913511076f504dab"
   },
   "npm:luxon@3.7.2": {
@@ -1264,7 +1264,7 @@
   "npm:react-chartjs-2@5.3.1": {
    "license": "8b9beea70bdbdd0e02b7a749c2f00b3f"
   },
-  "npm:react-dom@19.3.0": {
+  "npm:react-dom@19.3.1": {
    "license": "da6d3703ed11cbe42bd212c725957c98"
   },
   "npm:react-router-dom@7.18.4": {
@@ -1273,7 +1273,7 @@
   "npm:react-router@7.18.4": {
    "license": "77c9ee6a9c5d5782fb0c50b50d101189"
   },
-  "npm:react@19.3.0": {
+  "npm:react@19.3.1": {
    "license": "da6d3703ed11cbe42bd212c725957c98"
   },
   "npm:rehype-external-links@3.0.0": {
@@ -1460,7 +1460,7 @@
   "npm:yaml@2.9.1": {
    "license": "5bba27375d93e9119f76c1015f7672cf"
   },
-  "npm:zod@4.6.5": {
+  "npm:zod@4.6.7": {
    "license": "3f1189b28e3866e0d979968d466b78f8"
   },
   "npm:zustand@4.5.7": {
