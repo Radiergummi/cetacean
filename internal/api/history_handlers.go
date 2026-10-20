@@ -38,11 +38,16 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Paged by cursor, as the feeds are: the ring moves under an offset.
+	beforeID, _ := strconv.ParseUint(q.Get("before"), 10, 64)
+
 	query := cache.HistoryQuery{
-		Type:       cache.EventType(resourceType),
-		ResourceID: resourceID,
-		Limit:      limit,
-		Visible:    h.readableHistory(r),
+		Type:         cache.EventType(resourceType),
+		ResourceID:   resourceID,
+		BeforeID:     beforeID,
+		NameContains: q.Get("search"),
+		Limit:        limit,
+		Visible:      h.readableHistory(r),
 	}
 
 	// The type names what resourceId is, and a service's timeline holds its
@@ -62,6 +67,15 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	if wantCSV {
 		writeCSV(w, r, "history", csvTableForHistory(entries))
 		return
+	}
+
+	if len(entries) == limit {
+		next := r.URL.Query()
+		next.Set("before", strconv.FormatUint(entries[len(entries)-1].ID, 10))
+		next.Set("limit", strconv.Itoa(limit))
+		w.Header().Add("Link", fmt.Sprintf(
+			`<%s?%s>; rel="next"`, absPath(r.Context(), r.URL.Path), next.Encode(),
+		))
 	}
 
 	writeCachedJSON(

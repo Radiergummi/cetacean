@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1232,6 +1233,76 @@ func TestHandleHistory_CustomLimit(t *testing.T) {
 	}
 	if len(resp.Items) != 2 {
 		t.Errorf("got %d entries, want 2", len(resp.Items))
+	}
+}
+
+// historyPage reads one page of /history and the target of its next link.
+func historyPage(t *testing.T, h *Handlers, target string) ([]string, string) {
+	t.Helper()
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, httptest.NewRequest("GET", target, nil))
+
+	var resp CollectionResponse[cache.HistoryEntry]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode %s: %v", target, err)
+	}
+	names := make([]string, len(resp.Items))
+	for i, entry := range resp.Items {
+		names[i] = entry.Name
+	}
+	next := ""
+	if m := regexp.MustCompile(`<([^>]+)>; rel="next"`).
+		FindStringSubmatch(w.Header().Get("Link")); m != nil {
+		next = m[1]
+	}
+	return names, next
+}
+
+func TestHandleHistory_PagesByCursor(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		c.SetService(
+			swarm.Service{
+				ID:   name,
+				Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+			},
+		)
+	}
+	h := newTestHandlers(t, withCache(c))
+
+	var pages [][]string
+	for target := "/history?limit=2"; target != ""; {
+		var names []string
+		names, target = historyPage(t, h, target)
+		pages = append(pages, names)
+	}
+
+	want := [][]string{{"e", "d"}, {"c", "b"}, {"a"}}
+	if fmt.Sprint(pages) != fmt.Sprint(want) {
+		t.Errorf("pages = %v, want %v", pages, want)
+	}
+}
+
+func TestHandleHistory_SearchCarriesAcrossPages(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"web-1", "db", "web-2", "cache", "web-3"} {
+		c.SetService(
+			swarm.Service{
+				ID:   name,
+				Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name}},
+			},
+		)
+	}
+	h := newTestHandlers(t, withCache(c))
+
+	first, next := historyPage(t, h, "/history?search=WEB&limit=2")
+	if next == "" {
+		t.Fatalf("a full first page %v carried no next link", first)
+	}
+	second, last := historyPage(t, h, next)
+
+	if fmt.Sprint(first, second) != "[web-3 web-2] [web-1]" || last != "" {
+		t.Errorf("pages = %v %v, next after them %q", first, second, last)
 	}
 }
 
