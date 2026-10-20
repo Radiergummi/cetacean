@@ -35,16 +35,14 @@ type representationFunc func(*http.Request) (any, error)
 func (h *Handlers) writeServiceRepresentation(
 	w http.ResponseWriter,
 	r *http.Request,
-	serviceID string,
+	svc swarm.Service,
 	rep representationFunc,
 ) {
-	value, ok := representationOr404(w, r, "service", serviceID, rep)
+	value, ok := representationOr404(w, r, "service", svc.ID, rep)
 	if !ok {
 		return
 	}
-	if svc, found := h.cache.GetService(serviceID); found {
-		h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
-	}
+	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
 
 	writeCachedJSON(w, r, value)
 }

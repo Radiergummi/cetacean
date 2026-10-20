@@ -578,3 +578,17 @@ func TestPatchableSubResourcesReportTheirOwnAllow(t *testing.T) {
 		}
 	}
 }
+
+// A plugin's name may hold a slash, which its links keep escaped: decoded, the
+// target would name a path no route serves.
+func TestEditLinksKeepAnEscapedName(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/plugins/vieux%2Fsshfs%3Alatest", nil)
+	h.setAllow(w, r, "plugin", "vieux/sshfs:latest")
+
+	got := editTargets(w.Header())
+	if !slices.Contains(got, "/plugins/vieux%2Fsshfs%3Alatest/enable") {
+		t.Errorf("edit links = %v, want the name kept escaped", got)
+	}
+}

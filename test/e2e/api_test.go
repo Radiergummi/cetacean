@@ -279,13 +279,8 @@ func TestEditLinksReflectOperationsLevel(t *testing.T) {
 			t.Fatal("no Allow header on /services/{id}")
 		}
 
-		if links := strings.Join(
-			resp.Header.Values("Link"),
-			", ",
-		); strings.Contains(
-			links,
-			`rel="edit"`,
-		) {
+		links := strings.Join(resp.Header.Values("Link"), ", ")
+		if strings.Contains(links, `rel="edit"`) {
 			t.Errorf("Link = %q at ops level 0; want no edit links", links)
 		}
 	})

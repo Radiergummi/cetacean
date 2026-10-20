@@ -72,53 +72,39 @@ var (
 
 var writeMethods = []string{"PUT", "POST", "PATCH", "DELETE"}
 
-// allowedMethods lists GET, HEAD and every write method routed at the path r
-// matched that the caller's level reaches.
-func (h *Handlers) allowedMethods(r *http.Request) []string {
+// routedWrites matches r against the routes once. methods lists GET, HEAD and
+// every write method routed at the matched path that the caller's level
+// reaches; below names the sub-resources directly under it that route one.
+func (h *Handlers) routedWrites(r *http.Request) (methods, below []string) {
 	routes := routeTable()
 	_, pattern := routes.mux.Handler(r)
 	_, path, routed := strings.Cut(pattern, " ")
+	methods = []string{"GET", "HEAD"}
+	if !routed {
+		return methods, nil
+	}
 	level := h.levelFor(r)
 
 	offered := make(map[string]bool)
 	for _, route := range routes.tiered {
-		if routed && route.path == path && level >= route.level {
+		if level < route.level || !slices.Contains(writeMethods, route.method) {
+			continue
+		}
+		if route.path == path {
 			offered[route.method] = true
+		} else if name, ok := strings.CutPrefix(route.path, path+"/"); ok &&
+			!strings.ContainsAny(name, "/{") && !slices.Contains(below, name) {
+			below = append(below, name)
 		}
 	}
 
-	methods := []string{"GET", "HEAD"}
 	for _, method := range writeMethods {
 		if offered[method] {
 			methods = append(methods, method)
 		}
 	}
 
-	return methods
-}
-
-// writableBelow names the sub-resources directly under the path r matched that
-// route a write the caller's level reaches.
-func (h *Handlers) writableBelow(r *http.Request) []string {
-	routes := routeTable()
-	_, pattern := routes.mux.Handler(r)
-	_, path, routed := strings.Cut(pattern, " ")
-	if !routed {
-		return nil
-	}
-	level := h.levelFor(r)
-
-	var names []string
-	for _, route := range routes.tiered {
-		name, below := strings.CutPrefix(route.path, path+"/")
-		if !below || strings.ContainsAny(name, "/{") || level < route.level ||
-			!slices.Contains(writeMethods, route.method) || slices.Contains(names, name) {
-			continue
-		}
-		names = append(names, name)
-	}
-
-	return names
+	return methods, below
 }
 
 // acceptPatch is the Accept-Patch of a path that takes PATCH: labels and
@@ -159,11 +145,12 @@ func (h *Handlers) setAllow(
 		return
 	}
 
-	writeAllow(w, r, h.allowedMethods(r))
+	methods, below := h.routedWrites(r)
+	writeAllow(w, r, methods)
 
-	self := absPath(r.Context(), r.URL.Path)
+	self := absPath(r.Context(), r.URL.EscapedPath())
 	var links []string
-	for _, name := range h.writableBelow(r) {
+	for _, name := range below {
 		links = append(links, fmt.Sprintf(`<%s/%s>; rel="edit"`, self, name))
 	}
 	if len(links) > 0 {
@@ -179,7 +166,7 @@ func (h *Handlers) setAllowSubResource(
 ) {
 	methods := []string{"GET", "HEAD"}
 	if h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceExpr) {
-		methods = h.allowedMethods(r)
+		methods, _ = h.routedWrites(r)
 	}
 	writeAllow(w, r, methods)
 }
@@ -205,9 +192,7 @@ func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resource
 	id := auth.IdentityFromContext(r.Context())
 	if createsByName[resourceType] && h.acl.TypeGrants(id).Can("write", resourceType) ||
 		h.acl.Can(id, "write", resourceType+":*") {
-		methods = h.allowedMethods(r)
+		methods, _ = h.routedWrites(r)
 	}
-
-	w.Header().Set("Allow", strings.Join(methods, ", "))
-	varyByIdentity(w)
+	writeAllow(w, r, methods)
 }
