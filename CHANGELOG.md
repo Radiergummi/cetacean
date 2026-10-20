@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-20
+
 ### Added
 - The History page loads older events past the latest 200, and its name filter searches the whole log rather than the loaded page
 - `GET /history` takes `search` and a `before` cursor, and a full page links the next one with `rel="next"`
@@ -17,16 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - **Breaking:** `Allow` lists a resource's own methods, not its sub-resources'. A detail response links each sub-resource you may write with `rel="edit"`, and `Accept-Patch` moves to the sub-resources that take a `PATCH`. API clients reading writes off a parent's `Allow` must read the links
 - **Breaking:** `?filter=` refuses a field the resource doesn't have, or a comparison of mismatched types, with `400` (`FLT002`). Task `exit_code` is a number, `0` until the task ends: write `exit_code != 0`, not `"0"`
-- A Client ID Metadata Document is cached as its response's `Cache-Control` or `Expires` allows, for at most a day, instead of always an hour
 - **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
+- A Client ID Metadata Document is cached as its response's `Cache-Control` or `Expires` allows, for at most a day, instead of always an hour
 
 ### Fixed
 - The Swarm page no longer offers the CA and encryption editors at operations level 2, which the server refused
 - A plugin whose name has a `/`, like `vieux/sshfs`, resolves behind `server.base_path` and with a `.json` suffix
-- A write method on a path that doesn't serve it answers `405` with `Allow`, instead of `404` and the dashboard
 - The demo's topology view shows each service's running replicas instead of reporting every service down
 - The resync button reports a failed re-sync, and waits long enough for a slow Docker Engine to answer instead of giving up after 30 seconds
-- An unknown or disabled `/-/` endpoint answers `404`, and one asked with the wrong method `405` with `Allow`, instead of serving the dashboard
+- A method a path doesn't serve answers `405` with `Allow`, and an unknown or disabled `/-/` endpoint `404`, instead of serving the dashboard
 - Remove Node in the command palette tries a normal removal first, and offers to force it, behind a second confirmation, only if Docker refuses
 - Stopping Cetacean ends open metrics streams, log follows and MCP listen sessions, so a connected client no longer holds shutdown for the whole grace period
 - A failed config or secret create is reported once, in the dialog, instead of also as a toast
