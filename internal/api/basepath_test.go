@@ -425,3 +425,31 @@ func TestAbsURLOriginBehindRealIP(t *testing.T) {
 		})
 	}
 }
+
+func TestBasePathMiddlewareKeepsAnEscapedName(t *testing.T) {
+	var captured string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.EscapedPath()
+	})
+
+	handler := basePathMiddleware("/cetacean", noRoutes(), inner)
+	req := httptest.NewRequest(http.MethodGet, "/cetacean/plugins/vieux%2Fsshfs%3Alatest", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if want := "/plugins/vieux%2Fsshfs%3Alatest"; captured != want {
+		t.Errorf("inner saw escaped path %q, want %q", captured, want)
+	}
+}
+
+func TestBasePathRedirectKeepsAnEscapedName(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	handler := basePathMiddleware("/cetacean", noRoutes(), inner)
+	req := httptest.NewRequest(http.MethodGet, "/cetacean/plugins/vieux%2Fsshfs/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if got, want := rec.Header().Get("Location"), "/cetacean/plugins/vieux%2Fsshfs"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
+	}
+}
