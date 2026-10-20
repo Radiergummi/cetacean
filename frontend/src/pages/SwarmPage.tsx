@@ -116,10 +116,10 @@ export default function SwarmPage() {
         actions={
           <>
             <SwarmActions
-              allowedMethods={page.allowedMethods}
+              editable={page.editable}
               onRotated={page.fetchSwarmInfo}
             />
-            {page.allowedMethods.has("POST") && (
+            {page.editable.has("rotate-token") && (
               <>
                 <JoinTokenDialog
                   label="Manager"
@@ -172,7 +172,7 @@ export default function SwarmPage() {
         {/* Raft */}
         <EditablePanel
           title="Raft"
-          canEdit={page.allowedMethods.has("PATCH")}
+          canEdit={page.editable.has("raft")}
           display={
             <KVTable
               rows={[
@@ -243,14 +243,14 @@ export default function SwarmPage() {
         <CAConfigPanel
           spec={spec}
           rootRotationInProgress={swarm.RootRotationInProgress}
-          canEdit={page.allowedMethods.has("POST")}
+          canEdit={page.editable.has("ca")}
           onSaved={page.fetchSwarmInfo}
         />
 
         {/* Orchestration */}
         <EditablePanel
           title="Orchestration"
-          canEdit={page.allowedMethods.has("PATCH")}
+          canEdit={page.editable.has("orchestration")}
           display={
             <KVTable
               rows={[
@@ -286,7 +286,7 @@ export default function SwarmPage() {
         {/* Dispatcher */}
         <EditablePanel
           title="Dispatcher"
-          canEdit={page.allowedMethods.has("PATCH")}
+          canEdit={page.editable.has("dispatcher")}
           display={
             <KVTable
               rows={[
@@ -318,7 +318,7 @@ export default function SwarmPage() {
         {/* Encryption */}
         <EncryptionPanel
           spec={spec}
-          canEdit={page.allowedMethods.has("POST")}
+          canEdit={page.editable.has("encryption")}
           onSaved={page.fetchSwarmInfo}
         />
 
@@ -343,7 +343,7 @@ export default function SwarmPage() {
       <CollapsibleSection
         title="Plugins"
         controls={
-          page.allowedMethods.has("POST") ? (
+          page.canInstallPlugins ? (
             <Button
               variant="outline"
               size="sm"

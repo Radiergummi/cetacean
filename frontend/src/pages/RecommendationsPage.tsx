@@ -1,4 +1,4 @@
-import { headAllowedMethods } from "@/api/client";
+import { headCapabilities } from "@/api/client";
 import type { Recommendation, RecommendationCategory } from "@/api/types";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
@@ -103,14 +103,15 @@ function RecommendationCard({ hint, applying, onApply }: CardProps) {
   // oxlint-disable-next-line react/static-components
   const CategoryIcon = hintIcon(hint.category);
   const fix = fixTarget(hint);
-  // The target's own Allow says whether this caller may apply the fix: the
-  // operations level and the grant both have to admit its method.
-  const { data: targetMethods } = useQuery({
-    queryKey: ["allowed-methods", fix?.path],
-    queryFn: fix != null && hint.suggested != null ? () => headAllowedMethods(fix.path) : skipToken,
+  // The target's edit links say whether this caller may apply the fix: the
+  // operations level and the grant both have to admit the sub-resource.
+  const { data: target } = useQuery({
+    queryKey: ["capabilities", fix?.path],
+    queryFn: fix != null && hint.suggested != null ? () => headCapabilities(fix.path) : skipToken,
     staleTime: 60_000,
   });
-  const hasFix = fix != null && hint.suggested != null && (targetMethods?.has(fix.method) ?? false);
+  const hasFix =
+    fix != null && hint.suggested != null && (target?.editable.has(fix.subResource) ?? false);
   const isApplying = applying === recommendationKey(hint);
   const link = recommendationLink(hint);
   const detail = categoryDetails[hint.category];

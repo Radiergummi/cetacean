@@ -16,7 +16,7 @@ import { useState } from "react";
 interface Props {
   hints: Recommendation[];
   /** The service's Allow methods; a fix is offered when they carry its method. */
-  allowedMethods: Set<string>;
+  editable: ReadonlySet<string>;
   onFixed?: (() => void) | undefined;
 }
 
@@ -24,7 +24,7 @@ interface Props {
  * Full-width banner showing all sizing hints for a service, with
  * detailed messages, suggested values, and apply buttons.
  */
-export function SizingBanner({ hints, allowedMethods, onFixed }: Props) {
+export function SizingBanner({ hints, editable, onFixed }: Props) {
   const [applying, setApplying] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export function SizingBanner({ hints, allowedMethods, onFixed }: Props) {
           const HintIcon = hintIcon(hint.category);
           const suggestion = formatSuggestion(hint);
           const fix = fixTarget(hint);
-          const hasFix = fix != null && hint.suggested != null && allowedMethods.has(fix.method);
+          const hasFix = fix != null && hint.suggested != null && editable.has(fix.subResource);
           const isApplying = applying === originalIndex;
 
           return (

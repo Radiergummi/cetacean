@@ -49,6 +49,7 @@ export default function PluginDetail() {
   });
   const plugin = pluginQuery.data?.data ?? null;
   const allowedMethods = pluginQuery.data?.allowedMethods ?? emptyMethods;
+  const editable = pluginQuery.data?.editable ?? emptyMethods;
   const error = pluginQuery.error
     ? getErrorMessage(pluginQuery.error, "Failed to load plugin")
     : null;
@@ -94,7 +95,7 @@ export default function PluginDetail() {
         ]}
         actions={
           <>
-            {allowedMethods.has("POST") && !plugin.Enabled && (
+            {editable.has("enable") && !plugin.Enabled && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -115,7 +116,7 @@ export default function PluginDetail() {
               </Button>
             )}
 
-            {allowedMethods.has("POST") && plugin.Enabled && (
+            {editable.has("disable") && plugin.Enabled && (
               <AlertDialog>
                 <AlertDialogTrigger
                   render={
@@ -158,7 +159,7 @@ export default function PluginDetail() {
               </AlertDialog>
             )}
 
-            {allowedMethods.has("DELETE") && (
+            {editable.has("upgrade") && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -267,7 +268,7 @@ export default function PluginDetail() {
             title="Args"
             empty={args.length === 0}
             emptyDescription="Click Edit to configure plugin arguments."
-            canEdit={allowedMethods.has("PATCH")}
+            canEdit={editable.has("settings")}
             onOpen={() => setDraftArgs(joinCommand(args))}
             onSave={async () => {
               const parsed = parseCommand(draftArgs);

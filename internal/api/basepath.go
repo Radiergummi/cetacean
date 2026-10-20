@@ -197,7 +197,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		if stripped == "" || stripped == "/" {
 			ctx := context.WithValue(r.Context(), basePathKey, basePath)
 			r = r.WithContext(ctx)
-			r.URL.Path = "/"
+			r.URL.Path, r.URL.RawPath = "/", ""
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -206,6 +206,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 			trimmed := strings.TrimRight(stripped, "/")
 			target := url.URL{
 				Path:     basePath + trimmed,
+				RawPath:  strings.TrimRight(r.URL.RawPath, "/"),
 				RawQuery: r.URL.RawQuery,
 			}
 			http.Redirect(w, r, target.String(), http.StatusMovedPermanently)
@@ -215,6 +216,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		ctx := context.WithValue(r.Context(), basePathKey, basePath)
 		r = r.WithContext(ctx)
 		r.URL.Path = stripped
+		r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, basePath)
 		next.ServeHTTP(w, r)
 	})
 }

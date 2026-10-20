@@ -316,12 +316,19 @@ describe("Allow", () => {
     return response.headers.get("Allow");
   }
 
-  it("offers only the writes the server routes for a resource", async () => {
+  it("offers only the writes the server routes at the resource itself", async () => {
     expect(await allow(`/volumes/${dataset.volumes[0]!.Name}`)).toBe("GET, HEAD, DELETE");
-    expect(await allow(`/secrets/${dataset.secrets[0]!.ID}`)).toBe("GET, HEAD, PATCH, DELETE");
-    expect(await allow(`/services/${dataset.services[0]!.ID}`)).toBe(
-      "GET, HEAD, PUT, POST, PATCH, DELETE",
-    );
+    expect(await allow(`/secrets/${dataset.secrets[0]!.ID}`)).toBe("GET, HEAD, DELETE");
+    expect(await allow(`/services/${dataset.services[0]!.ID}`)).toBe("GET, HEAD, DELETE");
+  });
+
+  it("links the sub-resources that take a write", async () => {
+    const path = `/secrets/${dataset.secrets[0]!.ID}`;
+    const response = await fetch(`http://localhost${path}`, {
+      headers: { Accept: "application/json" },
+    });
+
+    expect(response.headers.get("Link")).toBe(`<${path}/labels>; rel="edit"`);
   });
 
   it("offers create on the collections that have one", async () => {

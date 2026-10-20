@@ -1281,6 +1281,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -2044,6 +2048,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -2427,6 +2435,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -3028,6 +3040,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -5190,6 +5206,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -5454,6 +5474,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -5761,6 +5785,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -6011,6 +6039,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -6179,6 +6211,10 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+            Link:
+              $ref: "#/components/headers/Link"
           content:
             application/json:
               schema:
@@ -6642,8 +6678,19 @@ components:
         enum: [zstd, gzip]
         example: zstd
 
+    Allow:
+      description: >
+        The methods the caller may use on this resource: GET and HEAD, plus
+        each write routed here that both the operations level and the
+        caller's write grant permit
+      schema:
+        type: string
+        example: GET, HEAD, PUT, PATCH, DELETE
+
     Link:
-      description: RFC 8288 pagination links (rel="next", rel="prev")
+      description: |
+        RFC 8288 links: pagination (rel="next", rel="prev") on a list, and on a
+        detail response one rel="edit" per sub-resource the caller may write
       schema:
         type: string
         example: '</nodes?limit=50&offset=50>; rel="next"'

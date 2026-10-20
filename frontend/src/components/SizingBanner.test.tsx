@@ -12,25 +12,25 @@ const scaleHint = {
   suggested: 2,
 } as Recommendation;
 
-// Each fix is offered by the method it needs: a scale is a PUT, which level 1
-// allows, while the resources editor's PATCH waits for level 2.
+// Each fix is offered by the sub-resource it writes: a scale opens at level 1,
+// while the resources editor waits for level 2.
 describe("SizingBanner", () => {
-  it("offers a scale fix when PUT is allowed, without PATCH", () => {
+  it("offers a scale fix when scale is editable, without resources", () => {
     render(
       <SizingBanner
         hints={[scaleHint]}
-        allowedMethods={new Set(["GET", "HEAD", "PUT", "POST"])}
+        editable={new Set(["scale", "restart"])}
       />,
     );
 
     expect(screen.getByRole("button", { name: /Apply suggested value/ })).toBeInTheDocument();
   });
 
-  it("withholds it when PUT is not allowed", () => {
+  it("withholds it when scale is not editable", () => {
     render(
       <SizingBanner
         hints={[scaleHint]}
-        allowedMethods={new Set(["GET", "HEAD", "PATCH"])}
+        editable={new Set(["resources"])}
       />,
     );
 

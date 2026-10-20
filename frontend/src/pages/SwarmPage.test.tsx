@@ -13,20 +13,21 @@ vi.mock("@/api/client", async (importOriginal) => ({
   },
 }));
 
-function respondWith(allowedMethods: string[]) {
+function respondWith(editable: string[]) {
   vi.mocked(api.swarm).mockResolvedValue({
     data: { swarm: buildDataset().swarm, managerAddr: "10.0.0.1:2377" },
-    allowedMethods: new Set(allowedMethods),
+    allowedMethods: new Set(["GET", "HEAD"]),
+    editable: new Set(editable),
   } as never);
 }
 
 beforeEach(() => {
-  vi.mocked(api.plugins).mockResolvedValue({ data: [] } as never);
+  vi.mocked(api.plugins).mockResolvedValue({ data: [], allowedMethods: new Set() } as never);
 });
 
 describe("SwarmPage", () => {
-  it("hides the join dialogs when the caller may not POST to the swarm", async () => {
-    respondWith(["GET", "HEAD", "PATCH"]);
+  it("hides the join dialogs when the caller may not rotate the join tokens", async () => {
+    respondWith(["raft", "dispatcher"]);
 
     render(<SwarmPage />, { wrapper: createWrapper(createTestQueryClient()) });
 
@@ -35,8 +36,8 @@ describe("SwarmPage", () => {
     expect(screen.queryByText("Join Manager")).not.toBeInTheDocument();
   });
 
-  it("offers the join dialogs when the caller may POST to the swarm", async () => {
-    respondWith(["GET", "HEAD", "PATCH", "POST"]);
+  it("offers the join dialogs when the caller may rotate the join tokens", async () => {
+    respondWith(["raft", "dispatcher", "rotate-token"]);
 
     render(<SwarmPage />, { wrapper: createWrapper(createTestQueryClient()) });
 

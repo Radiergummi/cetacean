@@ -47,9 +47,7 @@ func (h *Handlers) HandleGetServiceMode(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
-
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceModeRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceModeRepresentation)
 }
 
 func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.Request) {
@@ -57,9 +55,7 @@ func (h *Handlers) HandleGetServiceEndpointMode(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	h.setAllowSubResource(w, r, "service:"+svc.Spec.Name)
-
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEndpointModeRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceEndpointModeRepresentation)
 }
 
 type updateEndpointModeRequest struct {
@@ -180,7 +176,7 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceEnvRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceEnvRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +243,7 @@ func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceResourcesRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceResourcesRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceResources(w http.ResponseWriter, r *http.Request) {
@@ -358,7 +354,7 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	h.writeServiceRepresentation(w, r, svc.ID, h.servicePortsRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.servicePortsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
@@ -406,7 +402,7 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceHealthcheckRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceHealthcheckRepresentation)
 }
 
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -443,7 +439,7 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.servicePlacementRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.servicePlacementRepresentation)
 }
 
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
@@ -479,7 +475,7 @@ func (h *Handlers) HandleGetServiceUpdatePolicy(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceUpdatePolicyRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceUpdatePolicyRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceUpdatePolicy(w http.ResponseWriter, r *http.Request) {
@@ -501,7 +497,7 @@ func (h *Handlers) HandleGetServiceRollbackPolicy(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceRollbackPolicyRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceRollbackPolicyRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceRollbackPolicy(w http.ResponseWriter, r *http.Request) {
@@ -523,7 +519,7 @@ func (h *Handlers) HandleGetServiceLogDriver(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceLogDriverRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceLogDriverRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceLogDriver(w http.ResponseWriter, r *http.Request) {
@@ -621,7 +617,7 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceContainerConfigRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceContainerConfigRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
@@ -758,7 +754,7 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceConfigsRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceConfigsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
@@ -862,7 +858,7 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceSecretsRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceSecretsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
@@ -941,7 +937,7 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceNetworksRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceNetworksRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
@@ -1019,7 +1015,7 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	h.writeServiceRepresentation(w, r, svc.ID, h.serviceMountsRepresentation)
+	h.writeServiceRepresentation(w, r, svc, h.serviceMountsRepresentation)
 }
 
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {

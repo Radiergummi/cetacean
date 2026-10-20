@@ -599,3 +599,17 @@ func TestParseAcceptRangesIsCaseInsensitive(t *testing.T) {
 		t.Errorf("second range = %+v, want text/* at q=0", ranges[1])
 	}
 }
+
+func TestSuffixKeepsAnEscapedName(t *testing.T) {
+	var captured string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.URL.EscapedPath()
+	})
+
+	req := httptest.NewRequest("GET", "/plugins/vieux%2Fsshfs%3Alatest.json", nil)
+	negotiate(inner).ServeHTTP(httptest.NewRecorder(), req)
+
+	if want := "/plugins/vieux%2Fsshfs%3Alatest"; captured != want {
+		t.Errorf("inner saw escaped path %q, want %q", captured, want)
+	}
+}

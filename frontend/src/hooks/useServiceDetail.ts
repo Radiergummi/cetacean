@@ -1,4 +1,4 @@
-import { api, headAllowedMethods } from "../api/client";
+import { api } from "../api/client";
 import type {
   ContainerConfig,
   Healthcheck,
@@ -57,7 +57,6 @@ export function useServiceDetail(id: string | undefined) {
   const [serviceMounts, setServiceMounts] = useState<ServiceMount[] | null>(null);
   const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
   const monitoring = useMonitoringStatus();
-  const [canChangeEndpointMode, setCanChangeEndpointMode] = useState(false);
   const hasPrometheus = isPrometheusReady(monitoring);
   const hasCadvisor = isCadvisorReady(monitoring);
   const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
@@ -122,6 +121,7 @@ export function useServiceDetail(id: string | undefined) {
     error,
     retry: refetchService,
     allowedMethods,
+    editable,
   } = useDetailResource<ServiceDetail>(id, api.service, "/services", {
     onEvent,
     extraQueryKeys,
@@ -163,18 +163,6 @@ export function useServiceDetail(id: string | undefined) {
       })
       .catch(console.warn);
   }, []);
-
-  useEffect(() => {
-    if (!id) {
-      return;
-    }
-
-    headAllowedMethods(`/services/${id}/endpoint-mode`)
-      .then((methods) => {
-        setCanChangeEndpointMode(methods.has("PUT"));
-      })
-      .catch(() => {});
-  }, [id]);
 
   const serviceName = service?.Spec.Name || "";
   const taskMetrics = useTaskMetrics(
@@ -264,8 +252,6 @@ export function useServiceDetail(id: string | undefined) {
     );
   }, [serviceLabels, integrations]);
 
-  const canPatch = allowedMethods.has("PATCH");
-
   return {
     service,
     changes,
@@ -287,8 +273,7 @@ export function useServiceDetail(id: string | undefined) {
     onContainerConfigSaved: setContainerConfig,
     integrations,
     allowedMethods,
-    canPatch,
-    canChangeEndpointMode,
+    editable,
     hasPrometheus,
     hasCadvisor,
     error,

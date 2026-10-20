@@ -243,9 +243,9 @@ func hasMidPathExtension(path string) bool {
 }
 
 // resolveExtension checks for a known extension suffix on the request path.
-// If found, it strips the suffix from r.URL.Path and returns the content type
-// along with the suffix it removed. Returns ContentTypeUnsupported if no
-// extension matches.
+// If found, it strips the suffix from the path, raw and decoded, and returns
+// the content type along with the suffix it removed. Returns
+// ContentTypeUnsupported if no extension matches.
 func resolveExtension(r *http.Request) (ContentType, string) {
 	path := r.URL.Path
 	if literalDocuments[path] {
@@ -258,6 +258,7 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 				continue
 			}
 			r.URL.Path = trimmed
+			r.URL.RawPath = strings.TrimSuffix(r.URL.RawPath, ext.ext)
 
 			return ext.ct, ext.ext
 		}

@@ -1,4 +1,4 @@
-import { ApiError, api, headAllowedMethods } from "../../api/client";
+import { ApiError, api, headCapabilities } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
@@ -382,14 +382,17 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const executeAction = useCallback(
     async (action: PaletteAction, args: unknown[]) => {
       // Check permission via HEAD before executing
-      if (action.requiredMethod && action.steps[0]?.type === "resource") {
+      if ((action.requiredMethod || action.requiredEdit) && action.steps[0]?.type === "resource") {
         const resource = args[0] as SearchResult;
         const path = resourcePath(action.steps[0].resourceType!, resource.id, resource.name);
 
         if (path) {
-          const methods = await headAllowedMethods(path);
+          const { methods, editable } = await headCapabilities(path);
+          const permitted = action.requiredEdit
+            ? editable.has(action.requiredEdit)
+            : methods.has(action.requiredMethod ?? "");
 
-          if (!methods.has(action.requiredMethod)) {
+          if (!permitted) {
             setActionError("You don't have permission to perform this action.");
             return;
           }

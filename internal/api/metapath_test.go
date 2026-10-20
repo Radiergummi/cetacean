@@ -50,3 +50,32 @@ func TestMetaPathWithTheWrongMethodIsNotAllowed(t *testing.T) {
 		t.Errorf("Allow = %q, want POST", allow)
 	}
 }
+
+// Outside /-/ too, a write method on a path some route serves is that path's
+// to refuse, not the dashboard's: 405, with the methods the path does serve.
+func TestWriteMethodOnARoutedPathIsNotAllowed(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/405-sends-allow")
+
+	handler, _ := newRouter(testRouterConfig(t, nil))
+
+	for _, tc := range []struct{ method, path, allow string }{
+		{http.MethodPut, "/nodes", "GET, HEAD"},
+		{http.MethodDelete, "/services/svc1/scale", "PUT"},
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s = %d, want 405", tc.method, tc.path, rec.Code)
+		}
+		if got := rec.Header().Get("Allow"); got != tc.allow {
+			t.Errorf("%s %s: Allow = %q, want %q", tc.method, tc.path, got, tc.allow)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/no/such/path", nil))
+	if rec.Code == http.StatusMethodNotAllowed {
+		t.Errorf("POST to a path nothing routes = 405, want it left to the fallback")
+	}
+}

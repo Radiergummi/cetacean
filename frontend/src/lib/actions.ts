@@ -15,8 +15,10 @@ export interface PaletteAction {
    * the catalogue marks as one forcing would get past.
    */
   forceFallback?: PaletteAction | undefined;
-  /** HTTP method required to execute this action (checked via HEAD). */
+  /** Method the resource itself must allow (checked via HEAD). */
   requiredMethod?: string | undefined;
+  /** Sub-resource the action writes, which the resource must link as editable. */
+  requiredEdit?: string | undefined;
 }
 
 export interface PaletteStep {
@@ -73,7 +75,7 @@ export function getActions(): PaletteAction[] {
       id: "scale",
       label: "Scale Service",
       keywords: ["scale", "replicas"],
-      requiredMethod: "PUT",
+      requiredEdit: "scale",
       steps: [
         { type: "resource", resourceType: "service", label: "Service" },
         { type: "number", label: "Replicas", placeholder: "Number of replicas" },
@@ -86,7 +88,7 @@ export function getActions(): PaletteAction[] {
       id: "image",
       label: "Update Image",
       keywords: ["image", "deploy", "tag"],
-      requiredMethod: "PUT",
+      requiredEdit: "image",
       steps: [
         { type: "resource", resourceType: "service", label: "Service" },
         { type: "text", label: "Image", placeholder: "e.g. nginx:1.27" },
@@ -99,7 +101,7 @@ export function getActions(): PaletteAction[] {
       id: "rollback",
       label: "Rollback Service",
       keywords: ["rollback", "revert"],
-      requiredMethod: "POST",
+      requiredEdit: "rollback",
       steps: [{ type: "resource", resourceType: "service", label: "Service" }],
       destructive: true,
       execute: async (service: SearchResult) => {
@@ -110,7 +112,7 @@ export function getActions(): PaletteAction[] {
       id: "restart",
       label: "Restart Service",
       keywords: ["restart", "redeploy"],
-      requiredMethod: "POST",
+      requiredEdit: "restart",
       steps: [{ type: "resource", resourceType: "service", label: "Service" }],
       destructive: true,
       execute: async (service: SearchResult) => {
@@ -121,7 +123,7 @@ export function getActions(): PaletteAction[] {
       id: "drain",
       label: "Drain Node",
       keywords: ["drain"],
-      requiredMethod: "PUT",
+      requiredEdit: "availability",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
       execute: async (node: SearchResult) => {
@@ -132,7 +134,7 @@ export function getActions(): PaletteAction[] {
       id: "activate",
       label: "Activate Node",
       keywords: ["activate", "undrain"],
-      requiredMethod: "PUT",
+      requiredEdit: "availability",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       execute: async (node: SearchResult) => {
         await api.updateNodeAvailability(node.id, "active");
@@ -142,7 +144,7 @@ export function getActions(): PaletteAction[] {
       id: "pause",
       label: "Pause Node",
       keywords: ["pause"],
-      requiredMethod: "PUT",
+      requiredEdit: "availability",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
       execute: async (node: SearchResult) => {
@@ -164,7 +166,7 @@ export function getActions(): PaletteAction[] {
       id: "promote-node",
       label: "Promote Node",
       keywords: ["promote"],
-      requiredMethod: "PUT",
+      requiredEdit: "role",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       execute: async (node: SearchResult) => {
         await api.updateNodeRole(node.id, "manager");
@@ -174,7 +176,7 @@ export function getActions(): PaletteAction[] {
       id: "demote-node",
       label: "Demote Node",
       keywords: ["demote"],
-      requiredMethod: "PUT",
+      requiredEdit: "role",
       steps: [{ type: "resource", resourceType: "node", label: "Node" }],
       destructive: true,
       execute: async (node: SearchResult) => {

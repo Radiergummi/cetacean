@@ -76,6 +76,7 @@ func handleGetLabels[T any](
 	if !ok {
 		return
 	}
+	h.setAllowSubResource(w, r, spec.aclResource(item))
 
 	writeCachedJSON(w, r, spec.detail(r, item))
 }

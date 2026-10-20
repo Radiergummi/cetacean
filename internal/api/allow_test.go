@@ -98,11 +98,12 @@ func TestSetAllow_ServiceFullWriteGrants(t *testing.T) {
 	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
 	h.setAllow(w, r, "service", "webapp")
 
-	allow := w.Header().Get("Allow")
-	for _, method := range []string{"GET", "HEAD", "PUT", "POST", "PATCH", "DELETE"} {
-		if !strings.Contains(allow, method) {
-			t.Errorf("Allow header %q missing method %s", allow, method)
-		}
+	if got := w.Header().Get("Allow"); got != "GET, HEAD, DELETE" {
+		t.Errorf("Allow = %q, want %q", got, "GET, HEAD, DELETE")
+	}
+	if got := editTargets(w.Header()); !slices.Contains(got, "/services/webapp/scale") ||
+		!slices.Contains(got, "/services/webapp/labels") {
+		t.Errorf("edit links = %v, want scale and labels among them", got)
 	}
 }
 
@@ -123,35 +124,6 @@ func TestSetAllow_ServiceReadOnlyGrants(t *testing.T) {
 	}
 }
 
-func TestSetAllow_ServiceLowOpsLevel(t *testing.T) {
-	e := acl.NewEvaluator()
-	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
-	}})
-
-	// OpsOperational: only tier1 methods (PUT, POST for service).
-	h := newTestHandlers(t, withACL(e), withOpsLevel(config.OpsOperational))
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/services/webapp", nil)
-	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
-	h.setAllow(w, r, "service", "webapp")
-
-	allow := w.Header().Get("Allow")
-	// Should include PUT and POST (tier1) but not PATCH (tier2) or DELETE (tier3).
-	if !strings.Contains(allow, "PUT") {
-		t.Errorf("Allow header %q should include PUT at OpsOperational", allow)
-	}
-	if !strings.Contains(allow, "POST") {
-		t.Errorf("Allow header %q should include POST at OpsOperational", allow)
-	}
-	if strings.Contains(allow, "PATCH") {
-		t.Errorf("Allow header %q should NOT include PATCH at OpsOperational", allow)
-	}
-	if strings.Contains(allow, "DELETE") {
-		t.Errorf("Allow header %q should NOT include DELETE at OpsOperational", allow)
-	}
-}
-
 func TestSetAllow_DifferentResourceTypes(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
@@ -166,7 +138,7 @@ func TestSetAllow_DifferentResourceTypes(t *testing.T) {
 		{
 			name:         "node",
 			resourceType: "node",
-			wantMethods:  []string{"GET", "HEAD", "PUT", "PATCH", "DELETE"},
+			wantMethods:  []string{"GET", "HEAD", "DELETE"},
 		},
 		{
 			name:         "task",
@@ -205,34 +177,6 @@ func TestSetAllow_DifferentResourceTypes(t *testing.T) {
 	}
 }
 
-func TestSetAllow_AcceptPatch_ServiceFullWrite(t *testing.T) {
-	spec.Satisfies(t,
-		"http/rfc5789/accept-patch-is-advertised",
-	)
-
-	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/services/webapp", nil)
-	h.setAllow(w, r, "service", "webapp")
-
-	got := w.Header().Get("Accept-Patch")
-	if got != AcceptPatch {
-		t.Errorf("Accept-Patch = %q, want %q", got, AcceptPatch)
-	}
-}
-
-func TestSetAllow_AcceptPatch_SwarmMergeOnly(t *testing.T) {
-	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/swarm", nil)
-	h.setAllow(w, r, "swarm", "swarm")
-
-	got := w.Header().Get("Accept-Patch")
-	if got != AcceptMergePatch {
-		t.Errorf("Accept-Patch = %q, want %q", got, AcceptMergePatch)
-	}
-}
-
 func TestSetAllow_AcceptPatch_AbsentWhenNoPatch(t *testing.T) {
 	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
 	w := httptest.NewRecorder()
@@ -252,9 +196,9 @@ func TestSetAllow_AcceptPatch_AbsentWhenReadOnly(t *testing.T) {
 
 	h := newTestHandlers(t, withACL(e), withOpsLevel(config.OpsImpactful))
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/services/webapp", nil)
+	r := httptest.NewRequest("GET", "/services/webapp/labels", nil)
 	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
-	h.setAllow(w, r, "service", "webapp")
+	h.setAllowSubResource(w, r, "service:webapp")
 
 	if got := w.Header().Get("Accept-Patch"); got != "" {
 		t.Errorf("Accept-Patch should be absent for read-only, got %q", got)
@@ -265,8 +209,8 @@ func TestSetAllow_AcceptPatch_AbsentWhenLowOpsLevel(t *testing.T) {
 	// OpsOperational is below PATCH tier (OpsConfiguration) for services.
 	h := newTestHandlers(t, withOpsLevel(config.OpsOperational))
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/services/webapp", nil)
-	h.setAllow(w, r, "service", "webapp")
+	r := httptest.NewRequest("GET", "/services/webapp/labels", nil)
+	h.setAllowSubResource(w, r, "service:webapp")
 
 	if got := w.Header().Get("Accept-Patch"); got != "" {
 		t.Errorf("Accept-Patch should be absent at OpsOperational, got %q", got)
@@ -280,20 +224,16 @@ func TestSetAllow_NilACL(t *testing.T) {
 	r := httptest.NewRequest("GET", "/services/webapp", nil)
 	h.setAllow(w, r, "service", "webapp")
 
-	allow := w.Header().Get("Allow")
-	// With nil ACL, Can() returns true, so all methods at/below ops level are included.
-	for _, method := range []string{"GET", "HEAD", "PUT", "POST", "PATCH", "DELETE"} {
-		if !strings.Contains(allow, method) {
-			t.Errorf("Allow header %q missing method %s with nil ACL", allow, method)
-		}
+	// With nil ACL, Can() returns true, so every method the level reaches is offered.
+	if got := w.Header().Get("Allow"); got != "GET, HEAD, DELETE" {
+		t.Errorf("Allow = %q with nil ACL, want %q", got, "GET, HEAD, DELETE")
 	}
 }
 
-// Fails while allow.go still calls a node PATCH impactful, which hides the
-// dashboard's labels editor on an API that accepts the edit. The gate is held to
-// the same tier elsewhere, but that reads no Allow header. The tier is asserted
-// rather than read from the routes, which would pass whatever they said.
-func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
+// The node labels editor opens at operations level 2, the level its route
+// takes. The tier is asserted rather than read from the routes, which would
+// pass whatever they said.
+func TestNodeLabelsAreLinkedAtTierTwo(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
 		{Resources: []string{"node:*"}, Audience: []string{"*"}, Permissions: []string{"write"}},
@@ -305,8 +245,8 @@ func TestAllowHeaderOffersNodePatchAtTierTwo(t *testing.T) {
 	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
 	h.setAllow(w, r, "node", "node1")
 
-	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "PATCH") {
-		t.Errorf("Allow = %q at operations level 2, want PATCH offered", allow)
+	if got := editTargets(w.Header()); !slices.Contains(got, "/nodes/node1/labels") {
+		t.Errorf("edit links = %v at operations level 2, want the labels", got)
 	}
 }
 
@@ -416,8 +356,8 @@ func TestVaryByIdentityStatedOnce(t *testing.T) {
 	}
 }
 
-// Every method Allow offers on a resource must be routed at that path or below
-// it; POST creates a config or secret on the collection, never on one of them.
+// Every method Allow offers on a resource must be routed at that path; POST
+// creates a config or secret on the collection, never on one of them.
 func TestAllowOffersNoMethodWithoutARoute(t *testing.T) {
 	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
 
@@ -428,8 +368,8 @@ func TestAllowOffersNoMethodWithoutARoute(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.setAllow(w, httptest.NewRequest("GET", tc.path, nil), tc.kind, "x")
 
-		if got := w.Header().Get("Allow"); got != "GET, HEAD, PATCH, DELETE" {
-			t.Errorf("Allow on %s = %q, want %q", tc.path, got, "GET, HEAD, PATCH, DELETE")
+		if got := w.Header().Get("Allow"); got != "GET, HEAD, DELETE" {
+			t.Errorf("Allow on %s = %q, want %q", tc.path, got, "GET, HEAD, DELETE")
 		}
 	}
 }
@@ -508,5 +448,147 @@ func TestDetailAllowUsesTheWriteGatesName(t *testing.T) {
 	}
 	if got := allow(t, "/tasks/task1", "service:web"); !strings.Contains(got, "DELETE") {
 		t.Errorf("write on the task's service: Allow = %q, want DELETE", got)
+	}
+}
+
+// editTargets lists the rel="edit" targets a response carries.
+func editTargets(h http.Header) []string {
+	var targets []string
+	for _, value := range h.Values("Link") {
+		for link := range strings.SplitSeq(value, ", ") {
+			target, params, _ := strings.Cut(link, ">;")
+			if strings.TrimSpace(params) == `rel="edit"` {
+				targets = append(targets, strings.TrimPrefix(target, "<"))
+			}
+		}
+	}
+	return targets
+}
+
+// Allow names the target's own methods; what may be written beneath it is
+// linked instead, one sub-resource per link.
+func TestDetailAllowIsStrictAndLinksWritableSubResources(t *testing.T) {
+	for _, tc := range []struct {
+		level     config.OperationsLevel
+		wantAllow string
+		wantEdit  []string
+	}{
+		{config.OpsOperational, "GET, HEAD", []string{
+			"/services/web/image", "/services/web/restart", "/services/web/rollback",
+			"/services/web/scale",
+		}},
+		{config.OpsImpactful, "GET, HEAD, DELETE", nil},
+	} {
+		h := newTestHandlers(t, withOpsLevel(tc.level))
+		w := httptest.NewRecorder()
+		h.setAllow(w, httptest.NewRequest("GET", "/services/web", nil), "service", "web")
+
+		if got := w.Header().Get("Allow"); got != tc.wantAllow {
+			t.Errorf("level %d: Allow = %q, want %q", tc.level, got, tc.wantAllow)
+		}
+		got := editTargets(w.Header())
+		slices.Sort(got)
+		if tc.wantEdit != nil && !slices.Equal(got, tc.wantEdit) {
+			t.Errorf("level %d: edit links = %v, want %v", tc.level, got, tc.wantEdit)
+		}
+		if tc.level == config.OpsImpactful && !slices.Contains(got, "/services/web/endpoint-mode") {
+			t.Errorf("level 3: edit links = %v, want endpoint-mode among them", got)
+		}
+	}
+}
+
+// At level 2 the dispatcher is writable and the CA is not, which the union of
+// PATCH could not tell apart.
+func TestSwarmLinksOnlyTheSettingsTheLevelReaches(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsConfiguration))
+	w := httptest.NewRecorder()
+	h.setAllow(w, httptest.NewRequest("GET", "/swarm", nil), "swarm", "cluster")
+
+	got := editTargets(w.Header())
+	if !slices.Contains(got, "/swarm/dispatcher") || slices.Contains(got, "/swarm/ca") {
+		t.Errorf("edit links at level 2 = %v, want dispatcher and not ca", got)
+	}
+}
+
+func TestDetailLinksNothingWithoutAWriteGrant(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"service:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+	h := newTestHandlers(t, withACL(e), withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/services/web", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}))
+	h.setAllow(w, r, "service", "web")
+
+	if got := editTargets(w.Header()); len(got) != 0 {
+		t.Errorf("edit links for a read-only caller = %v, want none", got)
+	}
+}
+
+// Accept-Patch belongs to the resource that takes the PATCH, with the formats
+// that one parses.
+func TestAcceptPatchIsAdvertisedWhereThePatchGoes(t *testing.T) {
+	spec.Satisfies(t, "http/rfc5789/accept-patch-is-advertised")
+
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+	for path, want := range map[string]string{
+		"/services/web":           "",
+		"/services/web/labels":    AcceptPatch,
+		"/services/web/env":       AcceptPatch,
+		"/services/web/resources": AcceptMergePatch,
+		"/services/web/mode":      "",
+	} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", path, nil)
+		if path == "/services/web" {
+			h.setAllow(w, r, "service", "web")
+		} else {
+			h.setAllowSubResource(w, r, "service:web")
+		}
+
+		if got := w.Header().Get("Accept-Patch"); got != want {
+			t.Errorf("Accept-Patch on %s = %q, want %q", path, got, want)
+		}
+	}
+}
+
+// A patchable sub-resource reports its own Allow and the patch formats it takes.
+func TestPatchableSubResourcesReportTheirOwnAllow(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	router := newTestRouterWithCache(t, c, withOpsLevel(config.OpsImpactful))
+
+	for path, want := range map[string]string{
+		"/services/svc1/labels":    AcceptPatch,
+		"/services/svc1/env":       AcceptPatch,
+		"/services/svc1/resources": AcceptMergePatch,
+	} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+
+		if got := rec.Header().Get("Allow"); got != "GET, HEAD, PATCH" {
+			t.Errorf("Allow on %s = %q, want %q", path, got, "GET, HEAD, PATCH")
+		}
+		if got := rec.Header().Get("Accept-Patch"); got != want {
+			t.Errorf("Accept-Patch on %s = %q, want %q", path, got, want)
+		}
+	}
+}
+
+// A plugin's name may hold a slash, which its links keep escaped: decoded, the
+// target would name a path no route serves.
+func TestEditLinksKeepAnEscapedName(t *testing.T) {
+	h := newTestHandlers(t, withOpsLevel(config.OpsImpactful))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/plugins/vieux%2Fsshfs%3Alatest", nil)
+	h.setAllow(w, r, "plugin", "vieux/sshfs:latest")
+
+	got := editTargets(w.Header())
+	if !slices.Contains(got, "/plugins/vieux%2Fsshfs%3Alatest/enable") {
+		t.Errorf("edit links = %v, want the name kept escaped", got)
 	}
 }

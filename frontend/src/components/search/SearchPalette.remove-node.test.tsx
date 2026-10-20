@@ -1,5 +1,5 @@
 import SearchPalette from "./SearchPalette";
-import { ApiError, api, headAllowedMethods } from "@/api/client";
+import { ApiError, api, headCapabilities } from "@/api/client";
 import { MockEventSource } from "@/test/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -11,7 +11,7 @@ vi.mock("@/api/client", async () => {
 
   return {
     ...actual,
-    headAllowedMethods: vi.fn<typeof actual.headAllowedMethods>(),
+    headCapabilities: vi.fn<typeof actual.headCapabilities>(),
     api: {
       ...actual.api,
       search: vi.fn<typeof actual.api.search>(),
@@ -46,7 +46,10 @@ async function pickNodeToRemove() {
 describe("SearchPalette Remove Node", () => {
   beforeEach(() => {
     vi.stubGlobal("EventSource", MockEventSource);
-    vi.mocked(headAllowedMethods).mockResolvedValue(new Set(["GET", "DELETE"]));
+    vi.mocked(headCapabilities).mockResolvedValue({
+      methods: new Set(["GET", "DELETE"]),
+      editable: new Set(),
+    });
     vi.mocked(api.search).mockResolvedValue({
       results: { nodes: [{ id: "n1", name: "worker-1", detail: "worker" }] },
       counts: { nodes: 1 },

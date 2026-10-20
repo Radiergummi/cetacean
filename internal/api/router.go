@@ -1022,15 +1022,18 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			return
 		}
 
-		// The SPA has no route under /-/: what reaches here is a wrong method
-		// or a disabled or unknown endpoint, never the dashboard.
-		if strings.HasPrefix(r.URL.Path, "/-/") {
+		// The SPA has no route under /-/ and answers only GET and HEAD, so a
+		// method some route serves at this path is a wrong one, not the
+		// dashboard; under /-/, so is a disabled or unknown endpoint.
+		meta := strings.HasPrefix(r.URL.Path, "/-/")
+		if meta || r.Method != http.MethodGet && r.Method != http.MethodHead {
 			if allow := mux.allows(r); len(allow) > 0 {
 				w.Header().Set("Allow", strings.Join(allow, ", "))
 				writeProblem(w, r, http.StatusMethodNotAllowed, r.Method+" is not allowed here")
 				return
 			}
-
+		}
+		if meta {
 			writeProblem(w, r, http.StatusNotFound, "no such resource")
 			return
 		}
