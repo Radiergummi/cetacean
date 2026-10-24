@@ -67,8 +67,15 @@ func CheckVolumesAttachable(
 	return nil
 }
 
+// isVolumeMount covers a Swarm cluster volume too: it is mounted by name and
+// listed, and so keyed, as volume:<name> like any other.
 func isVolumeMount(m mount.Mount) bool {
-	return mount.Type(strings.ToLower(string(m.Type))) == mount.TypeVolume
+	switch mount.Type(strings.ToLower(string(m.Type))) {
+	case mount.TypeVolume, mount.TypeCluster:
+		return true
+	default:
+		return false
+	}
 }
 
 func attached(svc swarm.Service, kind AttachmentKind, id string) bool {

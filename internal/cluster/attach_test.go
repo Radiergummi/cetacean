@@ -6,6 +6,9 @@ import (
 
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func attachTestService() swarm.Service {
@@ -102,5 +105,38 @@ func TestCheckVolumesAttachable(t *testing.T) {
 				t.Fatalf("err = %v, want denied=%v", err, tc.denied)
 			}
 		})
+	}
+}
+
+// A cluster volume is mounted by name like any other volume, so the read check
+// and the host-access tier apply to it as well.
+func TestClusterVolumeMountsAreChecked(t *testing.T) {
+	canRead := func(resource string) bool { return resource == "volume:mine" }
+	theirs := []mount.Mount{{Type: mount.TypeCluster, Source: "theirs", Target: "/d"}}
+
+	var denied *AttachDeniedError
+	if err := CheckVolumesAttachable(
+		attachTestService(),
+		canRead,
+		theirs,
+	); !errors.As(
+		err,
+		&denied,
+	) {
+		t.Errorf("unreadable cluster volume: err = %v, want *AttachDeniedError", err)
+	}
+
+	never := func(string) (volume.Volume, bool) { return volume.Volume{}, false }
+	var host *HostAccessError
+	if err := CheckMounts(
+		attachTestService(),
+		theirs,
+		never,
+		config.OpsConfiguration,
+	); !errors.As(
+		err,
+		&host,
+	) {
+		t.Errorf("cluster volume below level 3: err = %v, want *HostAccessError", err)
 	}
 }
