@@ -184,6 +184,7 @@ export function EditableTable<T>({
                     <td className="px-3 py-3">
                       {(canRemove?.(item, index) ?? true) && (
                         <Button
+                          aria-label="Remove"
                           variant="ghost"
                           size="icon"
                           onClick={() => removeRow(index)}

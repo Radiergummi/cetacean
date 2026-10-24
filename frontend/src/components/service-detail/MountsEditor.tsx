@@ -147,6 +147,7 @@ export function MountsEditor({
                   className="relative rounded-lg border p-3"
                 >
                   <Button
+                    aria-label="Remove mount"
                     variant="outline"
                     size="xs"
                     className="absolute top-2 right-2"

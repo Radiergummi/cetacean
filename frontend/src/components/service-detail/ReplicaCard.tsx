@@ -142,6 +142,7 @@ export function ReplicaCard({
               <PopoverTrigger
                 render={
                   <Button
+                    aria-label="Edit replicas"
                     variant="ghost"
                     size="icon-xs"
                   >

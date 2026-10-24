@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A volume whose name holds a character reserved in a URL, such as `#` or `?`, opens, links and removes correctly in the dashboard
 - The History page's Download CSV applies the name filter as well as the type
 - A command palette action whose permission check fails says so, instead of doing nothing
+- Icon-only buttons, such as Edit replicas and the editors' remove buttons, have names a screen reader announces
 
 ## [0.17.0] - 2026-10-20
 

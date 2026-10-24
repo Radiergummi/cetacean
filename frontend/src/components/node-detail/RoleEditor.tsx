@@ -107,6 +107,7 @@ export function RoleEditor({
                 <PopoverTrigger
                   render={
                     <Button
+                      aria-label="Edit role"
                       variant="ghost"
                       size="icon-xs"
                       title="Edit role"
