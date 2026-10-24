@@ -299,8 +299,16 @@ func TestUpdateServiceMountsNeedsReadOnTheVolume(t *testing.T) {
 		func(o *Options) {
 			e := acl.NewEvaluator()
 			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-				{Resources: []string{"service:web"}, Audience: []string{"*"}, Permissions: []string{"write"}},
-				{Resources: []string{"volume:data"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+				{
+					Resources:   []string{"service:web"},
+					Audience:    []string{"*"},
+					Permissions: []string{"write"},
+				},
+				{
+					Resources:   []string{"volume:data"},
+					Audience:    []string{"*"},
+					Permissions: []string{"read"},
+				},
 			}})
 			o.ACL = e
 		})

@@ -15,7 +15,9 @@ func attachTestService() swarm.Service {
 				ContainerSpec: &swarm.ContainerSpec{
 					Secrets: []*swarm.SecretReference{{SecretID: "s-own", SecretName: "own"}},
 					Configs: []*swarm.ConfigReference{{ConfigID: "c-own", ConfigName: "own"}},
-					Mounts:  []mount.Mount{{Type: mount.TypeVolume, Source: "v-own", Target: "/own"}},
+					Mounts: []mount.Mount{
+						{Type: mount.TypeVolume, Source: "v-own", Target: "/own"},
+					},
 				},
 				Networks: []swarm.NetworkAttachmentConfig{{Target: "n-own"}},
 			},

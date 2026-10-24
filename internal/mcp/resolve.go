@@ -16,7 +16,7 @@ import (
 func (s *Server) visibleNodeErr(ctx context.Context, err error) error {
 	if ambiguous, ok := errors.AsType[*cache.AmbiguousNameError](err); ok &&
 		s.checkRead(ctx, "node", ambiguous.Name) != nil {
-		return nil
+		return nil //nolint:nilerr // answered as not found; see above
 	}
 
 	return err

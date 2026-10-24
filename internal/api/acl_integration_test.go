@@ -1993,7 +1993,9 @@ func TestPatchServiceMounts_RequiresReadOnTheVolume(t *testing.T) {
 			Annotations: swarm.Annotations{Name: "web"},
 			TaskTemplate: swarm.TaskSpec{
 				ContainerSpec: &swarm.ContainerSpec{
-					Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "held", Target: "/held"}},
+					Mounts: []mount.Mount{
+						{Type: mount.TypeVolume, Source: "held", Target: "/held"},
+					},
 				},
 			},
 		},
@@ -2004,8 +2006,16 @@ func TestPatchServiceMounts_RequiresReadOnTheVolume(t *testing.T) {
 
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		{Resources: []string{"service:web"}, Audience: []string{"*"}, Permissions: []string{"write"}},
-		{Resources: []string{"volume:mine"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+		{
+			Resources:   []string{"service:web"},
+			Audience:    []string{"*"},
+			Permissions: []string{"write"},
+		},
+		{
+			Resources:   []string{"volume:mine"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
 	}})
 
 	written := false
