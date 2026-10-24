@@ -648,3 +648,43 @@ func TestServerWithoutDCRKeepsPersistedRegistrations(t *testing.T) {
 		t.Errorf("registrations on disk = %v, want the pre-existing one kept", written)
 	}
 }
+
+// A grant saved before unverified emails were dropped may carry one, and a
+// refresh re-issues whatever the grant holds, so it comes back without it.
+func TestRestoreDropsTheEmailOfAGrantSavedBeforeItWasChecked(t *testing.T) {
+	saved := NewRefreshTokenStore()
+	token := saved.Issue(RefreshTokenData{
+		Subject:  "alice",
+		Email:    "alice@corp.com",
+		ClientID: "c",
+		Resource: "r",
+	}, time.Hour)
+
+	snap := saved.Snapshot()
+	for hash, entry := range snap.Tokens {
+		if !entry.EmailChecked {
+			t.Fatal("a snapshot this build writes must mark its emails checked")
+		}
+		entry.EmailChecked = false
+		snap.Tokens[hash] = entry
+	}
+
+	restored := NewRefreshTokenStore()
+	restored.Restore(snap)
+
+	data, ok := restored.Validate(token)
+	if !ok {
+		t.Fatal("restored grant does not validate")
+	}
+	if data.Email != "" {
+		t.Errorf("Email = %q, want it dropped from an unchecked grant", data.Email)
+	}
+	if data.Subject != "alice" {
+		t.Errorf("Subject = %q, want the rest of the identity kept", data.Subject)
+	}
+
+	restored.Restore(saved.Snapshot())
+	if data, _ := restored.Validate(token); data.Email != "alice@corp.com" {
+		t.Errorf("Email = %q, want a checked grant's email kept", data.Email)
+	}
+}

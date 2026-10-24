@@ -80,11 +80,11 @@ func (s *Server) impactfulTools() []toolDef {
 				mcplib.WithOpenWorldHintAnnotation(false),
 				mcplib.WithString("id",
 					mcplib.Required(),
-					mcplib.Description("Task ID (long-form Docker ID)."),
+					mcplib.Description("Task ID, or `<service>.<slot>` naming a live replica."),
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "task", s.checkTaskWrite,
+			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveTask(ctx, id)
 				}),

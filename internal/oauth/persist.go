@@ -68,6 +68,10 @@ type RefreshTokenSnapEntry struct {
 	GrantID        string    `json:"grantId"`
 	ExpiresAt      time.Time `json:"expiresAt"`
 	GrantExpiresAt time.Time `json:"grantExpiresAt"`
+
+	// Set by every build that drops an email the provider marks unverified.
+	// A grant saved without it may carry one, so Restore drops its email.
+	EmailChecked bool `json:"emailChecked,omitempty"`
 }
 
 // Snapshot returns a serializable copy of the store's current state.
@@ -88,6 +92,7 @@ func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
 			GrantID:        entry.data.grantID,
 			ExpiresAt:      entry.expiresAt,
 			GrantExpiresAt: entry.grantExpiresAt,
+			EmailChecked:   true,
 		}
 	}
 
@@ -128,10 +133,15 @@ func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
 			continue
 		}
 
+		email := entry.Email
+		if !entry.EmailChecked {
+			email = ""
+		}
+
 		s.tokens[hash] = refreshTokenEntry{
 			data: RefreshTokenData{
 				Subject:     entry.Subject,
-				Email:       entry.Email,
+				Email:       email,
 				DisplayName: entry.DisplayName,
 				Groups:      append([]string(nil), entry.Groups...),
 				Grants:      entry.Grants,

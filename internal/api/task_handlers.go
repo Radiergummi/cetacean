@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -66,7 +67,10 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		writeListCSV(w, r, "task", tasks, p, h.taskRows)
+		canRead := h.readChecker(r)
+		writeListCSV(w, r, "task", tasks, p, func(page []swarm.Task) []cluster.Row {
+			return h.enrichedTaskRows(cluster.EnrichTasks(h.cache, page, canRead))
+		})
 		return
 	}
 
@@ -79,19 +83,27 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 		validator,
 		"Task",
 		enrichedTaskID,
-		func(page []swarm.Task) []cluster.EnrichedTask { return cluster.EnrichTasks(h.cache, page) },
+		func(page []swarm.Task) []cluster.EnrichedTask {
+			return cluster.EnrichTasks(h.cache, page, h.readChecker(r))
+		},
 	)
 }
 
-func (h *Handlers) taskRows(tasks []swarm.Task) []cluster.Row {
-	return h.enrichedTaskRows(cluster.EnrichTasks(h.cache, tasks))
+// readChecker is the caller's read predicate, for naming a resource's parents.
+func (h *Handlers) readChecker(r *http.Request) func(resource string) bool {
+	return h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
 }
 
 // enrichedTaskRows looks up each task's parent rather than handing the builder
-// every service, which would index the whole service table per page.
+// every service, which would index the whole service table per page. A parent
+// enrichment left unnamed is one the caller cannot read, so it stays out.
 func (h *Handlers) enrichedTaskRows(tasks []cluster.EnrichedTask) []cluster.Row {
 	parents := make([]swarm.Service, 0, len(tasks))
 	for _, task := range tasks {
+		if task.ServiceName == "" {
+			continue
+		}
+
 		if svc, ok := h.cache.GetService(task.ServiceID); ok {
 			parents = append(parents, svc)
 		}

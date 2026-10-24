@@ -43,10 +43,10 @@ export function SecretsEditor({
 
   const fetchSecrets = useCallback(() => {
     api
-      .secrets()
-      .then(({ data: response }) => {
+      .allSecrets()
+      .then((secrets) => {
         setAvailableSecrets(
-          response.items.map((secret) => ({
+          secrets.map((secret) => ({
             value: secret.ID,
             label: secret.Spec.Name,
             description: secret.ID.slice(0, 12),

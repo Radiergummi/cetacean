@@ -31,7 +31,7 @@ func TestEnrichTask(t *testing.T) {
 	task.ServiceID = "svc1"
 	task.NodeID = "node1"
 
-	et := cluster.EnrichTask(c, task)
+	et := cluster.EnrichTask(c, task, nil)
 
 	if et.ServiceName != "my-service" {
 		t.Errorf("ServiceName = %q, want %q", et.ServiceName, "my-service")
@@ -52,7 +52,7 @@ func TestEnrichTaskMissingService(t *testing.T) {
 	task.ServiceID = "nonexistent-svc"
 	task.NodeID = ""
 
-	et := cluster.EnrichTask(c, task)
+	et := cluster.EnrichTask(c, task, nil)
 
 	if et.ServiceName != "" {
 		t.Errorf("ServiceName = %q, want empty string", et.ServiceName)
@@ -75,7 +75,7 @@ func TestEnrichTaskMissingNode(t *testing.T) {
 	task.ServiceID = "svc2"
 	task.NodeID = "nonexistent-node"
 
-	et := cluster.EnrichTask(c, task)
+	et := cluster.EnrichTask(c, task, nil)
 
 	if et.ServiceName != "another-service" {
 		t.Errorf("ServiceName = %q, want %q", et.ServiceName, "another-service")
@@ -106,7 +106,7 @@ func TestEnrichTasksSlice(t *testing.T) {
 		{ID: "t3", ServiceID: "gamma-svc", NodeID: "gamma-node"},
 	}
 
-	enriched := cluster.EnrichTasks(c, tasks)
+	enriched := cluster.EnrichTasks(c, tasks, nil)
 
 	if len(enriched) != 3 {
 		t.Fatalf("len(enriched) = %d, want 3", len(enriched))
@@ -180,5 +180,26 @@ func TestRedactSecrets(t *testing.T) {
 		if s.Spec.Data == nil {
 			t.Errorf("original[%d].Spec.Data was mutated to nil", i)
 		}
+	}
+}
+
+func TestEnrichTaskNamesOnlyReadableParents(t *testing.T) {
+	c := newTestCache()
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetNode(swarm.Node{ID: "node1", Description: swarm.NodeDescription{Hostname: "worker-1"}})
+
+	task := swarm.Task{ID: "task1", ServiceID: "svc1", NodeID: "node1"}
+
+	none := cluster.EnrichTask(c, task, func(string) bool { return false })
+	if none.ServiceName != "" || none.NodeHostname != "" {
+		t.Errorf("unreadable parents named: %q, %q", none.ServiceName, none.NodeHostname)
+	}
+
+	nodeOnly := cluster.EnrichTask(c, task, func(r string) bool { return r == "node:worker-1" })
+	if nodeOnly.ServiceName != "" || nodeOnly.NodeHostname != "worker-1" {
+		t.Errorf("node-only grant: %q, %q", nodeOnly.ServiceName, nodeOnly.NodeHostname)
 	}
 }

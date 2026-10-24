@@ -52,6 +52,12 @@ describe("NodeActions", () => {
     expect(screen.getByRole("button", { name: "Force remove" })).toBeInTheDocument();
   });
 
+  it("shows the server's reason beside the suggestion", async () => {
+    await removeAndGetRefused("worker");
+
+    expect(screen.getByText("refused")).toBeInTheDocument();
+  });
+
   // Swarm refuses to remove a manager until it is demoted, force or not.
   it("does not offer force removal for a refused manager", async () => {
     await removeAndGetRefused("manager");

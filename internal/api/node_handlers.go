@@ -99,7 +99,7 @@ func (h *Handlers) HandleNodeTasks(w http.ResponseWriter, r *http.Request) {
 		"task",
 		func(t swarm.Task) string { return t.ID },
 	)
-	enriched := cluster.EnrichTasks(h.cache, tasks)
+	enriched := cluster.EnrichTasks(h.cache, tasks, h.readChecker(r))
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
 		h.writeTaskCSV(w, r, node.Description.Hostname, enriched)

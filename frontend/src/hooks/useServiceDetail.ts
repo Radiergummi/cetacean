@@ -152,11 +152,11 @@ export function useServiceDetail(id: string | undefined) {
 
   useEffect(() => {
     api
-      .networks()
-      .then(({ data: result }) => {
+      .allNetworks()
+      .then((networks) => {
         const map: Record<string, string> = {};
 
-        for (const network of result.items) {
+        for (const network of networks) {
           map[network.Id] = network.Name;
         }
         setNetworkNames(map);

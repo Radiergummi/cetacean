@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - `docker.task_poll_interval` sets how often Cetacean re-lists every task, ten seconds by default and at least one second; `0` turns it off
 
+### Changed
+- **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider; sessions from before the upgrade keep their email until they expire
+- **Breaking:** a problem details response's `@context` is now an array; `type`, `status` and `detail` in other responses no longer map to RFC 9457
+- **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
+
 ### Fixed
 - An event stream resuming from the first event after the change history filled up now gets a `sync` event instead of silently missing events
 - A service, task or node no longer briefly shows an older state after a burst of changes
@@ -20,6 +25,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Tasks on nodes other than the one Cetacean is connected to update within seconds, and with their service or node, instead of at the next five-minute sync
 - Stopping Cetacean writes a last snapshot, so a restart starts from the state at shutdown rather than from the last full sync
 - The Traefik panel reads labels in any case, as Traefik does, and accepts `traefik.enable` values like `1` or `True`
+- MCP resource subscriptions notify on a stack's members, a service's or node's tasks and a full resync, follow a name to whatever holds it, and cap one stream at 256 URIs
+- MCP `get_logs` and the service logs resource are held to the REST log reads' concurrency limits, for the server and for each caller
+- Tasks show their ID instead of `<service>.<slot>`, and no service or node name, wherever you can't read that parent: task lists, detail, CSV and feeds, search, history, MCP
+- MCP `remove_task` and `get_logs` with `task` act on the task a `<service>.<slot>` name resolves to, and refuse an ID prefix instead of passing it to Docker
+- MCP prompts cite the fields resource reads actually return, and `get_logs` describes `tail` as a total across replicas, not per replica
+- The MCP server reports Cetacean's own version in `serverInfo` instead of `1.0.0`
+- `/mcp` admits a browser client at the origin of `server.public_url` without it being listed in `server.cors.origins`, and compares origins ignoring case and a default port
+- The log viewer's regex search no longer repeats matched text or crashes the page when the pattern contains a capture group
+- The Tasks page's state filter covers every task, not only the loaded pages, and counts only the state you selected
+- A searched or filtered list shows resources that start or stop matching while it is open, and the Tasks page follows tasks as they change state
+- The Swarm page offers Show Unlock Key, Rotate Unlock Key and Unlock Swarm only to callers the server allows them
+- The MCP table, topology, metrics and recommendations widgets show what the tool was called with, such as filters, view, severity or a cluster-wide ranking, instead of a default
+- Error toasts, the remove buttons and the log viewer show the server's reason for a failure alongside the suggested fix, instead of only the suggestion
+- A service's secret, config and network pickers offer every one in the cluster, not only the first page
+- The Atom feed button and feed autodiscovery link the search page's feed correctly, and no longer appear on a resource's sub-pages, which have no feed
+- A volume whose name holds a character reserved in a URL, such as `#` or `?`, opens, links, and removes correctly in the dashboard
+- The History page's Download CSV applies the name filter as well as the type
+- A command palette action whose permission check fails says so, instead of doing nothing
+- Icon-only buttons, such as Edit replicas and the editors' remove buttons, have names a screen reader announces
+- Built with Go 1.27.3, which refuses the compromised intermediate certificates in GO-2026-6809 when connecting to a TLS Docker Engine, an OIDC provider, or Tailscale
+- MCP no longer lists the IDs of nodes or networks sharing a name to a caller who can't read that name
+- MCP's cluster-wide metrics ranking is held to the services and nodes you can read unless you have `read` on `*`
+- A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
+- Configuring a plugin no longer writes its settings, which often carry credentials, to the log
+- An MCP `find` call with a negative `limit` no longer crashes Cetacean
+- Behind `server.trusted_proxies`, an address written to the left of a hop the proxy names `unknown` or obfuscates (`_hidden`) is no longer taken as the client's
 
 ## [0.17.0] - 2026-10-20
 

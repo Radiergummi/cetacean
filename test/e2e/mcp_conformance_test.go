@@ -698,14 +698,11 @@ func TestMCPConformanceOriginValidation(t *testing.T) {
 		}
 	})
 
-	// The suite expects a 2xx here. Deferred in the registry, which carries
-	// the reason; this pins the answer as it stands.
-	t.Run("this deployment's own origin is refused too", func(t *testing.T) {
-		if status := probe(t, conformanceIssuer); status != http.StatusForbidden {
-			t.Errorf(
-				"status = %d — the guard now accepts its own origin, so assert 200 here",
-				status,
-			)
+	// The SUT names its origin only as server.public_url, not in
+	// server.cors.origins, so this is the public URL admitting it.
+	t.Run("this deployment's own origin is admitted", func(t *testing.T) {
+		if status := probe(t, conformanceIssuer); status != http.StatusOK {
+			t.Errorf("status = %d, want 200", status)
 		}
 	})
 }

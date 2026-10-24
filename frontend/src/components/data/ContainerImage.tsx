@@ -91,6 +91,7 @@ function ImageUpdatePopover({
       <PopoverTrigger
         render={
           <Button
+            aria-label="Update image"
             variant="ghost"
             size="icon-xs"
             title="Update image"

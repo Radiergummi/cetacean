@@ -63,6 +63,38 @@ describe("TaskStateFilter", () => {
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
+  it("counts only the selected segment when the server filtered", () => {
+    render(
+      <TaskStateFilter
+        tasks={fakeTasks}
+        total={7}
+        active={null}
+        onChange={() => {}}
+      />,
+    );
+
+    const activeSegment = screen.getByText("Active").closest("button")!;
+    const allSegment = screen.getByText("All").closest("button")!;
+
+    expect(within(activeSegment).getByText("7")).toBeInTheDocument();
+    expect(allSegment.textContent).toBe("All");
+    expect(screen.getByText("Running").closest("button")).not.toBeDisabled();
+  });
+
+  it("keeps a selected state the loaded rows do not hold when the server filtered", () => {
+    const onChange = vi.fn<(state: string | null) => void>();
+    render(
+      <TaskStateFilter
+        tasks={[]}
+        total={0}
+        active="failed"
+        onChange={onChange}
+      />,
+    );
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("passes active filter as selected value", () => {
     render(
       <TaskStateFilter

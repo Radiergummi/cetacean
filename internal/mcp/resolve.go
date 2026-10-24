@@ -1,10 +1,27 @@
 package mcp
 
 import (
+	"context"
+	"errors"
+
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
+
+// visibleAmbiguity withholds an ambiguous name from a caller who cannot read
+// it, since the error lists every candidate ID; the caller then answers not
+// found. Node hostnames and network names repeat, and every candidate shares
+// the one key a grant matches: the name.
+func (s *Server) visibleAmbiguity(ctx context.Context, resourceType string, err error) error {
+	if ambiguous, ok := errors.AsType[*cache.AmbiguousNameError](err); ok &&
+		s.checkRead(ctx, resourceType, ambiguous.Name) != nil {
+		return nil //nolint:nilerr // answered as not found; see above
+	}
+
+	return err
+}
 
 // resolveTask returns the task with this ID or rendered name. The rule lives
 // in internal/cluster so REST cannot disagree about what a task name denotes.

@@ -1,8 +1,8 @@
 # API Access Tokens from the OAuth Server
 
 **Date:** 2026-09-13
-**Status:** Implemented, except decision 5 (the operations-tier cap), which is deferred — see
-the note under it. Phase 0 of `2026-09-13-native-apple-client-design.md`, written up
+**Status:** Implemented. Decision 5 (the operations-tier cap) was deferred out of the first change
+and landed later as `oauth.token_operations_level`; see the note under it. Phase 0 of `2026-09-13-native-apple-client-design.md`, written up
 separately because it stands on its own: any CLI, script or third-party client wants it whether or
 not a native app is ever built.
 
@@ -206,7 +206,8 @@ the fix lands as a fix rather than as an assumption.
 
 ### 5. No scopes in this change, but reserve the tier cap
 
-> **Not implemented, and the premise below is wrong.** "`requireLevel` already enforces it,
+> **Not implemented in this change, and the premise below is wrong.** It landed later as
+> `oauth.token_operations_level`, with `requireLevel` resolving per request. "`requireLevel` already enforces it,
 > `Allow` already reports it" does not hold: `requireLevel(required, configured)` decides at
 > *construction* time — `if configured >= required { return next }` — and `h.operationsLevel` is
 > a struct field. A per-caller cap needs a request-scoped effective level, which means the three

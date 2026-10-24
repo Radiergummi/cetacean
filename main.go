@@ -1085,6 +1085,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
+		PublicURL:       d.cfg.PublicURL,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 		Streams:         d.streams,

@@ -266,7 +266,7 @@ export default function StackDetail() {
             renderRow={({ Name }) => (
               <td className="p-3 text-sm">
                 <Link
-                  to={`/volumes/${Name}`}
+                  to={`/volumes/${encodeURIComponent(Name)}`}
                   className="font-medium text-link hover:underline"
                 >
                   <ResourceName name={Name} />

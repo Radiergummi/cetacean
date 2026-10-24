@@ -1,4 +1,4 @@
-import { ApiError, api, headCapabilities } from "../../api/client";
+import { ApiError, api, type Capabilities, headCapabilities } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
 import { useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
@@ -387,7 +387,16 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         const path = resourcePath(action.steps[0].resourceType!, resource.id, resource.name);
 
         if (path) {
-          const { methods, editable } = await headCapabilities(path);
+          let capabilities: Capabilities;
+
+          try {
+            capabilities = await headCapabilities(path);
+          } catch (caught) {
+            setActionError(getErrorMessage(caught, "Could not check permission for this action."));
+            return;
+          }
+
+          const { methods, editable } = capabilities;
           const permitted = action.requiredEdit
             ? editable.has(action.requiredEdit)
             : methods.has(action.requiredMethod ?? "");

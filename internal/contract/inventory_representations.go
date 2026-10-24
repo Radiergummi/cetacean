@@ -288,7 +288,7 @@ func feedFields(expr ast.Expr, fn *ast.FuncDecl) (fields feedSet, ok bool) {
 		switch sel.Sel.Name {
 		case "listFeeds":
 			return feedSet{atom: true, jsonFeed: true, csv: true}, true
-		case "detailFeeds", "searchFeeds":
+		case "detailFeeds", "taskDetailFeeds", "searchFeeds":
 			return feedSet{atom: true, jsonFeed: true}, true
 		default:
 			return feedSet{}, false

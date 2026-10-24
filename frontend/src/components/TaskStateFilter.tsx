@@ -29,6 +29,24 @@ export function isActiveTask({
   return !(DesiredState === "shutdown" && terminalStates.has(State));
 }
 
+/**
+ * The `?filter=` expression selecting what the filter shows for `state`: the
+ * active tasks for null, every task for "__all__", otherwise that one state.
+ */
+export function taskStateExpression(state: string | null): string | undefined {
+  if (state === all) {
+    return undefined;
+  }
+
+  if (state) {
+    return `state == ${JSON.stringify(state)}`;
+  }
+
+  const terminal = [...terminalStates].map((value) => JSON.stringify(value)).join(", ");
+
+  return `!(desired_state == "shutdown" && state in [${terminal}])`;
+}
+
 const knownStates = [
   "running",
   "failed",
@@ -44,16 +62,39 @@ const knownStates = [
   "pending",
 ] as const;
 
+function capitalize(state: string) {
+  return state.charAt(0).toUpperCase() + state.slice(1);
+}
+
+/**
+ * Counts each segment from `tasks` when they are the whole set. With `total`,
+ * the server applied the filter, so only the selected segment's count is known.
+ */
 export default function TaskStateFilter({
   tasks,
+  total,
   active: activeFilter,
   onChange,
 }: {
   tasks: Task[];
+  total?: number | undefined;
   active: string | null;
   onChange: (state: string | null) => void;
 }) {
-  const segments = useMemo(() => {
+  const segments = useMemo((): Segment<string>[] => {
+    if (total !== undefined) {
+      const selected = activeFilter ?? active;
+      const unbadged: Segment<string>[] = [
+        { value: active, label: "Active" },
+        { value: all, label: "All" },
+        ...knownStates.map((state) => ({ value: state, label: capitalize(state) })),
+      ];
+
+      return unbadged.map((segment) =>
+        segment.value === selected ? { ...segment, badge: total } : segment,
+      );
+    }
+
     const counts = new Map<string, number>();
 
     for (const {
@@ -72,7 +113,7 @@ export default function TaskStateFilter({
 
     for (const state of knownStates) {
       const count = counts.get(state) ?? 0;
-      const label = state.charAt(0).toUpperCase() + state.slice(1);
+      const label = capitalize(state);
 
       if (count > 0) {
         enabled.push({ value: state, label, badge: count });
@@ -82,7 +123,7 @@ export default function TaskStateFilter({
     }
 
     return [...segments, ...enabled, ...disabled];
-  }, [tasks]);
+  }, [tasks, total, activeFilter]);
 
   // Reset filter if the selected state has no tasks
   useEffect(() => {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
@@ -501,5 +502,52 @@ func TestReadDenialLooksLikeNotFound(t *testing.T) {
 	}
 	if want := strings.ReplaceAll(missing.Error(), "svc2", "svc1"); denied.Error() != want {
 		t.Errorf("denied watch = %q, want %q", denied, want)
+	}
+}
+
+// Two hosts may share a hostname, and the ambiguity names both IDs. A caller
+// who cannot read the hostname must get the not-found any other name gets.
+func TestReadNodeResource_WithholdsAnAmbiguityTheCallerCannotRead(t *testing.T) {
+	c := cache.New(nil)
+	for _, id := range []string{"nodeAAA", "nodeBBB"} {
+		c.SetNode(swarm.Node{ID: id, Description: swarm.NodeDescription{Hostname: "worker"}})
+	}
+
+	denied := acl.NewEvaluator()
+	denied.SetPolicy(readOnlyPolicy("service:public-*"))
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = denied })
+
+	_, err := srv.readResource(ctxWithIdentity(), "cetacean://nodes/worker")
+	if err == nil || strings.Contains(err.Error(), "nodeAAA") {
+		t.Fatalf("err = %v, want a not-found that names no node", err)
+	}
+
+	allowed := acl.NewEvaluator()
+	allowed.SetPolicy(readOnlyPolicy("node:*"))
+
+	srv = newResourceTestServer(t, c, func(o *Options) { o.ACL = allowed })
+
+	_, err = srv.readResource(ctxWithIdentity(), "cetacean://nodes/worker")
+	if err == nil || !strings.Contains(err.Error(), "nodeAAA") {
+		t.Fatalf("err = %v, want the ambiguity reported to a caller who can read it", err)
+	}
+}
+
+// Network names repeat too, and their ambiguity names every candidate ID.
+func TestReadNetworkResource_WithholdsAnAmbiguityTheCallerCannotRead(t *testing.T) {
+	c := cache.New(nil)
+	for _, id := range []string{"netAAA", "netBBB"} {
+		c.SetNetwork(network.Summary{ID: id, Name: "backend"})
+	}
+
+	denied := acl.NewEvaluator()
+	denied.SetPolicy(readOnlyPolicy("service:public-*"))
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = denied })
+
+	_, err := srv.readResource(ctxWithIdentity(), "cetacean://networks/backend")
+	if err == nil || strings.Contains(err.Error(), "netAAA") {
+		t.Fatalf("err = %v, want a not-found that names no network", err)
 	}
 }

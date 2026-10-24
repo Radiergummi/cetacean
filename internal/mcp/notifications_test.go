@@ -190,27 +190,27 @@ func TestEventNamesResource(t *testing.T) {
 	}
 }
 
-// Asserts that a subscriber whose stored identity cannot read the affected
-// resource does not show up in the matching deliveries: the dispatch loop
-// short-circuits before sending. The check is on the canRead helper directly.
+// A subscriber whose stored identity cannot read the changed resource is not
+// notified, whether it subscribed by ID or by name.
 func TestDispatchCacheEvent_ACLBlocksUpdatedNotification(t *testing.T) {
 	c := cache.New(nil)
 	e := acl.NewEvaluator()
+	e.SetResolver(c)
 	e.SetPolicy(readOnlyPolicy("service:public-*"))
-
 	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
 
 	id := &auth.Identity{Subject: "alice"}
-	srv.notifications.Subscribe(session("session1"), "cetacean://services/svc1", id)
+	name := t.Name()
+	for _, uri := range []string{
+		"cetacean://services/svc-public", "cetacean://services/svc-secret",
+		"cetacean://services/secret-svc",
+	} {
+		srv.notifications.Subscribe(session(name), uri, id)
+	}
 
-	allowed := srv.canRead(id, "service:public-api")
-	denied := srv.canRead(id, "service:secret-svc")
-	if !allowed {
-		t.Fatal("identity should be allowed to read service:public-api")
-	}
-	if denied {
-		t.Fatal("identity should NOT be allowed to read service:secret-svc")
-	}
+	c.SetService(stackService("svc-public", "public-api", ""))
+	c.SetService(stackService("svc-secret", "secret-svc", ""))
+	assertUpdated(t, drainUpdated(t, name), "cetacean://services/svc-public")
 }
 
 // TestDispatchCacheEvent_ACLOffPassesThrough confirms the dispatch is a no-op
@@ -309,7 +309,7 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 		t.Fatal("no subscriptions/listen hook installed: modern clients would receive no updates")
 	}
 
-	ctx := contextWithSession(t, srv, "session-modern")
+	ctx := contextWithSession(t, srv, t.Name())
 	req := &mcplib.SubscriptionsListenRequest{}
 	req.Params.Notifications = mcplib.SubscriptionFilter{
 		ResourcesListChanged:  true,
@@ -320,18 +320,12 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 		hook(ctx, "req-1", req)
 	}
 
-	for _, want := range []struct {
-		event cache.Event
-		uri   string
-	}{
-		{cache.Event{Type: cache.EventService, ID: "abc"}, "cetacean://services/abc"},
-		{cache.Event{Type: cache.EventNode, ID: "xyz"}, "cetacean://nodes/xyz"},
-	} {
-		got := srv.notifications.MatchingURIs(session("session-modern"), want.event)
-		if !slices.Contains(got, want.uri) {
-			t.Errorf("subscription to %s not recorded (matched %v)", want.uri, got)
-		}
-	}
+	srv.dispatchCacheEvent(cache.Event{Type: cache.EventService, Action: "update", ID: "abc"})
+	srv.dispatchCacheEvent(cache.Event{Type: cache.EventNode, Action: "update", ID: "xyz"})
+
+	got := drainUpdated(t, t.Name())
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://nodes/xyz", "cetacean://services/abc")
 }
 
 // TestSubscriptionsListenClearsOnStreamClose verifies the teardown half: the
@@ -340,7 +334,7 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
 	srv := newTestServer(t)
 	hooks := srv.installSubscriptionHooks()
-	ctx := contextWithSession(t, srv, "session-modern")
+	ctx := contextWithSession(t, srv, t.Name())
 
 	req := &mcplib.SubscriptionsListenRequest{}
 	req.Params.Notifications = mcplib.SubscriptionFilter{
@@ -355,11 +349,6 @@ func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
 		hook(ctx, "req-1", req, &mcplib.SubscriptionsListenResult{})
 	}
 
-	got := srv.notifications.MatchingURIs(session("session-modern"), cache.Event{
-		Type: cache.EventService,
-		ID:   "abc",
-	})
-	if len(got) != 0 {
-		t.Fatalf("subscriptions survived stream close: %v", got)
-	}
+	srv.dispatchCacheEvent(cache.Event{Type: cache.EventService, Action: "update", ID: "abc"})
+	assertUpdated(t, drainUpdated(t, t.Name()))
 }

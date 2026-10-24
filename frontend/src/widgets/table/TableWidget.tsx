@@ -12,18 +12,33 @@ interface FindResult {
   total: number;
 }
 
-/**
- * The resource type this widget lists.
- *
- * A host renders a widget for a tool result, so the type is whatever the model
- * asked find for. The host does not hand the widget the call's arguments, so
- * the widget reads them from its own URL fragment — which is how one bundle
- * serves every resource type — and lists services by default.
- */
-function resourceTypeFromLocation(): string {
-  const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("type");
+/** The `find` arguments the table repeats; `raw` would only add records it never renders. */
+const findArgumentNames = [
+  "type",
+  "query",
+  "state",
+  "stack",
+  "node",
+  "image",
+  "label",
+  "limit",
+  "offset",
+] as const;
 
-  return fromHash ?? "services";
+/**
+ * The arguments the host called `find` with. One bundle serves every resource
+ * type, and nothing but the tool input says which one this call listed.
+ */
+function findArgumentsFrom(
+  input: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!input) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    findArgumentNames.flatMap((name) => (input[name] === undefined ? [] : [[name, input[name]]])),
+  );
 }
 
 /**
@@ -35,12 +50,10 @@ function resourceTypeFromLocation(): string {
  */
 export function TableWidget() {
   const host = useCetaceanHost();
-  const { isConnected, error: connectionError } = host;
+  const { isConnected, error: connectionError, toolInput } = host;
 
-  const resourceType = resourceTypeFromLocation();
-  const { data, error, isLoading } = useToolData<FindResult>(host, "find", {
-    type: resourceType,
-  });
+  const args = findArgumentsFrom(toolInput);
+  const { data, error, isLoading } = useToolData<FindResult>(host, "find", args);
 
   if (connectionError) {
     return <Message text={`Could not reach the host: ${connectionError.message}`} />;
@@ -50,12 +63,16 @@ export function TableWidget() {
     return <Message text="Connecting to the host…" />;
   }
 
+  if (!args) {
+    return <Message text="Waiting for the host to say what to list…" />;
+  }
+
   if (error) {
     return <Message text={error.message} />;
   }
 
   if (isLoading || !data) {
-    return <Message text={`Loading ${resourceType}…`} />;
+    return <Message text={`Loading ${typeof args.type === "string" ? args.type : "matches"}…`} />;
   }
 
   return (

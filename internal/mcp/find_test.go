@@ -73,6 +73,37 @@ func TestFindReturnsCompactRows(t *testing.T) {
 	}
 }
 
+// A query without a type searches every type on its own goroutine, so a
+// negative limit must become the default before it reaches one.
+func TestFindAcrossTypesTreatsANegativeLimitAsTheDefault(t *testing.T) {
+	c := cache.New(nil)
+	for _, id := range []string{"svc1", "svc2", "svc3", "svc4"} {
+		c.SetService(swarm.Service{
+			ID:   id,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web_" + id}},
+		})
+	}
+
+	srv := newLogTestServer(t, c, &fakeLogStreamer{})
+	td, _ := srv.findTool("find")
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"query": "web",
+		"limit": -1,
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	var got findResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Items) != 3 {
+		t.Errorf("items = %d, want the default of 3", len(got.Items))
+	}
+}
+
 // A type nobody wrote a builder for must fail loudly rather than return an
 // empty list that reads as "no such resources".
 func TestFindRejectsUnknownType(t *testing.T) {
