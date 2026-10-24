@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	json "github.com/goccy/go-json"
@@ -34,10 +35,15 @@ func (c problemContext) MarshalJSON() ([]byte, error) {
 	return append(buf, ']'), nil
 }
 
+// UnmarshalJSON accepts only the array form, so a decoder in a test fails if
+// the wire form ever regresses to a bare string.
 func (c *problemContext) UnmarshalJSON(data []byte) error {
 	var list []json.RawMessage
-	if err := json.Unmarshal(data, &list); err != nil || len(list) == 0 {
-		return json.Unmarshal(data, (*string)(c))
+	if err := json.Unmarshal(data, &list); err != nil {
+		return err
+	}
+	if len(list) == 0 {
+		return errors.New("problem @context: empty array")
 	}
 
 	return json.Unmarshal(list[0], (*string)(c))
