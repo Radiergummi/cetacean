@@ -20,6 +20,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // mockLogStreamer returns pre-built Docker multiplex frames.
@@ -704,7 +705,7 @@ func TestHandleServiceLogs_RefusesPastTheReadCap(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
-	occupy(t, &h.logReads, maxLogReads, maxLogReads)
+	occupy(t, h.logReads, logs.MaxConcurrentReads, logs.MaxConcurrentReads)
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
@@ -719,8 +720,8 @@ func TestHandleServiceLogs_RefusesPastTheReadCap(t *testing.T) {
 			w.Header().Get("Retry-After"),
 		)
 	}
-	if got := h.logReads.InUse(); got != maxLogReads {
-		t.Errorf("a refused read changed the count to %d, want %d", got, maxLogReads)
+	if got := h.logReads.InUse(); got != logs.MaxConcurrentReads {
+		t.Errorf("a refused read changed the count to %d, want %d", got, logs.MaxConcurrentReads)
 	}
 }
 
@@ -728,7 +729,7 @@ func TestHandleServiceLogs_ReleasesItsReadSlot(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
-	occupy(t, &h.logReads, maxLogReads, maxLogReads-1)
+	occupy(t, h.logReads, logs.MaxConcurrentReads, logs.MaxConcurrentReads-1)
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")
@@ -739,8 +740,8 @@ func TestHandleServiceLogs_ReleasesItsReadSlot(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 with one slot free", w.Code)
 	}
-	if got := h.logReads.InUse(); got != maxLogReads-1 {
-		t.Errorf("reads in flight = %d after the read, want %d", got, maxLogReads-1)
+	if got := h.logReads.InUse(); got != logs.MaxConcurrentReads-1 {
+		t.Errorf("reads in flight = %d after the read, want %d", got, logs.MaxConcurrentReads-1)
 	}
 }
 
@@ -758,5 +759,27 @@ func occupy(t *testing.T, slots *sse.Slots, max, n int) {
 			t.Fatalf("slot %d of %d refused", i+1, n)
 		}
 		t.Cleanup(release)
+	}
+}
+
+// The pool main passes in is the one a read draws on, so MCP's reads count
+// against REST's cap.
+func TestHandleServiceLogs_DrawsOnTheSharedReadPool(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
+
+	shared := new(sse.Slots)
+	h.SetLogReads(shared)
+	occupy(t, shared, logs.MaxConcurrentReads, logs.MaxConcurrentReads)
+
+	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
+	req.SetPathValue("id", "svc1")
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want 429 from the shared pool", w.Code)
 	}
 }

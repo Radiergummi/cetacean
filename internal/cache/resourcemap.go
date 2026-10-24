@@ -212,8 +212,26 @@ func (r *ResourceMap[T]) Len() int {
 	return len(r.items)
 }
 
-// Replace atomically swaps the entire map contents. Hooks are not called.
-// Caller must hold the write lock.
+// Replace atomically swaps the entire map contents, keeping the stored value
+// wherever m holds an older version of it. Hooks are not called. Caller must
+// hold the write lock.
 func (r *ResourceMap[T]) Replace(m map[string]T) {
+	keepNewer(m, r.items, r.version)
 	r.items = m
+}
+
+// keepNewer overwrites each entry of listed with cached's where cached holds a
+// newer version: a list can be read before an inspect that already landed.
+// Keys only cached holds stay out, as the list decides what exists. A nil
+// version keeps nothing.
+func keepNewer[T any](listed, cached map[string]T, version func(T) uint64) {
+	if version == nil {
+		return
+	}
+
+	for key, fresh := range listed {
+		if held, ok := cached[key]; ok && version(held) > version(fresh) {
+			listed[key] = held
+		}
+	}
 }

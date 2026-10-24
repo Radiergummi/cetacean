@@ -39,16 +39,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - With `server.cors.origins` set, a browser client from another origin can send `If-Match`, `If-Range`, `Prefer` and `Range`, and read `Content-Range`, `Accept-Patch`, `Preference-Applied` and `Link-Template`
 - The OpenAPI description names `application/merge-patch+json` for a service's `configs`, `secrets`, `networks` and `mounts`, and documents the `403`, `415`, `Prefer: return=minimal` `204`, and `/swarm` error answers of every write
 - An event stream resuming from the first event after the change history filled up now gets a `sync` event instead of silently missing events
-- A service, task or node no longer briefly shows an older state after a burst of changes
+- A service, task, node, config or secret no longer shows an older state after a burst of changes or a full sync that raced one
 - Live updates no longer skip changes when a browser reconnects during a burst or falls behind: it gets a `sync` event instead, and one that stops reading is disconnected
 - `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
-- A stack's desired task count expects a global service's task only on ready nodes that aren't drained
+- A stack's desired task count expects a global service's task only on ready nodes that aren't drained and meet its placement constraints
 - Changes made while Cetacean syncs with Docker, at startup or after a reconnect, are no longer missed until the next periodic sync
 - Tasks on nodes other than the one Cetacean is connected to update within seconds, and with their service or node, instead of at the next five-minute sync
 - Stopping Cetacean writes a last snapshot, so a restart starts from the state at shutdown rather than from the last full sync
 - The Traefik panel reads labels in any case, as Traefik does, and accepts `traefik.enable` values like `1` or `True`
 - MCP resource subscriptions notify on a stack's members, a service's or node's tasks and a full resync, follow a name to whatever holds it, and cap one stream at 256 URIs
-- MCP `get_logs` and the service logs resource are held to the REST log reads' concurrency limits, for the server and for each caller
+- MCP `get_logs` and the service logs resource share the REST log reads' concurrency limits, for the server and for each caller
 - Tasks show their ID instead of `<service>.<slot>`, and no service or node name, wherever you can't read that parent: task lists, detail, CSV and feeds, search, history, MCP
 - MCP `remove_task` and `get_logs` with `task` act on the task a `<service>.<slot>` name resolves to, and refuse an ID prefix instead of passing it to Docker
 - MCP prompts cite the fields resource reads actually return, and `get_logs` describes `tail` as a total across replicas, not per replica

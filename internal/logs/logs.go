@@ -14,6 +14,11 @@ import (
 
 const maxLogFrameSize = 1 << 20 // 1 MiB
 
+// MaxConcurrentReads bounds plain log reads in flight across REST and MCP
+// together, a quarter of it per caller. Each fans out to the daemon per task
+// and buffers, sorts and encodes every line it returns.
+const MaxConcurrentReads = 32
+
 // LogLine represents a single parsed Docker log line.
 type LogLine struct {
 	Timestamp string            `json:"timestamp"`

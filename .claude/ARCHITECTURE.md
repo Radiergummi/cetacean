@@ -24,6 +24,7 @@ liability — it is the only part of the previous version of this file that rott
 | `api/sse/` | The broadcaster behind every stream |
 | `api/jgf/`, `api/dot/`, `api/graphml/`, `api/atom/`, `api/jsonfeed/`, `api/linkset/` | Pure serialization, no HTTP |
 | `cluster/` | The domain layer both transports share — see the boundary rule below |
+| `placement/` | Placement-constraint evaluation, a leaf so `cache/` and `cluster/` read constraints alike |
 | `mcp/` | The embedded MCP server: tools, resources, prompts, widgets, tracing |
 | `prometheus/`, `prom/` | Query client and proxy; `prom/` is the three result types alone |
 | `recommendations/` | The checkers and the engine that schedules them |

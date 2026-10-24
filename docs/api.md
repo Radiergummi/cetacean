@@ -718,7 +718,7 @@ turned away together aren't told to come back together; none is told less than 5
 | SSE event clients from one caller                       | 64    | `SSE001` |
 | Log streams (`/services/{id}/logs`, `/tasks/{id}/logs`) | 128   | `LOG001` |
 | Log streams from one caller                             | 32    | `LOG001` |
-| Log reads (the same paths as JSON)                      | 32    | `LOG009` |
+| Log reads (the same paths as JSON, and MCP `get_logs`)  | 32    | `LOG009` |
 | Log reads from one caller                               | 8     | `LOG009` |
 | Metrics streams (`/metrics` as SSE)                     | 64    | `MTR005` |
 

@@ -8,8 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 // holdLogReads takes n log-read slots for owner, releasing them at cleanup.
@@ -17,7 +20,7 @@ func holdLogReads(t *testing.T, srv *Server, n int, owner func(i int) *http.Requ
 	t.Helper()
 
 	for i := range n {
-		release, _, ok := srv.logReads.Acquire(owner(i), maxLogReads)
+		release, _, ok := srv.logReads.Acquire(owner(i), logs.MaxConcurrentReads)
 		if !ok {
 			t.Fatalf("slot %d refused while filling", i)
 		}
@@ -28,7 +31,7 @@ func holdLogReads(t *testing.T, srv *Server, n int, owner func(i int) *http.Requ
 func TestLogReadsAreCappedAcrossCallers(t *testing.T) {
 	srv := newLogTestServer(t, cache.New(nil), &fakeLogStreamer{})
 
-	holdLogReads(t, srv, maxLogReads, func(i int) *http.Request {
+	holdLogReads(t, srv, logs.MaxConcurrentReads, func(i int) *http.Request {
 		return &http.Request{RemoteAddr: fmt.Sprintf("10.0.0.%d:1234", i)}
 	})
 
@@ -51,7 +54,7 @@ func TestLogReadsCapOneCallerAtAQuarter(t *testing.T) {
 	alice := &auth.Identity{Provider: "oidc", Subject: "alice"}
 	ctx := auth.ContextWithIdentity(context.Background(), alice)
 
-	holdLogReads(t, srv, maxLogReads/4, func(int) *http.Request {
+	holdLogReads(t, srv, logs.MaxConcurrentReads/4, func(int) *http.Request {
 		return (&http.Request{}).WithContext(ctx)
 	})
 
@@ -86,7 +89,7 @@ func TestLogReadsReleaseTheirSlot(t *testing.T) {
 			srv := newLogTestServer(t, cache.New(nil), tc.streamer)
 			td, _ := srv.findTool("get_logs")
 
-			for i := range maxLogReads + 1 {
+			for i := range logs.MaxConcurrentReads + 1 {
 				_, err := td.handler(context.Background(), newCallToolRequest(
 					"get_logs",
 					map[string]any{"service": "svc1"},
@@ -101,5 +104,37 @@ func TestLogReadsReleaseTheirSlot(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// REST's log reads draw on the same pool when main passes it in, so the two
+// transports together stay under one cap rather than one each.
+func TestLogReadsDrawOnAPoolPassedIn(t *testing.T) {
+	shared := new(sse.Slots)
+	for i := range logs.MaxConcurrentReads {
+		r := &http.Request{RemoteAddr: fmt.Sprintf("10.0.1.%d:1234", i)}
+		release, _, ok := shared.Acquire(r, logs.MaxConcurrentReads)
+		if !ok {
+			t.Fatalf("slot %d refused while filling", i)
+		}
+		t.Cleanup(release)
+	}
+
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	srv, err := New(cache.New(nil), Options{
+		Config:         cfg,
+		GlobalOpsLevel: config.OpsReadOnly,
+		Logs:           &fakeLogStreamer{},
+		AuthMode:       "none",
+		LogReads:       shared,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if _, err := srv.readServiceLogs(context.Background(), "svc1"); err == nil ||
+		!strings.Contains(err.Error(), "too many log reads") {
+		t.Fatalf("logs resource read err = %v, want the shared cap", err)
 	}
 }

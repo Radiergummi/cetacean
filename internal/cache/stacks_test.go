@@ -158,6 +158,39 @@ func TestStackSummaryDesiresAGlobalTaskPerSchedulableNode(t *testing.T) {
 	}
 }
 
+// A global service runs only where its placement constraints hold, so a
+// worker-only one desires nothing of a manager.
+func TestStackSummaryAppliesAGlobalServicesConstraints(t *testing.T) {
+	c := New(nil)
+
+	node := func(id string, role swarm.NodeRole) swarm.Node {
+		return swarm.Node{
+			ID:     id,
+			Spec:   swarm.NodeSpec{Role: role, Availability: swarm.NodeAvailabilityActive},
+			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		}
+	}
+	c.SetNode(node("manager-1", swarm.NodeRoleManager))
+	c.SetNode(node("worker-1", swarm.NodeRoleWorker))
+	c.SetNode(node("worker-2", swarm.NodeRoleWorker))
+
+	global := stackService("global-1", "app")
+	global.Spec.Mode = swarm.ServiceMode{Global: &swarm.GlobalService{}}
+	global.Spec.TaskTemplate.Placement = &swarm.Placement{
+		Constraints: []string{"node.role == worker"},
+	}
+	c.SetService(global)
+
+	summaries := c.ListStackSummaries()
+	if len(summaries) != 1 {
+		t.Fatalf("summaries = %d, want 1", len(summaries))
+	}
+
+	if got := summaries[0].DesiredTasks; got != 2 {
+		t.Errorf("DesiredTasks = %d, want 2: the manager is excluded by the constraint", got)
+	}
+}
+
 // Only the current run's completions count: a re-run bumps JobIteration and
 // leaves the previous run's completed tasks in the task list.
 func TestCompletedJobTaskCountFollowsTheCurrentIteration(t *testing.T) {

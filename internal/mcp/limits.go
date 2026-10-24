@@ -12,6 +12,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/logs"
 )
 
 const (
@@ -26,10 +27,6 @@ const (
 	// index keeps an event's cost off other streams, not off one subscribing
 	// to everything; a client wanting that much reads listings instead.
 	maxListenURIs = 256
-
-	// maxLogReads bounds get_logs calls and logs resource reads in flight, by
-	// the REST log reads' numbers. The two transports hold separate pools.
-	maxLogReads = 32
 )
 
 // remoteAddrKey carries the connection's address into handler contexts, as
@@ -42,7 +39,7 @@ func (s *Server) claimLogRead(ctx context.Context) (release func(), err error) {
 	addr, _ := ctx.Value(remoteAddrKey{}).(string)
 	r := (&http.Request{RemoteAddr: addr}).WithContext(ctx)
 
-	release, callerFull, ok := s.logReads.Acquire(r, maxLogReads)
+	release, callerFull, ok := s.logReads.Acquire(r, logs.MaxConcurrentReads)
 	if !ok {
 		if callerFull {
 			return nil, errors.New("too many log reads in flight from this client; retry shortly")

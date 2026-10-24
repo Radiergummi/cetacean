@@ -22,7 +22,7 @@ func TestLoadACL_Defaults(t *testing.T) {
 		os.Unsetenv(key)
 	}
 
-	cfg := mustLoadACL(t, nil, nil)
+	cfg := mustLoadACL(t, nil)
 	if cfg.Policy != "" {
 		t.Errorf("Policy=%q, want empty", cfg.Policy)
 	}
@@ -51,7 +51,7 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL", "X-ACL")
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL_CAPABILITY", "example.com/cap/headers")
 
-	cfg := mustLoadACL(t, nil, nil)
+	cfg := mustLoadACL(t, nil)
 	if cfg.Policy != `{"grants":[]}` {
 		t.Errorf("Policy=%q", cfg.Policy)
 	}
@@ -69,26 +69,6 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	}
 	if cfg.HeadersCapability != "example.com/cap/headers" {
 		t.Errorf("HeadersCapability=%q", cfg.HeadersCapability)
-	}
-}
-
-func TestLoadACL_FlagOverridesEnv(t *testing.T) {
-	t.Setenv("CETACEAN_ACL_POLICY", "env-policy")
-	t.Setenv("CETACEAN_ACL_POLICY_FILE", "env-file")
-
-	flagPolicy := "flag-policy"
-	flagFile := "flag-file"
-	flags := &Flags{
-		ACLPolicy:     &flagPolicy,
-		ACLPolicyFile: &flagFile,
-	}
-
-	cfg := mustLoadACL(t, flags, nil)
-	if cfg.Policy != "flag-policy" {
-		t.Errorf("Policy=%q, want flag-policy", cfg.Policy)
-	}
-	if cfg.PolicyFile != "flag-file" {
-		t.Errorf("PolicyFile=%q, want flag-file", cfg.PolicyFile)
 	}
 }
 
@@ -124,7 +104,7 @@ func TestLoadACL_FileConfig(t *testing.T) {
 		},
 	}
 
-	cfg := mustLoadACL(t, nil, fc)
+	cfg := mustLoadACL(t, fc)
 	if cfg.Policy != "file-policy" {
 		t.Errorf("Policy=%q", cfg.Policy)
 	}
@@ -154,7 +134,7 @@ func TestLoadACL_OIDCUserClaims(t *testing.T) {
 	t.Run("defaults to subject and email", func(t *testing.T) {
 		unset(t)
 
-		cfg := mustLoadACL(t, nil, nil)
+		cfg := mustLoadACL(t, nil)
 		if !slices.Equal(cfg.OIDCUserClaims, []string{"sub", "email"}) {
 			t.Errorf("OIDCUserClaims=%q", cfg.OIDCUserClaims)
 		}
@@ -163,7 +143,7 @@ func TestLoadACL_OIDCUserClaims(t *testing.T) {
 	t.Run("env var is a comma-separated list over the file", func(t *testing.T) {
 		t.Setenv("CETACEAN_ACL_OIDC_USER_CLAIMS", " sub ")
 
-		cfg := mustLoadACL(t, nil, &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{"email"}}})
+		cfg := mustLoadACL(t, &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{"email"}}})
 		if !slices.Equal(cfg.OIDCUserClaims, []string{"sub"}) {
 			t.Errorf("OIDCUserClaims=%q", cfg.OIDCUserClaims)
 		}
@@ -172,7 +152,7 @@ func TestLoadACL_OIDCUserClaims(t *testing.T) {
 	t.Run("file", func(t *testing.T) {
 		unset(t)
 
-		cfg := mustLoadACL(t, nil, &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{"sub"}}})
+		cfg := mustLoadACL(t, &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{"sub"}}})
 		if !slices.Equal(cfg.OIDCUserClaims, []string{"sub"}) {
 			t.Errorf("OIDCUserClaims=%q", cfg.OIDCUserClaims)
 		}
@@ -181,7 +161,7 @@ func TestLoadACL_OIDCUserClaims(t *testing.T) {
 	t.Run("refuses an unknown claim", func(t *testing.T) {
 		t.Setenv("CETACEAN_ACL_OIDC_USER_CLAIMS", "sub,preferred_username")
 
-		_, err := LoadACL(nil, nil)
+		_, err := LoadACL(nil)
 		if err == nil || !strings.Contains(err.Error(), "preferred_username") {
 			t.Errorf("err = %v, want one naming preferred_username", err)
 		}
@@ -191,7 +171,7 @@ func TestLoadACL_OIDCUserClaims(t *testing.T) {
 		unset(t)
 
 		fc := &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{}}}
-		if _, err := LoadACL(nil, fc); err == nil {
+		if _, err := LoadACL(fc); err == nil {
 			t.Error("an empty list was accepted")
 		}
 	})
@@ -211,10 +191,10 @@ func TestLoadACL_OIDCUserClaims(t *testing.T) {
 	})
 }
 
-func mustLoadACL(t *testing.T, flags *Flags, fc *fileConfig) ACLConfig {
+func mustLoadACL(t *testing.T, fc *fileConfig) ACLConfig {
 	t.Helper()
 
-	cfg, err := LoadACL(flags, fc)
+	cfg, err := LoadACL(fc)
 	if err != nil {
 		t.Fatal(err)
 	}
