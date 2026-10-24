@@ -14,7 +14,6 @@ import (
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func TestAtomListHandler_ReturnsValidAtom(t *testing.T) {
@@ -160,8 +159,8 @@ func TestAtomDetailHandler_NamesATaskReadableThroughItsService(t *testing.T) {
 	}}})
 
 	h := newTestHandlers(t, withCache(c), withACL(e))
-	handler := h.feedDetailHandler(cache.EventTask, "id", func(id string) string {
-		return cluster.TaskDisplayName(h.cache, id)
+	handler := h.feedDetailHandler(cache.EventTask, "id", func(string) string {
+		return "web.1"
 	}, renderAtom)
 
 	req := httptest.NewRequest("GET", "/tasks/task1", nil)
