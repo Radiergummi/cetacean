@@ -156,6 +156,11 @@ type Cache struct {
 	lastSync       time.Time
 	listenerMu     sync.RWMutex
 	listeners      []listenerEntry
+
+	// notifyMu makes recording an event and handing it to listeners one step,
+	// so listeners see history order. Never held with c.mu; a listener must
+	// not write to the cache.
+	notifyMu sync.Mutex
 	nextListenerID uint64
 	history        *History
 	serviceRef     serviceRefIndex
@@ -296,7 +301,8 @@ func (c *Cache) RestartCount(serviceID string, lookback time.Duration) uint64 {
 // Restarts returns the underlying RestartTracker for snapshot serialization.
 func (c *Cache) Restarts() *RestartTracker { return c.restarts }
 
-// AddOnChangeListener registers fn to be called on every cache change event.
+// AddOnChangeListener registers fn to be called on every cache change event,
+// one at a time and in history order. fn must not write to the cache.
 // The returned cancel function removes the listener; it is safe to call multiple times.
 func (c *Cache) AddOnChangeListener(fn OnChangeFunc) func() {
 	c.listenerMu.Lock()
@@ -332,6 +338,9 @@ func (c *Cache) notify(e Event) {
 		e.Service, e.Stack = c.removedFrom(e.Resource)
 	}
 
+	c.notifyMu.Lock()
+	defer c.notifyMu.Unlock()
+
 	if e.Type != EventSync {
 		entry := HistoryEntry{
 			Type:       e.Type,
@@ -351,8 +360,8 @@ func (c *Cache) notify(e Event) {
 		e.HistoryID = c.history.Count()
 	}
 
-	// Snapshot listeners under read lock, then call outside the lock to avoid
-	// re-entrant deadlock if a listener calls back into the cache.
+	// Snapshot listeners under read lock, then call outside it, so a listener
+	// may read the cache.
 	c.listenerMu.RLock()
 	fns := make([]OnChangeFunc, len(c.listeners))
 	for i, entry := range c.listeners {
