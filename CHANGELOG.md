@@ -9,9 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider
-
-### Fixed
-- `/api/context.jsonld` no longer maps every response's `type`, `status` and `detail` to RFC 9457; problem details carry those mappings in an array `@context` of their own
+- **Breaking:** a problem details response's `@context` is an array: the shared context's URL, then the RFC 9457 term mappings, which `/api/context.jsonld` no longer applies to every response's `type`, `status` and `detail`
 
 ## [0.17.0] - 2026-10-20
 
