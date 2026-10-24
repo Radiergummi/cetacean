@@ -2,7 +2,7 @@ import { ConnectionTracker } from "../ConnectionTracker";
 import SearchPalette from "./SearchPalette";
 import { api } from "@/api/client";
 import { MockEventSource } from "@/test/mocks";
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +32,7 @@ describe("SearchPalette refresh", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
