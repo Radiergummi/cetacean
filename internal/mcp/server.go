@@ -187,7 +187,7 @@ type Server struct {
 	recEngine  RecommendationEngine
 	prom       MetricsQuerier // nil when Prometheus is not configured
 
-	// allowedOrigins is the set of Origin header values the streamable HTTP
+	// allowedOrigins is the set of origins, serialised, the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
 	// 403 (DNS-rebinding defense).
 	allowedOrigins []string
@@ -484,13 +484,13 @@ func (s *Server) Handler() http.Handler {
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport
 // requires and mcp-go does not enforce. A request with no Origin passes
-// through. Matching is exact, so "*" admits nothing: every call is a POST that
-// may write, and a wildcard is not trusted for cross-origin writes.
+// through. Origins match as RFC 6454 serialises them, so "*" admits nothing:
+// every call is a POST that may write, and a wildcard is not trusted for that.
 func (s *Server) originGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		if origin == "" || slices.Contains(s.allowedOrigins, origin) {
+		if origin == "" || slices.Contains(s.allowedOrigins, serialiseOrigin(origin)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -499,16 +499,45 @@ func (s *Server) originGuard(next http.Handler) http.Handler {
 	})
 }
 
-// withPublicOrigin adds the origin of publicURL, scheme and host with any port
-// as written, to the allowed origins. Config validation has already refused a
-// public URL with a path, userinfo or a scheme other than http or https.
+// withPublicOrigin serialises the allowed origins and adds publicURL's. Config
+// validation has already refused a public URL with a path, userinfo or a
+// scheme other than http or https.
 func withPublicOrigin(allowed []string, publicURL string) []string {
-	u, err := url.Parse(publicURL)
-	if publicURL == "" || err != nil || u.Host == "" {
-		return allowed
+	origins := make([]string, 0, len(allowed)+1)
+	for _, origin := range allowed {
+		origins = append(origins, serialiseOrigin(origin))
 	}
 
-	return append(slices.Clone(allowed), u.Scheme+"://"+u.Host)
+	u, err := url.Parse(publicURL)
+	if publicURL == "" || err != nil || u.Host == "" {
+		return origins
+	}
+
+	return append(origins, serialiseOrigin(u.Scheme+"://"+u.Host))
+}
+
+// serialiseOrigin is RFC 6454's serialisation of a scheme://host[:port]
+// origin: scheme and host lower-cased, the scheme's default port dropped.
+// Anything else, "null" and "*" among them, is returned as written.
+func serialiseOrigin(origin string) string {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.Opaque != "" ||
+		u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return origin
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Hostname())
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+
+	switch port := u.Port(); {
+	case port == "", scheme == "http" && port == "80", scheme == "https" && port == "443":
+		return scheme + "://" + host
+	default:
+		return scheme + "://" + host + ":" + port
+	}
 }
 
 // bearerAuth validates Authorization: Bearer <jwt>, puts an auth.Identity in

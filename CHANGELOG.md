@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP `remove_task` and `get_logs` with `task` act on the task a `<service>.<slot>` name resolves to, and refuse an ID prefix instead of passing it to Docker
 - MCP prompts cite the fields resource reads actually return, and `get_logs` describes `tail` as a total across replicas, not per replica
 - The MCP server reports Cetacean's own version in `serverInfo` instead of `1.0.0`
-- `/mcp` admits a browser client at the origin of `server.public_url` without that origin also being listed in `server.cors.origins`
+- `/mcp` admits a browser client at the origin of `server.public_url` without it being listed in `server.cors.origins`, and compares origins ignoring case and a default port
 
 ## [0.17.0] - 2026-10-20
 
