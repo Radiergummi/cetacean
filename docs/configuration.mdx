@@ -54,8 +54,8 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Path to the PEM-encoded private key matching [`docker.tls.cert`][docker.tls.cert].
 </ConfigParam>
 
-<ConfigParam name="docker.task_poll_interval" flag="-docker-task-poll-interval" env="CETACEAN_DOCKER_TASK_POLL_INTERVAL" default="5s">
-  How often Cetacean re-lists every task. Docker reports container events only for the engine Cetacean is connected to, so a task on another node changes state without an event; this poll is what picks it up. Lower values show those changes sooner at the cost of one task list per interval. `0` turns the poll off, leaving those tasks to service and node changes and the five-minute full sync.
+<ConfigParam name="docker.task_poll_interval" flag="-docker-task-poll-interval" env="CETACEAN_DOCKER_TASK_POLL_INTERVAL" default="10s">
+  How often Cetacean re-lists every task. Docker reports container events only for the engine Cetacean is connected to, so a task on another node changes state without an event; this poll is what picks it up. Lower values show those changes sooner, but each poll has the manager read and send the whole task list, so the interval must be at least `1s`. `0` turns the poll off, leaving those tasks to service and node changes and the five-minute full sync.
 </ConfigParam>
 
 <ConfigParam name="prometheus.url" flag="-prometheus-url" env="CETACEAN_PROMETHEUS_URL">

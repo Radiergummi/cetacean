@@ -116,7 +116,7 @@ func ParseFlags(args []string) (*Flags, error) {
 	dockerTaskPoll := fs.String(
 		"docker-task-poll-interval",
 		"",
-		"How often to re-list tasks, 0 to disable (env: CETACEAN_DOCKER_TASK_POLL_INTERVAL, default \"5s\")",
+		"How often to re-list tasks, at least 1s or 0 to disable (env: CETACEAN_DOCKER_TASK_POLL_INTERVAL, default \"10s\")",
 	)
 	prometheusURL := fs.String(
 		"prometheus-url",

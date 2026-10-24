@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `docker.task_poll_interval` sets how often Cetacean re-lists every task, five seconds by default; `0` turns it off
+- `docker.task_poll_interval` sets how often Cetacean re-lists every task, ten seconds by default and at least one second; `0` turns it off
 
 ### Fixed
 - An event stream resuming from the first event after the change history filled up now gets a `sync` event instead of silently missing events

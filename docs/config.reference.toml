@@ -23,7 +23,7 @@
 
 [docker]
 # host = "unix:///var/run/docker.sock"      # unix:// socket or tcp://host:port
-# task_poll_interval = "5s"                 # How often to re-list tasks; "0s" disables
+# task_poll_interval = "10s"                # How often to re-list tasks, at least "1s"; "0s" disables
 
 # [docker.tls]
 # ca = ""                                   # CA bundle path (PEM); unset = system roots

@@ -41,7 +41,7 @@ type Config struct {
 	DockerTLS  DockerTLSConfig // [docker.tls] / CETACEAN_DOCKER_TLS_*
 
 	// DockerTaskPollInterval is how often the watcher re-lists every task;
-	// zero disables it. CETACEAN_DOCKER_TASK_POLL_INTERVAL, default 5s.
+	// zero disables it. CETACEAN_DOCKER_TASK_POLL_INTERVAL, default 10s.
 	DockerTaskPollInterval time.Duration
 
 	PrometheusURL    string
@@ -181,11 +181,19 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		flags.DockerTaskPoll,
 		"CETACEAN_DOCKER_TASK_POLL_INTERVAL",
 		fTaskPoll,
-		5*time.Second,
+		10*time.Second,
 		true,
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// Each poll has the daemon decode and send the whole task list.
+	if taskPollInterval > 0 && taskPollInterval < time.Second {
+		return nil, fmt.Errorf(
+			"docker.task_poll_interval %s: want at least 1s, or 0 to turn it off",
+			taskPollInterval,
+		)
 	}
 
 	opsLevel, err := resolveInt(
