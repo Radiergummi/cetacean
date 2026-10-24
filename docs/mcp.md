@@ -151,7 +151,7 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 | A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].                                      |
 | A subscription is refused with `429`             | 64 subscription streams are already open. The client retries after `Retry-After`.                                                          |
 | A subscription is refused with `Invalid params`  | It names more than 256 resource URIs, the most one stream watches. See [MCP tools and resources][mcp-tools].                               |
-| `get_logs` fails with "too many log reads"       | 32 log reads are in flight, or 8 from this caller, the same limits the REST log reads have. Retry shortly.                                 |
+| `get_logs` fails with "too many log reads"       | 32 log reads are in flight across MCP and the REST API, or 8 from this caller. Retry shortly.                                              |
 | A call is refused with `413`                     | Its request body is over 1 MiB.                                                                                                            |
 | An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.                                           |
 | `cert` auth mode: client can't connect           | mTLS can't drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off. |

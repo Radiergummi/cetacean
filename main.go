@@ -501,6 +501,9 @@ func main() {
 	)
 	handlers.SetStreamLifetime(streams)
 
+	logReads := new(sse.Slots)
+	handlers.SetLogReads(logReads)
+
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {
@@ -591,6 +594,7 @@ func main() {
 		prometheus:   promClient,
 		tracer:       mcpTracer,
 		streams:      streams,
+		logReads:     logReads,
 	}
 
 	oauthSrv := setupOAuth(deps)
@@ -964,6 +968,7 @@ type mcpDeps struct {
 	prometheus  *promapi.Client
 	tracer      oteltrace.Tracer
 	streams     *sse.Lifetime
+	logReads    *sse.Slots
 }
 
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
@@ -1089,6 +1094,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 		Streams:         d.streams,
+		LogReads:        d.logReads,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)

@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Stopping Cetacean writes a last snapshot, so a restart starts from the state at shutdown rather than from the last full sync
 - The Traefik panel reads labels in any case, as Traefik does, and accepts `traefik.enable` values like `1` or `True`
 - MCP resource subscriptions notify on a stack's members, a service's or node's tasks and a full resync, follow a name to whatever holds it, and cap one stream at 256 URIs
-- MCP `get_logs` and the service logs resource are held to the REST log reads' concurrency limits, for the server and for each caller
+- MCP `get_logs` and the service logs resource share the REST log reads' concurrency limits, for the server and for each caller
 - Tasks show their ID instead of `<service>.<slot>`, and no service or node name, wherever you can't read that parent: task lists, detail, CSV and feeds, search, history, MCP
 - MCP `remove_task` and `get_logs` with `task` act on the task a `<service>.<slot>` name resolves to, and refuse an ID prefix instead of passing it to Docker
 - MCP prompts cite the fields resource reads actually return, and `get_logs` describes `tail` as a total across replicas, not per replica

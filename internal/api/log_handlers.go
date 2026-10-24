@@ -107,7 +107,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		tail = min(limit*10, maxLogLimit)
 	}
 
-	release, callerFull, ok := h.logReads.Acquire(r, maxLogReads)
+	release, callerFull, ok := h.logReads.Acquire(r, logs.MaxConcurrentReads)
 	if !ok {
 		w.Header().Set("Retry-After", sse.RetryAfter())
 		writeErrorCode(w, r, "LOG009", tooMany("log reads in flight", callerFull))

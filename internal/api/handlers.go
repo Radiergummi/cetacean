@@ -32,10 +32,6 @@ const defaultLogLimit = 500
 const maxLogLimit = 10000
 const maxLogSSEConns = 128
 
-// maxLogReads bounds plain (non-streaming) log reads in flight. Each fans out
-// to the daemon per task and buffers, sorts and encodes up to maxLogLimit lines.
-const maxLogReads = 32
-
 // maxPreferWaits bounds writes held open by Prefer: wait, each up to minutes.
 const maxPreferWaits = 32
 
@@ -243,7 +239,7 @@ type Handlers struct {
 
 	logStreams         sse.Slots
 	streams            *sse.Lifetime // ends the metrics stream and log follows at shutdown
-	logReads           sse.Slots
+	logReads           *sse.Slots    // see logs.MaxConcurrentReads
 	activePreferWaits  atomic.Int64
 	metricsStreamCount atomic.Int64
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
@@ -294,6 +290,7 @@ func NewHandlers(
 		dockerVersionCache:   newDockerVersionCache(),
 		topologyDocs:         newProjectionCache(),
 		stackDocs:            newProjectionCache(),
+		logReads:             new(sse.Slots),
 	}
 }
 
@@ -301,6 +298,11 @@ func NewHandlers(
 // deployment runs at. Already narrowed by the global level when it arrives.
 func (h *Handlers) SetTokenOperationsLevel(level config.OperationsLevel) {
 	h.tokenOperationsLevel = level
+}
+
+// SetLogReads draws plain log reads from slots, which MCP's log reads share.
+func (h *Handlers) SetLogReads(slots *sse.Slots) {
+	h.logReads = slots
 }
 
 // SetStreamLifetime ends the metrics stream and log follows when l ends.

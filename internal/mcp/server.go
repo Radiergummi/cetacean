@@ -229,8 +229,8 @@ type Server struct {
 	// streams ends the open listen streams at shutdown.
 	streams *sse.Lifetime
 
-	// logReads bounds log reads in flight — see maxLogReads.
-	logReads sse.Slots
+	// logReads bounds log reads in flight — see logs.MaxConcurrentReads.
+	logReads *sse.Slots
 
 	// inflight scopes notifications/cancelled to the caller's own requests.
 	inflight inflight
@@ -281,6 +281,10 @@ type Options struct {
 	// Streams ends open subscriptions/listen streams when it ends. Nil leaves
 	// them to their clients.
 	Streams *sse.Lifetime
+
+	// LogReads is the pool get_logs and the logs resource draw on, shared with
+	// REST's log reads. Nil gives this server a pool of its own.
+	LogReads *sse.Slots
 }
 
 // Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
@@ -325,6 +329,10 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		watches:        make(chan struct{}, maxConcurrentWatches),
 		listens:        make(chan struct{}, maxListenStreams),
 		streams:        opts.Streams,
+		logReads:       opts.LogReads,
+	}
+	if srv.logReads == nil {
+		srv.logReads = new(sse.Slots)
 	}
 	srv.notifications.resolve = srv.subscriptionFor
 	srv.notifications.keys = srv.eventKeys
