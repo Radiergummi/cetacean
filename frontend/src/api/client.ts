@@ -886,7 +886,11 @@ export const api = {
   volumes: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Volume>("/volumes", params, signal, schema.volumeSchema),
   volume: (name: string, signal?: AbortSignal) =>
-    fetchJSON<VolumeDetail>(`/volumes/${name}`, signal, schema.volumeDetailSchema),
+    fetchJSON<VolumeDetail>(
+      `/volumes/${encodeURIComponent(name)}`,
+      signal,
+      schema.volumeDetailSchema,
+    ),
   task: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ task: Task }>(`/tasks/${id}`, signal, schema.taskDetailSchema).then(
       ({ data, ...rest }) => ({ data: data.task, ...rest }),
@@ -1048,7 +1052,7 @@ export const api = {
       ifMatch,
     ).then(({ labels }) => labels),
   removeNetwork: (id: string) => del(`/networks/${id}`),
-  removeVolume: (name: string) => del(`/volumes/${name}`),
+  removeVolume: (name: string) => del(`/volumes/${encodeURIComponent(name)}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>

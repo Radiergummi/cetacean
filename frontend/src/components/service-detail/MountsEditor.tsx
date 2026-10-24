@@ -431,7 +431,7 @@ export function MountsEditor({
                 <>
                   {Type === "volume" && Source ? (
                     <Link
-                      to={`/volumes/${Source}`}
+                      to={`/volumes/${encodeURIComponent(Source)}`}
                       className="font-mono text-link hover:underline"
                     >
                       <ResourceName name={Source} />

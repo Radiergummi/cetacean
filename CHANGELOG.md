@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Error toasts, the remove buttons and the log viewer show the server's reason for a failure alongside the suggested fix, instead of only the suggestion
 - A service's secret, config and network pickers offer every one in the cluster, not only the first page
 - The Atom feed button and feed autodiscovery link the search page's feed correctly, and no longer appear on a resource's sub-pages, which have no feed
+- A volume whose name holds a character reserved in a URL, such as `#` or `?`, opens, links and removes correctly in the dashboard
 
 ## [0.17.0] - 2026-10-20
 

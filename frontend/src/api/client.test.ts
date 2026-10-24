@@ -259,6 +259,24 @@ describe("api client", () => {
   });
 });
 
+describe("volume paths", () => {
+  it("encodes the name of the volume it reads", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ volume: { Name: "a b" }, services: [] }));
+
+    await api.volume("data/a b");
+
+    expect(mockFetch).toHaveBeenCalledWith("/volumes/data%2Fa%20b", expect.anything());
+  });
+
+  it("encodes the name of the volume it removes", async () => {
+    mockFetch.mockReturnValue(Promise.resolve({ ok: true, status: 204, headers: new Headers() }));
+
+    await api.removeVolume("data/a b");
+
+    expect(mockFetch).toHaveBeenCalledWith("/volumes/data%2Fa%20b", expect.anything());
+  });
+});
+
 describe("preconditions", () => {
   it("reads the current ETag of a path", async () => {
     mockFetch.mockReturnValue(

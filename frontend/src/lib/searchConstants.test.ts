@@ -64,6 +64,12 @@ describe("resourcePath", () => {
     expect(resourcePath("stack", "stack-id", "my-stack")).toBe("/stacks/my-stack");
   });
 
+  it("encodes a volume or stack name that is not a path segment as it stands", () => {
+    expect(resourcePath("volume", "id", "backup.json")).toBe("/volumes/backup.json");
+    expect(resourcePath("volumes", "id", "a/b?c")).toBe("/volumes/a%2Fb%3Fc");
+    expect(resourcePath("stack", "id", "a#b")).toBe("/stacks/a%23b");
+  });
+
   it("returns null for unknown type", () => {
     expect(resourcePath("unknown", "abc")).toBeNull();
   });
