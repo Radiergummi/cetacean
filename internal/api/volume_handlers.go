@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/docker/docker/api/types/volume"
 
@@ -27,8 +26,7 @@ func (h *Handlers) HandleGetVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, _ := time.Parse(time.RFC3339, vol.CreatedAt)
-	writeCachedJSONTimed(w, r, rep, created)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleListVolumes(w http.ResponseWriter, r *http.Request) {

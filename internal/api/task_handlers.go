@@ -113,7 +113,7 @@ func (h *Handlers) writeTaskCSV(
 
 func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	task, ok := lookupACL(h, w, r, "task", id, h.cache.GetTask, func(t swarm.Task) string {
+	_, ok := lookupACL(h, w, r, "task", id, h.cache.GetTask, func(t swarm.Task) string {
 		return "task:" + t.ID
 	})
 	if !ok {
@@ -127,7 +127,7 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeCachedJSONTimed(w, r, rep, task.UpdatedAt)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleTaskLogs(w http.ResponseWriter, r *http.Request) {

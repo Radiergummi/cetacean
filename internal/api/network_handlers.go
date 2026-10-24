@@ -34,7 +34,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeCachedJSONTimed(w, r, rep, net.Created)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {

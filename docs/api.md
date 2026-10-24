@@ -474,8 +474,9 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-Detail endpoints also set `Last-Modified` from the resource's update timestamp and honor `If-Modified-Since`. When
-both conditional headers are present, `If-None-Match` wins.
+A service's and a node's detail also set `Last-Modified` from the resource's update timestamp and honor
+`If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
+volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
 SSE and streaming endpoints set no caching headers.
