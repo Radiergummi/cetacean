@@ -186,7 +186,10 @@ func (c *Client) InspectNetwork(ctx context.Context, id string) (network.Summary
 	return c.docker.NetworkInspect(ctx, id, network.InspectOptions{})
 }
 
-func (c *Client) Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error) {
+func (c *Client) Events(
+	ctx context.Context,
+	since time.Time,
+) (<-chan events.Message, <-chan error) {
 	var sinceArg string
 	if !since.IsZero() {
 		sinceArg = fmt.Sprintf("%d.%09d", since.Unix(), since.Nanosecond())

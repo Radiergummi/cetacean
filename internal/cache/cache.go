@@ -160,7 +160,7 @@ type Cache struct {
 	// notifyMu makes recording an event and handing it to listeners one step,
 	// so listeners see history order. Never held with c.mu; a listener must
 	// not write to the cache.
-	notifyMu sync.Mutex
+	notifyMu       sync.Mutex
 	nextListenerID uint64
 	history        *History
 	serviceRef     serviceRefIndex

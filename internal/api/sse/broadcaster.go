@@ -399,7 +399,7 @@ func (b *Broadcaster) replayEvents(
 // writeFrame writes events as one frame under the stream's write deadline.
 func (b *Broadcaster) writeFrame(stream *streamWriter, events []cache.Event) error {
 	return stream.send(func() error {
-		return WriteBatch(stream, stream, events, b.basePath, b.epoch)
+		return writeBatch(stream, stream, events, b.basePath, b.epoch)
 	})
 }
 
@@ -664,8 +664,18 @@ func ResourceType(typ cache.EventType) string {
 	}
 }
 
-// WriteBatch writes events as one frame, returning the first write error.
+// WriteBatch writes events as one frame.
 func WriteBatch(
+	w io.Writer,
+	flusher http.Flusher,
+	events []cache.Event,
+	basePath, epoch string,
+) {
+	_ = writeBatch(w, flusher, events, basePath, epoch)
+}
+
+// writeBatch is WriteBatch, returning the first write error.
+func writeBatch(
 	w io.Writer,
 	flusher http.Flusher,
 	events []cache.Event,

@@ -40,9 +40,9 @@ func TestSSE_ASlowClientIsResyncedRatherThanSkippedAhead(t *testing.T) {
 	defer b.Close()
 
 	w := &gatedRecorder{
-		flushRecorder: flushRecorder{ResponseRecorder: httptest.NewRecorder()},
-		entered:       make(chan struct{}),
-		released:      make(chan struct{}),
+		ResponseRecorder: httptest.NewRecorder(),
+		entered:          make(chan struct{}),
+		released:         make(chan struct{}),
 	}
 
 	done := make(chan struct{})
@@ -129,6 +129,8 @@ func TestSSE_AStalledClientIsDisconnected(t *testing.T) {
 	if _, err := fmt.Fprintf(conn, "GET /events HTTP/1.1\r\nHost: test\r\n\r\n"); err != nil {
 		t.Fatal(err)
 	}
+	// The body is the stream itself, deliberately never read nor drained.
+	//nolint:bodyclose // closing it would drain the stream this test stalls
 	if _, err := http.ReadResponse(bufio.NewReader(conn), nil); err != nil {
 		t.Fatal(err)
 	}

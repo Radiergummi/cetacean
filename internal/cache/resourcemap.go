@@ -91,7 +91,13 @@ func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) (event Event,
 	if r.nameFunc != nil {
 		name = r.nameFunc(v)
 	}
-	return Event{Type: eventType, Action: setAction(existed), ID: key, Name: name, Resource: v}, true
+	return Event{
+		Type:     eventType,
+		Action:   setAction(existed),
+		ID:       key,
+		Name:     name,
+		Resource: v,
+	}, true
 }
 
 // Get retrieves a value by key.

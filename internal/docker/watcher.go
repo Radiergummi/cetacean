@@ -774,9 +774,7 @@ func (w *Watcher) settleOnLoop(ctx context.Context, key eventKey) bool {
 		return false
 	}
 
-	<-done
-
-	return true
+	return <-done == nil
 }
 
 // taskCaughtUp reports whether Swarm's record has caught up with the container

@@ -340,7 +340,9 @@ func main() {
 		select {
 		case <-watcherStopped:
 		case <-time.After(shutdownGrace):
-			slog.Warn("the watcher did not stop within the shutdown grace; its snapshot may be stale")
+			slog.Warn(
+				"the watcher did not stop within the shutdown grace; its snapshot may be stale",
+			)
 		}
 	}()
 

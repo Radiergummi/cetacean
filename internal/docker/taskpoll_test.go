@@ -16,7 +16,7 @@ import (
 func runningTask(id, service, node string, version uint64) swarm.Task {
 	return swarm.Task{
 		ID:           id,
-		Meta:         swarm.Meta{Version: swarm.Version{Index: version}},
+		Version:      swarm.Version{Index: version},
 		ServiceID:    service,
 		NodeID:       node,
 		DesiredState: swarm.TaskStateRunning,
