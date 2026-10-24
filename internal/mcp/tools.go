@@ -351,6 +351,12 @@ func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (s
 		)
 	}
 
+	release, err := s.claimLogRead(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+
 	if stack != "" {
 		resp, err := s.readScopedLogs(ctx, "stack", stack, optsFromToolRequest(req))
 		if err != nil {

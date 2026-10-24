@@ -427,6 +427,11 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 // callers wanting cursored pagination use the get_logs tool which accepts
 // `since` and `tail` arguments.
 func (s *Server) readServiceLogs(ctx context.Context, serviceID string) (any, error) {
+	release, err := s.claimLogRead(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	resp, err := s.readLogsImpl(ctx, docker.ServiceLog, serviceID, logOptions{tail: defaultLogTail})
 	if err != nil {
 		return nil, err

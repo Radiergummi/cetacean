@@ -227,6 +227,9 @@ type Server struct {
 	// streams ends the open listen streams at shutdown.
 	streams *sse.Lifetime
 
+	// logReads bounds log reads in flight — see maxLogReads.
+	logReads sse.Slots
+
 	// inflight scopes notifications/cancelled to the caller's own requests.
 	inflight inflight
 
@@ -423,6 +426,8 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			if id := auth.IdentityFromContext(r.Context()); id != nil {
 				ctx = auth.ContextWithIdentity(ctx, id)
 			}
+
+			ctx = context.WithValue(ctx, remoteAddrKey{}, r.RemoteAddr)
 
 			// server/discover reports this as supportedVersions. mcp-go would
 			// otherwise list every revision it implements, advertising eras

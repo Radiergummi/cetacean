@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,7 +20,33 @@ const (
 	// maxListenStreams bounds open subscriptions/listen streams. Each holds a
 	// connection with no write timeout, so they accumulate without one.
 	maxListenStreams = 64
+
+	// maxLogReads bounds get_logs calls and logs resource reads in flight, by
+	// the REST log reads' numbers. The two transports hold separate pools.
+	maxLogReads = 32
 )
+
+// remoteAddrKey carries the connection's address into handler contexts, as
+// the per-caller share of a cap keys an unauthenticated caller on it.
+type remoteAddrKey struct{}
+
+// claimLogRead takes a log-read slot for the caller, refusing past the cap or
+// past the caller's quarter share of it.
+func (s *Server) claimLogRead(ctx context.Context) (release func(), err error) {
+	addr, _ := ctx.Value(remoteAddrKey{}).(string)
+	r := (&http.Request{RemoteAddr: addr}).WithContext(ctx)
+
+	release, callerFull, ok := s.logReads.Acquire(r, maxLogReads)
+	if !ok {
+		if callerFull {
+			return nil, errors.New("too many log reads in flight from this client; retry shortly")
+		}
+
+		return nil, errors.New("too many log reads in flight; retry shortly")
+	}
+
+	return release, nil
+}
 
 // limitBody refuses a body over maxRequestBytes before mcp-go reads it whole.
 func limitBody(next http.Handler) http.Handler {
