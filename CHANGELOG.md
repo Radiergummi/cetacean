@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Live updates no longer skip changes when a browser reconnects during a burst or falls behind: it gets a `sync` event instead, and one that stops reading is disconnected
 - `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
 - A stack's desired task count expects a global service's task only on nodes that are ready and active, not on drained or down ones
+- Changes made while Cetacean syncs with Docker, at startup or after a reconnect, are no longer missed until the next periodic sync
 
 ## [0.17.0] - 2026-10-20
 

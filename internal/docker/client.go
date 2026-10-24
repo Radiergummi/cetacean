@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
@@ -173,8 +174,14 @@ func (c *Client) InspectNetwork(ctx context.Context, id string) (network.Summary
 	return c.docker.NetworkInspect(ctx, id, network.InspectOptions{})
 }
 
-func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan error) {
+func (c *Client) Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error) {
+	var sinceArg string
+	if !since.IsZero() {
+		sinceArg = fmt.Sprintf("%d.%09d", since.Unix(), since.Nanosecond())
+	}
+
 	return c.docker.Events(ctx, events.ListOptions{
+		Since: sinceArg,
 		Filters: filters.NewArgs(
 			filters.Arg("type", string(events.ServiceEventType)),
 			filters.Arg("type", string(events.NodeEventType)),

@@ -25,7 +25,9 @@ import (
 type DockerClient interface {
 	FullSync(ctx context.Context) (cache.FullSyncData, error)
 	Inspect(ctx context.Context, resourceType events.Type, id string) (any, error)
-	Events(ctx context.Context) (<-chan events.Message, <-chan error)
+	// Events streams from since onwards, replaying what the daemon still holds
+	// from before the call; a zero since streams only what follows it.
+	Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error)
 	Logs(
 		ctx context.Context,
 		kind LogKind,
@@ -152,6 +154,7 @@ func (w *Watcher) Ready() <-chan struct{} {
 
 // Run starts the watcher. It blocks until the context is cancelled.
 func (w *Watcher) Run(ctx context.Context) {
+	since := eventsSince()
 	if err := w.fullSync(ctx); err == nil {
 		w.writeSnapshot()
 	}
@@ -164,7 +167,7 @@ func (w *Watcher) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, since)
 		slog.Warn("event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
@@ -172,6 +175,7 @@ func (w *Watcher) Run(ctx context.Context) {
 		case <-time.After(backoff):
 		}
 		slog.Info("re-syncing after reconnect")
+		since = eventsSince()
 		if err := w.fullSync(ctx); err == nil {
 			w.writeSnapshot()
 			backoff = 1 * time.Second // Reset on success.
@@ -179,6 +183,14 @@ func (w *Watcher) Run(ctx context.Context) {
 			backoff = min(backoff*2, maxBackoff)
 		}
 	}
+}
+
+// eventsSince is where a stream subscribed after a sync starts: before the sync
+// listed anything, so a change made during the listing is replayed rather than
+// lost. Replays are harmless, since every event re-reads its resource. The
+// margin absorbs the daemon's clock running behind ours.
+func eventsSince() time.Time {
+	return time.Now().Add(-eventReplayMargin)
 }
 
 func (w *Watcher) writeSnapshot() {
@@ -326,6 +338,9 @@ const (
 	// settleAttempts bounds how many times a task is re-read while its record
 	// still lags, each wait twice the last. Three covers about five seconds.
 	settleAttempts = 3
+
+	// eventReplayMargin is how far before a sync its event stream starts.
+	eventReplayMargin = 5 * time.Second
 )
 
 // eventKey identifies a unique resource for coalescing.
@@ -361,8 +376,8 @@ func isContainerDeath(action events.Action) bool {
 	}
 }
 
-func (w *Watcher) watchEvents(ctx context.Context) {
-	msgCh, errCh := w.client.Events(ctx)
+func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
+	msgCh, errCh := w.client.Events(ctx, since)
 
 	w.loopRunning.Store(true)
 	defer w.loopRunning.Store(false)

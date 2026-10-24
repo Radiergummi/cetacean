@@ -50,7 +50,7 @@ func TestAFailedPeriodicResyncIsNotADisconnection(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, time.Time{})
 	}()
 
 	before := mc.fullSyncs.Load()
@@ -111,7 +111,7 @@ func TestARefreshIsSerializedWithEventProcessing(t *testing.T) {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, time.Time{})
 	}()
 
 	for !w.loopRunning.Load() {
@@ -196,7 +196,7 @@ func TestAResyncCannotUndoARemoveAppliedDuringItsFetch(t *testing.T) {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, time.Time{})
 	}()
 
 	for !w.loopRunning.Load() {

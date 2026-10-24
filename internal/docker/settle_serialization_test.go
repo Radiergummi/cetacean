@@ -53,7 +53,7 @@ func TestASettleIsSerializedWithEventProcessing(t *testing.T) {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, time.Time{})
 	}()
 
 	for !w.loopRunning.Load() {
