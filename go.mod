@@ -1,6 +1,6 @@
 module github.com/radiergummi/cetacean
 
-go 1.27.2
+go 1.27.3
 
 // pnpm installs a package that ships Go sources, which ./... would build and test.
 ignore node_modules
