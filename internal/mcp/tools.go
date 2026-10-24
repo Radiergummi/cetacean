@@ -376,14 +376,15 @@ func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (s
 	}
 
 	kind, target := docker.ServiceLog, service
-	check := s.checkServiceRead
 
 	if task != "" {
-		kind, target = docker.TaskLog, task
-		check = s.checkTaskRead
-	}
+		resolved, err := s.resolveTaskRead(ctx, task)
+		if err != nil {
+			return "", err
+		}
 
-	if err := check(ctx, target); err != nil {
+		kind, target = docker.TaskLog, resolved.ID
+	} else if err := s.checkServiceRead(ctx, service); err != nil {
 		return "", err
 	}
 
@@ -514,12 +515,28 @@ func (s *Server) removeHandler(
 	aclCheck func(ctx context.Context, id string) error,
 	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
+	resolve := func(ctx context.Context, id string) (string, error) {
+		return id, aclCheck(ctx, id)
+	}
+
+	return s.removeResolvedHandler(idKey, resource, resolve, remove)
+}
+
+// removeResolvedHandler is removeHandler for a resource whose argument must
+// be resolved before Docker sees it: resolve checks the ACL and returns what
+// remove is passed.
+func (s *Server) removeResolvedHandler(
+	idKey, resource string,
+	resolve func(ctx context.Context, id string) (string, error),
+	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
+) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-		id, err := req.RequireString(idKey)
+		arg, err := req.RequireString(idKey)
 		if err != nil {
 			return "", err
 		}
-		if err := aclCheck(ctx, id); err != nil {
+		id, err := resolve(ctx, arg)
+		if err != nil {
 			return "", err
 		}
 		wc, err := s.requireWriteClient()

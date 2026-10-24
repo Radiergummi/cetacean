@@ -311,23 +311,57 @@ func (s *Server) checkNetworkWrite(ctx context.Context, id string) error {
 	return s.checkResolvedWrite(ctx, "network", id, net.Name, ok, err)
 }
 
-// checkTaskWrite routes the ACL check to the task's parent service so an MCP
-// `remove_task` evaluates the same key REST DELETE /tasks/{id} does
-// (`service:<name>`), falling back to `task:<id>` as REST does when the cache
-// cannot resolve the parent service.
-func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
-	task, ok, err := cluster.ResolveTask(s.cache, id)
+// resolveTaskWrite resolves id to a task ID and routes the ACL check to the
+// task's parent service so an MCP `remove_task` evaluates the same key REST
+// DELETE /tasks/{id} does (`service:<name>`), falling back to `task:<id>` as
+// REST does when the cache cannot resolve the parent service.
+func (s *Server) resolveTaskWrite(ctx context.Context, id string) (string, error) {
+	task, err := s.resolveTaskArg(ctx, id)
+	if err != nil {
+		return "", err
+	}
 
 	svc, found := s.cache.GetService(task.ServiceID)
-	if !ok || !found || svc.Spec.Name == "" {
-		return s.checkResolvedWrite(ctx, "task", id, task.ID, ok, err)
+	if !found || svc.Spec.Name == "" {
+		return task.ID, s.checkResolvedWrite(ctx, "task", id, task.ID, true, nil)
 	}
 
 	if s.checkRead(ctx, "service", svc.Spec.Name) != nil {
-		return fmt.Errorf("task %q not found", id)
+		return "", fmt.Errorf("task %q not found", id)
 	}
 
-	return s.checkWrite(ctx, "service", svc.Spec.Name)
+	return task.ID, s.checkWrite(ctx, "service", svc.Spec.Name)
+}
+
+// resolveTaskArg resolves a task ID or "<service>.<slot>" through the cache.
+// Docker would read an unresolved argument as an ID prefix the ACL never
+// checked, so one is refused with or without a policy. A slot resolves only
+// through a readable service, since its name is the service's.
+func (s *Server) resolveTaskArg(ctx context.Context, arg string) (swarm.Task, error) {
+	task, ok, err := cluster.ResolveTask(s.cache, arg)
+	if err != nil && s.checkRead(ctx, "task", arg) == nil {
+		return swarm.Task{}, err
+	}
+
+	if err != nil || !ok || task.ID != arg && s.readableService(ctx, task.ServiceID) == nil {
+		return swarm.Task{}, fmt.Errorf("task %q not found", arg)
+	}
+
+	return task, nil
+}
+
+// resolveTaskRead is resolveTaskArg for a read of the task it names.
+func (s *Server) resolveTaskRead(ctx context.Context, arg string) (swarm.Task, error) {
+	task, err := s.resolveTaskArg(ctx, arg)
+	if err != nil {
+		return swarm.Task{}, err
+	}
+
+	if err := s.checkTaskRead(ctx, task.ID); err != nil {
+		return swarm.Task{}, fmt.Errorf("task %q not found", arg)
+	}
+
+	return task, nil
 }
 
 // checkServiceRead resolves Spec.Name from the cache so the ACL key is

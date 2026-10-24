@@ -815,6 +815,7 @@ func TestToolScaleServiceMissingArgs(t *testing.T) {
 
 func TestToolRemoveTask(t *testing.T) {
 	c := cache.New(nil)
+	c.SetTask(swarm.Task{ID: "task1"})
 	var removed string
 	wc := &fakeWriteClient{
 		removeTaskFn: func(_ context.Context, id string) error {
