@@ -86,6 +86,22 @@ describe("History", () => {
     );
   });
 
+  it("downloads the CSV of what the type and name filters select", async () => {
+    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")] });
+    renderPage();
+
+    await screen.findByText("web");
+    fireEvent.click(screen.getByRole("button", { name: "Services" }));
+    fireEvent.change(screen.getByPlaceholderText("Filter by name…"), { target: { value: "db" } });
+
+    await waitFor(() =>
+      expect(screen.getByText("Download CSV").closest("a")).toHaveAttribute(
+        "href",
+        "/history.csv?type=service&search=db",
+      ),
+    );
+  });
+
   it("loads older entries by following the next link", async () => {
     const older = "/history?limit=200&before=2";
     mockHistoryPage.mockImplementation(async (path) =>
