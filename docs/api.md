@@ -408,11 +408,21 @@ detail lists every ID the request could have meant.
 ## Errors
 
 Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, with Content-Type
-`application/problem+json` and `Cache-Control: no-store`.
+`application/problem+json` and `Cache-Control: no-store`. A problem's `@context` adds the RFC 9457 members to the
+shared context, which leaves `type`, `status` and `detail` to the resources that use those names for their own values.
 
 ```json
 {
-  "@context": "/api/context.jsonld",
+  "@context": [
+    "/api/context.jsonld",
+    {
+      "type": { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" },
+      "title": "urn:ietf:rfc:9457#title",
+      "status": "urn:ietf:rfc:9457#status",
+      "detail": "urn:ietf:rfc:9457#detail",
+      "instance": { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
+    }
+  ],
   "type": "about:blank",
   "title": "Not Found",
   "status": 404,
@@ -428,7 +438,7 @@ Domain-specific errors carry a stable code as the last path segment of `type`:
 
 ```json
 {
-  "@context": "/api/context.jsonld",
+  "@context": ["/api/context.jsonld", { "...": "as above" }],
   "type": "/api/errors/SVC001",
   "title": "Service Version Conflict",
   "status": 409,
