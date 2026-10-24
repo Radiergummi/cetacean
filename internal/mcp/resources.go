@@ -300,7 +300,8 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
-		node, err := resolved(s.cache.ResolveNode(resourceID))(uri)
+		node, found, err := s.cache.ResolveNode(resourceID)
+		node, err = resolved(node, found, s.visibleNodeErr(ctx, err))(uri)
 		if err != nil {
 			return nil, err
 		}

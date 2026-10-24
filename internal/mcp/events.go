@@ -73,7 +73,7 @@ func (s *Server) toolGetEvents(
 	}
 
 	resource, err := cluster.ResolveIdentifier(s.cache, resourceType, req.GetString("resource", ""))
-	if err != nil {
+	if err = s.visibleNodeErr(ctx, err); err != nil {
 		return "", err
 	}
 

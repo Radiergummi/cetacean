@@ -389,7 +389,7 @@ func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, 
 // selector matching its node-exporter instance.
 func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, string, error) {
 	node, ok, err := s.cache.ResolveNode(id)
-	if err != nil {
+	if err = s.visibleNodeErr(ctx, err); err != nil {
 		return "", "", err
 	}
 

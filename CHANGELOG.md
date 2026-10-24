@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** mounting a named volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it
 
 ### Fixed
+- MCP no longer lists the IDs of nodes sharing a hostname to a caller who can't read that hostname
+- MCP's cluster-wide metrics ranking is held to the services and nodes you can read unless you have `read` on `*`, as the REST metrics endpoints require
 - A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
 - Configuring a plugin no longer writes its settings, which often carry credentials, to the log
 - An MCP `find` call with a negative `limit` no longer crashes Cetacean

@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -104,22 +105,16 @@ var rankCatalog = map[string]map[string]rankSpec{
 // reach the query, not the result: filtering afterwards hands a restricted
 // caller an empty answer whenever the true top N are all invisible to them.
 func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
-	if s.acl == nil {
+	// Only read on a bare "*" leaves the ranking unscoped, as REST requires for
+	// raw PromQL: Prometheus may hold series no cluster resource stands for,
+	// such as another cluster's or a removed service's.
+	if s.acl.CanReadEverything(auth.IdentityFromContext(ctx)) {
 		return "", nil
 	}
 
 	switch by {
 	case rankByService:
-		all := s.cache.ListServices()
-		services := s.filterServices(ctx, all)
-
-		// An evaluator exists wherever authentication does, policy or not, and
-		// with no policy it grants everything — so its presence alone would
-		// join every service name in the cluster into a selector that
-		// restricts nothing. The filtered listing answers the real question.
-		if len(services) == len(all) {
-			return "", nil
-		}
+		services := s.filterServices(ctx, s.cache.ListServices())
 
 		names := make([]string, 0, len(services))
 		for _, svc := range services {
@@ -133,12 +128,7 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 		return fmt.Sprintf(`,%s=~"%s"`, swarmServiceLabel, strings.Join(names, "|")), nil
 
 	default:
-		all := s.cache.ListNodes()
-		nodes := s.filterNodes(ctx, all)
-
-		if len(nodes) == len(all) {
-			return "", nil
-		}
+		nodes := s.filterNodes(ctx, s.cache.ListNodes())
 
 		hosts := make([]string, 0, len(nodes))
 		for _, node := range nodes {
