@@ -123,7 +123,8 @@ func decodeMergePatch[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 
 // decodeListMergePatch reads a merge patch whose one member replaces a list.
 // present is false when the member is absent, which RFC 7396 reads as no
-// change; null and [] both clear the list.
+// change; null and [] both clear the list. Any other member is refused, since
+// names match exactly and a misspelt one would otherwise change nothing.
 func decodeListMergePatch[T any](
 	w http.ResponseWriter,
 	r *http.Request,
@@ -136,6 +137,15 @@ func decodeListMergePatch[T any](
 	if patch == nil {
 		writeErrorCode(w, r, "API008", "the merge patch must be a JSON object")
 		return nil, false, false
+	}
+
+	for name := range patch {
+		if name != member {
+			writeErrorCode(w, r, "API008", fmt.Sprintf(
+				"unknown member %q: this merge patch takes only %q", name, member,
+			))
+			return nil, false, false
+		}
 	}
 
 	raw, present := patch[member]

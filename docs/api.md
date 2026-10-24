@@ -508,8 +508,9 @@ service `env` take `application/json-patch+json, application/merge-patch+json`; 
 A JSON Patch `path` is a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) to one key: write `/` in a key as
 `~1` and `~` as `~0`, so label `app.kubernetes.io/name` is `/app.kubernetes.io~1name`.
 
-A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a merge patch naming that one list.
-A patch without the member changes nothing; `null` or `[]` empties the list.
+A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a merge patch naming that one list,
+spelled exactly so; any other member answers `400`. A patch without the member changes nothing; `null` or `[]` empties
+the list.
 
 A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
 

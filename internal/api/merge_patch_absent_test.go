@@ -80,7 +80,7 @@ func patchList(
 // RFC 7396: a member absent from the patch leaves the target's member as it is.
 func TestAListMergePatchWithoutItsMemberChangesNothing(t *testing.T) {
 	for _, route := range listPatchRoutes {
-		for _, body := range []string{`{}`, `{"` + route.member + `s":[]}`} {
+		for _, body := range []string{`{}`} {
 			t.Run(route.member+" "+body, func(t *testing.T) {
 				c := cache.New(nil)
 				c.SetService(serviceWithEveryList())
@@ -164,6 +164,31 @@ func TestAListMergePatchThatIsNotAnObjectIsRefused(t *testing.T) {
 
 				if w.Code != http.StatusBadRequest {
 					t.Errorf("status = %d, want 400: %s", w.Code, w.Body.String())
+				}
+			})
+		}
+	}
+}
+
+// Member names are compared exactly (RFC 7396), so a misspelt or differently
+// cased one would otherwise change nothing and still answer 200.
+func TestAListMergePatchNamingAnotherMemberIsRefused(t *testing.T) {
+	for _, route := range listPatchRoutes {
+		upper := strings.ToUpper(route.member[:1]) + route.member[1:]
+		for _, body := range []string{
+			`{"` + upper + `":[]}`,
+			`{"` + route.member + `s":[]}`,
+			`{"` + route.member + `":[],"extra":1}`,
+		} {
+			t.Run(route.member+" "+body, func(t *testing.T) {
+				c := cache.New(nil)
+				c.SetService(serviceWithEveryList())
+				h := newTestHandlers(t, withCache(c), withWriteClient(&mockWriteClient{}))
+				w := patchList(h, route.handler(h), route.member, body)
+
+				if w.Code != http.StatusBadRequest ||
+					!strings.Contains(w.Body.String(), "API008") {
+					t.Errorf("status = %d, want 400 API008: %s", w.Code, w.Body.String())
 				}
 			})
 		}

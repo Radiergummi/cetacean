@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **Breaking:** a JSON Patch `path` decodes `~1` to `/` and `~0` to `~`, and refuses any other `~` or a second `/`. Write label key `a/b` as `/a~1b`
+- **Breaking:** a merge patch to a service's `ports`, `configs`, `secrets`, `networks` or `mounts` refuses any other member, `Ports` included, with `400` (`API008`)
 
 ### Fixed
 - A volume, config or other resource named like `backup.json` is addressed by that name: `DELETE /volumes/backup.json` no longer removes volume `backup`
