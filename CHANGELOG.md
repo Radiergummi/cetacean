@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - `docker.task_poll_interval` sets how often Cetacean re-lists every task, ten seconds by default and at least one second; `0` turns it off
+- `acl.oidc_user_claims` sets which OIDC claims a `user:` grant matches; set it to `["sub"]` to stop granting by email address, which a provider can reassign
 
 ### Changed
 - **Breaking:** a JSON Patch `path` decodes `~1` to `/` and `~0` to `~`, and refuses any other `~` or a second `/`. Write label key `a/b` as `/a~1b`

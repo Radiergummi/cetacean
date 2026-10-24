@@ -184,7 +184,11 @@ func main() {
 		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
 	}
 
-	aclCfg := config.LoadACL(flags, fc)
+	aclCfg, err := config.LoadACL(flags, fc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
 
 	var authProvider auth.Provider
 	var tsnetServer *tsnet.Server
@@ -460,6 +464,10 @@ func main() {
 		case "oidc":
 			if aclCfg.OIDCClaim != "" {
 				aclEval.SetSource(&acl.OIDCSource{Claim: aclCfg.OIDCClaim})
+			}
+			if err := aclEval.SetOIDCUserClaims(aclCfg.OIDCUserClaims); err != nil {
+				slog.Error("invalid acl.oidc_user_claims", "error", err)
+				os.Exit(1)
 			}
 		case "headers":
 			if aclCfg.HeadersACL != "" {

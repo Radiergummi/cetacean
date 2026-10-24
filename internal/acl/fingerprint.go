@@ -41,7 +41,7 @@ func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 	// commutative, so an identical set of grants fingerprints identically.
 	var sum uint64
 	for _, g := range p.Grants {
-		if audienceMatches(g, id) {
+		if audienceMatches(g, id, e.userClaims) {
 			sum += grantHash(g)
 		}
 	}

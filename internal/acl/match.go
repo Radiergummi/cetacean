@@ -60,11 +60,17 @@ func matchResourceParts(expression, resType, resName string) bool {
 	return matched
 }
 
+// userClaims is which identity fields a "user:" audience matches. The zero value
+// matches both, which is the default.
+type userClaims struct {
+	skipSubject, skipEmail bool
+}
+
 // matchAudience checks whether an audience expression matches an identity.
-// "user:pattern" matches against Subject and Email (union).
+// "user:pattern" matches against Subject and Email (union), less what claims skips.
 // "group:pattern" matches against each entry in Groups.
 // Bare "*" matches everyone.
-func matchAudience(expression string, id *auth.Identity) bool {
+func matchAudience(expression string, id *auth.Identity, claims userClaims) bool {
 	if expression == "*" {
 		return true
 	}
@@ -76,7 +82,7 @@ func matchAudience(expression string, id *auth.Identity) bool {
 
 	switch kind {
 	case "user":
-		if id.Subject != "" {
+		if !claims.skipSubject && id.Subject != "" {
 			if matched, err := path.Match(pattern, id.Subject); err != nil {
 				slog.Warn(
 					"ACL audience match error",
@@ -91,7 +97,7 @@ func matchAudience(expression string, id *auth.Identity) bool {
 				return true
 			}
 		}
-		if id.Email != "" {
+		if !claims.skipEmail && id.Email != "" {
 			if matched, err := path.Match(pattern, id.Email); err != nil {
 				slog.Warn(
 					"ACL audience match error",

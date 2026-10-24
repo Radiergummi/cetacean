@@ -238,6 +238,10 @@ Auth mode `none` bypasses authorization. See [Authorization][authorization] for 
   Path to a policy file (JSON, YAML, or TOML). The file is watched and reloaded on change, so grants can be edited without restarting Cetacean.
 </ConfigParam>
 
+<ConfigParam name="acl.oidc_user_claims" env="CETACEAN_ACL_OIDC_USER_CLAIMS" default="sub,email">
+  Identity claims a `user:` audience matches in `oidc` mode, as a list in the config file or comma-separated in the environment. Set it to `sub` to stop matching email addresses, which a provider can reassign to someone else. Only `sub` and `email` are accepted. Covers OIDC sessions and the OAuth tokens issued to them; other authentication modes are unaffected. Read at startup only, not reloaded with the policy file, and applied to sessions and tokens that already exist. See [Matching users by email][oidc-user-claims].
+</ConfigParam>
+
 The following four settings read grants carried by the identity itself. They add to whatever the policy
 already grants, and each applies only to its own authentication mode.
 
@@ -499,6 +503,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [oauth.refresh_token_ttl]: #oauth.refresh_token_ttl
 [oauth.token_operations_level]: #oauth.token_operations_level
 [oidc]: #oidc
+[oidc-user-claims]: authorization#matching-users-by-email
 [operations-level]: #operations-level
 [recommendations]: recommendations
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239

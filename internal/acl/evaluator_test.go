@@ -180,6 +180,91 @@ func TestEvaluator_EmailMatch(t *testing.T) {
 	}
 }
 
+func TestEvaluator_UserClaimsNarrowWhatUserGrantsMatch(t *testing.T) {
+	policy := &Policy{Grants: []Grant{
+		{
+			Resources:   []string{"service:by-subject"},
+			Audience:    []string{"user:alice"},
+			Permissions: []string{"read"},
+		},
+		{
+			Resources:   []string{"service:by-email"},
+			Audience:    []string{"user:alice@example.com"},
+			Permissions: []string{"read"},
+		},
+	}}
+
+	// A session, and a token minted from it, carry the same subject and email.
+	session := &auth.Identity{Subject: "alice", Email: "alice@example.com", Provider: "oidc"}
+	token := &auth.Identity{
+		Subject:  "alice",
+		Email:    "alice@example.com",
+		Provider: auth.ProviderToken,
+	}
+
+	tests := []struct {
+		claims           []string
+		subject, byEmail bool
+	}{
+		{nil, true, true},
+		{[]string{"sub", "email"}, true, true},
+		{[]string{"sub"}, true, false},
+		{[]string{"email"}, false, true},
+	}
+	for _, tt := range tests {
+		for _, id := range []*auth.Identity{session, token} {
+			e := NewEvaluator()
+			if tt.claims != nil {
+				if err := e.SetOIDCUserClaims(tt.claims); err != nil {
+					t.Fatalf("%v: %v", tt.claims, err)
+				}
+			}
+			e.SetPolicy(policy)
+
+			if got := e.Can(id, "read", "service:by-subject"); got != tt.subject {
+				t.Errorf("%v %s: by subject = %v, want %v", tt.claims, id.Provider, got, tt.subject)
+			}
+			if got := e.Can(id, "read", "service:by-email"); got != tt.byEmail {
+				t.Errorf("%v %s: by email = %v, want %v", tt.claims, id.Provider, got, tt.byEmail)
+			}
+		}
+	}
+}
+
+func TestEvaluator_UserClaimsChangeTheFingerprint(t *testing.T) {
+	policy := &Policy{Grants: []Grant{{
+		Resources:   []string{"service:web"},
+		Audience:    []string{"user:alice@example.com"},
+		Permissions: []string{"read"},
+	}}}
+	id := &auth.Identity{Subject: "alice", Email: "alice@example.com", Provider: "oidc"}
+	nobody := &auth.Identity{Subject: "nobody", Provider: "oidc"}
+
+	both := NewEvaluator()
+	both.SetPolicy(policy)
+
+	subjectOnly := NewEvaluator()
+	if err := subjectOnly.SetOIDCUserClaims([]string{"sub"}); err != nil {
+		t.Fatal(err)
+	}
+	subjectOnly.SetPolicy(policy)
+
+	if subjectOnly.Fingerprint(id) != subjectOnly.Fingerprint(nobody) {
+		t.Error("an email the setting excludes still counted towards the fingerprint")
+	}
+	if both.Fingerprint(id) == both.Fingerprint(nobody) {
+		t.Error("an email the default matches did not count towards the fingerprint")
+	}
+}
+
+func TestEvaluator_SetOIDCUserClaimsRefusesAnUnknownClaim(t *testing.T) {
+	for _, claims := range [][]string{{}, {"preferred_username"}, {"sub", "Email"}} {
+		if err := NewEvaluator().SetOIDCUserClaims(claims); err == nil {
+			t.Errorf("%q accepted", claims)
+		}
+	}
+}
+
 func TestFilter(t *testing.T) {
 	e := NewEvaluator()
 	e.SetPolicy(&Policy{Grants: []Grant{

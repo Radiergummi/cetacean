@@ -70,7 +70,7 @@ func TestMatchAudience(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.expr, func(t *testing.T) {
-			if got := matchAudience(tt.expr, alice); got != tt.want {
+			if got := matchAudience(tt.expr, alice, userClaims{}); got != tt.want {
 				t.Errorf("matchAudience(%q) = %v, want %v", tt.expr, got, tt.want)
 			}
 		})
@@ -113,7 +113,7 @@ func TestMatchAudience_EmptySubject(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := matchAudience(tt.expr, tt.id)
+			got := matchAudience(tt.expr, tt.id, userClaims{})
 			if got != tt.want {
 				t.Errorf("matchAudience(%q, %+v) = %v, want %v", tt.expr, tt.id, got, tt.want)
 			}
@@ -127,7 +127,7 @@ func TestMatchAudienceFailsClosedOnAMalformedGlob(t *testing.T) {
 	id := &auth.Identity{Subject: "[", Email: "[", Groups: []string{"["}}
 
 	for _, expression := range []string{"user:[", "group:["} {
-		if matchAudience(expression, id) {
+		if matchAudience(expression, id, userClaims{}) {
 			t.Errorf("%q matched", expression)
 		}
 	}

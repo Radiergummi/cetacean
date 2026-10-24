@@ -3,6 +3,7 @@
 package config
 
 var knownEnvVars = map[string]bool{
+	"CETACEAN_ACL_OIDC_USER_CLAIMS":               true,
 	"CETACEAN_ACL_POLICY":                         true,
 	"CETACEAN_ACL_POLICY_FILE":                    true,
 	"CETACEAN_AUTH_CERT_CA":                       true,
