@@ -487,3 +487,63 @@ func TestUpdateServiceMountsRefusesANewBindBelowImpactful(t *testing.T) {
 		}
 	}
 }
+
+// A list tool replaces the whole list, so an argument that is absent or null
+// says nothing about what the list should become and must not clear it.
+func TestListToolsRefuseAnAbsentOrNullList(t *testing.T) {
+	for _, tc := range []struct{ tool, extra, key string }{
+		{"update_service_secrets", "", "secrets"},
+		{"update_service_configs", "", "configs"},
+		{"update_service_mounts", "", "mounts"},
+		{"update_service", `,"section":"ports"`, "value"},
+	} {
+		for _, arg := range []string{"", `,"` + tc.key + `":null`} {
+			t.Run(tc.tool+arg, func(t *testing.T) {
+				var wrote bool
+
+				write := func() (swarm.Service, error) {
+					wrote = true
+
+					return swarm.Service{}, nil
+				}
+
+				writeClient := &fakeWriteClient{
+					updateServiceSecretsFn: func(
+						context.Context, string, []*swarm.SecretReference,
+					) (swarm.Service, error) {
+						return write()
+					},
+					updateServiceConfigsFn: func(
+						context.Context, string, []*swarm.ConfigReference,
+					) (swarm.Service, error) {
+						return write()
+					},
+					updateServiceMountsFn: func(
+						context.Context, string, []mount.Mount,
+					) (swarm.Service, error) {
+						return write()
+					},
+					updateServicePortsFn: func(
+						context.Context, string, []swarm.PortConfig,
+					) (swarm.Service, error) {
+						return write()
+					},
+				}
+
+				handler := newToolTestServer(
+					t, attachmentTestCache(t), writeClient, config.OpsConfiguration,
+				).Handler()
+
+				raw := callToolExpectingError(t, handler, `{"name":"`+tc.tool+
+					`","arguments":{"id":"web"`+tc.extra+arg+`}}`)
+
+				if wrote {
+					t.Error("the list was written")
+				}
+				if !strings.Contains(raw, tc.key) {
+					t.Errorf("the error does not name %q: %s", tc.key, raw)
+				}
+			})
+		}
+	}
+}

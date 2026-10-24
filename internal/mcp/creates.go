@@ -54,7 +54,7 @@ func decodePayload(req mcplib.CallToolRequest) ([]byte, error) {
 
 // createLabels reads the optional `labels` argument.
 func createLabels(req mcplib.CallToolRequest) (map[string]string, error) {
-	if _, present := req.GetArguments()["labels"]; !present {
+	if raw, present := req.GetArguments()["labels"]; !present || raw == nil {
 		return nil, nil
 	}
 
