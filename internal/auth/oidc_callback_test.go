@@ -38,6 +38,9 @@ type mockIDPServer struct {
 
 	// tokenHandler can be overridden per-test to customize the token response.
 	tokenHandler http.HandlerFunc
+
+	// emailVerified is the email_verified claim the tokens carry; nil omits it.
+	emailVerified any
 }
 
 func newMockIDP(t *testing.T, clientID string) *mockIDPServer {
@@ -125,6 +128,9 @@ func (idp *mockIDPServer) issueIDToken(t *testing.T, nonce string, expiry time.T
 		"email": "test@example.com",
 		"nonce": nonce,
 	}
+	if idp.emailVerified != nil {
+		extra["email_verified"] = idp.emailVerified
+	}
 
 	raw, err := josejwt.Signed(signer).Claims(claims).Claims(extra).Serialize()
 	if err != nil {
@@ -166,6 +172,9 @@ func (idp *mockIDPServer) issueIDTokenMultiAud(
 		"name":  "Test User",
 		"email": "test@example.com",
 		"nonce": nonce,
+	}
+	if idp.emailVerified != nil {
+		extra["email_verified"] = idp.emailVerified
 	}
 	if azp != "" {
 		extra["azp"] = azp
@@ -1081,6 +1090,54 @@ func TestWhoami_BearerToken(t *testing.T) {
 }
 
 // --- Bearer token tests via Authenticate ---
+
+func TestAnUnverifiedEmailStaysOffTheIdentity(t *testing.T) {
+	idp := newMockIDP(t, "test-client")
+	idp.emailVerified = false
+	p := newProviderWithIDP(t, idp, "http://localhost/auth/callback")
+
+	t.Run("bearer", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/nodes", nil)
+		r.Header.Set("Authorization", "Bearer "+idp.issueIDToken(t, "", time.Now().Add(time.Hour)))
+
+		id, err := p.Authenticate(httptest.NewRecorder(), r)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if id.Email != "" {
+			t.Errorf("Email = %q, want empty", id.Email)
+		}
+	})
+
+	t.Run("callback", func(t *testing.T) {
+		cookies, state, nonce, _ := initiateLogin(t, p)
+		idp.setTokenHandler(
+			t,
+			idp.issueIDToken(t, nonce, time.Now().Add(time.Hour)),
+			time.Now().Add(time.Hour),
+		)
+
+		w := httptest.NewRecorder()
+		p.handleCallback(
+			w,
+			buildCallbackRequest(cookies, url.Values{"code": {"c"}, "state": {state}}),
+		)
+
+		sessionCookie := findCookie(w.Result().Cookies(), cookieName)
+		if sessionCookie == nil {
+			t.Fatalf("no session cookie; status %d", w.Code)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(sessionCookie)
+		id, err := p.session.Get(req)
+		if err != nil {
+			t.Fatalf("session.Get: %v", err)
+		}
+		if id.Email != "" {
+			t.Errorf("Email = %q, want empty", id.Email)
+		}
+	})
+}
 
 func TestAuthenticate_ValidBearerToken(t *testing.T) {
 	idp := newMockIDP(t, "test-client")

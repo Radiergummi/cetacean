@@ -68,6 +68,10 @@ instead of naming tasks.
 `user:pattern` matches the identity's subject or email. `group:pattern` matches any of its groups. Patterns are globs
 again, a bare `*` matches everyone, and a grant with no `audience` field also matches everyone.
 
+In `oidc` mode, an email the identity provider marks unverified is ignored for matching. A provider that lets users
+set an arbitrary address without verifying it, and omits `email_verified`, should be matched on `sub` or a group claim
+instead.
+
 ### Permissions
 
 `read` and `write`. `write` implies `read`, so a write grant needs no separate read grant.
