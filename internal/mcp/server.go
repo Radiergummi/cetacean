@@ -25,6 +25,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
+	"github.com/radiergummi/cetacean/internal/version"
 )
 
 // TokenVerifier is the surface of the OAuth authorization server this transport
@@ -401,7 +402,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 
 	mcpSrv := mcpserver.NewMCPServer(
 		"cetacean",
-		"1.0.0",
+		version.Version,
 		serverOptions...,
 	)
 	srv.mcpServer = mcpSrv
