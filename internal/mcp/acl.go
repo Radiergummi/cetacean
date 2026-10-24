@@ -188,9 +188,9 @@ func (s *Server) filterRecommendations(
 }
 
 // readableEnrichedTasks filters tasks to the ones the caller may read, then
-// names their parents from the services and nodes they may read too. The
-// enrichment has to be ACL-aware: cluster.EnrichTasks resolves straight out of
-// the cache, so a bare `task:*` grant would name every service in the cluster.
+// names their parents from the services and nodes they may read too, so a
+// bare `task:*` grant names no service. Filtering both lists once beats a
+// per-task check when the page holds many tasks.
 func (s *Server) readableEnrichedTasks(
 	ctx context.Context,
 	tasks []swarm.Task,

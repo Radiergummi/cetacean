@@ -35,14 +35,9 @@ func NameHistoryTasks(
 	return named
 }
 
-// TaskDisplayName resolves one task ID to "<service>.<slot>", falling back to
-// the ID when either record has already gone.
-func TaskDisplayName(c *cache.Cache, taskID string) string {
-	return ReadableTaskName(c, taskID, nil)
-}
-
-// ReadableTaskName is TaskDisplayName naming the service only where canRead
-// admits it, since the name is the service's; a nil canRead admits all.
+// ReadableTaskName resolves one task ID to "<service>.<slot>", naming the
+// service only where canRead admits it, since the name is the service's; it
+// falls back to the ID otherwise or when either record has gone.
 func ReadableTaskName(c *cache.Cache, taskID string, canRead func(resource string) bool) string {
 	task, ok := c.GetTask(taskID)
 	if !ok {
@@ -50,7 +45,7 @@ func ReadableTaskName(c *cache.Cache, taskID string, canRead func(resource strin
 	}
 
 	svc, ok := c.GetService(task.ServiceID)
-	if !ok || canRead != nil && !canRead("service:"+svc.Spec.Name) {
+	if !ok || !admits(canRead, "service:"+svc.Spec.Name) {
 		return taskID
 	}
 

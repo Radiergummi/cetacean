@@ -447,7 +447,7 @@ func (h *Handlers) taskRepresentation(r *http.Request) (any, error) {
 		return nil, errNoRepresentation
 	}
 
-	et := cluster.EnrichTask(h.cache, task)
+	et := cluster.EnrichTask(h.cache, task, h.readChecker(r))
 
 	return NewDetailResponse(r.Context(), "/tasks/"+id, "Task", TaskResponse{
 		Task: et,
