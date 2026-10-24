@@ -25,6 +25,10 @@ import (
 type DockerClient interface {
 	FullSync(ctx context.Context) (cache.FullSyncData, error)
 	Inspect(ctx context.Context, resourceType events.Type, id string) (any, error)
+
+	// ListTasksIn lists one service's or one node's tasks, or every task for
+	// a zero scope.
+	ListTasksIn(ctx context.Context, scope TaskScope) ([]swarm.Task, error)
 	// Events streams from since onwards, replaying what the daemon still holds
 	// from before the call; a zero since streams only what follows it.
 	Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error)
@@ -37,6 +41,12 @@ type DockerClient interface {
 		since, until string,
 	) (io.ReadCloser, error)
 	Close() error
+}
+
+// TaskScope narrows a task list to one service or one node; zero means all.
+type TaskScope struct {
+	Service string
+	Node    string
 }
 
 // Store is the interface the watcher uses to mutate cached state.
@@ -52,6 +62,11 @@ type Store interface {
 	// GetTask lets the watcher tell an already-settled task from one whose
 	// terminal state Swarm has not published yet — see scheduleSettle.
 	GetTask(string) (swarm.Task, bool)
+
+	// The cached side of a task re-list, which drops what the list lacks.
+	ListTasks() []swarm.Task
+	ListTasksByService(string) []swarm.Task
+	ListTasksByNode(string) []swarm.Task
 	SetConfig(swarm.Config)
 	DeleteConfig(string)
 	SetSecret(swarm.Secret)
@@ -90,6 +105,10 @@ type Watcher struct {
 
 	// syncInterval is how often the event loop re-reads the whole cluster.
 	syncInterval time.Duration
+
+	// taskPollInterval is how often the event loop re-lists every task; zero
+	// disables it. See SetTaskPollInterval.
+	taskPollInterval time.Duration
 
 	// settles tracks the re-reads still outstanding, so a test can wait for
 	// them instead of sleeping and production can be sure they are not
@@ -138,6 +157,13 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 
 		resyncRequests: make(chan chan error),
 	}
+}
+
+// SetTaskPollInterval sets how often the event loop re-lists every task, zero
+// for never. Container events reach the watcher only from the engine it is
+// connected to, so a task elsewhere changes without one. Call before Run.
+func (w *Watcher) SetTaskPollInterval(interval time.Duration) {
+	w.taskPollInterval = interval
 }
 
 // waitForSettles blocks until every scheduled re-read has finished.
@@ -397,6 +423,14 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 	syncTicker := time.NewTicker(w.syncInterval)
 	defer syncTicker.Stop()
 
+	// The task poll runs here for the same reason, and is nil when disabled.
+	var pollC <-chan time.Time
+	if w.taskPollInterval > 0 {
+		pollTicker := time.NewTicker(w.taskPollInterval)
+		defer pollTicker.Stop()
+		pollC = pollTicker.C
+	}
+
 	// A full sync replaces the cache, so pending events are applied first.
 	flushPending := func() {
 		if timer != nil {
@@ -468,6 +502,18 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 				w.writeSnapshot()
 			}
 			done <- err
+		case <-pollC:
+			// A full sync re-reads the tasks too, so a poll beside one is waste.
+			if !w.syncMu.TryLock() {
+				continue
+			}
+
+			err := w.reconcileTasks(ctx, TaskScope{})
+			w.syncMu.Unlock()
+
+			if err != nil {
+				slog.Debug("task poll failed", "error", err)
+			}
 		case <-syncTicker.C:
 			flushPending()
 
@@ -530,6 +576,8 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 
 // processBatch handles a coalesced batch of events with a worker pool.
 func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced) {
+	scopes := taskScopes(batch)
+
 	// Process removes synchronously first — they're cheap (no Inspect).
 	var removeKeys []eventKey
 	for key, ev := range batch {
@@ -543,6 +591,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	}
 
 	if len(batch) == 0 {
+		w.reconcileScopes(ctx, scopes)
 		return
 	}
 
@@ -564,6 +613,8 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	}
 	wg.Wait()
 
+	w.reconcileScopes(ctx, scopes)
+
 	// Scheduled after the batch rather than inside it: the inspect above may
 	// already have read the settled record, and checking once here costs one
 	// map lookup instead of a goroutine per event.
@@ -572,6 +623,80 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 			w.scheduleSettle(ctx, key, ev.action)
 		}
 	}
+}
+
+// taskScopes names the task lists a batch calls for: Swarm emits no task
+// events, and a service or node changing is when its tasks most likely did.
+func taskScopes(batch map[eventKey]coalesced) []TaskScope {
+	var scopes []TaskScope
+	for key := range batch {
+		switch key.resourceType { //nolint:exhaustive // only services and nodes own tasks
+		case events.ServiceEventType:
+			scopes = append(scopes, TaskScope{Service: key.id})
+		case events.NodeEventType:
+			scopes = append(scopes, TaskScope{Node: key.id})
+		}
+	}
+
+	return scopes
+}
+
+// reconcileScopes re-lists the tasks of each scope, one at a time: two lists
+// taken at different moments can disagree on a task, and the later-applied
+// one must not drop a task the other added. Past a handful, one list of every
+// task is cheaper than many.
+func (w *Watcher) reconcileScopes(ctx context.Context, scopes []TaskScope) {
+	if len(scopes) > workerCount {
+		scopes = []TaskScope{{}}
+	}
+
+	for _, scope := range scopes {
+		if err := w.reconcileTasks(ctx, scope); err != nil {
+			slog.Debug(
+				"task re-list failed",
+				"service", scope.Service,
+				"node", scope.Node,
+				"error", err,
+			)
+		}
+	}
+}
+
+// reconcileTasks re-lists a scope's tasks and applies the difference: SetTask
+// announces only a real change, and a cached task the list lacks is gone.
+// Callers run it on the event loop, so nothing else applies meanwhile.
+func (w *Watcher) reconcileTasks(ctx context.Context, scope TaskScope) error {
+	ctx, cancel := context.WithTimeout(ctx, taskListTimeout)
+	defer cancel()
+
+	listed, err := w.client.ListTasksIn(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	var cached []swarm.Task
+	switch {
+	case scope.Service != "":
+		cached = w.store.ListTasksByService(scope.Service)
+	case scope.Node != "":
+		cached = w.store.ListTasksByNode(scope.Node)
+	default:
+		cached = w.store.ListTasks()
+	}
+
+	present := make(map[string]struct{}, len(listed))
+	for _, task := range listed {
+		present[task.ID] = struct{}{}
+		w.store.SetTask(task)
+	}
+
+	for _, task := range cached {
+		if _, ok := present[task.ID]; !ok {
+			w.store.DeleteTask(task.ID)
+		}
+	}
+
+	return nil
 }
 
 // scheduleSettle re-reads a task shortly after its container started or exited.
@@ -754,6 +879,9 @@ func (w *Watcher) apply(resource any) {
 
 // fullSyncTimeout bounds one full sync, however it was started.
 var fullSyncTimeout = 2 * time.Minute
+
+// taskListTimeout bounds one task re-list, which holds the event loop.
+var taskListTimeout = 30 * time.Second
 
 // refreshHandoffTimeout bounds how long Refresh waits for the event loop to
 // take its request. Long enough that a loop busy with a burst of events still

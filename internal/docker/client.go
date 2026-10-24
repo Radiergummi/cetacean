@@ -121,6 +121,18 @@ func (c *Client) ListTasks(ctx context.Context) ([]swarm.Task, error) {
 	return c.docker.TaskList(ctx, swarm.TaskListOptions{})
 }
 
+func (c *Client) ListTasksIn(ctx context.Context, scope TaskScope) ([]swarm.Task, error) {
+	args := filters.NewArgs()
+	if scope.Service != "" {
+		args.Add("service", scope.Service)
+	}
+	if scope.Node != "" {
+		args.Add("node", scope.Node)
+	}
+
+	return c.docker.TaskList(ctx, swarm.TaskListOptions{Filters: args})
+}
+
 func (c *Client) ListConfigs(ctx context.Context) ([]swarm.Config, error) {
 	return c.docker.ConfigList(ctx, swarm.ConfigListOptions{})
 }

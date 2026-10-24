@@ -37,8 +37,13 @@ const (
 )
 
 type Config struct {
-	DockerHost       string
-	DockerTLS        DockerTLSConfig // [docker.tls] / CETACEAN_DOCKER_TLS_*
+	DockerHost string
+	DockerTLS  DockerTLSConfig // [docker.tls] / CETACEAN_DOCKER_TLS_*
+
+	// DockerTaskPollInterval is how often the watcher re-lists every task;
+	// zero disables it. CETACEAN_DOCKER_TASK_POLL_INTERVAL, default 5s.
+	DockerTaskPollInterval time.Duration
+
 	PrometheusURL    string
 	ListenAddr       string
 	BasePath         string           // CETACEAN_BASE_PATH, default ""
@@ -167,6 +172,22 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 
+	var fTaskPoll *string
+	if fDocker != nil {
+		fTaskPoll = fDocker.TaskPollInterval
+	}
+
+	taskPollInterval, err := resolveDuration(
+		flags.DockerTaskPoll,
+		"CETACEAN_DOCKER_TASK_POLL_INTERVAL",
+		fTaskPoll,
+		5*time.Second,
+		true,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	opsLevel, err := resolveInt(
 		flags.OperationsLevel,
 		"CETACEAN_OPERATIONS_LEVEL",
@@ -248,11 +269,13 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		DataDir:          resolve(flags.DataDir, "CETACEAN_DATA_DIR", fDataDir, "./data"),
 		Snapshot:         snapshot,
 		SSEBatchInterval: batchInterval,
-		Pprof:            pprof,
-		SelfMetrics:      selfMetrics,
-		Recommendations:  recommendations,
-		VersionCheck:     versionCheck,
-		OperationsLevel:  OperationsLevel(opsLevel),
+
+		DockerTaskPollInterval: taskPollInterval,
+		Pprof:                  pprof,
+		SelfMetrics:            selfMetrics,
+		Recommendations:        recommendations,
+		VersionCheck:           versionCheck,
+		OperationsLevel:        OperationsLevel(opsLevel),
 		CORSOrigins: resolveStringSlice(
 			flags.CORSOrigins,
 			"CETACEAN_CORS_ORIGINS",

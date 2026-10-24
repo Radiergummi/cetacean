@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `docker.task_poll_interval` sets how often Cetacean re-lists every task, five seconds by default; `0` turns it off
+
 ### Fixed
 - An event stream resuming from the very first event after the change history filled up now resyncs instead of silently missing events
 - A service, task or node no longer briefly shows an older state after a burst of changes
@@ -14,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
 - A stack's desired task count expects a global service's task only on nodes that are ready and active, not on drained or down ones
 - Changes made while Cetacean syncs with Docker, at startup or after a reconnect, are no longer missed until the next periodic sync
+- Tasks on nodes other than the one Cetacean is connected to update within seconds, and with their service or node, instead of at the next five-minute sync
 
 ## [0.17.0] - 2026-10-20
 

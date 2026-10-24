@@ -318,6 +318,7 @@ func main() {
 	}
 
 	watcher := docker.NewWatcher(dockerClient, stateCache, snapshotPath)
+	watcher.SetTaskPollInterval(cfg.DockerTaskPollInterval)
 
 	// Start watcher in background
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

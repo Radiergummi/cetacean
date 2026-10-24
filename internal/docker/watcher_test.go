@@ -43,6 +43,9 @@ type mockClient struct {
 	// syncGate, when set, holds every FullSync until it is closed.
 	syncGate chan struct{}
 
+	// listTasksFn, when set, replaces ListTasksIn's default behaviour.
+	listTasksFn func(ctx context.Context, scope TaskScope) ([]swarm.Task, error)
+
 	// eventsSince records the since of every Events call.
 	eventsSince []time.Time
 
@@ -109,6 +112,34 @@ func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 		data.Volumes, data.HasVolumes = m.volumes, true
 	}
 	return data, fullSyncError(failed)
+}
+
+func (m *mockClient) ListTasksIn(ctx context.Context, scope TaskScope) ([]swarm.Task, error) {
+	if m.listTasksFn != nil {
+		return m.listTasksFn(ctx, scope)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var out []swarm.Task
+	for _, task := range m.tasks {
+		if scope.Service != "" && task.ServiceID != scope.Service {
+			continue
+		}
+		if scope.Node != "" && task.NodeID != scope.Node {
+			continue
+		}
+		out = append(out, task)
+	}
+
+	return out, nil
+}
+
+func (m *mockClient) setTasks(tasks []swarm.Task) {
+	m.mu.Lock()
+	m.tasks = tasks
+	m.mu.Unlock()
 }
 
 func (m *mockClient) Inspect(

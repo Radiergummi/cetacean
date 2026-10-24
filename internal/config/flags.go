@@ -15,6 +15,7 @@ type Flags struct {
 	DockerTLSCA     *string
 	DockerTLSCert   *string
 	DockerTLSKey    *string
+	DockerTaskPoll  *string
 	PrometheusURL   *string
 	LogLevel        *string
 	LogFormat       *string
@@ -111,6 +112,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"docker-tls-key",
 		"",
 		"Client key for the Docker Engine (env: CETACEAN_DOCKER_TLS_KEY)",
+	)
+	dockerTaskPoll := fs.String(
+		"docker-task-poll-interval",
+		"",
+		"How often to re-list tasks, 0 to disable (env: CETACEAN_DOCKER_TASK_POLL_INTERVAL, default \"5s\")",
 	)
 	prometheusURL := fs.String(
 		"prometheus-url",
@@ -243,6 +249,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.DockerTLSCert = dockerTLSCert
 		case "docker-tls-key":
 			f.DockerTLSKey = dockerTLSKey
+		case "docker-task-poll-interval":
+			f.DockerTaskPoll = dockerTaskPoll
 		case "prometheus-url":
 			f.PrometheusURL = prometheusURL
 		case "log-level":
