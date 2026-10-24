@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - With `server.cors.origins` set, a browser client from another origin can send `If-Match`, `If-Range`, `Prefer` and `Range`, and read `Content-Range`, `Accept-Patch`, `Preference-Applied` and `Link-Template`
 - The OpenAPI description names `application/merge-patch+json` for a service's `configs`, `secrets`, `networks` and `mounts`, and documents the `403`, `415`, `Prefer: return=minimal` `204`, and `/swarm` error answers of every write
 - An event stream resuming from the first event after the change history filled up now gets a `sync` event instead of silently missing events
-- A service, task or node no longer briefly shows an older state after a burst of changes
+- A service, task, node, config or secret no longer shows an older state after a burst of changes or a full sync that raced one
 - Live updates no longer skip changes when a browser reconnects during a burst or falls behind: it gets a `sync` event instead, and one that stops reading is disconnected
 - `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
 - A stack's desired task count expects a global service's task only on ready nodes that aren't drained and meet its placement constraints

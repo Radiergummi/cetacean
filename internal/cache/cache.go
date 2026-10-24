@@ -1408,6 +1408,23 @@ func (c *Cache) rebuildStacksSynced() {
 	c.mu.Unlock()
 }
 
+func addIndexed(by map[string]map[string]struct{}, parent, id string) {
+	if parent == "" {
+		return
+	}
+	if by[parent] == nil {
+		by[parent] = make(map[string]struct{})
+	}
+	by[parent][id] = struct{}{}
+}
+
+func removeIndexed(by map[string]map[string]struct{}, parent, id string) {
+	delete(by[parent], id)
+	if len(by[parent]) == 0 {
+		delete(by, parent)
+	}
+}
+
 // FullSyncData holds all resource lists for an atomic full sync.
 type FullSyncData struct {
 	Nodes    []swarm.Node
@@ -1424,8 +1441,9 @@ type FullSyncData struct {
 }
 
 // ReplaceAll atomically replaces resource maps for which Has* flags are true,
-// then rebuilds derived state. Resource types that failed to sync (Has* = false)
-// are preserved from the existing cache.
+// then rebuilds derived state. Types that failed to sync are preserved, and a
+// cached object newer than its listed copy is kept; networks and volumes carry
+// no version, so their lists win outright.
 func (c *Cache) ReplaceAll(data FullSyncData) {
 	// Build new maps outside the lock for resource types that succeeded.
 	var nodes map[string]swarm.Node
@@ -1524,6 +1542,7 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 				c.goneServices[id] = old
 			}
 		}
+		keepNewer(services, c.services, func(s swarm.Service) uint64 { return s.Version.Index })
 		c.services = services
 	}
 
@@ -1532,6 +1551,17 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	// these counts through Restore afterwards, so only the full sync is affected.
 	var newFailures []swarm.Task
 	if data.HasTasks {
+		for id, listed := range tasks {
+			held, ok := c.tasks[id]
+			if !ok || held.Version.Index <= listed.Version.Index {
+				continue
+			}
+			removeIndexed(byService, listed.ServiceID, id)
+			removeIndexed(byNode, listed.NodeID, id)
+			addIndexed(byService, held.ServiceID, id)
+			addIndexed(byNode, held.NodeID, id)
+			tasks[id] = held
+		}
 		for id, t := range tasks {
 			if !IsFailureState(t.Status.State) {
 				continue
