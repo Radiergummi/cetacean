@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - The log viewer's regex search no longer repeats matched text or crashes the page when the pattern contains a capture group
 - The Tasks page's state filter covers every task, not only the loaded pages, and counts only the state you selected
+- A searched or filtered list shows resources that start or stop matching while it is open, and the Tasks page follows tasks as they change state
 - The Swarm page offers Show Unlock Key, Rotate Unlock Key and Unlock Swarm only to callers the server allows them
 - The MCP table, topology and recommendations widgets show the resource type, filters, view, node or severity the tool was called with, instead of a default
 - Error toasts, the remove buttons and the log viewer show the server's reason for a failure alongside the suggested fix, instead of only the suggestion

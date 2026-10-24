@@ -7,7 +7,7 @@ import {
 } from "../test/mocks";
 import TaskList from "./TaskList";
 import { QueryClient } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -113,6 +113,38 @@ describe("TaskList", () => {
 
     expect(await screen.findByText("Slot 1")).toBeInTheDocument();
     expect(requestedFilter()).toMatch(/^!\(desired_state == "shutdown" && state in \[/);
+  });
+
+  it("follows the stream on the default active filter", async () => {
+    const page = (...tasks: Task[]) => ({
+      data: { items: tasks, total: tasks.length, limit: 50, offset: 0 },
+      allowedMethods: new Set<string>(),
+    });
+    const failed = {
+      ...fakeTask(0),
+      DesiredState: "shutdown",
+      Status: { State: "failed", Timestamp: "2026-10-09T09:01:00Z" },
+    } as unknown as Task;
+
+    renderAt("/tasks");
+    expect(await screen.findByText("Slot 1")).toBeInTheDocument();
+
+    const stream = MockEventSource.instances.findLast(({ listeners }) => listeners.has("task"));
+    const send = (action: string, task: Task) =>
+      act(() =>
+        stream?.simulateEvent("task", { type: "task", action, id: task.ID, resource: task }),
+      );
+
+    mockTasks.mockResolvedValue(page(fakeTask(0), fakeTask(1)));
+    send("create", fakeTask(1));
+    expect(await screen.findByText("Slot 2", {}, { timeout: 3000 })).toBeInTheDocument();
+
+    mockTasks.mockResolvedValue(page(fakeTask(1)));
+    send("update", failed);
+    await waitFor(() => expect(screen.queryByText("Slot 1")).not.toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    expect(screen.getByText("Slot 2")).toBeInTheDocument();
   });
 
   it("sends no filter for all tasks", async () => {
