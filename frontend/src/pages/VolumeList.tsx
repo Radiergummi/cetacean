@@ -16,7 +16,7 @@ export default function VolumeList() {
       viewModeKey="volumes"
       fetchFn={(params, signal) => api.volumes(params, signal)}
       keyFn={({ Name }) => Name}
-      itemPath={({ Name }) => `/volumes/${Name}`}
+      itemPath={({ Name }) => `/volumes/${encodeURIComponent(Name)}`}
       columns={(sortKey, sortDir, toggle) => [
         {
           ...sortColumn("Name", "name", sortKey, sortDir, toggle),
@@ -34,7 +34,7 @@ export default function VolumeList() {
       renderCard={({ Driver, Name, Scope }) => (
         <ResourceCard
           title={<ResourceName name={Name} />}
-          to={`/volumes/${Name}`}
+          to={`/volumes/${encodeURIComponent(Name)}`}
           meta={[Driver, Scope]}
         />
       )}

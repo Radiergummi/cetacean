@@ -52,6 +52,7 @@ function StackLegend({ colors, isMobile }: { colors: Map<string, string>; isMobi
   if (isMobile && !open) {
     return (
       <button
+        aria-label="Show legend"
         type="button"
         onClick={() => setOpen(true)}
         className="absolute right-3 bottom-3 z-10 rounded-lg border bg-card/90 p-2 shadow-sm backdrop-blur-sm"
@@ -68,6 +69,7 @@ function StackLegend({ colors, isMobile }: { colors: Map<string, string>; isMobi
         <span className="font-medium text-muted-foreground">Stacks</span>
         {isMobile && (
           <button
+            aria-label="Hide legend"
             type="button"
             onClick={() => setOpen(false)}
             className="ms-2 text-muted-foreground hover:text-foreground"

@@ -51,6 +51,16 @@ describe("PageHeader", () => {
     expect(link).toHaveAttribute("href", "/services.atom");
   });
 
+  it("links the search feed with the query after the suffix", () => {
+    renderWithRouter(<PageHeader title="Search" />, "/search?q=web");
+    expect(screen.getByLabelText("Atom feed")).toHaveAttribute("href", "/search.atom?q=web");
+  });
+
+  it("hides feed button on a resource's sub-pages", () => {
+    renderWithRouter(<PageHeader title="Environment" />, "/services/abc/env");
+    expect(screen.queryByLabelText("Atom feed")).not.toBeInTheDocument();
+  });
+
   it("hides feed button on pages without feeds", () => {
     renderWithRouter(<PageHeader title="Cluster" />, "/cluster");
     expect(screen.queryByLabelText("Atom feed")).not.toBeInTheDocument();

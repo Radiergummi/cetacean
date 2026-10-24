@@ -353,6 +353,7 @@ export function DiunPanel({
               placeholder="value"
             />
             <button
+              aria-label="Remove metadata entry"
               type="button"
               onClick={() => removeMetadataEntry(index)}
               className="text-muted-foreground hover:text-destructive"

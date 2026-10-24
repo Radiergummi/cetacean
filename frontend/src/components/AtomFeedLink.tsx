@@ -25,7 +25,8 @@ const feedRoutes: Record<string, string> = {
 
 /**
  * Determines the Atom feed href and title for a given path and search string.
- * Exported for testing.
+ * The href carries the `.atom` suffix ahead of any query, and only a list or a
+ * detail route has a feed: the server answers a sub-resource's with 406.
  */
 export function feedForPath(
   pathname: string,
@@ -34,14 +35,14 @@ export function feedForPath(
   // Check standalone routes first.
   for (const [route, title] of Object.entries(feedRoutes)) {
     if (pathname === route) {
-      return { href: apiPath(route), title };
+      return { href: apiPath(`${route}.atom`), title };
     }
   }
 
   // Check /search with a query — include the query string so feed readers
   // hit the correct filtered feed instead of getting a 400.
   if (pathname === "/search") {
-    return { href: apiPath("/search") + search, title: "Search Results" };
+    return { href: apiPath("/search.atom") + search, title: "Search Results" };
   }
 
   // Check resource routes: /nodes, /nodes/:id, /services/:id, etc.
@@ -49,13 +50,13 @@ export function feedForPath(
 
   const [resource, resourceId] = segments;
 
-  if (resource && feedResources.has(resource)) {
+  if (resource && feedResources.has(resource) && segments.length <= 2) {
     const title =
       segments.length === 1
         ? capitalize(resource)
         : `${capitalize(resource).replace(/s$/, "")} ${resourceId}`;
 
-    return { href: apiPath(pathname), title };
+    return { href: apiPath(`/${segments.join("/")}.atom`), title };
   }
 
   return null;

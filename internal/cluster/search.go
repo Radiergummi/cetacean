@@ -42,7 +42,7 @@ type SearchResults struct {
 }
 
 // Search returns the matches canRead admits across every resource type; a nil
-// canRead admits all. Hits are capped per type at limit (0 means 1000), while
+// canRead admits all. Hits are capped per type at limit (0 or less means 1000), while
 // Counts is the readable pre-cap total, for "X matches" affordances. Secret
 // data is never returned.
 func Search(
@@ -52,7 +52,7 @@ func Search(
 	limit int,
 	canRead func(resource string) bool,
 ) SearchResults {
-	if limit == 0 || limit > 1000 {
+	if limit <= 0 || limit > 1000 {
 		limit = 1000
 	}
 

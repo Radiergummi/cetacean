@@ -147,6 +147,7 @@ export function MountsEditor({
                   className="relative rounded-lg border p-3"
                 >
                   <Button
+                    aria-label="Remove mount"
                     variant="outline"
                     size="xs"
                     className="absolute top-2 right-2"
@@ -431,7 +432,7 @@ export function MountsEditor({
                 <>
                   {Type === "volume" && Source ? (
                     <Link
-                      to={`/volumes/${Source}`}
+                      to={`/volumes/${encodeURIComponent(Source)}`}
                       className="font-mono text-link hover:underline"
                     >
                       <ResourceName name={Source} />

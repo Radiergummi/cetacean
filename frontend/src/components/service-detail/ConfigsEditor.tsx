@@ -29,10 +29,10 @@ export function ConfigsEditor({
 
   const fetchConfigs = useCallback(() => {
     api
-      .configs()
-      .then(({ data: response }) => {
+      .allConfigs()
+      .then((configs) => {
         setAvailableConfigs(
-          response.items.map((config) => ({
+          configs.map((config) => ({
             value: config.ID,
             label: config.Spec.Name,
             description: config.ID.slice(0, 12),

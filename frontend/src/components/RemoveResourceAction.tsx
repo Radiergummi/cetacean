@@ -99,7 +99,10 @@ export function RemoveResourceAction({
         </AlertDialogContent>
       </AlertDialog>
       {remove.error && (
-        <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
+        <p className="text-xs text-status-danger">
+          {remove.error}
+          {errorInfo && <span className="block text-muted-foreground">{errorInfo.suggestion}</span>}
+        </p>
       )}
     </div>
   );

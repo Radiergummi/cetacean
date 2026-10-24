@@ -175,6 +175,7 @@ export function ExtraHostsEditor({
                   )}
                 </div>
                 <Button
+                  aria-label="Remove host"
                   variant="outline"
                   size="xs"
                   className="h-8 shrink-0"

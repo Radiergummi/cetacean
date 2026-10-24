@@ -68,6 +68,10 @@ instead of naming tasks.
 `user:pattern` matches the identity's subject or email. `group:pattern` matches any of its groups. Patterns are globs
 again, a bare `*` matches everyone, and a grant with no `audience` field also matches everyone.
 
+In `oidc` mode, an email the identity provider marks unverified is ignored for matching. A provider that lets users
+set an arbitrary address without verifying it, and omits `email_verified`, should be matched on `sub` or a group claim
+instead.
+
 ### Permissions
 
 `read` and `write`. `write` implies `read`, so a write grant needs no separate read grant.
@@ -78,8 +82,8 @@ grant: unreadable items are filtered out of the response, and `total` counts onl
 
 Creating a config or secret needs `write` on the name being created, so `secret:team-*` lets a team create secrets
 inside its own prefix and nowhere else. Installing a plugin needs `write` on `plugin:*`. Attaching a secret, config,
-or network to a service needs `read` on it as well as `write` on the service, unless the service already has it
-attached.
+or network to a service, or mounting a named volume, needs `read` on it as well as `write` on the service, unless
+the service already has it attached.
 
 ## Policy configuration
 
@@ -173,8 +177,9 @@ Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 | [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                                                                 |
 | [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at                                         |
 
-Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
-dashboard knows which action buttons to show you.
+Read responses carry an `Allow` header naming the write methods available on that resource itself, and a `Link`
+with `rel="edit"` for each of its sub-resources you may write. Together they are how the dashboard knows which
+action buttons to show you; [Response headers][api.response-headers] describes both.
 
 The [Prometheus][monitoring] query endpoints (`GET /metrics`, its event stream, `GET /metrics/labels`, and
 `GET /metrics/labels/{name}`) take PromQL, which reaches every service and node. They need a `read` grant on
@@ -246,7 +251,7 @@ curl -s -H "Accept: application/json" http://localhost:9000/profile | jq .permis
 ```
 
 That shows the grant patterns, not the resources they resolve to. To check one resource, read its detail endpoint
-and look at the `Allow` header, which resolves grants and operations level together.
+and look at the `Allow` header and the `rel="edit"` links, which resolve grants and operations level together.
 
 The [MCP server][mcp] applies the same grants. Its tools and resources are filtered per caller, and a tool the
 caller can never use is left out of `tools/list`.
@@ -257,6 +262,7 @@ caller can never use is left out of `tools/list`.
 [acl.policy]: configuration#acl.policy
 [acl.policy_file]: configuration#acl.policy_file
 [acl.tailscale_capability]: configuration#acl.tailscale_capability
+[api.response-headers]: api#response-headers
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [mcp]: mcp

@@ -43,9 +43,10 @@ Findings that have an obvious fix get an **Apply suggested value** button:
 | `over-provisioned` | Raises or lowers the reservation to match real usage | [Operations level][operations-level] 2 |
 | `approaching-limit`, `at-limit` | Adjusts the limit | [Operations level][operations-level] 2 |
 | `single-replica` | Scales the service to 2 replicas | [Operations level][operations-level] 1 |
+| `manager-has-workloads` | Drains the manager, after a confirmation | [Operations level][operations-level] 3 |
 
-All three also need [write permission][authorization] on the service—the button only appears for callers who
-have it. Everything else is reported for you to act on yourself.
+Each also needs [write permission][authorization] on the service or node it changes—the button only appears for
+callers who have it. Everything else is reported for you to act on yourself.
 
 ## Without Prometheus
 

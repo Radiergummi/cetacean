@@ -10,7 +10,7 @@ import { TaskSparkline } from "../components/metrics";
 import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
 import ResourceName from "../components/ResourceName";
-import TaskStateFilter, { isActiveTask } from "../components/TaskStateFilter";
+import TaskStateFilter, { taskStateExpression } from "../components/TaskStateFilter";
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useListPage } from "../hooks/useListPage";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -26,6 +26,7 @@ export default function TaskList() {
 
   const {
     data: tasks,
+    total,
     loading,
     error,
     retry,
@@ -45,24 +46,13 @@ export default function TaskList() {
     viewModeKey: "tasks",
     fetchFn: (params, signal) => api.tasks(params, signal),
     keyFn: ({ ID }: Task) => ID,
+    filter: taskStateExpression(stateFilter),
   });
-
-  const filteredTasks = useMemo(() => {
-    if (stateFilter === "__all__") {
-      return tasks;
-    }
-
-    if (stateFilter) {
-      return tasks.filter(({ Status: { State } }) => State === stateFilter);
-    }
-
-    return tasks.filter(isActiveTask);
-  }, [tasks, stateFilter]);
 
   const groupedByService = useMemo(() => {
     const groups = new Map<string, { name: string; id: string; tasks: Task[] }>();
 
-    for (const task of filteredTasks) {
+    for (const task of tasks) {
       const key = task.ServiceID;
       let group = groups.get(key);
 
@@ -75,7 +65,7 @@ export default function TaskList() {
     }
 
     return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [filteredTasks]);
+  }, [tasks]);
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
@@ -193,11 +183,12 @@ export default function TaskList() {
       <div className="mb-4 flex justify-end">
         <TaskStateFilter
           tasks={tasks}
+          total={total}
           active={stateFilter}
           onChange={setStateFilter}
         />
       </div>
-      {filteredTasks.length === 0 ? (
+      {tasks.length === 0 ? (
         <EmptyState
           message={search || stateFilter ? "No tasks match your filters" : "No tasks found"}
         />
@@ -205,7 +196,7 @@ export default function TaskList() {
         <DataTable
           label="Tasks"
           columns={columns}
-          data={filteredTasks}
+          data={tasks}
           keyFn={({ ID }) => ID}
           onRowClick={({ ID }) => navigate(`/tasks/${ID}`)}
           hasMore={hasMore}

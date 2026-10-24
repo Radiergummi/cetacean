@@ -588,9 +588,10 @@ async function fetchRange<T>(
   params: ListParams | undefined,
   signal: AbortSignal | undefined,
   itemSchema: z.ZodType,
+  size = pageSize,
 ): Promise<FetchResult<CollectionResponse<T>>> {
   const offset = params?.offset ?? 0;
-  const end = offset + pageSize - 1;
+  const end = offset + size - 1;
   const url = `${path}${buildListQueryString(params)}`;
 
   const response = await fetch(apiPath(url), {
@@ -616,7 +617,7 @@ async function fetchRange<T>(
 
       if (total !== null) {
         return {
-          data: { items: [], total, limit: pageSize, offset },
+          data: { items: [], total, limit: size, offset },
           allowedMethods: parseAllowHeader(response),
         };
       }
@@ -631,6 +632,37 @@ async function fetchRange<T>(
   checkShape(path, schema.collectionOf(itemSchema), data);
 
   return { data, allowedMethods };
+}
+
+/** The largest page the server serves; it clamps a longer range to this. */
+const maximumPageSize = 200;
+
+/**
+ * Every item of a collection, for a picker that must offer all of them. Pages
+ * by what arrived rather than by the requested size, so a clamp cannot skip any.
+ */
+async function fetchAll<T>(
+  path: string,
+  signal: AbortSignal | undefined,
+  itemSchema: z.ZodType,
+): Promise<T[]> {
+  const items: T[] = [];
+
+  for (;;) {
+    // eslint-disable-next-line no-await-in-loop
+    const { data } = await fetchRange<T>(
+      path,
+      { offset: items.length },
+      signal,
+      itemSchema,
+      maximumPageSize,
+    );
+    items.push(...data.items);
+
+    if (data.items.length === 0 || items.length >= data.total) {
+      return items;
+    }
+  }
 }
 
 export interface HistoryPage {
@@ -837,20 +869,28 @@ export const api = {
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Config>("/configs", params, signal, schema.configSchema),
+  allConfigs: (signal?: AbortSignal) => fetchAll<Config>("/configs", signal, schema.configSchema),
   config: (id: string, signal?: AbortSignal) =>
     fetchJSON<ConfigDetail>(`/configs/${id}`, signal, schema.configDetailSchema),
   secrets: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Secret>("/secrets", params, signal, schema.secretSchema),
+  allSecrets: (signal?: AbortSignal) => fetchAll<Secret>("/secrets", signal, schema.secretSchema),
   secret: (id: string, signal?: AbortSignal) =>
     fetchJSON<SecretDetail>(`/secrets/${id}`, signal, schema.secretDetailSchema),
   networks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Network>("/networks", params, signal, schema.networkSchema),
+  allNetworks: (signal?: AbortSignal) =>
+    fetchAll<Network>("/networks", signal, schema.networkSchema),
   network: (id: string, signal?: AbortSignal) =>
     fetchJSON<NetworkDetail>(`/networks/${id}`, signal, schema.networkDetailSchema),
   volumes: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Volume>("/volumes", params, signal, schema.volumeSchema),
   volume: (name: string, signal?: AbortSignal) =>
-    fetchJSON<VolumeDetail>(`/volumes/${name}`, signal, schema.volumeDetailSchema),
+    fetchJSON<VolumeDetail>(
+      `/volumes/${encodeURIComponent(name)}`,
+      signal,
+      schema.volumeDetailSchema,
+    ),
   task: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ task: Task }>(`/tasks/${id}`, signal, schema.taskDetailSchema).then(
       ({ data, ...rest }) => ({ data: data.task, ...rest }),
@@ -1012,7 +1052,7 @@ export const api = {
       ifMatch,
     ).then(({ labels }) => labels),
   removeNetwork: (id: string) => del(`/networks/${id}`),
-  removeVolume: (name: string) => del(`/volumes/${name}`),
+  removeVolume: (name: string) => del(`/volumes/${encodeURIComponent(name)}`),
 
   // Tier 2: sub-resource GETs
   serviceEnv: (id: string, signal?: AbortSignal) =>

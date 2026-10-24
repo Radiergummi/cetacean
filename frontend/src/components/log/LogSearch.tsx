@@ -98,6 +98,7 @@ export function LogSearch({
           </button>
           {search && (
             <button
+              aria-label="Clear search"
               type="button"
               onClick={() => setSearch("")}
               className="p-0.5 text-muted-foreground hover:text-foreground"

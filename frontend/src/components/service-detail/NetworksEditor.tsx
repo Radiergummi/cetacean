@@ -30,10 +30,10 @@ export function NetworksEditor({
 
   const fetchNetworks = useCallback(() => {
     api
-      .networks()
-      .then(({ data: response }) => {
+      .allNetworks()
+      .then((networks) => {
         setAvailableNetworks(
-          response.items.map((network) => ({
+          networks.map((network) => ({
             value: network.Id,
             label: network.Name,
             description: network.Id.slice(0, 12),

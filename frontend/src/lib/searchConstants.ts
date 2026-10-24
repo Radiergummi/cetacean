@@ -35,9 +35,9 @@ export function resourcePath(type: string, id: string, name?: string): string | 
     case "networks":
       return `/${type}/${id}`;
     case "volumes":
-      return `/volumes/${name ?? id}`;
+      return `/volumes/${encodeURIComponent(name ?? id)}`;
     case "stacks":
-      return `/stacks/${name ?? id}`;
+      return `/stacks/${encodeURIComponent(name ?? id)}`;
     // singular (HistoryEntry type)
     case "node":
     case "service":
@@ -47,9 +47,9 @@ export function resourcePath(type: string, id: string, name?: string): string | 
     case "network":
       return `/${type}s/${id}`;
     case "volume":
-      return `/volumes/${name ?? id}`;
+      return `/volumes/${encodeURIComponent(name ?? id)}`;
     case "stack":
-      return `/stacks/${name ?? id}`;
+      return `/stacks/${encodeURIComponent(name ?? id)}`;
     default:
       return null;
   }

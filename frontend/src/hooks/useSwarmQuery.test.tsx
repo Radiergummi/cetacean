@@ -375,6 +375,47 @@ describe("useSwarmQuery", () => {
     expect(result.current.data).toEqual([{ ID: "1", Name: "nginx-1" }]);
   });
 
+  it("SSE refetches a filtered collection once per burst", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "nginx-1" }], 1));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID, true),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    fetchFn.mockResolvedValue(
+      makeFetchResult(
+        [
+          { ID: "1", Name: "nginx-1" },
+          { ID: "2", Name: "nginx-2" },
+        ],
+        2,
+      ),
+    );
+
+    for (const [action, id] of [
+      ["create", "2"],
+      ["update", "1"],
+      ["update", "2"],
+    ]) {
+      act(() =>
+        MockEventSource.instance.simulateEvent("task", {
+          type: "task",
+          action,
+          id,
+          resource: { ID: id, Name: `nginx-${id}` },
+        }),
+      );
+    }
+
+    await waitFor(() => expect(result.current.total).toBe(2), { timeout: 3000 });
+    expect(result.current.data).toHaveLength(2);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
   it("SSE removes item", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

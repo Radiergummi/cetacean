@@ -318,7 +318,7 @@ export default function SwarmPage() {
         {/* Encryption */}
         <EncryptionPanel
           spec={spec}
-          canEdit={page.editable.has("encryption")}
+          editable={page.editable}
           onSaved={page.fetchSwarmInfo}
         />
 

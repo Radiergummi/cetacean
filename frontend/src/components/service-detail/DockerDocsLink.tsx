@@ -37,6 +37,7 @@ export function DockerDocsLink({
             rel="noopener noreferrer"
             className="inline-flex text-muted-foreground hover:text-foreground"
             onClick={(event) => event.stopPropagation()}
+            aria-label="Docker docs"
           >
             <CircleHelp className="size-3" />
           </a>

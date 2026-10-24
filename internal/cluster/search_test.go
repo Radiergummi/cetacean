@@ -248,3 +248,19 @@ func TestSearchResultsMarshalLikeTheRESTResponse(t *testing.T) {
 		}
 	}
 }
+
+// A negative limit runs on the per-type goroutines, where a panic is past any
+// recovery and takes the process with it.
+func TestSearchTreatsANegativeLimitAsUnset(t *testing.T) {
+	c := newTestCache()
+
+	svc := swarm.Service{}
+	svc.ID = "svc-abc"
+	svc.Spec.Name = "web-frontend"
+	c.SetService(svc)
+
+	results := cluster.Search(context.Background(), c, "web", -1, nil)
+	if got := len(results.Hits["services"]); got != 1 {
+		t.Fatalf("len(services) = %d, want 1", got)
+	}
+}

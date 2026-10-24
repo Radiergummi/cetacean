@@ -9,6 +9,8 @@ const viewLabels: Record<TopologyView, string> = {
   placement: "Placement",
 };
 
+const drainImpactCaption = "Services on the node to drain, and the nodes that could take them.";
+
 const viewCaptions: Record<TopologyView, string> = {
   network: "Services and the overlay networks they attach to.",
   placement: "Cluster nodes and the services they run.",
@@ -100,7 +102,9 @@ export function TopologyGraph({
   return (
     <div className="flex h-full w-full flex-col bg-background">
       <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
-        <p className="truncate text-xs text-muted-foreground">{viewCaptions[current] ?? ""}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {viewCaptions[current] ?? (graph.view === "drain-impact" ? drainImpactCaption : "")}
+        </p>
 
         <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-card p-0.5 ring-1 ring-input ring-inset">
           {topologyViews.map((view) => (
