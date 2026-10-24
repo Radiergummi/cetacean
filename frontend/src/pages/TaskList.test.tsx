@@ -8,6 +8,8 @@ import {
 import TaskList from "./TaskList";
 import { QueryClient } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../api/client", () => ({
@@ -77,5 +79,46 @@ describe("TaskList", () => {
     callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
 
     expect(await screen.findByText("Slot 100")).toBeInTheDocument();
+  });
+
+  function renderAt(url: string) {
+    mockTasks.mockResolvedValue({
+      data: { items: [fakeTask(0)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<TaskList />, {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createWrapper(testQueryClient, { withRouter: false })({
+          children: <MemoryRouter initialEntries={[url]}>{children}</MemoryRouter>,
+        }),
+    });
+  }
+
+  function requestedFilter() {
+    const [params] = mockTasks.mock.calls.at(-1) ?? [];
+
+    return params?.filter;
+  }
+
+  it("asks the server for the selected state", async () => {
+    renderAt("/tasks?state=failed");
+
+    expect(await screen.findByText("Slot 1")).toBeInTheDocument();
+    expect(requestedFilter()).toBe('state == "failed"');
+  });
+
+  it("asks the server for active tasks by default", async () => {
+    renderAt("/tasks");
+
+    expect(await screen.findByText("Slot 1")).toBeInTheDocument();
+    expect(requestedFilter()).toMatch(/^!\(desired_state == "shutdown" && state in \[/);
+  });
+
+  it("sends no filter for all tasks", async () => {
+    renderAt("/tasks?state=__all__");
+
+    expect(await screen.findByText("Slot 1")).toBeInTheDocument();
+    expect(requestedFilter()).toBeUndefined();
   });
 });

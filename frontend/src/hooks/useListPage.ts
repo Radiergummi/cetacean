@@ -13,10 +13,13 @@ export interface UseListPageConfig<T> {
   viewModeKey: string;
   fetchFn: (params: ListParams, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>;
   keyFn: (item: T) => string;
+  /** An expr-lang `?filter=` the server applies before paging. */
+  filter?: string | undefined;
 }
 
 interface UseListPageResult<T> {
   data: T[];
+  total: number;
   loading: boolean;
   error: Error | null;
   retry: () => void;
@@ -44,24 +47,26 @@ export function useListPage<T>({
   viewModeKey,
   fetchFn,
   keyFn,
+  filter,
 }: UseListPageConfig<T>): UseListPageResult<T> {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(defaultSort);
-  const { data, loading, error, retry, hasMore, loadMore, allowedMethods } = useSwarmQuery(
-    [path, { search: debouncedSearch, sort: sortKey, dir: sortDir }],
+  const { data, total, loading, error, retry, hasMore, loadMore, allowedMethods } = useSwarmQuery(
+    [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
     useCallback(
       (offset: number, signal: AbortSignal) =>
-        fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, offset }, signal),
-      [debouncedSearch, sortKey, sortDir, fetchFn],
+        fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, filter, offset }, signal),
+      [debouncedSearch, sortKey, sortDir, filter, fetchFn],
     ),
     sseType,
     keyFn,
-    debouncedSearch !== "",
+    debouncedSearch !== "" || Boolean(filter),
   );
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 
   return {
     data,
+    total,
     loading,
     error,
     retry,

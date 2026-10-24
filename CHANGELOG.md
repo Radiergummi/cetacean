@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - The log viewer's regex search no longer repeats matched text or crashes the page when the pattern contains a capture group
+- The Tasks page's state filter covers every task, not only the loaded pages, and counts only the state you selected
 
 ## [0.17.0] - 2026-10-20
 
