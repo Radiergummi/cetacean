@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /nodes/{id}/role` sends `Allow`, offering `PUT` to a caller who may change the role
 - `GET /configs` and `GET /secrets` no longer offer `POST`, nor the dashboard a create button, to a user whose only write grant is on a stack
 - With `server.cors.origins` set, a browser client from another origin can send `If-Match`, `Prefer` and `Range`, and read `Content-Range`, `Accept-Patch`, `Preference-Applied` and `Link-Template`
-- The OpenAPI description names `application/merge-patch+json` for a service's `configs`, `secrets`, `networks` and `mounts`, and documents each write's `403`, `415`, `Prefer: return=minimal` `204` and `/swarm` error answers
+- The OpenAPI description names `application/merge-patch+json` for a service's `configs`, `secrets`, `networks` and `mounts`, and documents the `403`, `415`, `Prefer: return=minimal` `204`, and `/swarm` error answers of every write
 
 ## [0.17.0] - 2026-10-20
 
