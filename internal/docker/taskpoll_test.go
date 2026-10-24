@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -239,4 +240,42 @@ func TestATaskPollAgainstAHungEngineEnds(t *testing.T) {
 
 	cancel()
 	<-streamed
+}
+
+// A sync replaces every task, so an event's re-list beside one could drop a
+// task the sync just added with a scoped list taken before it.
+func TestAnEventReListStandsAsideForASync(t *testing.T) {
+	mc := newMockClient()
+
+	var lists atomic.Int64
+	mc.listTasksFn = func(context.Context, TaskScope) ([]swarm.Task, error) {
+		lists.Add(1)
+		return nil, nil
+	}
+
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	w.syncMu.Lock()
+	w.processBatch(context.Background(), map[eventKey]coalesced{
+		{resourceType: events.ServiceEventType, id: "s1"}: {action: "update"},
+	})
+	w.syncMu.Unlock()
+
+	if n := lists.Load(); n != 0 {
+		t.Errorf("an event re-listed tasks %d times while a sync held the lock", n)
+	}
+}
+
+// The engine resolves a list's service or node filter, and refuses one that
+// names a removed object, so a removal calls for no re-list of its own.
+func TestARemovalCallsForNoReList(t *testing.T) {
+	scopes := taskScopes(map[eventKey]coalesced{
+		{resourceType: events.ServiceEventType, id: "s1"}: {action: "remove"},
+		{resourceType: events.NodeEventType, id: "n1"}:    {action: "remove"},
+		{resourceType: events.ServiceEventType, id: "s2"}: {action: "update"},
+	})
+
+	if want := []TaskScope{{Service: "s2"}}; !slices.Equal(scopes, want) {
+		t.Errorf("scopes = %v, want %v", scopes, want)
+	}
 }

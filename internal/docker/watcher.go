@@ -521,7 +521,8 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			}
 			done <- err
 		case <-pollC:
-			// A full sync re-reads the tasks too, so a poll beside one is waste.
+			// A list taken before a sync's must not be applied after it, or
+			// it drops tasks the sync added; the sync re-reads them anyway.
 			if !w.syncMu.TryLock() {
 				continue
 			}
@@ -645,9 +646,14 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 
 // taskScopes names the task lists a batch calls for: Swarm emits no task
 // events, and a service or node changing is when its tasks most likely did.
+// A removal is left to the poll: the engine refuses a filter on a removed one.
 func taskScopes(batch map[eventKey]coalesced) []TaskScope {
 	var scopes []TaskScope
-	for key := range batch {
+	for key, ev := range batch {
+		if ev.action == "remove" {
+			continue
+		}
+
 		switch key.resourceType { //nolint:exhaustive // only services and nodes own tasks
 		case events.ServiceEventType:
 			scopes = append(scopes, TaskScope{Service: key.id})
@@ -661,9 +667,14 @@ func taskScopes(batch map[eventKey]coalesced) []TaskScope {
 
 // reconcileScopes re-lists the tasks of each scope, one at a time: two lists
 // taken at different moments can disagree on a task, and the later-applied
-// one must not drop a task the other added. Past a handful, one list of every
-// task is cheaper than many.
+// one must not drop a task the other added. The same holds against a sync,
+// so a running one wins. Past a handful, one list of every task is cheaper.
 func (w *Watcher) reconcileScopes(ctx context.Context, scopes []TaskScope) {
+	if len(scopes) == 0 || !w.syncMu.TryLock() {
+		return
+	}
+	defer w.syncMu.Unlock()
+
 	if len(scopes) > workerCount {
 		scopes = []TaskScope{{}}
 	}
