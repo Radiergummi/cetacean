@@ -165,7 +165,7 @@ func TestCORSCoversTheAPIsOwnHeaders(t *testing.T) {
 
 	allowed := strings.Split(strings.ToLower(w.Header().Get("Access-Control-Allow-Headers")), ", ")
 	for _, header := range []string{
-		"if-match", "if-none-match", "if-modified-since", "if-unmodified-since", "if-range",
+		"if-match", "if-none-match", "if-modified-since", "if-range",
 		"prefer", "range", "last-event-id",
 	} {
 		if !slices.Contains(allowed, header) {

@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
@@ -667,25 +670,63 @@ func TestParsePagination_RangeOverflowIsIgnored(t *testing.T) {
 	}
 }
 
-// RFC 9110 §13.1.5 wants If-Range evaluated on a Range request. It is not
-// read, so this pins that the range is served whatever the client's copy is.
-func TestParsePagination_IfRangeIsNotEvaluated(t *testing.T) {
-	spec.Satisfies(t, "http/rfc9110/if-range-is-evaluated")
+// RFC 9110 §13.1.5: If-Range holds only for the exact, strong ETag the ranged
+// answer carries; otherwise the Range is ignored and the whole list is sent.
+func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
+	spec.Satisfies(t,
+		"http/rfc9110/if-range-is-evaluated",
+		"http/rfc9110/a-false-if-range-ignores-the-range",
+		"http/rfc9110/a-true-if-range-processes-the-range",
+	)
 
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Range", "items 0-9")
-	r.Header.Set("If-Range", `"a-validator-that-is-not-current"`)
+	c := cache.New(nil)
+	for _, id := range []string{"s1", "s2"} {
+		c.SetService(swarm.Service{
+			ID:   id,
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: id}},
+		})
+	}
+	router := newTestRouterWithCache(t, c)
 
-	p, err := parsePagination(r)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	get := func(ifRange string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/services", nil)
+		req.Header.Set("Range", "items 0-0")
+		if ifRange != "" {
+			req.Header.Set("If-Range", ifRange)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		return w
 	}
 
-	if !p.RangeReq {
-		t.Fatal("the Range header was not honoured at all")
+	first := get("")
+	etag := first.Header().Get("ETag")
+	if first.Code != http.StatusPartialContent || etag == "" {
+		t.Fatalf("Range alone answered %d with ETag %q, want 206 with one", first.Code, etag)
 	}
-	if p.Limit != 10 || p.Offset != 0 {
-		t.Errorf("limit=%d offset=%d, want 10 and 0; the deferral is stale", p.Limit, p.Offset)
+
+	if w := get(etag); w.Code != http.StatusPartialContent {
+		t.Errorf("If-Range: %s (current) answered %d, want 206", etag, w.Code)
+	}
+
+	for _, stale := range []string{
+		`"not-the-current-one"`,
+		"W/" + etag,
+		"Mon, 15 Jun 2026 10:30:00 GMT",
+	} {
+		w := get(stale)
+		if w.Code != http.StatusOK || w.Header().Get("Content-Range") != "" {
+			t.Errorf("If-Range: %s answered %d, Content-Range %q; want 200 and none",
+				stale, w.Code, w.Header().Get("Content-Range"))
+		}
+		if !strings.Contains(w.Body.String(), `"total":2`) ||
+			strings.Count(w.Body.String(), `"@type":"Service"`) != 2 {
+			t.Errorf("If-Range: %s did not send the whole list: %s", stale, w.Body.String())
+		}
+		if w.Header().Get("ETag") == etag {
+			t.Errorf("If-Range: %s sent the whole list under the ranged answer's ETag", stale)
+		}
 	}
 }
 

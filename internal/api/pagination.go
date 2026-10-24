@@ -122,6 +122,37 @@ func parseItemsRange(header string) (int, int, bool, error) {
 	return limit, startN, true, nil
 }
 
+// ifRange evaluates If-Range on a Range request (RFC 9110 §13.1.5) against the
+// validator the ranged answer carries. When it does not hold, the Range is
+// dropped and the whole list goes out under the validator of that request.
+func (h *Handlers) ifRange(r *http.Request, validator string) (*http.Request, string) {
+	cond := r.Header.Get("If-Range")
+	if cond == "" || r.Header.Get("Range") == "" || ifRangeHolds(r, cond, validator) {
+		return r, validator
+	}
+
+	r = r.Clone(r.Context())
+	r.Header.Del("Range")
+	r.Header.Del("If-Range")
+
+	return r, h.derivedETag(r)
+}
+
+// ifRangeHolds is the strong comparison against the tag this answer would
+// carry, in either coding; a weak tag never equals one, and a date never
+// holds, since no list sends Last-Modified.
+func ifRangeHolds(r *http.Request, cond, validator string) bool {
+	cond = strings.TrimSpace(cond)
+	if cond == codedETag(validator, EncodingIdentity) {
+		return true
+	}
+
+	coding := resolveEncoding(r)
+
+	return coding != EncodingIdentity && !compressionDisabled(r) &&
+		cond == codedETag(validator, coding)
+}
+
 // pageOf is the slice the page names, clamped to what there is.
 func pageOf[T any](items []T, p PageParams) []T {
 	start := min(p.Offset, len(items))

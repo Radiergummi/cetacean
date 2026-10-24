@@ -18,13 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A `/history` entry's and a `/disk-usage` summary's `@id` is a fragment of its list, like `/history#42`, instead of a URL that answered `404`
 - A job service's `mode` reads `replicated-job` or `global-job` in `?filter=` and `?sort=mode`, instead of `replicated`
 - With `server.base_path` set, a path outside it answers `404` with problem details instead of plain text
+- A list honors `If-Range` on a `Range` request, sending the first page with `200` when the page you hold changed
 - A list's page links keep a `.json` or `.csv` suffix, and an `offset` past the end links no next page instead of a negative offset
 - A `PATCH` reads its `Content-Type` case-insensitively, so `Application/Merge-Patch+JSON` is accepted and a type that merely starts like a patch format is refused with `415`
 - `Accept` is weighed by the most specific range, parameters included, against the type each endpoint sends; every endpoint answers with the best type it serves instead of `406` or JSON
 - A plugin's `@id` escapes the `/` in its name, so `/plugins/vieux%2Fsshfs:latest` resolves, and `POST /plugins` answers with its `Location`
 - `GET /nodes/{id}/role` sends `Allow`, offering `PUT` to a caller who may change the role
 - `GET /configs` and `GET /secrets` no longer offer `POST`, nor the dashboard a create button, to a user whose only write grant is on a stack
-- With `server.cors.origins` set, a browser client from another origin can send `If-Match`, `Prefer` and `Range`, and read `Content-Range`, `Accept-Patch`, `Preference-Applied` and `Link-Template`
+- With `server.cors.origins` set, a browser client from another origin can send `If-Match`, `If-Range`, `Prefer` and `Range`, and read `Content-Range`, `Accept-Patch`, `Preference-Applied` and `Link-Template`
 - The OpenAPI description names `application/merge-patch+json` for a service's `configs`, `secrets`, `networks` and `mounts`, and documents the `403`, `415`, `Prefer: return=minimal` `204`, and `/swarm` error answers of every write
 
 ## [0.17.0] - 2026-10-20

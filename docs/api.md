@@ -315,7 +315,8 @@ curl "http://localhost:9000/configs?search=nginx"
 
 List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
 Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
-*/142`. Query parameters take precedence when both are present.
+*/142`. Query parameters take precedence when both are present. With `If-Range` naming the `ETag` of the page
+you hold, the range is served only if that page is unchanged; otherwise you get the first page with a `200`.
 
 ### History pagination
 

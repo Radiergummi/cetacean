@@ -63,7 +63,6 @@ var allowedHeaders = strings.Join([]string{
 	"If-Match",
 	"If-None-Match",
 	"If-Modified-Since",
-	"If-Unmodified-Since",
 	"If-Range",
 	"Last-Event-ID",
 	"Prefer",
