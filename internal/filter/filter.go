@@ -245,14 +245,24 @@ func NodeEnv(n swarm.Node, m map[string]any) map[string]any {
 	return m
 }
 
+// ServiceMode names a service's scheduling mode as a filter or a sort reads it.
+func ServiceMode(s swarm.Service) string {
+	switch {
+	case s.Spec.Mode.ReplicatedJob != nil:
+		return "replicated-job"
+	case s.Spec.Mode.GlobalJob != nil:
+		return "global-job"
+	case s.Spec.Mode.Global != nil:
+		return "global"
+	default:
+		return "replicated"
+	}
+}
+
 // ServiceEnv builds an expression environment from a swarm.Service.
 func ServiceEnv(s swarm.Service, m map[string]any) map[string]any {
 	if m == nil {
 		m = make(map[string]any, 5)
-	}
-	mode := modeReplicated
-	if s.Spec.Mode.Global != nil {
-		mode = modeGlobal
 	}
 	image := emptyString
 	if s.Spec.TaskTemplate.ContainerSpec != nil {
@@ -261,7 +271,7 @@ func ServiceEnv(s swarm.Service, m map[string]any) map[string]any {
 	m["id"] = s.ID
 	m["name"] = s.Spec.Name
 	m["image"] = image
-	m["mode"] = mode
+	m["mode"] = boxedOr(serviceModes, ServiceMode(s))
 	m["stack"] = s.Spec.Labels[cache.StackLabel]
 	return m
 }

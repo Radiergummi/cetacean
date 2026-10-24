@@ -353,7 +353,7 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 | Resource | Fields                                                                                                                              |
 |----------|-------------------------------------------------------------------------------------------------------------------------------------|
 | Nodes    | `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`) |
-| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`                                                                      |
+| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`/`replicated-job`/`global-job`), `stack`                                        |
 | Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code` (int), `error`, `service` (ID), `node` (ID), `slot` (int)                      |
 | Stacks   | `name`, `services`, `configs`, `secrets`, `networks`, `volumes` (all counts)                                                        |
 | Configs  | `id`, `name`                                                                                                                        |

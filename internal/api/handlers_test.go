@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1403,6 +1404,44 @@ func TestHandleListServices_SortByMode(t *testing.T) {
 	// "Global" < "Replicated"
 	if resp.Items[0].Spec.Mode.Global == nil {
 		t.Error("expected Global first")
+	}
+}
+
+func TestHandleListServices_SortByModeKnowsJobs(t *testing.T) {
+	c := cache.New(nil)
+	for id, mode := range map[string]swarm.ServiceMode{
+		"a-replicated-job": {ReplicatedJob: &swarm.ReplicatedJob{}},
+		"b-replicated":     {Replicated: &swarm.ReplicatedService{}},
+		"c-global-job":     {GlobalJob: &swarm.GlobalJob{}},
+	} {
+		c.SetService(swarm.Service{ID: id, Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: id},
+			Mode:        mode,
+		}})
+	}
+	h := newTestHandlers(t, withCache(c))
+
+	w := httptest.NewRecorder()
+	h.HandleListServices(w, httptest.NewRequest("GET", "/services?sort=mode", nil))
+
+	var resp CollectionResponse[ServiceListItem]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	var order []string
+	for _, item := range resp.Items {
+		order = append(order, item.ID)
+	}
+	if want := []string{
+		"c-global-job",
+		"b-replicated",
+		"a-replicated-job",
+	}; !slices.Equal(
+		order,
+		want,
+	) {
+		t.Errorf("sorted by mode = %v, want %v", order, want)
 	}
 }
 

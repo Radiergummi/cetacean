@@ -64,9 +64,7 @@ var (
 		swarm.TaskStateOrphaned,
 	)
 
-	// The two values ServiceEnv reports for mode, boxed rather than rebuilt.
-	modeReplicated any = "replicated"
-	modeGlobal     any = "global"
+	serviceModes = intern("replicated", "global", "replicated-job", "global-job")
 
 	// An absent optional field, boxed once rather than per item.
 	emptyString any = ""
