@@ -86,6 +86,26 @@ describe("SearchPalette Remove Node", () => {
     expect(removeNodeMock.mock.calls[1]).toEqual(["n1", true]);
   });
 
+  it("reports a permission check that fails instead of swallowing it", async () => {
+    vi.mocked(headCapabilities).mockRejectedValue(new Error("network down"));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SearchPalette onClose={vi.fn<() => void>()} />
+      </MemoryRouter>,
+    );
+
+    const input = screen.getByRole("combobox");
+    await user.type(input, "remove node");
+    await user.keyboard("{Enter}");
+    await user.type(input, "worker");
+    await user.click(await screen.findByRole("option", { name: /worker-1/ }));
+
+    expect(await screen.findByText(/network down/)).toBeInTheDocument();
+    expect(removeNodeMock).not.toHaveBeenCalled();
+  });
+
   it("does not offer force for a refusal force would not get past", async () => {
     removeNodeMock.mockRejectedValue(
       new ApiError("/api/errors/NOD003", "Node not found", 404, "no such node"),

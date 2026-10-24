@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The Atom feed button and feed autodiscovery link the search page's feed correctly, and no longer appear on a resource's sub-pages, which have no feed
 - A volume whose name holds a character reserved in a URL, such as `#` or `?`, opens, links and removes correctly in the dashboard
 - The History page's Download CSV applies the name filter as well as the type
+- A command palette action whose permission check fails says so, instead of doing nothing
 
 ## [0.17.0] - 2026-10-20
 
