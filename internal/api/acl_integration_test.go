@@ -2275,3 +2275,27 @@ func TestCreatedDataResourceIsImmediatelyAttachable(t *testing.T) {
 		})
 	}
 }
+
+// The answer reads the leader's address off the node cache and redacts the
+// join tokens per grant and tier, none of which moves the swarm's own
+// timestamp, so that timestamp cannot be offered as its Last-Modified.
+func TestHandleSwarm_SendsNoLastModified(t *testing.T) {
+	h := newTestHandlers(t, withSystemClient(&mockSystemClient{
+		swarmInspectFn: func(_ context.Context) (swarm.Swarm, error) {
+			return swarm.Swarm{UpdatedAt: time.Date(2020, 6, 15, 10, 30, 0, 0, time.UTC)}, nil
+		},
+	}))
+
+	req := httptest.NewRequest("GET", "/swarm", nil)
+	req.Header.Set("If-Modified-Since", "Mon, 15 Jun 2026 10:30:00 GMT")
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "admin"}))
+	w := httptest.NewRecorder()
+	h.HandleSwarm(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status=%d, want 200", w.Code)
+	}
+	if lm := w.Header().Get("Last-Modified"); lm != "" {
+		t.Errorf("Last-Modified = %q, want none", lm)
+	}
+}

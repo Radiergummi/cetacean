@@ -340,10 +340,12 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 		sw.JoinTokens = swarm.JoinTokens{}
 	}
 
-	writeCachedJSONTimed(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
+	// No Last-Modified: the leader's address and the redaction change without
+	// the swarm's timestamp moving.
+	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/swarm", "Swarm", SwarmResponse{
 		Swarm:       sw,
 		ManagerAddr: managerAddr,
-	}), sw.UpdatedAt)
+	}))
 }
 
 type DiskUsageSummary struct {
