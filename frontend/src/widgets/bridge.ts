@@ -78,17 +78,20 @@ export type CetaceanHost = ReturnType<typeof useCetaceanHost>;
  * Widgets are rendered in a sandboxed iframe whose lifetime the host controls,
  * so a call can still be in flight when the widget is torn down; the result of
  * a superseded or late call is discarded rather than set on an unmounted tree.
+ *
+ * Undefined `args` makes no call: a widget passes that until the host has sent
+ * the arguments of the call it renders for.
  */
 export function useToolData<T>(
   host: Pick<CetaceanHost, "callTool" | "isConnected">,
   toolName: string,
-  args: Record<string, unknown> = {},
+  args: Record<string, unknown> | undefined,
 ): { data: T | undefined; error: Error | undefined; isLoading: boolean } {
   const { isConnected, callTool } = host;
 
   // Serialised so a caller can pass an object literal without re-firing the
   // effect on every render.
-  const argsKey = JSON.stringify(args);
+  const argsKey = args === undefined ? undefined : JSON.stringify(args);
   const requestKey = `${toolName}:${argsKey}`;
 
   // One piece of state, stamped with the request it answers. Loading is then
@@ -104,7 +107,7 @@ export function useToolData<T>(
   const activeRef = useRef("");
 
   useEffect(() => {
-    if (!isConnected) {
+    if (!isConnected || argsKey === undefined) {
       return;
     }
 

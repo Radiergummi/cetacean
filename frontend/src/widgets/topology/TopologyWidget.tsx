@@ -4,6 +4,23 @@ import { TopologyGraph } from "./TopologyGraph";
 import { useState } from "react";
 
 /**
+ * The view and node the host called get_topology with: the graph to draw first.
+ * Only drain-impact reads the node, and it cannot be drawn without one.
+ */
+function topologyArgumentsFrom(
+  input: Record<string, unknown> | undefined,
+): { view: string; node?: string } | undefined {
+  if (!input) {
+    return undefined;
+  }
+
+  const view = typeof input.view === "string" && input.view !== "" ? input.view : "network";
+  const node = input.node;
+
+  return typeof node === "string" && node !== "" ? { view, node } : { view };
+}
+
+/**
  * Renders the cluster topology as an interactive graph.
  *
  * The view is widget state, not host state: switching it re-calls get_topology
@@ -13,10 +30,12 @@ import { useState } from "react";
  */
 export function TopologyWidget() {
   const host = useCetaceanHost();
-  const { error: connectionError, isConnected } = host;
-  const [view, setView] = useState<TopologyView>("network");
+  const { error: connectionError, isConnected, toolInput } = host;
+  const [chosenView, setChosenView] = useState<TopologyView | undefined>(undefined);
 
-  const { data, error, isLoading } = useToolData<TopologyGraphData>(host, "get_topology", { view });
+  const called = topologyArgumentsFrom(toolInput);
+  const args = called && chosenView ? { ...called, view: chosenView } : called;
+  const { data, error, isLoading } = useToolData<TopologyGraphData>(host, "get_topology", args);
 
   if (connectionError) {
     return <Message text={`Could not reach the host: ${connectionError.message}`} />;
@@ -26,18 +45,22 @@ export function TopologyWidget() {
     return <Message text="Connecting to the host…" />;
   }
 
+  if (!args) {
+    return <Message text="Waiting for the host to say which topology to draw…" />;
+  }
+
   if (error) {
     return <Message text={error.message} />;
   }
 
   if (isLoading || !data) {
-    return <Message text={`Loading the ${view} topology…`} />;
+    return <Message text={`Loading the ${args.view} topology…`} />;
   }
 
   return (
     <TopologyGraph
       graph={data}
-      onViewChange={setView}
+      onViewChange={setChosenView}
     />
   );
 }

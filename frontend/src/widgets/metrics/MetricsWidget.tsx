@@ -45,7 +45,7 @@ export function MetricsWidget() {
   const { data, error, isLoading } = useToolData<MetricsResult>(
     host,
     "get_metrics",
-    args ? { ...args, range } : {},
+    args && { ...args, range },
   );
 
   if (connectionError) {

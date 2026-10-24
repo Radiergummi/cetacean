@@ -31,6 +31,20 @@ describe("toFlow", () => {
     expect(nodes[1]?.position.x).toBeGreaterThan(0);
   });
 
+  it("puts the drained node's services beside the nodes that could take them", () => {
+    const { nodes } = toFlow({
+      view: "drain-impact",
+      nodes: [
+        { id: "node-2", label: "worker-b", type: "node" },
+        { id: "svc-a", label: "api", type: "service" },
+      ],
+      edges: [],
+    });
+
+    expect(nodes[1]?.position.x).toBe(0);
+    expect(nodes[0]?.position.x).toBeGreaterThan(0);
+  });
+
   it("stacks the members of one column without overlapping them", () => {
     const { nodes } = toFlow({
       view: "network",
