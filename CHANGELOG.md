@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-24
+
 ### Added
 - `docker.task_poll_interval` sets how often Cetacean re-lists every task, ten seconds by default and at least one second; `0` turns it off
 - `acl.oidc_user_claims` sets which OIDC claims a `user:` grant matches; set it to `["sub"]` to stop granting by email address, which a provider can reassign
