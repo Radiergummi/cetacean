@@ -189,12 +189,13 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 
-	t.Run("specificity: higher q wins over higher specificity", func(t *testing.T) {
-		// text/html is exact (specificity 3, q=0.9); text/* is partial (specificity 2, q=1.0).
-		// Higher q wins, so text/* matches. text/* matches text/html first in our preference order.
+	t.Run("specificity: the most specific range weighs a type", func(t *testing.T) {
+		// text/html is weighed by its own range at 0.9, every other text type
+		// by text/* at 1.0, so the first of those in our order is preferred. A
+		// wildcard never opens a stream; the endpoint picks among its own types.
 		ct, _ := run("/services", "text/html;q=0.9, text/*;q=1.0")
-		if ct != ContentTypeHTML {
-			t.Errorf("got %v, want HTML", ct)
+		if ct != ContentTypeDOT {
+			t.Errorf("got %v, want DOT", ct)
 		}
 	})
 
@@ -592,11 +593,17 @@ func TestParseAcceptRangesIsCaseInsensitive(t *testing.T) {
 		t.Fatalf("parsed %d ranges, want 2", len(ranges))
 	}
 
-	if !ranges[0].matches("application", "json") || ranges[0].q != 0.5 {
+	if !ranges[0].matches(mediaType{typ: "application", subtype: "json"}) || ranges[0].q != 0.5 {
 		t.Errorf("first range = %+v, want application/json at q=0.5", ranges[0])
 	}
-	if !ranges[1].matches("text", "html") || ranges[1].q != 0 {
+	if !ranges[1].matches(mediaType{typ: "text", subtype: "html"}) || ranges[1].q != 0 {
 		t.Errorf("second range = %+v, want text/* at q=0", ranges[1])
+	}
+
+	// A weight before another parameter is still the weight, not part of it.
+	ranges = parseAcceptRanges("text/csv;q=0.1;header=present")
+	if len(ranges) != 1 || ranges[0].q != 0.1 || len(ranges[0].params) != 1 {
+		t.Errorf("parsed %+v, want text/csv;header=present at q=0.1", ranges)
 	}
 }
 

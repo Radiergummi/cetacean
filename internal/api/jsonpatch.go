@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strings"
 )
 
 // errPatchApply is the sentinel wrapping every patch-application failure from
@@ -18,14 +19,28 @@ type PatchOp struct {
 	Value string `json:"value,omitempty"`
 }
 
-// normalizePath strips a leading "/" if present, for convenience on flat maps.
-// Per RFC 6902, paths use JSON Pointer (RFC 6901) syntax with a leading "/".
-// We also accept paths without the leading slash for ergonomic flat-map usage.
-func normalizePath(p string) string {
-	if len(p) > 0 && p[0] == '/' {
-		return p[1:]
+// pointerKey resolves a JSON Pointer (RFC 6901) to the flat-map key it names;
+// a leading "/" may be left off. A second token would reach inside a string,
+// which has no members. ~1 decodes before ~0, so "~01" is the key "~1".
+func pointerKey(p string) (string, error) {
+	token := strings.TrimPrefix(p, "/")
+
+	if strings.Contains(token, "/") {
+		return "", fmt.Errorf("path %q reaches inside a value; write a / in a key as ~1", p)
 	}
-	return p
+
+	for rest := token; ; {
+		_, escaped, found := strings.Cut(rest, "~")
+		if !found {
+			break
+		}
+		if escaped == "" || escaped[0] != '0' && escaped[0] != '1' {
+			return "", fmt.Errorf("path %q has a ~ that is not ~0 or ~1", p)
+		}
+		rest = escaped[1:]
+	}
+
+	return strings.ReplaceAll(strings.ReplaceAll(token, "~1", "/"), "~0", "~"), nil
 }
 
 // testFailedError indicates a "test" operation found a value mismatch.
@@ -48,7 +63,10 @@ func applyJSONPatch(m map[string]string, ops []PatchOp) (map[string]string, erro
 	maps.Copy(result, m)
 
 	for i, op := range ops {
-		key := normalizePath(op.Path)
+		key, err := pointerKey(op.Path)
+		if err != nil {
+			return nil, fmt.Errorf("%w: operation %d: %w", errPatchApply, i, err)
+		}
 		if key == "" {
 			return nil, fmt.Errorf("%w: operation %d: empty path", errPatchApply, i)
 		}

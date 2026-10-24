@@ -123,6 +123,7 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	h.setAllowSubResource(w, r, nodeResource(node))
 
 	writeCachedJSON(w, r, rep)
 }

@@ -51,6 +51,57 @@ func TestSetAllowList_POST(t *testing.T) {
 	}
 }
 
+// A new config belongs to no stack, so only a grant naming configs can permit
+// creating one; a stack grant implies its configs and nothing outside it.
+func TestSetAllowListOffersCreateOnlyForAGrantNamingTheType(t *testing.T) {
+	for resource, want := range map[string]string{
+		"stack:web":    "GET, HEAD",
+		"config:app-*": "GET, HEAD, POST",
+		"*":            "GET, HEAD, POST",
+	} {
+		t.Run(resource, func(t *testing.T) {
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+				Resources:   []string{resource},
+				Audience:    []string{"*"},
+				Permissions: []string{"write"},
+			}}})
+			h := &Handlers{operationsLevel: config.OpsConfiguration, acl: e}
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", "/configs", nil)
+			r = r.WithContext(
+				auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}),
+			)
+
+			h.setAllowList(w, r, "config")
+
+			if got := w.Header().Get("Allow"); got != want {
+				t.Errorf("Allow = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestTheNodeRoleOffersItsPut(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-1"}})
+	router := newTestRouterWithCache(t, c)
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes/n1/role", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Allow"); got != "GET, HEAD, PUT" {
+		t.Errorf("Allow = %q, want GET, HEAD, PUT", got)
+	}
+	if vary := w.Header().Values("Vary"); !slices.ContainsFunc(vary, func(v string) bool {
+		return strings.Contains(v, "Authorization")
+	}) {
+		t.Errorf("Vary = %q, want it to name the identity", vary)
+	}
+}
+
 func TestSetAllowList_NoWrite(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{

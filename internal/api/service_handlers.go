@@ -47,12 +47,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		filterEnv:    filter.Services,
 		sortKeys: map[string]func(swarm.Service) string{
 			"name": func(s swarm.Service) string { return s.Spec.Name },
-			"mode": func(s swarm.Service) string {
-				if s.Spec.Mode.Global != nil {
-					return "Global"
-				}
-				return "Replicated"
-			},
+			"mode": filter.ServiceMode,
 		},
 	}
 
@@ -62,6 +57,8 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 	if listNotModified(h, w, r, spec, validator) {
 		return
 	}
+
+	r, validator = h.ifRange(r, validator)
 
 	services, p, ok := prepareList(h, w, r, spec)
 	if !ok {

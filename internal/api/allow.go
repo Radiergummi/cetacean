@@ -182,17 +182,30 @@ func writeAllow(w http.ResponseWriter, r *http.Request, methods []string) {
 }
 
 // createsByName lists the types whose create checks the write grant on the
-// created name, so any write grant on the type may allow one; the rest need it
-// type-wide.
+// created name, so any write grant naming the type may allow one; the rest
+// need it type-wide.
 var createsByName = map[string]bool{"config": true, "secret": true}
 
 // setAllowList sets the Allow header for list endpoints.
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	methods := []string{"GET", "HEAD"}
 	id := auth.IdentityFromContext(r.Context())
-	if createsByName[resourceType] && h.acl.TypeGrants(id).Can("write", resourceType) ||
-		h.acl.Can(id, "write", resourceType+":*") {
+	if h.acl.Can(id, "write", resourceType+":*") ||
+		createsByName[resourceType] && grantsWriteOnType(h.acl.PermissionsFor(id), resourceType) {
 		methods, _ = h.routedWrites(r)
 	}
 	writeAllow(w, r, methods)
+}
+
+// grantsWriteOnType reports whether a grant pattern names the type itself. A
+// stack grant implies the stack's configs and secrets, but a new one belongs
+// to no stack, so it cannot permit the create.
+func grantsWriteOnType(patterns map[string][]string, resourceType string) bool {
+	for pattern, permissions := range patterns {
+		if strings.HasPrefix(pattern, resourceType+":") && slices.Contains(permissions, "write") {
+			return true
+		}
+	}
+
+	return false
 }

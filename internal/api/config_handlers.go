@@ -26,7 +26,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeCachedJSONTimed(w, r, rep, cfg.UpdatedAt)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {

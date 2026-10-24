@@ -27,7 +27,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeCachedJSONTimed(w, r, rep, sec.UpdatedAt)
+	writeCachedJSON(w, r, rep)
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {

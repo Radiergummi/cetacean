@@ -118,6 +118,11 @@ const errorDictionary: Record<string, ErrorInfo> = {
     suggestion: "Check the Docker daemon logs for details.",
     action: "retry",
   },
+  SWM012: {
+    title: "Swarm changed meanwhile",
+    suggestion: "Someone else updated the swarm settings. Refresh and try again.",
+    action: "retry",
+  },
   SWM008: {
     title: "Swarm unlock failed",
     suggestion: "Verify the unlock key is correct and try again.",

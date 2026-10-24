@@ -24,6 +24,11 @@ const (
 	asyncAPIYAMLMediaType = "application/vnd.aai.asyncapi+yaml;version=3.0.0"
 )
 
+var asyncAPISends = sending{
+	ContentTypeJSON: mustMediaType(asyncAPIMediaType),
+	ContentTypeYAML: mustMediaType(asyncAPIYAMLMediaType),
+}
+
 // asyncAPIRendering is one representation of the document as one origin sees
 // it.
 type asyncAPIRendering struct {
@@ -117,12 +122,13 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	}
 
 	negotiated = func(w http.ResponseWriter, r *http.Request) {
-		if !acceptable(r, ContentTypeJSON, ContentTypeYAML) {
+		r, ct := choose(r, asyncAPISends, ContentTypeJSON, ContentTypeYAML)
+		if ct != ContentTypeJSON && ct != ContentTypeYAML {
 			notAcceptable(w, r, asyncAPIMediaType+", "+asyncAPIYAMLMediaType)
 			return
 		}
 
-		serve(w, r, ContentTypeFromContext(r.Context()) == ContentTypeYAML)
+		serve(w, r, ct == ContentTypeYAML)
 	}
 
 	yamlOnly = func(w http.ResponseWriter, r *http.Request) {

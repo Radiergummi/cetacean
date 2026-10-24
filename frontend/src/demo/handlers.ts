@@ -1386,7 +1386,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         CollectionResponse<DiskUsageSummary & { "@id": string; "@type": string }>
       >({
         items: summaries.map((summary) =>
-          wrapItem(summary, "DiskUsageSummary", `/disk-usage/${summary.type}`),
+          wrapItem(summary, "DiskUsageSummary", `/disk-usage#${summary.type}`),
         ),
         total: summaries.length,
         limit: 50,

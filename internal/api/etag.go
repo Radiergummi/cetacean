@@ -285,9 +285,9 @@ func writeEncodedJSON(w http.ResponseWriter, status int, body []byte, coding Enc
 }
 
 // writeCachedJSONTimed is like writeCachedJSON but also sets a Last-Modified
-// header and evaluates If-Modified-Since for conditional requests. Per
-// RFC 9110 §13.1.3, If-None-Match takes precedence over If-Modified-Since
-// when both are present.
+// header and evaluates If-Modified-Since, which If-None-Match overrides
+// (RFC 9110 §13.1.3). Only for a body whose every input moves lastModified:
+// one listing cross-references or filtered by grants would get a stale 304.
 func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastModified time.Time) {
 	body, err := json.Marshal(v)
 	if err != nil {

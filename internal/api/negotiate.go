@@ -2,10 +2,15 @@ package api
 
 import (
 	"context"
+	"mime"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 // ContentType represents the resolved content type for a request.
@@ -86,6 +91,12 @@ func extensionFromContext(ctx context.Context) string {
 	return ext
 }
 
+// selfPath is the request's own path as a client would spell it again, its
+// suffix included, for a link to another page of the same representation.
+func selfPath(r *http.Request) string {
+	return absPath(r.Context(), r.URL.EscapedPath()) + extensionFromContext(r.Context())
+}
+
 // htmlUnacceptable reports whether the client ruled out text/html — by naming
 // an extension suffix that is not .html, or by an Accept header that does not
 // admit it.
@@ -103,26 +114,126 @@ func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")
 
-		ct, ext := resolveExtension(r)
-		acceptsHTML := ct == ContentTypeHTML
-
-		if ct == ContentTypeUnsupported {
-			ranges := parseAcceptRanges(r.Header.Get("Accept"))
-			ct = bestMatch(ranges)
-			acceptsHTML = rangesAcceptHTML(ranges)
+		// On a write to a member, a suffix would only choose the response's
+		// representation, and reading it off a name instead changes or removes
+		// the wrong resource.
+		ct, ext := ContentTypeUnsupported, ""
+		if isSafeMethod(r.Method) || r.Method == http.MethodOptions ||
+			!addressesMember(r.URL.EscapedPath()) {
+			ct, ext = resolveExtension(r)
 		}
 
-		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
-		if ext != "" {
-			ctx = context.WithValue(ctx, extensionKey{}, ext)
-		}
-
-		if !acceptsHTML {
-			ctx = context.WithValue(ctx, htmlUnacceptableKey{}, true)
-		}
-
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(negotiated(r, ct, ext)))
 	})
+}
+
+// negotiated records the type a suffix resolved to, or, when ct is
+// ContentTypeUnsupported, the one the Accept header prefers.
+func negotiated(r *http.Request, ct ContentType, ext string) context.Context {
+	acceptsHTML := ct == ContentTypeHTML
+
+	if ct == ContentTypeUnsupported {
+		ranges := parseAcceptRanges(r.Header.Get("Accept"))
+		ct = bestMatch(ranges)
+		acceptsHTML = rangesAcceptHTML(ranges)
+	}
+
+	ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
+	ctx = context.WithValue(ctx, extensionKey{}, ext)
+
+	return context.WithValue(ctx, htmlUnacceptableKey{}, !acceptsHTML)
+}
+
+// suffixedNames puts back a suffix negotiate stripped when the whole segment
+// names a member the caller may read: volume backup.json is that volume, not
+// volume backup as JSON. After authentication, so how the path is answered
+// reveals no name the caller cannot read.
+func (h *Handlers) suffixedNames(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ext := extensionFromContext(r.Context())
+		collection, identifier, rest := splitResourcePath(r.URL.EscapedPath())
+		identifier, err := url.PathUnescape(identifier)
+
+		if ext == "" || identifier == "" || rest != "" || err != nil ||
+			!h.namesReadableMember(r, collection, identifier+ext) {
+			next.ServeHTTP(w, r)
+
+			return
+		}
+
+		r.URL.Path += ext
+		if r.URL.RawPath != "" {
+			r.URL.RawPath += ext
+		}
+
+		next.ServeHTTP(w, r.WithContext(negotiated(r, ContentTypeUnsupported, "")))
+	})
+}
+
+// addressesMember reports whether the escaped path ends in the identifier of a
+// member of a collection that can be addressed by a name, where a dot is part
+// of the name. A plugin's tag is one: foo:1.csv.
+func addressesMember(escapedPath string) bool {
+	collection, identifier, rest := splitResourcePath(escapedPath)
+	if identifier == "" || rest != "" {
+		return false
+	}
+
+	_, resolvable := canonicalResolvers[collection]
+
+	return resolvable || collection == "volumes" || collection == "stacks" ||
+		collection == "plugins" && identifier != "privileges"
+}
+
+// namesReadableMember reports whether identifier addresses a member of the
+// collection the caller may read. A name several members share counts: the
+// ambiguity report answers it, not a suffix.
+func (h *Handlers) namesReadableMember(r *http.Request, collection, identifier string) bool {
+	var resource string
+
+	switch resolve, resolvable := canonicalResolvers[collection]; {
+	case resolvable:
+		_, named, found, err := resolve(h.cache, identifier)
+		if err != nil {
+			named, found = singularType[collection]+":"+identifier, true
+		}
+		if !found {
+			return false
+		}
+		resource = named
+	case collection == "volumes":
+		if _, ok := h.cache.GetVolume(identifier); !ok {
+			return false
+		}
+		resource = "volume:" + identifier
+	case collection == "stacks":
+		if _, ok := h.cache.GetStack(identifier); !ok {
+			return false
+		}
+		resource = "stack:" + identifier
+	case collection == "plugins":
+		return h.namesReadablePlugin(r, identifier)
+	default:
+		return false
+	}
+
+	return h.acl.Can(auth.IdentityFromContext(r.Context()), "read", resource)
+}
+
+// namesReadablePlugin is namesReadableMember for a plugin, which the cache does
+// not hold: the daemon is asked, and only once the caller may read the name.
+func (h *Handlers) namesReadablePlugin(r *http.Request, name string) bool {
+	if h.pluginClient == nil ||
+		!h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "plugin:"+name) {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := h.pluginClient.PluginInspect(ctx, name)
+
+	return err == nil
 }
 
 // notAcceptable refuses a type the endpoint does not serve, naming what it
@@ -131,8 +242,10 @@ func notAcceptable(w http.ResponseWriter, r *http.Request, serves string) {
 	writeErrorCode(w, r, "API003", "this endpoint supports "+serves)
 }
 
-// supportedTypes lists the media types we support, mapped to ContentType.
-// When a wildcard matches multiple supported types, we prefer earlier entries.
+// supportedTypes lists the names a client may ask for each ContentType by.
+// A type is weighed by the one it is sent as (see sentAs); the others are
+// aliases, which count only where named. Among equal weights, the ContentType
+// listed first wins, so a text/* wildcard resolves to HTML.
 var supportedTypes = []struct {
 	typ     string // e.g. "application"
 	subtype string // e.g. "json"
@@ -151,30 +264,60 @@ var supportedTypes = []struct {
 	{"application", "vnd.jgf+json", ContentTypeJGF},
 	{"application", "graphml+xml", ContentTypeGraphML},
 	{"text", "vnd.graphviz", ContentTypeDOT},
-	// After text/html, so a text/* wildcard still resolves to HTML.
 	{"text", "csv", ContentTypeCSV},
-	// The specification documents, served by /api and /api/asyncapi only.
-	// After application/json, so an application/* wildcard still resolves to
-	// JSON.
-	//
-	// Both halves of each pair are named. Registering only the +yaml spelling
-	// would resolve `Accept: …+json, …+yaml` — the pair an AsyncAPI tool sends
-	// — to YAML, since the JSON half would match nothing and the YAML half
-	// would win by default; and it would leave /api answering 406 to the
-	// registered JSON type for an OpenAPI document.
+	// Both halves of each specification-document pair are named, so a tool
+	// sending `…+json, …+yaml` is weighed on both rather than defaulting to
+	// the half that matched.
 	{"application", "vnd.oai.openapi+json", ContentTypeJSON},
 	{"application", "openapi+json", ContentTypeJSON},
 	{"application", "vnd.aai.asyncapi+json", ContentTypeJSON},
 	{"application", "asyncapi+json", ContentTypeJSON},
+	{"application", "yaml", ContentTypeYAML},
+	{"application", "x-yaml", ContentTypeYAML},
 	{"application", "vnd.oai.openapi", ContentTypeYAML},
 	{"application", "openapi+yaml", ContentTypeYAML},
 	{"application", "vnd.aai.asyncapi+yaml", ContentTypeYAML},
 	{"application", "asyncapi+yaml", ContentTypeYAML},
-	{"application", "yaml", ContentTypeYAML},
-	{"application", "x-yaml", ContentTypeYAML},
-	// After text/html and text/csv, for the same wildcard reason.
 	{"text", "yaml", ContentTypeYAML},
 	{"text", "x-yaml", ContentTypeYAML},
+}
+
+// contentTypeOrder is each ContentType once, in supportedTypes order.
+var contentTypeOrder = func() []ContentType {
+	var order []ContentType
+	for _, sup := range supportedTypes {
+		if !slices.Contains(order, sup.ct) {
+			order = append(order, sup.ct)
+		}
+	}
+
+	return order
+}()
+
+// sentAs is the media type each ContentType goes out as, unless the endpoint
+// says otherwise with a sending.
+var sentAs = map[ContentType]mediaType{
+	ContentTypeJSON:     mustMediaType("application/json"),
+	ContentTypeHTML:     mustMediaType("text/html"),
+	ContentTypeSSE:      mustMediaType("text/event-stream"),
+	ContentTypeAtom:     mustMediaType("application/atom+xml"),
+	ContentTypeJSONFeed: mustMediaType("application/feed+json"),
+	ContentTypeJGF:      mustMediaType("application/vnd.jgf+json"),
+	ContentTypeGraphML:  mustMediaType("application/graphml+xml"),
+	ContentTypeDOT:      mustMediaType("text/vnd.graphviz"),
+	ContentTypeCSV:      mustMediaType("text/csv;header=present"),
+	ContentTypeYAML:     mustMediaType("application/yaml"),
+}
+
+// sending names what an endpoint sends for a type where that is not sentAs.
+type sending map[ContentType]mediaType
+
+func (s sending) as(ct ContentType) mediaType {
+	if mt, ok := s[ct]; ok {
+		return mt
+	}
+
+	return sentAs[ct]
 }
 
 // yamlPaths are the routes that have a YAML representation: the specification
@@ -267,25 +410,59 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 }
 
 // acceptable reports whether the request admits one of the types an endpoint
-// serves. The negotiated type is the best of every endpoint's; a client whose
-// wildcard admits one of these is answered with it, not refused. A suffix
-// names one type, so it is not second-guessed against the Accept header.
+// serves.
 func acceptable(r *http.Request, serves ...ContentType) bool {
-	if slices.Contains(serves, ContentTypeFromContext(r.Context())) {
+	return acceptableAs(r, nil, serves...)
+}
+
+// acceptableAs is acceptable for an endpoint sending some type as sends says.
+func acceptableAs(r *http.Request, sends sending, serves ...ContentType) bool {
+	if slices.Contains(serves, negotiatedAmong(r, sends, serves...)) {
 		return true
 	}
+
+	// No Accept at all is no preference, so any type will do.
+	return extensionFromContext(r.Context()) == "" &&
+		len(parseAcceptRanges(r.Header.Get("Accept"))) == 0
+}
+
+// negotiatedAmong is the best of the types an endpoint serves, weighed by what
+// it sends for each. A suffix names one type, so it is not second-guessed;
+// without an Accept the default stands, and with none served the client's
+// favourite does, for the endpoint to refuse in terms of that type.
+func negotiatedAmong(r *http.Request, sends sending, serves ...ContentType) ContentType {
+	ct := ContentTypeFromContext(r.Context())
 	if extensionFromContext(r.Context()) != "" {
-		return false
+		return ct
 	}
 
 	ranges := parseAcceptRanges(r.Header.Get("Accept"))
-	for _, sup := range supportedTypes {
-		if slices.Contains(serves, sup.ct) && rangesAccept(ranges, sup.typ, sup.subtype) {
-			return true
-		}
+	if len(ranges) == 0 {
+		return ct
 	}
 
-	return false
+	if best := bestServed(ranges, serves, sends); best != ContentTypeUnsupported ||
+		slices.Contains(serves, ct) {
+		return best
+	}
+
+	return ct
+}
+
+// choose is negotiatedAmong, recorded on the request, for a dispatcher to hand
+// the arm it picked: a handler choosing its own rendering off the context must
+// read this choice, not the best of every endpoint's types.
+func choose(
+	r *http.Request,
+	sends sending,
+	serves ...ContentType,
+) (*http.Request, ContentType) {
+	ct := negotiatedAmong(r, sends, serves...)
+	if ct == ContentTypeFromContext(r.Context()) {
+		return r, ct
+	}
+
+	return r.WithContext(context.WithValue(r.Context(), contentTypeKey{}, ct)), ct
 }
 
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable
@@ -293,115 +470,227 @@ func acceptable(r *http.Request, serves ...ContentType) bool {
 // weight, so "*/*, text/html;q=0" refuses it. The resolved ContentType cannot
 // answer this — it reports JSON for a wildcard and an explicit type alike.
 func rangesAcceptHTML(ranges []mediaRange) bool {
-	return rangesAccept(ranges, "text", "html")
-}
-
-// rangesAccept is rangesAcceptHTML for any one media type.
-func rangesAccept(ranges []mediaRange, typ, subtype string) bool {
 	if len(ranges) == 0 {
 		return true
 	}
 
-	specificity, quality := -1, 0.0
+	weight, ok := weigh(ranges, ContentTypeHTML, sentAs[ContentTypeHTML])
+
+	return ok && weight.q > 0
+}
+
+// governingRange returns the range that weighs a media type: the most
+// specific one matching it, the first of equals (RFC 9110 §12.5.1).
+func governingRange(ranges []mediaRange, mt mediaType) (mediaRange, bool) {
+	var governing mediaRange
+	found := false
 
 	for _, mr := range ranges {
-		if !mr.matches(typ, subtype) {
-			continue
-		}
-
-		if s := mr.specificity(); s > specificity {
-			specificity, quality = s, mr.q
+		if mr.matches(mt) && (!found || mr.specificity() > governing.specificity()) {
+			governing, found = mr, true
 		}
 	}
 
-	return quality > 0
+	return governing, found
+}
+
+// weigh returns the range that weighs ct, sent as sent. Naming one of its
+// aliases at a usable weight stands in for naming sent, unless sent is named
+// itself: that says what the client thinks of what it would receive. A
+// wildcard admits no stream: it asks for a document, not an endless connection.
+func weigh(ranges []mediaRange, ct ContentType, sent mediaType) (mediaRange, bool) {
+	governing, ok := governingRange(ranges, sent)
+	if ok && governing.named() {
+		return governing, true
+	}
+
+	var alias mediaRange
+	aliased := false
+
+	for _, sup := range supportedTypes {
+		if sup.ct != ct || sup.typ == sent.typ && sup.subtype == sent.subtype {
+			continue
+		}
+
+		named := mediaType{typ: sup.typ, subtype: sup.subtype, params: sent.params}
+		if mr, found := governingRange(ranges, named); found && mr.named() && mr.q > 0 &&
+			(!aliased || mr.outranks(alias)) {
+			alias, aliased = mr, true
+		}
+	}
+
+	switch {
+	case aliased:
+		return alias, true
+	case ct == ContentTypeSSE:
+		return mediaRange{}, false
+	default:
+		return governing, ok
+	}
+}
+
+// mediaType is a type, subtype and parameters, names lower-cased.
+type mediaType struct {
+	typ     string
+	subtype string
+	params  map[string]string
+}
+
+// parseMediaType parses one media type or range with its parameters.
+func parseMediaType(s string) (mediaType, bool) {
+	full, params, err := mime.ParseMediaType(s)
+	if err != nil {
+		return mediaType{}, false
+	}
+
+	typ, subtype, ok := strings.Cut(full, "/")
+	if !ok || typ == "" || subtype == "" {
+		return mediaType{}, false
+	}
+
+	return mediaType{typ: typ, subtype: subtype, params: params}, true
+}
+
+func mustMediaType(s string) mediaType {
+	mt, ok := parseMediaType(s)
+	if !ok {
+		panic("api: invalid media type " + s)
+	}
+
+	return mt
+}
+
+// carries reports whether the type has a parameter at this value. Every body
+// this API sends is UTF-8, JSON by definition, so each carries that charset.
+func (mt mediaType) carries(name, value string) bool {
+	if name == "charset" {
+		return strings.EqualFold(value, "utf-8")
+	}
+
+	got, ok := mt.params[name]
+
+	return ok && got == value
 }
 
 // mediaRange is a parsed Accept header entry.
 type mediaRange struct {
-	typ     string  // e.g. "text", "*"
-	subtype string  // e.g. "html", "*"
-	q       float64 // quality value 0.0-1.0
-	order   int     // position in the Accept header (for tie-breaking)
+	mediaType
+
+	q     float64 // quality value 0.0-1.0
+	order int     // position in the Accept header (for tie-breaking)
 }
 
-// specificity returns the specificity level of a media range:
-//   - 3 for exact match (e.g. text/html)
-//   - 2 for partial wildcard (e.g. text/*)
-//   - 1 for full wildcard (*​/*)
+// specificity ranks a range: a full wildcard below a partial one below a type,
+// and each parameter above the same range without it (RFC 9110 §12.5.1).
 func (mr mediaRange) specificity() int {
-	if mr.typ == "*" {
-		return 1
+	level := 3
+	switch {
+	case mr.typ == "*":
+		level = 1
+	case mr.subtype == "*":
+		level = 2
 	}
-	if mr.subtype == "*" {
-		return 2
-	}
-	return 3
+
+	return level*100 + len(mr.params)
 }
 
-// matches reports whether this media range matches the given type/subtype.
-func (mr mediaRange) matches(typ, subtype string) bool {
-	if mr.typ == "*" && mr.subtype == "*" {
-		return true
+// named reports whether the range names a type rather than a wildcard.
+func (mr mediaRange) named() bool {
+	return mr.typ != "*" && mr.subtype != "*"
+}
+
+// outranks orders two ranges weighing different types: the heavier, then the
+// more specific, then the one the client listed first.
+func (mr mediaRange) outranks(other mediaRange) bool {
+	if mr.q != other.q {
+		return mr.q > other.q
 	}
-	if mr.typ == typ && mr.subtype == "*" {
-		return true
+
+	if mr.specificity() != other.specificity() {
+		return mr.specificity() > other.specificity()
 	}
-	return mr.typ == typ && mr.subtype == subtype
+
+	return mr.order < other.order
+}
+
+// matches reports whether this range admits mt: its type and subtype, and
+// every parameter it names, which mt must carry.
+func (mr mediaRange) matches(mt mediaType) bool {
+	switch {
+	case mr.typ == "*" && mr.subtype == "*":
+	case mr.typ == mt.typ && (mr.subtype == "*" || mr.subtype == mt.subtype):
+	default:
+		return false
+	}
+
+	for name, value := range mr.params {
+		if !mt.carries(name, value) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // parseAcceptRanges parses an Accept field value into its media ranges. An
 // absent, empty or wholly unparsable header yields none, which every consumer
-// reads as "no preference expressed".
+// reads as "no preference expressed". A malformed element is skipped.
 func parseAcceptRanges(accept string) []mediaRange {
-	accept = strings.TrimSpace(accept)
-	if accept == "" {
-		return nil
-	}
+	elements := splitList(accept)
+	ranges := make([]mediaRange, 0, len(elements))
 
-	ranges := make([]mediaRange, 0, strings.Count(accept, ",")+1)
-	i := -1
-	for part := range strings.SplitSeq(accept, ",") {
-		i++
-		part = strings.TrimSpace(part)
-		if part == "" {
+	for i, element := range elements {
+		mt, ok := parseMediaType(element)
+		if !ok {
 			continue
 		}
 
-		// Split media type from parameters (;q=...)
-		mediaType := part
+		// Any parameter named q is the weight, wherever it sits.
 		q := 1.0
-		if before, after, ok := strings.Cut(part, ";"); ok {
-			mediaType = strings.TrimSpace(before)
-			params := after
-			for param := range strings.SplitSeq(params, ";") {
-				param = strings.TrimSpace(param)
-				if len(param) > 2 && strings.EqualFold(param[:2], "q=") {
-					if v, err := strconv.ParseFloat(param[2:], 64); err == nil {
-						q = v
-					}
-				}
+		if v, ok := mt.params["q"]; ok {
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				q = parsed
 			}
+			delete(mt.params, "q")
 		}
 
-		// Split into type/subtype; skip malformed entries.
-		slash := strings.IndexByte(mediaType, '/')
-		if slash < 1 || slash >= len(mediaType)-1 {
-			continue
-		}
-		// Type and subtype are case-insensitive (RFC 9110 §8.3.1).
-		typ := strings.ToLower(mediaType[:slash])
-		subtype := strings.ToLower(mediaType[slash+1:])
-
-		ranges = append(ranges, mediaRange{
-			typ:     typ,
-			subtype: subtype,
-			q:       q,
-			order:   i,
-		})
+		ranges = append(ranges, mediaRange{mediaType: mt, q: q, order: i})
 	}
 
 	return ranges
+}
+
+// splitList splits a field value on the commas outside a quoted-string,
+// dropping empty elements (RFC 9110 §5.6.1).
+func splitList(value string) []string {
+	var elements []string
+
+	quoted, escaped, start := false, false, 0
+	for i := 0; i <= len(value); i++ {
+		if i < len(value) {
+			c := value[i]
+			switch {
+			case escaped:
+				escaped = false
+				continue
+			case quoted && c == '\\':
+				escaped = true
+				continue
+			case c == '"':
+				quoted = !quoted
+				continue
+			case c != ',' || quoted:
+				continue
+			}
+		}
+
+		if element := strings.TrimSpace(value[start:i]); element != "" {
+			elements = append(elements, element)
+		}
+		start = i + 1
+	}
+
+	return elements
 }
 
 // bestMatch picks the supported type the given ranges prefer, defaulting to
@@ -412,59 +701,30 @@ func bestMatch(ranges []mediaRange) ContentType {
 		return ContentTypeJSON
 	}
 
-	// For each supported type, find the best matching range.
-	type candidate struct {
-		ct          ContentType
-		q           float64
-		specificity int
-		order       int // header position of the matching range
-	}
+	return bestServed(ranges, nil, nil)
+}
 
-	// A value rather than a pointer: taking the address of a candidate declared
-	// in the loop escapes it to the heap on every match, and a wildcard range
-	// matches every supported type.
-	var best candidate
-	var found bool
+// bestServed is bestMatch among the types an endpoint serves, nil being all,
+// each weighed by what sends says the endpoint sends for it.
+func bestServed(ranges []mediaRange, serves []ContentType, sends sending) ContentType {
+	var best mediaRange
+	bestCT := ContentTypeUnsupported
 
-	for _, sup := range supportedTypes {
-		for _, mr := range ranges {
-			// RFC 9110 §12.5.1: a weight of zero means not acceptable.
-			if mr.q <= 0 || !mr.matches(sup.typ, sup.subtype) {
-				continue
-			}
+	for _, ct := range contentTypeOrder {
+		if serves != nil && !slices.Contains(serves, ct) {
+			continue
+		}
 
-			spec := mr.specificity()
-			c := candidate{
-				ct:          sup.ct,
-				q:           mr.q,
-				specificity: spec,
-				order:       mr.order,
-			}
+		mr, ok := weigh(ranges, ct, sends.as(ct))
+		// A weight of zero means not acceptable.
+		if !ok || mr.q <= 0 {
+			continue
+		}
 
-			if !found {
-				best, found = c, true
-				continue
-			}
-
-			// Higher quality wins.
-			if c.q > best.q {
-				best = c
-			} else if c.q == best.q {
-				// Same quality: higher specificity wins.
-				if c.specificity > best.specificity {
-					best = c
-				} else if c.specificity == best.specificity {
-					// Same specificity: earlier in header wins.
-					if c.order < best.order {
-						best = c
-					}
-				}
-			}
+		if bestCT == ContentTypeUnsupported || mr.outranks(best) {
+			best, bestCT = mr, ct
 		}
 	}
 
-	if !found {
-		return ContentTypeUnsupported
-	}
-	return best.ct
+	return bestCT
 }

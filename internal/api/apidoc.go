@@ -31,6 +31,8 @@ const (
 	openAPIYAMLMediaType = "application/vnd.oai.openapi"
 )
 
+var openAPISends = sending{ContentTypeYAML: mustMediaType(openAPIYAMLMediaType)}
+
 // HandleAPIDoc returns the negotiated handler and the one behind the .yaml
 // address: HTML gets the Scalar playground, */* and JSON the spec as JSON, and
 // YAML the source, verbatim but for a base path in its servers. One call, so
@@ -65,7 +67,7 @@ func HandleAPIDoc(specYAML []byte, basePath string) (negotiated, yamlOnly http.H
 	}
 
 	negotiated = func(w http.ResponseWriter, r *http.Request) {
-		ct := ContentTypeFromContext(r.Context())
+		r, ct := choose(r, openAPISends, ContentTypeHTML, ContentTypeJSON, ContentTypeYAML)
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		switch ct {
 		case ContentTypeHTML:

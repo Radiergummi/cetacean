@@ -364,28 +364,29 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
-		return
-	}
-
-	patch, ok := decodeMergePatch[struct {
-		Ports []swarm.PortConfig `json:"ports"`
-	}](w, r)
+	updated, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
 	if !ok {
 		return
 	}
 
-	if err := cluster.ValidatePorts(patch.Ports); err != nil {
-		writeErrorCode(w, r, "SVC020", err.Error())
+	ports, present, ok := decodeListMergePatch[swarm.PortConfig](w, r, "ports")
+	if !ok {
 		return
 	}
 
-	slog.Info("updating service ports", "service", id)
+	if present {
+		if err := cluster.ValidatePorts(ports); err != nil {
+			writeErrorCode(w, r, "SVC020", err.Error())
+			return
+		}
 
-	updated, err := h.serviceSpec.UpdateServicePorts(r.Context(), id, patch.Ports)
-	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
-		return
+		slog.Info("updating service ports", "service", id)
+
+		var err error
+		if updated, err = h.serviceSpec.UpdateServicePorts(r.Context(), id, ports); err != nil {
+			writeResourceError(w, r, err, "service", id, "SVC001")
+			return
+		}
 	}
 
 	writeMutationResponse(w, r, NewDetailResponse(
@@ -769,15 +770,19 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	patch, ok := decodeMergePatch[struct {
-		Configs []serviceConfigRef `json:"configs"`
-	}](w, r)
+	refs, present, ok := decodeListMergePatch[serviceConfigRef](w, r, "configs")
 	if !ok {
 		return
 	}
+	if !present {
+		writeMutationResponse(w, r, NewDetailResponse(
+			r.Context(), "/services/"+id+"/configs", "ServiceConfigs", serviceConfigsBody(svc),
+		))
+		return
+	}
 
-	configs := make([]*swarm.ConfigReference, len(patch.Configs))
-	for i, ref := range patch.Configs {
+	configs := make([]*swarm.ConfigReference, len(refs))
+	for i, ref := range refs {
 		if ref.ConfigID == "" || ref.ConfigName == "" {
 			writeErrorCode(
 				w,
@@ -873,15 +878,19 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	patch, ok := decodeMergePatch[struct {
-		Secrets []serviceSecretRef `json:"secrets"`
-	}](w, r)
+	refs, present, ok := decodeListMergePatch[serviceSecretRef](w, r, "secrets")
 	if !ok {
 		return
 	}
+	if !present {
+		writeMutationResponse(w, r, NewDetailResponse(
+			r.Context(), "/services/"+id+"/secrets", "ServiceSecrets", serviceSecretsBody(svc),
+		))
+		return
+	}
 
-	secrets := make([]*swarm.SecretReference, len(patch.Secrets))
-	for i, ref := range patch.Secrets {
+	secrets := make([]*swarm.SecretReference, len(refs))
+	for i, ref := range refs {
 		if ref.SecretID == "" || ref.SecretName == "" {
 			writeErrorCode(
 				w,
@@ -952,15 +961,19 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	patch, ok := decodeMergePatch[struct {
-		Networks []serviceNetworkRef `json:"networks"`
-	}](w, r)
+	refs, present, ok := decodeListMergePatch[serviceNetworkRef](w, r, "networks")
 	if !ok {
 		return
 	}
+	if !present {
+		writeMutationResponse(w, r, NewDetailResponse(
+			r.Context(), "/services/"+id+"/networks", "ServiceNetworks", serviceNetworksBody(svc),
+		))
+		return
+	}
 
-	networks := make([]swarm.NetworkAttachmentConfig, len(patch.Networks))
-	for i, ref := range patch.Networks {
+	networks := make([]swarm.NetworkAttachmentConfig, len(refs))
+	for i, ref := range refs {
 		if ref.Target == "" {
 			writeErrorCode(w, r, "SVC017", "each network must have a target")
 			return
@@ -1030,36 +1043,38 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	req, ok := decodeMergePatch[struct {
-		Mounts []mount.Mount `json:"mounts"`
-	}](w, r)
+	mounts, present, ok := decodeListMergePatch[mount.Mount](w, r, "mounts")
 	if !ok {
 		return
 	}
 
-	identity := auth.IdentityFromContext(r.Context())
-	canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
+	updated := svc
+	if present {
+		identity := auth.IdentityFromContext(r.Context())
+		canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
 
-	if err := cluster.CheckVolumesAttachable(svc, canRead, req.Mounts); err != nil {
-		writeErrorCode(w, r, "ACL001", err.Error())
-		return
-	}
+		if err := cluster.CheckVolumesAttachable(svc, canRead, mounts); err != nil {
+			writeErrorCode(w, r, "ACL001", err.Error())
+			return
+		}
 
-	if err := cluster.CheckMounts(svc, req.Mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
-		writeErrorCode(w, r, "OPS001", err.Error())
-		return
-	}
+		if err := cluster.CheckMounts(svc, mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
+			writeErrorCode(w, r, "OPS001", err.Error())
+			return
+		}
 
-	slog.Info("updating service mounts", "service", id, "count", len(req.Mounts))
+		slog.Info("updating service mounts", "service", id, "count", len(mounts))
 
-	updated, err := h.serviceAttachment.UpdateServiceMounts(
-		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
-		id,
-		req.Mounts,
-	)
-	if err != nil {
-		writeResourceError(w, r, err, "service", id, "SVC001")
-		return
+		var err error
+		updated, err = h.serviceAttachment.UpdateServiceMounts(
+			docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
+			id,
+			mounts,
+		)
+		if err != nil {
+			writeResourceError(w, r, err, "service", id, "SVC001")
+			return
+		}
 	}
 
 	writeMutationResponse(w, r, NewDetailResponse(

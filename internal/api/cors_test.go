@@ -149,6 +149,41 @@ func TestCORSAllowsMCPRequestHeaders(t *testing.T) {
 	}
 }
 
+// A browser client can send every header the API reads and read every one it
+// writes beyond the CORS-safelisted few.
+func TestCORSCoversTheAPIsOwnHeaders(t *testing.T) {
+	handler := cors(&CORSConfig{AllowedOrigins: []string{"https://host.example"}})(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+	)
+
+	req := httptest.NewRequest(http.MethodOptions, "/services/abc/env", nil)
+	req.Header.Set("Origin", "https://host.example")
+	req.Header.Set("Access-Control-Request-Method", "PATCH")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	allowed := strings.Split(strings.ToLower(w.Header().Get("Access-Control-Allow-Headers")), ", ")
+	for _, header := range []string{
+		"if-match", "if-none-match", "if-modified-since", "if-range",
+		"prefer", "range", "last-event-id",
+	} {
+		if !slices.Contains(allowed, header) {
+			t.Errorf("preflight does not allow %q (got %q)", header, allowed)
+		}
+	}
+
+	exposed := strings.Split(strings.ToLower(w.Header().Get("Access-Control-Expose-Headers")), ", ")
+	for _, header := range []string{
+		"accept-patch", "accept-ranges", "content-range", "content-disposition", "link-template",
+		"preference-applied", "revoked-grants", "www-authenticate",
+	} {
+		if !slices.Contains(exposed, header) {
+			t.Errorf("%q is not exposed (got %q)", header, exposed)
+		}
+	}
+}
+
 // TestCORSExposesSessionHeader — a legacy browser client reads its session ID
 // off the initialize response, which it cannot do unless the header is exposed.
 func TestCORSExposesSessionHeader(t *testing.T) {

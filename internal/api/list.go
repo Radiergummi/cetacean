@@ -68,6 +68,8 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 		return
 	}
 
+	r, validator = h.ifRange(r, validator)
+
 	items, p, ok := prepareList(h, w, r, spec)
 	if !ok {
 		return

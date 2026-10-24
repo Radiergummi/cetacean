@@ -79,7 +79,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		next.Set("before", strconv.FormatUint(entries[len(entries)-1].ID, 10))
 		next.Set("limit", strconv.Itoa(limit))
 		w.Header().Add("Link", fmt.Sprintf(
-			`<%s?%s>; rel="next"`, absPath(r.Context(), r.URL.Path), next.Encode(),
+			`<%s?%s>; rel="next"`, selfPath(r), next.Encode(),
 		))
 	}
 
@@ -92,7 +92,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 				r.Context(),
 				entries,
 				"HistoryEntry",
-				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history/%d", e.ID) },
+				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history#%d", e.ID) },
 			),
 			len(entries),
 			len(entries),

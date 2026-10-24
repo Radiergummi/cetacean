@@ -63,6 +63,15 @@ func TestServiceEnvModes(t *testing.T) {
 	if got := replicated["mode"]; got != "replicated" {
 		t.Errorf("replicated service mode = %#v", got)
 	}
+
+	for want, mode := range map[string]swarm.ServiceMode{
+		"replicated-job": {ReplicatedJob: &swarm.ReplicatedJob{}},
+		"global-job":     {GlobalJob: &swarm.GlobalJob{}},
+	} {
+		if got := ServiceEnv(swarm.Service{Spec: swarm.ServiceSpec{Mode: mode}}, nil)["mode"]; got != want {
+			t.Errorf("%s service mode = %#v", want, got)
+		}
+	}
 }
 
 // Filtering has to keep working end to end, since the env is what it reads.

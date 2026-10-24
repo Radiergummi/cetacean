@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -118,6 +119,46 @@ func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 // decode failure with API008. The caller checks the Content-Type itself.
 func decodeMergePatch[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	return decodeBody[T](w, r, "API008", "invalid JSON")
+}
+
+// decodeListMergePatch reads a merge patch whose one member replaces a list.
+// present is false when the member is absent, which RFC 7396 reads as no
+// change; null and [] both clear the list. Any other member is refused, since
+// names match exactly and a misspelt one would otherwise change nothing.
+func decodeListMergePatch[T any](
+	w http.ResponseWriter,
+	r *http.Request,
+	member string,
+) (list []T, present, ok bool) {
+	patch, ok := decodeMergePatch[map[string]json.RawMessage](w, r)
+	if !ok {
+		return nil, false, false
+	}
+	if patch == nil {
+		writeErrorCode(w, r, "API008", "the merge patch must be a JSON object")
+		return nil, false, false
+	}
+
+	for name := range patch {
+		if name != member {
+			writeErrorCode(w, r, "API008", fmt.Sprintf(
+				"unknown member %q: this merge patch takes only %q", name, member,
+			))
+			return nil, false, false
+		}
+	}
+
+	raw, present := patch[member]
+	if !present {
+		return nil, false, true
+	}
+
+	if err := json.Unmarshal(raw, &list); err != nil {
+		writeErrorCode(w, r, "API008", "invalid JSON")
+		return nil, false, false
+	}
+
+	return list, true, true
 }
 
 func decodeBody[T any](w http.ResponseWriter, r *http.Request, code, message string) (T, bool) {
@@ -417,11 +458,22 @@ func writeServiceSpecPatch(
 // requireMergePatch validates Content-Type is application/merge-patch+json.
 // Returns false and writes a 415 error response if not satisfied.
 func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/merge-patch+json") {
+	if requestMediaType(r) != "application/merge-patch+json" {
 		writeErrorCode(w, r, "API004", "expected Content-Type: application/merge-patch+json")
 		return false
 	}
 	return true
+}
+
+// requestMediaType is the request's Content-Type without parameters, lowered
+// as RFC 9110 §8.3.1 compares it, or "" when the field does not parse.
+func requestMediaType(r *http.Request) string {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return ""
+	}
+
+	return mediaType
 }
 
 // parsePatchMutator validates Content-Type, reads the body and returns a
@@ -434,9 +486,9 @@ func parsePatchMutator(
 ) (func(map[string]string) (map[string]string, error), bool) {
 	limitWriteBody(w, r)
 
-	ct := r.Header.Get("Content-Type")
-	isJSONPatch := strings.HasPrefix(ct, "application/json-patch+json")
-	isMergePatch := strings.HasPrefix(ct, "application/merge-patch+json")
+	ct := requestMediaType(r)
+	isJSONPatch := ct == "application/json-patch+json"
+	isMergePatch := ct == "application/merge-patch+json"
 
 	if !isJSONPatch && !isMergePatch {
 		writeErrorCode(

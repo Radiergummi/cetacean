@@ -188,7 +188,14 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		}
 
 		if !strings.HasPrefix(path, basePath+"/") && path != basePath {
-			http.NotFound(w, r)
+			// The context is ours, under the prefix; the instance is the path asked for.
+			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			writeProblemTyped(w, r.WithContext(ctx), ProblemDetail{
+				Status:   http.StatusNotFound,
+				Detail:   "no such resource",
+				Instance: path,
+			})
+
 			return
 		}
 

@@ -11,11 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `docker.task_poll_interval` sets how often Cetacean re-lists every task, ten seconds by default and at least one second; `0` turns it off
 
 ### Changed
+- **Breaking:** a JSON Patch `path` decodes `~1` to `/` and `~0` to `~`, and refuses any other `~` or a second `/`. Write label key `a/b` as `/a~1b`
+- **Breaking:** a merge patch to a service's `ports`, `configs`, `secrets`, `networks` or `mounts` refuses any other member, `Ports` included, with `400` (`API008`)
 - **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider; sessions from before the upgrade keep their email until they expire
 - **Breaking:** a problem details response's `@context` is now an array; `type`, `status` and `detail` in other responses no longer map to RFC 9457
 - **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
 
 ### Fixed
+- A volume, config, plugin or other resource named like `backup.json` is addressed by that name: `DELETE /volumes/backup.json` no longer removes volume `backup`, nor a plugin tagged `1.csv` the one tagged `1`
+- A merge patch to a service's `ports`, `configs`, `secrets`, `networks` or `mounts` that omits the list, like `{}`, changes nothing instead of emptying it
+- A `/swarm` update or key rotation that races another change answers `409` (`SWM012`) instead of `500`
+- A config, secret, network, volume or task detail, and `/swarm`, no longer answer `If-Modified-Since` with a stale `304` after a change the timestamp misses; they send no `Last-Modified`
+- A `/history` entry's and a `/disk-usage` summary's `@id` is a fragment of its list, like `/history#42`, instead of a URL that answered `404`
+- A job service's `mode` reads `replicated-job` or `global-job` in `?filter=` and `?sort=mode`, instead of `replicated`
+- With `server.base_path` set, a path outside it answers `404` with problem details instead of plain text
+- A list honors `If-Range` on a `Range` request, sending the first page with `200` when the page you hold changed
+- A list's page links keep a `.json` or `.csv` suffix, and an `offset` past the end links no next page instead of a negative offset
+- A `PATCH` reads its `Content-Type` case-insensitively, so `Application/Merge-Patch+JSON` is accepted and a type that merely starts like a patch format is refused with `415`
+- `Accept` is weighed by the most specific range, parameters included, against the type each endpoint sends; every endpoint answers with the best type it serves instead of `406` or JSON
+- A plugin's `@id` escapes the `/` in its name, so `/plugins/vieux%2Fsshfs:latest` resolves, and `POST /plugins` answers with its `Location`
+- `GET /nodes/{id}/role` sends `Allow`, offering `PUT` to a caller who may change the role
+- `GET /configs` and `GET /secrets` no longer offer `POST`, nor the dashboard a create button, to a user whose only write grant is on a stack
+- With `server.cors.origins` set, a browser client from another origin can send `If-Match`, `If-Range`, `Prefer` and `Range`, and read `Content-Range`, `Accept-Patch`, `Preference-Applied` and `Link-Template`
+- The OpenAPI description names `application/merge-patch+json` for a service's `configs`, `secrets`, `networks` and `mounts`, and documents the `403`, `415`, `Prefer: return=minimal` `204`, and `/swarm` error answers of every write
 - An event stream resuming from the first event after the change history filled up now gets a `sync` event instead of silently missing events
 - A service, task or node no longer briefly shows an older state after a burst of changes
 - Live updates no longer skip changes when a browser reconnects during a burst or falls behind: it gets a `sync` event instead, and one that stops reading is disconnected

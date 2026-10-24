@@ -41,9 +41,11 @@ const problemContextTerms = `{` +
 // process like the two documents /api serves beside it.
 var contextBody = newStaticBody([]byte(jsonLDContextDoc))
 
+var contextSends = sending{ContentTypeJSON: mustMediaType("application/ld+json")}
+
 // HandleContext serves the JSON-LD context document.
 func HandleContext(w http.ResponseWriter, r *http.Request) {
-	if !acceptable(r, ContentTypeJSON) {
+	if !acceptableAs(r, contextSends, ContentTypeJSON) {
 		notAcceptable(w, r, "application/ld+json")
 		return
 	}

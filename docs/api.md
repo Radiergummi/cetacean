@@ -47,8 +47,17 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
 ### Resolution order
 
 1. File extension appended to the path, which wins over everything else
-2. `Accept` header, parsed per RFC 9110 with `q` values and wildcards
+2. `Accept` header, parsed per RFC 9110 with `q` values, parameters, and wildcards. A type is weighed by the most
+   specific range matching the media type the endpoint sends, parameters included: `application/json;q=0, */*`
+   refuses JSON, and `application/json;profile="x";q=0` doesn't. Naming an alias from the following table stands in
+   for naming the type sent, unless that type is named too. An endpoint answers with the best of the types it serves.
+   A wildcard never opens an event stream—ask for `text/event-stream` by name
 3. `application/json` when the client sends `*/*` or no `Accept` header
+
+A name can end in what looks like an extension. When a volume, config, secret, network, service, node, stack, or
+plugin you may read is named exactly that, `/volumes/backup.json` is volume `backup.json`, negotiated by `Accept`. A
+write to a resource never reads a suffix off its name: `DELETE /volumes/backup.json` removes `backup.json` or
+answers `404`.
 
 ### Supported types
 
@@ -306,7 +315,8 @@ curl "http://localhost:9000/configs?search=nginx"
 
 List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
 Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
-*/142`. Query parameters take precedence when both are present.
+*/142`. Query parameters take precedence when both are present. With `If-Range` naming the `ETag` of the page
+you hold, the range is served only if that page is unchanged; otherwise you get the first page with a `200`.
 
 ### History pagination
 
@@ -346,7 +356,7 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 | Resource | Fields                                                                                                                              |
 |----------|-------------------------------------------------------------------------------------------------------------------------------------|
 | Nodes    | `id`, `name` (hostname), `state` (`ready`/`down`/`unknown`), `role` (`manager`/`worker`), `availability` (`active`/`pause`/`drain`) |
-| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`), `stack`                                                                      |
+| Services | `id`, `name`, `image`, `mode` (`replicated`/`global`/`replicated-job`/`global-job`), `stack`                                        |
 | Tasks    | `id`, `state`, `desired_state`, `image`, `exit_code` (int), `error`, `service` (ID), `node` (ID), `slot` (int)                      |
 | Stacks   | `name`, `services`, `configs`, `secrets`, `networks`, `volumes` (all counts)                                                        |
 | Configs  | `id`, `name`                                                                                                                        |
@@ -459,7 +469,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 
 | Situation | Status | Codes | What to do |
 |---|---|---|---|
-| Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005) | Re-read the resource and retry |
+| Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005), [`SWM012`](api/errors#SWM012) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [Grants][authorization] deny read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
 | Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
@@ -479,8 +489,9 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-Detail endpoints also set `Last-Modified` from the resource's update timestamp and honor `If-Modified-Since`. When
-both conditional headers are present, `If-None-Match` wins.
+A service's and a node's detail also set `Last-Modified` from the resource's update timestamp and honor
+`If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
+volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
 SSE and streaming endpoints set no caching headers.
@@ -503,6 +514,13 @@ Link: </services/abc/scale>; rel="edit", </services/abc/labels>; rel="edit"
 `Accept-Patch` lists the patch formats a resource accepts, and appears where its own `Allow` carries `PATCH`. Labels and
 service `env` take `application/json-patch+json, application/merge-patch+json`; every other patchable sub-resource takes
 `application/merge-patch+json` alone.
+
+A JSON Patch `path` is a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) to one key: write `/` in a key as
+`~1` and `~` as `~0`, so label `app.kubernetes.io/name` is `/app.kubernetes.io~1name`.
+
+A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a merge patch naming that one list,
+spelled exactly so; any other member answers `400`. A patch without the member changes nothing; `null` or `[]` empties
+the list.
 
 A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
 

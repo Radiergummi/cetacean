@@ -63,8 +63,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-12.5.1
     mutants:
       - file: internal/api/negotiate.go
-        replace: "if len(param) > 2 && strings.EqualFold(param[:2], \"q=\") {"
-        with: "if strings.HasPrefix(param, \"q=\") {"
+        replace: "if v, ok := mt.params[\"q\"]; ok {"
+        with: "if v, ok := mt.params[\"q\"]; ok && strings.HasSuffix(element, v) {"
 
   - id: an-unacceptable-coding-falls-back-to-identity
     level: SHOULD
@@ -255,12 +255,32 @@ requirements:
       A server that receives an If-Range header field on a Range request MUST
       evaluate the condition per Section 13.2 prior to performing the method.
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
-    deferred: >-
-      Range is supported with the items unit, and If-Range is not read, so a
-      client asking for a page only if its copy is still current gets the page
-      regardless. It matters less here than for byte ranges over a file: an
-      items range is a page of a collection the client re-reads anyway, and
-      the ETag over the page it receives is what tells it the collection moved.
+    mutants:
+      - file: internal/api/pagination.go
+        replace: "if cond == \"\" || r.Header.Get(\"Range\") == \"\" || ifRangeHolds(r, cond, validator) {"
+        with: "if cond == \"\" || r.Header.Get(\"Range\") == \"\" || true {"
+
+  - id: a-false-if-range-ignores-the-range
+    level: MUST
+    text: >-
+      A recipient of an If-Range header field MUST ignore the Range header
+      field if the If-Range condition evaluates to false.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
+    mutants:
+      - file: internal/api/pagination.go
+        replace: "\tr.Header.Del(\"Range\")"
+        with: "\tr.Header.Del(\"X-Range\")"
+
+  - id: a-true-if-range-processes-the-range
+    level: SHOULD
+    text: >-
+      Otherwise, the recipient SHOULD process the Range header field as
+      requested.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.5
+    mutants:
+      - file: internal/api/pagination.go
+        replace: "if cond == codedETag(validator, EncodingIdentity) {"
+        with: "if false {"
 
   - id: preconditions-are-evaluated-before-the-action
     level: MUST
@@ -469,18 +489,14 @@ dismissed:
   if-range-needs-a-range: >-
     Binds the client composing the pair.
   an-if-range-without-a-range-is-ignored: >-
-    Satisfied by never reading the field: a request carrying If-Range and no
-    Range is treated exactly as one carrying neither.
+    The field is read only beside a Range, so a request carrying If-Range
+    and no Range is treated exactly as one carrying neither.
   an-if-range-on-a-non-range-resource-is-ignored: >-
-    The same, for a resource that does not support Range.
+    The same: only the collections that page by Range read the field.
   if-range-carries-no-weak-validator: >-
     Binds the client choosing a validator.
   if-range-carries-a-date-only-as-a-last-resort: >-
     Binds the client choosing a validator.
-  a-false-if-range-ignores-the-range: >-
-    The consequence of evaluating a field this deployment does not read.
-  a-true-if-range-processes-the-range: >-
-    The other branch of the same evaluation.
   non-origin-servers-forward-preconditions: >-
     Binds a server that is neither the origin nor a cache for the resource.
   preconditions-are-ignored-on-connect-options-and-trace: >-
