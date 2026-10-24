@@ -608,15 +608,23 @@ func TestParseAcceptRangesIsCaseInsensitive(t *testing.T) {
 }
 
 func TestSuffixKeepsAnEscapedName(t *testing.T) {
-	var captured string
-	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		captured = r.URL.EscapedPath()
-	})
+	for _, path := range []string{
+		"/plugins/vieux%2Fsshfs%3Alatest.json",
+		"/plugins/vieux%2Fsshfs%3Alatest%2Ejson",
+		"/plugins/vieux%2Fsshfs%3Alatest%2e%6Ason",
+	} {
+		t.Run(path, func(t *testing.T) {
+			var captured string
+			inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captured = r.URL.EscapedPath()
+			})
 
-	req := httptest.NewRequest("GET", "/plugins/vieux%2Fsshfs%3Alatest.json", nil)
-	negotiate(inner).ServeHTTP(httptest.NewRecorder(), req)
+			req := httptest.NewRequest("GET", path, nil)
+			negotiate(inner).ServeHTTP(httptest.NewRecorder(), req)
 
-	if want := "/plugins/vieux%2Fsshfs%3Alatest"; captured != want {
-		t.Errorf("inner saw escaped path %q, want %q", captured, want)
+			if want := "/plugins/vieux%2Fsshfs%3Alatest"; captured != want {
+				t.Errorf("inner saw escaped path %q, want %q", captured, want)
+			}
+		})
 	}
 }

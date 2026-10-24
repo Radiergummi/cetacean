@@ -67,7 +67,7 @@ const writesByPath: [RegExp, string][] = [
   [/\/(tasks|stacks|networks|volumes)\/[^/]+$/, "DELETE"],
 ];
 
-const editableByPath: [RegExp, string[]][] = [
+export const editableByPath: [RegExp, string[]][] = [
   [
     /\/services\/[^/]+$/,
     [

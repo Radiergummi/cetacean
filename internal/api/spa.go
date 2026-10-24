@@ -189,7 +189,7 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 		// The mux's catch-all answers every path no route matched, and has one
 		// representation. Serving it to a POST, PUT or DELETE tells a client
 		// its write succeeded when nothing was registered to receive it. A
-		// wrong method on a path that *does* exist is still ServeMux's 405.
+		// wrong method on a path that *does* exist is the router catch-all's 405.
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			writeProblem(w, r, http.StatusNotFound, "no such resource")
 			return

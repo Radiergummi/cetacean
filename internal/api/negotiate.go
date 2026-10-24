@@ -401,7 +401,7 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 				continue
 			}
 			r.URL.Path = trimmed
-			r.URL.RawPath = strings.TrimSuffix(r.URL.RawPath, ext.ext)
+			r.URL.RawPath = r.URL.RawPath[:rawOffset(r.URL.RawPath, len(trimmed))]
 
 			return ext.ct, ext.ext
 		}

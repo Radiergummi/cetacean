@@ -589,6 +589,10 @@ func TestAcceptPatchIsAdvertisedWhereThePatchGoes(t *testing.T) {
 		"/services/web/env":       AcceptPatch,
 		"/services/web/resources": AcceptMergePatch,
 		"/services/web/mode":      "",
+		"/nodes/n1/labels":        AcceptPatch,
+		"/configs/c1/labels":      AcceptPatch,
+		"/secrets/s1/labels":      AcceptPatch,
+		"/services/web/ports":     AcceptMergePatch,
 	} {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("GET", path, nil)
