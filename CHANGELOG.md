@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** mounting a named volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it
 
 ### Fixed
+- An MCP `find` call with a negative `limit` no longer crashes Cetacean
 - Behind `server.trusted_proxies`, an address left of a hop the proxy anonymised (`unknown`, `_hidden`) is no longer taken as the client's
 
 ## [0.17.0] - 2026-10-20
