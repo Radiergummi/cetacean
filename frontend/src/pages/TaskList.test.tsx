@@ -129,7 +129,9 @@ describe("TaskList", () => {
     renderAt("/tasks");
     expect(await screen.findByText("Slot 1")).toBeInTheDocument();
 
-    const stream = MockEventSource.instances.findLast(({ listeners }) => listeners.has("task"));
+    const stream = [...MockEventSource.instances]
+      .reverse()
+      .find(({ listeners }) => listeners.has("task"));
     const send = (action: string, task: Task) =>
       act(() =>
         stream?.simulateEvent("task", { type: "task", action, id: task.ID, resource: task }),
