@@ -79,12 +79,16 @@ func resolveClientIP(r *http.Request, peerPort string, trusted []netip.Prefix) (
 		nodes = forwardedForNodes(r.Header.Values("X-Forwarded-For"))
 	}
 
-	// A node naming no address is read past rather than treated as the
-	// boundary: naming the client behind an anonymised hop serves a log better
-	// than naming the proxy.
+	// A node naming no address is the boundary: everything left of it was
+	// written by whoever the proxy anonymised, and RemoteAddr feeds identity
+	// (Tailscale's WhoIs) and per-client limits, not only the log.
 	for _, node := range slices.Backward(nodes) {
 		addr, ok := nodeAddr(node)
-		if !ok || isTrusted(addr, trusted) {
+		if !ok {
+			return "", false
+		}
+
+		if isTrusted(addr, trusted) {
 			continue
 		}
 

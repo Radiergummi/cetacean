@@ -281,10 +281,16 @@ func TestRealIP_ClientResolution(t *testing.T) {
 			want:      "[2001:db8::1]:9999",
 		},
 		{
-			name:      "an anonymised hop is read past",
+			name:      "an anonymised hop ends the chain the client cannot have written",
 			headers:   config.RFC7239Headers,
 			forwarded: []string{"for=203.0.113.50, for=unknown, for=_hidden"},
-			want:      "203.0.113.50:9999",
+			want:      "",
+		},
+		{
+			name:    "an address left of an anonymised X-Forwarded-For hop is not believed",
+			headers: config.XForwardedHeaders,
+			xff:     "100.64.0.7, unknown",
+			want:    "",
 		},
 		{
 			name:      "Forwarded carrying no for parameter discloses no client",
