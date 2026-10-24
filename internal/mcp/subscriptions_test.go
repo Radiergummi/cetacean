@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,7 +88,9 @@ func TestSubscriptionByNameResolvesToID(t *testing.T) {
 	assertUpdated(t, drainUpdated(t, name), "cetacean://services/web_api")
 }
 
-func TestSubscriptionUnreadableNameStaysUnresolved(t *testing.T) {
+// A name the caller cannot read delivers nothing, and starts delivering once a
+// policy change makes it readable.
+func TestSubscriptionByNameFollowsReadability(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-hidden", "hidden", ""))
 
@@ -96,10 +99,96 @@ func TestSubscriptionUnreadableNameStaysUnresolved(t *testing.T) {
 	e.SetPolicy(readOnlyPolicy("service:public-*"))
 	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
 
-	got := srv.subscriptionFor("cetacean://services/hidden", &auth.Identity{Subject: "alice"})
-	if got.target.id != "hidden" {
-		t.Fatalf("target id = %q, want the name as written", got.target.id)
-	}
+	name := t.Name()
+	srv.notifications.Subscribe(
+		session(name),
+		"cetacean://services/hidden",
+		&auth.Identity{Subject: "alice"},
+	)
+
+	c.SetService(stackService("svc-hidden", "hidden", ""))
+	assertUpdated(t, drainUpdated(t, name))
+
+	e.SetPolicy(readOnlyPolicy("service:*"))
+	c.SetService(stackService("svc-hidden", "hidden", ""))
+	assertUpdated(t, drainUpdated(t, name), "cetacean://services/hidden")
+}
+
+// A name keeps naming whatever holds it: subscribing ahead of a service, and
+// a service removed and created again under a new ID.
+func TestSubscriptionByNameFollowsRecreation(t *testing.T) {
+	c := cache.New(nil)
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://services/web", nil)
+	srv.notifications.Subscribe(session(name), "cetacean://stacks/shop", nil)
+
+	c.SetService(stackService("svc-first", "web", "shop"))
+	got := drainUpdated(t, name)
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://services/web", "cetacean://stacks/shop")
+
+	c.DeleteService("svc-first")
+	drainUpdated(t, name)
+
+	c.SetService(stackService("svc-second", "web", "shop"))
+	drainUpdated(t, name)
+
+	c.SetTask(swarm.Task{ID: "task-second", ServiceID: "svc-second"})
+	got = drainUpdated(t, name)
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://services/web", "cetacean://stacks/shop")
+}
+
+// A node that rejoins comes back under a new ID and the same hostname.
+func TestSubscriptionByHostnameFollowsARejoinedNode(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node-old", Description: swarm.NodeDescription{Hostname: "n1"}})
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://nodes/n1", nil)
+
+	c.DeleteNode("node-old")
+	drainUpdated(t, name)
+
+	c.SetNode(swarm.Node{ID: "node-new", Description: swarm.NodeDescription{Hostname: "n1"}})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://nodes/n1")
+}
+
+// "<service>.<slot>" names whichever replica holds the slot, so the replica
+// that replaces a failed one is the one a subscription follows.
+func TestSubscriptionBySlotFollowsTheReplacementReplica(t *testing.T) {
+	c := slotCache()
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://tasks/web.1", nil)
+
+	c.SetTask(swarm.Task{
+		ID: "task-live-1", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateShutdown,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateFailed},
+	})
+	drainUpdated(t, name)
+
+	c.SetTask(swarm.Task{
+		ID: "task-live-2", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateStarting},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://tasks/web.1")
+
+	c.SetTask(swarm.Task{
+		ID: "task-live-2", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://tasks/web.1")
+
+	c.SetTask(swarm.Task{ID: "task-other", ServiceID: "svc1", Slot: 2})
+	assertUpdated(t, drainUpdated(t, name))
 }
 
 func TestSubscriptionServiceAndNodeFollowTheirTasks(t *testing.T) {
@@ -159,4 +248,25 @@ func TestClusterResourceDoesNotPromisePush(t *testing.T) {
 			t.Fatalf("cluster description promises push: %q", r.description)
 		}
 	}
+}
+
+// A task reaches its service's subscribers only where the service itself is
+// readable, or the timing of its tasks would confirm a guessed name.
+func TestSubscriptionParentMustBeReadable(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(stackService("svc-hidden", "hidden", "shop"))
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(readOnlyPolicy("task:*"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	id := &auth.Identity{Subject: "alice"}
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://services/hidden", id)
+	srv.notifications.Subscribe(session(name), "cetacean://stacks/shop", id)
+	srv.notifications.Subscribe(session(name), "cetacean://tasks/task-hidden", id)
+
+	c.SetTask(swarm.Task{ID: "task-hidden", ServiceID: "svc-hidden"})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://tasks/task-hidden")
 }

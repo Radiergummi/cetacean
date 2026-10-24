@@ -327,6 +327,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		streams:        opts.Streams,
 	}
 	srv.notifications.resolve = srv.subscriptionFor
+	srv.notifications.keys = srv.eventKeys
 
 	serverOptions := []mcpserver.ServerOption{
 		mcpserver.WithResourceCapabilities(true, true),

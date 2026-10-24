@@ -190,27 +190,27 @@ func TestEventNamesResource(t *testing.T) {
 	}
 }
 
-// Asserts that a subscriber whose stored identity cannot read the affected
-// resource does not show up in the matching deliveries: the dispatch loop
-// short-circuits before sending. The check is on the canRead helper directly.
+// A subscriber whose stored identity cannot read the changed resource is not
+// notified, whether it subscribed by ID or by name.
 func TestDispatchCacheEvent_ACLBlocksUpdatedNotification(t *testing.T) {
 	c := cache.New(nil)
 	e := acl.NewEvaluator()
+	e.SetResolver(c)
 	e.SetPolicy(readOnlyPolicy("service:public-*"))
-
 	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
 
 	id := &auth.Identity{Subject: "alice"}
-	srv.notifications.Subscribe(session("session1"), "cetacean://services/svc1", id)
+	name := t.Name()
+	for _, uri := range []string{
+		"cetacean://services/svc-public", "cetacean://services/svc-secret",
+		"cetacean://services/secret-svc",
+	} {
+		srv.notifications.Subscribe(session(name), uri, id)
+	}
 
-	allowed := srv.canRead(id, "service:public-api")
-	denied := srv.canRead(id, "service:secret-svc")
-	if !allowed {
-		t.Fatal("identity should be allowed to read service:public-api")
-	}
-	if denied {
-		t.Fatal("identity should NOT be allowed to read service:secret-svc")
-	}
+	c.SetService(stackService("svc-public", "public-api", ""))
+	c.SetService(stackService("svc-secret", "secret-svc", ""))
+	assertUpdated(t, drainUpdated(t, name), "cetacean://services/svc-public")
 }
 
 // TestDispatchCacheEvent_ACLOffPassesThrough confirms the dispatch is a no-op

@@ -375,10 +375,17 @@ gone from that revision. A `2025-11-25` client gets no subscriptions at all, sin
 
 A watched URI may name its resource by ID or by name. The server sends `notifications/resources/updated` for it when
 the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, and
-after a full resync, and the client re-reads. A service's logs URI is notified on the same changes as the service, not
-on every new line; read new lines with `get_logs` and the previous cursor. The cluster overview is never notified.
+after a full resync, and the client re-reads. A name keeps following whatever holds it: a service removed and created
+again under the same name, a node that rejoins with the same hostname, the replica that takes over a
+`<service>.<slot>`, and a resource created after the stream opened. A service's logs URI is notified on the same
+changes as the service, not on every new line; read new lines with `get_logs` and the previous cursor. The cluster
+overview, `cetacean://history`, `cetacean://recommendations`, and the listing URIs are never notified.
 `notifications/resources/list_changed` fires when resources are created or removed. Both are filtered by grants per
-notification: a client is only notified about resources its identity can read.
+notification: a client is only notified about resources its identity can read, and through a service, node, or stack
+only when it can read that too.
+
+One stream watches at most 256 resource URIs. A `subscriptions/listen` naming more is refused with an
+`Invalid params` error; open a second stream, or watch the stack rather than each of its services.
 
 ### Argument completion
 
