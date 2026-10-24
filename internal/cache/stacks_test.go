@@ -127,6 +127,36 @@ func TestStackSummaryDesiresNothingOfAJob(t *testing.T) {
 	}
 }
 
+// A global service has no task on a node that is down or drained.
+func TestStackSummaryDesiresAGlobalTaskPerSchedulableNode(t *testing.T) {
+	c := New(nil)
+
+	node := func(id string, state swarm.NodeState, availability swarm.NodeAvailability) swarm.Node {
+		return swarm.Node{
+			ID:     id,
+			Spec:   swarm.NodeSpec{Availability: availability},
+			Status: swarm.NodeStatus{State: state},
+		}
+	}
+	c.SetNode(node("ready", swarm.NodeStateReady, swarm.NodeAvailabilityActive))
+	c.SetNode(node("down", swarm.NodeStateDown, swarm.NodeAvailabilityActive))
+	c.SetNode(node("drained", swarm.NodeStateReady, swarm.NodeAvailabilityDrain))
+	c.SetNode(node("paused", swarm.NodeStateReady, swarm.NodeAvailabilityPause))
+
+	global := stackService("global-1", "app")
+	global.Spec.Mode = swarm.ServiceMode{Global: &swarm.GlobalService{}}
+	c.SetService(global)
+
+	summaries := c.ListStackSummaries()
+	if len(summaries) != 1 {
+		t.Fatalf("summaries = %d, want 1", len(summaries))
+	}
+
+	if got := summaries[0].DesiredTasks; got != 1 {
+		t.Errorf("DesiredTasks = %d, want 1: only one node is ready and active", got)
+	}
+}
+
 // Only the current run's completions count: a re-run bumps JobIteration and
 // leaves the previous run's completed tasks in the task list.
 func TestCompletedJobTaskCountFollowsTheCurrentIteration(t *testing.T) {

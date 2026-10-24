@@ -897,6 +897,16 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// A global service runs one task per node Swarm can schedule on. Placement
+	// constraints are not applied here, so a constrained one is overstated.
+	schedulable := 0
+	for _, n := range c.nodes.items {
+		if n.Status.State == swarm.NodeStateReady &&
+			n.Spec.Availability == swarm.NodeAvailabilityActive {
+			schedulable++
+		}
+	}
+
 	out := make([]StackSummary, 0, len(c.stacks))
 	for _, stack := range c.stacks {
 		s := StackSummary{
@@ -923,7 +933,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 			} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
 			} else if svc.Spec.Mode.Global != nil {
-				replicas = len(c.nodes.items)
+				replicas = schedulable
 			}
 			s.DesiredTasks += replicas
 

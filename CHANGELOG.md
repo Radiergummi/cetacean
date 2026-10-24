@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A service, task or node no longer briefly shows an older state after a burst of changes
 - Live updates no longer skip a change when the browser reconnects during a burst of changes
 - `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
+- A stack's desired task count expects a global service's task only on nodes that are ready and active, not on drained or down ones
 
 ## [0.17.0] - 2026-10-20
 
