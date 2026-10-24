@@ -125,6 +125,9 @@ func (h *Handlers) buildACLFilteredNetworkGraph(r *http.Request) jgf.Graph {
 	return buildNetworkJGF(services, networks, h.cache.RunningTaskCounts(), contextURL)
 }
 
+// topologySends is the topology's JSON, which is the JGF document.
+var topologySends = sending{ContentTypeJSON: sentAs[ContentTypeJGF]}
+
 // HandleTopologyGraphML serves the network topology as a GraphML document.
 func (h *Handlers) HandleTopologyGraphML(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAnyGrant(w, r) {

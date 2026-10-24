@@ -100,7 +100,7 @@ func contentNegotiatedWithSSE(
 	served := strings.Join(names, ", ")
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		r, ct := choose(r, types...)
+		r, ct := choose(r, nil, types...)
 
 		switch ct {
 		case ContentTypeHTML:

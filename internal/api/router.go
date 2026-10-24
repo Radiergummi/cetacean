@@ -372,6 +372,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
 		r, ct := choose(
 			r,
+			nil,
 			ContentTypeSSE, ContentTypeHTML, ContentTypeAtom, ContentTypeJSONFeed,
 		)
 
@@ -948,6 +949,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
 		r, ct := choose(
 			r,
+			topologySends,
 			ContentTypeHTML, ContentTypeJGF, ContentTypeJSON, ContentTypeGraphML, ContentTypeDOT,
 		)
 

@@ -63,8 +63,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-12.5.1
     mutants:
       - file: internal/api/negotiate.go
-        replace: "if len(param) > 2 && strings.EqualFold(param[:2], \"q=\") {"
-        with: "if strings.HasPrefix(param, \"q=\") {"
+        replace: "if v, ok := mt.params[\"q\"]; ok {"
+        with: "if v, ok := mt.params[\"q\"]; ok && strings.HasSuffix(element, v) {"
 
   - id: an-unacceptable-coding-falls-back-to-identity
     level: SHOULD

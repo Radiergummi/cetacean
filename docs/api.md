@@ -47,8 +47,10 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
 ### Resolution order
 
 1. File extension appended to the path, which wins over everything else
-2. `Accept` header, parsed per RFC 9110 with `q` values and wildcards. A type is weighed by the most specific range
-   naming it, so `application/json;q=0, */*` refuses JSON; an endpoint answers with the best of the types it serves.
+2. `Accept` header, parsed per RFC 9110 with `q` values, parameters, and wildcards. A type is weighed by the most
+   specific range matching the media type the endpoint sends, parameters included: `application/json;q=0, */*`
+   refuses JSON, and `application/json;profile="x";q=0` doesn't. Naming an alias from the following table stands in
+   for naming the type sent, unless that type is named too. An endpoint answers with the best of the types it serves.
    A wildcard never opens an event stream—ask for `text/event-stream` by name
 3. `application/json` when the client sends `*/*` or no `Accept` header
 
