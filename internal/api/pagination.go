@@ -193,15 +193,16 @@ func writePaginationLinks(w http.ResponseWriter, r *http.Request, total, limit, 
 		q := r.URL.Query()
 		q.Set("limit", strconv.Itoa(limit))
 		q.Set("offset", strconv.Itoa(newOffset))
-		return fmt.Sprintf("<%s?%s>", absPath(r.Context(), r.URL.Path), q.Encode())
+		return fmt.Sprintf("<%s?%s>", selfPath(r), q.Encode())
 	}
 
+	// Compared without adding, so an offset near the largest int cannot wrap.
 	var links []string
-	if offset+limit < total {
+	if offset < total && limit < total-offset {
 		links = append(links, buildLink(offset+limit)+`; rel="next"`)
 	}
 	if offset > 0 {
-		prev := max(offset-limit, 0)
+		prev := max(min(offset, total)-limit, 0)
 		links = append(links, buildLink(prev)+`; rel="prev"`)
 	}
 	if len(links) > 0 {

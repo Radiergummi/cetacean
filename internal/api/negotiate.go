@@ -88,6 +88,12 @@ func extensionFromContext(ctx context.Context) string {
 	return ext
 }
 
+// selfPath is the request's own path as a client would spell it again, its
+// suffix included, for a link to another page of the same representation.
+func selfPath(r *http.Request) string {
+	return absPath(r.Context(), r.URL.EscapedPath()) + extensionFromContext(r.Context())
+}
+
 // htmlUnacceptable reports whether the client ruled out text/html — by naming
 // an extension suffix that is not .html, or by an Accept header that does not
 // admit it.
