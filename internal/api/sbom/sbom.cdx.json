@@ -13730,10 +13730,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|undici@8.10.2",
+      "bom-ref": "frontend@0.0.0|undici@8.12.3",
       "type": "library",
       "name": "undici",
-      "version": "8.10.2",
+      "version": "8.12.3",
       "description": "An HTTP/1.1 client, written from scratch for Node.js",
       "licenses": [
         {
@@ -13742,7 +13742,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/undici@8.10.2",
+      "purl": "pkg:npm/undici@8.12.3",
       "externalReferences": [
         {
           "url": "https://undici.nodejs.org",
@@ -13757,11 +13757,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/undici/-/undici-8.10.2.tgz",
+          "url": "https://registry.npmjs.org/undici/-/undici-8.12.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ff2e3f6c7f58354e618bd348ae93aebc65c5731ae3dc232b57efc0629a300184e91e7f205ff5cf163372efae853e8618d2689085d5bdefb24558a18d841770c9"
+              "content": "f9f7677544f004ff3a7158e2853a76d61647a3b77aa23d5cff8ed73c0de52fc98cd171ecf82e0491c8e6811b059c59367ff50e3460f2f48b4122d997b0b3901f"
             }
           ],
           "type": "distribution"
