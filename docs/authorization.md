@@ -173,8 +173,9 @@ Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 | [`ACL002`](api/errors#ACL002) | 403    | Write denied on this resource                                                                                 |
 | [`OPS001`](api/errors#OPS001) | 403    | The operation needs a higher operations level than the server runs at                                         |
 
-Read responses carry an `Allow` header naming the write methods available on that resource, which is how the
-dashboard knows which action buttons to show you.
+Read responses carry an `Allow` header naming the write methods available on that resource itself, and a `Link`
+with `rel="edit"` for each of its sub-resources you may write. Together they are how the dashboard knows which
+action buttons to show you; [Response headers][api.response-headers] describes both.
 
 The [Prometheus][monitoring] query endpoints (`GET /metrics`, its event stream, `GET /metrics/labels`, and
 `GET /metrics/labels/{name}`) take PromQL, which reaches every service and node. They need a `read` grant on
@@ -246,7 +247,7 @@ curl -s -H "Accept: application/json" http://localhost:9000/profile | jq .permis
 ```
 
 That shows the grant patterns, not the resources they resolve to. To check one resource, read its detail endpoint
-and look at the `Allow` header, which resolves grants and operations level together.
+and look at the `Allow` header and the `rel="edit"` links, which resolve grants and operations level together.
 
 The [MCP server][mcp] applies the same grants. Its tools and resources are filtered per caller, and a tool the
 caller can never use is left out of `tools/list`.
@@ -257,6 +258,7 @@ caller can never use is left out of `tools/list`.
 [acl.policy]: configuration#acl.policy
 [acl.policy_file]: configuration#acl.policy_file
 [acl.tailscale_capability]: configuration#acl.tailscale_capability
+[api.response-headers]: api#response-headers
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [mcp]: mcp

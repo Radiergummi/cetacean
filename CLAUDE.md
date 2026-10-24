@@ -16,7 +16,7 @@ cluster — every resource browsable, with working cross-references between them
 ## Commands
 
 ```bash
-make check        # lint + typecheck + fmt-check + test — the gate
+make check        # lint + typecheck + fmt-check + test + spec — the gate
 make lint-docs    # Vale over the published docs, README, CONTRIBUTING, and CHANGELOG
 make build        # frontend + widgets + go build
 make fmt          # gofmt + oxfmt (write)
@@ -62,7 +62,7 @@ Add `-c compose.prometheus.yaml` to join the `monitoring` network from `compose.
 
 ## Configuration
 
-74 settings, all optional, all with a TOML path and an env var; the `acl.*`, `mcp.*`, `oauth.*`,
+73 settings, all optional, all with a TOML path and an env var, plus `-config` itself; the `acl.*`, `mcp.*`, `oauth.*`,
 `sizing.*` and `tracing.*` settings have no flag.
 **`docs/configuration.mdx` is canonical** — do not restate the table anywhere else, and
 name settings by their TOML path (`server.trusted_proxies`) in user-facing text.
