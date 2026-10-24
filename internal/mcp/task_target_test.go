@@ -6,6 +6,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -98,4 +100,38 @@ func TestRemoveTaskRefusesAnUnresolvedTask(t *testing.T) {
 	if removed != "" {
 		t.Errorf("removed %q", removed)
 	}
+}
+
+// A slot name is the service's, so resources/read and a subscription resolve
+// one only through a service the caller can read, as the tools do.
+func TestSlotNameResolvesOnlyThroughAReadableService(t *testing.T) {
+	c := slotCache()
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(readOnlyPolicy("task:*"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+	identity := &auth.Identity{Subject: "alice"}
+
+	t.Run("read", func(t *testing.T) {
+		ctx := auth.ContextWithIdentity(context.Background(), identity)
+		if body, err := srv.readResource(ctx, "cetacean://tasks/web.1"); err == nil {
+			t.Fatalf("read a slot through an unreadable service: %s", body)
+		}
+
+		if _, err := srv.readResource(ctx, "cetacean://tasks/task-live-1"); err != nil {
+			t.Fatalf("read by ID: %v", err)
+		}
+	})
+
+	t.Run("subscription", func(t *testing.T) {
+		name := t.Name()
+		srv.notifications.Subscribe(session(name), "cetacean://tasks/web.1", identity)
+
+		c.SetTask(swarm.Task{
+			ID: "task-live-1", ServiceID: "svc1", Slot: 1,
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: swarm.TaskStateRunning, Message: "changed"},
+		})
+		assertUpdated(t, drainUpdated(t, name))
+	})
 }

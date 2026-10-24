@@ -73,7 +73,11 @@ func (s *Server) subscriptionFor(uri string, identity *auth.Identity) subscripti
 		return subscription{}
 	}
 
-	if id, resource, found := s.resolveTarget(target); found && s.canRead(identity, resource) {
+	if id, resource, found := s.resolveTarget(
+		identity,
+		target,
+	); found &&
+		s.canRead(identity, resource) {
 		target.id = id
 	}
 
@@ -86,7 +90,10 @@ func (s *Server) subscriptionFor(uri string, identity *auth.Identity) subscripti
 
 // resolveTarget finds the resource a target names by ID or name, returning
 // its ID and the ACL resource a read of it is checked against.
-func (s *Server) resolveTarget(target subscriptionTarget) (string, string, bool) {
+func (s *Server) resolveTarget(
+	identity *auth.Identity,
+	target subscriptionTarget,
+) (string, string, bool) {
 	prefix := string(target.typ) + ":"
 
 	switch target.typ {
@@ -97,7 +104,7 @@ func (s *Server) resolveTarget(target subscriptionTarget) (string, string, bool)
 		node, ok, _ := s.cache.ResolveNode(target.id)
 		return node.ID, prefix + cluster.NodeACLName(node), ok
 	case cache.EventTask:
-		task, ok, _ := s.resolveTask(target.id)
+		task, ok, _ := s.resolveTaskAs(identity, target.id)
 		return task.ID, prefix + task.ID, ok
 	case cache.EventConfig:
 		cfg, ok, _ := s.cache.ResolveConfig(target.id)
@@ -122,7 +129,7 @@ func (s *Server) resolveTarget(target subscriptionTarget) (string, string, bool)
 // targetReadable reports whether identity may read the subscribed resource
 // as it stands in the cache now; one that is gone is not.
 func (s *Server) targetReadable(identity *auth.Identity, target subscriptionTarget) bool {
-	_, resource, found := s.resolveTarget(target)
+	_, resource, found := s.resolveTarget(identity, target)
 
 	return found && s.canRead(identity, resource)
 }

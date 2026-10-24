@@ -10,6 +10,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
@@ -334,7 +335,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.readableEnrichedTasks(ctx, s.cache.ListTasks()), nil
 		}
-		task, err := resolved(s.resolveTask(resourceID))(uri)
+		task, err := resolved(s.resolveTaskAs(auth.IdentityFromContext(ctx), resourceID))(uri)
 		if err != nil {
 			return nil, err
 		}

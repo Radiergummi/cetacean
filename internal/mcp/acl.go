@@ -335,19 +335,42 @@ func (s *Server) resolveTaskWrite(ctx context.Context, id string) (string, error
 
 // resolveTaskArg resolves a task ID or "<service>.<slot>" through the cache.
 // Docker would read an unresolved argument as an ID prefix the ACL never
-// checked, so one is refused with or without a policy. A slot resolves only
-// through a readable service, since its name is the service's.
+// checked, so one is refused with or without a policy.
 func (s *Server) resolveTaskArg(ctx context.Context, arg string) (swarm.Task, error) {
-	task, ok, err := cluster.ResolveTask(s.cache, arg)
+	task, ok, err := s.resolveTaskAs(auth.IdentityFromContext(ctx), arg)
 	if err != nil && s.checkRead(ctx, "task", arg) == nil {
 		return swarm.Task{}, err
 	}
 
-	if err != nil || !ok || task.ID != arg && s.readableService(ctx, task.ServiceID) == nil {
+	if err != nil || !ok {
 		return swarm.Task{}, fmt.Errorf("task %q not found", arg)
 	}
 
 	return task, nil
+}
+
+// resolveTaskAs resolves a task ID or "<service>.<slot>" for identity. A slot
+// resolves only through a service identity can read, since its name is the
+// service's; every transport resolving a task argument goes through here.
+func (s *Server) resolveTaskAs(identity *auth.Identity, arg string) (swarm.Task, bool, error) {
+	task, ok, err := s.resolveTask(arg)
+	if err != nil || !ok {
+		return swarm.Task{}, false, err
+	}
+
+	if task.ID != arg && !s.serviceReadable(identity, task.ServiceID) {
+		return swarm.Task{}, false, nil
+	}
+
+	return task, true, nil
+}
+
+// serviceReadable reports whether identity may read the service with this ID;
+// a nil identity reads all, as in checkRead.
+func (s *Server) serviceReadable(identity *auth.Identity, serviceID string) bool {
+	svc, ok := s.cache.GetService(serviceID)
+
+	return ok && (identity == nil || s.canRead(identity, "service:"+svc.Spec.Name))
 }
 
 // resolveTaskRead is resolveTaskArg for a read of the task it names.
