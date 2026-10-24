@@ -62,7 +62,7 @@ func (s *Server) drainImpact(
 	}
 
 	node, found, err := s.cache.ResolveNode(identifier)
-	if err = s.visibleNodeErr(ctx, err); err != nil {
+	if err = s.visibleAmbiguity(ctx, "node", err); err != nil {
 		return "", err
 	}
 	if !found || s.checkRead(ctx, "node", cluster.NodeACLName(node)) != nil {

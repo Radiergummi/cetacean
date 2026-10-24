@@ -301,7 +301,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
 		node, found, err := s.cache.ResolveNode(resourceID)
-		node, err = resolved(node, found, s.visibleNodeErr(ctx, err))(uri)
+		node, err = resolved(node, found, s.visibleAmbiguity(ctx, "node", err))(uri)
 		if err != nil {
 			return nil, err
 		}
@@ -395,7 +395,8 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
 		}
-		net, err := resolved(s.cache.ResolveNetwork(resourceID))(uri)
+		net, found, err := s.cache.ResolveNetwork(resourceID)
+		net, err = resolved(net, found, s.visibleAmbiguity(ctx, "network", err))(uri)
 		if err != nil {
 			return nil, err
 		}

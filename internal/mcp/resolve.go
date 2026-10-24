@@ -10,12 +10,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// visibleNodeErr withholds an ambiguous hostname from a caller who cannot read
+// visibleAmbiguity withholds an ambiguous name from a caller who cannot read
 // it, since the error lists every candidate ID; the caller then answers not
-// found. Only node hostnames can be ambiguous, and all candidates share one key.
-func (s *Server) visibleNodeErr(ctx context.Context, err error) error {
+// found. Node hostnames and network names repeat, and every candidate shares
+// the one key a grant matches: the name.
+func (s *Server) visibleAmbiguity(ctx context.Context, resourceType string, err error) error {
 	if ambiguous, ok := errors.AsType[*cache.AmbiguousNameError](err); ok &&
-		s.checkRead(ctx, "node", ambiguous.Name) != nil {
+		s.checkRead(ctx, resourceType, ambiguous.Name) != nil {
 		return nil //nolint:nilerr // answered as not found; see above
 	}
 
