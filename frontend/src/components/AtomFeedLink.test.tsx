@@ -24,7 +24,7 @@ describe("feedForPath", () => {
     for (const resource of resources) {
       const result = feedForPath(`/${resource}`, "");
       expect(result).not.toBeNull();
-      expect(result!.href).toBe(`/${resource}`);
+      expect(result!.href).toBe(`/${resource}.atom`);
       expect(result!.title).toBe(resource.charAt(0).toUpperCase() + resource.slice(1));
     }
   });
@@ -32,8 +32,13 @@ describe("feedForPath", () => {
   it("returns feed for resource detail routes", () => {
     const result = feedForPath("/services/abc123", "");
     expect(result).not.toBeNull();
-    expect(result!.href).toBe("/services/abc123");
+    expect(result!.href).toBe("/services/abc123.atom");
     expect(result!.title).toBe("Service abc123");
+  });
+
+  it("returns no feed below a resource's detail route", () => {
+    expect(feedForPath("/services/abc123/env", "")).toBeNull();
+    expect(feedForPath("/nodes/n1/labels", "")).toBeNull();
   });
 
   it("returns feed for standalone routes", () => {
@@ -49,13 +54,13 @@ describe("feedForPath", () => {
   it("returns feed for search with query string", () => {
     const result = feedForPath("/search", "?q=myservice");
     expect(result).not.toBeNull();
-    expect(result!.href).toBe("/search?q=myservice");
+    expect(result!.href).toBe("/search.atom?q=myservice");
     expect(result!.title).toBe("Search Results");
   });
 
   it("returns feed for search without query string", () => {
     const result = feedForPath("/search", "");
     expect(result).not.toBeNull();
-    expect(result!.href).toBe("/search");
+    expect(result!.href).toBe("/search.atom");
   });
 });

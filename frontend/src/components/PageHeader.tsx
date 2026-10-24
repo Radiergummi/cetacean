@@ -85,7 +85,7 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
                 <TooltipTrigger
                   render={
                     <a
-                      href={feed.href + ".atom"}
+                      href={feed.href}
                       className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
                       aria-label="Atom feed"
                     >
