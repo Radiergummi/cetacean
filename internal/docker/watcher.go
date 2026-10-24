@@ -444,7 +444,7 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.processBatch(ctx, batch)
 			}
 		case req := <-w.refreshes:
-			req.done <- w.refreshNow(ctx, req.kind, req.id)
+			req.done <- req.run(ctx)
 		case done := <-w.resyncRequests:
 			flushPending()
 
@@ -578,7 +578,9 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 			case <-time.After(delay):
 			}
 
-			w.inspectAndApply(ctx, key)
+			if !w.settleOnLoop(ctx, key) {
+				return
+			}
 
 			task, ok := w.store.GetTask(key.id)
 			if !ok || taskCaughtUp(task, action) {
@@ -595,6 +597,38 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 			delay *= 2
 		}
 	})
+}
+
+// settleOnLoop re-reads a task on the event loop, which applies every other
+// write, so a removal cannot land between its inspect and its apply. It
+// reports false when the loop did not take it: the loop is reconnecting, and
+// the full sync that follows supersedes the re-read.
+func (w *Watcher) settleOnLoop(ctx context.Context, key eventKey) bool {
+	if !w.loopRunning.Load() {
+		w.inspectAndApply(ctx, key)
+		return true
+	}
+
+	done := make(chan error, 1)
+	settle := func(ctx context.Context) error {
+		w.inspectAndApply(ctx, key)
+		return nil
+	}
+
+	handoff := time.NewTimer(refreshHandoffTimeout)
+	defer handoff.Stop()
+
+	select {
+	case w.refreshes <- refreshRequest{run: settle, done: done}:
+	case <-handoff.C:
+		return false
+	case <-ctx.Done():
+		return false
+	}
+
+	<-done
+
+	return true
 }
 
 // taskCaughtUp reports whether Swarm's record has caught up with the container
@@ -719,10 +753,9 @@ var errRefreshUnavailable = fmt.Errorf(
 	"the Docker event loop is not accepting refreshes: %w", cerrdefs.ErrUnavailable,
 )
 
-// refreshRequest asks the event loop to re-read one resource on its behalf.
+// refreshRequest asks the event loop to run a re-read on its behalf.
 type refreshRequest struct {
-	kind string
-	id   string
+	run  func(context.Context) error
 	done chan error
 }
 
@@ -731,10 +764,12 @@ type refreshRequest struct {
 // which applies every other write: applying from the caller's goroutine lets a
 // remove arriving mid-inspect be undone, resurrecting the resource.
 func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+	refresh := func(ctx context.Context) error { return w.refreshNow(ctx, kind, id) }
+
 	// Nothing to serialize against with no loop running, and waiting for one
 	// would stall the write this refresh precedes.
 	if !w.loopRunning.Load() {
-		return w.refreshNow(ctx, kind, id)
+		return refresh(ctx)
 	}
 
 	done := make(chan error, 1)
@@ -748,7 +783,7 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 	defer handoff.Stop()
 
 	select {
-	case w.refreshes <- refreshRequest{kind: kind, id: id, done: done}:
+	case w.refreshes <- refreshRequest{run: refresh, done: done}:
 	case <-handoff.C:
 		return errRefreshUnavailable
 	case <-ctx.Done():

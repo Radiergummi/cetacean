@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - An event stream resuming from the very first event after the change history filled up now resyncs instead of silently missing events
+- A service, task or node no longer briefly shows an older state after a burst of changes
 
 ## [0.17.0] - 2026-10-20
 

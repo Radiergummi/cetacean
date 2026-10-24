@@ -200,12 +200,14 @@ func New(onChange OnChangeFunc) *Cache {
 		mu:       &c.mu,
 		items:    make(map[string]swarm.Node),
 		nameFunc: func(n swarm.Node) string { return n.Description.Hostname },
+		version:  func(n swarm.Node) uint64 { return n.Version.Index },
 	}
 
 	c.configs = ResourceMap[swarm.Config]{
 		mu:       &c.mu,
 		items:    make(map[string]swarm.Config),
 		nameFunc: func(cfg swarm.Config) string { return cfg.Spec.Name },
+		version:  func(cfg swarm.Config) uint64 { return cfg.Version.Index },
 		onSet: func(_ string, old *swarm.Config, new_ *swarm.Config) {
 			if old != nil {
 				c.removeFromStack(EventConfig, old.ID, old.Spec.Labels)
@@ -221,6 +223,7 @@ func New(onChange OnChangeFunc) *Cache {
 		mu:       &c.mu,
 		items:    make(map[string]swarm.Secret),
 		nameFunc: func(s swarm.Secret) string { return s.Spec.Name },
+		version:  func(s swarm.Secret) uint64 { return s.Version.Index },
 		onSet: func(_ string, old *swarm.Secret, new_ *swarm.Secret) {
 			if old != nil {
 				c.removeFromStack(EventSecret, old.ID, old.Spec.Labels)
@@ -451,7 +454,9 @@ func (c *Cache) notifyRefChanges(old, new refSet) {
 // --- Nodes ---
 
 func (c *Cache) SetNode(n swarm.Node) {
-	c.notify(c.nodes.Set(n.ID, n, EventNode))
+	if event, ok := c.nodes.Set(n.ID, n, EventNode); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetNode(id string) (swarm.Node, bool) { return c.nodes.Get(id) }
@@ -524,12 +529,18 @@ func (c *Cache) EachTask(yield func(swarm.Task) bool) {
 
 // --- Services ---
 
+// SetService ignores a service older than the cached one, as SetTask does a
+// task: two inspects of one resource can land in either order.
 func (c *Cache) SetService(s swarm.Service) {
 	newRefs := serviceRefs(s)
 
 	c.mu.Lock()
 	var oldRefs refSet
 	old, existed := c.services[s.ID]
+	if existed && s.Version.Index < old.Version.Index {
+		c.mu.Unlock()
+		return
+	}
 	if existed {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
@@ -600,6 +611,10 @@ func (c *Cache) SetTask(t swarm.Task) {
 	changed := true
 	wasFailure := false
 	old, existed := c.tasks[t.ID]
+	if existed && t.Version.Index < old.Version.Index {
+		c.mu.Unlock()
+		return
+	}
 	if existed {
 		// Status.Message captures the human-readable transition reason
 		// ("started", "shutdown requested", "rejected: …"). Without it
@@ -728,7 +743,9 @@ func (c *Cache) ListTasks() []swarm.Task {
 // --- Configs ---
 
 func (c *Cache) SetConfig(cfg swarm.Config) {
-	c.notify(c.configs.Set(cfg.ID, cfg, EventConfig))
+	if event, ok := c.configs.Set(cfg.ID, cfg, EventConfig); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetConfig(id string) (swarm.Config, bool) { return c.configs.Get(id) }
@@ -742,7 +759,9 @@ func (c *Cache) ListConfigs() []swarm.Config { return c.configs.List() }
 // --- Secrets ---
 
 func (c *Cache) SetSecret(s swarm.Secret) {
-	c.notify(c.secrets.Set(s.ID, s, EventSecret))
+	if event, ok := c.secrets.Set(s.ID, s, EventSecret); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetSecret(id string) (swarm.Secret, bool) { return c.secrets.Get(id) }
@@ -756,7 +775,9 @@ func (c *Cache) ListSecrets() []swarm.Secret { return c.secrets.List() }
 // --- Networks ---
 
 func (c *Cache) SetNetwork(n network.Summary) {
-	c.notify(c.networks.Set(n.ID, n, EventNetwork))
+	if event, ok := c.networks.Set(n.ID, n, EventNetwork); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetNetwork(id string) (network.Summary, bool) { return c.networks.Get(id) }
@@ -770,7 +791,9 @@ func (c *Cache) ListNetworks() []network.Summary { return c.networks.List() }
 // --- Volumes ---
 
 func (c *Cache) SetVolume(v volume.Volume) {
-	c.notify(c.volumes.Set(v.Name, v, EventVolume))
+	if event, ok := c.volumes.Set(v.Name, v, EventVolume); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetVolume(name string) (volume.Volume, bool) { return c.volumes.Get(name) }
