@@ -309,7 +309,7 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 		t.Fatal("no subscriptions/listen hook installed: modern clients would receive no updates")
 	}
 
-	ctx := contextWithSession(t, srv, "session-modern")
+	ctx := contextWithSession(t, srv, t.Name())
 	req := &mcplib.SubscriptionsListenRequest{}
 	req.Params.Notifications = mcplib.SubscriptionFilter{
 		ResourcesListChanged:  true,
@@ -320,18 +320,12 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 		hook(ctx, "req-1", req)
 	}
 
-	for _, want := range []struct {
-		event cache.Event
-		uri   string
-	}{
-		{cache.Event{Type: cache.EventService, ID: "abc"}, "cetacean://services/abc"},
-		{cache.Event{Type: cache.EventNode, ID: "xyz"}, "cetacean://nodes/xyz"},
-	} {
-		got := srv.notifications.MatchingURIs(session("session-modern"), want.event)
-		if !slices.Contains(got, want.uri) {
-			t.Errorf("subscription to %s not recorded (matched %v)", want.uri, got)
-		}
-	}
+	srv.dispatchCacheEvent(cache.Event{Type: cache.EventService, Action: "update", ID: "abc"})
+	srv.dispatchCacheEvent(cache.Event{Type: cache.EventNode, Action: "update", ID: "xyz"})
+
+	got := drainUpdated(t, t.Name())
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://nodes/xyz", "cetacean://services/abc")
 }
 
 // TestSubscriptionsListenClearsOnStreamClose verifies the teardown half: the
@@ -340,7 +334,7 @@ func TestSubscriptionsListenPopulatesManager(t *testing.T) {
 func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
 	srv := newTestServer(t)
 	hooks := srv.installSubscriptionHooks()
-	ctx := contextWithSession(t, srv, "session-modern")
+	ctx := contextWithSession(t, srv, t.Name())
 
 	req := &mcplib.SubscriptionsListenRequest{}
 	req.Params.Notifications = mcplib.SubscriptionFilter{
@@ -355,11 +349,6 @@ func TestSubscriptionsListenClearsOnStreamClose(t *testing.T) {
 		hook(ctx, "req-1", req, &mcplib.SubscriptionsListenResult{})
 	}
 
-	got := srv.notifications.MatchingURIs(session("session-modern"), cache.Event{
-		Type: cache.EventService,
-		ID:   "abc",
-	})
-	if len(got) != 0 {
-		t.Fatalf("subscriptions survived stream close: %v", got)
-	}
+	srv.dispatchCacheEvent(cache.Event{Type: cache.EventService, Action: "update", ID: "abc"})
+	assertUpdated(t, drainUpdated(t, t.Name()))
 }
