@@ -51,6 +51,37 @@ func TestSetAllowList_POST(t *testing.T) {
 	}
 }
 
+// A new config belongs to no stack, so only a grant naming configs can permit
+// creating one; a stack grant implies its configs and nothing outside it.
+func TestSetAllowListOffersCreateOnlyForAGrantNamingTheType(t *testing.T) {
+	for resource, want := range map[string]string{
+		"stack:web":    "GET, HEAD",
+		"config:app-*": "GET, HEAD, POST",
+		"*":            "GET, HEAD, POST",
+	} {
+		t.Run(resource, func(t *testing.T) {
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+				Resources:   []string{resource},
+				Audience:    []string{"*"},
+				Permissions: []string{"write"},
+			}}})
+			h := &Handlers{operationsLevel: config.OpsConfiguration, acl: e}
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", "/configs", nil)
+			r = r.WithContext(
+				auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "alice"}),
+			)
+
+			h.setAllowList(w, r, "config")
+
+			if got := w.Header().Get("Allow"); got != want {
+				t.Errorf("Allow = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestSetAllowList_NoWrite(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{
