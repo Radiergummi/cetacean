@@ -120,6 +120,36 @@ func decodeMergePatch[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
 	return decodeBody[T](w, r, "API008", "invalid JSON")
 }
 
+// decodeListMergePatch reads a merge patch whose one member replaces a list.
+// present is false when the member is absent, which RFC 7396 reads as no
+// change; null and [] both clear the list.
+func decodeListMergePatch[T any](
+	w http.ResponseWriter,
+	r *http.Request,
+	member string,
+) (list []T, present, ok bool) {
+	patch, ok := decodeMergePatch[map[string]json.RawMessage](w, r)
+	if !ok {
+		return nil, false, false
+	}
+	if patch == nil {
+		writeErrorCode(w, r, "API008", "the merge patch must be a JSON object")
+		return nil, false, false
+	}
+
+	raw, present := patch[member]
+	if !present {
+		return nil, false, true
+	}
+
+	if err := json.Unmarshal(raw, &list); err != nil {
+		writeErrorCode(w, r, "API008", "invalid JSON")
+		return nil, false, false
+	}
+
+	return list, true, true
+}
+
 func decodeBody[T any](w http.ResponseWriter, r *http.Request, code, message string) (T, bool) {
 	limitWriteBody(w, r)
 

@@ -499,6 +499,9 @@ Link: </services/abc/scale>; rel="edit", </services/abc/labels>; rel="edit"
 service `env` take `application/json-patch+json, application/merge-patch+json`; every other patchable sub-resource takes
 `application/merge-patch+json` alone.
 
+A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a merge patch naming that one list.
+A patch without the member changes nothing; `null` or `[]` empties the list.
+
 A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering

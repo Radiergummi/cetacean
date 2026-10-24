@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - A volume, config or other resource named like `backup.json` is addressed by that name: `DELETE /volumes/backup.json` no longer removes volume `backup`
+- A merge patch to a service's `ports`, `configs`, `secrets`, `networks` or `mounts` that omits the list, like `{}`, changes nothing instead of emptying it
 
 ## [0.17.0] - 2026-10-20
 
