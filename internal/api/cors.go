@@ -32,10 +32,18 @@ func (c *CORSConfig) Wildcard() bool {
 var exposedHeaders = strings.Join([]string{
 	"ETag",
 	"Link",
+	"Link-Template",
 	"Allow",
+	"Accept-Patch",
+	"Accept-Ranges",
+	"Content-Range",
+	"Content-Disposition",
 	"Location",
+	"Preference-Applied",
 	"Retry-After",
 	"Request-Id",
+	"Revoked-Grants",
+	"WWW-Authenticate",
 	// A browser-based MCP client on protocol 2025-11-25 or older reads its
 	// session ID off the initialize response.
 	"Mcp-Session-Id",
@@ -52,7 +60,15 @@ var allowedHeaders = strings.Join([]string{
 	"Accept",
 	"Authorization",
 	"Content-Type",
+	"If-Match",
 	"If-None-Match",
+	"If-Modified-Since",
+	"If-Unmodified-Since",
+	"If-Range",
+	"Last-Event-ID",
+	"Prefer",
+	// Safelisted only for a single bytes range; the lists page in items.
+	"Range",
 	"Request-Id",
 	// The MCP streamable HTTP transport. Mcp-Method and Mcp-Name are required
 	// on every POST from protocol 2026-07-28 (SEP-2243); Mcp-Protocol-Version
