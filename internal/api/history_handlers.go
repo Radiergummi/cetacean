@@ -87,7 +87,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 				r.Context(),
 				entries,
 				"HistoryEntry",
-				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history/%d", e.ID) },
+				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history#%d", e.ID) },
 			),
 			len(entries),
 			len(entries),

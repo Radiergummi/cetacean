@@ -491,7 +491,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 				r.Context(),
 				summaries,
 				"DiskUsageSummary",
-				func(d DiskUsageSummary) string { return "/disk-usage/" + d.Type },
+				func(d DiskUsageSummary) string { return "/disk-usage#" + d.Type },
 			),
 			len(summaries),
 			len(summaries),

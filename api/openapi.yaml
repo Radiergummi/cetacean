@@ -1911,28 +1911,28 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - "@id": /disk-usage/images
+                  - "@id": "/disk-usage#images"
                     "@type": DiskUsageSummary
                     type: images
                     count: 24
                     active: 18
                     totalSize: 4823691264
                     reclaimable: 1124532224
-                  - "@id": /disk-usage/containers
+                  - "@id": "/disk-usage#containers"
                     "@type": DiskUsageSummary
                     type: containers
                     count: 12
                     active: 12
                     totalSize: 234881024
                     reclaimable: 0
-                  - "@id": /disk-usage/volumes
+                  - "@id": "/disk-usage#volumes"
                     "@type": DiskUsageSummary
                     type: volumes
                     count: 8
                     active: 6
                     totalSize: 1572864000
                     reclaimable: 419430400
-                  - "@id": /disk-usage/buildCache
+                  - "@id": "/disk-usage#buildCache"
                     "@type": DiskUsageSummary
                     type: buildCache
                     count: 47
@@ -5193,7 +5193,7 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - "@id": /history/1042
+                  - "@id": "/history#1042"
                     "@type": HistoryEntry
                     id: 1042
                     type: service
@@ -5202,7 +5202,7 @@ paths:
                     name: webapp
                     timestamp: "2025-03-20T14:30:00Z"
                     summary: Image updated to nginx:1.28
-                  - "@id": /history/1041
+                  - "@id": "/history#1041"
                     "@type": HistoryEntry
                     id: 1041
                     type: task
@@ -8003,7 +8003,7 @@ components:
       properties:
         "@id":
           type: string
-          description: JSON-LD item identifier (e.g. /disk-usage/images)
+          description: JSON-LD item identifier (e.g. /disk-usage#images), a fragment of the collection
         "@type":
           type: string
           description: JSON-LD type name (DiskUsageSummary)
@@ -8079,7 +8079,7 @@ components:
       properties:
         "@id":
           type: string
-          description: JSON-LD item identifier (e.g. /history/8421)
+          description: JSON-LD item identifier (e.g. /history#8421), a fragment of the collection
         "@type":
           type: string
           description: JSON-LD type name (HistoryEntry)
