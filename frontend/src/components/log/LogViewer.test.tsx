@@ -190,7 +190,9 @@ describe("LogViewer", () => {
     renderWithRouter(<LogViewer serviceId="svc1" />);
 
     await waitFor(() => {
-      expect(screen.getByText(/^Too many log reads\. Wait a few seconds/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/^Too many log reads: too many log reads in flight\. Wait a few seconds/),
+      ).toBeInTheDocument();
     });
   });
 

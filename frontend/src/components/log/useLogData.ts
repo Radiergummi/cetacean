@@ -1,6 +1,6 @@
 import type { LogLine as ApiLogLine } from "../../api/client";
 import { api, ApiError } from "../../api/client";
-import { getErrorInfo } from "../../lib/errors";
+import { getErrorInfo, withSuggestion } from "../../lib/errors";
 import { getErrorMessage } from "../../lib/utils";
 import type { LogLine, TimeRange } from "./log-utils";
 import { maxLiveLines, toLogLine } from "./log-utils";
@@ -119,10 +119,11 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
         if (timedOut) {
           setError("Request timed out");
         } else {
-          const info = caught instanceof ApiError ? getErrorInfo(caught.code) : undefined;
+          const apiError = caught instanceof ApiError ? caught : undefined;
+          const info = apiError && getErrorInfo(apiError.code);
           setError(
-            info
-              ? `${info.title}. ${info.suggestion}`
+            info && apiError
+              ? `${info.title}: ${withSuggestion(apiError.detail, info.suggestion)}`
               : getErrorMessage(caught, "Failed to load logs"),
           );
         }
