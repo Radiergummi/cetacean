@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
 
 ### Fixed
+- The log viewer's regex search no longer repeats matched text or crashes the page when the pattern contains a capture group
+- The Tasks page's state filter covers every task, not only the loaded pages, and counts only the state you selected
+- A searched or filtered list shows resources that start or stop matching while it is open, and the Tasks page follows tasks as they change state
+- The Swarm page offers Show Unlock Key, Rotate Unlock Key and Unlock Swarm only to callers the server allows them
+- The MCP table, topology, metrics and recommendations widgets show what the tool was called with, such as filters, view, severity or a cluster-wide ranking, instead of a default
+- Error toasts, the remove buttons and the log viewer show the server's reason for a failure alongside the suggested fix, instead of only the suggestion
+- A service's secret, config and network pickers offer every one in the cluster, not only the first page
+- The Atom feed button and feed autodiscovery link the search page's feed correctly, and no longer appear on a resource's sub-pages, which have no feed
+- A volume whose name holds a character reserved in a URL, such as `#` or `?`, opens, links, and removes correctly in the dashboard
+- The History page's Download CSV applies the name filter as well as the type
+- A command palette action whose permission check fails says so, instead of doing nothing
+- Icon-only buttons, such as Edit replicas and the editors' remove buttons, have names a screen reader announces
 - Built with Go 1.27.3, which refuses the compromised intermediate certificates in GO-2026-6809 when connecting to a TLS Docker Engine, an OIDC provider, or Tailscale
 - MCP no longer lists the IDs of nodes or networks sharing a name to a caller who can't read that name
 - MCP's cluster-wide metrics ranking is held to the services and nodes you can read unless you have `read` on `*`

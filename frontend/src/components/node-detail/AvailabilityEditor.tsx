@@ -101,6 +101,7 @@ export function AvailabilityEditor({
           <PopoverTrigger
             render={
               <Button
+                aria-label="Edit availability"
                 variant="ghost"
                 size="icon-xs"
                 title="Edit availability"

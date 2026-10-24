@@ -116,6 +116,7 @@ export function PlacementEditor({
                 />
 
                 <Button
+                  aria-label="Remove constraint"
                   variant="outline"
                   size="xs"
                   className="h-8 shrink-0"

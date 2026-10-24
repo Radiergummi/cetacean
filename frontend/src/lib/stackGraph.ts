@@ -156,7 +156,7 @@ export function stackToReactFlow(
       `volume:${volume.Name}`,
       mountNode(`volume:${volume.Name}`, "stackVolume", {
         name: bare(volume.Name),
-        href: `/volumes/${volume.Name}`,
+        href: `/volumes/${encodeURIComponent(volume.Name)}`,
         detail: volume.Driver,
         referenced: false,
         mountedBy: [],
@@ -244,7 +244,12 @@ export function stackToReactFlow(
         continue;
       }
 
-      const id = referenceMount(`volume:${Source}`, "stackVolume", Source, `/volumes/${Source}`);
+      const id = referenceMount(
+        `volume:${Source}`,
+        "stackVolume",
+        Source,
+        `/volumes/${encodeURIComponent(Source)}`,
+      );
 
       connect(serviceId, id);
 

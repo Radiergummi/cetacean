@@ -34,15 +34,20 @@ export interface TopologyGraphData {
 }
 
 /**
- * Which node type occupies which column, per view. Both graphs the server
+ * Which node type occupies which column, per view. Every graph the server
  * builds are bipartite, which is what makes a two-column layout exact rather
  * than an approximation of one.
  */
 const networkColumns = ["service", "network"] as const;
 const placementColumns = ["node", "service"] as const;
+const drainImpactColumns = ["service", "node"] as const;
 
 function columnsFor(view: string): readonly string[] {
-  return view === "placement" ? placementColumns : networkColumns;
+  if (view === "placement") {
+    return placementColumns;
+  }
+
+  return view === "drain-impact" ? drainImpactColumns : networkColumns;
 }
 
 const columnGap = 260;
