@@ -56,7 +56,7 @@ const (
 // writeTimeout bounds one write to a stream. The server sets no write timeout
 // for streams to share, so without it a client that stops reading holds its
 // slot, and shutdown, for as long as the connection lives.
-var writeTimeout = 15 * time.Second
+var writeTimeout = 30 * time.Second
 
 // ErrorWriter is a callback for writing HTTP error responses.
 // This decouples the SSE package from the API error registry.
@@ -235,7 +235,7 @@ func (b *Broadcaster) ServeSSE(
 	metrics.RecordSSEConnect()
 
 	stream := newStreamWriter(w)
-	defer stream.clearDeadline()
+	defer func() { _ = stream.clearDeadline() }()
 
 	defer func() {
 		b.mu.Lock()
@@ -436,7 +436,8 @@ func (s *streamWriter) Flush() {
 }
 
 // send runs write under a fresh deadline and flushes. A writer that cannot
-// take a deadline is written to without one rather than refused.
+// take a deadline is written to without one rather than refused. The deadline
+// is lifted afterwards: HTTP/2 resets a stream whose deadline passes while idle.
 func (s *streamWriter) send(write func() error) error {
 	err := s.controller.SetWriteDeadline(time.Now().Add(writeTimeout))
 	if err != nil && !errors.Is(err, http.ErrNotSupported) {
@@ -447,14 +448,21 @@ func (s *streamWriter) send(write func() error) error {
 		return err
 	}
 	s.Flush()
+	if s.err != nil {
+		return s.err
+	}
 
-	return s.err
+	return s.clearDeadline()
 }
 
-// clearDeadline lifts the deadline, which would otherwise outlive the handler
-// on a connection the server reuses.
-func (s *streamWriter) clearDeadline() {
-	_ = s.controller.SetWriteDeadline(time.Time{})
+// clearDeadline lifts the deadline, which would otherwise outlive the write.
+func (s *streamWriter) clearDeadline() error {
+	err := s.controller.SetWriteDeadline(time.Time{})
+	if errors.Is(err, http.ErrNotSupported) {
+		return nil
+	}
+
+	return err
 }
 
 // EventID is the id the stream writes for a history position.

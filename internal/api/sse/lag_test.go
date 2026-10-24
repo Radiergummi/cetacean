@@ -3,6 +3,7 @@ package sse
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -158,6 +159,67 @@ func TestSSE_AStalledClientIsDisconnected(t *testing.T) {
 		case <-deadline:
 			t.Fatal("the stream to a client that stopped reading never ended")
 		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// HTTP/2 resets a stream when its write deadline passes even with no write
+// pending, so a deadline left armed between writes ends an idle stream.
+func TestSSE_AnIdleHTTP2StreamOutlivesTheWriteTimeout(t *testing.T) {
+	original := writeTimeout
+	writeTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { writeTimeout = original })
+
+	b := NewBroadcaster(5*time.Millisecond, noopErrorWriter, nil)
+	b.keepaliveInterval = 100 * time.Millisecond
+	defer b.Close()
+
+	server := httptest.NewUnstartedServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			b.ServeSSE(w, r, nil, ReplayAll)
+		}),
+	)
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.ProtoMajor != 2 {
+		t.Fatalf("protocol = %s, want HTTP/2", response.Proto)
+	}
+
+	// An event arms the deadline just before the keepalive timer restarts.
+	b.Broadcast(cache.Event{Type: cache.EventService, ID: "s1", HistoryID: 1})
+
+	keepalives := make(chan struct{}, 64)
+	failed := make(chan error, 1)
+	go func() {
+		scanner := bufio.NewScanner(response.Body)
+		for scanner.Scan() {
+			if scanner.Text() == ": keepalive" {
+				keepalives <- struct{}{}
+			}
+		}
+		err := scanner.Err()
+		if err == nil {
+			err = io.EOF
+		}
+		failed <- fmt.Errorf("stream ended: %w", err)
+	}()
+
+	timeout := time.After(5 * time.Second)
+	for seen := 0; seen < 5; {
+		select {
+		case <-keepalives:
+			seen++
+		case err := <-failed:
+			t.Fatalf("after %d keepalives: %v", seen, err)
+		case <-timeout:
+			t.Fatalf("only %d keepalives arrived", seen)
 		}
 	}
 }
