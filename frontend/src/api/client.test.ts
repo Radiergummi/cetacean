@@ -106,6 +106,40 @@ describe("api client", () => {
     );
   });
 
+  it("pages through every secret for a picker", async () => {
+    const secrets = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `s${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `secret-${from + index}` },
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: secrets(0, 200), total: 250, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: secrets(200, 50), total: 250, limit: 200, offset: 200 }),
+      );
+
+    const all = await api.allSecrets();
+
+    expect(all).toHaveLength(250);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      "/secrets",
+      expect.objectContaining({
+        headers: { Accept: "application/json", Range: "items 200-399" },
+      }),
+    );
+  });
+
+  it("stops paging when the server returns an empty page short of the total", async () => {
+    mockFetch.mockReturnValue(jsonResponse({ items: [], total: 10, limit: 200, offset: 0 }));
+
+    expect(await api.allNetworks()).toEqual([]);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("accepts 206 Partial Content as success", async () => {
     mockFetch.mockReturnValue(
       jsonResponse({ items: [{ ID: "n1" }], total: 100, limit: 50, offset: 0 }, 206),

@@ -47,7 +47,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
     service: vi.fn<() => Promise<unknown>>(),
     serviceTasks: vi.fn<() => Promise<unknown>>(),
     history: vi.fn<() => Promise<unknown>>(),
-    networks: vi.fn<() => Promise<unknown>>(),
+    allNetworks: vi.fn<() => Promise<unknown>>(),
     metricsQuery: vi.fn<() => Promise<unknown>>(),
   },
 }));
@@ -72,7 +72,7 @@ beforeEach(() => {
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
   vi.mocked(api.history).mockResolvedValue([] as never);
-  vi.mocked(api.networks).mockResolvedValue({ data: { items: [] } } as never);
+  vi.mocked(api.allNetworks).mockResolvedValue([] as never);
   vi.mocked(api.metricsQuery).mockResolvedValue({} as never);
 });
 

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The Swarm page offers Show Unlock Key, Rotate Unlock Key and Unlock Swarm only to callers the server allows them
 - The MCP table, topology and recommendations widgets show what the tool was called for — its resource type and filters, view and node, or severity — instead of a default
 - Error toasts, the remove buttons and the log viewer show the server's reason for a failure alongside the suggested fix, instead of only the suggestion
+- A service's secret, config and network pickers offer every one in the cluster, not only the first page
 
 ## [0.17.0] - 2026-10-20
 
