@@ -1,7 +1,7 @@
 import SearchPalette from "./SearchPalette";
 import { api } from "@/api/client";
 import { MockEventSource } from "@/test/mocks";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,7 +23,10 @@ function open() {
 }
 
 describe("SearchPalette accessibility", () => {
+  // Unmount before the stub goes: a search resolving late re-renders and
+  // opens a stream, which then finds no EventSource on a slow runner.
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
   });
 
