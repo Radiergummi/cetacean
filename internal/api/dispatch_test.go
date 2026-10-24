@@ -395,6 +395,7 @@ func TestAssembledRouterCarriesCSVParams(t *testing.T) {
 	for path, want := range map[string]string{
 		"/services?search=web&sort=name": "search=web",
 		"/history?type=service":          "type=service",
+		"/history?search=web":            "search=web",
 	} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest("GET", path, nil)

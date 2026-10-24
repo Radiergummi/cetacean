@@ -452,7 +452,7 @@ var searchFeedParams = []string{"q"}
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
 // historyCSVParams names what HandleHistory reads.
-var historyCSVParams = []string{"type", "resourceId", "limit"}
+var historyCSVParams = []string{"type", "resourceId", "search", "before", "limit"}
 
 // feedQuery returns the subset of r's query a feed's links may carry: the
 // pagination pair every feed reads, plus whatever else the caller declares.
