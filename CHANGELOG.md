@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A volume, config, plugin or other resource named like `backup.json` is addressed by that name: `DELETE /volumes/backup.json` no longer removes volume `backup`, nor a plugin tagged `1.csv` the one tagged `1`
 - A merge patch to a service's `ports`, `configs`, `secrets`, `networks` or `mounts` that omits the list, like `{}`, changes nothing instead of emptying it
 - A `/swarm` update or key rotation that races another change answers `409` (`SWM012`) instead of `500`
+- A failed join-token or unlock-key rotation, swarm unlock or unlock-key read no longer repeats the Docker daemon's error text unless it names something the caller can fix
 - A config, secret, network, volume or task detail, and `/swarm`, no longer answer `If-Modified-Since` with a stale `304` after a change the timestamp misses; they send no `Last-Modified`
 - A `/history` entry's and a `/disk-usage` summary's `@id` is a fragment of its list, like `/history#42`, instead of a URL that answered `404`
 - A job service's `mode` reads `replicated-job` or `global-job` in `?filter=` and `?sort=mode`, instead of `replicated`
