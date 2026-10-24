@@ -122,7 +122,8 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 			return
 		}
 
-		serve(w, r, ContentTypeFromContext(r.Context()) == ContentTypeYAML)
+		r, ct := choose(r, ContentTypeJSON, ContentTypeYAML)
+		serve(w, r, ct == ContentTypeYAML)
 	}
 
 	yamlOnly = func(w http.ResponseWriter, r *http.Request) {

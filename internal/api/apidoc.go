@@ -65,7 +65,7 @@ func HandleAPIDoc(specYAML []byte, basePath string) (negotiated, yamlOnly http.H
 	}
 
 	negotiated = func(w http.ResponseWriter, r *http.Request) {
-		ct := ContentTypeFromContext(r.Context())
+		r, ct := choose(r, ContentTypeHTML, ContentTypeJSON, ContentTypeYAML)
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		switch ct {
 		case ContentTypeHTML:

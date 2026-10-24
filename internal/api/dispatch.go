@@ -100,7 +100,9 @@ func contentNegotiatedWithSSE(
 	served := strings.Join(names, ", ")
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		switch negotiatedAmong(r, types...) {
+		r, ct := choose(r, types...)
+
+		switch ct {
 		case ContentTypeHTML:
 			addFeedLinks(w, r, feeds)
 			spa.ServeHTTP(w, r)

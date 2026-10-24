@@ -370,7 +370,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 	// SSE events
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
-		switch ct := ContentTypeFromContext(r.Context()); ct {
+		r, ct := choose(
+			r,
+			ContentTypeSSE, ContentTypeHTML, ContentTypeAtom, ContentTypeJSONFeed,
+		)
+
+		switch ct {
 		case ContentTypeSSE:
 			b.ServeSSE(w, r, h.aclMatchWrap(r, sse.TypesFilter(r)), sse.ReplayAll)
 		case ContentTypeAtom:
@@ -941,7 +946,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 	// Topology
 	mux.HandleFunc("GET /topology", func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
+		r, ct := choose(
+			r,
+			ContentTypeHTML, ContentTypeJGF, ContentTypeJSON, ContentTypeGraphML, ContentTypeDOT,
+		)
+
+		switch ct {
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
 		case ContentTypeJGF, ContentTypeJSON:

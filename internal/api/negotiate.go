@@ -384,6 +384,18 @@ func negotiatedAmong(r *http.Request, serves ...ContentType) ContentType {
 	return ct
 }
 
+// choose is negotiatedAmong, recorded on the request, for a dispatcher to hand
+// the arm it picked: a handler choosing its own rendering off the context must
+// read this choice, not the best of every endpoint's types.
+func choose(r *http.Request, serves ...ContentType) (*http.Request, ContentType) {
+	ct := negotiatedAmong(r, serves...)
+	if ct == ContentTypeFromContext(r.Context()) {
+		return r, ct
+	}
+
+	return r.WithContext(context.WithValue(r.Context(), contentTypeKey{}, ct)), ct
+}
+
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable
 // quality (RFC 9110 §12.5.1): the most specific matching range carries the
 // weight, so "*/*, text/html;q=0" refuses it. The resolved ContentType cannot

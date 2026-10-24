@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - With `server.base_path` set, a path outside it answers `404` with problem details instead of plain text
 - A list's page links keep a `.json` or `.csv` suffix, and an `offset` past the end links no next page instead of a negative offset
 - A `PATCH` reads its `Content-Type` case-insensitively, so `Application/Merge-Patch+JSON` is accepted and a type that merely starts like a patch format is refused with `415`
-- `Accept` is weighed by the most specific range, so `application/json;q=0, */*` no longer returns JSON, and `text/csv, application/json;q=0.5` on a detail URL returns JSON instead of `406`
+- `Accept` is weighed by the most specific range, and every endpoint, `/events` and `/topology` included, answers with the best type it serves instead of `406` or JSON
 - A plugin's `@id` escapes the `/` in its name, so `/plugins/vieux%2Fsshfs:latest` resolves, and `POST /plugins` answers with its `Location`
 - `GET /nodes/{id}/role` sends `Allow`, offering `PUT` to a caller who may change the role
 - `GET /configs` and `GET /secrets` no longer offer `POST`, nor the dashboard a create button, to a user whose only write grant is on a stack

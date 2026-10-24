@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -69,6 +70,36 @@ func TestADetailRouteServesTheBestOfItsOwnTypes(t *testing.T) {
 		}
 		if want == http.StatusOK && w.Header().Get("Content-Type") != "application/json" {
 			t.Errorf("Accept: %s answered %s, want JSON", accept, w.Header().Get("Content-Type"))
+		}
+	}
+}
+
+// The type an endpoint chose among its own is the one its handler renders: a
+// handler that re-read the best of every endpoint's would render a type the
+// client ranked below the one it was dispatched for.
+func TestTheArmRendersTheTypeItWasChosenFor(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "s1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}}})
+	router := newTestRouterWithCache(t, c)
+
+	for _, tc := range []struct{ path, accept, want string }{
+		{"/services", "application/vnd.jgf+json, text/csv;q=0.5", "text/csv"},
+		{"/tasks", "application/vnd.jgf+json, text/csv;q=0.5", "text/csv"},
+		{"/nodes", "application/vnd.jgf+json, text/csv;q=0.5", "text/csv"},
+		{"/api/asyncapi", "text/html, application/yaml;q=0.5", asyncAPIYAMLMediaType},
+		{"/api", "text/csv, application/yaml;q=0.5", openAPIYAMLMediaType},
+		{"/events", "application/atom+xml;q=0.5, application/json", "application/atom+xml"},
+		{"/topology", "text/csv, application/vnd.jgf+json;q=0.5", "application/vnd.jgf+json"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.Header.Set("Accept", tc.accept)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if got := w.Header().Get("Content-Type"); w.Code != http.StatusOK ||
+			!strings.HasPrefix(got, tc.want) {
+			t.Errorf("GET %s, Accept: %s answered %d %s, want 200 %s",
+				tc.path, tc.accept, w.Code, got, tc.want)
 		}
 	}
 }
