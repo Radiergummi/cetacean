@@ -215,7 +215,8 @@ without their values—so raising a CPU limit never hands back the service's cre
 
 `update_service_secrets`, `update_service_configs`, and `update_service_mounts` replace their set wholesale:
 pass every entry the service should end up with, because one left out is detached—and a container may lose
-data it was writing to a dropped mount.
+data it was writing to a dropped mount. An empty array clears the set; a missing or `null` list is refused rather
+than read as empty.
 
 <McpTool name="update_service" level={2}>
     <Fragment slot="arguments">`id`, `section`, `value`</Fragment>
@@ -236,6 +237,7 @@ data it was writing to a dropped mount.
     | `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
 
     Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
+    A `null` value is refused for every section.
 
     Secrets, configs, and mounts aren't sections here. Each takes a list rather than a spec fragment, and
     attaching a secret checks a read grant on the secret as well as a write grant on the service, so each is a tool

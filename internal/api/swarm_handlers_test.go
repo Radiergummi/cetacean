@@ -1616,26 +1616,64 @@ func TestHandleSwarmUpdateErrorKeepsTheDaemonsText(t *testing.T) {
 			true,
 		},
 	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			sc := &mockSystemClient{
-				swarmInspectFn: func(context.Context) (swarm.Swarm, error) { return validSwarm(), nil },
-				updateSwarmFn: func(context.Context, swarm.Spec, swarm.Version, swarm.UpdateFlags) error {
-					return tc.err
-				},
-			}
-			h := newSwarmHandlers(t, sc)
-
-			rec := httptest.NewRecorder()
+	writes := map[string]struct {
+		code  string
+		write func(h *Handlers, w http.ResponseWriter)
+	}{
+		"orchestration": {"SWM003", func(h *Handlers, w http.ResponseWriter) {
 			h.HandlePatchSwarmOrchestration(
-				rec,
+				w,
 				mergePatchRequest("/swarm/orchestration", `{"TaskHistoryRetentionLimit": 10}`),
 			)
+		}},
+		"rotate-token": {"SWM006", func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePostRotateToken(w, httptest.NewRequest(
+				http.MethodPost, "/swarm/rotate-token", strings.NewReader(`{"target":"worker"}`),
+			))
+		}},
+		"rotate-unlock-key": {"SWM007", func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePostRotateUnlockKey(
+				w,
+				httptest.NewRequest(http.MethodPost, "/swarm/rotate-unlock-key", nil),
+			)
+		}},
+		"unlock": {"SWM008", func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePostUnlockSwarm(w, httptest.NewRequest(
+				http.MethodPost, "/swarm/unlock", strings.NewReader(`{"unlockKey":"SWMKEY-1-x"}`),
+			))
+		}},
+		"unlock-key": {"SWM009", func(h *Handlers, w http.ResponseWriter) {
+			h.HandleGetUnlockKey(w, httptest.NewRequest(http.MethodGet, "/swarm/unlock-key", nil))
+		}},
+	}
+	for write, wc := range writes {
+		for name, tc := range cases {
+			t.Run(write+"/"+name, func(t *testing.T) {
+				sc := &mockSystemClient{
+					swarmInspectFn: func(context.Context) (swarm.Swarm, error) {
+						return validSwarm(), nil
+					},
+					updateSwarmFn: func(
+						context.Context, swarm.Spec, swarm.Version, swarm.UpdateFlags,
+					) error {
+						return tc.err
+					},
+					unlockSwarmFn:  func(context.Context, string) error { return tc.err },
+					getUnlockKeyFn: func(context.Context) (string, error) { return "", tc.err },
+				}
 
-			if shown := strings.Contains(rec.Body.String(), "10.0.0.7"); shown != tc.show {
-				t.Errorf("daemon text shown = %v, want %v: %s", shown, tc.show, rec.Body.String())
-			}
-		})
+				rec := httptest.NewRecorder()
+				wc.write(newSwarmHandlers(t, sc), rec)
+
+				body := rec.Body.String()
+				if shown := strings.Contains(body, "10.0.0.7"); shown != tc.show {
+					t.Errorf("daemon text shown = %v, want %v: %s", shown, tc.show, body)
+				}
+				if !strings.Contains(body, wc.code) {
+					t.Errorf("body does not carry %s: %s", wc.code, body)
+				}
+			})
+		}
 	}
 }
 

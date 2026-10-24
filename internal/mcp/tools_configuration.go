@@ -44,7 +44,7 @@ func (s *Server) configurationTools() []toolDef {
 				mcplib.WithAny("value",
 					mcplib.Required(),
 					mcplib.Description(
-						"The section's new value: a merge-patch object for `env` and `labels`, an array of PortConfig for `ports`, and the replacement object for the rest. See the tool description for the shape each section expects.",
+						"The section's new value: a merge-patch object for `env` and `labels`, an array of PortConfig for `ports`, and the replacement object for the rest; null is refused. See the tool description for the shape each section expects.",
 					),
 				),
 			),
@@ -176,7 +176,7 @@ func (s *Server) configurationTools() []toolDef {
 				mcplib.WithArray("secrets",
 					mcplib.Required(),
 					mcplib.Description(
-						"The complete set of secrets the service should receive. Each entry takes `name` (the secret's name) and an optional `target` (the file it is mounted as, relative to /run/secrets unless absolute; defaults to /run/secrets/<name>). An empty array detaches every secret.",
+						"The complete set of secrets the service should receive. Each entry takes `name` (the secret's name) and an optional `target` (the file it is mounted as, relative to /run/secrets unless absolute; defaults to /run/secrets/<name>). An empty array detaches every secret; null is refused.",
 					),
 					mcplib.Items(attachmentItemSchema()),
 				),
@@ -203,7 +203,7 @@ func (s *Server) configurationTools() []toolDef {
 				mcplib.WithArray("configs",
 					mcplib.Required(),
 					mcplib.Description(
-						"The complete set of configs the service should receive. Each entry takes `name` (the config's name) and an optional `target` (the absolute path it is mounted at; defaults to /<name>). An empty array detaches every config.",
+						"The complete set of configs the service should receive. Each entry takes `name` (the config's name) and an optional `target` (the absolute path it is mounted at; defaults to /<name>). An empty array detaches every config; null is refused.",
 					),
 					mcplib.Items(attachmentItemSchema()),
 				),
@@ -230,7 +230,7 @@ func (s *Server) configurationTools() []toolDef {
 				mcplib.WithArray("mounts",
 					mcplib.Required(),
 					mcplib.Description(
-						"The complete set of mounts the service should receive. Each entry takes `type` (volume, bind or tmpfs), `target` (the absolute path inside the container), an optional `source` (the volume name for a volume, the host path for a bind; a tmpfs has none) and an optional `readOnly`. An empty array unmounts everything.",
+						"The complete set of mounts the service should receive. Each entry takes `type` (volume, bind or tmpfs), `target` (the absolute path inside the container), an optional `source` (the volume name for a volume, the host path for a bind; a tmpfs has none) and an optional `readOnly`. An empty array unmounts everything; null is refused.",
 					),
 					mcplib.Items(map[string]any{
 						"type": "object",
