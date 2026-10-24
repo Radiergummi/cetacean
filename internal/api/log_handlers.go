@@ -279,7 +279,9 @@ func (h *Handlers) serveLogsSSE(
 			stream.Close() // unblocks StreamDockerLogs's io.Read
 			for range ch {
 			}
-			<-done
+			if err := <-done; err != nil {
+				slog.Debug("log stream closed after the client left", "error", err)
+			}
 			return
 		}
 	}
