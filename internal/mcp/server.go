@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -258,6 +259,10 @@ type Options struct {
 	Recommendations RecommendationEngine
 	AllowedOrigins  []string
 
+	// PublicURL is server.public_url. Its origin is admitted beside
+	// AllowedOrigins, as the API's cross-origin guard admits it.
+	PublicURL string
+
 	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
 	// is unset, and the tool then says metrics are unavailable rather than
 	// charting nothing.
@@ -314,7 +319,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
 		prom:           opts.Prometheus,
-		allowedOrigins: opts.AllowedOrigins,
+		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 		watches:        make(chan struct{}, maxConcurrentWatches),
@@ -491,6 +496,18 @@ func (s *Server) originGuard(next http.Handler) http.Handler {
 
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 	})
+}
+
+// withPublicOrigin adds the origin of publicURL, scheme and host with any port
+// as written, to the allowed origins. Config validation has already refused a
+// public URL with a path, userinfo or a scheme other than http or https.
+func withPublicOrigin(allowed []string, publicURL string) []string {
+	u, err := url.Parse(publicURL)
+	if publicURL == "" || err != nil || u.Host == "" {
+		return allowed
+	}
+
+	return append(slices.Clone(allowed), u.Scheme+"://"+u.Host)
 }
 
 // bearerAuth validates Authorization: Bearer <jwt>, puts an auth.Identity in
