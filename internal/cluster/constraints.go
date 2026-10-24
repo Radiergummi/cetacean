@@ -5,29 +5,31 @@ import (
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/placement"
 )
 
 // nodeCanHost reports whether a node passes every hard scheduling filter in a
 // service's placement spec, naming the first it fails. Swarm enforces exactly
 // three: constraints, supported platforms and the per-node replica cap, which
 // placed is measured against. Resource reservations are deliberately not.
-func nodeCanHost(node swarm.Node, placement *swarm.Placement, placed int) (bool, string) {
-	if placement == nil {
+func nodeCanHost(node swarm.Node, spec *swarm.Placement, placed int) (bool, string) {
+	if spec == nil {
 		return true, ""
 	}
 
-	if ok, reason := nodeSatisfies(node, placement.Constraints); !ok {
+	if ok, reason := placement.Satisfies(node, spec.Constraints); !ok {
 		return false, reason
 	}
 
-	if ok, reason := nodeSupportsPlatform(node, placement.Platforms); !ok {
+	if ok, reason := nodeSupportsPlatform(node, spec.Platforms); !ok {
 		return false, reason
 	}
 
-	if placement.MaxReplicas > 0 && uint64(placed) >= placement.MaxReplicas {
+	if spec.MaxReplicas > 0 && uint64(placed) >= spec.MaxReplicas {
 		return false, fmt.Sprintf(
 			"already runs %d of at most %d replica(s) per node",
-			placed, placement.MaxReplicas,
+			placed, spec.MaxReplicas,
 		)
 	}
 
@@ -37,7 +39,7 @@ func nodeCanHost(node swarm.Node, placement *swarm.Placement, placed int) (bool,
 // nodeSupportsPlatform reports whether a node's platform is one the service's
 // image supports, naming both sides when not. This list comes from the image
 // manifest, so an unrecognised value must not block — the reverse of
-// nodeSatisfies' rule. Each half is compared only when both sides state it.
+// placement.Satisfies' rule. Each half is compared only when both sides state it.
 func nodeSupportsPlatform(node swarm.Node, platforms []swarm.Platform) (bool, string) {
 	if len(platforms) == 0 {
 		return true, ""
@@ -126,88 +128,4 @@ func renderPlatform(p swarm.Platform, absent string) string {
 	}
 
 	return os + "/" + arch
-}
-
-// nodeSatisfies reports whether a node meets every placement constraint in a
-// service's spec, naming the first it does not. A constraint it cannot parse
-// or does not recognise is **not** satisfied: the other reading calls a service
-// movable that Swarm will refuse to place.
-func nodeSatisfies(node swarm.Node, constraints []string) (bool, string) {
-	for _, raw := range constraints {
-		key, op, value, ok := splitConstraint(raw)
-		if !ok {
-			return false, strings.TrimSpace(raw)
-		}
-
-		actual, known := nodeAttribute(node, key)
-		if !known {
-			return false, strings.TrimSpace(raw)
-		}
-
-		// An absent label is unset rather than empty: it equals nothing and
-		// differs from everything, which is how Swarm reads it too.
-		matches := actual == value
-		if op == "!=" {
-			matches = !matches
-		}
-
-		if !matches {
-			return false, strings.TrimSpace(raw)
-		}
-	}
-
-	return true, ""
-}
-
-// splitConstraint parses `key==value` or `key!=value`, tolerating the
-// whitespace a hand-written spec commonly carries. Docker supports only these
-// two operators, so anything else is a constraint we cannot evaluate rather
-// than one we evaluate wrongly.
-func splitConstraint(raw string) (key, op, value string, ok bool) {
-	for _, candidate := range []string{"==", "!="} {
-		key, value, found := strings.Cut(raw, candidate)
-		if !found {
-			continue
-		}
-
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-
-		if key == "" || value == "" {
-			return "", "", "", false
-		}
-
-		return key, candidate, value, true
-	}
-
-	return "", "", "", false
-}
-
-// nodeAttribute resolves a constraint key against a node, reporting whether the
-// key is one Swarm defines at all. Unknown-key is separate from empty-value:
-// `node.labels.gpu` on a node without it is known and unset, so `!=` holds,
-// while `weird.key` is one Swarm rejects outright.
-func nodeAttribute(node swarm.Node, key string) (string, bool) {
-	if label, found := strings.CutPrefix(key, "node.labels."); found {
-		return node.Spec.Labels[label], label != ""
-	}
-
-	if label, found := strings.CutPrefix(key, "engine.labels."); found {
-		return node.Description.Engine.Labels[label], label != ""
-	}
-
-	switch key {
-	case "node.id":
-		return node.ID, true
-	case "node.hostname":
-		return node.Description.Hostname, true
-	case "node.role":
-		return string(node.Spec.Role), true
-	case "node.platform.os":
-		return node.Description.Platform.OS, true
-	case "node.platform.arch":
-		return node.Description.Platform.Architecture, true
-	default:
-		return "", false
-	}
 }

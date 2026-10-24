@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/metrics"
+	"github.com/radiergummi/cetacean/internal/placement"
 )
 
 // EventType identifies the kind of resource an event relates to.
@@ -897,16 +898,15 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// A global service runs one task per ready node that is active or paused:
-	// pausing stops new placements but keeps running tasks. Placement
-	// constraints are not applied here, so a constrained one is overstated.
-	schedulable := 0
+	// A global service runs one task per ready node that is active or paused
+	// and meets its constraints: pausing stops new placements but keeps tasks.
+	schedulable := make([]swarm.Node, 0, len(c.nodes.items))
 	for _, n := range c.nodes.items {
 		availability := n.Spec.Availability
 		if n.Status.State == swarm.NodeStateReady &&
 			(availability == swarm.NodeAvailabilityActive ||
 				availability == swarm.NodeAvailabilityPause) {
-			schedulable++
+			schedulable = append(schedulable, n)
 		}
 	}
 
@@ -936,7 +936,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 			} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
 			} else if svc.Spec.Mode.Global != nil {
-				replicas = schedulable
+				replicas = globalTaskCount(svc, schedulable)
 			}
 			s.DesiredTasks += replicas
 
@@ -963,6 +963,25 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	}
 	sortByName(out, func(s StackSummary) string { return s.Name })
 	return out
+}
+
+// globalTaskCount is how many of the given nodes a global service places a
+// task on. Platforms are not consulted: Swarm creates the task regardless and
+// leaves it pending, which is a shortfall the summary should show.
+func globalTaskCount(svc swarm.Service, nodes []swarm.Node) int {
+	spec := svc.Spec.TaskTemplate.Placement
+	if spec == nil || len(spec.Constraints) == 0 {
+		return len(nodes)
+	}
+
+	count := 0
+	for _, n := range nodes {
+		if ok, _ := placement.Satisfies(n, spec.Constraints); ok {
+			count++
+		}
+	}
+
+	return count
 }
 
 // setAction names what a Set did, so subscribers can tell a resource appearing
