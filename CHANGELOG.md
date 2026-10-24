@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A stack's desired task count expects a global service's task only on nodes that are ready and active, not on drained or down ones
 - Changes made while Cetacean syncs with Docker, at startup or after a reconnect, are no longer missed until the next periodic sync
 - Tasks on nodes other than the one Cetacean is connected to update within seconds, and with their service or node, instead of at the next five-minute sync
+- Stopping Cetacean writes a last snapshot, so a restart starts from the state at shutdown rather than from the last full sync
 
 ## [0.17.0] - 2026-10-20
 

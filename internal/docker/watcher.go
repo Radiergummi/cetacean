@@ -178,8 +178,16 @@ func (w *Watcher) Ready() <-chan struct{} {
 	return w.ready
 }
 
-// Run starts the watcher. It blocks until the context is cancelled.
+// Run starts the watcher. It blocks until the context is cancelled, and then
+// writes a last snapshot, unless no sync ever succeeded: that cache holds
+// nothing newer than the snapshot it was loaded from.
 func (w *Watcher) Run(ctx context.Context) {
+	defer func() {
+		if w.lastSync.Load() != 0 {
+			w.writeSnapshot()
+		}
+	}()
+
 	since := eventsSince()
 	if err := w.fullSync(ctx); err == nil {
 		w.writeSnapshot()
