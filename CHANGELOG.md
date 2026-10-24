@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider; sessions from before the upgrade keep their email until they expire
+- **Breaking:** a problem details response's `@context` is now an array; `type`, `status` and `detail` in other responses no longer map to RFC 9457
 - **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
 
 ### Fixed

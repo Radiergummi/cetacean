@@ -434,7 +434,8 @@ func (p *OIDCProvider) validateAzp(idToken *oidc.IDToken, claims map[string]any)
 	return nil
 }
 
-// claimsToIdentity extracts identity fields from an OIDC claims map.
+// claimsToIdentity extracts identity fields from an OIDC claims map. An email
+// the provider marks unverified is dropped, since a `user:` grant matches it.
 func claimsToIdentity(claims map[string]any) *Identity {
 	id := &Identity{
 		Provider: "oidc",
@@ -449,7 +450,7 @@ func claimsToIdentity(claims map[string]any) *Identity {
 	} else if pref, ok := claims["preferred_username"].(string); ok {
 		id.DisplayName = pref
 	}
-	if email, ok := claims["email"].(string); ok {
+	if email, ok := claims["email"].(string); ok && !emailUnverified(claims) {
 		id.Email = email
 	}
 
@@ -462,6 +463,18 @@ func claimsToIdentity(claims map[string]any) *Identity {
 	}
 
 	return id
+}
+
+// emailUnverified reports whether email_verified is present and anything but
+// true. OIDC Core types it boolean; the string "true" is accepted as some
+// providers send it. An absent claim is not unverified: Entra ID never sends it.
+func emailUnverified(claims map[string]any) bool {
+	v, present := claims["email_verified"]
+	if !present {
+		return false
+	}
+
+	return v != true && v != "true"
 }
 
 // ExtractBearerToken extracts the token from an Authorization: Bearer header.
