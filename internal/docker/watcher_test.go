@@ -43,6 +43,12 @@ type mockClient struct {
 	// syncGate, when set, holds every FullSync until it is closed.
 	syncGate chan struct{}
 
+	// listTasksFn, when set, replaces ListTasksIn's default behaviour.
+	listTasksFn func(ctx context.Context, scope TaskScope) ([]swarm.Task, error)
+
+	// eventsSince records the since of every Events call.
+	eventsSince []time.Time
+
 	// fullSyncFn, when set, replaces FullSync's default behaviour. It
 	// receives the 1-based call number, so a test can tell calls apart.
 	fullSyncFn func(call int64) (cache.FullSyncData, error)
@@ -108,6 +114,34 @@ func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	return data, fullSyncError(failed)
 }
 
+func (m *mockClient) ListTasksIn(ctx context.Context, scope TaskScope) ([]swarm.Task, error) {
+	if m.listTasksFn != nil {
+		return m.listTasksFn(ctx, scope)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var out []swarm.Task
+	for _, task := range m.tasks {
+		if scope.Service != "" && task.ServiceID != scope.Service {
+			continue
+		}
+		if scope.Node != "" && task.NodeID != scope.Node {
+			continue
+		}
+		out = append(out, task)
+	}
+
+	return out, nil
+}
+
+func (m *mockClient) setTasks(tasks []swarm.Task) {
+	m.mu.Lock()
+	m.tasks = tasks
+	m.mu.Unlock()
+}
+
 func (m *mockClient) Inspect(
 	ctx context.Context,
 	resourceType events.Type,
@@ -136,7 +170,14 @@ func (m *mockClient) Inspect(
 	}
 }
 
-func (m *mockClient) Events(ctx context.Context) (<-chan events.Message, <-chan error) {
+func (m *mockClient) Events(
+	_ context.Context,
+	since time.Time,
+) (<-chan events.Message, <-chan error) {
+	m.mu.Lock()
+	m.eventsSince = append(m.eventsSince, since)
+	m.mu.Unlock()
+
 	return m.eventsCh, m.errCh
 }
 
@@ -538,7 +579,7 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 		mc.errCh <- fmt.Errorf("stream ended")
 	}()
 
-	w.watchEvents(ctx)
+	w.watchEvents(ctx, time.Time{})
 	cancel()
 
 	if _, ok := c.GetNode("n1"); !ok {
@@ -555,7 +596,7 @@ func TestWatchEvents_StopsOnContextCancel(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, time.Time{})
 		close(done)
 	}()
 
@@ -1126,7 +1167,7 @@ func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	w.watchEvents(ctx)
+	w.watchEvents(ctx, time.Time{})
 
 	if connected, _ := w.Liveness(); connected {
 		t.Error("still connected after the event stream ended")
@@ -1295,7 +1336,7 @@ func TestPeriodicSyncSkipsWhenAResyncIsRunning(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, time.Time{})
 	}()
 
 	// Several ticks' worth of time while the resync still holds syncMu.

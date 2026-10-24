@@ -37,6 +37,7 @@ var knownEnvVars = map[string]bool{
 	"CETACEAN_CORS_ORIGINS":                       true,
 	"CETACEAN_DATA_DIR":                           true,
 	"CETACEAN_DOCKER_HOST":                        true,
+	"CETACEAN_DOCKER_TASK_POLL_INTERVAL":          true,
 	"CETACEAN_DOCKER_TLS_CA":                      true,
 	"CETACEAN_DOCKER_TLS_CERT":                    true,
 	"CETACEAN_DOCKER_TLS_KEY":                     true,

@@ -8118,7 +8118,8 @@ components:
             an existing one changed, `remove` that it is gone, and
             `ref_changed` that a resource this one cross-references changed.
             `full_sync` accompanies a `sync` event and asks the client to
-            refetch, because the stream could not be replayed from its cursor.
+            refetch, because the stream could not be replayed from its cursor
+            or the client fell behind and missed events.
         id:
           type: string
           description: Resource ID

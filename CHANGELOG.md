@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `docker.task_poll_interval` sets how often Cetacean re-lists every task, ten seconds by default and at least one second; `0` turns it off
+
 ### Changed
 - **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider; sessions from before the upgrade keep their email until they expire
 - **Breaking:** a problem details response's `@context` is now an array; `type`, `status` and `detail` in other responses no longer map to RFC 9457
 - **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
 
 ### Fixed
+- An event stream resuming from the first event after the change history filled up now gets a `sync` event instead of silently missing events
+- A service, task or node no longer briefly shows an older state after a burst of changes
+- Live updates no longer skip changes when a browser reconnects during a burst or falls behind: it gets a `sync` event instead, and one that stops reading is disconnected
+- `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
+- A stack's desired task count expects a global service's task only on ready nodes that aren't drained
+- Changes made while Cetacean syncs with Docker, at startup or after a reconnect, are no longer missed until the next periodic sync
+- Tasks on nodes other than the one Cetacean is connected to update within seconds, and with their service or node, instead of at the next five-minute sync
+- Stopping Cetacean writes a last snapshot, so a restart starts from the state at shutdown rather than from the last full sync
+- The Traefik panel reads labels in any case, as Traefik does, and accepts `traefik.enable` values like `1` or `True`
 - MCP resource subscriptions notify on a stack's members, a service's or node's tasks and a full resync, follow a name to whatever holds it, and cap one stream at 256 URIs
 - MCP `get_logs` and the service logs resource are held to the REST log reads' concurrency limits, for the server and for each caller
 - Tasks show their ID instead of `<service>.<slot>`, and no service or node name, wherever you can't read that parent: task lists, detail, CSV and feeds, search, history, MCP

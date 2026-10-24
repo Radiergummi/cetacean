@@ -21,6 +21,10 @@ type ResourceMap[T any] struct {
 	nameFunc func(T) string                    // extracts display name for events
 	onSet    func(key string, old *T, new_ *T) // called under write lock; old is nil on first set
 	onDelete func(key string, old T)           // called under write lock
+
+	// version, when set, orders writes: Set ignores a value older than the
+	// one it would replace, which an inspect overtaken by a later one carries.
+	version func(T) uint64
 }
 
 func (r *ResourceMap[T]) set(key string, v *T) {
@@ -72,17 +76,28 @@ func (r *ResourceMap[T]) list() []T {
 
 // Set stores a value, calling the onSet hook under the write lock. The event
 // reports whether the key was new, which is what lets a client distinguish a
-// resource appearing from one it already counts changing.
-func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) Event {
+// resource appearing from one it already counts changing. ok is false when the
+// value was older than the stored one and nothing changed.
+func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) (event Event, ok bool) {
 	r.mu.Lock()
-	_, existed := r.items[key]
+	old, existed := r.items[key]
+	if existed && r.version != nil && r.version(v) < r.version(old) {
+		r.mu.Unlock()
+		return Event{}, false
+	}
 	r.set(key, &v)
 	r.mu.Unlock()
 	var name string
 	if r.nameFunc != nil {
 		name = r.nameFunc(v)
 	}
-	return Event{Type: eventType, Action: setAction(existed), ID: key, Name: name, Resource: v}
+	return Event{
+		Type:     eventType,
+		Action:   setAction(existed),
+		ID:       key,
+		Name:     name,
+		Resource: v,
+	}, true
 }
 
 // Get retrieves a value by key.

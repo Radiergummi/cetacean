@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
@@ -120,6 +121,18 @@ func (c *Client) ListTasks(ctx context.Context) ([]swarm.Task, error) {
 	return c.docker.TaskList(ctx, swarm.TaskListOptions{})
 }
 
+func (c *Client) ListTasksIn(ctx context.Context, scope TaskScope) ([]swarm.Task, error) {
+	args := filters.NewArgs()
+	if scope.Service != "" {
+		args.Add("service", scope.Service)
+	}
+	if scope.Node != "" {
+		args.Add("node", scope.Node)
+	}
+
+	return c.docker.TaskList(ctx, swarm.TaskListOptions{Filters: args})
+}
+
 func (c *Client) ListConfigs(ctx context.Context) ([]swarm.Config, error) {
 	return c.docker.ConfigList(ctx, swarm.ConfigListOptions{})
 }
@@ -173,8 +186,17 @@ func (c *Client) InspectNetwork(ctx context.Context, id string) (network.Summary
 	return c.docker.NetworkInspect(ctx, id, network.InspectOptions{})
 }
 
-func (c *Client) Events(ctx context.Context) (<-chan events.Message, <-chan error) {
+func (c *Client) Events(
+	ctx context.Context,
+	since time.Time,
+) (<-chan events.Message, <-chan error) {
+	var sinceArg string
+	if !since.IsZero() {
+		sinceArg = fmt.Sprintf("%d.%09d", since.Unix(), since.Nanosecond())
+	}
+
 	return c.docker.Events(ctx, events.ListOptions{
+		Since: sinceArg,
 		Filters: filters.NewArgs(
 			filters.Arg("type", string(events.ServiceEventType)),
 			filters.Arg("type", string(events.NodeEventType)),

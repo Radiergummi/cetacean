@@ -68,27 +68,23 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 		mwMap      map[string]*TraefikMiddleware
 	)
 
+	// Traefik reads label keys case-insensitively. Names and middleware
+	// options keep the case they were written in, for display.
 	for k, v := range labels {
-		suffix, ok := strings.CutPrefix(k, "traefik.")
-		if !ok {
+		parts := strings.SplitN(k, ".", 5)
+		if !strings.EqualFold(parts[0], "traefik") {
 			continue
 		}
 
 		found = true
 
-		httpSuffix, ok := strings.CutPrefix(suffix, "http.")
-		if !ok {
+		if len(parts) < 5 || !strings.EqualFold(parts[1], "http") {
 			continue
 		}
 
-		parts := strings.SplitN(httpSuffix, ".", 3)
-		if len(parts) < 3 {
-			continue
-		}
-
-		category := parts[0]
-		name := parts[1]
-		field := parts[2]
+		category := strings.ToLower(parts[2])
+		name := parts[3]
+		field := parts[4]
 
 		switch category {
 		case "routers":
@@ -97,14 +93,14 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 			}
 
 			r := getOrCreateRouter(routerMap, name)
-			parseRouterField(r, field, v)
+			parseRouterField(r, strings.ToLower(field), v)
 		case "services":
 			if serviceMap == nil {
 				serviceMap = make(map[string]*TraefikService)
 			}
 
 			s := getOrCreateService(serviceMap, name)
-			parseServiceField(s, field, v)
+			parseServiceField(s, strings.ToLower(field), v)
 		case "middlewares":
 			if mwMap == nil {
 				mwMap = make(map[string]*TraefikMiddleware)
@@ -121,7 +117,7 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 
 	integration := &TraefikIntegration{
 		Name:    "traefik",
-		Enabled: enabled(labels, "traefik."),
+		Enabled: traefikEnabled(labels),
 	}
 
 	integration.Routers = sortedValues(routerMap, func(r TraefikRouter) string { return r.Name })
@@ -132,6 +128,20 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 	)
 
 	return integration
+}
+
+// traefikEnabled reads traefik.enable as Traefik does: any key case, and a Go
+// boolean. A value that does not parse disables it, as Traefik skips the
+// service; an absent one leaves it enabled.
+func traefikEnabled(labels map[string]string) bool {
+	for k, v := range labels {
+		if strings.EqualFold(k, "traefik.enable") {
+			on, err := strconv.ParseBool(v)
+			return err == nil && on
+		}
+	}
+
+	return true
 }
 
 func getOrCreateRouter(m map[string]*TraefikRouter, name string) *TraefikRouter {
@@ -178,7 +188,7 @@ func parseRouterField(r *TraefikRouter, field, value string) {
 			r.Priority = n
 		}
 	case field == "tls":
-		if value != "false" {
+		if on, err := strconv.ParseBool(value); err != nil || on {
 			ensureTLS(r)
 		}
 	case field == "tls.certresolver":

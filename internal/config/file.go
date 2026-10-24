@@ -138,8 +138,9 @@ type fileSSE struct {
 }
 
 type fileDocker struct {
-	Host *string        `toml:"host"`
-	TLS  *fileDockerTLS `toml:"tls"`
+	Host             *string        `toml:"host"`
+	TaskPollInterval *string        `toml:"task_poll_interval"`
+	TLS              *fileDockerTLS `toml:"tls"`
 }
 
 type fileDockerTLS struct {
