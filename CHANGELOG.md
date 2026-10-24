@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A `/history` entry's and a `/disk-usage` summary's `@id` is a fragment of its list, like `/history#42`, instead of a URL that answered `404`
 - A job service's `mode` reads `replicated-job` or `global-job` in `?filter=` and `?sort=mode`, instead of `replicated`
 - With `server.base_path` set, a path outside it answers `404` with problem details instead of plain text
+- A plugin whose name has a `/` resolves when the request escapes part of `server.base_path`, like `/cet%61cean`, or its format suffix, like `%2Ejson`
 - A list honors `If-Range` on a `Range` request, sending the first page with `200` when the page you hold changed
 - A list's page links keep a `.json` or `.csv` suffix, and an `offset` past the end links no next page instead of a negative offset
 - A `PATCH` reads its `Content-Type` case-insensitively, so `Application/Merge-Patch+JSON` is accepted and a type that merely starts like a patch format is refused with `415`
@@ -80,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The consent page shows the host an MCP client's `https://` client ID lives on, beside the name the client gives itself
 
 ### Changed
-- **Breaking:** `Allow` lists a resource's own methods, not its sub-resources'. A detail response links each sub-resource you may write with `rel="edit"`, and `Accept-Patch` moves to the sub-resources that take a `PATCH`. API clients reading writes off a parent's `Allow` must read the links
+- **Breaking:** `Allow` lists a resource's own methods; a detail response links each sub-resource you may write with `rel="edit"`, which sends its own `Accept-Patch`. API clients must read writes off those links, not the parent's `Allow`
 - **Breaking:** `?filter=` refuses a field the resource doesn't have, or a comparison of mismatched types, with `400` (`FLT002`). Task `exit_code` is a number, `0` until the task ends: write `exit_code != 0`, not `"0"`
 - **Breaking:** a failed `POST /-/resync` answers with problem details: `504` (`ENG005`) when Docker didn't answer in time, otherwise `502` (`ENG006`) naming what each list answered. Clients must read `detail`, not `error`
 - A Client ID Metadata Document is cached as its response's `Cache-Control` or `Expires` allows, for at most a day, instead of always an hour

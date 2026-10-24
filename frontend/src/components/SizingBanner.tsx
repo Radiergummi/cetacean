@@ -15,7 +15,10 @@ import { useState } from "react";
 
 interface Props {
   hints: Recommendation[];
-  /** The service's Allow methods; a fix is offered when they carry its method. */
+  /**
+   * The sub-resources the service links with `rel="edit"`; a fix is offered
+   * when they name the sub-resource it writes.
+   */
   editable: ReadonlySet<string>;
   onFixed?: (() => void) | undefined;
 }
