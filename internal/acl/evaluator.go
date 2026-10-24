@@ -1,6 +1,8 @@
 package acl
 
 import (
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -12,9 +14,10 @@ import (
 // policy means "allow all" — this preserves backward compatibility when no
 // policy is configured.
 type Evaluator struct {
-	policy   atomic.Pointer[Policy]
-	source   GrantSource
-	resolver ResourceResolver
+	policy     atomic.Pointer[Policy]
+	source     GrantSource
+	resolver   ResourceResolver
+	userClaims userClaims
 
 	// policyGeneration advances on every SetPolicy. The policy is hot-reloaded
 	// from disk, so what an identity may see changes with no cache mutation
@@ -61,6 +64,33 @@ func (e *Evaluator) SetSource(s GrantSource) {
 		return
 	}
 	e.source = s
+}
+
+// SetOIDCUserClaims limits what a user: audience matches to the named claims,
+// "sub" and "email". Set only in oidc mode, where every identity is a session or
+// a token minted from one, and like SetSource before the evaluator serves.
+func (e *Evaluator) SetOIDCUserClaims(claims []string) error {
+	if len(claims) == 0 {
+		return errors.New("acl: no user claims named")
+	}
+
+	uc := userClaims{skipSubject: true, skipEmail: true}
+	for _, claim := range claims {
+		switch claim {
+		case "sub":
+			uc.skipSubject = false
+		case "email":
+			uc.skipEmail = false
+		default:
+			return fmt.Errorf("acl: unknown user claim %q", claim)
+		}
+	}
+
+	if e != nil {
+		e.userClaims = uc
+	}
+
+	return nil
 }
 
 // Can checks if the identity has the given permission on the resource.
@@ -265,7 +295,7 @@ func (e *Evaluator) collectGrants(id *auth.Identity, p *Policy) []Grant {
 
 	// File-based grants: check audience.
 	for _, g := range p.Grants {
-		if audienceMatches(g, id) {
+		if audienceMatches(g, id, e.userClaims) {
 			grants = append(grants, g)
 		}
 	}
@@ -468,7 +498,7 @@ func splitResource(resource string) (string, string, bool) {
 	return strings.Cut(resource, ":")
 }
 
-func audienceMatches(g Grant, id *auth.Identity) bool {
+func audienceMatches(g Grant, id *auth.Identity, claims userClaims) bool {
 	if len(g.Audience) == 0 {
 		// Provider grants have no audience — they match implicitly.
 		// File grants with no audience match everyone.
@@ -478,7 +508,7 @@ func audienceMatches(g Grant, id *auth.Identity) bool {
 		return false
 	}
 	for _, expr := range g.Audience {
-		if matchAudience(expr, id) {
+		if matchAudience(expr, id, claims) {
 			return true
 		}
 	}

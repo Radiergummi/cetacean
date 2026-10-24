@@ -68,9 +68,20 @@ instead of naming tasks.
 `user:pattern` matches the identity's subject or email. `group:pattern` matches any of its groups. Patterns are globs
 again, a bare `*` matches everyone, and a grant with no `audience` field also matches everyone.
 
-In `oidc` mode, an email the identity provider marks unverified is ignored for matching. A provider that lets users
-set an arbitrary address without verifying it, and omits `email_verified`, should be matched on `sub` or a group claim
-instead.
+### Matching users by email
+
+In `oidc` mode, an email the identity provider marks unverified is ignored for matching. An absent `email_verified`
+claim isn't treated as unverified, since some providers never send it.
+
+Even a verified address isn't a stable identifier: a provider can reassign it to someone else, and some let users
+change their own. Whoever holds a recycled `alice@example.com` inherits every `user:alice@example.com` grant. To rule
+that out, set [`acl.oidc_user_claims`][acl.oidc_user_claims] to `["sub"]` and name users by subject, or grant through
+`group:` audiences instead. The default, `["sub", "email"]`, matches both.
+
+The setting is read at startup, not reloaded with the policy file, so changing it takes a restart. It's applied when a
+grant is checked, so sessions and OAuth tokens issued before the restart follow it too. It covers OIDC identities and
+the OAuth tokens issued to them only. The other modes keep matching `user:` on subject and email, since each establishes them on its
+own terms: Tailscale from the login name, `cert` from the certificate, and `headers` from the trusted proxy.
 
 ### Permissions
 
@@ -259,6 +270,7 @@ caller can never use is left out of `tools/list`.
 [acl.headers_acl]: configuration#acl.headers_acl
 [acl.headers_capability]: configuration#acl.headers_capability
 [acl.oidc_claim]: configuration#acl.oidc_claim
+[acl.oidc_user_claims]: configuration#acl.oidc_user_claims
 [acl.policy]: configuration#acl.policy
 [acl.policy_file]: configuration#acl.policy_file
 [acl.tailscale_capability]: configuration#acl.tailscale_capability
