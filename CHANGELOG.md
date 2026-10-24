@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** mounting a named volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it
 
 ### Fixed
+- Built with Go 1.27.3, which refuses the compromised intermediate certificates in GO-2026-6809 when connecting to a TLS Docker Engine, an OIDC provider or Tailscale
 - MCP no longer lists the IDs of nodes sharing a hostname to a caller who can't read that hostname
 - MCP's cluster-wide metrics ranking is held to the services and nodes you can read unless you have `read` on `*`, as the REST metrics endpoints require
 - A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
