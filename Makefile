@@ -273,8 +273,9 @@ spec-extract-check:
 
 ## Regenerate the MCP registry families from upstream
 #
-# Needs network: it fetches the conformance suite's own requirement files at
-# the revision scripts/spec-genmcp pins. Not part of `check`.
+# Needs network: it fetches the conformance suite's requirement files and the
+# published revision's pages at the commits scripts/spec-genmcp pins, and reads
+# the site's own anchors back. Not part of `check`.
 spec-genmcp:
 	go run ./scripts/spec-genmcp
 	git diff --exit-code internal/spec/registry/mcp/

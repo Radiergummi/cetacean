@@ -1,10 +1,11 @@
-// Command spec-genmcp writes the MCP families of the requirement registry from
-// the conformance suite's own requirement files. The suite publishes them as
-// YAML already, so transcribing them by hand is how the text stops being a
-// quote. Output follows scripts/dump-errors: plain stderr, not slog.
+// Command spec-genmcp writes the MCP families of the requirement registry. The
+// conformance suite's requirement files say which obligations exist; the
+// published revision says what each one is, so every text is a quotation of it
+// and every citation an anchor into it. Output follows scripts/dump-errors.
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"maps"
@@ -21,83 +22,50 @@ import (
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
-// upstreamRev pins the commit the registry quotes. Bumping it is the only way
-// the text here changes, which is what makes a drift a reviewable diff.
-const upstreamRev = "7169291ec0b68eb370fddcd9947313ab0d5e4156"
+// The pins. Bumping one is the only way the text here changes, which is what
+// makes a drift a reviewable diff.
+const (
+	revision      = "2026-07-28"
+	conformanceAt = "c37eec888e1c6ff140af79987a40008548b7cc5f"
+	specAt        = "dae694f61a31f7a3ec2af3aff709e11f70f61e48"
+	tasksAt       = "b3d28aceaa6d49f5f92258e3d06b61ad6f111e84"
+)
 
-const rawBase = "https://raw.githubusercontent.com/modelcontextprotocol/conformance/"
+const conformanceBase = "https://raw.githubusercontent.com/modelcontextprotocol/conformance/"
 
-var seps = []int{2575, 2243, 2549, 2164}
-
-// gaps are requirements of ours that no test reaches yet. They are registered
-// rather than dismissed: the obligation is real, only the evidence is missing.
-var gaps = map[string]string{
-	"sep-2575-http-server-no-independent-requests-on-stream": "The stream lane reads " +
-		"notifications and never asserts that nothing else arrives on the stream.",
+func specPage(key string) pageRef {
+	return pageRef{
+		key: key,
+		raw: "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/" +
+			specAt + "/docs/specification/" + revision + "/" + key + ".mdx",
+		web:  "https://modelcontextprotocol.io/specification/" + revision + "/" + key,
+		live: true,
+	}
 }
 
-// dismissed says why there is nothing of ours to test. A check absent from
-// here becomes a registered requirement instead, which the static gate fails
-// on until a test claims it — so an upstream addition is never silent.
-var dismissed = map[string]string{
-	"sep-2575-client-populates-meta":                  reasonClientSide,
-	"sep-2575-client-retry-supported-version":         reasonClientSide,
-	"sep-2575-http-client-sends-version-header":       reasonClientSide,
-	"sep-2575-client-declares-elicitation-capability": reasonClientSide,
-	"sep-2575-client-declares-roots-capability":       reasonClientSide,
-	"sep-2575-client-declares-sampling-capability":    reasonClientSide,
-	"sep-2243-client-includes-standard-headers":       reasonClientSide,
-	"sep-2243-client-supports-custom-headers":         reasonClientSide,
-	"sep-2243-client-mirrors-designated-params":       reasonClientSide,
-	"sep-2243-client-reject-invalid-tool":             reasonClientSide,
-	"sep-2243-client-encode-values":                   reasonClientSide,
-	"sep-2243-client-base64-unsafe":                   reasonClientSide,
-	"sep-2243-client-omit-null":                       reasonClientSide,
-	"sep-2575-http-version-header-matches-meta": "Addressed to the client sending the " +
-		"header; the obligation it puts on this server is http-server-header-mismatch-400.",
-	"sep-2575-server-sends-prompts-list-changed-on-subscription": "The prompt catalog is " +
-		"built once at startup, so the list this notification reports never changes.",
-	"sep-2575-server-sends-tools-list-changed-on-subscription": "The tool catalog is built " +
-		"once at startup and filtered per identity at list time; the list itself never changes.",
-	"sep-2575-server-no-log-without-loglevel": "This server emits no notifications/message " +
-		"at all, per-request log level or not.",
-	"sep-2243-x-mcp-header-not-empty":            reasonNoDesignations,
-	"sep-2243-x-mcp-header-charset":              reasonNoDesignations,
-	"sep-2243-x-mcp-header-unique":               reasonNoDesignations,
-	"sep-2243-x-mcp-header-primitive-only":       reasonNoDesignations,
-	"sep-2243-server-decode-base64":              reasonNoDesignatedParams,
-	"sep-2243-server-not-expect-null":            reasonNoDesignatedParams,
-	"sep-2243-server-reject-missing-required":    reasonNoDesignatedParams,
-	"sep-2243-server-reject-invalid-param-chars": reasonNoDesignatedParams,
-	"sep-2243-server-validate-param-match":       reasonNoDesignatedParams,
-	"sep-2243-server-reject-param-mismatch":      reasonNoDesignatedParams,
+// The Tasks extension is specified outside the core repository, and its
+// published revision has no page of its own on the site.
+var tasksPage = pageRef{
+	key: "tasks",
+	raw: "https://raw.githubusercontent.com/modelcontextprotocol/ext-tasks/" +
+		tasksAt + "/specification/" + revision + "/tasks.md",
+	web: "https://github.com/modelcontextprotocol/ext-tasks/blob/" +
+		tasksAt + "/specification/" + revision + "/tasks.md",
 }
 
-const reasonNoDesignations = "This server designates no x-mcp-header parameter, so no " +
-	"tool definition of ours can carry a value this constrains."
-
-const reasonNoDesignatedParams = "Mcp-Param-{Name} headers exist only for parameters a " +
-	"tool designates with x-mcp-header; no tool of this server designates any."
-
-const reasonClientSide = "Client-side requirement."
-
-// levels carries the strength of a requirement whose text states a closed
-// enumeration rather than an RFC 2119 keyword. The suite fails a server that
-// violates it either way, so it has a strength even where the sentence does not.
-var levels = map[string]string{
-	"sep-2549-cache-scope-valid": "MUST",
-}
-
-type upstreamDoc struct {
-	SEP          int           `yaml:"sep"`
-	SpecURL      string        `yaml:"spec_url"`
-	Requirements []upstreamReq `yaml:"requirements"`
-}
-
-type upstreamReq struct {
-	Check string `yaml:"check"`
-	Text  string `yaml:"text"`
-	URL   string `yaml:"url"`
+var corePages = []pageRef{
+	specPage("basic/index"),
+	specPage("basic/versioning"),
+	specPage("basic/transports/streamable-http"),
+	specPage("basic/patterns/subscriptions"),
+	specPage("server/prompts"),
+	specPage("server/tools"),
+	specPage("server/resources"),
+	specPage("server/utilities/caching"),
+	specPage("server/utilities/logging"),
+	specPage("client/roots"),
+	specPage("client/sampling"),
+	specPage("deprecated"),
 }
 
 func main() {
@@ -113,36 +81,63 @@ func run() error {
 		return err
 	}
 
-	seen := map[string]bool{}
-
-	for _, sep := range seps {
-		raw := fmt.Sprintf("%s%s/src/seps/sep-%d.yaml", rawBase, upstreamRev, sep)
-
-		body, err := fetch(raw)
-		if err != nil {
-			return err
-		}
-
-		var doc upstreamDoc
-		if err := yaml.Unmarshal(body, &doc); err != nil {
-			return fmt.Errorf("sep-%d: %w", sep, err)
-		}
-
-		path := filepath.Join(dir, fmt.Sprintf("sep-%d.yaml", sep))
-
-		out, err := render(&doc, raw, reviewed(path), seen)
-		if err != nil {
-			return fmt.Errorf("sep-%d: %w", sep, err)
-		}
-
-		if err := os.WriteFile(path, out, 0o600); err != nil {
-			return err
-		}
-
-		fmt.Fprintf(os.Stderr, "spec-genmcp: wrote %s\n", path)
+	c := &corpus{pages: map[string]*page{}, ids: map[string]map[string]bool{}}
+	if err := c.load(append(slices.Clone(corePages), tasksPage)); err != nil {
+		return err
 	}
 
-	return unconsumed(seen)
+	seen := map[string]bool{}
+
+	var docs []*document
+
+	for _, s := range suites {
+		d, err := fromSuite(c, s, seen)
+		if err != nil {
+			return fmt.Errorf("sep-%d: %w", s.sep, err)
+		}
+
+		docs = append(docs, d)
+	}
+
+	if err := unconsumed(seen); err != nil {
+		return err
+	}
+
+	for i := range quoted {
+		d, err := fromQuotes(c, &quoted[i])
+		if err != nil {
+			return fmt.Errorf("%s: %w", quoted[i].name, err)
+		}
+
+		docs = append(docs, d)
+	}
+
+	written := map[string]bool{}
+
+	for _, d := range docs {
+		for _, r := range d.reqs {
+			written[d.name+"/"+r.id] = true
+		}
+	}
+
+	for key := range mutants {
+		if !written[key] {
+			return fmt.Errorf("mutants names %s, which no document registers", key)
+		}
+	}
+
+	for _, d := range docs {
+		path := filepath.Join(dir, d.name+".yaml")
+
+		out, err := d.write(path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", d.name, err)
+		}
+
+		fmt.Fprintf(os.Stderr, "spec-genmcp: wrote %s\n", out)
+	}
+
+	return nil
 }
 
 // unconsumed refuses a table entry for a check upstream no longer publishes.
@@ -151,11 +146,15 @@ func run() error {
 func unconsumed(seen map[string]bool) error {
 	var stale []string
 
-	for _, table := range []map[string]string{dismissed, gaps, levels} {
-		for check := range table {
-			if !seen[check] {
-				stale = append(stale, check)
-			}
+	for _, check := range slices.Concat(
+		slices.Collect(maps.Keys(dismissed)),
+		slices.Collect(maps.Keys(gaps)),
+		slices.Collect(maps.Keys(deferred)),
+		slices.Collect(maps.Keys(levels)),
+		slices.Collect(maps.Keys(located)),
+	) {
+		if !seen[check] {
+			stale = append(stale, check)
 		}
 	}
 
@@ -165,7 +164,7 @@ func unconsumed(seen map[string]bool) error {
 
 	return fmt.Errorf(
 		"upstream no longer publishes %s; drop the entry from scripts/spec-genmcp",
-		strings.Join(slices.Sorted(slices.Values(stale)), ", "),
+		strings.Join(slices.Compact(slices.Sorted(slices.Values(stale))), ", "),
 	)
 }
 
@@ -193,124 +192,360 @@ func fetch(url string) ([]byte, error) {
 var levelRE = regexp.MustCompile(`\b(MUST|SHOULD|MAY)\b`)
 
 // level reads the requirement's strength off its own text. A statement with no
-// RFC 2119 keyword has no strength to read, and is a fault in the source.
+// RFC 2119 keyword has no strength to read, and is a fault in the source. A
+// statement with several takes the strongest: a SHOULD beside a MUST does not
+// make the MUST optional.
 func level(text string) (string, error) {
-	m := levelRE.FindString(text)
-	if m == "" {
-		return "", fmt.Errorf("no RFC 2119 keyword in %q", text)
+	found := levelRE.FindAllString(text, -1)
+
+	for _, l := range []string{"MUST", "SHOULD", "MAY"} {
+		if slices.Contains(found, l) {
+			return l, nil
+		}
 	}
 
-	return m, nil
+	return "", fmt.Errorf("no RFC 2119 keyword in %q", text)
 }
 
-// reviewed is the date the existing file carries, as long as it was written
-// against this same upstream revision. Stamping today unconditionally would
-// make every regeneration a diff, and the date would stop meaning anything.
-func reviewed(path string) string {
-	today := time.Now().Format(time.DateOnly)
+type suite struct {
+	sep   int
+	title string
+	at    string
+	pages []pageRef
 
-	body, err := os.ReadFile(path) // #nosec G304 -- a path this generator built
+	// lane is where the claimants of this suite's requirements live.
+	lane spec.Lane
+}
+
+type upstreamDoc struct {
+	SEP          int           `yaml:"sep"`
+	Requirements []upstreamReq `yaml:"requirements"`
+}
+
+type upstreamReq struct {
+	Check string `yaml:"check"`
+	Text  string `yaml:"text"`
+}
+
+func fromSuite(c *corpus, s suite, seen map[string]bool) (*document, error) {
+	raw := fmt.Sprintf("%s%s/src/seps/sep-%d.yaml", conformanceBase, conformanceAt, s.sep)
+
+	body, err := fetch(raw)
 	if err != nil {
-		return today
+		return nil, err
 	}
 
-	var prev spec.Document
-
-	if err := yaml.Unmarshal(body, &prev); err != nil || prev.Revision != upstreamRev {
-		return today
+	var up upstreamDoc
+	if err := yaml.Unmarshal(body, &up); err != nil {
+		return nil, err
 	}
 
-	return prev.Reviewed
-}
+	if err := c.load(s.pages); err != nil {
+		return nil, err
+	}
 
-func render(doc *upstreamDoc, raw, reviewed string, seen map[string]bool) ([]byte, error) {
-	prefix := fmt.Sprintf("sep-%d-", doc.SEP)
+	keys := make([]string, 0, len(s.pages))
+	for _, p := range s.pages {
+		keys = append(keys, p.key)
+	}
 
-	var (
-		reqs    []upstreamReq
-		dismiss = map[string]string{}
-		checks  int
-	)
+	_, home, err := c.cite(s.at)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, r := range doc.Requirements {
+	name := fmt.Sprintf("sep-%d", s.sep)
+	prefix := name + "-"
+
+	d := &document{
+		name:      name,
+		source:    fmt.Sprintf("SEP-%d", s.sep),
+		title:     s.title,
+		url:       []string{home},
+		from:      raw,
+		dismissed: map[string]string{},
+	}
+
+	var problems []string
+
+	for _, r := range up.Requirements {
 		if r.Check == "" {
 			continue
 		}
 
-		checks++
+		d.count++
 		seen[r.Check] = true
+		id := strings.TrimPrefix(r.Check, prefix)
 
-		reason, skip := dismissed[r.Check]
-		if !skip {
-			reqs = append(reqs, r)
+		if reason, ok := dismissed[r.Check]; ok {
+			d.dismissed[id] = reason
 
 			continue
 		}
 
-		dismiss[strings.TrimPrefix(r.Check, prefix)] = reason
-	}
+		quote, url, err := c.locateCheck(keys, r)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", r.Check, err))
 
-	var b strings.Builder
+			continue
+		}
 
-	fmt.Fprintf(&b, "# Generated by scripts/spec-genmcp. Do not edit: run `make spec-genmcp`.\n\n")
-	fmt.Fprintf(&b, "source: SEP-%d\n", doc.SEP)
-	fmt.Fprintf(&b, "revision: %s\n", upstreamRev)
-	fmt.Fprintf(&b, "reviewed: %s\n", reviewed)
-	fmt.Fprintf(&b, "url: %s\n\n", doc.SpecURL)
+		q := requirement{
+			id:       id,
+			text:     quote,
+			urls:     []string{url, raw},
+			gap:      gaps[r.Check],
+			deferred: deferred[r.Check],
+			mutants:  mutants[name+"/"+id],
+		}
 
-	fmt.Fprintf(&b, "inventory:\n")
-	fmt.Fprintf(&b, "  from: %s\n", raw)
-	fmt.Fprintf(&b, "  count: %d\n\n", checks)
+		if q.gap == "" {
+			q.lane = s.lane
+		}
 
-	fmt.Fprintf(&b, "requirements:\n")
+		if q.level = levels[r.Check]; q.level == "" {
+			if q.level, err = level(quote); err != nil {
+				problems = append(problems, fmt.Sprintf("%s: %v; add it to the levels "+
+					"table in scripts/spec-genmcp", r.Check, err))
 
-	for _, r := range reqs {
-		lvl, ok := levels[r.Check]
-		if !ok {
-			var err error
-			if lvl, err = level(r.Text); err != nil {
-				return nil, fmt.Errorf("%s: %w; add it to the levels table in "+
-					"scripts/spec-genmcp", r.Check, err)
+				continue
 			}
 		}
 
-		fmt.Fprintf(&b, "  - id: %s\n", strings.TrimPrefix(r.Check, prefix))
-		fmt.Fprintf(&b, "    level: %s\n", lvl)
+		d.reqs = append(d.reqs, q)
+	}
 
-		// Every requirement this suite declares is driven from test/e2e, which
-		// needs the conformance harness. A gap is driven by nothing yet, so it
-		// gains the declaration when it leaves the table above.
-		if gaps[r.Check] == "" {
-			fmt.Fprintf(&b, "    lane: e2e\n")
+	if len(problems) > 0 {
+		return nil, fmt.Errorf("locate each in the located table, or dismiss it:\n  %s",
+			strings.Join(problems, "\n  "))
+	}
+
+	return d, nil
+}
+
+// locateCheck quotes the published text a check stands for: found from the
+// suite's own wording where that is a quotation, or from the located table
+// where the suite paraphrases.
+func (c *corpus) locateCheck(keys []string, r upstreamReq) (string, string, error) {
+	loc, ok := located[r.Check]
+	if !ok {
+		return c.locate(keys, "", r.Text)
+	}
+
+	if loc.quote == "" {
+		return c.locate(keys, loc.at, r.Text)
+	}
+
+	s, url, err := c.cite(loc.at)
+	if err != nil {
+		return "", "", err
+	}
+
+	if !s.holds(loc.quote) {
+		return "", "", fmt.Errorf("%s does not hold %q", loc.at, loc.quote)
+	}
+
+	return loc.quote, url, nil
+}
+
+func fromQuotes(c *corpus, q *quotedDoc) (*document, error) {
+	d := &document{
+		name:      q.name,
+		source:    q.source,
+		title:     q.title,
+		from:      q.from,
+		dismissed: map[string]string{},
+	}
+
+	for _, at := range q.at {
+		_, url, err := c.cite(at)
+		if err != nil {
+			return nil, err
 		}
 
-		b.WriteString(folded("    text", r.Text))
+		d.url = append(d.url, url)
+	}
 
-		url := r.URL
-		if url == "" {
-			url = doc.SpecURL
+	for _, r := range q.reqs {
+		s, url, err := c.cite(r.at)
+		if err != nil {
+			return nil, err
 		}
 
-		fmt.Fprintf(&b, "    url:\n      - %s\n      - %s\n", url, raw)
+		if !s.holds(r.quote) {
+			return nil, fmt.Errorf("%s: %s does not hold %q", r.id, r.at, r.quote)
+		}
 
-		if reason := gaps[r.Check]; reason != "" {
-			b.WriteString(folded("    gap", reason))
+		lvl := r.level
+		if lvl == "" {
+			if lvl, err = level(r.quote); err != nil {
+				return nil, fmt.Errorf("%s: %w", r.id, err)
+			}
+		}
+
+		d.reqs = append(d.reqs, requirement{
+			id:       r.id,
+			level:    lvl,
+			text:     r.quote,
+			urls:     []string{url},
+			deferred: r.deferred,
+			mutants:  mutants[q.name+"/"+r.id],
+		})
+	}
+
+	// A dismissal quotes its statement too, though only the reason is written:
+	// it is what holds the inventory to statements the revision makes.
+	for _, r := range q.dismissed {
+		s, _, err := c.cite(r.at)
+		if err != nil {
+			return nil, err
+		}
+
+		if !s.holds(r.quote) {
+			return nil, fmt.Errorf("%s: %s does not hold %q", r.id, r.at, r.quote)
+		}
+
+		d.dismissed[r.id] = r.reason
+	}
+
+	d.count = len(d.reqs) + len(d.dismissed)
+
+	return d, nil
+}
+
+type document struct {
+	name, source, title string
+	url                 []string
+	from                string
+	count               int
+	reqs                []requirement
+	dismissed           map[string]string
+}
+
+type requirement struct {
+	id, level, text string
+	lane            spec.Lane
+	urls            []string
+	gap, deferred   string
+	mutants         []spec.Mutant
+}
+
+// write keeps the date the existing file carries when nothing else in it
+// changed. Stamping today unconditionally would make every regeneration a
+// diff, and the date would stop meaning anything.
+func (d *document) write(path string) (string, error) {
+	prev, err := os.ReadFile(path) // #nosec G304 -- a path this generator built
+	if err == nil {
+		var old spec.Document
+		if yaml.Unmarshal(prev, &old) == nil && old.Reviewed != "" {
+			out, err := d.render(old.Reviewed)
+			if err != nil {
+				return "", err
+			}
+
+			if bytes.Equal(out, prev) {
+				return path, nil
+			}
+		}
+	}
+
+	out, err := d.render(time.Now().Format(time.DateOnly))
+	if err != nil {
+		return "", err
+	}
+
+	return path, os.WriteFile(path, out, 0o600)
+}
+
+func (d *document) render(reviewed string) ([]byte, error) {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "# Generated by scripts/spec-genmcp. Do not edit: run `make spec-genmcp`.\n\n")
+	fmt.Fprintf(&b, "source: %s\n", d.source)
+	fmt.Fprintf(&b, "title: %s\n", d.title)
+	fmt.Fprintf(&b, "revision: %q\n", revision)
+	fmt.Fprintf(&b, "reviewed: %s\n", reviewed)
+	writeURLs(&b, "", d.url)
+	b.WriteString("\n")
+
+	fmt.Fprintf(&b, "inventory:\n")
+	b.WriteString(folded("  from", d.from))
+	fmt.Fprintf(&b, "  count: %d\n\n", d.count)
+
+	if len(d.reqs) == 0 {
+		fmt.Fprintf(&b, "requirements: []\n\n")
+	} else {
+		fmt.Fprintf(&b, "requirements:\n")
+	}
+
+	for _, r := range d.reqs {
+		fmt.Fprintf(&b, "  - id: %s\n", r.id)
+		fmt.Fprintf(&b, "    level: %s\n", r.level)
+
+		if r.lane != "" {
+			fmt.Fprintf(&b, "    lane: %s\n", r.lane)
+		}
+
+		b.WriteString(folded("    text", r.text))
+		writeURLs(&b, "    ", r.urls)
+
+		if r.gap != "" {
+			b.WriteString(folded("    gap", r.gap))
+		}
+
+		if r.deferred != "" {
+			b.WriteString(folded("    deferred", r.deferred))
+		}
+
+		if len(r.mutants) > 0 {
+			b.WriteString("    mutants:\n")
+
+			for _, m := range r.mutants {
+				fmt.Fprintf(&b, "      - file: %s\n", m.File)
+				fmt.Fprintf(&b, "        replace: %s\n", quoteYAML(m.Replace))
+				fmt.Fprintf(&b, "        with: %s\n", quoteYAML(m.With))
+			}
 		}
 
 		b.WriteString("\n")
 	}
 
-	if len(dismiss) > 0 {
+	if len(d.dismissed) > 0 {
 		fmt.Fprintf(&b, "dismissed:\n")
 
-		for _, id := range slices.Sorted(maps.Keys(dismiss)) {
-			b.WriteString(folded("  "+id, dismiss[id]))
+		for _, id := range slices.Sorted(maps.Keys(d.dismissed)) {
+			b.WriteString(folded("  "+id, d.dismissed[id]))
 		}
 	}
 
-	out := []byte(b.String())
+	out := []byte(strings.TrimRight(b.String(), "\n") + "\n")
 
-	return out, verify(out, prefix, reqs, dismiss)
+	return out, d.verify(out)
+}
+
+func writeURLs(b *strings.Builder, indent string, urls []string) {
+	if len(urls) == 1 {
+		fmt.Fprintf(b, "%surl: %s\n", indent, urls[0])
+
+		return
+	}
+
+	fmt.Fprintf(b, "%surl:\n", indent)
+
+	for _, u := range urls {
+		fmt.Fprintf(b, "%s  - %s\n", indent, u)
+	}
+}
+
+// quoteYAML writes a mutant pattern as a double-quoted scalar, the one form
+// that keeps its tabs and leading whitespace exactly.
+func quoteYAML(s string) string {
+	out, err := yaml.Marshal(s)
+	if err != nil || !strings.HasPrefix(string(out), `"`) {
+		return fmt.Sprintf("%q", s)
+	}
+
+	return strings.TrimSpace(string(out))
 }
 
 // folded emits a >- block scalar, which quotes nothing and escapes nothing.
@@ -352,35 +587,35 @@ func folded(key, text string) string {
 
 // verify reads the rendered file back and fails unless every text survived the
 // round trip. The registry's whole claim is that these are quotations.
-func verify(out []byte, prefix string, reqs []upstreamReq, dismiss map[string]string) error {
+func (d *document) verify(out []byte) error {
 	var back spec.Document
 
 	if err := yaml.Unmarshal(out, &back); err != nil {
 		return fmt.Errorf("rendered file does not parse: %w", err)
 	}
 
-	if len(back.Requirements) != len(reqs) {
-		return fmt.Errorf(
-			"rendered %d requirements, read back %d",
-			len(reqs),
-			len(back.Requirements),
-		)
+	if len(back.Requirements) != len(d.reqs) {
+		return fmt.Errorf("rendered %d requirements, read back %d",
+			len(d.reqs), len(back.Requirements))
 	}
 
 	for i, got := range back.Requirements {
-		want := strings.Join(strings.Fields(reqs[i].Text), " ")
-		if got.Text != want {
-			return fmt.Errorf("%s: text did not survive the round trip:\n  got  %q\n  want %q",
-				got.ID, got.Text, want)
+		want := d.reqs[i]
+
+		if got.ID != want.id || got.Text != strings.Join(strings.Fields(want.text), " ") {
+			return fmt.Errorf("%s did not survive the round trip:\n  got  %q\n  want %q",
+				want.id, got.Text, want.text)
 		}
 
-		if got.ID != strings.TrimPrefix(reqs[i].Check, prefix) {
-			return fmt.Errorf("id %q, want %q", got.ID, reqs[i].Check)
+		if len(got.Mutants) != len(want.mutants) ||
+			!slices.Equal(got.Mutants, want.mutants) {
+			return fmt.Errorf("%s: mutants did not survive the round trip", want.id)
 		}
 	}
 
-	if len(back.Dismissed) != len(dismiss) {
-		return fmt.Errorf("rendered %d dismissals, read back %d", len(dismiss), len(back.Dismissed))
+	if len(back.Dismissed) != len(d.dismissed) {
+		return fmt.Errorf("rendered %d dismissals, read back %d",
+			len(d.dismissed), len(back.Dismissed))
 	}
 
 	return nil

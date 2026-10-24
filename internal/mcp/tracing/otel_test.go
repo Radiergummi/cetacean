@@ -3,15 +3,65 @@ package tracing
 import (
 	"context"
 	"errors"
+	"regexp"
 	"testing"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpgotracing "github.com/mark3labs/mcp-go/tracing"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	oteltrace "go.opentelemetry.io/otel/trace"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
+
+// traceparentRE is W3C Trace Context's version-00 traceparent.
+var traceparentRE = regexp.MustCompile(`^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$`)
+
+func TestInjectedTraceContextIsW3CFormatted(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-414/trace-context-values-are-w3c")
+
+	state, err := oteltrace.ParseTraceState("cetacean=probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	member, err := baggage.NewMember("tenant", "blue")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bag, err := baggage.New(member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := oteltrace.ContextWithSpanContext(context.Background(),
+		oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
+			TraceID:    oteltrace.TraceID{0x0a, 0xf7, 0x65, 0x19, 0x16, 0xcd, 0x43, 0xdd},
+			SpanID:     oteltrace.SpanID{0x00, 0xf0, 0x67, 0xaa, 0x0b, 0xa9, 0x02, 0xb7},
+			TraceFlags: oteltrace.FlagsSampled,
+			TraceState: state,
+		}))
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	meta := NewMetaPropagator().InjectMeta(ctx, nil)
+	if meta == nil {
+		t.Fatal("nothing injected for a context carrying trace context and baggage")
+	}
+
+	if got, _ := meta.AdditionalFields["traceparent"].(string); !traceparentRE.MatchString(got) {
+		t.Errorf("traceparent = %q, not a W3C traceparent", got)
+	}
+
+	for key, want := range map[string]string{"tracestate": "cetacean=probe", "baggage": "tenant=blue"} {
+		if got := meta.AdditionalFields[key]; got != want {
+			t.Errorf("%s = %v, want %q", key, got, want)
+		}
+	}
+}
 
 func TestOTelTracerRecordsSpan(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()

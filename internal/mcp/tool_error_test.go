@@ -6,13 +6,15 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
-// Characterizes SEP-1303 conformance: a tool's own input-validation failure must
-// surface as a Tool Execution Error — a tools/call result with isError=true —
-// and not as a JSON-RPC protocol error. The invariant per call is no protocol
-// error and an isError result.
+// A tool's own input-validation failure must surface as a Tool Execution Error
+// — a tools/call result with isError=true — and not as a JSON-RPC protocol
+// error. The invariant per call is no protocol error and an isError result.
 func TestToolInputValidationIsExecutionError(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-1303/input-validation-is-a-tool-execution-error")
+
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsOperational)
 	handler := srv.Handler()
 
@@ -24,6 +26,9 @@ func TestToolInputValidationIsExecutionError(t *testing.T) {
 		{"scale_service", `{"id":"svc1","replicas":-1}`},
 		// find rejects an empty query when type is omitted.
 		{"find", `{"query":""}`},
+		// Arguments the input schema refuses are input validation errors too.
+		{"scale_service", `{"id":"svc1","replicas":"three"}`},
+		{"scale_service", `{"replicas":3}`},
 	}
 
 	for _, call := range calls {
