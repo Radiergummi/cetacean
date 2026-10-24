@@ -2,6 +2,7 @@ import type { PatchOp } from "@/api/types";
 import KeyValuePills from "@/components/data/KeyValuePills";
 import { EditableTable } from "@/components/EditableTable";
 import { Input } from "@/components/ui/input";
+import { pointerTo } from "@/lib/jsonPointer";
 import type React from "react";
 import { useMemo, useState } from "react";
 
@@ -153,7 +154,7 @@ export function KeyValueEditor({
           }
 
           if (!(key in draftMap)) {
-            ops.push({ op: "remove", path: `/${key}` });
+            ops.push({ op: "remove", path: pointerTo(key) });
           }
         }
 
@@ -163,9 +164,9 @@ export function KeyValueEditor({
           }
 
           if (!(key in entries)) {
-            ops.push({ op: "add", path: `/${key}`, value });
+            ops.push({ op: "add", path: pointerTo(key), value });
           } else if (entries[key] !== value) {
-            ops.push({ op: "replace", path: `/${key}`, value });
+            ops.push({ op: "replace", path: pointerTo(key), value });
           }
         }
 

@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 import type { PatchOp } from "@/api/types";
+import { pointerTo } from "@/lib/jsonPointer";
 
 /**
  * Compute JSON Patch operations from label changes.
@@ -7,9 +8,6 @@ import type { PatchOp } from "@/api/types";
  * Compares `newLabels` against the original raw label entries for an integration.
  * Keys present in `originalEntries` but absent from `newLabels` are removed.
  * Keys not in either set (pass-through labels from other integrations) are untouched.
- *
- * Note: paths use a simple `/{key}` format — the backend's normalizePath strips the
- * leading `/` and uses the remainder as a flat map key (no RFC 6901 unescaping).
  */
 export function diffLabels(
   originalEntries: [string, string][],
@@ -20,15 +18,15 @@ export function diffLabels(
 
   for (const [key, value] of Object.entries(newLabels)) {
     if (!(key in originalMap)) {
-      ops.push({ op: "add", path: `/${key}`, value });
+      ops.push({ op: "add", path: pointerTo(key), value });
     } else if (originalMap[key] !== value) {
-      ops.push({ op: "replace", path: `/${key}`, value });
+      ops.push({ op: "replace", path: pointerTo(key), value });
     }
   }
 
   for (const [key] of originalEntries) {
     if (!(key in newLabels)) {
-      ops.push({ op: "remove", path: `/${key}` });
+      ops.push({ op: "remove", path: pointerTo(key) });
     }
   }
 
@@ -55,15 +53,15 @@ export function diffModelledLabels(
     }
 
     if (rawMap[key] === undefined) {
-      ops.push({ op: "add", path: `/${key}`, value });
+      ops.push({ op: "add", path: pointerTo(key), value });
     } else if (rawMap[key] !== value) {
-      ops.push({ op: "replace", path: `/${key}`, value });
+      ops.push({ op: "replace", path: pointerTo(key), value });
     }
   }
 
   for (const key of Object.keys(before)) {
     if (!(key in after) && rawMap[key] !== undefined) {
-      ops.push({ op: "remove", path: `/${key}` });
+      ops.push({ op: "remove", path: pointerTo(key) });
     }
   }
 

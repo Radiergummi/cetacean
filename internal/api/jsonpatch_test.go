@@ -192,6 +192,43 @@ func TestApplyJSONPatch_PathWithoutSlash(t *testing.T) {
 	}
 }
 
+// RFC 6901 §4: a token decodes ~1 to / and then ~0 to ~, in that order, so
+// ~01 is the two characters ~1.
+func TestApplyJSONPatch_DecodesPointerEscapes(t *testing.T) {
+	for path, key := range map[string]string{
+		"/a~1b":                    "a/b",
+		"/m~0n":                    "m~n",
+		"/~01":                     "~1",
+		"/~10":                     "/0",
+		"/app.kubernetes.io~1name": "app.kubernetes.io/name",
+	} {
+		result, err := applyJSONPatch(
+			map[string]string{},
+			[]PatchOp{{Op: "add", Path: path, Value: "v"}},
+		)
+		if err != nil {
+			t.Errorf("%s: %v", path, err)
+			continue
+		}
+		if _, ok := result[key]; !ok || len(result) != 1 {
+			t.Errorf("%s added %v, want the key %q", path, result, key)
+		}
+	}
+}
+
+// RFC 6901 §3 and §7: a ~ not followed by 0 or 1 is invalid syntax, and a
+// second token would reach inside a string value, which has no members.
+func TestApplyJSONPatch_RefusesAPointerToNoKey(t *testing.T) {
+	for _, path := range []string{"/a~", "/a~2b", "/~", "/a/b", "/a/"} {
+		if _, err := applyJSONPatch(
+			map[string]string{"a": "1"},
+			[]PatchOp{{Op: "add", Path: path, Value: "v"}},
+		); !errors.Is(err, errPatchApply) {
+			t.Errorf("%s: err = %v, want a patch error", path, err)
+		}
+	}
+}
+
 func TestApplyJSONPatch_EmptyPath(t *testing.T) {
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "add", Path: "", Value: "x"}})
