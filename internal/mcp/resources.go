@@ -294,7 +294,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		return cluster.NameHistoryTasks(s.cache, s.cache.History().List(cache.HistoryQuery{
 			Limit:   100,
 			Visible: cluster.HistoryReadable(s.readPredicate(ctx)),
-		})), nil
+		}), s.readPredicate(ctx)), nil
 
 	case "nodes":
 		if resourceID == "" {

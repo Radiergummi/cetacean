@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - MCP resource subscriptions notify on a stack's members, a service's or node's tasks, a URI naming a resource by name, and a full resync
 - MCP `get_logs` and the service logs resource are held to the same concurrency limits as REST log reads, overall and per caller
+- Tasks in search, `GET /history`, its feeds and the MCP history and events show the task ID instead of `<service>.<slot>` when you cannot read the service, and no longer match on its name
 
 ## [0.17.0] - 2026-10-20
 

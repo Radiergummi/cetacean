@@ -11,7 +11,9 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -94,5 +96,41 @@ func TestServiceLogsKeepTheirRawError(t *testing.T) {
 	_, err := srv.readLogsImpl(context.Background(), docker.ServiceLog, "svc1", logOptions{})
 	if err == nil || !strings.Contains(err.Error(), "docker unavailable") {
 		t.Fatalf("expected the raw streamer error, got %v", err)
+	}
+}
+
+// The service is named only to a caller who may read it: a bare task grant
+// would otherwise learn the name through the hint.
+func TestTaskLogsHintHidesAnUnreadableService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "demo_flaky"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1", Slot: 1})
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(readOnlyPolicy("task:*"))
+
+	cfg := config.DefaultMCPConfig()
+	cfg.Enabled = true
+	srv, err := New(c, Options{
+		Config:   cfg,
+		Logs:     &fakeLogStreamer{err: dockerNotFound},
+		ACL:      e,
+		AuthMode: "none",
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_, err = srv.readLogsImpl(ctxWithIdentity(), docker.TaskLog, "task1", logOptions{})
+	if err == nil {
+		t.Fatal("expected an error for a task whose logs the daemon will not serve")
+	}
+
+	if strings.Contains(err.Error(), "demo_flaky") {
+		t.Errorf("error names a service the caller cannot read: %q", err)
 	}
 }

@@ -140,6 +140,15 @@ func Search(
 				return true
 			})
 
+			// A hidden service's name neither matches nor names its tasks.
+			if canRead != nil {
+				for id, name := range svcNames {
+					if !canRead("service:" + name) {
+						delete(svcNames, id)
+					}
+				}
+			}
+
 			// IDs rather than tasks: every match is held until the read filter has
 			// run, and a broad query matches most of the task table.
 			var ids []string
@@ -175,7 +184,7 @@ func Search(
 					continue
 				}
 				var svc *swarm.Service
-				if s, ok := c.GetService(t.ServiceID); ok {
+				if s, ok := c.GetService(t.ServiceID); ok && svcNames[t.ServiceID] != "" {
 					svc = &s
 				}
 				detail := ""

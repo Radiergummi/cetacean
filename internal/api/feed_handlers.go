@@ -109,8 +109,10 @@ func (h *Handlers) queryHistoryFeed(
 	query.BeforeID = beforeID
 	query.Limit = limit
 	query.Visible = h.readableHistory(r)
+	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+	entries := cluster.NameHistoryTasks(h.cache, h.cache.History().List(query), canRead)
 
-	return cluster.NameHistoryTasks(h.cache, h.cache.History().List(query)), beforeID, limit
+	return entries, beforeID, limit
 }
 
 // handleFeedSearch validates the search query, queries matching history entries,
