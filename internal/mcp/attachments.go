@@ -311,6 +311,10 @@ func (s *Server) toolUpdateServiceMounts(
 	}
 
 	svc, _, _ := s.cache.ResolveService(id)
+	if err := cluster.CheckVolumesAttachable(svc, s.readPredicate(ctx), mounts); err != nil {
+		return "", err
+	}
+
 	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
 	if err := cluster.CheckMounts(svc, mounts, s.cache.GetVolume, level); err != nil {
 		return "", err

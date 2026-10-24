@@ -1,6 +1,11 @@
 package cluster
 
-import "github.com/docker/docker/api/types/swarm"
+import (
+	"strings"
+
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/swarm"
+)
 
 // AttachmentKind is a resource type a service can attach, and its ACL prefix.
 type AttachmentKind string
@@ -9,6 +14,7 @@ const (
 	AttachSecret  AttachmentKind = "secret"
 	AttachConfig  AttachmentKind = "config"
 	AttachNetwork AttachmentKind = "network"
+	AttachVolume  AttachmentKind = "volume"
 )
 
 // AttachDeniedError reports an attachment the caller may not read.
@@ -41,6 +47,30 @@ func CheckAttachable(
 	return nil
 }
 
+// CheckVolumesAttachable applies CheckAttachable to every named volume a mount
+// list references. Volumes are keyed by name, so the source is both.
+func CheckVolumesAttachable(
+	svc swarm.Service,
+	canRead func(resource string) bool,
+	mounts []mount.Mount,
+) error {
+	for _, m := range mounts {
+		if !isVolumeMount(m) || m.Source == "" {
+			continue
+		}
+
+		if err := CheckAttachable(svc, canRead, AttachVolume, m.Source, m.Source); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func isVolumeMount(m mount.Mount) bool {
+	return mount.Type(strings.ToLower(string(m.Type))) == mount.TypeVolume
+}
+
 func attached(svc swarm.Service, kind AttachmentKind, id string) bool {
 	spec := svc.Spec.TaskTemplate
 
@@ -67,6 +97,15 @@ func attached(svc swarm.Service, kind AttachmentKind, id string) bool {
 		for _, ref := range spec.Networks {
 			if ref.Target == id {
 				return true
+			}
+		}
+
+	case AttachVolume:
+		if spec.ContainerSpec != nil {
+			for _, m := range spec.ContainerSpec.Mounts {
+				if isVolumeMount(m) && m.Source == id {
+					return true
+				}
 			}
 		}
 	}

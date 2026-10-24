@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -282,6 +283,46 @@ func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
 
 // Below level 3 a new bind is refused, but at level 3 nothing stops a socket
 // bind, a root shell on the host, so the description is where a model reads that.
+// A named volume's data is readable from inside the container, so mounting one
+// needs read on it, as attaching a secret does.
+func TestUpdateServiceMountsNeedsReadOnTheVolume(t *testing.T) {
+	c := attachmentTestCache(t)
+	c.SetVolume(volume.Volume{Name: "other_team", Driver: "local"})
+
+	writeClient := &fakeWriteClient{
+		updateServiceMountsFn: func(context.Context, string, []mount.Mount) (swarm.Service, error) {
+			svc, _ := c.GetService("svc1")
+			return svc, nil
+		},
+	}
+	srv := newToolTestServer(t, c, writeClient, config.OpsConfiguration,
+		func(o *Options) {
+			e := acl.NewEvaluator()
+			e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+				{Resources: []string{"service:web"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+				{Resources: []string{"volume:data"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+			}})
+			o.ACL = e
+		})
+	td, _ := srv.findTool("update_service_mounts")
+
+	mountVolume := func(name string) error {
+		_, err := td.handler(ctxWithIdentity(), newCallToolRequest("update_service_mounts",
+			map[string]any{"id": "web", "mounts": []any{map[string]any{
+				"type": "volume", "source": name, "target": "/data",
+			}}}))
+
+		return err
+	}
+
+	if err := mountVolume("other_team"); err == nil {
+		t.Error("mounted a volume the caller cannot read")
+	}
+	if err := mountVolume("data"); err != nil {
+		t.Errorf("mounting a readable volume: %v", err)
+	}
+}
+
 func TestUpdateServiceMountsWarnsAboutHostBinds(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 

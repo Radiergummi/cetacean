@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
@@ -1979,6 +1980,70 @@ func TestPatchServiceAttachments_RequireReadOnTheAttachment(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+// A named volume's data is readable from inside the container as a secret's is,
+// so mounting one needs read on it too.
+func TestPatchServiceMounts_RequiresReadOnTheVolume(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "held", Target: "/held"}},
+				},
+			},
+		},
+	})
+	for _, name := range []string{"mine", "theirs", "held"} {
+		c.SetVolume(volume.Volume{Name: name, Driver: "local"})
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"service:web"}, Audience: []string{"*"}, Permissions: []string{"write"}},
+		{Resources: []string{"volume:mine"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	written := false
+	mock := &mockWriteClient{
+		updateServiceMountsFn: func(context.Context, string, []mount.Mount) (swarm.Service, error) {
+			written = true
+			return swarm.Service{ID: "svc1"}, nil
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(mock))
+
+	send := func(source string) *httptest.ResponseRecorder {
+		body := fmt.Sprintf(`{"mounts":[{"Type":"volume","Source":%q,"Target":"/data"}]}`, source)
+		req := httptest.NewRequest("PATCH", "/services/svc1/mounts", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/merge-patch+json")
+		req.SetPathValue("id", "svc1")
+		req = req.WithContext(
+			auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "dev"}),
+		)
+		w := httptest.NewRecorder()
+		h.HandlePatchServiceMounts(w, req)
+
+		return w
+	}
+
+	if w := send("theirs"); w.Code != http.StatusForbidden {
+		t.Fatalf("unreadable volume: status=%d, want 403; body: %s", w.Code, w.Body.String())
+	} else {
+		assertACLErrorCode(t, w, "ACL001")
+	}
+	if written {
+		t.Fatal("a refused mount reached the writer")
+	}
+
+	for _, source := range []string{"mine", "held"} {
+		if w := send(source); w.Code != http.StatusOK {
+			t.Fatalf("volume %q: status=%d, want 200; body: %s", source, w.Code, w.Body.String())
+		}
 	}
 }
 

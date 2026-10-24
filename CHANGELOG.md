@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** mounting a named volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it
+
+### Fixed
+
 ## [0.17.0] - 2026-10-20
 
 ### Added
