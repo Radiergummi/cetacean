@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- MCP tools that edit a service or node take an optional `version`, from `describe` or the last write, and refuse without writing if the resource changed since
+
 ## [0.18.0] - 2026-10-24
 
 ### Added

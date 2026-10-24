@@ -26,6 +26,23 @@ Each tool advertises the behavioral hints (`readOnlyHint`, `destructiveHint`, `i
 `openWorldHint`) clients use to gate confirmation prompts and an output schema the server validates results
 against. A mutating tool returns an error when someone else changed the resource first, so re-read it and retry.
 
+### Conditional writes
+
+Every tool that edits an existing service or node takes an optional `version`, the MCP counterpart of the
+API's `If-Match`. Pass the `version` that `describe` or the previous write returned, and the write is applied
+only if the resource is still at that version. If it changed in between, the tool refuses with an error saying
+it changed since you read it and naming the version it's at now, and writes nothing: `describe` it again, check
+your change still makes sense, and retry with the new version. Without `version` the write applies to whatever
+the resource holds when it lands.
+
+Removals and creates take no `version`. Swarm checks a version only on an update, so a removal couldn't be
+refused atomically, and a create has no earlier state to compare against. No tool edits a config, secret, or
+the swarm itself, so none of those take one either.
+
+`update_service_secrets`, `update_service_configs`, and `update_service_mounts` check the attachment against
+Cetacean's copy of the service, so a `version` newer than that copy is refused until Cetacean catches up,
+typically within a second. Retry it unchanged.
+
 > [!CAUTION]
 > Removals are irreversible: no spec history is retained after a service removal, and a config, secret, or
 > volume payload can't be recovered.
@@ -153,29 +170,29 @@ Running services: how many replicas, which image, and starting over. All four co
 ```
 
 `running` is the live count, `state` is the same derivation the [dashboard][dashboard] and the [API][api] report,
-and `version` is the Swarm version index for a caller doing its own concurrency checks. `replicas` is omitted for a
-global service.
+and `version` is the Swarm version index, to pass as the next write's `version` (see
+[conditional writes](#conditional-writes)). `replicas` is omitted for a global service.
 
 <McpTool name="scale_service" level={1}>
-    <Fragment slot="arguments">`id`, `replicas`</Fragment>
+    <Fragment slot="arguments">`id`, `replicas`, `version`</Fragment>
 
     Sets the desired replica count. `0` stops every task without removing the service.
 </McpTool>
 
 <McpTool name="update_service_image" level={1}>
-    <Fragment slot="arguments">`id`, `image`</Fragment>
+    <Fragment slot="arguments">`id`, `image`, `version`</Fragment>
 
     Sets the container image, triggering a rolling deploy per the service's update policy.
 </McpTool>
 
 <McpTool name="rollback_service" level={1}>
-    <Fragment slot="arguments">`id`</Fragment>
+    <Fragment slot="arguments">`id`, `version`</Fragment>
 
     Reverts to the previous spec. Only one previous spec is retained, so calling twice doesn't unwind further.
 </McpTool>
 
 <McpTool name="restart_service" level={1}>
-    <Fragment slot="arguments">`id`</Fragment>
+    <Fragment slot="arguments">`id`, `version`</Fragment>
 
     Forces a rolling restart by bumping `ForceUpdate`. No other spec field changes.
 </McpTool>
@@ -219,7 +236,7 @@ data it was writing to a dropped mount. An empty array clears the set; a missing
 than read as empty.
 
 <McpTool name="update_service" level={2}>
-    <Fragment slot="arguments">`id`, `section`, `value`</Fragment>
+    <Fragment slot="arguments">`id`, `section`, `value`, `version`</Fragment>
 
     Changes one section of a service's spec. `section` takes one of ten names, and `value` that section's new value:
 
@@ -245,19 +262,19 @@ than read as empty.
 </McpTool>
 
 <McpTool name="update_service_secrets" level={2}>
-    <Fragment slot="arguments">`id`, `secrets`</Fragment>
+    <Fragment slot="arguments">`id`, `secrets`, `version`</Fragment>
 
     Replaces the complete set of secrets a service receives.
 </McpTool>
 
 <McpTool name="update_service_configs" level={2}>
-    <Fragment slot="arguments">`id`, `configs`</Fragment>
+    <Fragment slot="arguments">`id`, `configs`, `version`</Fragment>
 
     Replaces the complete set of configs a service receives.
 </McpTool>
 
 <McpTool name="update_service_mounts" level={2}>
-    <Fragment slot="arguments">`id`, `mounts`</Fragment>
+    <Fragment slot="arguments">`id`, `mounts`, `version`</Fragment>
 
     Replaces the complete set of mounts: named volumes, host bind mounts, tmpfs.
 
@@ -321,14 +338,14 @@ content can be read back, so use a secret for anything sensitive.
 Where work is allowed to run, and who votes in Raft.
 
 <McpTool name="update_node_labels" level={2}>
-    <Fragment slot="arguments">`id`, `labels`</Fragment>
+    <Fragment slot="arguments">`id`, `labels`, `version`</Fragment>
 
     Patches a node's labels (JSON Merge Patch).
 </McpTool>
 
 <McpTool name="update_node" level={3}>
     <Fragment slot="arguments">`id`, `section` (`availability`, `role`), `value` (`active`, `pause`, `drain`—or
-        `worker`, `manager`)</Fragment>
+        `worker`, `manager`), `version`</Fragment>
 
     Changes a node's availability or role.
 
@@ -414,6 +431,7 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 
 | Field            | Contents                                                                                                                                                          |
 |------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `version`        | The Swarm version index, to pass back as a write's `version`. Services, nodes, configs, and secrets only                                                          |
 | `reason`         | The cause Swarm gave for a non-healthy `state`; omitted when the state is healthy                                                                                 |
 | `since`          | When the current state began: the oldest still-live failing task's timestamp, or the resource's own last-updated time                                             |
 | `details`        | A type-specific map of facts, such as a service's image, replica counts, reserved CPU and memory, ports, and placement constraints, or a node's role and capacity |

@@ -587,15 +587,13 @@ func (c *Client) updateNodeSpec(
 	if err != nil {
 		return swarm.Node{}, err
 	}
+	if err := checkPinned(ctx, "node", node.ID, node.Version); err != nil {
+		return swarm.Node{}, err
+	}
 	if err := mutate(&node.Spec); err != nil {
 		return swarm.Node{}, err
 	}
-	err = c.docker.NodeUpdate(
-		ctx,
-		node.ID,
-		writeVersion(ctx, "node", node.ID, node.Version),
-		node.Spec,
-	)
+	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
 	if err != nil {
 		return swarm.Node{}, err
 	}
@@ -662,17 +660,15 @@ func (c *Client) UpdateConfigLabels(
 	if err != nil {
 		return swarm.Config{}, err
 	}
+	if err := checkPinned(ctx, "config", cfg.ID, cfg.Version); err != nil {
+		return swarm.Config{}, err
+	}
 	updated, err := mutate(cfg.Spec.Labels)
 	if err != nil {
 		return swarm.Config{}, err
 	}
 	cfg.Spec.Labels = updated
-	err = c.docker.ConfigUpdate(
-		ctx,
-		cfg.ID,
-		writeVersion(ctx, "config", cfg.ID, cfg.Version),
-		cfg.Spec,
-	)
+	err = c.docker.ConfigUpdate(ctx, cfg.ID, cfg.Version, cfg.Spec)
 	if err != nil {
 		return swarm.Config{}, err
 	}
@@ -688,17 +684,15 @@ func (c *Client) UpdateSecretLabels(
 	if err != nil {
 		return swarm.Secret{}, err
 	}
+	if err := checkPinned(ctx, "secret", sec.ID, sec.Version); err != nil {
+		return swarm.Secret{}, err
+	}
 	updated, err := mutate(sec.Spec.Labels)
 	if err != nil {
 		return swarm.Secret{}, err
 	}
 	sec.Spec.Labels = updated
-	err = c.docker.SecretUpdate(
-		ctx,
-		sec.ID,
-		writeVersion(ctx, "secret", sec.ID, sec.Version),
-		sec.Spec,
-	)
+	err = c.docker.SecretUpdate(ctx, sec.ID, sec.Version, sec.Spec)
 	if err != nil {
 		return swarm.Secret{}, err
 	}
@@ -826,17 +820,15 @@ func (c *Client) updateService(
 		return swarm.Service{}, err
 	}
 
+	if err := checkPinned(ctx, "service", svc.ID, svc.Version); err != nil {
+		return swarm.Service{}, err
+	}
+
 	if err := mutate(&svc); err != nil {
 		return swarm.Service{}, err
 	}
 
-	if _, err := c.docker.ServiceUpdate(
-		ctx,
-		svc.ID,
-		writeVersion(ctx, "service", svc.ID, svc.Version),
-		svc.Spec,
-		opts,
-	); err != nil {
+	if _, err := c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, opts); err != nil {
 		return swarm.Service{}, err
 	}
 

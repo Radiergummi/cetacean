@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -135,34 +136,13 @@ func (h *Handlers) pinSubjectVersion(r *http.Request) func(context.Context) cont
 	unchanged := func(ctx context.Context) context.Context { return ctx }
 
 	root, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	id := r.PathValue("id")
 
-	var (
-		kind    string
-		meta    swarm.Meta
-		subject string
-		found   bool
-	)
-
-	switch root {
-	case "services":
-		var svc swarm.Service
-		svc, found = h.cache.GetService(id)
-		kind, subject, meta = "service", svc.ID, svc.Meta
-	case "nodes":
-		var node swarm.Node
-		node, found = h.cache.GetNode(id)
-		kind, subject, meta = "node", node.ID, node.Meta
-	case "configs":
-		var cfg swarm.Config
-		cfg, found = h.cache.GetConfig(id)
-		kind, subject, meta = "config", cfg.ID, cfg.Meta
-	case "secrets":
-		var sec swarm.Secret
-		sec, found = h.cache.GetSecret(id)
-		kind, subject, meta = "secret", sec.ID, sec.Meta
+	subject, ok := preconditionSubjects[root]
+	if !ok || !cluster.Versioned(subject.kind) {
+		return unchanged
 	}
 
+	id, version, found := h.cachedVersion(subject.kind, r.PathValue(subject.key))
 	if !found {
 		return unchanged
 	}
@@ -170,8 +150,38 @@ func (h *Handlers) pinSubjectVersion(r *http.Request) func(context.Context) cont
 	return func(ctx context.Context) context.Context {
 		ctx = context.WithValue(ctx, preconditionedKey{}, true)
 
-		return docker.WithPinnedVersion(ctx, kind, subject, meta.Version)
+		return docker.WithPinnedVersion(ctx, subject.kind, id, version)
 	}
+}
+
+// cachedVersion reads the ID and version of a record of a Versioned kind.
+func (h *Handlers) cachedVersion(kind, key string) (string, swarm.Version, bool) {
+	var (
+		meta  swarm.Meta
+		id    string
+		found bool
+	)
+
+	switch kind {
+	case "service":
+		var svc swarm.Service
+		svc, found = h.cache.GetService(key)
+		id, meta = svc.ID, svc.Meta
+	case "node":
+		var node swarm.Node
+		node, found = h.cache.GetNode(key)
+		id, meta = node.ID, node.Meta
+	case "config":
+		var cfg swarm.Config
+		cfg, found = h.cache.GetConfig(key)
+		id, meta = cfg.ID, cfg.Meta
+	case "secret":
+		var sec swarm.Secret
+		sec, found = h.cache.GetSecret(key)
+		id, meta = sec.ID, sec.Meta
+	}
+
+	return id, meta.Version, found
 }
 
 // absentSubjectKey marks a request the precondition let through because there

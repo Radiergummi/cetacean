@@ -249,6 +249,10 @@ type Digest struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 
+	// Version is the record's Swarm version index, what a conditional write
+	// takes back. Set only for the kinds Versioned names.
+	Version uint64 `json:"version,omitempty"`
+
 	State string `json:"state,omitempty"`
 
 	// Reason explains a non-healthy State, and is empty when there is nothing
@@ -408,6 +412,7 @@ func ServiceDigest(
 		ID:             svc.ID,
 		Name:           svc.Spec.Name,
 		Type:           "service",
+		Version:        svc.Version.Index,
 		State:          state,
 		Details:        ServiceDetails(svc),
 		Related:        serviceRelated(svc, networks),

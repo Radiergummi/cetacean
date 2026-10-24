@@ -30,6 +30,7 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Node ID or hostname."),
 				),
+				versionArg("node"),
 				mcplib.WithString("section",
 					mcplib.Required(),
 					mcplib.Enum(sectionAvailability, sectionRole),

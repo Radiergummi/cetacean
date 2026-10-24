@@ -229,8 +229,8 @@ var nodeSectionKeys = map[string][]string{
 
 // serviceUpdateResult is what the spec-editing service tools return: enough to
 // confirm the edit landed and address the service again. Version comes off the
-// write's own inspect, as the asynchronously filled cache may not hold it yet;
-// no tool takes it back, since each write reads the current version itself.
+// write's own inspect, as the asynchronously filled cache may not hold it yet,
+// and is what a following edit passes back as `version`.
 type serviceUpdateResult struct {
 	ID      string         `json:"id"`
 	Name    string         `json:"name"`
@@ -346,6 +346,11 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
+
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -355,7 +360,7 @@ func (s *Server) toolUpdateService(
 
 	updated, err := write(writeClient, ctx, id, req, section)
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 
 	return marshalResult(serviceUpdate(section, updated))
@@ -408,6 +413,11 @@ func (s *Server) toolUpdateNode(
 		return "", err
 	}
 
+	ctx, id, cond, err := s.pinVersion(ctx, req, "node", id)
+	if err != nil {
+		return "", err
+	}
+
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -440,7 +450,7 @@ func (s *Server) toolUpdateNode(
 	}
 
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 
 	return marshalResult(nodeUpdate(section, updated))
