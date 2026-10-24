@@ -1,7 +1,7 @@
 # RBAC Authorization Design
 
 **Date:** 2026-03-17
-**Status:** Draft
+**Status:** Implemented as `internal/acl`
 
 ## Overview
 

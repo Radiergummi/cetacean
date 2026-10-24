@@ -920,7 +920,8 @@ the API behind it isn't.
 
 Each `item` names an API; the contexts beside it carry that API's `service-desc`, `service-doc`, `describedby` and
 `status` links. The MCP server appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata
-only when [`auth.mode`][auth.mode] isn't `none`.
+only when [`oauth.enabled`][oauth.enabled] is set. The web API's own authorization metadata needs
+[`oauth.api_tokens`][oauth.api_tokens] as well.
 
 URIs are absolute—set [`server.public_url`][server.public_url] behind a reverse proxy.
 
@@ -933,6 +934,8 @@ URIs are absolute—set [`server.public_url`][server.public_url] behind a revers
 [mcp]: mcp
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
+[oauth.api_tokens]: configuration#oauth.api_tokens
+[oauth.enabled]: configuration#oauth.enabled
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [server.cors.origins]: configuration#server.cors.origins

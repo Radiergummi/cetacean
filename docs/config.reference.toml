@@ -1,5 +1,5 @@
 # Cetacean configuration reference.
-# All fields are optional — omitting a key uses the default shown.
+# All fields are optional — omitting a key uses the default shown, unless its comment says it inherits.
 # Copy this file, uncomment what you need, and pass it with:
 #   cetacean -config /path/to/config.toml
 
@@ -110,7 +110,7 @@
 # Issues the bearer tokens protected resources accept: /mcp, and the web API
 # when api_tokens is on. Opt-in: it mints credentials for your cluster, so
 # nothing enables it implicitly. MCP under any auth mode but "none" needs this
-# enabled — startup refuses that combination without it.
+# enabled, or that mode listed in mcp.auth_bypass — startup refuses it otherwise.
 
 # [oauth]
 # enabled = false                           # Run the authorization server (/oauth/* + /.well-known/oauth-*)
@@ -123,7 +123,8 @@
 # refresh_token_ttl = "720h"                # Refresh token lifetime (30 days)
 # consent_ttl = "2160h"                     # How long a remembered approval lasts (90 days); "0s" always prompts
 # api_tokens = false                        # Offer the web API as a protected resource clients can get tokens for
-# token_operations_level = 0                # Ceiling on a token-authenticated caller of the web API (0=read, 1=ops, 2=config, 3=impactful); unset inherits CETACEAN_OPERATIONS_LEVEL
+# token_operations_level = 3                # Ceiling on a token-authenticated caller of the web API (0=read, 1=ops, 2=config, 3=impactful)
+#                                           # Unset inherits server.operations_level; there is no default
 # require_resource_indicator = true         # Require RFC 8707 resource parameter on authorize/token
 # dcr_enabled = true                        # Enable Dynamic Client Registration (RFC 7591)
 # dcr_rate_limit = 10                       # Max DCR registrations per IP per hour
@@ -136,7 +137,8 @@
 
 # [mcp]
 # enabled = false                           # Enable MCP server
-# operations_level = -1                     # Tier for MCP tools (0=read, 1=ops, 2=config, 3=impactful); -1 inherits CETACEAN_OPERATIONS_LEVEL
+# operations_level = 3                      # Tier for MCP tools (0=read, 1=ops, 2=config, 3=impactful)
+#                                           # Unset inherits server.operations_level; there is no default
 # max_concurrent_tasks = 32                 # Cap on in-flight task-augmented tool calls
 # task_ttl = "15m"                          # Task retention applied when a call omits task.ttl; "0s" disables the fill-in
 # max_task_ttl = "1h"                       # Ceiling on the retention a call may ask for; "0s" disables the cap

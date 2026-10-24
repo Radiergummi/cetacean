@@ -1,6 +1,7 @@
 # MCP asymmetric token signing — design
 
-**Status:** designed
+**Status:** implemented, with three departures: the setting is `oauth.signing_key`, the HKDF labels are
+`cetacean/oauth/...`, and a malformed key is refused at startup rather than warned about
 
 Derive the OAuth server's two keys from one root instead of using one secret
 directly for both, and publish the key that verifies a Cetacean-minted access
