@@ -69,19 +69,15 @@ export function HighlightedText({
   let expression: RegExp;
 
   try {
-    expression = new RegExp(`(${pattern})`, caseSensitive ? "g" : "gi");
+    expression = new RegExp(pattern, caseSensitive ? "g" : "gi");
   } catch {
     return <>{text}</>;
   }
-  const parts = text.split(expression);
 
   return (
     <>
-      {parts.map((part, index) => {
-        expression.lastIndex = 0;
-        const isMatch = part.length > 0 && expression.test(part);
-
-        return isMatch ? (
+      {highlightParts(text, expression).map(({ part, isMatch }, index) =>
+        isMatch ? (
           <mark
             key={index}
             className="rounded-xs bg-yellow-200 px-px text-yellow-900 dark:bg-yellow-500/40 dark:text-yellow-200"
@@ -90,8 +86,38 @@ export function HighlightedText({
           </mark>
         ) : (
           <span key={index}>{part}</span>
-        );
-      })}
+        ),
+      )}
     </>
   );
+}
+
+/**
+ * Slices the text by match position, never by `split`, which splices the user's
+ * own capture groups into the result. Zero-length matches are skipped.
+ */
+function highlightParts(text: string, expression: RegExp) {
+  const parts: { part: string; isMatch: boolean }[] = [];
+  let cursor = 0;
+
+  for (const match of text.matchAll(expression)) {
+    const [matched] = match;
+
+    if (matched.length === 0) {
+      continue;
+    }
+
+    if (match.index > cursor) {
+      parts.push({ part: text.slice(cursor, match.index), isMatch: false });
+    }
+
+    parts.push({ part: matched, isMatch: true });
+    cursor = match.index + matched.length;
+  }
+
+  if (cursor < text.length) {
+    parts.push({ part: text.slice(cursor), isMatch: false });
+  }
+
+  return parts;
 }

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The log viewer's regex search no longer repeats matched text or crashes the page when the pattern contains a capture group
+
 ## [0.17.0] - 2026-10-20
 
 ### Added
