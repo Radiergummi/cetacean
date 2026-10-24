@@ -50,6 +50,11 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
 2. `Accept` header, parsed per RFC 9110 with `q` values and wildcards
 3. `application/json` when the client sends `*/*` or no `Accept` header
 
+A name can end in what looks like an extension. When a volume, config, secret, network, service, node, or stack
+you may read is named exactly that, `/volumes/backup.json` is volume `backup.json`, negotiated by `Accept`. A
+write to a resource never reads a suffix off its name: `DELETE /volumes/backup.json` removes `backup.json` or
+answers `404`.
+
 ### Supported types
 
 | `Accept` value | Extension | Result |

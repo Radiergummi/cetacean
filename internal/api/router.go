@@ -1054,6 +1054,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),
 		auth.Middleware(authProvider, cfg.APITokens),
+		h.suffixedNames,
 		requireReady(h, mux),
 		discoveryLinks,
 		requestLogger,

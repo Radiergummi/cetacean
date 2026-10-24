@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 // ContentType represents the resolved content type for a request.
@@ -103,26 +105,105 @@ func negotiate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Accept")
 
-		ct, ext := resolveExtension(r)
-		acceptsHTML := ct == ContentTypeHTML
-
-		if ct == ContentTypeUnsupported {
-			ranges := parseAcceptRanges(r.Header.Get("Accept"))
-			ct = bestMatch(ranges)
-			acceptsHTML = rangesAcceptHTML(ranges)
+		// On a write to a member, a suffix would only choose the response's
+		// representation, and reading it off a name instead changes or removes
+		// the wrong resource.
+		ct, ext := ContentTypeUnsupported, ""
+		if isSafeMethod(r.Method) || r.Method == http.MethodOptions ||
+			!addressesMember(r.URL.Path) {
+			ct, ext = resolveExtension(r)
 		}
 
-		ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
-		if ext != "" {
-			ctx = context.WithValue(ctx, extensionKey{}, ext)
-		}
-
-		if !acceptsHTML {
-			ctx = context.WithValue(ctx, htmlUnacceptableKey{}, true)
-		}
-
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(negotiated(r, ct, ext)))
 	})
+}
+
+// negotiated records the type a suffix resolved to, or, when ct is
+// ContentTypeUnsupported, the one the Accept header prefers.
+func negotiated(r *http.Request, ct ContentType, ext string) context.Context {
+	acceptsHTML := ct == ContentTypeHTML
+
+	if ct == ContentTypeUnsupported {
+		ranges := parseAcceptRanges(r.Header.Get("Accept"))
+		ct = bestMatch(ranges)
+		acceptsHTML = rangesAcceptHTML(ranges)
+	}
+
+	ctx := context.WithValue(r.Context(), contentTypeKey{}, ct)
+	ctx = context.WithValue(ctx, extensionKey{}, ext)
+
+	return context.WithValue(ctx, htmlUnacceptableKey{}, !acceptsHTML)
+}
+
+// suffixedNames puts back a suffix negotiate stripped when the whole segment
+// names a member the caller may read: volume backup.json is that volume, not
+// volume backup as JSON. After authentication, so how the path is answered
+// reveals no name the caller cannot read.
+func (h *Handlers) suffixedNames(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ext := extensionFromContext(r.Context())
+		collection, identifier, rest := splitResourcePath(r.URL.Path)
+
+		if ext == "" || identifier == "" || rest != "" ||
+			!h.namesReadableMember(r, collection, identifier+ext) {
+			next.ServeHTTP(w, r)
+
+			return
+		}
+
+		r.URL.Path += ext
+		if r.URL.RawPath != "" {
+			r.URL.RawPath += ext
+		}
+
+		next.ServeHTTP(w, r.WithContext(negotiated(r, ContentTypeUnsupported, "")))
+	})
+}
+
+// addressesMember reports whether path ends in the identifier of a member of a
+// collection that can be addressed by a name, where a dot is part of the name.
+func addressesMember(path string) bool {
+	collection, identifier, rest := splitResourcePath(path)
+	if identifier == "" || rest != "" {
+		return false
+	}
+
+	_, resolvable := canonicalResolvers[collection]
+
+	return resolvable || collection == "volumes" || collection == "stacks"
+}
+
+// namesReadableMember reports whether identifier addresses a member of the
+// collection the caller may read. A name several members share counts: the
+// ambiguity report answers it, not a suffix.
+func (h *Handlers) namesReadableMember(r *http.Request, collection, identifier string) bool {
+	var resource string
+
+	switch resolve, resolvable := canonicalResolvers[collection]; {
+	case resolvable:
+		_, named, found, err := resolve(h.cache, identifier)
+		if err != nil {
+			named, found = singularType[collection]+":"+identifier, true
+		}
+		if !found {
+			return false
+		}
+		resource = named
+	case collection == "volumes":
+		if _, ok := h.cache.GetVolume(identifier); !ok {
+			return false
+		}
+		resource = "volume:" + identifier
+	case collection == "stacks":
+		if _, ok := h.cache.GetStack(identifier); !ok {
+			return false
+		}
+		resource = "stack:" + identifier
+	default:
+		return false
+	}
+
+	return h.acl.Can(auth.IdentityFromContext(r.Context()), "read", resource)
 }
 
 // notAcceptable refuses a type the endpoint does not serve, naming what it
