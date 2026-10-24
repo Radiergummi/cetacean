@@ -188,9 +188,9 @@ func (s *Server) filterRecommendations(
 }
 
 // readableEnrichedTasks filters tasks to the ones the caller may read, then
-// names their parents from the services and nodes they may read too. The
-// enrichment has to be ACL-aware: cluster.EnrichTasks resolves straight out of
-// the cache, so a bare `task:*` grant would name every service in the cluster.
+// names their parents from the services and nodes they may read too, so a
+// bare `task:*` grant names no service. Filtering both lists once beats a
+// per-task check when the page holds many tasks.
 func (s *Server) readableEnrichedTasks(
 	ctx context.Context,
 	tasks []swarm.Task,
@@ -311,23 +311,80 @@ func (s *Server) checkNetworkWrite(ctx context.Context, id string) error {
 	return s.checkResolvedWrite(ctx, "network", id, net.Name, ok, err)
 }
 
-// checkTaskWrite routes the ACL check to the task's parent service so an MCP
-// `remove_task` evaluates the same key REST DELETE /tasks/{id} does
-// (`service:<name>`), falling back to `task:<id>` as REST does when the cache
-// cannot resolve the parent service.
-func (s *Server) checkTaskWrite(ctx context.Context, id string) error {
-	task, ok, err := cluster.ResolveTask(s.cache, id)
+// resolveTaskWrite resolves id to a task ID and routes the ACL check to the
+// task's parent service so an MCP `remove_task` evaluates the same key REST
+// DELETE /tasks/{id} does (`service:<name>`), falling back to `task:<id>` as
+// REST does when the cache cannot resolve the parent service.
+func (s *Server) resolveTaskWrite(ctx context.Context, id string) (string, error) {
+	task, err := s.resolveTaskArg(ctx, id)
+	if err != nil {
+		return "", err
+	}
 
 	svc, found := s.cache.GetService(task.ServiceID)
-	if !ok || !found || svc.Spec.Name == "" {
-		return s.checkResolvedWrite(ctx, "task", id, task.ID, ok, err)
+	if !found || svc.Spec.Name == "" {
+		return task.ID, s.checkResolvedWrite(ctx, "task", id, task.ID, true, nil)
 	}
 
 	if s.checkRead(ctx, "service", svc.Spec.Name) != nil {
-		return fmt.Errorf("task %q not found", id)
+		return "", fmt.Errorf("task %q not found", id)
 	}
 
-	return s.checkWrite(ctx, "service", svc.Spec.Name)
+	return task.ID, s.checkWrite(ctx, "service", svc.Spec.Name)
+}
+
+// resolveTaskArg resolves a task ID or "<service>.<slot>" through the cache.
+// Docker would read an unresolved argument as an ID prefix the ACL never
+// checked, so one is refused with or without a policy.
+func (s *Server) resolveTaskArg(ctx context.Context, arg string) (swarm.Task, error) {
+	task, ok, err := s.resolveTaskAs(auth.IdentityFromContext(ctx), arg)
+	if err != nil && s.checkRead(ctx, "task", arg) == nil {
+		return swarm.Task{}, err
+	}
+
+	if err != nil || !ok {
+		return swarm.Task{}, fmt.Errorf("task %q not found", arg)
+	}
+
+	return task, nil
+}
+
+// resolveTaskAs resolves a task ID or "<service>.<slot>" for identity. A slot
+// resolves only through a service identity can read, since its name is the
+// service's; every transport resolving a task argument goes through here.
+func (s *Server) resolveTaskAs(identity *auth.Identity, arg string) (swarm.Task, bool, error) {
+	task, ok, err := s.resolveTask(arg)
+	if err != nil || !ok {
+		return swarm.Task{}, false, err
+	}
+
+	if task.ID != arg && !s.serviceReadable(identity, task.ServiceID) {
+		return swarm.Task{}, false, nil
+	}
+
+	return task, true, nil
+}
+
+// serviceReadable reports whether identity may read the service with this ID;
+// a nil identity reads all, as in checkRead.
+func (s *Server) serviceReadable(identity *auth.Identity, serviceID string) bool {
+	svc, ok := s.cache.GetService(serviceID)
+
+	return ok && (identity == nil || s.canRead(identity, "service:"+svc.Spec.Name))
+}
+
+// resolveTaskRead is resolveTaskArg for a read of the task it names.
+func (s *Server) resolveTaskRead(ctx context.Context, arg string) (swarm.Task, error) {
+	task, err := s.resolveTaskArg(ctx, arg)
+	if err != nil {
+		return swarm.Task{}, err
+	}
+
+	if err := s.checkTaskRead(ctx, task.ID); err != nil {
+		return swarm.Task{}, fmt.Errorf("task %q not found", arg)
+	}
+
+	return task, nil
 }
 
 // checkServiceRead resolves Spec.Name from the cache so the ACL key is

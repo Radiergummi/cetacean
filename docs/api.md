@@ -418,11 +418,21 @@ detail lists every ID the request could have meant.
 ## Errors
 
 Errors follow [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, with Content-Type
-`application/problem+json` and `Cache-Control: no-store`.
+`application/problem+json` and `Cache-Control: no-store`. A problem's `@context` adds the RFC 9457 members to the
+shared context, which leaves `type`, `status` and `detail` to the resources that use those names for their own values.
 
 ```json
 {
-  "@context": "/api/context.jsonld",
+  "@context": [
+    "/api/context.jsonld",
+    {
+      "type": { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" },
+      "title": "urn:ietf:rfc:9457#title",
+      "status": "urn:ietf:rfc:9457#status",
+      "detail": "urn:ietf:rfc:9457#detail",
+      "instance": { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
+    }
+  ],
   "type": "about:blank",
   "title": "Not Found",
   "status": 404,
@@ -438,7 +448,7 @@ Domain-specific errors carry a stable code as the last path segment of `type`:
 
 ```json
 {
-  "@context": "/api/context.jsonld",
+  "@context": ["/api/context.jsonld", { "...": "as above" }],
   "type": "/api/errors/SVC001",
   "title": "Service Version Conflict",
   "status": 409,
@@ -622,7 +632,7 @@ The `action` field says what happened:
 | `update` | An existing resource changed. The collection's size is unaffected. |
 | `remove` | The resource is gone. |
 | `ref_changed` | A resource this one cross-references changed. |
-| `full_sync` | Sent as a `sync` event when the stream couldn't be replayed from the client's cursor. Refetch. |
+| `full_sync` | Sent as a `sync` event when the stream couldn't be replayed from the client's cursor, or the client fell behind and missed events. Refetch. |
 
 Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100 ms)
 are sent together as a `batch` event:
@@ -660,6 +670,9 @@ Each event carries an `id:`. Treat it as opaque: it names a position in the chan
 EventSource clients send `Last-Event-ID` on reconnect and the server replays what they missed from the change history.
 Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer or one written
 before Cetacean restarted; all three send a `sync` event telling the client to refetch.
+A client that reads too slowly to take every event gets a `sync` event in place of the ones it missed. One that stops
+reading altogether is disconnected once a write to it has been blocked for 30 seconds, and reconnects from its last
+cursor. Network buffers absorb writes first, so that can be well after the client stopped reading.
 
 ### Metrics streams
 
@@ -938,7 +951,8 @@ the API behind it isn't.
 
 Each `item` names an API; the contexts beside it carry that API's `service-desc`, `service-doc`, `describedby` and
 `status` links. The MCP server appears only when [`mcp.enabled`][mcp.enabled] is set, and its authorization metadata
-only when [`auth.mode`][auth.mode] isn't `none`.
+only when [`oauth.enabled`][oauth.enabled] is set. The web API's own authorization metadata needs
+[`oauth.api_tokens`][oauth.api_tokens] as well.
 
 URIs are absolute—set [`server.public_url`][server.public_url] behind a reverse proxy.
 
@@ -951,6 +965,8 @@ URIs are absolute—set [`server.public_url`][server.public_url] behind a revers
 [mcp]: mcp
 [mcp-tools]: mcp-tools
 [mcp.enabled]: configuration#mcp.enabled
+[oauth.api_tokens]: configuration#oauth.api_tokens
+[oauth.enabled]: configuration#oauth.enabled
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [server.cors.origins]: configuration#server.cors.origins

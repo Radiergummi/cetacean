@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -62,7 +63,11 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		entries = []cache.HistoryEntry{}
 	}
 
-	entries = cluster.NameHistoryTasks(h.cache, entries)
+	entries = cluster.NameHistoryTasks(
+		h.cache,
+		entries,
+		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
+	)
 
 	if wantCSV {
 		writeCSV(w, r, "history", csvTableForHistory(entries))

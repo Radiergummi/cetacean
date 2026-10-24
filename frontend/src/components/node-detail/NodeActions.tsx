@@ -79,7 +79,12 @@ export function NodeActions({ node, allowedMethods }: { node: Node; allowedMetho
 
       {remove.error && (
         <div className="flex items-center gap-2">
-          <p className="text-xs text-status-danger">{errorInfo?.suggestion ?? remove.error}</p>
+          <p className="text-xs text-status-danger">
+            {remove.error}
+            {errorInfo && (
+              <span className="block text-muted-foreground">{errorInfo.suggestion}</span>
+            )}
+          </p>
           {showForceRemove && (
             <ForceRemoveButton
               name={hostname}

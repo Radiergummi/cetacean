@@ -24,10 +24,6 @@ requirements:
       Servers MUST validate the Origin header on all incoming connections to
       prevent DNS rebinding attacks.
     url: https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http#security--endpoint
-    deferred: >-
-      The guard reads server.cors.origins alone, so a deployment that names
-      only server.public_url refuses a browser client at its own origin too.
-      The CSRF guard trusts that setting and this one does not.
 
   - id: invalid-origin-refused-with-403
     level: MUST

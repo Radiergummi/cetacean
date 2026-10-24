@@ -54,6 +54,10 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Path to the PEM-encoded private key matching [`docker.tls.cert`][docker.tls.cert].
 </ConfigParam>
 
+<ConfigParam name="docker.task_poll_interval" flag="-docker-task-poll-interval" env="CETACEAN_DOCKER_TASK_POLL_INTERVAL" default="10s">
+  How often Cetacean re-lists every task. Docker reports container events only for the engine Cetacean is connected to, so a task on another node changes state without an event; this poll is what picks it up. Lower values show those changes sooner, but each poll has the manager read and send the whole task list, so the interval must be at least `1s`. `0` turns the poll off, leaving those tasks to service and node changes and the five-minute full sync.
+</ConfigParam>
+
 <ConfigParam name="prometheus.url" flag="-prometheus-url" env="CETACEAN_PROMETHEUS_URL">
   Base URL of a [Prometheus][monitoring] server, for example `http://prometheus:9090`. When set, Cetacean proxies metric queries and enables usage charts, sizing recommendations, and the metrics stream. When unset, every metric-dependent feature is disabled.
 </ConfigParam>
@@ -234,7 +238,7 @@ Auth mode `none` bypasses authorization. See [Authorization][authorization] for 
   Path to a policy file (JSON, YAML, or TOML). The file is watched and reloaded on change, so grants can be edited without restarting Cetacean.
 </ConfigParam>
 
-The following three settings read grants carried by the identity itself. They add to whatever the policy
+The following four settings read grants carried by the identity itself. They add to whatever the policy
 already grants, and each applies only to its own authentication mode.
 
 <ConfigParam name="acl.tailscale_capability" env="CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY">
@@ -377,15 +381,12 @@ against measured usage. The other checkers use fixed thresholds.
 </ConfigParam>
 
 <ConfigParam name="sizing.thresholds.lookback" env="CETACEAN_SIZING_LOOKBACK" default="168h">
-  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days). A short window makes the check react to a quiet weekend; a long one needs that much history in Prometheus.
+  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days), and over which restarts count towards a flaky service (shortened while the process is younger than the window, since restarts are tracked in memory). A short window makes the over-provisioning check react to a quiet weekend; a long one needs that much history in Prometheus.
 </ConfigParam>
 
 ## Config file
 
-Pass a TOML file with `-config` or `CETACEAN_CONFIG`. Without either, Cetacean reads the first
-of these that exists: `./cetacean.toml`, `$XDG_CONFIG_HOME/cetacean/cetacean.toml` (or
-`~/.config/cetacean/cetacean.toml`), `~/.cetacean.toml`, and `/etc/cetacean/cetacean.toml`. Every
-field is optional; an omitted key uses the default.
+Pass a TOML file with `-config` or `CETACEAN_CONFIG`. Every field is optional; an omitted key uses the default.
 
 ```bash
 CETACEAN_CONFIG=/etc/cetacean/config.toml cetacean
@@ -454,6 +455,7 @@ expose. Each level includes everything below it. A request above the configured 
 | Change a service's endpoint mode                                              |      —      |       —       |        —        |      ✔      |
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
 | Manage CA and encryption, read and rotate join tokens, unlock the swarm       |      —      |       —       |        —        |      ✔      |
+| Revoke OAuth clients a user authorized (`DELETE /tokens/{subject}`)           |      —      |       —       |        —        |      ✔      |
 
 Operations level and [grants][interaction-with-operations-level] are independent checks
 and both must pass. Operations level is the global ceiling, grants control per-user scope. Set

@@ -148,9 +148,8 @@ func TestSpecEditingToolsNeverReturnSecrets(t *testing.T) {
 				t.Errorf("identity missing: %+v", compact)
 			}
 
-			// A follow-up write needs the version Docker returned; reading it
-			// back off the asynchronously-filled cache is the race this
-			// avoids.
+			// The version Docker returned, not the asynchronously filled
+			// cache's, which may still hold the one before the write.
 			if compact.Version != 41 {
 				t.Errorf("version = %d, want 41", compact.Version)
 			}

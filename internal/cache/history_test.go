@@ -206,6 +206,32 @@ func TestHistory_Since_Overwritten(t *testing.T) {
 	}
 }
 
+// A cursor of zero is a position like any other: once the ring has wrapped,
+// the entries right after it are gone and the replay cannot be complete.
+func TestHistory_Since_ZeroAfterWrap(t *testing.T) {
+	h := NewHistory(3)
+
+	for i := range 3 {
+		h.Append(HistoryEntry{Type: "service", Name: names[i]})
+	}
+
+	if entries, ok := h.Since(0); !ok || len(entries) != 3 {
+		t.Fatalf("full but unwrapped ring: Since(0) = %d entries, ok=%v; want 3, true",
+			len(entries), ok)
+	}
+
+	h.Append(HistoryEntry{Type: "service", Name: names[3]})
+
+	if _, ok := h.Since(0); ok {
+		t.Fatal("Since(0) after the ring wrapped: ok=true, want false")
+	}
+
+	// The ring holds 2..4, so a cursor at 1 misses nothing.
+	if entries, ok := h.Since(1); !ok || len(entries) != 3 {
+		t.Fatalf("Since(1) = %d entries, ok=%v; want 3, true", len(entries), ok)
+	}
+}
+
 func TestHistory_Since_FutureID(t *testing.T) {
 	h := NewHistory(10)
 

@@ -73,7 +73,7 @@ func (s *Server) toolGetEvents(
 	}
 
 	resource, err := cluster.ResolveIdentifier(s.cache, resourceType, req.GetString("resource", ""))
-	if err != nil {
+	if err = s.visibleAmbiguity(ctx, resourceType, err); err != nil {
 		return "", err
 	}
 
@@ -97,7 +97,7 @@ func (s *Server) toolGetEvents(
 		matched = matched[:limit]
 	}
 
-	matched = cluster.NameHistoryTasks(s.cache, matched)
+	matched = cluster.NameHistoryTasks(s.cache, matched, s.readPredicate(ctx))
 
 	timeline := make([]cluster.TimelineEntry, 0, len(matched))
 

@@ -121,7 +121,11 @@ func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tasks := cluster.EnrichTasks(h.cache, h.cache.ListTasksByService(r.PathValue("id")))
+	tasks := cluster.EnrichTasks(
+		h.cache,
+		h.cache.ListTasksByService(r.PathValue("id")),
+		h.readChecker(r),
+	)
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
 		h.writeTaskCSV(w, r, svc.Spec.Name, tasks)

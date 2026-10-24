@@ -553,13 +553,15 @@ components:
     sync:
       name: sync
       title: Resynchronize
-      summary: The stream could not be replayed from your cursor. Refetch.
+      summary: The stream cannot account for every change since your cursor. Refetch.
       description: |
         Sent when a reconnecting client's `Last-Event-ID` is older than the
         change-history ring still holds or was written before a restart, and
         unconditionally on every detail channel, which is ineligible for
-        replay. The frame's `id` is the current history position, so the next
-        reconnect resumes from there. The
+        replay. Also sent mid-stream, in place of the next frame, when the
+        client fell behind and events it matched were dropped. The frame's `id`
+        is the current history position, so the next reconnect resumes from
+        there. The
         payload carries no `@id`, no `@type`, an empty `id` and no `resource`.
       payload:
         type: object
@@ -653,7 +655,8 @@ components:
             an existing one changed, `remove` that it is gone, and
             `ref_changed` that a resource this one cross-references changed.
             `full_sync` accompanies a `sync` event and asks the client to
-            refetch, because the stream could not be replayed from its cursor.
+            refetch, because the stream could not be replayed from its cursor
+            or the client fell behind and missed events.
         id:
           type: string
           description: Resource ID

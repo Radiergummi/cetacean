@@ -192,8 +192,8 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 		oldestID = 1
 	}
 
-	// afterID has been overwritten
-	if afterID > 0 && afterID < oldestID {
+	// The entry right after afterID has been overwritten — zero included.
+	if afterID+1 < oldestID {
 		return nil, false
 	}
 

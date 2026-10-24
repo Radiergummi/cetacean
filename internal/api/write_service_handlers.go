@@ -1050,6 +1050,14 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 	updated := svc
 	if present {
+		identity := auth.IdentityFromContext(r.Context())
+		canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
+
+		if err := cluster.CheckVolumesAttachable(svc, canRead, mounts); err != nil {
+			writeErrorCode(w, r, "ACL001", err.Error())
+			return
+		}
+
 		if err := cluster.CheckMounts(svc, mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
 			writeErrorCode(w, r, "OPS001", err.Error())
 			return

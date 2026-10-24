@@ -138,7 +138,7 @@ func TestBasePathMiddleware_Mismatch(t *testing.T) {
 		}
 		if body := rec.Body.String(); !strings.Contains(
 			body,
-			`"@context":"/cetacean/api/context.jsonld"`,
+			`"@context":["/cetacean/api/context.jsonld"`,
 		) {
 			t.Errorf("path=%q: the problem's context is not under the base path: %s", path, body)
 		}

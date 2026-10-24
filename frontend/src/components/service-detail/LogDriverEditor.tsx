@@ -169,6 +169,7 @@ export function LogDriverEditor({
                 />
 
                 <Button
+                  aria-label="Remove option"
                   variant="outline"
                   size="xs"
                   className="h-8 shrink-0"

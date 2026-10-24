@@ -56,7 +56,7 @@ export function useDetailResource<T>(
 
   // The route parameter keys the queries: it is unique per URL and known on
   // the first render, where the canonical ID is not.
-  const routePath = key ? `${collection}/${key}` : undefined;
+  const routePath = key ? `${collection}/${encodeURIComponent(key)}` : undefined;
 
   const detailKey = useMemo(() => ["detail", routePath], [routePath]);
   const historyKey = useMemo(() => ["detail-history", routePath], [routePath]);

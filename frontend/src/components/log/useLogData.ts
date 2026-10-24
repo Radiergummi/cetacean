@@ -1,6 +1,6 @@
 import type { LogLine as ApiLogLine } from "../../api/client";
 import { api, ApiError } from "../../api/client";
-import { getErrorInfo } from "../../lib/errors";
+import { getErrorInfo, withSuggestion } from "../../lib/errors";
 import { getErrorMessage } from "../../lib/utils";
 import type { LogLine, TimeRange } from "./log-utils";
 import { maxLiveLines, toLogLine } from "./log-utils";
@@ -119,10 +119,11 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
         if (timedOut) {
           setError("Request timed out");
         } else {
-          const info = caught instanceof ApiError ? getErrorInfo(caught.code) : undefined;
+          const apiError = caught instanceof ApiError ? caught : undefined;
+          const info = apiError && getErrorInfo(apiError.code);
           setError(
-            info
-              ? `${info.title}. ${info.suggestion}`
+            info && apiError
+              ? titled(info.title, withSuggestion(apiError.detail, info.suggestion))
               : getErrorMessage(caught, "Failed to load logs"),
           );
         }
@@ -422,4 +423,15 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     loadNewer,
     handleScroll,
   };
+}
+
+/**
+ * Prefixes the title unless the explanation already opens with it.
+ */
+function titled(title: string, explanation: string): string {
+  if (explanation.toLowerCase().startsWith(title.toLowerCase())) {
+    return explanation.charAt(0).toUpperCase() + explanation.slice(1);
+  }
+
+  return `${title}: ${explanation}`;
 }

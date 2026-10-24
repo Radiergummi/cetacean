@@ -4,33 +4,53 @@ import type { MetricsResult } from "./types";
 import { useState } from "react";
 
 /**
- * The call the host rendered this widget for: which resource, and which metric.
- * Without a target there is nothing to chart, so a widget that never receives
- * one says so rather than guessing at a service.
+ * The call the host rendered this widget for. Without a target there is
+ * nothing to chart, so a widget that never receives one says so rather than
+ * guessing; every target but the cluster also needs an id.
  */
 interface MetricsArguments {
   target: string;
-  id: string;
+  id?: string | undefined;
   metric: string;
+  top?: number | undefined;
+  by?: string | undefined;
+  range?: string | undefined;
 }
 
 function metricsArgumentsFrom(
   input: Record<string, unknown> | undefined,
 ): MetricsArguments | undefined {
   const target = input?.target;
-  const id = input?.id;
+  const id = typeof input?.id === "string" && input.id !== "" ? input.id : undefined;
 
-  if (typeof target !== "string" || typeof id !== "string" || target === "" || id === "") {
+  if (typeof target !== "string" || target === "" || (target !== "cluster" && !id)) {
     return undefined;
   }
 
-  const metric = input?.metric;
+  const { by, metric, range, top } = input ?? {};
+  const args: MetricsArguments = { target, metric: typeof metric === "string" ? metric : "cpu" };
 
-  return { target, id, metric: typeof metric === "string" ? metric : "cpu" };
+  if (id) {
+    args.id = id;
+  }
+
+  if (typeof top === "number") {
+    args.top = top;
+  }
+
+  if (typeof by === "string") {
+    args.by = by;
+  }
+
+  if (typeof range === "string") {
+    args.range = range;
+  }
+
+  return args;
 }
 
 /**
- * Charts one metric for one service or node.
+ * Charts one metric for a service, a node, or a ranking across either.
  *
  * The range is widget state: picking a new one re-calls get_metrics through the
  * host, so the wider window is fetched under the same identity and the same ACL
@@ -39,13 +59,13 @@ function metricsArgumentsFrom(
 export function MetricsWidget() {
   const host = useCetaceanHost();
   const { error: connectionError, isConnected, toolInput } = host;
-  const [range, setRange] = useState("1h");
+  const [pickedRange, setRange] = useState<string | undefined>();
 
   const args = metricsArgumentsFrom(toolInput);
   const { data, error, isLoading } = useToolData<MetricsResult>(
     host,
     "get_metrics",
-    args ? { ...args, range } : {},
+    args && { ...args, range: pickedRange ?? args.range ?? "1h" },
   );
 
   if (connectionError) {
@@ -65,7 +85,7 @@ export function MetricsWidget() {
   }
 
   if (isLoading || !data) {
-    return <Message text={`Loading ${args.metric} for ${args.id}…`} />;
+    return <Message text={`Loading ${args.metric} for ${args.id ?? "the cluster"}…`} />;
   }
 
   return (

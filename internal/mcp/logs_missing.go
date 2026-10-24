@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -18,7 +19,7 @@ func isNotFound(err error) bool {
 // caller can act on: a task read is the only way to reach an exited replica,
 // and "not found" reads identically to a mistyped ID. The cache is the
 // tiebreaker — it outlives the record, and knows the parent service.
-func (s *Server) explainMissingTaskLogs(taskID string, err error) error {
+func (s *Server) explainMissingTaskLogs(ctx context.Context, taskID string, err error) error {
 	task, known := s.cache.GetTask(taskID)
 	if !known {
 		return fmt.Errorf(
@@ -31,17 +32,21 @@ func (s *Server) explainMissingTaskLogs(taskID string, err error) error {
 
 	// Naming the service beats naming its ID: it is what the caller passes to
 	// the very next call. The ID is the fallback for a service the cache has
-	// already dropped, which get_logs still resolves.
-	target := task.ServiceID
-	if svc, ok := s.cache.GetService(task.ServiceID); ok && svc.Spec.Name != "" {
-		target = svc.Spec.Name
+	// already dropped, which get_logs still resolves; a service the caller
+	// cannot read is not named at all.
+	target := fmt.Sprintf("%q", task.ServiceID)
+	if _, ok := s.cache.GetService(task.ServiceID); ok {
+		target = "it belongs to"
+		if svc := s.readableService(ctx, task.ServiceID); svc != nil && svc.Spec.Name != "" {
+			target = fmt.Sprintf("%q", svc.Spec.Name)
+		}
 	}
 
 	return fmt.Errorf(
 		"task %s still exists but its log output has been discarded: Swarm keeps only "+
 			"task-history-limit records per slot (five by default), so a replica that "+
 			"restarts often loses its output within seconds and it is not retrievable "+
-			"again. Read the logs of service %q instead, or describe that service for "+
+			"again. Read the logs of the service %s instead, or describe that service for "+
 			"the recent task failures and the reason behind them (daemon said: %v)",
 		taskID, target, err,
 	)

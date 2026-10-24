@@ -318,12 +318,33 @@ func main() {
 	}
 
 	watcher := docker.NewWatcher(dockerClient, stateCache, snapshotPath)
+	watcher.SetTaskPollInterval(cfg.DockerTaskPollInterval)
 
 	// Start watcher in background
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go watcher.Run(ctx)
+	// Waited for at shutdown, within the same grace as the server, so the
+	// watcher's last snapshot lands before the Docker client closes.
+	watcherStopped := make(chan struct{})
+	go func() {
+		defer close(watcherStopped)
+		watcher.Run(ctx)
+	}()
+
+	watcherDone := make(chan struct{})
+	go func() {
+		defer close(watcherDone)
+
+		<-ctx.Done()
+		select {
+		case <-watcherStopped:
+		case <-time.After(shutdownGrace):
+			slog.Warn(
+				"the watcher did not stop within the shutdown grace; its snapshot may be stale",
+			)
+		}
+	}()
 
 	// API — pass ready channel so /-/ready reports sync status
 	promapi.SetNilProxyErrorWriter(api.WriteErrorCode)
@@ -652,6 +673,7 @@ func main() {
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
 		serveDualListeners(ctx, cfg, router, handlers, tsnetLn, closeStreams)
+		<-watcherDone
 		return
 	}
 
@@ -712,6 +734,7 @@ func main() {
 	}
 
 	<-drained
+	<-watcherDone
 	slog.Info("shutdown complete")
 }
 
@@ -1062,6 +1085,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		AllowedOrigins:  d.cfg.CORSOrigins,
+		PublicURL:       d.cfg.PublicURL,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 		Streams:         d.streams,

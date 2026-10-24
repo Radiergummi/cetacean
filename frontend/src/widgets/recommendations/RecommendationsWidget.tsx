@@ -24,11 +24,14 @@ export function investigationPrompt(finding: Recommendation): string {
  */
 export function RecommendationsWidget() {
   const host = useCetaceanHost();
-  const { app, error: connectionError, isConnected } = host;
+  const { app, error: connectionError, isConnected, toolInput } = host;
 
+  const severity = toolInput?.severity;
+  const args = toolInput && (typeof severity === "string" && severity !== "" ? { severity } : {});
   const { data, error, isLoading } = useToolData<RecommendationsResult>(
     host,
     "get_recommendations",
+    args,
   );
 
   function investigate(finding: Recommendation) {

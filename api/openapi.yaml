@@ -6944,7 +6944,13 @@ components:
             invalidFilter:
               summary: Invalid filter expression (FLT002)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/FLT002
                 title: Invalid Filter Expression
                 status: 400
@@ -6954,7 +6960,13 @@ components:
             invalidJSON:
               summary: Invalid JSON in request body (API008)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/API008
                 title: Invalid JSON
                 status: 400
@@ -6964,7 +6976,13 @@ components:
             patchApplyFailed:
               summary: JSON Patch application failed (API011)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/API011
                 title: Patch Application Failed
                 status: 400
@@ -6979,7 +6997,13 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
           example:
-            "@context": /api/context.jsonld
+            "@context":
+              - /api/context.jsonld
+              - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                title: urn:ietf:rfc:9457#title
+                status: urn:ietf:rfc:9457#status
+                detail: urn:ietf:rfc:9457#detail
+                instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: about:blank
             title: Not Found
             status: 404
@@ -6997,7 +7021,13 @@ components:
             sseNotSupported:
               summary: SSE requested on non-streaming endpoint (API001)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/API001
                 title: SSE Not Supported
                 status: 406
@@ -7007,7 +7037,13 @@ components:
             sseRequired:
               summary: SSE required on streaming-only endpoint (API002)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/API002
                 title: SSE Required
                 status: 406
@@ -7022,7 +7058,13 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
           example:
-            "@context": /api/context.jsonld
+            "@context":
+              - /api/context.jsonld
+              - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                title: urn:ietf:rfc:9457#title
+                status: urn:ietf:rfc:9457#status
+                detail: urn:ietf:rfc:9457#detail
+                instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: /api/errors/SVC001
             title: Service Version Conflict
             status: 409
@@ -7037,7 +7079,13 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
           example:
-            "@context": /api/context.jsonld
+            "@context":
+              - /api/context.jsonld
+              - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                title: urn:ietf:rfc:9457#title
+                status: urn:ietf:rfc:9457#status
+                detail: urn:ietf:rfc:9457#detail
+                instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: /api/errors/API006
             title: Invalid Request Body
             status: 415
@@ -7052,7 +7100,13 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
           example:
-            "@context": /api/context.jsonld
+            "@context":
+              - /api/context.jsonld
+              - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                title: urn:ietf:rfc:9457#title
+                status: urn:ietf:rfc:9457#status
+                detail: urn:ietf:rfc:9457#detail
+                instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: /api/errors/API013
             title: Precondition Failed
             status: 412
@@ -7072,7 +7126,13 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
           example:
-            "@context": /api/context.jsonld
+            "@context":
+              - /api/context.jsonld
+              - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                title: urn:ietf:rfc:9457#title
+                status: urn:ietf:rfc:9457#status
+                detail: urn:ietf:rfc:9457#detail
+                instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: about:blank
             title: Requested Range Not Satisfiable
             status: 416
@@ -7087,7 +7147,13 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
           example:
-            "@context": /api/context.jsonld
+            "@context":
+              - /api/context.jsonld
+              - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                title: urn:ietf:rfc:9457#title
+                status: urn:ietf:rfc:9457#status
+                detail: urn:ietf:rfc:9457#detail
+                instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: /api/errors/ENG001
             title: Docker Engine Unavailable
             status: 503
@@ -7122,7 +7188,13 @@ components:
             operationsLevel:
               summary: Operations level too low (OPS001)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/OPS001
                 title: Operations Level Too Low
                 status: 403
@@ -7132,7 +7204,13 @@ components:
             aclReadDenied:
               summary: ACL read denied (ACL001)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/ACL001
                 title: Access Denied
                 status: 403
@@ -7142,7 +7220,13 @@ components:
             aclWriteDenied:
               summary: ACL write denied (ACL002)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/ACL002
                 title: Write Access Denied
                 status: 403
@@ -7152,7 +7236,13 @@ components:
             crossOriginBlocked:
               summary: Cross-origin write blocked (CSR001)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/CSR001
                 title: Cross-Origin Request Blocked
                 status: 403
@@ -7173,7 +7263,13 @@ components:
             sseLimit:
               summary: SSE broadcaster limit reached (SSE001)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/SSE001
                 title: Too Many SSE Connections
                 status: 429
@@ -7183,7 +7279,13 @@ components:
             logStreamLimit:
               summary: Per-endpoint log stream limit (LOG001)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/LOG001
                 title: Too Many Log Streams
                 status: 429
@@ -7193,7 +7295,13 @@ components:
             logReadLimit:
               summary: Log read limit (LOG009)
               value:
-                "@context": /api/context.jsonld
+                "@context":
+                  - /api/context.jsonld
+                  - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+                    title: urn:ietf:rfc:9457#title
+                    status: urn:ietf:rfc:9457#status
+                    detail: urn:ietf:rfc:9457#detail
+                    instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
                 type: /api/errors/LOG009
                 title: Too Many Log Reads
                 status: 429
@@ -7281,7 +7389,13 @@ components:
       required: [type, title, status]
       properties:
         "@context":
-          type: string
+          type: array
+          description: |
+            The shared context's URL, then an object mapping the RFC 9457 members,
+            which the shared context leaves to the resources that reuse their names.
+          items: {}
+          minItems: 2
+          maxItems: 2
         type:
           type: string
           description: "Problem type URI — `/api/errors/{code}` for domain errors, `about:blank` for generic"
@@ -7301,7 +7415,13 @@ components:
           type: string
           description: Correlation ID for this request
       example:
-        "@context": /api/context.jsonld
+        "@context":
+          - /api/context.jsonld
+          - type: { "@id": "urn:ietf:rfc:9457#type", "@type": "@id" }
+            title: urn:ietf:rfc:9457#title
+            status: urn:ietf:rfc:9457#status
+            detail: urn:ietf:rfc:9457#detail
+            instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
         type: /api/errors/SVC001
         title: Service Version Conflict
         status: 409
@@ -8197,7 +8317,8 @@ components:
             an existing one changed, `remove` that it is gone, and
             `ref_changed` that a resource this one cross-references changed.
             `full_sync` accompanies a `sync` event and asks the client to
-            refetch, because the stream could not be replayed from its cursor.
+            refetch, because the stream could not be replayed from its cursor
+            or the client fell behind and missed events.
         id:
           type: string
           description: Resource ID

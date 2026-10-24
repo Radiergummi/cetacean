@@ -119,6 +119,7 @@ export function TimeRangeSelector({
                 />
                 {customSince && (
                   <button
+                    aria-label="Clear start time"
                     type="button"
                     onClick={() => setCustomSince("")}
                     className="text-muted-foreground hover:text-foreground"
@@ -137,6 +138,7 @@ export function TimeRangeSelector({
                 />
                 {customUntil && (
                   <button
+                    aria-label="Clear end time"
                     type="button"
                     onClick={() => setCustomUntil("")}
                     className="text-muted-foreground hover:text-foreground"

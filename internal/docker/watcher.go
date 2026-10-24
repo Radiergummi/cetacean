@@ -25,7 +25,13 @@ import (
 type DockerClient interface {
 	FullSync(ctx context.Context) (cache.FullSyncData, error)
 	Inspect(ctx context.Context, resourceType events.Type, id string) (any, error)
-	Events(ctx context.Context) (<-chan events.Message, <-chan error)
+
+	// ListTasksIn lists one service's or one node's tasks, or every task for
+	// a zero scope.
+	ListTasksIn(ctx context.Context, scope TaskScope) ([]swarm.Task, error)
+	// Events streams from since onwards, replaying what the daemon still holds
+	// from before the call; a zero since streams only what follows it.
+	Events(ctx context.Context, since time.Time) (<-chan events.Message, <-chan error)
 	Logs(
 		ctx context.Context,
 		kind LogKind,
@@ -35,6 +41,12 @@ type DockerClient interface {
 		since, until string,
 	) (io.ReadCloser, error)
 	Close() error
+}
+
+// TaskScope narrows a task list to one service or one node; zero means all.
+type TaskScope struct {
+	Service string
+	Node    string
 }
 
 // Store is the interface the watcher uses to mutate cached state.
@@ -50,6 +62,11 @@ type Store interface {
 	// GetTask lets the watcher tell an already-settled task from one whose
 	// terminal state Swarm has not published yet — see scheduleSettle.
 	GetTask(string) (swarm.Task, bool)
+
+	// The cached side of a task re-list, which drops what the list lacks.
+	ListTasks() []swarm.Task
+	ListTasksByService(string) []swarm.Task
+	ListTasksByNode(string) []swarm.Task
 	SetConfig(swarm.Config)
 	DeleteConfig(string)
 	SetSecret(swarm.Secret)
@@ -89,6 +106,10 @@ type Watcher struct {
 	// syncInterval is how often the event loop re-reads the whole cluster.
 	syncInterval time.Duration
 
+	// taskPollInterval is how often the event loop re-lists every task; zero
+	// disables it. See SetTaskPollInterval.
+	taskPollInterval time.Duration
+
 	// settles tracks the re-reads still outstanding, so a test can wait for
 	// them instead of sleeping and production can be sure they are not
 	// silently dropped.
@@ -98,6 +119,12 @@ type Watcher struct {
 	// every other write. See Refresh. resyncRequests does the same for Resync.
 	refreshes      chan refreshRequest
 	resyncRequests chan chan error
+
+	// settled holds settle reads awaiting the loop, one per task; settledReady
+	// wakes the loop to apply them. See settleRead.
+	settledMu    sync.Mutex
+	settled      map[string]settledRead
+	settledReady chan struct{}
 
 	// loopRunning reports whether the event loop is reading refreshes.
 	loopRunning atomic.Bool
@@ -133,9 +160,18 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 		settleDelay:  defaultSettleDelay,
 		syncInterval: defaultSyncInterval,
 		refreshes:    make(chan refreshRequest),
+		settled:      make(map[string]settledRead),
+		settledReady: make(chan struct{}, 1),
 
 		resyncRequests: make(chan chan error),
 	}
+}
+
+// SetTaskPollInterval sets how often the event loop re-lists every task, zero
+// for never. Container events reach the watcher only from the engine it is
+// connected to, so a task elsewhere changes without one. Call before Run.
+func (w *Watcher) SetTaskPollInterval(interval time.Duration) {
+	w.taskPollInterval = interval
 }
 
 // waitForSettles blocks until every scheduled re-read has finished.
@@ -150,8 +186,17 @@ func (w *Watcher) Ready() <-chan struct{} {
 	return w.ready
 }
 
-// Run starts the watcher. It blocks until the context is cancelled.
+// Run starts the watcher. It blocks until the context is cancelled, and then
+// writes a last snapshot, unless no sync ever succeeded: that cache holds
+// nothing newer than the snapshot it was loaded from.
 func (w *Watcher) Run(ctx context.Context) {
+	defer func() {
+		if w.lastSync.Load() != 0 {
+			w.writeSnapshot()
+		}
+	}()
+
+	since := eventsSince()
 	if err := w.fullSync(ctx); err == nil {
 		w.writeSnapshot()
 	}
@@ -164,7 +209,7 @@ func (w *Watcher) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		w.watchEvents(ctx)
+		w.watchEvents(ctx, since)
 		slog.Warn("event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
@@ -172,6 +217,7 @@ func (w *Watcher) Run(ctx context.Context) {
 		case <-time.After(backoff):
 		}
 		slog.Info("re-syncing after reconnect")
+		since = eventsSince()
 		if err := w.fullSync(ctx); err == nil {
 			w.writeSnapshot()
 			backoff = 1 * time.Second // Reset on success.
@@ -179,6 +225,14 @@ func (w *Watcher) Run(ctx context.Context) {
 			backoff = min(backoff*2, maxBackoff)
 		}
 	}
+}
+
+// eventsSince is where a stream subscribed after a sync starts: before the sync
+// listed anything, so a change made during the listing is replayed rather than
+// lost. Replays are harmless, since every event re-reads its resource. The
+// margin absorbs the daemon's clock running behind ours.
+func eventsSince() time.Time {
+	return time.Now().Add(-eventReplayMargin)
 }
 
 func (w *Watcher) writeSnapshot() {
@@ -326,6 +380,9 @@ const (
 	// settleAttempts bounds how many times a task is re-read while its record
 	// still lags, each wait twice the last. Three covers about five seconds.
 	settleAttempts = 3
+
+	// eventReplayMargin is how far before a sync its event stream starts.
+	eventReplayMargin = 5 * time.Second
 )
 
 // eventKey identifies a unique resource for coalescing.
@@ -361,8 +418,8 @@ func isContainerDeath(action events.Action) bool {
 	}
 }
 
-func (w *Watcher) watchEvents(ctx context.Context) {
-	msgCh, errCh := w.client.Events(ctx)
+func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
+	msgCh, errCh := w.client.Events(ctx, since)
 
 	w.loopRunning.Store(true)
 	defer w.loopRunning.Store(false)
@@ -381,6 +438,14 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 	// re-inserting resources that were just deleted by an incremental event.
 	syncTicker := time.NewTicker(w.syncInterval)
 	defer syncTicker.Stop()
+
+	// The task poll runs here for the same reason, and is nil when disabled.
+	var pollC <-chan time.Time
+	if w.taskPollInterval > 0 {
+		pollTicker := time.NewTicker(w.taskPollInterval)
+		defer pollTicker.Stop()
+		pollC = pollTicker.C
+	}
 
 	// A full sync replaces the cache, so pending events are applied first.
 	flushPending := func() {
@@ -444,7 +509,9 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.processBatch(ctx, batch)
 			}
 		case req := <-w.refreshes:
-			req.done <- w.refreshNow(ctx, req.kind, req.id)
+			req.done <- req.run(ctx)
+		case <-w.settledReady:
+			w.applySettled()
 		case done := <-w.resyncRequests:
 			flushPending()
 
@@ -453,6 +520,19 @@ func (w *Watcher) watchEvents(ctx context.Context) {
 				w.writeSnapshot()
 			}
 			done <- err
+		case <-pollC:
+			// A list taken before a sync's must not be applied after it, or
+			// it drops tasks the sync added; the sync re-reads them anyway.
+			if !w.syncMu.TryLock() {
+				continue
+			}
+
+			err := w.reconcileTasks(ctx, TaskScope{})
+			w.syncMu.Unlock()
+
+			if err != nil {
+				slog.Debug("task poll failed", "error", err)
+			}
 		case <-syncTicker.C:
 			flushPending()
 
@@ -515,6 +595,8 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 
 // processBatch handles a coalesced batch of events with a worker pool.
 func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced) {
+	scopes := taskScopes(batch)
+
 	// Process removes synchronously first — they're cheap (no Inspect).
 	var removeKeys []eventKey
 	for key, ev := range batch {
@@ -528,6 +610,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	}
 
 	if len(batch) == 0 {
+		w.reconcileScopes(ctx, scopes)
 		return
 	}
 
@@ -549,6 +632,8 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	}
 	wg.Wait()
 
+	w.reconcileScopes(ctx, scopes)
+
 	// Scheduled after the batch rather than inside it: the inspect above may
 	// already have read the settled record, and checking once here costs one
 	// map lookup instead of a goroutine per event.
@@ -557,6 +642,90 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 			w.scheduleSettle(ctx, key, ev.action)
 		}
 	}
+}
+
+// taskScopes names the task lists a batch calls for: Swarm emits no task
+// events, and a service or node changing is when its tasks most likely did.
+// A removal is left to the poll: the engine refuses a filter on a removed one.
+func taskScopes(batch map[eventKey]coalesced) []TaskScope {
+	var scopes []TaskScope
+	for key, ev := range batch {
+		if ev.action == "remove" {
+			continue
+		}
+
+		switch key.resourceType { //nolint:exhaustive // only services and nodes own tasks
+		case events.ServiceEventType:
+			scopes = append(scopes, TaskScope{Service: key.id})
+		case events.NodeEventType:
+			scopes = append(scopes, TaskScope{Node: key.id})
+		}
+	}
+
+	return scopes
+}
+
+// reconcileScopes re-lists the tasks of each scope, one at a time: two lists
+// taken at different moments can disagree on a task, and the later-applied
+// one must not drop a task the other added. The same holds against a sync,
+// so a running one wins. Past a handful, one list of every task is cheaper.
+func (w *Watcher) reconcileScopes(ctx context.Context, scopes []TaskScope) {
+	if len(scopes) == 0 || !w.syncMu.TryLock() {
+		return
+	}
+	defer w.syncMu.Unlock()
+
+	if len(scopes) > workerCount {
+		scopes = []TaskScope{{}}
+	}
+
+	for _, scope := range scopes {
+		if err := w.reconcileTasks(ctx, scope); err != nil {
+			slog.Debug(
+				"task re-list failed",
+				"service", scope.Service,
+				"node", scope.Node,
+				"error", err,
+			)
+		}
+	}
+}
+
+// reconcileTasks re-lists a scope's tasks and applies the difference: SetTask
+// announces only a real change, and a cached task the list lacks is gone.
+// Callers run it on the event loop, so nothing else applies meanwhile.
+func (w *Watcher) reconcileTasks(ctx context.Context, scope TaskScope) error {
+	ctx, cancel := context.WithTimeout(ctx, taskListTimeout)
+	defer cancel()
+
+	listed, err := w.client.ListTasksIn(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	var cached []swarm.Task
+	switch {
+	case scope.Service != "":
+		cached = w.store.ListTasksByService(scope.Service)
+	case scope.Node != "":
+		cached = w.store.ListTasksByNode(scope.Node)
+	default:
+		cached = w.store.ListTasks()
+	}
+
+	present := make(map[string]struct{}, len(listed))
+	for _, task := range listed {
+		present[task.ID] = struct{}{}
+		w.store.SetTask(task)
+	}
+
+	for _, task := range cached {
+		if _, ok := present[task.ID]; !ok {
+			w.store.DeleteTask(task.ID)
+		}
+	}
+
+	return nil
 }
 
 // scheduleSettle re-reads a task shortly after its container started or exited.
@@ -578,10 +747,7 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 			case <-time.After(delay):
 			}
 
-			w.inspectAndApply(ctx, key)
-
-			task, ok := w.store.GetTask(key.id)
-			if !ok || taskCaughtUp(task, action) {
+			if w.settleRead(ctx, key, action) {
 				return
 			}
 
@@ -595,6 +761,86 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 			delay *= 2
 		}
 	})
+}
+
+// settledRead is a settle's inspect awaiting the loop: the task, or gone.
+type settledRead struct {
+	task swarm.Task
+	gone bool
+}
+
+// settleRead inspects a task off the loop and queues the result for it, so a
+// burst of exits holds neither the loop nor a Refresh behind it. It reports
+// whether the task has caught up, which ends the re-reads.
+func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) bool {
+	resource, err := w.inspectWithRetry(ctx, key)
+
+	var read settledRead
+	switch {
+	case cerrdefs.IsNotFound(err):
+		read.gone = true
+	case err != nil:
+		slog.Warn("task re-read failed", "id", key.id, "error", err)
+		return ctx.Err() != nil
+	default:
+		task, ok := resource.(swarm.Task)
+		if !ok {
+			return true
+		}
+		read.task = task
+	}
+
+	// With no loop there is nothing to order against, as for Refresh.
+	if !w.loopRunning.Load() {
+		w.applySettledRead(key.id, read)
+	} else {
+		w.queueSettled(key.id, read)
+	}
+
+	return read.gone || taskCaughtUp(read.task, action)
+}
+
+// queueSettled keeps the newest read per task until the loop takes it. A loop
+// that stops first leaves it for the next one.
+func (w *Watcher) queueSettled(id string, read settledRead) {
+	w.settledMu.Lock()
+	if queued, ok := w.settled[id]; !ok || queued.gone ||
+		read.gone || read.task.Version.Index >= queued.task.Version.Index {
+		w.settled[id] = read
+	}
+	w.settledMu.Unlock()
+
+	select {
+	case w.settledReady <- struct{}{}:
+	default:
+	}
+}
+
+// applySettled applies every queued settle read; it runs on the event loop.
+func (w *Watcher) applySettled() {
+	w.settledMu.Lock()
+	reads := w.settled
+	w.settled = make(map[string]settledRead, len(reads))
+	w.settledMu.Unlock()
+
+	for id, read := range reads {
+		w.applySettledRead(id, read)
+	}
+}
+
+// applySettledRead applies a read taken before the writes now in the cache:
+// a task removed meanwhile stays removed, and SetTask refuses an older version.
+func (w *Watcher) applySettledRead(id string, read settledRead) {
+	if _, ok := w.store.GetTask(id); !ok {
+		return
+	}
+
+	if read.gone {
+		w.store.DeleteTask(id)
+		return
+	}
+
+	w.store.SetTask(read.task)
 }
 
 // taskCaughtUp reports whether Swarm's record has caught up with the container
@@ -706,6 +952,9 @@ func (w *Watcher) apply(resource any) {
 // fullSyncTimeout bounds one full sync, however it was started.
 var fullSyncTimeout = 2 * time.Minute
 
+// taskListTimeout bounds one task re-list, which holds the event loop.
+var taskListTimeout = 30 * time.Second
+
 // refreshHandoffTimeout bounds how long Refresh waits for the event loop to
 // take its request. Long enough that a loop busy with a burst of events still
 // gets there, short enough that a caller learns the engine is unreachable
@@ -719,10 +968,9 @@ var errRefreshUnavailable = fmt.Errorf(
 	"the Docker event loop is not accepting refreshes: %w", cerrdefs.ErrUnavailable,
 )
 
-// refreshRequest asks the event loop to re-read one resource on its behalf.
+// refreshRequest asks the event loop to run a re-read on its behalf.
 type refreshRequest struct {
-	kind string
-	id   string
+	run  func(context.Context) error
 	done chan error
 }
 
@@ -731,10 +979,12 @@ type refreshRequest struct {
 // which applies every other write: applying from the caller's goroutine lets a
 // remove arriving mid-inspect be undone, resurrecting the resource.
 func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
+	refresh := func(ctx context.Context) error { return w.refreshNow(ctx, kind, id) }
+
 	// Nothing to serialize against with no loop running, and waiting for one
 	// would stall the write this refresh precedes.
 	if !w.loopRunning.Load() {
-		return w.refreshNow(ctx, kind, id)
+		return refresh(ctx)
 	}
 
 	done := make(chan error, 1)
@@ -748,7 +998,7 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 	defer handoff.Stop()
 
 	select {
-	case w.refreshes <- refreshRequest{kind: kind, id: id, done: done}:
+	case w.refreshes <- refreshRequest{run: refresh, done: done}:
 	case <-handoff.C:
 		return errRefreshUnavailable
 	case <-ctx.Done():

@@ -494,6 +494,7 @@ export default function TimeSeriesChart({
         {stackable && panel?.stacked == null && (
           <div className="ms-1 flex items-center gap-0.5">
             <button
+              aria-label="Line chart"
               type="button"
               onClick={() => setLocalStacked(false)}
               aria-pressed={!stacked}
@@ -503,6 +504,7 @@ export default function TimeSeriesChart({
               <LineChart className="size-3.5" />
             </button>
             <button
+              aria-label="Stacked area"
               type="button"
               onClick={() => setLocalStacked(true)}
               aria-pressed={stacked}

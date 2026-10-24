@@ -110,7 +110,7 @@ func (s *Server) readLogsImpl(
 	)
 	if err != nil {
 		if kind == docker.TaskLog && isNotFound(err) {
-			return LogResourceResponse{}, s.explainMissingTaskLogs(targetID, err)
+			return LogResourceResponse{}, s.explainMissingTaskLogs(ctx, targetID, err)
 		}
 
 		return LogResourceResponse{}, fmt.Errorf("fetch logs: %w", err)

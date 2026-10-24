@@ -274,7 +274,7 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 	settings := make([]string, 0, len(req.Args)+len(req.Env))
 	settings = append(settings, req.Args...)
 	settings = append(settings, req.Env...)
-	slog.Info("configuring plugin", "plugin", name, "settings", settings)
+	slog.Info("configuring plugin", "plugin", name, "count", len(settings))
 
 	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {
 		writeDockerError(w, r, err, "plugin", name)

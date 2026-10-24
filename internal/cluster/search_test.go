@@ -179,7 +179,10 @@ func TestSearchCountsOnlyWhatCanReadAdmits(t *testing.T) {
 	}
 
 	c.SetTask(swarm.Task{ID: "task-1", ServiceID: "id-acme-a"})
-	c.SetTask(swarm.Task{ID: "task-2", ServiceID: "id-acme-b"})
+	// Matched on its image: acme-b is hidden, so its name matches nothing.
+	task2 := swarm.Task{ID: "task-2", ServiceID: "id-acme-b"}
+	task2.Spec.ContainerSpec = &swarm.ContainerSpec{Image: "registry/acme-app:1"}
+	c.SetTask(task2)
 
 	node := swarm.Node{ID: "acme-node"}
 	node.Spec.Labels = map[string]string{"team": "acme"}
@@ -243,5 +246,21 @@ func TestSearchResultsMarshalLikeTheRESTResponse(t *testing.T) {
 		if _, ok := decoded[key]; ok {
 			t.Errorf("key %q leaks the Go field name", key)
 		}
+	}
+}
+
+// A negative limit runs on the per-type goroutines, where a panic is past any
+// recovery and takes the process with it.
+func TestSearchTreatsANegativeLimitAsUnset(t *testing.T) {
+	c := newTestCache()
+
+	svc := swarm.Service{}
+	svc.ID = "svc-abc"
+	svc.Spec.Name = "web-frontend"
+	c.SetService(svc)
+
+	results := cluster.Search(context.Background(), c, "web", -1, nil)
+	if got := len(results.Hits["services"]); got != 1 {
+		t.Fatalf("len(services) = %d, want 1", got)
 	}
 }

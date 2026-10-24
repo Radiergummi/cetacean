@@ -2,15 +2,13 @@ package api
 
 import "net/http"
 
+// The shared context maps none of RFC 9457's members: elsewhere `type`,
+// `status` and `detail` are Cetacean's own, a resource kind among them.
+// A problem document adds problemContextTerms after it instead.
 const jsonLDContextDoc = `{
   "@context": {
     "@vocab": "urn:cetacean:",
     "items": {"@container": "@set"},
-    "type": "urn:ietf:rfc:9457#type",
-    "title": "urn:ietf:rfc:9457#title",
-    "status": "urn:ietf:rfc:9457#status",
-    "detail": "urn:ietf:rfc:9457#detail",
-    "instance": "urn:ietf:rfc:9457#instance",
     "kind": "urn:cetacean:kind",
     "name": "urn:cetacean:name",
     "replicas": "urn:cetacean:replicas",
@@ -30,6 +28,14 @@ const jsonLDContextDoc = `{
     "networks": {"@container": "@list"}
   }
 }`
+
+const problemContextTerms = `{` +
+	`"type":{"@id":"urn:ietf:rfc:9457#type","@type":"@id"},` +
+	`"title":"urn:ietf:rfc:9457#title",` +
+	`"status":"urn:ietf:rfc:9457#status",` +
+	`"detail":"urn:ietf:rfc:9457#detail",` +
+	`"instance":{"@id":"urn:ietf:rfc:9457#instance","@type":"@id"}` +
+	`}`
 
 // contextBody is the JSON-LD context document, fixed for the life of the
 // process like the two documents /api serves beside it.

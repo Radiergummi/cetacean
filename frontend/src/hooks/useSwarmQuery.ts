@@ -5,7 +5,7 @@ import { useResourceStream } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -38,6 +38,12 @@ function keepEnrichment<T>(cached: T, incoming: T): T {
   return Object.keys(kept).length === 0 ? incoming : { ...incoming, ...kept };
 }
 
+/**
+ * How long a filtered list gathers stream events before refetching. Timed from
+ * the first event, so a cluster that never goes quiet still refreshes.
+ */
+const filteredRefetchDelay = 750;
+
 type PageData<T> = FetchResult<CollectionResponse<T>>;
 type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 
@@ -52,6 +58,9 @@ export function useSwarmQuery<T>(
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
   const filteredRef = useLatestRef(filtered);
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => clearTimeout(refetchTimer.current), []);
 
   const query = useInfiniteQuery({
     queryKey: [...queryKey],
@@ -101,6 +110,16 @@ export function useSwarmQuery<T>(
         const held = currentData.pages.some((page) =>
           page.data.items.some((item) => getIdRef.current(item) === event.id),
         );
+
+        // Only the server can say whether a change moves a resource into or
+        // out of a filtered collection, so ask it again — once per burst, and
+        // for whole pages, keeping the total and the loaded rows in step.
+        if (filteredRef.current && !(held && event.action === "remove")) {
+          refetchTimer.current ??= setTimeout(() => {
+            refetchTimer.current = undefined;
+            void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
+          }, filteredRefetchDelay);
+        }
 
         if (event.action === "remove") {
           // A filtered collection cannot tell whether an item it does not hold
@@ -174,9 +193,8 @@ export function useSwarmQuery<T>(
             // churning list. The sentinel then pages past the real end and the
             // server answers 416.
             //
-            // A filtered collection sits this out for the reason the removal
-            // above does: it cannot tell whether the arrival matches its
-            // search, and appending it would show a row the filter excludes.
+            // A filtered collection sits this out: it cannot tell whether the
+            // arrival matches, and the refetch above brings it in if it does.
             queryClient.setQueryData<InfinitePages<T>>(key, (old) => {
               if (!old) {
                 return old;

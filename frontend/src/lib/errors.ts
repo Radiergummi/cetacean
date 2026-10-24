@@ -211,3 +211,15 @@ export function getErrorInfo(code: string | null): ErrorInfo | undefined {
 
   return errorDictionary[code];
 }
+
+/**
+ * The server's detail followed by the code's generic advice: the detail names
+ * what went wrong this time, which the advice cannot.
+ */
+export function withSuggestion(detail: string, suggestion: string): string {
+  if (detail === "") {
+    return suggestion;
+  }
+
+  return `${/[.!?]$/.test(detail) ? detail : `${detail}.`} ${suggestion}`;
+}

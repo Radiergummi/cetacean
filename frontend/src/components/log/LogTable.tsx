@@ -90,6 +90,7 @@ function LogRow({
         />
         {onTogglePin && (
           <button
+            aria-label="Pin line"
             type="button"
             onClick={(event) => {
               event.stopPropagation();

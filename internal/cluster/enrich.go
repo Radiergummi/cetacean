@@ -15,25 +15,34 @@ type EnrichedTask struct {
 	NodeHostname string `json:"NodeHostname,omitempty"`
 }
 
-// EnrichTask resolves service name and node hostname for a task.
-func EnrichTask(c *cache.Cache, t swarm.Task) EnrichedTask {
+// EnrichTask names a task's service and node where canRead admits them, since
+// each name is its parent's; a nil canRead admits all.
+func EnrichTask(c *cache.Cache, t swarm.Task, canRead func(resource string) bool) EnrichedTask {
 	et := EnrichedTask{Task: t}
-	if svc, ok := c.GetService(t.ServiceID); ok {
+	if svc, ok := c.GetService(t.ServiceID); ok && admits(canRead, "service:"+svc.Spec.Name) {
 		et.ServiceName = svc.Spec.Name
 	}
-	if node, ok := c.GetNode(t.NodeID); ok {
+	if node, ok := c.GetNode(t.NodeID); ok && admits(canRead, "node:"+NodeACLName(node)) {
 		et.NodeHostname = node.Description.Hostname
 	}
 	return et
 }
 
 // EnrichTasks enriches a slice of tasks.
-func EnrichTasks(c *cache.Cache, tasks []swarm.Task) []EnrichedTask {
+func EnrichTasks(
+	c *cache.Cache,
+	tasks []swarm.Task,
+	canRead func(resource string) bool,
+) []EnrichedTask {
 	out := make([]EnrichedTask, len(tasks))
 	for i, t := range tasks {
-		out[i] = EnrichTask(c, t)
+		out[i] = EnrichTask(c, t, canRead)
 	}
 	return out
+}
+
+func admits(canRead func(resource string) bool, resource string) bool {
+	return canRead == nil || canRead(resource)
 }
 
 // EnrichTasksWithin names each task's parents from the slices given rather than

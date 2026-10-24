@@ -156,6 +156,11 @@ type Cache struct {
 	lastSync       time.Time
 	listenerMu     sync.RWMutex
 	listeners      []listenerEntry
+
+	// notifyMu makes recording an event and handing it to listeners one step,
+	// so listeners see history order. Never held with c.mu; a listener must
+	// not write to the cache.
+	notifyMu       sync.Mutex
 	nextListenerID uint64
 	history        *History
 	serviceRef     serviceRefIndex
@@ -200,12 +205,14 @@ func New(onChange OnChangeFunc) *Cache {
 		mu:       &c.mu,
 		items:    make(map[string]swarm.Node),
 		nameFunc: func(n swarm.Node) string { return n.Description.Hostname },
+		version:  func(n swarm.Node) uint64 { return n.Version.Index },
 	}
 
 	c.configs = ResourceMap[swarm.Config]{
 		mu:       &c.mu,
 		items:    make(map[string]swarm.Config),
 		nameFunc: func(cfg swarm.Config) string { return cfg.Spec.Name },
+		version:  func(cfg swarm.Config) uint64 { return cfg.Version.Index },
 		onSet: func(_ string, old *swarm.Config, new_ *swarm.Config) {
 			if old != nil {
 				c.removeFromStack(EventConfig, old.ID, old.Spec.Labels)
@@ -221,6 +228,7 @@ func New(onChange OnChangeFunc) *Cache {
 		mu:       &c.mu,
 		items:    make(map[string]swarm.Secret),
 		nameFunc: func(s swarm.Secret) string { return s.Spec.Name },
+		version:  func(s swarm.Secret) uint64 { return s.Version.Index },
 		onSet: func(_ string, old *swarm.Secret, new_ *swarm.Secret) {
 			if old != nil {
 				c.removeFromStack(EventSecret, old.ID, old.Spec.Labels)
@@ -293,7 +301,8 @@ func (c *Cache) RestartCount(serviceID string, lookback time.Duration) uint64 {
 // Restarts returns the underlying RestartTracker for snapshot serialization.
 func (c *Cache) Restarts() *RestartTracker { return c.restarts }
 
-// AddOnChangeListener registers fn to be called on every cache change event.
+// AddOnChangeListener registers fn to be called on every cache change event,
+// one at a time and in history order. fn must not write to the cache.
 // The returned cancel function removes the listener; it is safe to call multiple times.
 func (c *Cache) AddOnChangeListener(fn OnChangeFunc) func() {
 	c.listenerMu.Lock()
@@ -329,6 +338,9 @@ func (c *Cache) notify(e Event) {
 		e.Service, e.Stack = c.removedFrom(e.Resource)
 	}
 
+	c.notifyMu.Lock()
+	defer c.notifyMu.Unlock()
+
 	if e.Type != EventSync {
 		entry := HistoryEntry{
 			Type:       e.Type,
@@ -344,12 +356,16 @@ func (c *Cache) notify(e Event) {
 
 		e.HistoryID = c.history.Append(entry)
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
+
+		if e.Action == "create" || e.Action == "remove" {
+			c.recordResourceCount(e.Type)
+		}
 	} else {
 		e.HistoryID = c.history.Count()
 	}
 
-	// Snapshot listeners under read lock, then call outside the lock to avoid
-	// re-entrant deadlock if a listener calls back into the cache.
+	// Snapshot listeners under read lock, then call outside it, so a listener
+	// may read the cache.
 	c.listenerMu.RLock()
 	fns := make([]OnChangeFunc, len(c.listeners))
 	for i, entry := range c.listeners {
@@ -451,7 +467,9 @@ func (c *Cache) notifyRefChanges(old, new refSet) {
 // --- Nodes ---
 
 func (c *Cache) SetNode(n swarm.Node) {
-	c.notify(c.nodes.Set(n.ID, n, EventNode))
+	if event, ok := c.nodes.Set(n.ID, n, EventNode); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetNode(id string) (swarm.Node, bool) { return c.nodes.Get(id) }
@@ -524,12 +542,18 @@ func (c *Cache) EachTask(yield func(swarm.Task) bool) {
 
 // --- Services ---
 
+// SetService ignores a service older than the cached one, as SetTask does a
+// task: two inspects of one resource can land in either order.
 func (c *Cache) SetService(s swarm.Service) {
 	newRefs := serviceRefs(s)
 
 	c.mu.Lock()
 	var oldRefs refSet
 	old, existed := c.services[s.ID]
+	if existed && s.Version.Index < old.Version.Index {
+		c.mu.Unlock()
+		return
+	}
 	if existed {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
@@ -600,6 +624,10 @@ func (c *Cache) SetTask(t swarm.Task) {
 	changed := true
 	wasFailure := false
 	old, existed := c.tasks[t.ID]
+	if existed && t.Version.Index < old.Version.Index {
+		c.mu.Unlock()
+		return
+	}
 	if existed {
 		// Status.Message captures the human-readable transition reason
 		// ("started", "shutdown requested", "rejected: …"). Without it
@@ -728,7 +756,9 @@ func (c *Cache) ListTasks() []swarm.Task {
 // --- Configs ---
 
 func (c *Cache) SetConfig(cfg swarm.Config) {
-	c.notify(c.configs.Set(cfg.ID, cfg, EventConfig))
+	if event, ok := c.configs.Set(cfg.ID, cfg, EventConfig); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetConfig(id string) (swarm.Config, bool) { return c.configs.Get(id) }
@@ -742,7 +772,9 @@ func (c *Cache) ListConfigs() []swarm.Config { return c.configs.List() }
 // --- Secrets ---
 
 func (c *Cache) SetSecret(s swarm.Secret) {
-	c.notify(c.secrets.Set(s.ID, s, EventSecret))
+	if event, ok := c.secrets.Set(s.ID, s, EventSecret); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetSecret(id string) (swarm.Secret, bool) { return c.secrets.Get(id) }
@@ -756,7 +788,9 @@ func (c *Cache) ListSecrets() []swarm.Secret { return c.secrets.List() }
 // --- Networks ---
 
 func (c *Cache) SetNetwork(n network.Summary) {
-	c.notify(c.networks.Set(n.ID, n, EventNetwork))
+	if event, ok := c.networks.Set(n.ID, n, EventNetwork); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetNetwork(id string) (network.Summary, bool) { return c.networks.Get(id) }
@@ -770,7 +804,9 @@ func (c *Cache) ListNetworks() []network.Summary { return c.networks.List() }
 // --- Volumes ---
 
 func (c *Cache) SetVolume(v volume.Volume) {
-	c.notify(c.volumes.Set(v.Name, v, EventVolume))
+	if event, ok := c.volumes.Set(v.Name, v, EventVolume); ok {
+		c.notify(event)
+	}
 }
 
 func (c *Cache) GetVolume(name string) (volume.Volume, bool) { return c.volumes.Get(name) }
@@ -861,6 +897,19 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	// A global service runs one task per ready node that is active or paused:
+	// pausing stops new placements but keeps running tasks. Placement
+	// constraints are not applied here, so a constrained one is overstated.
+	schedulable := 0
+	for _, n := range c.nodes.items {
+		availability := n.Spec.Availability
+		if n.Status.State == swarm.NodeStateReady &&
+			(availability == swarm.NodeAvailabilityActive ||
+				availability == swarm.NodeAvailabilityPause) {
+			schedulable++
+		}
+	}
+
 	out := make([]StackSummary, 0, len(c.stacks))
 	for _, stack := range c.stacks {
 		s := StackSummary{
@@ -887,7 +936,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 			} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
 				replicas = int(*svc.Spec.Mode.Replicated.Replicas)
 			} else if svc.Spec.Mode.Global != nil {
-				replicas = len(c.nodes.items)
+				replicas = schedulable
 			}
 			s.DesiredTasks += replicas
 
@@ -1505,27 +1554,40 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.restarts.Record(t.ServiceID, t.Status.Timestamp)
 	}
 
-	if data.HasNodes {
-		metrics.SetCacheResources("nodes", len(data.Nodes))
-	}
-	if data.HasServices {
-		metrics.SetCacheResources("services", len(data.Services))
-	}
-	if data.HasTasks {
-		metrics.SetCacheResources("tasks", len(data.Tasks))
-	}
-	if data.HasConfigs {
-		metrics.SetCacheResources("configs", len(data.Configs))
-	}
-	if data.HasSecrets {
-		metrics.SetCacheResources("secrets", len(data.Secrets))
-	}
-	if data.HasNetworks {
-		metrics.SetCacheResources("networks", len(data.Networks))
-	}
-	if data.HasVolumes {
-		metrics.SetCacheResources("volumes", len(data.Volumes))
+	for _, typ := range [...]EventType{
+		EventNode, EventService, EventTask, EventConfig, EventSecret, EventNetwork, EventVolume,
+	} {
+		c.recordResourceCount(typ)
 	}
 
 	c.notify(Event{Type: EventSync, Action: "full_sync", ID: ""})
+}
+
+// recordResourceCount publishes how many resources of one type the cache
+// holds. Called without c.mu, which it takes for reading.
+func (c *Cache) recordResourceCount(typ EventType) {
+	c.mu.RLock()
+	var count int
+	switch typ { //nolint:exhaustive // stacks and syncs are not counted
+	case EventNode:
+		count = len(c.nodes.items)
+	case EventService:
+		count = len(c.services)
+	case EventTask:
+		count = len(c.tasks)
+	case EventConfig:
+		count = len(c.configs.items)
+	case EventSecret:
+		count = len(c.secrets.items)
+	case EventNetwork:
+		count = len(c.networks.items)
+	case EventVolume:
+		count = len(c.volumes.items)
+	default:
+		c.mu.RUnlock()
+		return
+	}
+	c.mu.RUnlock()
+
+	metrics.SetCacheResources(string(typ)+"s", count)
 }

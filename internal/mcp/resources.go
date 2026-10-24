@@ -10,6 +10,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
@@ -56,7 +57,7 @@ var (
 			uri:         "cetacean://cluster",
 			name:        "cluster",
 			title:       "Swarm cluster overview",
-			description: "High-level cluster facts: node, service, task and stack counts, node readiness (ready, down, draining), task counts by state, total and reserved CPU and memory across the cluster, the largest single node's capacity, converged and degraded service counts, and the last sync time. Returns a single JSON document; updates push via notifications/resources/updated when any of those fields change.",
+			description: "High-level cluster facts: node, service, task and stack counts, node readiness (ready, down, draining), task counts by state, total and reserved CPU and memory across the cluster, the largest single node's capacity, converged and degraded service counts, and the last sync time. Returns a single JSON document. Not subscribable: re-read it, or subscribe to the nodes, services and stacks it summarises.",
 		},
 		{
 			uri:         "cetacean://recommendations",
@@ -88,8 +89,8 @@ var (
 		{
 			uri:         "cetacean://services/{id}/logs",
 			name:        "service_logs",
-			title:       "Service logs (streaming)",
-			description: "Live log stream for a service, merged across replicas. Subscribe via resources/subscribe to receive new log lines as notifications/resources/updated events. For a one-shot fetch of recent lines use the get_logs tool.",
+			title:       "Service logs",
+			description: "The most recent 100 log lines of a service, merged across replicas. A subscription is notified when the service or one of its tasks changes — a replica started, replaced or stopped — not on every new line; for those, call get_logs with the previous read's cursor as `since`.",
 		},
 		{
 			uri:         "cetacean://tasks/{id}",
@@ -294,13 +295,14 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		return cluster.NameHistoryTasks(s.cache, s.cache.History().List(cache.HistoryQuery{
 			Limit:   100,
 			Visible: cluster.HistoryReadable(s.readPredicate(ctx)),
-		})), nil
+		}), s.readPredicate(ctx)), nil
 
 	case "nodes":
 		if resourceID == "" {
 			return s.filterNodes(ctx, s.cache.ListNodes()), nil
 		}
-		node, err := resolved(s.cache.ResolveNode(resourceID))(uri)
+		node, found, err := s.cache.ResolveNode(resourceID)
+		node, err = resolved(node, found, s.visibleAmbiguity(ctx, "node", err))(uri)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +336,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.readableEnrichedTasks(ctx, s.cache.ListTasks()), nil
 		}
-		task, err := resolved(s.resolveTask(resourceID))(uri)
+		task, err := resolved(s.resolveTaskAs(auth.IdentityFromContext(ctx), resourceID))(uri)
 		if err != nil {
 			return nil, err
 		}
@@ -394,7 +396,8 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if resourceID == "" {
 			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
 		}
-		net, err := resolved(s.cache.ResolveNetwork(resourceID))(uri)
+		net, found, err := s.cache.ResolveNetwork(resourceID)
+		net, err = resolved(net, found, s.visibleAmbiguity(ctx, "network", err))(uri)
 		if err != nil {
 			return nil, err
 		}
@@ -427,6 +430,11 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 // callers wanting cursored pagination use the get_logs tool which accepts
 // `since` and `tail` arguments.
 func (s *Server) readServiceLogs(ctx context.Context, serviceID string) (any, error) {
+	release, err := s.claimLogRead(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	resp, err := s.readLogsImpl(ctx, docker.ServiceLog, serviceID, logOptions{tail: defaultLogTail})
 	if err != nil {
 		return nil, err

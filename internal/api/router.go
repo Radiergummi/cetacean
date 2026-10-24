@@ -140,6 +140,20 @@ func (h *Handlers) detailFeeds(
 	}
 }
 
+// taskDetailFeeds titles a task's feed with its name, which is its service's,
+// so the name is built per request against the caller's grants.
+func (h *Handlers) taskDetailFeeds() feedHandlers {
+	perRequest := func(render feedRenderer) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			canRead := h.readChecker(r)
+			name := func(id string) string { return cluster.ReadableTaskName(h.cache, id, canRead) }
+			h.feedDetailHandler(cache.EventTask, "id", name, render)(w, r)
+		}
+	}
+
+	return feedHandlers{atom: perRequest(renderAtom), jsonFeed: perRequest(renderJSONFeed)}
+}
+
 // routeRecorder is the mux NewRouter registers on: an http.ServeMux that also
 // remembers the patterns it was handed. The stdlib mux exposes no way to
 // enumerate them, and without the list nothing can hold the routes that exist
@@ -754,9 +768,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			func(w http.ResponseWriter, r *http.Request) {
 				h.streamResource(w, r, cache.EventTask, r.PathValue("id"))
 			},
-			h.detailFeeds(cache.EventTask, "id", func(id string) string {
-				return cluster.TaskDisplayName(h.cache, id)
-			}),
+			h.taskDetailFeeds(),
 			spa,
 		),
 	)

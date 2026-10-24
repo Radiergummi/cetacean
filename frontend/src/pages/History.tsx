@@ -60,7 +60,11 @@ export default function History() {
 
   const entries = useMemo(() => data?.pages.flatMap(({ items }) => items) ?? [], [data]);
 
-  const csvHref = apiPath(`/history.csv${resourceType ? `?type=${resourceType}` : ""}`);
+  const csvQuery = new URLSearchParams({
+    ...(resourceType ? { type: resourceType } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+  }).toString();
+  const csvHref = apiPath(`/history.csv${csvQuery ? `?${csvQuery}` : ""}`);
 
   return (
     <div>
