@@ -53,7 +53,7 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithNumber(
 					"tail",
 					mcplib.Description(
-						"Number of recent log lines to return per replica. Default 100.",
+						"Number of recent log lines to return in all: the newest of the lines merged across replicas, or across services on a stack or cluster read. Default 100, at most 1000.",
 					),
 				),
 				mcplib.WithString(

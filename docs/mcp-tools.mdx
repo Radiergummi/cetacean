@@ -82,8 +82,8 @@ resources they returned, so a host can offer somewhere to go next.
 What the cluster is doing now, and what it did recently.
 
 <McpTool name="get_logs" level={0}>
-    <Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail` (100 per
-        replica), `since`, `level` (`debug`, `info`, `warn`, `error`, `fatal`)</Fragment>
+    <Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail` (100 lines
+        in all, across replicas and services), `since`, `level` (`debug`, `info`, `warn`, `error`, `fatal`)</Fragment>
 
     Fetches recent log lines from one scope.
 

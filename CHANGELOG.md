@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP `get_logs` and the service logs resource are held to the same concurrency limits as REST log reads, overall and per caller
 - Tasks in search, `GET /history`, its feeds and the MCP history and events show the task ID instead of `<service>.<slot>` when you cannot read the service, and no longer match on its name
 - MCP `remove_task` and `get_logs` with `task` act on the task a `<service>.<slot>` name resolves to, and refuse an ID prefix instead of passing it to Docker
+- MCP prompts cite the fields resource reads actually return, and `get_logs` describes `tail` as a total across replicas, not per replica
 
 ## [0.17.0] - 2026-10-20
 

@@ -771,7 +771,7 @@ func TestToolScaleService(t *testing.T) {
 	// The result must describe the write, not the cache. Reading the service
 	// back from the cache reported the state before the mutation — an agent
 	// that scaled 2 to 5 was told 2, which reads as "the call did nothing",
-	// and the stale Version would collide on any follow-up write.
+	// and reported the Version from before the write.
 	switch {
 	case got.Replicas == nil:
 		t.Error("replicas is nil — the result must reflect the write, not the cache")
@@ -781,7 +781,7 @@ func TestToolScaleService(t *testing.T) {
 	}
 
 	if got.Version != 11 {
-		t.Errorf("version = %d, want 11 — a stale version breaks the next write",
+		t.Errorf("version = %d, want 11, the write's own rather than the cache's",
 			got.Version)
 	}
 }
