@@ -287,6 +287,18 @@ func TestRealIP_ClientResolution(t *testing.T) {
 			want:      "",
 		},
 		{
+			name:      "an unterminated quote cannot swallow the proxy's own element",
+			headers:   config.RFC7239Headers,
+			forwarded: []string{`for=198.51.100.66;x=", for=203.0.113.9`},
+			want:      "",
+		},
+		{
+			name:      "a proxy's element without for ends the chain",
+			headers:   config.RFC7239Headers,
+			forwarded: []string{"for=198.51.100.66, by=10.0.0.1;proto=https"},
+			want:      "",
+		},
+		{
 			name:    "an address left of an anonymised X-Forwarded-For hop is not believed",
 			headers: config.XForwardedHeaders,
 			xff:     "100.64.0.7, unknown",
