@@ -82,6 +82,26 @@ func TestSetAllowListOffersCreateOnlyForAGrantNamingTheType(t *testing.T) {
 	}
 }
 
+func TestTheNodeRoleOffersItsPut(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "n1", Description: swarm.NodeDescription{Hostname: "worker-1"}})
+	router := newTestRouterWithCache(t, c)
+
+	req := httptest.NewRequest(http.MethodGet, "/nodes/n1/role", nil)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if got := w.Header().Get("Allow"); got != "GET, HEAD, PUT" {
+		t.Errorf("Allow = %q, want GET, HEAD, PUT", got)
+	}
+	if vary := w.Header().Values("Vary"); !slices.ContainsFunc(vary, func(v string) bool {
+		return strings.Contains(v, "Authorization")
+	}) {
+		t.Errorf("Vary = %q, want it to name the identity", vary)
+	}
+}
+
 func TestSetAllowList_NoWrite(t *testing.T) {
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{
