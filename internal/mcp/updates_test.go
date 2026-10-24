@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -371,5 +372,50 @@ func TestUpdateServicePortsRejectsAPortWithNoTarget(t *testing.T) {
 
 	if err := cluster.ValidatePorts(ports); err == nil {
 		t.Error("a port with TargetPort 0 was accepted")
+	}
+}
+
+// A label patch is an object keyed by the label itself, not a JSON Pointer, so
+// a key holding a / or a ~ arrives exactly as written, never decoded as ~1 or ~0.
+func TestLabelPatchKeysAreTakenLiterally(t *testing.T) {
+	const patch = `{"app.kubernetes.io/name":"web","a~1b":"x","c~0d":null}`
+
+	current := map[string]string{"c~0d": "gone", "c~d": "kept"}
+	want := map[string]string{"app.kubernetes.io/name": "web", "a~1b": "x", "c~d": "kept"}
+
+	var gotService, gotNode map[string]string
+
+	writeClient := &fakeWriteClient{
+		simulatedLabels:     maps.Clone(current),
+		simulatedNodeLabels: maps.Clone(current),
+		updateServiceLabelsFn: func(
+			_ context.Context, _ string, labels map[string]string,
+		) (swarm.Service, error) {
+			gotService = labels
+
+			return swarm.Service{}, nil
+		},
+		updateNodeLabelsFn: func(
+			_ context.Context, _ string, labels map[string]string,
+		) (swarm.Node, error) {
+			gotNode = labels
+
+			return swarm.Node{}, nil
+		},
+	}
+
+	handler := newToolTestServer(t, seededDescribeCache(), writeClient, config.OpsConfiguration).
+		Handler()
+
+	callTool(t, handler, `{"name":"update_service","arguments":`+
+		`{"id":"web","section":"labels","value":`+patch+`}}`)
+	callTool(t, handler, `{"name":"update_node_labels","arguments":`+
+		`{"id":"node1","labels":`+patch+`}}`)
+
+	if !maps.Equal(gotService, want) {
+		t.Errorf("service labels = %v, want %v", gotService, want)
+	}
+	if !maps.Equal(gotNode, want) {
+		t.Errorf("node labels = %v, want %v", gotNode, want)
 	}
 }

@@ -799,12 +799,19 @@ func mergePatchMutator(
 
 // decodeArgInto round-trips the named argument through JSON into target. The
 // caller passes a pointer to a struct/slice; this lets handlers accept rich
-// Docker types from MCP clients without per-field decoding.
+// Docker types from MCP clients without per-field decoding. A null is refused
+// like an absent key: every caller replaces wholesale, where it would clear.
 func decodeArgInto(req mcplib.CallToolRequest, key string, target any) error {
 	args := req.GetArguments()
 	raw, ok := args[key]
 	if !ok {
 		return fmt.Errorf("missing required argument %q", key)
+	}
+	if raw == nil {
+		return fmt.Errorf(
+			"argument %q is null; pass the complete value, or an empty one to clear it",
+			key,
+		)
 	}
 	b, err := json.Marshal(raw)
 	if err != nil {

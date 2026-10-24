@@ -300,9 +300,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	slog.Info("rotating swarm join token", "target", req.Target)
 
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		if !writeSwarmConflict(w, r, err) {
-			writeErrorCode(w, r, "SWM006", "failed to rotate token: "+err.Error())
-		}
+		writeSwarmErrorCode(w, r, err, "SWM006", "failed to rotate token")
 		return
 	}
 
@@ -328,9 +326,7 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 
 	flags := swarm.UpdateFlags{RotateManagerUnlockKey: true}
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		if !writeSwarmConflict(w, r, err) {
-			writeErrorCode(w, r, "SWM007", "failed to rotate unlock key: "+err.Error())
-		}
+		writeSwarmErrorCode(w, r, err, "SWM007", "failed to rotate unlock key")
 		return
 	}
 
@@ -382,7 +378,7 @@ func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 
 	key, err := h.systemClient.GetUnlockKey(ctx)
 	if err != nil {
-		writeErrorCode(w, r, "SWM009", "failed to get unlock key: "+err.Error())
+		writeSwarmErrorCode(w, r, err, "SWM009", "failed to get unlock key")
 		return
 	}
 
@@ -426,7 +422,7 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 	slog.Info("unlocking swarm")
 
 	if err := h.systemClient.UnlockSwarm(ctx, body.UnlockKey); err != nil {
-		writeErrorCode(w, r, "SWM008", "failed to unlock swarm: "+err.Error())
+		writeSwarmErrorCode(w, r, err, "SWM008", "failed to unlock swarm")
 		return
 	}
 
@@ -437,17 +433,27 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 // act on keeps the daemon's text; anything else may name hosts and internals,
 // so it is logged and the response says only what failed.
 func writeSwarmError(w http.ResponseWriter, r *http.Request, err error, failed string) {
+	writeSwarmErrorCode(w, r, err, "SWM003", failed)
+}
+
+// writeSwarmErrorCode is writeSwarmError for a write with an error code of its own.
+func writeSwarmErrorCode(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	code, failed string,
+) {
 	if writeSwarmConflict(w, r, err) {
 		return
 	}
 
 	if cerrdefs.IsInvalidArgument(err) || cerrdefs.IsUnavailable(err) {
-		writeErrorCode(w, r, "SWM003", failed+": "+err.Error())
+		writeErrorCode(w, r, code, failed+": "+err.Error())
 		return
 	}
 
 	slog.Error(failed, "error", err)
-	writeErrorCode(w, r, "SWM003", failed)
+	writeErrorCode(w, r, code, failed)
 }
 
 // writeSwarmConflict answers a write that lost the race against another to the

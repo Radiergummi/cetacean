@@ -437,16 +437,41 @@ func TestAbsURLOriginBehindRealIP(t *testing.T) {
 }
 
 func TestBasePathMiddlewareKeepsAnEscapedName(t *testing.T) {
+	for _, path := range []string{
+		"/cetacean/plugins/vieux%2Fsshfs%3Alatest",
+		"/cet%61cean/plugins/vieux%2Fsshfs%3Alatest",
+		"/%63etacean/plugins/vieux%2Fsshfs%3Alatest",
+	} {
+		t.Run(path, func(t *testing.T) {
+			var captured string
+			inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captured = r.URL.EscapedPath()
+			})
+
+			handler := basePathMiddleware("/cetacean", noRoutes(), inner)
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+
+			if want := "/plugins/vieux%2Fsshfs%3Alatest"; captured != want {
+				t.Errorf("inner saw escaped path %q, want %q", captured, want)
+			}
+		})
+	}
+}
+
+// An escaped slash ending the prefix leaves no segment boundary in the raw
+// path to cut at; the stripped path must still route as the decoded one does.
+func TestBasePathMiddlewareStripsAPrefixEndingInAnEscapedSlash(t *testing.T) {
 	var captured string
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured = r.URL.EscapedPath()
 	})
 
 	handler := basePathMiddleware("/cetacean", noRoutes(), inner)
-	req := httptest.NewRequest(http.MethodGet, "/cetacean/plugins/vieux%2Fsshfs%3Alatest", nil)
+	req := httptest.NewRequest(http.MethodGet, "/cetacean%2Fnodes", nil)
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
-	if want := "/plugins/vieux%2Fsshfs%3Alatest"; captured != want {
+	if want := "/nodes"; captured != want {
 		t.Errorf("inner saw escaped path %q, want %q", captured, want)
 	}
 }

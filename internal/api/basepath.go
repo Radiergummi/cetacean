@@ -211,9 +211,10 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 
 		if strings.HasSuffix(stripped, "/") {
 			trimmed := strings.TrimRight(stripped, "/")
+			raw := r.URL.RawPath
 			target := url.URL{
 				Path:     basePath + trimmed,
-				RawPath:  strings.TrimRight(r.URL.RawPath, "/"),
+				RawPath:  raw[:rawOffset(raw, len(basePath)+len(trimmed))],
 				RawQuery: r.URL.RawQuery,
 			}
 			http.Redirect(w, r, target.String(), http.StatusMovedPermanently)
@@ -223,7 +224,35 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		ctx := context.WithValue(r.Context(), basePathKey, basePath)
 		r = r.WithContext(ctx)
 		r.URL.Path = stripped
-		r.URL.RawPath = strings.TrimPrefix(r.URL.RawPath, basePath)
+		r.URL.RawPath = trimRawPrefix(r.URL.RawPath, len(basePath))
 		next.ServeHTTP(w, r)
 	})
+}
+
+// rawOffset returns where, in the escaped path raw, decoded byte n begins: a
+// %XX escape decodes to one byte. raw is "" when the path needs no escaping of
+// its own, and stays "".
+func rawOffset(raw string, n int) int {
+	i := 0
+	for ; n > 0 && i < len(raw); n-- {
+		if raw[i] == '%' {
+			i += 3
+		} else {
+			i++
+		}
+	}
+
+	return min(i, len(raw))
+}
+
+// trimRawPrefix removes the first n decoded bytes from the escaped path raw,
+// however the client spelled them. An escaped slash left at the cut becomes
+// the segment boundary the decoded path already starts with.
+func trimRawPrefix(raw string, n int) string {
+	rest := raw[rawOffset(raw, n):]
+	if len(rest) >= 3 && strings.EqualFold(rest[:3], "%2F") {
+		return "/" + rest[3:]
+	}
+
+	return rest
 }
