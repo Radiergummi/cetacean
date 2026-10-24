@@ -407,6 +407,13 @@ var errorRegistry = map[string]ErrorDef{
 	"SWM011": {Code: "SWM011", Title: "Invalid Token Target", Status: http.StatusBadRequest,
 		Description: "The token rotation target must be either worker or manager.",
 		Suggestion:  "Use target=worker or target=manager."},
+	"SWM012": {
+		Code:        "SWM012",
+		Title:       "Swarm Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The swarm configuration changed between Cetacean reading it and applying the update.",
+		Suggestion:  "Retry the operation; it applies to the configuration as it now is.",
+	},
 
 	// ── PLG: plugin operations ────────────────────────────────────────
 	"PLG001": {Code: "PLG001", Title: "Plugin List Failed", Status: http.StatusInternalServerError,

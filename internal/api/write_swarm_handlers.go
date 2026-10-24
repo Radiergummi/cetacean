@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -299,7 +300,9 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	slog.Info("rotating swarm join token", "target", req.Target)
 
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeErrorCode(w, r, "SWM006", "failed to rotate token: "+err.Error())
+		if !writeSwarmConflict(w, r, err) {
+			writeErrorCode(w, r, "SWM006", "failed to rotate token: "+err.Error())
+		}
 		return
 	}
 
@@ -325,12 +328,9 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 
 	flags := swarm.UpdateFlags{RotateManagerUnlockKey: true}
 	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeErrorCode(
-			w,
-			r,
-			"SWM007",
-			"failed to rotate unlock key: "+err.Error(),
-		)
+		if !writeSwarmConflict(w, r, err) {
+			writeErrorCode(w, r, "SWM007", "failed to rotate unlock key: "+err.Error())
+		}
 		return
 	}
 
@@ -437,6 +437,10 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 // act on keeps the daemon's text; anything else may name hosts and internals,
 // so it is logged and the response says only what failed.
 func writeSwarmError(w http.ResponseWriter, r *http.Request, err error, failed string) {
+	if writeSwarmConflict(w, r, err) {
+		return
+	}
+
 	if cerrdefs.IsInvalidArgument(err) || cerrdefs.IsUnavailable(err) {
 		writeErrorCode(w, r, "SWM003", failed+": "+err.Error())
 		return
@@ -444,4 +448,16 @@ func writeSwarmError(w http.ResponseWriter, r *http.Request, err error, failed s
 
 	slog.Error(failed, "error", err)
 	writeErrorCode(w, r, "SWM003", failed)
+}
+
+// writeSwarmConflict answers a write that lost the race against another to the
+// swarm's version, and reports whether it did.
+func writeSwarmConflict(w http.ResponseWriter, r *http.Request, err error) bool {
+	if !strings.Contains(err.Error(), sequenceConflict) {
+		return false
+	}
+
+	writeErrorCode(w, r, "SWM012", "the swarm changed while it was being updated")
+
+	return true
 }

@@ -1638,3 +1638,48 @@ func TestHandleSwarmUpdateErrorKeepsTheDaemonsText(t *testing.T) {
 		})
 	}
 }
+
+// Every swarm write reads the version it updates moments before; another
+// writer landing in between is a conflict with the current state, not a fault.
+func TestASwarmUpdateOutOfSequenceIsAConflict(t *testing.T) {
+	writes := map[string]func(h *Handlers, w http.ResponseWriter){
+		"orchestration": func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePatchSwarmOrchestration(w, mergePatchRequest("/swarm/orchestration", `{}`))
+		},
+		"force-rotate-ca": func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePostForceRotateCA(
+				w,
+				httptest.NewRequest(http.MethodPost, "/swarm/force-rotate-ca", nil),
+			)
+		},
+		"rotate-unlock-key": func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePostRotateUnlockKey(
+				w,
+				httptest.NewRequest(http.MethodPost, "/swarm/rotate-unlock-key", nil),
+			)
+		},
+		"rotate-token": func(h *Handlers, w http.ResponseWriter) {
+			h.HandlePostRotateToken(w, httptest.NewRequest(
+				http.MethodPost, "/swarm/rotate-token", strings.NewReader(`{"target":"worker"}`),
+			))
+		},
+	}
+
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			sc := &mockSystemClient{
+				swarmInspectFn: func(context.Context) (swarm.Swarm, error) { return validSwarm(), nil },
+				updateSwarmFn: func(context.Context, swarm.Spec, swarm.Version, swarm.UpdateFlags) error {
+					return errors.New("rpc error: code = Unknown desc = update out of sequence")
+				},
+			}
+
+			rec := httptest.NewRecorder()
+			write(newSwarmHandlers(t, sc), rec)
+
+			if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "SWM012") {
+				t.Errorf("status = %d, want 409 SWM012: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}

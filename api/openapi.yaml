@@ -1373,9 +1373,21 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          description: The update failed (`SWM003`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/raft:
     patch:
@@ -1433,9 +1445,21 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          description: The update failed (`SWM003`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/dispatcher:
     patch:
@@ -1482,9 +1506,21 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          description: The update failed (`SWM003`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/ca:
     patch:
@@ -1531,9 +1567,21 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          description: The update failed (`SWM003`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/encryption:
     patch:
@@ -1579,9 +1627,21 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          description: The update failed (`SWM003`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/rotate-token:
     post:
@@ -1616,8 +1676,20 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "500":
+          description: The rotation failed (`SWM006`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/rotate-unlock-key:
     post:
@@ -1637,9 +1709,19 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "500":
+          description: The rotation failed (`SWM007`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/force-rotate-ca:
     post:
@@ -1659,9 +1741,19 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/SwarmConflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "500":
+          description: The rotation failed (`SWM003`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "501":
+          $ref: "#/components/responses/SwarmUnavailable"
+        "503":
+          $ref: "#/components/responses/SwarmInspectFailed"
 
   /swarm/plugins:
     get:
@@ -2735,8 +2827,12 @@ paths:
                       node:
                         type: object
                         description: Docker swarm.Node object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2832,6 +2928,8 @@ paths:
           description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2917,6 +3015,8 @@ paths:
                       node:
                         type: object
                         description: Docker swarm.Node object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -3269,8 +3369,12 @@ paths:
                 $ref: "#/components/schemas/ServiceDetail"
         "202":
           $ref: "#/components/responses/ServiceAccepted"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3315,8 +3419,12 @@ paths:
                 $ref: "#/components/schemas/ServiceDetail"
         "202":
           $ref: "#/components/responses/ServiceAccepted"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3366,8 +3474,12 @@ paths:
                 integrations: []
         "202":
           $ref: "#/components/responses/ServiceAccepted"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3414,6 +3526,10 @@ paths:
                 integrations: []
         "202":
           $ref: "#/components/responses/ServiceAccepted"
+        "204":
+          description: No content (Prefer return=minimal)
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3509,6 +3625,8 @@ paths:
           description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3573,8 +3691,12 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ServiceResources"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "412":
@@ -3634,8 +3756,12 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ServicePlacement"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3701,8 +3827,12 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ServicePorts"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3765,8 +3895,12 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ServiceUpdatePolicy"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3829,8 +3963,12 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ServiceRollbackPolicy"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -3894,8 +4032,12 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/DetailEnvelope"
                   - $ref: "#/components/schemas/ServiceLogDriver"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -4056,6 +4198,8 @@ paths:
                       healthcheck:
                         type: object
                         description: Docker container.HealthConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4103,6 +4247,8 @@ paths:
                       healthcheck:
                         type: object
                         description: Docker container.HealthConfig object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4165,7 +4311,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/merge-patch+json:
             schema:
               type: object
               properties:
@@ -4210,6 +4356,8 @@ paths:
                               type: string
                             fileName:
                               type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4220,6 +4368,8 @@ paths:
           $ref: "#/components/responses/Conflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   /services/{id}/secrets:
     get:
@@ -4270,7 +4420,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/merge-patch+json:
             schema:
               type: object
               properties:
@@ -4315,6 +4465,8 @@ paths:
                               type: string
                             fileName:
                               type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4325,6 +4477,8 @@ paths:
           $ref: "#/components/responses/Conflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   /services/{id}/networks:
     get:
@@ -4375,7 +4529,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/merge-patch+json:
             schema:
               type: object
               properties:
@@ -4417,6 +4571,8 @@ paths:
                               type: array
                               items:
                                 type: string
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4427,6 +4583,8 @@ paths:
           $ref: "#/components/responses/Conflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   /services/{id}/mounts:
     get:
@@ -4468,7 +4626,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          application/merge-patch+json:
             schema:
               type: object
               properties:
@@ -4499,6 +4657,8 @@ paths:
                         items:
                           type: object
                           description: Docker mount.Mount object
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4509,6 +4669,8 @@ paths:
           $ref: "#/components/responses/Conflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   /services/{id}/container-config:
     get:
@@ -4717,6 +4879,8 @@ paths:
                 $ref: "#/components/schemas/ServiceDetail"
         "202":
           $ref: "#/components/responses/ServiceAccepted"
+        "204":
+          description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -4906,8 +5070,16 @@ paths:
       responses:
         "204":
           description: Task removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: The Docker Engine no longer tracks the task (`TSK001`)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
 
@@ -5623,6 +5795,8 @@ paths:
           description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -5934,6 +6108,8 @@ paths:
           description: No content (Prefer return=minimal)
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -6913,6 +7089,24 @@ components:
             detail: "error during connect: Get \"http://docker/v1.51/plugins/vieux/sshfs:latest/json\": EOF"
             instance: /plugins/vieux/sshfs:latest
             requestId: req_a1b2c3d4e5f6
+    SwarmConflict:
+      description: The swarm changed between Cetacean reading it and applying the update (`SWM012`); retry
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    SwarmUnavailable:
+      description: The swarm API is not available; Cetacean is not connected to a swarm manager (`SWM001`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    SwarmInspectFailed:
+      description: The current swarm state could not be read, so nothing was changed (`SWM002`)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
     Forbidden:
       description: Access denied by operations level, ACL, cross-origin protection, or a rejected credential no HTTP challenge can ask for
       content:
