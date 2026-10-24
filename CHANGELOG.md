@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - An event stream resuming from the very first event after the change history filled up now resyncs instead of silently missing events
 - A service, task or node no longer briefly shows an older state after a burst of changes
-- Live updates no longer skip a change when the browser reconnects during a burst of changes
+- Live updates no longer skip changes when a browser reconnects during a burst or falls behind: it gets a `sync` event instead, and one that stops reading is disconnected
 - `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
 - A stack's desired task count expects a global service's task only on nodes that are ready and active, not on drained or down ones
 

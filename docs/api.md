@@ -604,7 +604,7 @@ The `action` field says what happened:
 | `update` | An existing resource changed. The collection's size is unaffected. |
 | `remove` | The resource is gone. |
 | `ref_changed` | A resource this one cross-references changed. |
-| `full_sync` | Sent as a `sync` event when the stream couldn't be replayed from the client's cursor. Refetch. |
+| `full_sync` | Sent as a `sync` event when the stream couldn't be replayed from the client's cursor, or the client fell behind and missed events. Refetch. |
 
 Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100 ms)
 are sent together as a `batch` event:
@@ -642,6 +642,8 @@ Each event carries an `id:`. Treat it as opaque: it names a position in the chan
 EventSource clients send `Last-Event-ID` on reconnect and the server replays what they missed from the change history.
 Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer or one written
 before Cetacean restarted; all three send a `sync` event telling the client to refetch.
+A client that reads too slowly to take every event gets a `sync` event in place of the ones it missed, and one that
+stops reading altogether is disconnected after 15 seconds, so it reconnects from its last cursor.
 
 ### Metrics streams
 

@@ -3,6 +3,7 @@ package sse
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -32,6 +34,15 @@ type sseClient struct {
 	match  func(cache.Event) bool // nil means accept all
 	done   chan struct{}
 	owner  string
+
+	// lagged marks a client an event it matched never reached. Its next frame
+	// is a sync rather than an id past the gap, which a reconnect would skip.
+	lagged atomic.Bool
+}
+
+// accepts reports whether the client's filter admits e.
+func (c *sseClient) accepts(e cache.Event) bool {
+	return c.match == nil || c.match(e)
 }
 
 const (
@@ -41,6 +52,11 @@ const (
 	// identity, or address under auth none, can hold every slot.
 	MaxClientsPerOwner = MaxClients / 4
 )
+
+// writeTimeout bounds one write to a stream. The server sets no write timeout
+// for streams to share, so without it a client that stops reading holds its
+// slot, and shutdown, for as long as the connection lives.
+var writeTimeout = 15 * time.Second
 
 // ErrorWriter is a callback for writing HTTP error responses.
 // This decouples the SSE package from the API error registry.
@@ -101,6 +117,14 @@ func (b *Broadcaster) Broadcast(e cache.Event) {
 	default:
 		metrics.RecordSSEDrop()
 		slog.Warn("SSE broadcast buffer full, dropping event", "type", e.Type, "id", e.ID)
+
+		b.mu.RLock()
+		for c := range b.clients {
+			if c.accepts(e) {
+				c.lagged.Store(true)
+			}
+		}
+		b.mu.RUnlock()
 	}
 }
 
@@ -111,17 +135,16 @@ func (b *Broadcaster) fanOut() {
 		case e := <-b.inbox:
 			b.mu.RLock()
 			for c := range b.clients {
-				if c.match != nil && !c.match(e) {
+				if !c.accepts(e) {
 					continue
 				}
 				select {
 				case c.events <- e:
 				default:
 					// Slow client: drop the event rather than block the
-					// broadcaster goroutine. The drop is otherwise invisible,
-					// so it is counted — a steady rate is the only signal that
-					// a UI is silently missing live updates.
+					// broadcaster goroutine, and resync the client instead.
 					metrics.RecordSSEClientDrop()
+					c.lagged.Store(true)
 				}
 			}
 			b.mu.RUnlock()
@@ -174,8 +197,7 @@ func (b *Broadcaster) ServeSSE(
 	match func(cache.Event) bool,
 	replayType cache.EventType,
 ) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	if _, ok := w.(http.Flusher); !ok {
 		b.writeError(w, r, "API005", "streaming not supported")
 		return
 	}
@@ -212,12 +234,8 @@ func (b *Broadcaster) ServeSSE(
 	b.mu.Unlock()
 	metrics.RecordSSEConnect()
 
-	flusher.Flush()
-
-	var skipBelow uint64
-	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && b.replay != nil {
-		skipBelow = b.replayEvents(w, flusher, lastID, replayType, client.match)
-	}
+	stream := newStreamWriter(w)
+	defer stream.clearDeadline()
 
 	defer func() {
 		b.mu.Lock()
@@ -236,6 +254,26 @@ func (b *Broadcaster) ServeSSE(
 		metrics.RecordSSEDisconnect()
 	}()
 
+	if stream.send(func() error { return nil }) != nil {
+		return
+	}
+
+	var skipBelow uint64
+	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && b.replay != nil {
+		var err error
+		if skipBelow, err = b.replayEvents(stream, lastID, replayType, client.match); err != nil {
+			return
+		}
+	}
+
+	// A lagged client's pending batch has a gap, so it is not written on the
+	// way out: the client reconnects from its last whole cursor instead.
+	finish := func(batch []cache.Event) {
+		if len(batch) > 0 && !client.lagged.Load() {
+			_ = b.writeFrame(stream, batch)
+		}
+	}
+
 	batchTicker := time.NewTicker(b.batchInterval)
 	defer batchTicker.Stop()
 	keepalive := time.NewTicker(b.keepaliveInterval)
@@ -246,9 +284,7 @@ func (b *Broadcaster) ServeSSE(
 		select {
 		case e, ok := <-client.events:
 			if !ok {
-				if len(batch) > 0 {
-					WriteBatch(w, flusher, batch, b.basePath, b.epoch)
-				}
+				finish(batch)
 				return
 			}
 			// Skip events already sent during replay. Only clear the dedup
@@ -263,41 +299,51 @@ func (b *Broadcaster) ServeSSE(
 			}
 			batch = append(batch, e)
 		case <-batchTicker.C:
+			// The sync covers the events queued behind it, which are skipped.
+			if client.lagged.Swap(false) {
+				batch = batch[:0]
+				skipBelow = b.replayPosition()
+				if b.writeFrame(stream, []cache.Event{syncEvent(skipBelow)}) != nil {
+					return
+				}
+				keepalive.Reset(b.keepaliveInterval)
+
+				continue
+			}
 			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, b.basePath, b.epoch)
+				if b.writeFrame(stream, batch) != nil {
+					return
+				}
 				batch = batch[:0]
 				keepalive.Reset(b.keepaliveInterval)
 			}
 		case <-keepalive.C:
-			fmt.Fprint(w, ": keepalive\n\n")
-			flusher.Flush()
-		case <-r.Context().Done():
-			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, b.basePath, b.epoch)
+			err := stream.send(func() error {
+				_, err := fmt.Fprint(stream, ": keepalive\n\n")
+				return err
+			})
+			if err != nil {
+				return
 			}
+		case <-r.Context().Done():
+			finish(batch)
 			return
 		case <-client.done:
-			if len(batch) > 0 {
-				WriteBatch(w, flusher, batch, b.basePath, b.epoch)
-			}
+			finish(batch)
 			return
 		}
 	}
 }
 
 func (b *Broadcaster) replayEvents(
-	w io.Writer,
-	flusher http.Flusher,
+	stream *streamWriter,
 	lastID string,
 	replayType cache.EventType,
 	match func(cache.Event) bool,
-) uint64 {
-	writeSync := func() uint64 {
+) (uint64, error) {
+	writeSync := func() (uint64, error) {
 		count := b.replay.Count()
-		WriteBatch(w, flusher, []cache.Event{{
-			Type: cache.EventSync, Action: "full_sync", HistoryID: count,
-		}}, b.basePath, b.epoch)
-		return count
+		return count, b.writeFrame(stream, []cache.Event{syncEvent(count)})
 	}
 
 	// Detail/stack streams are ineligible for replay — send sync.
@@ -316,7 +362,7 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	if len(entries) == 0 {
-		return afterID
+		return afterID, nil
 	}
 
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
@@ -344,11 +390,71 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	if len(replay) == 0 {
-		return afterID
+		return afterID, nil
 	}
 
-	WriteBatch(w, flusher, replay, b.basePath, b.epoch)
-	return replay[len(replay)-1].HistoryID
+	return replay[len(replay)-1].HistoryID, b.writeFrame(stream, replay)
+}
+
+// writeFrame writes events as one frame under the stream's write deadline.
+func (b *Broadcaster) writeFrame(stream *streamWriter, events []cache.Event) error {
+	return stream.send(func() error {
+		return WriteBatch(stream, stream, events, b.basePath, b.epoch)
+	})
+}
+
+// syncEvent tells a client to refetch, at history position id.
+func syncEvent(id uint64) cache.Event {
+	return cache.Event{Type: cache.EventSync, Action: "full_sync", HistoryID: id}
+}
+
+// replayPosition is the newest history id, or zero without a history.
+func (b *Broadcaster) replayPosition() uint64 {
+	if b.replay == nil {
+		return 0
+	}
+
+	return b.replay.Count()
+}
+
+// streamWriter writes one stream under a per-write deadline and keeps the
+// first flush error, which http.Flusher would swallow.
+type streamWriter struct {
+	io.Writer
+	controller *http.ResponseController
+	err        error
+}
+
+func newStreamWriter(w http.ResponseWriter) *streamWriter {
+	return &streamWriter{Writer: w, controller: http.NewResponseController(w)}
+}
+
+func (s *streamWriter) Flush() {
+	if err := s.controller.Flush(); err != nil && s.err == nil {
+		s.err = err
+	}
+}
+
+// send runs write under a fresh deadline and flushes. A writer that cannot
+// take a deadline is written to without one rather than refused.
+func (s *streamWriter) send(write func() error) error {
+	err := s.controller.SetWriteDeadline(time.Now().Add(writeTimeout))
+	if err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+
+	if err := write(); err != nil {
+		return err
+	}
+	s.Flush()
+
+	return s.err
+}
+
+// clearDeadline lifts the deadline, which would otherwise outlive the handler
+// on a connection the server reuses.
+func (s *streamWriter) clearDeadline() {
+	_ = s.controller.SetWriteDeadline(time.Time{})
 }
 
 // EventID is the id the stream writes for a history position.
@@ -558,12 +664,13 @@ func ResourceType(typ cache.EventType) string {
 	}
 }
 
+// WriteBatch writes events as one frame, returning the first write error.
 func WriteBatch(
 	w io.Writer,
 	flusher http.Flusher,
 	events []cache.Event,
 	basePath, epoch string,
-) {
+) error {
 	var maxID uint64
 	for _, e := range events {
 		if e.HistoryID > maxID {
@@ -573,14 +680,24 @@ func WriteBatch(
 
 	if len(events) == 1 {
 		data, _ := json.Marshal(ToSSEEvent(events[0], basePath))
-		fmt.Fprintf(w, "id: %s-%d\nevent: %s\ndata: %s\n\n", epoch, maxID, events[0].Type, data)
+		_, err := fmt.Fprintf(
+			w, "id: %s-%d\nevent: %s\ndata: %s\n\n", epoch, maxID, events[0].Type, data,
+		)
+		if err != nil {
+			return err
+		}
 	} else {
 		enriched := make([]Event, len(events))
 		for i, e := range events {
 			enriched[i] = ToSSEEvent(e, basePath)
 		}
 		data, _ := json.Marshal(enriched)
-		fmt.Fprintf(w, "id: %s-%d\nevent: batch\ndata: %s\n\n", epoch, maxID, data)
+		_, err := fmt.Fprintf(w, "id: %s-%d\nevent: batch\ndata: %s\n\n", epoch, maxID, data)
+		if err != nil {
+			return err
+		}
 	}
 	flusher.Flush()
+
+	return nil
 }
