@@ -292,10 +292,11 @@ func TestOIDCProvider_RegisterRoutes_Login(t *testing.T) {
 
 func TestClaimsToIdentity(t *testing.T) {
 	claims := map[string]any{
-		"sub":    "user-456",
-		"name":   "Jane Doe",
-		"email":  "jane@example.com",
-		"groups": []any{"admin", "dev"},
+		"sub":            "user-456",
+		"name":           "Jane Doe",
+		"email":          "jane@example.com",
+		"email_verified": true,
+		"groups":         []any{"admin", "dev"},
 	}
 
 	id := claimsToIdentity(claims)
@@ -314,6 +315,38 @@ func TestClaimsToIdentity(t *testing.T) {
 	}
 	if id.Provider != "oidc" {
 		t.Errorf("Provider = %q, want %q", id.Provider, "oidc")
+	}
+}
+
+func TestClaimsToIdentity_EmailVerified(t *testing.T) {
+	const email = "alice@corp.com"
+
+	tests := []struct {
+		name     string
+		verified any // absent omits the claim
+		absent   bool
+		want     string
+	}{
+		{"true", true, false, email},
+		{"false", false, false, ""},
+		{"absent", nil, true, email},
+		{"string true", "true", false, email},
+		{"string false", "false", false, ""},
+		{"string True", "True", false, ""},
+		{"number", 1, false, ""},
+		{"null", nil, false, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			claims := map[string]any{"sub": "user-1", "email": email}
+			if !tt.absent {
+				claims["email_verified"] = tt.verified
+			}
+
+			if got := claimsToIdentity(claims).Email; got != tt.want {
+				t.Errorf("Email = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

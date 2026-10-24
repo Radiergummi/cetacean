@@ -868,13 +868,17 @@ export const types: ResourceType[] = [
   },
 ];
 
-/** Build the JSON-LD context document from the property definitions. */
+/**
+ * Build the JSON-LD context document from the property definitions. RFC 9457's
+ * terms stay out: other responses use `type` and `status` for their own fields,
+ * so only a problem document's inline context maps them.
+ */
 export function buildContext(): Record<string, unknown> {
   const context: Record<string, unknown> = {
     "@vocab": "urn:cetacean:",
   };
 
-  for (const { container, iri, name } of [...properties, ...rfc9457Properties]) {
+  for (const { container, iri, name } of properties) {
     context[name] = container ? { "@container": container } : iri;
   }
 
@@ -924,7 +928,7 @@ export function schemaMarkdown(): string {
       "Each API response includes an `@type` value identifying the resource kind.",
       ...typeEntries,
       "## Properties",
-      "Properties are mapped to IRIs via the `@context`. The `urn:cetacean:` namespace is the default vocabulary; [RFC 9457](https://www.rfc-editor.org/info/rfc9457/) problem detail fields use `urn:ietf:rfc:9457#`.",
+      "Properties are mapped to IRIs via the `@context`. The `urn:cetacean:` namespace is the default vocabulary; [RFC 9457](https://www.rfc-editor.org/info/rfc9457/) problem detail fields use `urn:ietf:rfc:9457#`, mapped by the `@context` each problem document carries.",
       ...propertyEntries,
     ].join("\n\n") + "\n"
   );

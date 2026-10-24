@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider; sessions from before the upgrade keep their email until they expire
+- **Breaking:** a problem details response's `@context` is now an array; `type`, `status` and `detail` in other responses no longer map to RFC 9457
+- **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
+
 ### Fixed
 - The log viewer's regex search no longer repeats matched text or crashes the page when the pattern contains a capture group
 - The Tasks page's state filter covers every task, not only the loaded pages, and counts only the state you selected
@@ -20,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The History page's Download CSV applies the name filter as well as the type
 - A command palette action whose permission check fails says so, instead of doing nothing
 - Icon-only buttons, such as Edit replicas and the editors' remove buttons, have names a screen reader announces
+- Built with Go 1.27.3, which refuses the compromised intermediate certificates in GO-2026-6809 when connecting to a TLS Docker Engine, an OIDC provider, or Tailscale
+- MCP no longer lists the IDs of nodes or networks sharing a name to a caller who can't read that name
+- MCP's cluster-wide metrics ranking is held to the services and nodes you can read unless you have `read` on `*`
+- A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
+- Configuring a plugin no longer writes its settings, which often carry credentials, to the log
+- An MCP `find` call with a negative `limit` no longer crashes Cetacean
+- Behind `server.trusted_proxies`, an address written to the left of a hop the proxy names `unknown` or obfuscates (`_hidden`) is no longer taken as the client's
 
 ## [0.17.0] - 2026-10-20
 

@@ -354,3 +354,27 @@ func TestRankScopeRestrictsWhenGrantsHideSomething(t *testing.T) {
 		t.Errorf("rankScope = %q, must not name a service the caller cannot read", got)
 	}
 }
+
+// Reading every service in the cache is not reading everything: Prometheus may
+// hold another cluster's series, so only a grant on "*" ranks unscoped, as it
+// is the only grant REST's raw PromQL accepts.
+func TestRankScopeRestrictsATypedGrantThatCoversTheCluster(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "web",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(readOnlyPolicy("service:*"))
+
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	got, err := srv.rankScope(ctxWithIdentity(), rankByService)
+	if err != nil {
+		t.Fatalf("rankScope: %v", err)
+	}
+	if !strings.Contains(got, "web") {
+		t.Errorf("rankScope = %q, want the query held to this cluster's services", got)
+	}
+}

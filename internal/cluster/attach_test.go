@@ -4,7 +4,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 func attachTestService() swarm.Service {
@@ -14,6 +18,9 @@ func attachTestService() swarm.Service {
 				ContainerSpec: &swarm.ContainerSpec{
 					Secrets: []*swarm.SecretReference{{SecretID: "s-own", SecretName: "own"}},
 					Configs: []*swarm.ConfigReference{{ConfigID: "c-own", ConfigName: "own"}},
+					Mounts: []mount.Mount{
+						{Type: mount.TypeVolume, Source: "v-own", Target: "/own"},
+					},
 				},
 				Networks: []swarm.NetworkAttachmentConfig{{Target: "n-own"}},
 			},
@@ -22,10 +29,15 @@ func attachTestService() swarm.Service {
 }
 
 func TestCheckAttachableRefusesUnreadable(t *testing.T) {
-	readable := map[string]bool{"secret:mine": true, "config:mine": true, "network:mine": true}
+	readable := map[string]bool{
+		"secret:mine":  true,
+		"config:mine":  true,
+		"network:mine": true,
+		"volume:mine":  true,
+	}
 	canRead := func(resource string) bool { return readable[resource] }
 
-	for _, kind := range []AttachmentKind{AttachSecret, AttachConfig, AttachNetwork} {
+	for _, kind := range []AttachmentKind{AttachSecret, AttachConfig, AttachNetwork, AttachVolume} {
 		t.Run(string(kind), func(t *testing.T) {
 			if err := CheckAttachable(
 				attachTestService(),
@@ -60,10 +72,71 @@ func TestCheckAttachableAdmitsWhatTheServiceAlreadyCarries(t *testing.T) {
 		AttachSecret:  "s-own",
 		AttachConfig:  "c-own",
 		AttachNetwork: "n-own",
+		AttachVolume:  "v-own",
 	}
 	for kind, id := range cases {
 		if err := CheckAttachable(attachTestService(), never, kind, id, "own"); err != nil {
 			t.Errorf("%s already attached as %s: %v", kind, id, err)
 		}
+	}
+}
+
+func TestCheckVolumesAttachable(t *testing.T) {
+	canRead := func(resource string) bool { return resource == "volume:mine" }
+
+	cases := []struct {
+		name   string
+		mount  mount.Mount
+		denied bool
+	}{
+		{"readable volume", mount.Mount{Type: mount.TypeVolume, Source: "mine"}, false},
+		{"unreadable volume", mount.Mount{Type: mount.TypeVolume, Source: "theirs"}, true},
+		{"type read case-insensitively", mount.Mount{Type: "VOLUME", Source: "theirs"}, true},
+		{"already mounted", mount.Mount{Type: mount.TypeVolume, Source: "v-own"}, false},
+		{"anonymous volume", mount.Mount{Type: mount.TypeVolume}, false},
+		{"tmpfs", mount.Mount{Type: mount.TypeTmpfs, Target: "/tmp"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckVolumesAttachable(attachTestService(), canRead, []mount.Mount{tc.mount})
+
+			var denied *AttachDeniedError
+			if got := errors.As(err, &denied); got != tc.denied {
+				t.Fatalf("err = %v, want denied=%v", err, tc.denied)
+			}
+		})
+	}
+}
+
+// A cluster volume is mounted by name like any other volume, so the read check
+// and the host-access tier apply to it as well.
+func TestClusterVolumeMountsAreChecked(t *testing.T) {
+	canRead := func(resource string) bool { return resource == "volume:mine" }
+	theirs := []mount.Mount{{Type: mount.TypeCluster, Source: "theirs", Target: "/d"}}
+
+	var denied *AttachDeniedError
+	if err := CheckVolumesAttachable(
+		attachTestService(),
+		canRead,
+		theirs,
+	); !errors.As(
+		err,
+		&denied,
+	) {
+		t.Errorf("unreadable cluster volume: err = %v, want *AttachDeniedError", err)
+	}
+
+	never := func(string) (volume.Volume, bool) { return volume.Volume{}, false }
+	var host *HostAccessError
+	if err := CheckMounts(
+		attachTestService(),
+		theirs,
+		never,
+		config.OpsConfiguration,
+	); !errors.As(
+		err,
+		&host,
+	) {
+		t.Errorf("cluster volume below level 3: err = %v, want *HostAccessError", err)
 	}
 }

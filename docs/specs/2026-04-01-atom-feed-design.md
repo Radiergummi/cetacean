@@ -1,7 +1,7 @@
 # Atom Feed Support
 
 **Date:** 2026-04-01
-**Status:** Draft
+**Status:** Implemented
 
 ## Summary
 

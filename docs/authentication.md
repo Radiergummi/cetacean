@@ -69,7 +69,7 @@ identifier; `groups` feeds [authorization][authorization] audience matching.
 |---------------|-------------|-----------------------------------|---------------------------------------------|-------------------------------------|--------------------------------|
 | `subject`     | `anonymous` | `sub` claim                       | numeric user ID                             | SPIFFE URI SAN, else CN, else email | subject header                 |
 | `displayName` | `Anonymous` | `name`, else `preferred_username` | Tailscale display name                      | CN, else the SPIFFE ID path         | name header, else subject      |
-| `email`       | —           | `email` claim                     | Tailscale login name                        | first email SAN                     | email header                   |
+| `email`       | —           | `email` claim, unless unverified  | Tailscale login name                        | first email SAN                     | email header                   |
 | `groups`      | —           | `groups` claim                    | [app capability](#groups-from-capabilities) | Organizational Unit (OU) values     | groups header, comma-separated |
 
 ## Exempt paths
@@ -130,13 +130,17 @@ This mode also bypasses [authorization][authorization]: a configured authorizati
 
 [OpenID Connect](https://openid.net/developers/how-connect-works/) with the authorization code flow for browsers
 and ID token validation for scripts. Requires [`auth.oidc.issuer`][auth.oidc.issuer],
-[`auth.oidc.client_id`][auth.oidc.client_id], [`auth.oidc.client_secret`][auth.oidc.client_secret] and
-[`auth.oidc.redirect_url`][auth.oidc.redirect_url]; the redirect URL must use HTTPS unless it points at a loopback
+[`auth.oidc.client_id`][auth.oidc.client_id], [`auth.oidc.client_secret`][auth.oidc.client_secret], and
+[`auth.oidc.redirect_url`][auth.oidc.redirect_url] unless [`server.public_url`][server.public_url] is set; the redirect URL must use HTTPS unless it points at a loopback
 address. See [OIDC configuration][oidc] for all parameters.
 
 > [!NOTE]
 > With [`server.public_url`][server.public_url] set, `auth.oidc.redirect_url` is derived as
 > `{public_url}{base_path}/auth/callback` and only needs setting if your callback lives elsewhere.
+
+An `email` claim the provider marks `email_verified: false` is left out of the identity, so it can't satisfy a `user:`
+grant; a token without `email_verified` keeps its email. If your provider lets users set an address without verifying
+it and doesn't send that claim, match them on `sub` or a group claim instead of email.
 
 A request is matched against each credential in turn, and only one that accepts HTML is ever redirected:
 

@@ -234,7 +234,7 @@ Auth mode `none` bypasses authorization. See [Authorization][authorization] for 
   Path to a policy file (JSON, YAML, or TOML). The file is watched and reloaded on change, so grants can be edited without restarting Cetacean.
 </ConfigParam>
 
-The following three settings read grants carried by the identity itself. They add to whatever the policy
+The following four settings read grants carried by the identity itself. They add to whatever the policy
 already grants, and each applies only to its own authentication mode.
 
 <ConfigParam name="acl.tailscale_capability" env="CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY">
@@ -377,15 +377,12 @@ against measured usage. The other checkers use fixed thresholds.
 </ConfigParam>
 
 <ConfigParam name="sizing.thresholds.lookback" env="CETACEAN_SIZING_LOOKBACK" default="168h">
-  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days). A short window makes the check react to a quiet weekend; a long one needs that much history in Prometheus.
+  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days), and over which restarts count towards a flaky service (shortened while the process is younger than the window, since restarts are tracked in memory). A short window makes the over-provisioning check react to a quiet weekend; a long one needs that much history in Prometheus.
 </ConfigParam>
 
 ## Config file
 
-Pass a TOML file with `-config` or `CETACEAN_CONFIG`. Without either, Cetacean reads the first
-of these that exists: `./cetacean.toml`, `$XDG_CONFIG_HOME/cetacean/cetacean.toml` (or
-`~/.config/cetacean/cetacean.toml`), `~/.cetacean.toml`, and `/etc/cetacean/cetacean.toml`. Every
-field is optional; an omitted key uses the default.
+Pass a TOML file with `-config` or `CETACEAN_CONFIG`. Every field is optional; an omitted key uses the default.
 
 ```bash
 CETACEAN_CONFIG=/etc/cetacean/config.toml cetacean
@@ -454,6 +451,7 @@ expose. Each level includes everything below it. A request above the configured 
 | Change a service's endpoint mode                                              |      —      |       —       |        —        |      ✔      |
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
 | Manage CA and encryption, read and rotate join tokens, unlock the swarm       |      —      |       —       |        —        |      ✔      |
+| Revoke OAuth clients a user authorized (`DELETE /tokens/{subject}`)           |      —      |       —       |        —        |      ✔      |
 
 Operations level and [grants][interaction-with-operations-level] are independent checks
 and both must pass. Operations level is the global ceiling, grants control per-user scope. Set
