@@ -356,6 +356,10 @@ func (c *Cache) notify(e Event) {
 
 		e.HistoryID = c.history.Append(entry)
 		metrics.RecordCacheMutation(string(e.Type), e.Action)
+
+		if e.Action == "create" || e.Action == "remove" {
+			c.recordResourceCount(e.Type)
+		}
 	} else {
 		e.HistoryID = c.history.Count()
 	}
@@ -1537,27 +1541,40 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		c.restarts.Record(t.ServiceID, t.Status.Timestamp)
 	}
 
-	if data.HasNodes {
-		metrics.SetCacheResources("nodes", len(data.Nodes))
-	}
-	if data.HasServices {
-		metrics.SetCacheResources("services", len(data.Services))
-	}
-	if data.HasTasks {
-		metrics.SetCacheResources("tasks", len(data.Tasks))
-	}
-	if data.HasConfigs {
-		metrics.SetCacheResources("configs", len(data.Configs))
-	}
-	if data.HasSecrets {
-		metrics.SetCacheResources("secrets", len(data.Secrets))
-	}
-	if data.HasNetworks {
-		metrics.SetCacheResources("networks", len(data.Networks))
-	}
-	if data.HasVolumes {
-		metrics.SetCacheResources("volumes", len(data.Volumes))
+	for _, typ := range [...]EventType{
+		EventNode, EventService, EventTask, EventConfig, EventSecret, EventNetwork, EventVolume,
+	} {
+		c.recordResourceCount(typ)
 	}
 
 	c.notify(Event{Type: EventSync, Action: "full_sync", ID: ""})
+}
+
+// recordResourceCount publishes how many resources of one type the cache
+// holds. Called without c.mu, which it takes for reading.
+func (c *Cache) recordResourceCount(typ EventType) {
+	c.mu.RLock()
+	var count int
+	switch typ { //nolint:exhaustive // stacks and syncs are not counted
+	case EventNode:
+		count = len(c.nodes.items)
+	case EventService:
+		count = len(c.services)
+	case EventTask:
+		count = len(c.tasks)
+	case EventConfig:
+		count = len(c.configs.items)
+	case EventSecret:
+		count = len(c.secrets.items)
+	case EventNetwork:
+		count = len(c.networks.items)
+	case EventVolume:
+		count = len(c.volumes.items)
+	default:
+		c.mu.RUnlock()
+		return
+	}
+	c.mu.RUnlock()
+
+	metrics.SetCacheResources(string(typ)+"s", count)
 }

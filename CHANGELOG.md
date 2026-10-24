@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An event stream resuming from the very first event after the change history filled up now resyncs instead of silently missing events
 - A service, task or node no longer briefly shows an older state after a burst of changes
 - Live updates no longer skip a change when the browser reconnects during a burst of changes
+- `cetacean_cache_resources` follows every resource created or removed, instead of changing only at a full sync
 
 ## [0.17.0] - 2026-10-20
 
