@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"net/http/pprof"
@@ -173,7 +174,11 @@ func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
 	r.patterns = append(r.patterns, pattern)
 	if gated, ok := handler.(tieredHandler); ok {
 		method, path, _ := strings.Cut(pattern, " ")
-		r.tiered = append(r.tiered, tieredRoute{method, path, gated.level})
+		route := tieredRoute{method, path, gated.level, ""}
+		if method == http.MethodPatch {
+			route.acceptPatch = cmp.Or(gated.acceptPatch, AcceptMergePatch)
+		}
+		r.tiered = append(r.tiered, route)
 	}
 	r.mux.Handle(pattern, handler)
 }
@@ -311,8 +316,8 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	clusterExists := h.unrepresented(subjectExists)
 	// A create checks the write grant on the name it creates, in the handler.
 	createTier2 := tieredChain{
-		NewChain(h.requireLevel(config.OpsConfiguration)),
-		config.OpsConfiguration,
+		chain: NewChain(h.requireLevel(config.OpsConfiguration)),
+		level: config.OpsConfiguration,
 	}
 
 	authProvider.RegisterRoutes(mux.mux)
@@ -582,7 +587,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /nodes/{id}/labels",
-		nodeTier2.Append(h.precond(h.nodeLabelsSpec().representation)).
+		nodeTier2.Append(h.precond(h.nodeLabelsSpec().representation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchNodeLabels))
 	mux.HandleFunc(
 		"GET /nodes/{id}/role",
@@ -619,14 +624,14 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleGetServiceEnv, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/env",
-		svcTier2.Append(h.precond(h.serviceEnvRepresentation)).
+		svcTier2.Append(h.precond(h.serviceEnvRepresentation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchServiceEnv))
 	mux.HandleFunc(
 		"GET /services/{id}/labels",
 		contentNegotiated(h.HandleGetServiceLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/labels",
-		svcTier2.Append(h.precond(h.serviceLabelsSpec().representation)).
+		svcTier2.Append(h.precond(h.serviceLabelsSpec().representation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchServiceLabels))
 	mux.HandleFunc(
 		"GET /services/{id}/resources",
@@ -853,7 +858,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleGetConfigLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /configs/{id}/labels",
-		cfgTier2.Append(h.precond(h.configLabelsSpec().representation)).
+		cfgTier2.Append(h.precond(h.configLabelsSpec().representation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchConfigLabels))
 
 	// Secrets
@@ -891,7 +896,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleGetSecretLabels, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /secrets/{id}/labels",
-		secTier2.Append(h.precond(h.secretLabelsSpec().representation)).
+		secTier2.Append(h.precond(h.secretLabelsSpec().representation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchSecretLabels))
 
 	// Networks

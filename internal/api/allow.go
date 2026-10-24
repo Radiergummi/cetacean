@@ -23,30 +23,43 @@ const AcceptMergePatch = "application/merge-patch+json"
 // handlers carry that level, so the router records what each write route needs
 // and Allow is read off the routes instead of a list kept beside them.
 type tieredChain struct {
-	chain Chain
-	level config.OperationsLevel
+	chain       Chain
+	level       config.OperationsLevel
+	acceptPatch string
 }
 
 func (h *Handlers) tiered(acl Constructor, level config.OperationsLevel) tieredChain {
-	return tieredChain{NewChain(acl, h.requireLevel(level)), level}
+	return tieredChain{chain: NewChain(acl, h.requireLevel(level)), level: level}
 }
 
 func (c tieredChain) Append(constructors ...Constructor) tieredChain {
-	return tieredChain{c.chain.Append(constructors...), c.level}
+	c.chain = c.chain.Append(constructors...)
+
+	return c
+}
+
+// TakesJSONPatch marks a PATCH route whose handler parses JSON Patch as well
+// as a merge patch; any other PATCH route is advertised as merge-only.
+func (c tieredChain) TakesJSONPatch() tieredChain {
+	c.acceptPatch = AcceptPatch
+
+	return c
 }
 
 func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
-	return tieredHandler{c.chain.ThenFunc(fn), c.level}
+	return tieredHandler{c.chain.ThenFunc(fn), c.level, c.acceptPatch}
 }
 
 type tieredHandler struct {
 	http.Handler
-	level config.OperationsLevel
+	level       config.OperationsLevel
+	acceptPatch string
 }
 
 type tieredRoute struct {
 	method, path string
 	level        config.OperationsLevel
+	acceptPatch  string
 }
 
 // routeTable is a router built without dependencies, for its routes alone.
@@ -72,50 +85,53 @@ var (
 
 var writeMethods = []string{"PUT", "POST", "PATCH", "DELETE"}
 
-// routedWrites matches r against the routes once. methods lists GET, HEAD and
-// every write method routed at the matched path that the caller's level
-// reaches; below names the sub-resources directly under it that route one.
-func (h *Handlers) routedWrites(r *http.Request) (methods, below []string) {
+// routedWrites matches r against the routes once. Its methods list GET, HEAD
+// and every write method routed at the matched path that the caller's level
+// reaches; below, only when asked for, names the sub-resources directly under
+// it that route one.
+func (h *Handlers) routedWrites(r *http.Request, withBelow bool) offeredWrites {
 	routes := routeTable()
 	_, pattern := routes.mux.Handler(r)
 	_, path, routed := strings.Cut(pattern, " ")
-	methods = []string{"GET", "HEAD"}
+	offer := offeredWrites{methods: []string{"GET", "HEAD"}}
 	if !routed {
-		return methods, nil
+		return offer
 	}
 	level := h.levelFor(r)
 
 	offered := make(map[string]bool)
+	below := path + "/"
 	for _, route := range routes.tiered {
 		if level < route.level || !slices.Contains(writeMethods, route.method) {
 			continue
 		}
 		if route.path == path {
 			offered[route.method] = true
-		} else if name, ok := strings.CutPrefix(route.path, path+"/"); ok &&
-			!strings.ContainsAny(name, "/{") && !slices.Contains(below, name) {
-			below = append(below, name)
+			if route.method == http.MethodPatch {
+				offer.acceptPatch = route.acceptPatch
+			}
+		} else if !withBelow {
+			continue
+		} else if name, ok := strings.CutPrefix(route.path, below); ok &&
+			!strings.ContainsAny(name, "/{") && !slices.Contains(offer.below, name) {
+			offer.below = append(offer.below, name)
 		}
 	}
 
 	for _, method := range writeMethods {
 		if offered[method] {
-			methods = append(methods, method)
+			offer.methods = append(offer.methods, method)
 		}
 	}
 
-	return methods, below
+	return offer
 }
 
-// acceptPatch is the Accept-Patch of a path that takes PATCH: labels and
-// service env apply JSON Patch to a map, every other patch is a merge.
-func acceptPatch(path string) string {
-	switch path[strings.LastIndex(path, "/")+1:] {
-	case "labels", "env":
-		return AcceptPatch
-	default:
-		return AcceptMergePatch
-	}
+// offeredWrites is what routedWrites found: the methods for Allow, the
+// Accept-Patch of the PATCH among them, and the writable sub-resources.
+type offeredWrites struct {
+	methods, below []string
+	acceptPatch    string
 }
 
 const varyIdentity = "Authorization, Cookie"
@@ -141,16 +157,16 @@ func (h *Handlers) setAllow(
 	resourceType, resourceName string,
 ) {
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceType+":"+resourceName) {
-		writeAllow(w, r, []string{"GET", "HEAD"})
+		writeAllow(w, readOnly)
 		return
 	}
 
-	methods, below := h.routedWrites(r)
-	writeAllow(w, r, methods)
+	offer := h.routedWrites(r, true)
+	writeAllow(w, offer)
 
 	self := absPath(r.Context(), r.URL.EscapedPath())
 	var links []string
-	for _, name := range below {
+	for _, name := range offer.below {
 		links = append(links, fmt.Sprintf(`<%s/%s>; rel="edit"`, self, name))
 	}
 	if len(links) > 0 {
@@ -164,20 +180,22 @@ func (h *Handlers) setAllowSubResource(
 	r *http.Request,
 	resourceExpr string,
 ) {
-	methods := []string{"GET", "HEAD"}
+	offer := readOnly
 	if h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resourceExpr) {
-		methods, _ = h.routedWrites(r)
+		offer = h.routedWrites(r, false)
 	}
-	writeAllow(w, r, methods)
+	writeAllow(w, offer)
 }
 
+var readOnly = offeredWrites{methods: []string{"GET", "HEAD"}}
+
 // writeAllow writes Allow, and Accept-Patch when the methods take a PATCH.
-func writeAllow(w http.ResponseWriter, r *http.Request, methods []string) {
-	w.Header().Set("Allow", strings.Join(methods, ", "))
+func writeAllow(w http.ResponseWriter, offer offeredWrites) {
+	w.Header().Set("Allow", strings.Join(offer.methods, ", "))
 	varyByIdentity(w)
 
-	if slices.Contains(methods, "PATCH") {
-		w.Header().Set("Accept-Patch", acceptPatch(r.URL.Path))
+	if offer.acceptPatch != "" {
+		w.Header().Set("Accept-Patch", offer.acceptPatch)
 	}
 }
 
@@ -188,13 +206,13 @@ var createsByName = map[string]bool{"config": true, "secret": true}
 
 // setAllowList sets the Allow header for list endpoints.
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
-	methods := []string{"GET", "HEAD"}
+	offer := readOnly
 	id := auth.IdentityFromContext(r.Context())
 	if h.acl.Can(id, "write", resourceType+":*") ||
 		createsByName[resourceType] && grantsWriteOnType(h.acl.PermissionsFor(id), resourceType) {
-		methods, _ = h.routedWrites(r)
+		offer = h.routedWrites(r, false)
 	}
-	writeAllow(w, r, methods)
+	writeAllow(w, offer)
 }
 
 // grantsWriteOnType reports whether a grant pattern names the type itself. A
