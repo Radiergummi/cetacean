@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A `/swarm` update or key rotation that races another change answers `409` (`SWM012`) instead of `500`
 - A config, secret, network, volume or task detail no longer answers `If-Modified-Since` with a stale `304` after a service attaches or your grants change; it sends no `Last-Modified`
 - A `/history` entry's and a `/disk-usage` summary's `@id` is a fragment of its list, like `/history#42`, instead of a URL that answered `404`
+- With `server.base_path` set, a path outside it answers `404` with problem details instead of plain text
 - A list's page links keep a `.json` or `.csv` suffix, and an `offset` past the end links no next page instead of a negative offset
 - A `PATCH` reads its `Content-Type` case-insensitively, so `Application/Merge-Patch+JSON` is accepted and a type that merely starts like a patch format is refused with `415`
 - `Accept` is weighed by the most specific range, so `application/json;q=0, */*` no longer returns JSON, and `text/csv, application/json;q=0.5` on a detail URL returns JSON instead of `406`

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -131,6 +132,15 @@ func TestBasePathMiddleware_Mismatch(t *testing.T) {
 
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("path=%q: expected 404, got %d", path, rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+			t.Errorf("path=%q: Content-Type = %q, want a problem document", path, ct)
+		}
+		if body := rec.Body.String(); !strings.Contains(
+			body,
+			`"@context":"/cetacean/api/context.jsonld"`,
+		) {
+			t.Errorf("path=%q: the problem's context is not under the base path: %s", path, body)
 		}
 	}
 }
