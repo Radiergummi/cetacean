@@ -65,6 +65,9 @@ func hostAccess(m mount.Mount, lookup func(string) (volume.Volume, bool)) string
 		return "a bind mount of " + m.Source
 	case mount.TypeNamedPipe:
 		return "a named pipe mount of " + m.Source
+	case mount.TypeCluster:
+		// Always a CSI driver's, which is what a non-local volume is refused for.
+		return "a cluster volume mount of " + m.Source
 	case mount.TypeVolume:
 		if m.VolumeOptions != nil && m.VolumeOptions.DriverConfig != nil {
 			if m.Source == "" {

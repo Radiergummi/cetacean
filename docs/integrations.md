@@ -34,8 +34,8 @@ their middleware chains to the service they route to.
 ## Editing
 
 Each panel has a view toggle and a link to the tool's own documentation. The structured and raw views are editable
-when the service allows `PATCH`, which requires [operations level][operations-level] 2 and a write grant
-on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
+when the service's detail response links its labels with `rel="edit"`, which requires
+[operations level][operations-level] 2 and a write grant on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
 service label.
 
 The structured Traefik editor changes only the labels its fields show. Labels it doesn't model, such as TCP

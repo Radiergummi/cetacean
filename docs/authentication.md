@@ -130,8 +130,8 @@ This mode also bypasses [authorization][authorization]: a configured authorizati
 
 [OpenID Connect](https://openid.net/developers/how-connect-works/) with the authorization code flow for browsers
 and ID token validation for scripts. Requires [`auth.oidc.issuer`][auth.oidc.issuer],
-[`auth.oidc.client_id`][auth.oidc.client_id], [`auth.oidc.client_secret`][auth.oidc.client_secret] and
-[`auth.oidc.redirect_url`][auth.oidc.redirect_url]; the redirect URL must use HTTPS unless it points at a loopback
+[`auth.oidc.client_id`][auth.oidc.client_id], [`auth.oidc.client_secret`][auth.oidc.client_secret], and
+[`auth.oidc.redirect_url`][auth.oidc.redirect_url] unless [`server.public_url`][server.public_url] is set; the redirect URL must use HTTPS unless it points at a loopback
 address. See [OIDC configuration][oidc] for all parameters.
 
 > [!NOTE]
