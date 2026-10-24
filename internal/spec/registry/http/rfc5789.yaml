@@ -34,7 +34,7 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc5789#section-2
     mutants:
       - file: internal/api/write_helpers.go
-        replace: "\tisJSONPatch := strings.HasPrefix(ct, \"application/json-patch+json\")"
+        replace: "\tisJSONPatch := ct == \"application/json-patch+json\""
         with: "\tisJSONPatch := strings.HasPrefix(ct, \"application/json\")"
 
   - id: accept-patch-is-advertised
