@@ -281,8 +281,6 @@ func TestUpdateServiceConfigsDefaultsToTheRESTPath(t *testing.T) {
 	}
 }
 
-// Below level 3 a new bind is refused, but at level 3 nothing stops a socket
-// bind, a root shell on the host, so the description is where a model reads that.
 // A named volume's data is readable from inside the container, so mounting one
 // needs read on it, as attaching a secret does.
 func TestUpdateServiceMountsNeedsReadOnTheVolume(t *testing.T) {
@@ -331,6 +329,8 @@ func TestUpdateServiceMountsNeedsReadOnTheVolume(t *testing.T) {
 	}
 }
 
+// Below level 3 a new bind is refused, but at level 3 nothing stops a socket
+// bind, a root shell on the host, so the description is where a model reads that.
 func TestUpdateServiceMountsWarnsAboutHostBinds(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 

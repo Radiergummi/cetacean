@@ -73,10 +73,8 @@ func TestFindReturnsCompactRows(t *testing.T) {
 	}
 }
 
-// A type nobody wrote a builder for must fail loudly rather than return an
-// empty list that reads as "no such resources".
 // A query without a type searches every type on its own goroutine, so a
-// negative limit must be refused before it reaches one.
+// negative limit must become the default before it reaches one.
 func TestFindAcrossTypesTreatsANegativeLimitAsTheDefault(t *testing.T) {
 	c := cache.New(nil)
 	for _, id := range []string{"svc1", "svc2", "svc3", "svc4"} {
@@ -106,6 +104,8 @@ func TestFindAcrossTypesTreatsANegativeLimitAsTheDefault(t *testing.T) {
 	}
 }
 
+// A type nobody wrote a builder for must fail loudly rather than return an
+// empty list that reads as "no such resources".
 func TestFindRejectsUnknownType(t *testing.T) {
 	srv := newLogTestServer(t, cache.New(nil), &fakeLogStreamer{})
 	td, _ := srv.findTool("find")

@@ -14,6 +14,7 @@ import (
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func TestAtomListHandler_ReturnsValidAtom(t *testing.T) {
@@ -137,6 +138,46 @@ func TestAtomDetailHandler_WithholdsAnUnreadableName(t *testing.T) {
 
 	if strings.Contains(w.Body.String(), "billing") {
 		t.Errorf("the feed names a service the caller cannot read: %s", w.Body.String())
+	}
+}
+
+// A task is readable through its service's grant, which resolves from the
+// task's ID, so the title check must ask about the ID, not the display name.
+func TestAtomDetailHandler_NamesATaskReadableThroughItsService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1", Slot: 1})
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:web"},
+		Audience:    []string{"*"},
+		Permissions: []string{"read"},
+	}}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	handler := h.feedDetailHandler(cache.EventTask, "id", func(id string) string {
+		return cluster.TaskDisplayName(h.cache, id)
+	}, renderAtom)
+
+	req := httptest.NewRequest("GET", "/tasks/task1", nil)
+	req.SetPathValue("id", "task1")
+	req = withContentType(req, ContentTypeAtom)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "dev"}))
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	var feed atomxml.Feed
+	if err := xml.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("invalid XML: %v", err)
+	}
+	if feed.Title != "web.1" {
+		t.Errorf("feed.Title = %q, want web.1", feed.Title)
 	}
 }
 

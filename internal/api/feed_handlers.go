@@ -82,11 +82,15 @@ func (h *Handlers) feedDetailHandler(
 			ResourceID: resourceID,
 		})
 
-		// The entries are filtered by the same rule; the title must not name
-		// what they would withhold.
+		// The title must not name what the caller cannot read. A task is keyed
+		// by its ID, which is what its parent service's grant resolves from.
 		title := nameFunc(resourceID)
+		key := title
+		if eventType == cache.EventTask {
+			key = resourceID
+		}
 		canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
-		if !canRead(string(eventType) + ":" + title) {
+		if !canRead(string(eventType) + ":" + key) {
 			title = resourceID
 		}
 
