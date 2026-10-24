@@ -348,25 +348,34 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 }
 
 // acceptable reports whether the request admits one of the types an endpoint
-// serves. The negotiated type is the best of every endpoint's; a client whose
-// wildcard admits one of these is answered with it, not refused. A suffix
-// names one type, so it is not second-guessed against the Accept header.
+// serves.
 func acceptable(r *http.Request, serves ...ContentType) bool {
-	if slices.Contains(serves, ContentTypeFromContext(r.Context())) {
+	if slices.Contains(serves, negotiatedAmong(r, serves...)) {
 		return true
 	}
-	if extensionFromContext(r.Context()) != "" {
-		return false
+
+	// No Accept at all is no preference, so any type will do.
+	return extensionFromContext(r.Context()) == "" &&
+		len(parseAcceptRanges(r.Header.Get("Accept"))) == 0
+}
+
+// negotiatedAmong is the negotiated type, or, when the endpoint does not serve
+// it, the best of those it does: the negotiated type is the best of every
+// endpoint's. A suffix names one type, so it is not second-guessed.
+func negotiatedAmong(r *http.Request, serves ...ContentType) ContentType {
+	ct := ContentTypeFromContext(r.Context())
+	if slices.Contains(serves, ct) || extensionFromContext(r.Context()) != "" {
+		return ct
 	}
 
-	ranges := parseAcceptRanges(r.Header.Get("Accept"))
-	for _, sup := range supportedTypes {
-		if slices.Contains(serves, sup.ct) && rangesAccept(ranges, sup.typ, sup.subtype) {
-			return true
-		}
+	if best := bestServed(
+		parseAcceptRanges(r.Header.Get("Accept")),
+		serves,
+	); best != ContentTypeUnsupported {
+		return best
 	}
 
-	return false
+	return ct
 }
 
 // rangesAcceptHTML reports whether the ranges admit text/html at a usable
@@ -383,19 +392,24 @@ func rangesAccept(ranges []mediaRange, typ, subtype string) bool {
 		return true
 	}
 
-	specificity, quality := -1, 0.0
+	governing, ok := governingRange(ranges, typ, subtype)
+
+	return ok && governing.q > 0
+}
+
+// governingRange returns the range that weighs a media type: the most
+// specific one matching it, the first of equals (RFC 9110 §12.5.1).
+func governingRange(ranges []mediaRange, typ, subtype string) (mediaRange, bool) {
+	var governing mediaRange
+	found := false
 
 	for _, mr := range ranges {
-		if !mr.matches(typ, subtype) {
-			continue
-		}
-
-		if s := mr.specificity(); s > specificity {
-			specificity, quality = s, mr.q
+		if mr.matches(typ, subtype) && (!found || mr.specificity() > governing.specificity()) {
+			governing, found = mr, true
 		}
 	}
 
-	return quality > 0
+	return governing, found
 }
 
 // mediaRange is a parsed Accept header entry.
@@ -493,59 +507,49 @@ func bestMatch(ranges []mediaRange) ContentType {
 		return ContentTypeJSON
 	}
 
-	// For each supported type, find the best matching range.
-	type candidate struct {
-		ct          ContentType
-		q           float64
-		specificity int
-		order       int // header position of the matching range
-	}
+	return bestServed(ranges, nil)
+}
 
-	// A value rather than a pointer: taking the address of a candidate declared
-	// in the loop escapes it to the heap on every match, and a wildcard range
-	// matches every supported type.
-	var best candidate
-	var found bool
+// bestServed is bestMatch among the types an endpoint serves, nil being all.
+// Equal weights go to the more specific range, then the earlier one, then the
+// earlier supported type.
+func bestServed(ranges []mediaRange, serves []ContentType) ContentType {
+	var best mediaRange
+	bestCT := ContentTypeUnsupported
 
-	for _, sup := range supportedTypes {
-		for _, mr := range ranges {
-			// RFC 9110 §12.5.1: a weight of zero means not acceptable.
-			if mr.q <= 0 || !mr.matches(sup.typ, sup.subtype) {
-				continue
-			}
+	for i, sup := range supportedTypes {
+		if serves != nil && !slices.Contains(serves, sup.ct) {
+			continue
+		}
 
-			spec := mr.specificity()
-			c := candidate{
-				ct:          sup.ct,
-				q:           mr.q,
-				specificity: spec,
-				order:       mr.order,
-			}
+		mr, ok := governingRange(ranges, sup.typ, sup.subtype)
+		// A weight of zero means not acceptable.
+		if !ok || mr.q <= 0 || namedOnly[i] && mr.specificity() < 3 {
+			continue
+		}
 
-			if !found {
-				best, found = c, true
-				continue
-			}
-
-			// Higher quality wins.
-			if c.q > best.q {
-				best = c
-			} else if c.q == best.q {
-				// Same quality: higher specificity wins.
-				if c.specificity > best.specificity {
-					best = c
-				} else if c.specificity == best.specificity {
-					// Same specificity: earlier in header wins.
-					if c.order < best.order {
-						best = c
-					}
-				}
-			}
+		if bestCT == ContentTypeUnsupported || mr.q > best.q ||
+			mr.q == best.q && (mr.specificity() > best.specificity() ||
+				mr.specificity() == best.specificity() && mr.order < best.order) {
+			best, bestCT = mr, sup.ct
 		}
 	}
 
-	if !found {
-		return ContentTypeUnsupported
-	}
-	return best.ct
+	return bestCT
 }
+
+// namedOnly marks the supportedTypes entries no wildcard admits. An alias is
+// one: the response carries the first entry of its ContentType, and a wildcard
+// is judged against what is sent. A stream is the other: a wildcard asks for a
+// document, not a connection that never ends.
+var namedOnly = func() []bool {
+	named := make([]bool, len(supportedTypes))
+	seen := map[ContentType]bool{}
+
+	for i, sup := range supportedTypes {
+		named[i] = seen[sup.ct] || sup.ct == ContentTypeSSE
+		seen[sup.ct] = true
+	}
+
+	return named
+}()

@@ -189,12 +189,13 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 
-	t.Run("specificity: higher q wins over higher specificity", func(t *testing.T) {
-		// text/html is exact (specificity 3, q=0.9); text/* is partial (specificity 2, q=1.0).
-		// Higher q wins, so text/* matches. text/* matches text/html first in our preference order.
+	t.Run("specificity: the most specific range weighs a type", func(t *testing.T) {
+		// text/html is weighed by its own range at 0.9, every other text type
+		// by text/* at 1.0, so the first of those in our order is preferred. A
+		// wildcard never opens a stream; the endpoint picks among its own types.
 		ct, _ := run("/services", "text/html;q=0.9, text/*;q=1.0")
-		if ct != ContentTypeHTML {
-			t.Errorf("got %v, want HTML", ct)
+		if ct != ContentTypeDOT {
+			t.Errorf("got %v, want DOT", ct)
 		}
 	})
 

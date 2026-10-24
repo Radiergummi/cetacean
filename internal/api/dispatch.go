@@ -33,32 +33,43 @@ type feedHandlers struct {
 	queryParams []string
 }
 
-// servedTypes names what an endpoint carrying these feeds serves, derived from
+// servedTypes lists what an endpoint carrying these feeds serves, derived from
 // the same handlers the switch dispatches on rather than restated beside it.
-func (f feedHandlers) servedTypes(sse bool) string {
-	types := []string{"application/json", "text/html"}
+func (f feedHandlers) servedTypes(sse bool) []ContentType {
+	types := []ContentType{ContentTypeJSON, ContentTypeHTML}
 
 	if sse {
-		types = append(types, "text/event-stream")
+		types = append(types, ContentTypeSSE)
 	}
 
 	if f.atom != nil {
-		types = append(types, "application/atom+xml")
+		types = append(types, ContentTypeAtom)
 	}
 
 	if f.jsonFeed != nil {
-		types = append(types, "application/feed+json")
+		types = append(types, ContentTypeJSONFeed)
 	}
 
 	if f.csv {
-		types = append(types, "text/csv")
+		types = append(types, ContentTypeCSV)
 	}
 
 	if f.yaml != nil {
-		types = append(types, "application/yaml")
+		types = append(types, ContentTypeYAML)
 	}
 
-	return strings.Join(types, ", ")
+	return types
+}
+
+// servedMediaTypes names the types a 406 offers instead.
+var servedMediaTypes = map[ContentType]string{
+	ContentTypeJSON:     "application/json",
+	ContentTypeHTML:     "text/html",
+	ContentTypeSSE:      "text/event-stream",
+	ContentTypeAtom:     "application/atom+xml",
+	ContentTypeJSONFeed: "application/feed+json",
+	ContentTypeCSV:      "text/csv",
+	ContentTypeYAML:     "application/yaml",
 }
 
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
@@ -81,10 +92,15 @@ func contentNegotiatedWithSSE(
 ) http.HandlerFunc {
 	// What this endpoint serves is decided here, once, from the handlers it
 	// was given, so the switch and the 406 that names its arms cannot drift.
-	served := feeds.servedTypes(sseHandler != nil)
+	types := feeds.servedTypes(sseHandler != nil)
+	names := make([]string, len(types))
+	for i, ct := range types {
+		names[i] = servedMediaTypes[ct]
+	}
+	served := strings.Join(names, ", ")
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		switch ContentTypeFromContext(r.Context()) {
+		switch negotiatedAmong(r, types...) {
 		case ContentTypeHTML:
 			addFeedLinks(w, r, feeds)
 			spa.ServeHTTP(w, r)

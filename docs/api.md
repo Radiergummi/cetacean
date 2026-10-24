@@ -47,7 +47,9 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
 ### Resolution order
 
 1. File extension appended to the path, which wins over everything else
-2. `Accept` header, parsed per RFC 9110 with `q` values and wildcards
+2. `Accept` header, parsed per RFC 9110 with `q` values and wildcards. A type is weighed by the most specific range
+   naming it, so `application/json;q=0, */*` refuses JSON; an endpoint answers with the best of the types it serves.
+   A wildcard never opens an event stream—ask for `text/event-stream` by name
 3. `application/json` when the client sends `*/*` or no `Accept` header
 
 A name can end in what looks like an extension. When a volume, config, secret, network, service, node, or stack
