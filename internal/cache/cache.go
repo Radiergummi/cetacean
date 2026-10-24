@@ -897,12 +897,15 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// A global service runs one task per node Swarm can schedule on. Placement
+	// A global service runs one task per ready node that is active or paused:
+	// pausing stops new placements but keeps running tasks. Placement
 	// constraints are not applied here, so a constrained one is overstated.
 	schedulable := 0
 	for _, n := range c.nodes.items {
+		availability := n.Spec.Availability
 		if n.Status.State == swarm.NodeStateReady &&
-			n.Spec.Availability == swarm.NodeAvailabilityActive {
+			(availability == swarm.NodeAvailabilityActive ||
+				availability == swarm.NodeAvailabilityPause) {
 			schedulable++
 		}
 	}

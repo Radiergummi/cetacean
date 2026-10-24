@@ -127,7 +127,8 @@ func TestStackSummaryDesiresNothingOfAJob(t *testing.T) {
 	}
 }
 
-// A global service has no task on a node that is down or drained.
+// A global service has no task on a node that is down or drained, but keeps
+// the one it has on a paused node.
 func TestStackSummaryDesiresAGlobalTaskPerSchedulableNode(t *testing.T) {
 	c := New(nil)
 
@@ -152,8 +153,8 @@ func TestStackSummaryDesiresAGlobalTaskPerSchedulableNode(t *testing.T) {
 		t.Fatalf("summaries = %d, want 1", len(summaries))
 	}
 
-	if got := summaries[0].DesiredTasks; got != 1 {
-		t.Errorf("DesiredTasks = %d, want 1: only one node is ready and active", got)
+	if got := summaries[0].DesiredTasks; got != 2 {
+		t.Errorf("DesiredTasks = %d, want 2: the ready node and the paused one", got)
 	}
 }
 
