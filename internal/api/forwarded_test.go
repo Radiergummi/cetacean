@@ -59,9 +59,14 @@ func TestForwardedNodes(t *testing.T) {
 			want:   []string{"192.0.2.1"},
 		},
 		{
-			name:   "an element without a for parameter contributes nothing",
+			name:   "an element without a for parameter is a node naming no address",
 			values: []string{"proto=https, for=192.0.2.1"},
-			want:   []string{"192.0.2.1"},
+			want:   []string{"", "192.0.2.1"},
+		},
+		{
+			name:   "an unterminated quote makes its field value one node naming no address",
+			values: []string{`for=198.51.100.66;x=", for=203.0.113.9`, "for=192.0.2.1"},
+			want:   []string{"", "192.0.2.1"},
 		},
 		{
 			name:   "unknown and obfuscated nodes are reported as they stand",

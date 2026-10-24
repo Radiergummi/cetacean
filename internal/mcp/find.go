@@ -143,6 +143,9 @@ func (s *Server) findAcrossTypes(
 	}
 
 	limit := req.GetInt("limit", 3)
+	if limit < 0 {
+		limit = 3
+	}
 
 	results := cluster.Search(ctx, s.cache, query, limit, s.readPredicate(ctx))
 

@@ -78,8 +78,8 @@ grant: unreadable items are filtered out of the response, and `total` counts onl
 
 Creating a config or secret needs `write` on the name being created, so `secret:team-*` lets a team create secrets
 inside its own prefix and nowhere else. Installing a plugin needs `write` on `plugin:*`. Attaching a secret, config,
-or network to a service needs `read` on it as well as `write` on the service, unless the service already has it
-attached.
+or network to a service, or mounting a named volume, needs `read` on it as well as `write` on the service, unless
+the service already has it attached.
 
 ## Policy configuration
 

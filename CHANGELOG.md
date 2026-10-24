@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
+
+### Fixed
+- Built with Go 1.27.3, which refuses the compromised intermediate certificates in GO-2026-6809 when connecting to a TLS Docker Engine, an OIDC provider, or Tailscale
+- MCP no longer lists the IDs of nodes or networks sharing a name to a caller who can't read that name
+- MCP's cluster-wide metrics ranking is held to the services and nodes you can read unless you have `read` on `*`
+- A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
+- Configuring a plugin no longer writes its settings, which often carry credentials, to the log
+- An MCP `find` call with a negative `limit` no longer crashes Cetacean
+- Behind `server.trusted_proxies`, an address written to the left of a hop the proxy names `unknown` or obfuscates (`_hidden`) is no longer taken as the client's
+
 ## [0.17.0] - 2026-10-20
 
 ### Added

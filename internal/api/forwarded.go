@@ -5,30 +5,50 @@ import (
 	"strings"
 )
 
-// forwardedParams returns the value every RFC 7239 Forwarded element gives the
-// named parameter, leftmost first.
-func forwardedParams(values []string, name string) []string {
-	var found []string
+// forwardedNodes returns each Forwarded element's "for" node, first proxy
+// first — the ordering X-Forwarded-For uses. An element without one, or a
+// field value with an unterminated quote, yields "": no address, so the chain
+// stops there rather than reading past it into what the client wrote.
+func forwardedNodes(values []string) []string {
+	var nodes []string
 
 	for _, value := range values {
+		if !quotesBalanced(value) {
+			nodes = append(nodes, "")
+			continue
+		}
+
 		for _, element := range splitOutsideQuotes(value, ',') {
+			node := ""
 			for _, pair := range splitOutsideQuotes(element, ';') {
 				key, param, ok := strings.Cut(pair, "=")
-				if !ok || !strings.EqualFold(strings.TrimSpace(key), name) {
-					continue
+				if ok && strings.EqualFold(strings.TrimSpace(key), "for") {
+					node = unquote(strings.TrimSpace(param))
 				}
-				found = append(found, unquote(strings.TrimSpace(param)))
 			}
+			nodes = append(nodes, node)
 		}
 	}
 
-	return found
+	return nodes
 }
 
-// forwardedNodes returns each Forwarded element's "for" node, first proxy
-// first — the ordering X-Forwarded-For uses.
-func forwardedNodes(values []string) []string {
-	return forwardedParams(values, "for")
+// quotesBalanced reports whether every quoted-string in s is closed.
+func quotesBalanced(s string) bool {
+	inQuote, escaped := false, false
+
+	for i := range len(s) {
+		switch {
+		case escaped:
+			escaped = false
+		case inQuote && s[i] == '\\':
+			escaped = true
+		case s[i] == '"':
+			inQuote = !inQuote
+		}
+	}
+
+	return !inQuote
 }
 
 // forwardedOrigin returns the "proto" and "host" of the first Forwarded
