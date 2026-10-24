@@ -34,11 +34,13 @@ type SwarmSpec = SwarmInfo["swarm"]["Spec"];
 
 interface EncryptionPanelProps {
   spec: SwarmSpec;
-  canEdit: boolean;
+  editable: Set<string>;
   onSaved: () => void;
 }
 
-export function EncryptionPanel({ spec, canEdit, onSaved }: EncryptionPanelProps) {
+export function EncryptionPanel({ spec, editable, onSaved }: EncryptionPanelProps) {
+  const canRotateKey = editable.has("rotate-unlock-key");
+  const canUnlock = editable.has("unlock");
   const [draftAutoLock, setDraftAutoLock] = useState(false);
 
   const [unlockKeyValue, setUnlockKeyValue] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function EncryptionPanel({ spec, canEdit, onSaved }: EncryptionPanelProps
     <div className="space-y-3">
       <EditablePanel
         title="Encryption"
-        canEdit={canEdit}
+        canEdit={editable.has("encryption")}
         display={
           <KVTable
             rows={[["Auto-Lock Managers", spec.EncryptionConfig.AutoLockManagers ? "Yes" : "No"]]}
@@ -79,132 +81,138 @@ export function EncryptionPanel({ spec, canEdit, onSaved }: EncryptionPanelProps
         }}
       />
 
-      {spec.EncryptionConfig.AutoLockManagers && (
+      {spec.EncryptionConfig.AutoLockManagers && (canRotateKey || canUnlock) && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={fetchUnlockKey.loading}
-            onClick={() => {
-              if (showUnlockKey) {
-                setShowUnlockKey(false);
-                setUnlockKeyValue(null);
-              } else {
-                void fetchUnlockKey.execute(async () => {
-                  const result = await api.unlockKey();
-                  setUnlockKeyValue(result.unlockKey);
-                  setShowUnlockKey(true);
-                }, "Failed to fetch unlock key");
-              }
-            }}
-          >
-            {fetchUnlockKey.loading ? (
-              <Spinner className="size-3" />
-            ) : (
-              <KeyRound className="size-3.5" />
-            )}
-            {showUnlockKey ? "Hide Unlock Key" : "Show Unlock Key"}
-          </Button>
+          {canRotateKey && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={fetchUnlockKey.loading}
+                onClick={() => {
+                  if (showUnlockKey) {
+                    setShowUnlockKey(false);
+                    setUnlockKeyValue(null);
+                  } else {
+                    void fetchUnlockKey.execute(async () => {
+                      const result = await api.unlockKey();
+                      setUnlockKeyValue(result.unlockKey);
+                      setShowUnlockKey(true);
+                    }, "Failed to fetch unlock key");
+                  }
+                }}
+              >
+                {fetchUnlockKey.loading ? (
+                  <Spinner className="size-3" />
+                ) : (
+                  <KeyRound className="size-3.5" />
+                )}
+                {showUnlockKey ? "Hide Unlock Key" : "Show Unlock Key"}
+              </Button>
 
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={rotateUnlockKey.loading}
-                >
-                  {rotateUnlockKey.loading ? (
-                    <Spinner className="size-3" />
-                  ) : (
-                    <RefreshCw className="size-3.5" />
-                  )}
-                  Rotate Unlock Key
-                </Button>
-              }
-            />
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Rotate unlock key?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will invalidate the current unlock key. Make sure to save the new key.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    void rotateUnlockKey.execute(async () => {
-                      await api.rotateUnlockKey();
-                      setShowUnlockKey(false);
-                      setUnlockKeyValue(null);
-                      onSaved();
-                    }, "Failed to rotate unlock key");
-                  }}
-                >
-                  Rotate
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={rotateUnlockKey.loading}
+                    >
+                      {rotateUnlockKey.loading ? (
+                        <Spinner className="size-3" />
+                      ) : (
+                        <RefreshCw className="size-3.5" />
+                      )}
+                      Rotate Unlock Key
+                    </Button>
+                  }
+                />
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rotate unlock key?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will invalidate the current unlock key. Make sure to save the new key.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        void rotateUnlockKey.execute(async () => {
+                          await api.rotateUnlockKey();
+                          setShowUnlockKey(false);
+                          setUnlockKeyValue(null);
+                          onSaved();
+                        }, "Failed to rotate unlock key");
+                      }}
+                    >
+                      Rotate
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )}
 
-          <Dialog
-            open={unlockOpen}
-            onOpenChange={(open) => {
-              setUnlockOpen(open);
+          {canUnlock && (
+            <Dialog
+              open={unlockOpen}
+              onOpenChange={(open) => {
+                setUnlockOpen(open);
 
-              if (!open) {
-                setUnlockInput("");
-              }
-            }}
-          >
-            <DialogTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={unlockSwarm.loading}
-                >
-                  {unlockSwarm.loading ? (
-                    <Spinner className="size-3" />
-                  ) : (
-                    <LockOpen className="size-3.5" />
-                  )}
-                  Unlock Swarm
-                </Button>
-              }
-            />
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Unlock swarm</DialogTitle>
-                <DialogDescription>
-                  Enter the unlock key to unlock a locked swarm manager.
-                </DialogDescription>
-              </DialogHeader>
-              <Input
-                placeholder="SWMKEY-1-..."
-                value={unlockInput}
-                onChange={(event) => setUnlockInput(event.target.value)}
-                className="font-mono"
+                if (!open) {
+                  setUnlockInput("");
+                }
+              }}
+            >
+              <DialogTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={unlockSwarm.loading}
+                  >
+                    {unlockSwarm.loading ? (
+                      <Spinner className="size-3" />
+                    ) : (
+                      <LockOpen className="size-3.5" />
+                    )}
+                    Unlock Swarm
+                  </Button>
+                }
               />
-              <DialogFooter>
-                <Button
-                  disabled={unlockSwarm.loading || !unlockInput.trim()}
-                  onClick={() => {
-                    void unlockSwarm.execute(async () => {
-                      await api.unlockSwarm(unlockInput.trim());
-                      setUnlockOpen(false);
-                      setUnlockInput("");
-                      onSaved();
-                    }, "Failed to unlock swarm");
-                  }}
-                >
-                  {unlockSwarm.loading ? <Spinner className="size-3" /> : null}
-                  Unlock
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Unlock swarm</DialogTitle>
+                  <DialogDescription>
+                    Enter the unlock key to unlock a locked swarm manager.
+                  </DialogDescription>
+                </DialogHeader>
+                <Input
+                  placeholder="SWMKEY-1-..."
+                  value={unlockInput}
+                  onChange={(event) => setUnlockInput(event.target.value)}
+                  className="font-mono"
+                />
+                <DialogFooter>
+                  <Button
+                    disabled={unlockSwarm.loading || !unlockInput.trim()}
+                    onClick={() => {
+                      void unlockSwarm.execute(async () => {
+                        await api.unlockSwarm(unlockInput.trim());
+                        setUnlockOpen(false);
+                        setUnlockInput("");
+                        onSaved();
+                      }, "Failed to unlock swarm");
+                    }}
+                  >
+                    {unlockSwarm.loading ? <Spinner className="size-3" /> : null}
+                    Unlock
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       )}
 
