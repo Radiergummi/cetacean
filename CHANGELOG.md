@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Changes made while Cetacean syncs with Docker, at startup or after a reconnect, are no longer missed until the next periodic sync
 - Tasks on nodes other than the one Cetacean is connected to update within seconds, and with their service or node, instead of at the next five-minute sync
 - Stopping Cetacean writes a last snapshot, so a restart starts from the state at shutdown rather than from the last full sync
+- The Traefik panel reads labels in any case, as Traefik does, and accepts `traefik.enable` values like `1` or `True`
 
 ## [0.17.0] - 2026-10-20
 
