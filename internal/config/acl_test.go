@@ -19,7 +19,7 @@ func TestLoadACL_Defaults(t *testing.T) {
 		os.Unsetenv(key)
 	}
 
-	cfg := LoadACL(nil, nil)
+	cfg := LoadACL(nil)
 	if cfg.Policy != "" {
 		t.Errorf("Policy=%q, want empty", cfg.Policy)
 	}
@@ -48,7 +48,7 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL", "X-ACL")
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL_CAPABILITY", "example.com/cap/headers")
 
-	cfg := LoadACL(nil, nil)
+	cfg := LoadACL(nil)
 	if cfg.Policy != `{"grants":[]}` {
 		t.Errorf("Policy=%q", cfg.Policy)
 	}
@@ -66,26 +66,6 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	}
 	if cfg.HeadersCapability != "example.com/cap/headers" {
 		t.Errorf("HeadersCapability=%q", cfg.HeadersCapability)
-	}
-}
-
-func TestLoadACL_FlagOverridesEnv(t *testing.T) {
-	t.Setenv("CETACEAN_ACL_POLICY", "env-policy")
-	t.Setenv("CETACEAN_ACL_POLICY_FILE", "env-file")
-
-	flagPolicy := "flag-policy"
-	flagFile := "flag-file"
-	flags := &Flags{
-		ACLPolicy:     &flagPolicy,
-		ACLPolicyFile: &flagFile,
-	}
-
-	cfg := LoadACL(flags, nil)
-	if cfg.Policy != "flag-policy" {
-		t.Errorf("Policy=%q, want flag-policy", cfg.Policy)
-	}
-	if cfg.PolicyFile != "flag-file" {
-		t.Errorf("PolicyFile=%q, want flag-file", cfg.PolicyFile)
 	}
 }
 
@@ -121,7 +101,7 @@ func TestLoadACL_FileConfig(t *testing.T) {
 		},
 	}
 
-	cfg := LoadACL(nil, fc)
+	cfg := LoadACL(fc)
 	if cfg.Policy != "file-policy" {
 		t.Errorf("Policy=%q", cfg.Policy)
 	}

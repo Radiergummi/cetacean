@@ -10,12 +10,9 @@ type ACLConfig struct {
 	HeadersCapability   string // key of the grants array when that header is an object
 }
 
-// LoadACL loads ACL configuration from flags, env vars, and config file.
-func LoadACL(flags *Flags, fc *fileConfig) ACLConfig {
-	if flags == nil {
-		flags = &Flags{}
-	}
-
+// LoadACL loads ACL configuration from env vars and the config file; no ACL
+// setting has a flag.
+func LoadACL(fc *fileConfig) ACLConfig {
 	var fPolicy, fPolicyFile *string
 	var fTailscaleCap, fOIDCClaim, fHeadersACL, fHeadersCap *string
 	if fc != nil && fc.ACL != nil {
@@ -28,13 +25,8 @@ func LoadACL(flags *Flags, fc *fileConfig) ACLConfig {
 	}
 
 	return ACLConfig{
-		Policy: resolve(flags.ACLPolicy, "CETACEAN_ACL_POLICY", fPolicy, ""),
-		PolicyFile: resolve(
-			flags.ACLPolicyFile,
-			"CETACEAN_ACL_POLICY_FILE",
-			fPolicyFile,
-			"",
-		),
+		Policy:     resolve(nil, "CETACEAN_ACL_POLICY", fPolicy, ""),
+		PolicyFile: resolve(nil, "CETACEAN_ACL_POLICY_FILE", fPolicyFile, ""),
 		TailscaleCapability: resolve(
 			nil,
 			"CETACEAN_AUTH_TAILSCALE_ACL_CAPABILITY",

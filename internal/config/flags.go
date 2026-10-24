@@ -60,10 +60,6 @@ type Flags struct {
 	TLSCert *string
 	TLSKey  *string
 
-	// ACL
-	ACLPolicy     *string
-	ACLPolicyFile *string
-
 	// Storage
 	Snapshot *bool
 	DataDir  *string

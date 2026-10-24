@@ -184,7 +184,7 @@ func main() {
 		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
 	}
 
-	aclCfg := config.LoadACL(flags, fc)
+	aclCfg := config.LoadACL(fc)
 
 	var authProvider auth.Provider
 	var tsnetServer *tsnet.Server
