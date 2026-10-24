@@ -187,8 +187,10 @@ func TestASuffixedPluginTagAddressesThatPlugin(t *testing.T) {
 	}
 
 	for path, want := range map[string]string{
-		"/plugins/vieux%2Fsshfs%3A1.csv":  `"Name":"vieux/sshfs:1.csv"`,
-		"/plugins/vieux%2Fsshfs%3A1.json": `"Name":"vieux/sshfs:1"`,
+		"/plugins/vieux%2Fsshfs%3A1.csv":    `"Name":"vieux/sshfs:1.csv"`,
+		"/plugins/vieux%2Fsshfs%3A1%2Ecsv":  `"Name":"vieux/sshfs:1.csv"`,
+		"/plugins/vieux%2Fsshfs%3A1.json":   `"Name":"vieux/sshfs:1"`,
+		"/plugins/vieux%2Fsshfs%3A1%2Ejson": `"Name":"vieux/sshfs:1"`,
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Accept", "application/json")
