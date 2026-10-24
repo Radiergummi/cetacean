@@ -1,7 +1,7 @@
 import SearchPalette from "./SearchPalette";
 import { ApiError, api, headCapabilities } from "@/api/client";
 import { MockEventSource } from "@/test/mocks";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -59,6 +59,7 @@ describe("SearchPalette Remove Node", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
   });
 
