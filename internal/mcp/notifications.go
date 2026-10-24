@@ -22,11 +22,21 @@ type NotificationManager struct {
 	// *auth.Identity captured at subscribe time so dispatch can ACL-filter, and
 	// the notification filter the subscriptions/listen stream established.
 	sessions map[mcpserver.ClientSession]*sessionState
+
+	// index finds the subscriptions a key names, so an event touches only
+	// those that could match it rather than every subscribed URI.
+	index map[subscriptionTarget]map[*subscriptionEntry]struct{}
+
+	// resolve turns a subscribed URI into what it matches, and keys an event
+	// by everything it reaches. Nil for either matches literally, by the ID
+	// or name an event carries; the server installs both.
+	resolve func(uri string, identity *auth.Identity) subscription
+	keys    func(cache.Event) []eventKey
 }
 
 type sessionState struct {
 	identity *auth.Identity
-	uris     map[string]struct{}
+	uris     map[string]*subscriptionEntry
 
 	// filter is the opt-in a subscriptions/listen stream established, and is
 	// nil for legacy sessions. 2026-07-28 makes every notification type
@@ -35,11 +45,19 @@ type sessionState struct {
 	filter *mcplib.SubscriptionFilter
 }
 
+type subscriptionEntry struct {
+	session mcpserver.ClientSession
+	state   *sessionState
+	uri     string
+	sub     subscription
+}
+
 // NewNotificationManager returns an empty manager. Subscriptions are populated
-// via mcp-go's OnAfterSubscribe hook (wired in StartNotifications).
+// via the subscriptions/listen hooks installSubscriptionHooks wires.
 func NewNotificationManager() *NotificationManager {
 	return &NotificationManager{
 		sessions: make(map[mcpserver.ClientSession]*sessionState),
+		index:    make(map[subscriptionTarget]map[*subscriptionEntry]struct{}),
 	}
 }
 
@@ -55,17 +73,54 @@ func (nm *NotificationManager) Subscribe(
 		return
 	}
 
+	// Resolved before taking the lock, since resolving reads the cache.
+	resolve := nm.resolve
+	if resolve == nil {
+		resolve = literalSubscription
+	}
+	sub := resolve(uri, identity)
+
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 
+	st := nm.stateLocked(session)
+	st.identity = identity
+
+	if old, ok := st.uris[uri]; ok {
+		nm.unindexLocked(old)
+	}
+
+	entry := &subscriptionEntry{session: session, state: st, uri: uri, sub: sub}
+	st.uris[uri] = entry
+
+	for _, key := range sub.keys() {
+		entries := nm.index[key]
+		if entries == nil {
+			entries = make(map[*subscriptionEntry]struct{})
+			nm.index[key] = entries
+		}
+
+		entries[entry] = struct{}{}
+	}
+}
+
+func (nm *NotificationManager) stateLocked(session mcpserver.ClientSession) *sessionState {
 	st := nm.sessions[session]
 	if st == nil {
-		st = &sessionState{uris: make(map[string]struct{})}
+		st = &sessionState{uris: make(map[string]*subscriptionEntry)}
 		nm.sessions[session] = st
 	}
 
-	st.identity = identity
-	st.uris[uri] = struct{}{}
+	return st
+}
+
+func (nm *NotificationManager) unindexLocked(entry *subscriptionEntry) {
+	for _, key := range entry.sub.keys() {
+		delete(nm.index[key], entry)
+		if len(nm.index[key]) == 0 {
+			delete(nm.index, key)
+		}
+	}
 }
 
 // SetFilter records the notification opt-in a subscriptions/listen stream
@@ -84,12 +139,7 @@ func (nm *NotificationManager) SetFilter(
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 
-	st := nm.sessions[session]
-	if st == nil {
-		st = &sessionState{uris: make(map[string]struct{})}
-		nm.sessions[session] = st
-	}
-
+	st := nm.stateLocked(session)
 	st.identity = identity
 	st.filter = &filter
 }
@@ -104,7 +154,11 @@ func (nm *NotificationManager) Unsubscribe(session mcpserver.ClientSession, uri 
 		return
 	}
 
-	delete(st.uris, uri)
+	if entry, ok := st.uris[uri]; ok {
+		nm.unindexLocked(entry)
+		delete(st.uris, uri)
+	}
+
 	if len(st.uris) == 0 {
 		delete(nm.sessions, session)
 	}
@@ -114,6 +168,13 @@ func (nm *NotificationManager) Unsubscribe(session mcpserver.ClientSession, uri 
 func (nm *NotificationManager) RemoveSession(session mcpserver.ClientSession) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
+
+	if st, ok := nm.sessions[session]; ok {
+		for _, entry := range st.uris {
+			nm.unindexLocked(entry)
+		}
+	}
+
 	delete(nm.sessions, session)
 }
 
@@ -132,37 +193,18 @@ func (nm *NotificationManager) IdentityFor(session mcpserver.ClientSession) *aut
 }
 
 // MatchingURIs returns the subscribed URIs (for the given session) that match
-// the cache event. Detail-level URIs match exactly; for a service-update event
-// the manager also reports `cetacean://services/<id>/logs` so log-tail
-// subscribers learn about new lines without polling.
+// the cache event, before any ACL check.
 func (nm *NotificationManager) MatchingURIs(
 	session mcpserver.ClientSession,
 	event cache.Event,
 ) []string {
-	prefix := eventTypeToURIPrefix(event.Type)
-	if prefix == "" || event.ID == "" {
-		return nil
-	}
-
-	nm.mu.RLock()
-	defer nm.mu.RUnlock()
-
-	st, ok := nm.sessions[session]
-	if !ok || len(st.uris) == 0 {
-		return nil
-	}
-
 	var matches []string
-	detail := prefix + event.ID
-	if _, ok := st.uris[detail]; ok {
-		matches = append(matches, detail)
-	}
-	if event.Type == cache.EventService {
-		logURI := detail + "/logs"
-		if _, ok := st.uris[logURI]; ok {
-			matches = append(matches, logURI)
+	for _, d := range nm.matchingDeliveries(event) {
+		if d.session == session {
+			matches = append(matches, d.uri)
 		}
 	}
+
 	return matches
 }
 
@@ -193,37 +235,54 @@ func (nm *NotificationManager) listChangedTargets() []delivery {
 	return out
 }
 
-// matchingDeliveries walks every session's subscriptions under a single RLock
-// and returns the tuples needing notification for this event. The identity
-// rides along so the dispatcher can ACL-check without re-acquiring the lock,
-// which is released before dispatch so a slow send cannot block subscribe.
+// matchingDeliveries returns the tuples needing notification for this event,
+// found through the index: a resync reaches every indexed subscription, any
+// other event only the keys it names. The lock is released before dispatch, so
+// a slow send cannot block subscribe.
 func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery {
-	prefix := eventTypeToURIPrefix(event.Type)
-	if prefix == "" || event.ID == "" {
-		return nil
-	}
-	detail := prefix + event.ID
-	logURI := ""
-	if event.Type == cache.EventService {
-		logURI = detail + "/logs"
+	var keys []eventKey
+	if event.Type != cache.EventSync {
+		keys = directEventKeys(event)
+		if nm.keys != nil {
+			keys = nm.keys(event)
+		}
 	}
 
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
 
 	var out []delivery
-	for session, st := range nm.sessions {
-		if _, ok := st.uris[detail]; ok {
-			out = append(out, delivery{session: session, uri: detail, identity: st.identity})
+	add := func(entry *subscriptionEntry, via string) {
+		out = append(out, delivery{
+			session:  entry.session,
+			uri:      entry.uri,
+			target:   entry.sub.target,
+			via:      via,
+			identity: entry.state.identity,
+		})
+	}
+
+	if event.Type == cache.EventSync {
+		for _, st := range nm.sessions {
+			for _, entry := range st.uris {
+				if entry.sub.target.id != "" {
+					add(entry, "")
+				}
+			}
 		}
 
-		if logURI != "" {
-			if _, ok := st.uris[logURI]; ok {
-				out = append(
-					out,
-					delivery{session: session, uri: logURI, identity: st.identity},
-				)
+		return out
+	}
+
+	seen := make(map[*subscriptionEntry]struct{})
+	for _, key := range keys {
+		for entry := range nm.index[key.target] {
+			if _, dup := seen[entry]; dup {
+				continue
 			}
+
+			seen[entry] = struct{}{}
+			add(entry, key.via)
 		}
 	}
 
@@ -233,6 +292,8 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 type delivery struct {
 	session  mcpserver.ClientSession
 	uri      string
+	target   subscriptionTarget
+	via      string
 	identity *auth.Identity
 }
 
@@ -258,8 +319,8 @@ func eventTypeToURIPrefix(t cache.EventType) string {
 
 // startNotifications attaches the manager to the cache's event stream and
 // returns a cancel function for shutdown. The listener fires synchronously on
-// every mutation, so per-event work stays a map lookup and a non-blocking
-// send.
+// every mutation, so per-event work is bounded by the keys an event reaches,
+// never by how many URIs are subscribed elsewhere.
 func (s *Server) startNotifications() func() {
 	if s.cache == nil || s.notifications == nil {
 		return func() {}
@@ -270,20 +331,22 @@ func (s *Server) startNotifications() func() {
 }
 
 // dispatchCacheEvent fans an event out to subscribed sessions. Detail
-// subscribers get resources/updated; create and remove additionally broadcast
+// subscribers get resources/updated, on a resync too; create and remove additionally broadcast
 // resources/list_changed, which carries no URI. Deliveries are ACL-checked, so
 // a policy tightened after a subscription still applies.
 func (s *Server) dispatchCacheEvent(event cache.Event) {
-	if event.Type == cache.EventSync {
-		// The full-resync event isn't useful as a single notification.
-		// Clients re-read on reconnect anyway.
-		return
-	}
-
 	hasResource := eventNamesResource(event)
 	for _, d := range s.notifications.matchingDeliveries(event) {
 		canRead := func(resource string) bool { return s.canRead(d.identity, resource) }
-		if hasResource && !cluster.CanReadEvent(event, canRead) {
+
+		// A resync names no resource, so the subscribed one is checked instead:
+		// any of them may have changed, and the client must re-read.
+		if event.Type == cache.EventSync {
+			if !s.targetReadable(d.identity, d.target) {
+				continue
+			}
+		} else if hasResource && !cluster.CanReadEvent(event, canRead) ||
+			d.via != "" && !canRead(d.via) {
 			continue
 		}
 

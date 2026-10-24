@@ -185,3 +185,32 @@ func TestSubscriptionsListenHonoursOptIn(t *testing.T) {
 		// Nothing further arrived, which is what we want.
 	}
 }
+
+// Every event is matched against every subscribed URI that could name it, so
+// one stream may not subscribe to more than the cap, and is told why.
+func TestSubscriptionsListenCapsResourceSubscriptions(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+
+	listen := func(n int) jsonrpcEnvelope {
+		uris := make([]string, n)
+		for i := range uris {
+			uris[i] = fmt.Sprintf("cetacean://services/svc-%d", i)
+		}
+
+		encoded, _ := json.Marshal(uris)
+		params := fmt.Sprintf(`{"notifications":{"resourceSubscriptions":%s}}`, encoded)
+		request := modernRequest(t, 1, "subscriptions/listen", params)
+		_, envelope := sendMCP(t, srv.Handler(), request)
+
+		return envelope
+	}
+
+	refused := listen(maxListenURIs + 1)
+	if refused.Error == nil || refused.Error.Code != mcplib.INVALID_PARAMS {
+		t.Fatalf("listen past the cap = %+v, want an invalid-params error", refused)
+	}
+
+	if want := fmt.Sprint(maxListenURIs); !strings.Contains(refused.Error.Message, want) {
+		t.Errorf("error %q does not name the cap", refused.Error.Message)
+	}
+}

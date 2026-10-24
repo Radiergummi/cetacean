@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -19,7 +21,38 @@ const (
 	// maxListenStreams bounds open subscriptions/listen streams. Each holds a
 	// connection with no write timeout, so they accumulate without one.
 	maxListenStreams = 64
+
+	// maxListenURIs bounds the resources one listen stream subscribes to. The
+	// index keeps an event's cost off other streams, not off one subscribing
+	// to everything; a client wanting that much reads listings instead.
+	maxListenURIs = 256
+
+	// maxLogReads bounds get_logs calls and logs resource reads in flight, by
+	// the REST log reads' numbers. The two transports hold separate pools.
+	maxLogReads = 32
 )
+
+// remoteAddrKey carries the connection's address into handler contexts, as
+// the per-caller share of a cap keys an unauthenticated caller on it.
+type remoteAddrKey struct{}
+
+// claimLogRead takes a log-read slot for the caller, refusing past the cap or
+// past the caller's quarter share of it.
+func (s *Server) claimLogRead(ctx context.Context) (release func(), err error) {
+	addr, _ := ctx.Value(remoteAddrKey{}).(string)
+	r := (&http.Request{RemoteAddr: addr}).WithContext(ctx)
+
+	release, callerFull, ok := s.logReads.Acquire(r, maxLogReads)
+	if !ok {
+		if callerFull {
+			return nil, errors.New("too many log reads in flight from this client; retry shortly")
+		}
+
+		return nil, errors.New("too many log reads in flight; retry shortly")
+	}
+
+	return release, nil
+}
 
 // limitBody refuses a body over maxRequestBytes before mcp-go reads it whole.
 func limitBody(next http.Handler) http.Handler {
@@ -47,11 +80,12 @@ func limitBody(next http.Handler) http.Handler {
 }
 
 // limitListens refuses a listen stream past maxListenStreams as the SSE caps
-// do. It sits inside the origin and bearer checks, which must answer first,
-// and reads a body limitBody has already bounded.
+// do, and one naming more than maxListenURIs resources. It sits inside the
+// origin and bearer checks, which must answer first, and reads a body
+// limitBody has already bounded.
 func (s *Server) limitListens(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.listens == nil || r.Method != http.MethodPost {
+		if r.Method != http.MethodPost {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -65,10 +99,30 @@ func (s *Server) limitListens(next http.Handler) http.Handler {
 		r.Body = io.NopCloser(bytes.NewReader(body))
 
 		var envelope struct {
-			Method mcplib.MCPMethod `json:"method"`
+			ID     any                              `json:"id"`
+			Method mcplib.MCPMethod                 `json:"method"`
+			Params mcplib.SubscriptionsListenParams `json:"params"`
 		}
 		if json.Unmarshal(body, &envelope) != nil ||
 			envelope.Method != mcplib.MethodSubscriptionsListen {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if n := len(envelope.Params.Notifications.ResourceSubscriptions); n > maxListenURIs {
+			writeJSONRPCError(w, envelope.ID, http.StatusOK, mcplib.NewJSONRPCErrorDetails(
+				mcplib.INVALID_PARAMS,
+				fmt.Sprintf(
+					"resourceSubscriptions names %d URIs; at most %d are allowed per stream",
+					n, maxListenURIs,
+				),
+				nil,
+			))
+
+			return
+		}
+
+		if s.listens == nil {
 			next.ServeHTTP(w, r)
 			return
 		}

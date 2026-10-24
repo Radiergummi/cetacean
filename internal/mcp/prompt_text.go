@@ -10,11 +10,13 @@ const (
 Work through this order and stop as soon as you can name the cause.
 
 1. Resolve the name with the find tool to get the service ID, then read
-   cetacean://services/<id> for its mode, desired replicas and update status.
+   cetacean://services/<id> for its mode, replicas and updateState, and the
+   reason and recentFailures behind an unhealthy state.
 2. Call find for tasks and locate this service's tasks. Compare the
    running count against desired. Note any task in failed, rejected or
-   orphaned, and its Status.Err. The call returns at most 200 items but
-   reports the true total, so page with offset if you need more.
+   orphaned; describe one for the message Swarm gave. The call returns at
+   most 200 items but reports the true total, so page with offset if you
+   need more.
 3. For the most recent failing task, call get_logs on the service. A crash loop
    usually names itself in the last lines before exit.
 4. If the tasks are running but the service still misbehaves, call get_metrics
@@ -35,8 +37,9 @@ this one symptom; check them in this order, because the cheap checks rule out
 the expensive ones.
 
 1. Resolve the name with the find tool, then read cetacean://services/<id>
-   and note Spec.TaskTemplate.Placement - constraints, preferences and
-   MaxReplicas.
+   and note its placementConstraints. Placement preferences and the per-node
+   replica cap are not in it; call describe for the service with raw true and
+   read them from Spec.TaskTemplate.Placement in the raw record.
 2. Call describe for this service and read its reason and recentFailures.
    Swarm often states the cause outright ("no suitable node"); if it does, stop
    there.
@@ -44,15 +47,16 @@ the expensive ones.
    placement constraint, check which nodes satisfy it - node.labels.* come from
    a node's labels, node.role from its role, and node.hostname and
    node.platform.* from its hostname and platform; engine.labels.* are not
-   carried, so read cetacean://nodes/<id> with raw if a constraint names one.
+   carried, so call describe for the node with raw true if a constraint names
+   one.
    A constraint naming a label no node carries can never be satisfied.
 4. Check each node's state. A node reporting drain accepts nothing, a pause
    node accepts no new tasks, and a down node cannot take work either - so a
    cluster can look healthy and still have nowhere to put this service.
-5. Compare the task template's resource reservations against what nodes have
-   left. Reservations, not limits, decide placement. If Placement.MaxReplicas
-   is set, check whether that per-node cap is already reached on every
-   eligible node.
+5. Compare the service's cpuReservationCores and memoryReservationBytes
+   against what nodes have left. Reservations, not limits, decide placement.
+   If the raw record sets a per-node replica cap (MaxReplicas), check whether
+   it is already reached on every eligible node.
 
 Report which cause it is, and the specific constraint, label or
 reservation responsible. If several apply, say so - fixing one leaves the task
@@ -84,10 +88,11 @@ part of this review.`
 rollback is warranted before performing it.
 
 1. Resolve the name with the find tool, then read cetacean://services/<id>.
-   Check UpdateStatus.State: rollback_started means a rollback is already
+   Check updateState: rollback_started means a rollback is already
    running, so report that and stop rather than starting a second one;
    rollback_paused means one stalled and needs a human, not another attempt;
-   updating means the deployment may still converge on its own.
+   updating means the deployment may still converge on its own. No
+   updateState means no update has run since the service was created.
 2. Call find for tasks and confirm this service actually has failing
    or unplaced tasks. If every task is running and healthy, stop and report
    that - there is nothing to roll back, and rolling back a healthy service is
@@ -118,7 +123,8 @@ guess.
    with get_metrics: if it reports metrics unavailable, say so and stop
    rather than reporting the service as correctly sized.
 2. Resolve the name with the find tool, then read cetacean://services/<id>
-   for its current Resources.Reservations and Resources.Limits.
+   for its current cpuReservationCores, memoryReservationBytes,
+   cpuLimitCores and memoryLimitBytes. A field that is absent is not set.
 3. Call get_metrics for cpu and memory over the last week and check the finding
    against the series yourself. A service whose load is weekly or bursty can
    look over-provisioned over a day and be correctly sized over a week.

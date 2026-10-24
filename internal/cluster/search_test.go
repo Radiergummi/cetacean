@@ -179,7 +179,10 @@ func TestSearchCountsOnlyWhatCanReadAdmits(t *testing.T) {
 	}
 
 	c.SetTask(swarm.Task{ID: "task-1", ServiceID: "id-acme-a"})
-	c.SetTask(swarm.Task{ID: "task-2", ServiceID: "id-acme-b"})
+	// Matched on its image: acme-b is hidden, so its name matches nothing.
+	task2 := swarm.Task{ID: "task-2", ServiceID: "id-acme-b"}
+	task2.Spec.ContainerSpec = &swarm.ContainerSpec{Image: "registry/acme-app:1"}
+	c.SetTask(task2)
 
 	node := swarm.Node{ID: "acme-node"}
 	node.Spec.Labels = map[string]string{"team": "acme"}

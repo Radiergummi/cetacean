@@ -97,7 +97,7 @@ func (s *Server) toolGetEvents(
 		matched = matched[:limit]
 	}
 
-	matched = cluster.NameHistoryTasks(s.cache, matched)
+	matched = cluster.NameHistoryTasks(s.cache, matched, s.readPredicate(ctx))
 
 	timeline := make([]cluster.TimelineEntry, 0, len(matched))
 

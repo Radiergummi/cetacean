@@ -82,8 +82,8 @@ resources they returned, so a host can offer somewhere to go next.
 What the cluster is doing now, and what it did recently.
 
 <McpTool name="get_logs" level={0}>
-    <Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail` (100 per
-        replica), `since`, `level` (`debug`, `info`, `warn`, `error`, `fatal`)</Fragment>
+    <Fragment slot="arguments">exactly one of `service`, `task`, `stack`, `cluster`; plus `contains`, `tail` (100 lines
+        in all, across replicas and services), `since`, `level` (`debug`, `info`, `warn`, `error`, `fatal`)</Fragment>
 
     Fetches recent log lines from one scope.
 
@@ -351,7 +351,7 @@ Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `re
 cores.
 
 Templated resources return the same compact digest the `describe` tool builds. The exceptions are
-`services/{id}/logs`, a raw log stream, and the two `compose` documents, which are YAML rather than JSON.
+`services/{id}/logs`, the recent log lines, and the two `compose` documents, which are YAML rather than JSON.
 
 | URI template                       | Contents                                                                        |
 |------------------------------------|---------------------------------------------------------------------------------|
@@ -369,10 +369,23 @@ Templated resources return the same compact digest the `describe` tool builds. T
 
 ### Subscriptions
 
-Clients call `resources/subscribe` with a URI. When the underlying cluster state changes, the server sends
-`notifications/resources/updated` for that URI and the client re-reads.
+On `2026-07-28` a client subscribes by opening a `subscriptions/listen` stream that names the notification types it
+wants and the resource URIs to watch, and the server sends nothing the stream didn't ask for. `resources/subscribe` is
+gone from that revision. A `2025-11-25` client gets no subscriptions at all, since it has no stream to receive them on.
+
+A watched URI may name its resource by ID or by name. The server sends `notifications/resources/updated` for it when
+the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, and
+after a full resync, and the client re-reads. A name keeps following whatever holds it: a service removed and created
+again under the same name, a node that rejoins with the same hostname, the replica that takes over a
+`<service>.<slot>`, and a resource created after the stream opened. A service's logs URI is notified on the same
+changes as the service, not on every new line; read new lines with `get_logs` and the previous cursor. The cluster
+overview, `cetacean://history`, `cetacean://recommendations`, and the listing URIs are never notified.
 `notifications/resources/list_changed` fires when resources are created or removed. Both are filtered by grants per
-notification: a client is only notified about resources its identity can read.
+notification: a client is only notified about resources its identity can read, and through a service, node, or stack
+only when it can read that too.
+
+One stream watches at most 256 resource URIs. A `subscriptions/listen` naming more is refused with an
+`Invalid params` error; open a second stream, or watch the stack rather than each of its services.
 
 ### Argument completion
 
