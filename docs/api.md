@@ -54,8 +54,8 @@ the client asks for. There's no `/api/v1/` prefix; versioning lives in the media
    A wildcard never opens an event stream—ask for `text/event-stream` by name
 3. `application/json` when the client sends `*/*` or no `Accept` header
 
-A name can end in what looks like an extension. When a volume, config, secret, network, service, node, or stack
-you may read is named exactly that, `/volumes/backup.json` is volume `backup.json`, negotiated by `Accept`. A
+A name can end in what looks like an extension. When a volume, config, secret, network, service, node, stack, or
+plugin you may read is named exactly that, `/volumes/backup.json` is volume `backup.json`, negotiated by `Accept`. A
 write to a resource never reads a suffix off its name: `DELETE /volumes/backup.json` removes `backup.json` or
 answers `404`.
 

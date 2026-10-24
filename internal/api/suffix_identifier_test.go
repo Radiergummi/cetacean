@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,8 +10,10 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
+	"github.com/docker/docker/errdefs"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -149,5 +152,57 @@ func TestASuffixedConfigNameRedirectsToThatConfig(t *testing.T) {
 				t.Errorf("Location = %q, want /configs/suffixed-id", got)
 			}
 		})
+	}
+}
+
+// A plugin's tag can end like a suffix, foo:1.csv, and its name can carry an
+// escaped slash; neither may lose the suffix on a write or a read of it.
+func TestASuffixedPluginTagAddressesThatPlugin(t *testing.T) {
+	installed := map[string]bool{"vieux/sshfs:1.csv": true, "vieux/sshfs:1": true}
+
+	var removed string
+	pc := &mockPluginClient{
+		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+			if !installed[name] {
+				return nil, errdefs.NotFound(errors.New("no such plugin"))
+			}
+
+			return &types.Plugin{Name: name}, nil
+		},
+		pluginRemoveFn: func(_ context.Context, name string, _ bool) error {
+			removed = name
+			return nil
+		},
+	}
+	router := newTestRouterWithCache(t, cache.New(nil), withPluginClient(pc))
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(
+		w,
+		httptest.NewRequest(http.MethodDelete, "/plugins/vieux%2Fsshfs%3A1.csv", nil),
+	)
+	if w.Code != http.StatusNoContent || removed != "vieux/sshfs:1.csv" {
+		t.Errorf("DELETE answered %d and removed %q, want 204 and vieux/sshfs:1.csv: %s",
+			w.Code, removed, w.Body.String())
+	}
+
+	for path, want := range map[string]string{
+		"/plugins/vieux%2Fsshfs%3A1.csv":  `"Name":"vieux/sshfs:1.csv"`,
+		"/plugins/vieux%2Fsshfs%3A1.json": `"Name":"vieux/sshfs:1"`,
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Accept", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) {
+			t.Errorf(
+				"GET %s answered %d, want 200 with %s: %s",
+				path,
+				w.Code,
+				want,
+				w.Body.String(),
+			)
+		}
 	}
 }

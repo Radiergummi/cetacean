@@ -4,9 +4,11 @@ import (
 	"context"
 	"mime"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
@@ -117,7 +119,7 @@ func negotiate(next http.Handler) http.Handler {
 		// the wrong resource.
 		ct, ext := ContentTypeUnsupported, ""
 		if isSafeMethod(r.Method) || r.Method == http.MethodOptions ||
-			!addressesMember(r.URL.Path) {
+			!addressesMember(r.URL.EscapedPath()) {
 			ct, ext = resolveExtension(r)
 		}
 
@@ -149,9 +151,10 @@ func negotiated(r *http.Request, ct ContentType, ext string) context.Context {
 func (h *Handlers) suffixedNames(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ext := extensionFromContext(r.Context())
-		collection, identifier, rest := splitResourcePath(r.URL.Path)
+		collection, identifier, rest := splitResourcePath(r.URL.EscapedPath())
+		identifier, err := url.PathUnescape(identifier)
 
-		if ext == "" || identifier == "" || rest != "" ||
+		if ext == "" || identifier == "" || rest != "" || err != nil ||
 			!h.namesReadableMember(r, collection, identifier+ext) {
 			next.ServeHTTP(w, r)
 
@@ -167,17 +170,19 @@ func (h *Handlers) suffixedNames(next http.Handler) http.Handler {
 	})
 }
 
-// addressesMember reports whether path ends in the identifier of a member of a
-// collection that can be addressed by a name, where a dot is part of the name.
-func addressesMember(path string) bool {
-	collection, identifier, rest := splitResourcePath(path)
+// addressesMember reports whether the escaped path ends in the identifier of a
+// member of a collection that can be addressed by a name, where a dot is part
+// of the name. A plugin's tag is one: foo:1.csv.
+func addressesMember(escapedPath string) bool {
+	collection, identifier, rest := splitResourcePath(escapedPath)
 	if identifier == "" || rest != "" {
 		return false
 	}
 
 	_, resolvable := canonicalResolvers[collection]
 
-	return resolvable || collection == "volumes" || collection == "stacks"
+	return resolvable || collection == "volumes" || collection == "stacks" ||
+		collection == "plugins" && identifier != "privileges"
 }
 
 // namesReadableMember reports whether identifier addresses a member of the
@@ -206,11 +211,29 @@ func (h *Handlers) namesReadableMember(r *http.Request, collection, identifier s
 			return false
 		}
 		resource = "stack:" + identifier
+	case collection == "plugins":
+		return h.namesReadablePlugin(r, identifier)
 	default:
 		return false
 	}
 
 	return h.acl.Can(auth.IdentityFromContext(r.Context()), "read", resource)
+}
+
+// namesReadablePlugin is namesReadableMember for a plugin, which the cache does
+// not hold: the daemon is asked, and only once the caller may read the name.
+func (h *Handlers) namesReadablePlugin(r *http.Request, name string) bool {
+	if h.pluginClient == nil ||
+		!h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "plugin:"+name) {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	_, err := h.pluginClient.PluginInspect(ctx, name)
+
+	return err == nil
 }
 
 // notAcceptable refuses a type the endpoint does not serve, naming what it
