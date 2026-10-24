@@ -191,7 +191,20 @@ describe("LogViewer", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/^Too many log reads: too many log reads in flight\. Wait a few seconds/),
+        screen.getByText(/^Too many log reads in flight\. Wait a few seconds/),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("titles a refused log read whose detail does not name it", async () => {
+    mockServiceLogs.mockRejectedValue(
+      new ApiError("/api/errors/LOG009", "Too Many Log Reads", 429, "the manager is busy"),
+    );
+    renderWithRouter(<LogViewer serviceId="svc1" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/^Too many log reads: the manager is busy\. Wait a few seconds/),
       ).toBeInTheDocument();
     });
   });

@@ -123,7 +123,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
           const info = apiError && getErrorInfo(apiError.code);
           setError(
             info && apiError
-              ? `${info.title}: ${withSuggestion(apiError.detail, info.suggestion)}`
+              ? titled(info.title, withSuggestion(apiError.detail, info.suggestion))
               : getErrorMessage(caught, "Failed to load logs"),
           );
         }
@@ -423,4 +423,15 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     loadNewer,
     handleScroll,
   };
+}
+
+/**
+ * Prefixes the title unless the explanation already opens with it.
+ */
+function titled(title: string, explanation: string): string {
+  if (explanation.toLowerCase().startsWith(title.toLowerCase())) {
+    return explanation.charAt(0).toUpperCase() + explanation.slice(1);
+  }
+
+  return `${title}: ${explanation}`;
 }
