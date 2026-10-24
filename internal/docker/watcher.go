@@ -120,6 +120,12 @@ type Watcher struct {
 	refreshes      chan refreshRequest
 	resyncRequests chan chan error
 
+	// settled holds settle reads awaiting the loop, one per task; settledReady
+	// wakes the loop to apply them. See settleRead.
+	settledMu    sync.Mutex
+	settled      map[string]settledRead
+	settledReady chan struct{}
+
 	// loopRunning reports whether the event loop is reading refreshes.
 	loopRunning atomic.Bool
 
@@ -154,6 +160,8 @@ func NewWatcher(client DockerClient, store Store, snapshotPath string) *Watcher 
 		settleDelay:  defaultSettleDelay,
 		syncInterval: defaultSyncInterval,
 		refreshes:    make(chan refreshRequest),
+		settled:      make(map[string]settledRead),
+		settledReady: make(chan struct{}, 1),
 
 		resyncRequests: make(chan chan error),
 	}
@@ -502,6 +510,8 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			}
 		case req := <-w.refreshes:
 			req.done <- req.run(ctx)
+		case <-w.settledReady:
+			w.applySettled()
 		case done := <-w.resyncRequests:
 			flushPending()
 
@@ -726,12 +736,7 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 			case <-time.After(delay):
 			}
 
-			if !w.settleOnLoop(ctx, key) {
-				return
-			}
-
-			task, ok := w.store.GetTask(key.id)
-			if !ok || taskCaughtUp(task, action) {
+			if w.settleRead(ctx, key, action) {
 				return
 			}
 
@@ -747,34 +752,84 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 	})
 }
 
-// settleOnLoop re-reads a task on the event loop, which applies every other
-// write, so a removal cannot land between its inspect and its apply. It
-// reports false when the loop did not take it: the loop is reconnecting, and
-// the full sync that follows supersedes the re-read.
-func (w *Watcher) settleOnLoop(ctx context.Context, key eventKey) bool {
+// settledRead is a settle's inspect awaiting the loop: the task, or gone.
+type settledRead struct {
+	task swarm.Task
+	gone bool
+}
+
+// settleRead inspects a task off the loop and queues the result for it, so a
+// burst of exits holds neither the loop nor a Refresh behind it. It reports
+// whether the task has caught up, which ends the re-reads.
+func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) bool {
+	resource, err := w.inspectWithRetry(ctx, key)
+
+	var read settledRead
+	switch {
+	case cerrdefs.IsNotFound(err):
+		read.gone = true
+	case err != nil:
+		slog.Warn("task re-read failed", "id", key.id, "error", err)
+		return ctx.Err() != nil
+	default:
+		task, ok := resource.(swarm.Task)
+		if !ok {
+			return true
+		}
+		read.task = task
+	}
+
+	// With no loop there is nothing to order against, as for Refresh.
 	if !w.loopRunning.Load() {
-		w.inspectAndApply(ctx, key)
-		return true
+		w.applySettledRead(key.id, read)
+	} else {
+		w.queueSettled(key.id, read)
 	}
 
-	done := make(chan error, 1)
-	settle := func(ctx context.Context) error {
-		w.inspectAndApply(ctx, key)
-		return nil
-	}
+	return read.gone || taskCaughtUp(read.task, action)
+}
 
-	handoff := time.NewTimer(refreshHandoffTimeout)
-	defer handoff.Stop()
+// queueSettled keeps the newest read per task until the loop takes it. A loop
+// that stops first leaves it for the next one.
+func (w *Watcher) queueSettled(id string, read settledRead) {
+	w.settledMu.Lock()
+	if queued, ok := w.settled[id]; !ok || queued.gone ||
+		read.gone || read.task.Version.Index >= queued.task.Version.Index {
+		w.settled[id] = read
+	}
+	w.settledMu.Unlock()
 
 	select {
-	case w.refreshes <- refreshRequest{run: settle, done: done}:
-	case <-handoff.C:
-		return false
-	case <-ctx.Done():
-		return false
+	case w.settledReady <- struct{}{}:
+	default:
+	}
+}
+
+// applySettled applies every queued settle read; it runs on the event loop.
+func (w *Watcher) applySettled() {
+	w.settledMu.Lock()
+	reads := w.settled
+	w.settled = make(map[string]settledRead, len(reads))
+	w.settledMu.Unlock()
+
+	for id, read := range reads {
+		w.applySettledRead(id, read)
+	}
+}
+
+// applySettledRead applies a read taken before the writes now in the cache:
+// a task removed meanwhile stays removed, and SetTask refuses an older version.
+func (w *Watcher) applySettledRead(id string, read settledRead) {
+	if _, ok := w.store.GetTask(id); !ok {
+		return
 	}
 
-	return <-done == nil
+	if read.gone {
+		w.store.DeleteTask(id)
+		return
+	}
+
+	w.store.SetTask(read.task)
 }
 
 // taskCaughtUp reports whether Swarm's record has caught up with the container
