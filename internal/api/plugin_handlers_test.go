@@ -460,3 +460,76 @@ func TestHandleInstallPlugin_ChangedPrivilegesAreAConflict(t *testing.T) {
 		t.Errorf("status=%d body=%s, want 409 PLG006", w.Code, w.Body.String())
 	}
 }
+
+// A plugin name carries a slash, so every URI naming one escapes it as a
+// single segment; followed back through the router, each reaches the plugin.
+func TestEveryPluginURIResolvesToThePlugin(t *testing.T) {
+	const name = "vieux/sshfs:latest"
+	plugin := &types.Plugin{Name: name}
+
+	router := newTestRouterWithConfig(t, nil, withPluginClient(&mockPluginClient{
+		pluginListFn: func(context.Context) (types.PluginsListResponse, error) {
+			return types.PluginsListResponse{plugin}, nil
+		},
+		pluginInspectFn: func(_ context.Context, got string) (*types.Plugin, error) {
+			if got != name {
+				return nil, errdefs.NotFound(fmt.Errorf("plugin %q not found", got))
+			}
+			return plugin, nil
+		},
+		pluginInstallFn: func(context.Context, string) (*types.Plugin, error) { return plugin, nil },
+	}))
+
+	serve := func(method, target, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		return w
+	}
+
+	var list struct {
+		Items []struct {
+			ID string `json:"@id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(
+		serve(http.MethodGet, "/plugins", "").Body.Bytes(),
+		&list,
+	); err != nil ||
+		len(list.Items) != 1 {
+		t.Fatalf("list did not decode to one item: %v", err)
+	}
+
+	var detail struct {
+		ID string `json:"@id"`
+	}
+	if err := json.Unmarshal(
+		serve(http.MethodGet, list.Items[0].ID, "").Body.Bytes(),
+		&detail,
+	); err != nil {
+		t.Fatalf("detail did not decode: %v", err)
+	}
+
+	installed := serve(
+		http.MethodPost,
+		"/plugins",
+		`{"remote":"vieux/sshfs:latest","privileges":[]}`,
+	)
+
+	for label, uri := range map[string]string{
+		"list item @id": list.Items[0].ID,
+		"detail @id":    detail.ID,
+		"Location":      installed.Header().Get("Location"),
+	} {
+		if uri == "" {
+			t.Errorf("no %s", label)
+			continue
+		}
+		if w := serve(http.MethodGet, uri, ""); w.Code != http.StatusOK {
+			t.Errorf("%s %q answered %d", label, uri, w.Code)
+		}
+	}
+}

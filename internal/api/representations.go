@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -479,9 +480,15 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 // representation serialize. They share the rendering rather than the lookup,
 // because only the GET maps an inspect error to a status code.
 func pluginDetail(r *http.Request, name string, plugin types.Plugin) DetailResponse {
-	return NewDetailResponse(r.Context(), "/plugins/"+name, "Plugin", PluginResponse{
+	return NewDetailResponse(r.Context(), pluginPath(name), "Plugin", PluginResponse{
 		Plugin: plugin,
 	})
+}
+
+// pluginPath escapes the slash a plugin name carries, so the name stays the
+// single segment the route matches.
+func pluginPath(name string) string {
+	return "/plugins/" + url.PathEscape(name)
 }
 
 // pluginRepresentation is the one builder that does not read the cache: plugins

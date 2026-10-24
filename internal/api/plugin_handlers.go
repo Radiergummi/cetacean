@@ -50,7 +50,7 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 				r.Context(),
 				plugins,
 				"Plugin",
-				func(p *types.Plugin) string { return "/plugins/" + p.Name },
+				func(p *types.Plugin) string { return pluginPath(p.Name) },
 			),
 			len(plugins),
 			len(plugins),
@@ -226,6 +226,8 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		writePluginWriteError(w, r, err, req.Remote)
 		return
 	}
+
+	w.Header().Set("Location", absPath(r.Context(), pluginPath(plugin.Name)))
 
 	writeJSONStatus(
 		w,

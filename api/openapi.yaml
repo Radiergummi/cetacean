@@ -2033,6 +2033,11 @@ paths:
       responses:
         "201":
           description: Plugin installed
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Path to the installed plugin, its name escaped as one segment
           content:
             application/json:
               schema:
