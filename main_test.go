@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/config"
@@ -99,10 +101,16 @@ func TestProbeReadyIgnoresTheProxyEnvironment(t *testing.T) {
 		os.Args[0],
 		"-test.run=^TestProbeReadyIgnoresTheProxyEnvironment$",
 	)
-	cmd.Env = append(os.Environ(),
+	// Go never proxies localhost or a loopback IP, so the target must be
+	// neither yet reach this host without a resolver: the unspecified address.
+	// An inherited proxy setting, in either case, could exempt it.
+	cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return strings.HasSuffix(strings.ToLower(name), "_proxy")
+	})
+	cmd.Env = append(cmd.Env,
 		"HTTP_PROXY="+proxy.URL,
-		"NO_PROXY=",
-		"CETACEAN_TEST_PROBE_TARGET=http://localhost.:"+port+"/-/ready",
+		"CETACEAN_TEST_PROBE_TARGET=http://0.0.0.0:"+port+"/-/ready",
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Errorf("probe went through the proxy: %v\n%s", err, out)
