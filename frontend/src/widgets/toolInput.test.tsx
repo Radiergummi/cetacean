@@ -74,4 +74,19 @@ describe("widget tool input", () => {
       arguments: { target: "service", id: "web", metric: "cpu", range: "1h" },
     });
   });
+
+  it("ranks the cluster with the top, by and range get_metrics was called with", async () => {
+    const request = await callFor(<MetricsWidget />, {
+      target: "cluster",
+      top: 3,
+      by: "node",
+      metric: "memory",
+      range: "24h",
+    });
+
+    expect(request).toEqual({
+      name: "get_metrics",
+      arguments: { target: "cluster", metric: "memory", top: 3, by: "node", range: "24h" },
+    });
+  });
 });
