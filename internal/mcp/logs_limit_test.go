@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -68,5 +69,37 @@ func TestLogReadsCapOneCallerAtAQuarter(t *testing.T) {
 		"service": "svc1",
 	})); err != nil {
 		t.Fatalf("another caller was refused: %v", err)
+	}
+}
+
+// A read gives its slot back however it ends, or the cap fills with reads that
+// already finished and refuses every caller from then on.
+func TestLogReadsReleaseTheirSlot(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		streamer *fakeLogStreamer
+	}{
+		{"success", &fakeLogStreamer{}},
+		{"failure", &fakeLogStreamer{err: errors.New("daemon unreachable")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newLogTestServer(t, cache.New(nil), tc.streamer)
+			td, _ := srv.findTool("get_logs")
+
+			for i := range maxLogReads + 1 {
+				_, err := td.handler(context.Background(), newCallToolRequest(
+					"get_logs",
+					map[string]any{"service": "svc1"},
+				))
+				if err != nil && strings.Contains(err.Error(), "too many log reads") {
+					t.Fatalf("get_logs %d refused by the cap: a slot leaked", i)
+				}
+
+				_, err = srv.readServiceLogs(context.Background(), "svc1")
+				if err != nil && strings.Contains(err.Error(), "too many log reads") {
+					t.Fatalf("logs resource read %d refused by the cap: a slot leaked", i)
+				}
+			}
+		})
 	}
 }
