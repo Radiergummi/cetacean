@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- An event stream resuming from the very first event after the change history filled up now resyncs instead of silently missing events
+
 ## [0.17.0] - 2026-10-20
 
 ### Added
