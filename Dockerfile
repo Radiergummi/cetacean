@@ -15,7 +15,7 @@ RUN pnpm build
 # MCP Apps widget bundles; main.go embeds frontend/dist-widgets.
 RUN pnpm build:widgets
 
-FROM golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS backend
+FROM golang:1.27-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS backend
 ARG VERSION=dev
 ARG COMMIT=unknown
 WORKDIR /app
