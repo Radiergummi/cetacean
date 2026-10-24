@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - **Breaking:** a JSON Patch `path` decodes `~1` to `/` and `~0` to `~`, and refuses any other `~` or a second `/`. Write label key `a/b` as `/a~1b`
 - **Breaking:** a merge patch to a service's `ports`, `configs`, `secrets`, `networks` or `mounts` refuses any other member, `Ports` included, with `400` (`API008`)
+- **Breaking:** the MCP tools `update_service_secrets`, `update_service_configs`, `update_service_mounts` and `update_service` refuse a `null` list or value instead of clearing it; pass `[]` to clear
 - **Breaking:** an OIDC email the identity provider marks unverified no longer matches `user:` grants. Match such users on `sub` or a group, or verify their addresses at the provider; sessions from before the upgrade keep their email until they expire
 - **Breaking:** a problem details response's `@context` is now an array; `type`, `status` and `detail` in other responses no longer map to RFC 9457
 - **Breaking:** mounting a named or cluster volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it; a cluster volume mount also needs operations level 3
