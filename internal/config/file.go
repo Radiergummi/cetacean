@@ -207,12 +207,13 @@ type fileAuthHeaders struct {
 }
 
 type fileACL struct {
-	Policy              *string `toml:"policy"`
-	PolicyFile          *string `toml:"policy_file"`
-	TailscaleCapability *string `toml:"tailscale_capability"`
-	OIDCClaim           *string `toml:"oidc_claim"`
-	HeadersACL          *string `toml:"headers_acl"`
-	HeadersCapability   *string `toml:"headers_capability"`
+	Policy              *string  `toml:"policy"`
+	PolicyFile          *string  `toml:"policy_file"`
+	TailscaleCapability *string  `toml:"tailscale_capability"`
+	OIDCClaim           *string  `toml:"oidc_claim"`
+	HeadersACL          *string  `toml:"headers_acl"`
+	HeadersCapability   *string  `toml:"headers_capability"`
+	OIDCUserClaims      []string `toml:"oidc_user_claims"`
 }
 
 // LoadFile reads and parses the TOML config file at path.

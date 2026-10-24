@@ -2,6 +2,9 @@ package config
 
 import (
 	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -19,7 +22,7 @@ func TestLoadACL_Defaults(t *testing.T) {
 		os.Unsetenv(key)
 	}
 
-	cfg := LoadACL(nil)
+	cfg := mustLoadACL(t, nil)
 	if cfg.Policy != "" {
 		t.Errorf("Policy=%q, want empty", cfg.Policy)
 	}
@@ -48,7 +51,7 @@ func TestLoadACL_EnvVars(t *testing.T) {
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL", "X-ACL")
 	t.Setenv("CETACEAN_AUTH_HEADERS_ACL_CAPABILITY", "example.com/cap/headers")
 
-	cfg := LoadACL(nil)
+	cfg := mustLoadACL(t, nil)
 	if cfg.Policy != `{"grants":[]}` {
 		t.Errorf("Policy=%q", cfg.Policy)
 	}
@@ -101,7 +104,7 @@ func TestLoadACL_FileConfig(t *testing.T) {
 		},
 	}
 
-	cfg := LoadACL(fc)
+	cfg := mustLoadACL(t, fc)
 	if cfg.Policy != "file-policy" {
 		t.Errorf("Policy=%q", cfg.Policy)
 	}
@@ -120,4 +123,81 @@ func TestLoadACL_FileConfig(t *testing.T) {
 	if cfg.HeadersCapability != "headers-cap" {
 		t.Errorf("HeadersCapability=%q", cfg.HeadersCapability)
 	}
+}
+
+func TestLoadACL_OIDCUserClaims(t *testing.T) {
+	unset := func(t *testing.T) {
+		t.Setenv("CETACEAN_ACL_OIDC_USER_CLAIMS", "")
+		os.Unsetenv("CETACEAN_ACL_OIDC_USER_CLAIMS")
+	}
+
+	t.Run("defaults to subject and email", func(t *testing.T) {
+		unset(t)
+
+		cfg := mustLoadACL(t, nil)
+		if !slices.Equal(cfg.OIDCUserClaims, []string{"sub", "email"}) {
+			t.Errorf("OIDCUserClaims=%q", cfg.OIDCUserClaims)
+		}
+	})
+
+	t.Run("env var is a comma-separated list over the file", func(t *testing.T) {
+		t.Setenv("CETACEAN_ACL_OIDC_USER_CLAIMS", " sub ")
+
+		cfg := mustLoadACL(t, &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{"email"}}})
+		if !slices.Equal(cfg.OIDCUserClaims, []string{"sub"}) {
+			t.Errorf("OIDCUserClaims=%q", cfg.OIDCUserClaims)
+		}
+	})
+
+	t.Run("file", func(t *testing.T) {
+		unset(t)
+
+		cfg := mustLoadACL(t, &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{"sub"}}})
+		if !slices.Equal(cfg.OIDCUserClaims, []string{"sub"}) {
+			t.Errorf("OIDCUserClaims=%q", cfg.OIDCUserClaims)
+		}
+	})
+
+	t.Run("refuses an unknown claim", func(t *testing.T) {
+		t.Setenv("CETACEAN_ACL_OIDC_USER_CLAIMS", "sub,preferred_username")
+
+		_, err := LoadACL(nil)
+		if err == nil || !strings.Contains(err.Error(), "preferred_username") {
+			t.Errorf("err = %v, want one naming preferred_username", err)
+		}
+	})
+
+	t.Run("refuses an empty list", func(t *testing.T) {
+		unset(t)
+
+		fc := &fileConfig{ACL: &fileACL{OIDCUserClaims: []string{}}}
+		if _, err := LoadACL(fc); err == nil {
+			t.Error("an empty list was accepted")
+		}
+	})
+
+	t.Run("an empty TOML array is set, not absent", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "cetacean.toml")
+		if err := os.WriteFile(path, []byte("[acl]\noidc_user_claims = []\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		fc, err := LoadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fc.ACL.OIDCUserClaims == nil {
+			t.Fatal("an empty TOML array decoded as unset")
+		}
+	})
+}
+
+func mustLoadACL(t *testing.T, fc *fileConfig) ACLConfig {
+	t.Helper()
+
+	cfg, err := LoadACL(fc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return cfg
 }

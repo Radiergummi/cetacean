@@ -86,6 +86,7 @@
 # [acl]
 # policy = ""                               # Inline policy string (JSON, YAML, or TOML)
 # policy_file = ""                          # Path to policy file (hot-reloaded on change)
+# oidc_user_claims = ["sub", "email"]       # Claims a user: audience matches in oidc mode
 #
 # Provider grant sources. These complement the policy above rather than
 # replacing it: grants carried by the identity are added to whatever the
