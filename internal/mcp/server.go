@@ -317,6 +317,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		listens:        make(chan struct{}, maxListenStreams),
 		streams:        opts.Streams,
 	}
+	srv.notifications.resolve = srv.subscriptionFor
 
 	serverOptions := []mcpserver.ServerOption{
 		mcpserver.WithResourceCapabilities(true, true),

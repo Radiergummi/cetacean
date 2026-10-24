@@ -56,7 +56,7 @@ var (
 			uri:         "cetacean://cluster",
 			name:        "cluster",
 			title:       "Swarm cluster overview",
-			description: "High-level cluster facts: node, service, task and stack counts, node readiness (ready, down, draining), task counts by state, total and reserved CPU and memory across the cluster, the largest single node's capacity, converged and degraded service counts, and the last sync time. Returns a single JSON document; updates push via notifications/resources/updated when any of those fields change.",
+			description: "High-level cluster facts: node, service, task and stack counts, node readiness (ready, down, draining), task counts by state, total and reserved CPU and memory across the cluster, the largest single node's capacity, converged and degraded service counts, and the last sync time. Returns a single JSON document. Not subscribable: re-read it, or subscribe to the nodes, services and stacks it summarises.",
 		},
 		{
 			uri:         "cetacean://recommendations",
@@ -88,8 +88,8 @@ var (
 		{
 			uri:         "cetacean://services/{id}/logs",
 			name:        "service_logs",
-			title:       "Service logs (streaming)",
-			description: "Live log stream for a service, merged across replicas. Subscribe via resources/subscribe to receive new log lines as notifications/resources/updated events. For a one-shot fetch of recent lines use the get_logs tool.",
+			title:       "Service logs",
+			description: "The most recent 100 log lines of a service, merged across replicas. A subscription is notified when the service or one of its tasks changes — a replica started, replaced or stopped — not on every new line; for those, call get_logs with the previous read's cursor as `since`.",
 		},
 		{
 			uri:         "cetacean://tasks/{id}",

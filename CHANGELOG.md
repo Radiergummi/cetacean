@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- MCP resource subscriptions notify on a stack's members, a service's or node's tasks, a URI naming a resource by name, and a full resync
+
 ## [0.17.0] - 2026-10-20
 
 ### Added

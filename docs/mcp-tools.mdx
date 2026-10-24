@@ -351,7 +351,7 @@ Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `re
 cores.
 
 Templated resources return the same compact digest the `describe` tool builds. The exceptions are
-`services/{id}/logs`, a raw log stream, and the two `compose` documents, which are YAML rather than JSON.
+`services/{id}/logs`, the recent log lines, and the two `compose` documents, which are YAML rather than JSON.
 
 | URI template                       | Contents                                                                        |
 |------------------------------------|---------------------------------------------------------------------------------|
@@ -369,8 +369,14 @@ Templated resources return the same compact digest the `describe` tool builds. T
 
 ### Subscriptions
 
-Clients call `resources/subscribe` with a URI. When the underlying cluster state changes, the server sends
-`notifications/resources/updated` for that URI and the client re-reads.
+On `2026-07-28` a client subscribes by opening a `subscriptions/listen` stream that names the notification types it
+wants and the resource URIs to watch, and the server sends nothing the stream didn't ask for. `resources/subscribe` is
+gone from that revision. A `2025-11-25` client gets no subscriptions at all, since it has no stream to receive them on.
+
+A watched URI may name its resource by ID or by name. The server sends `notifications/resources/updated` for it when
+the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, and
+after a full resync, and the client re-reads. A service's logs URI is notified on the same changes as the service, not
+on every new line; read new lines with `get_logs` and the previous cursor. The cluster overview is never notified.
 `notifications/resources/list_changed` fires when resources are created or removed. Both are filtered by grants per
 notification: a client is only notified about resources its identity can read.
 
