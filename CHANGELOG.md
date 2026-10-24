@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
 - Configuring a plugin no longer writes its settings, which often carry credentials, to the log
 - An MCP `find` call with a negative `limit` no longer crashes Cetacean
-- Behind `server.trusted_proxies`, an address left of a hop the proxy anonymized (`unknown`, `_hidden`) is no longer taken as the client's
+- Behind `server.trusted_proxies`, an address written to the left of a hop the proxy names `unknown` or obfuscates (`_hidden`) is no longer taken as the client's
 
 ## [0.17.0] - 2026-10-20
 
