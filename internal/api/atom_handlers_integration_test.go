@@ -103,6 +103,43 @@ func TestAtomDetailHandler_ReturnsValidAtom(t *testing.T) {
 	}
 }
 
+// The JSON detail refuses a caller who cannot read the resource; its feed
+// answers, so it must not hand over the name the JSON would withhold.
+func TestAtomDetailHandler_WithholdsAnUnreadableName(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "billing"}},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:public"},
+		Audience:    []string{"*"},
+		Permissions: []string{"read"},
+	}}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	handler := h.feedDetailHandler(cache.EventService, "id", func(id string) string {
+		if s, ok := h.cache.GetService(id); ok {
+			return s.Spec.Name
+		}
+		return id
+	}, renderAtom)
+
+	req := httptest.NewRequest("GET", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	req = withContentType(req, ContentTypeAtom)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "dev"}))
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	if strings.Contains(w.Body.String(), "billing") {
+		t.Errorf("the feed names a service the caller cannot read: %s", w.Body.String())
+	}
+}
+
 func TestAtomNilHandler_Returns406(t *testing.T) {
 	h := newTestHandlers(t)
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

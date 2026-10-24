@@ -81,7 +81,16 @@ func (h *Handlers) feedDetailHandler(
 			Type:       eventType,
 			ResourceID: resourceID,
 		})
-		render(w, r, historyFeedData(r, nameFunc(resourceID), entries, beforeID, limit))
+
+		// The entries are filtered by the same rule; the title must not name
+		// what they would withhold.
+		title := nameFunc(resourceID)
+		canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+		if !canRead(string(eventType) + ":" + title) {
+			title = resourceID
+		}
+
+		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
 	}
 }
 

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** mounting a named volume into a service needs `read` on the volume, as attaching a secret does, unless the service already mounts it
 
 ### Fixed
+- A resource's Atom or JSON feed no longer names it in its title to a caller who can't read it
+- Configuring a plugin no longer writes its settings, which often carry credentials, to the log
 - An MCP `find` call with a negative `limit` no longer crashes Cetacean
 - Behind `server.trusted_proxies`, an address left of a hop the proxy anonymised (`unknown`, `_hidden`) is no longer taken as the client's
 
