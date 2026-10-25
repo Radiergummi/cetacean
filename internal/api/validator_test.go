@@ -127,6 +127,17 @@ func TestDerivedETagVaries(t *testing.T) {
 			t.Error("adding a node did not change the validator")
 		}
 	})
+
+	t.Run("image check", func(t *testing.T) {
+		digests := &fakeImageDigests{generation: 1}
+		h.SetImageDigests(digests)
+		before := listOnce(t, h, base, nil, "").Header().Get("ETag")
+
+		digests.generation++
+		if got := listOnce(t, h, base, nil, "").Header().Get("ETag"); got == before {
+			t.Error("a new image check answer did not change the validator")
+		}
+	})
 }
 
 // Two identities that see different rows must never share a tag.

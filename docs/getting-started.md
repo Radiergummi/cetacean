@@ -120,6 +120,7 @@ allows its own origin only. The server opens these connections, and no others:
 |------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | The Docker daemon at [`docker.host`][docker.host]                                        | Always                                                                                                                                                                                     |
 | `api.github.com`, for the latest Docker Engine release                                   | When a node's page opens, or anyone requests `/-/docker-latest-version`, which needs no credentials. The answer is cached for an hour. [`server.version_check`][server.version_check] turns it off; off or blocked, the node page shows no update hint |
+| The registry of each service image, such as `registry-1.docker.io` and its token service | Hourly per image, for its tag's manifest, anonymously. [`server.image_check`][server.image_check] turns it off; off or blocked, services show no update hint |
 | Prometheus at [`prometheus.url`][prometheus.url]                                         | When set                                                                                                                                                                                   |
 | The OIDC issuer, for discovery, signing keys, and the code exchange                       | With [`auth.mode`][auth.mode] `oidc`                                                                                                                                                       |
 | Tailscale's coordination server and relays, and `log.tailscale.com`                      | With [`auth.tailscale.mode`][auth.tailscale.mode] `tsnet`. The embedded node uploads its own diagnostic logs unless Cetacean's environment sets `TS_NO_LOGS_NO_SUPPORT=true`               |
@@ -177,6 +178,7 @@ In `local` Tailscale mode, Cetacean talks only to the host's Tailscale daemon, w
 [server.listen_addr]: configuration#server.listen_addr
 [server.operations_level]: configuration#server.operations_level
 [server.version_check]: configuration#server.version_check
+[server.image_check]: configuration#server.image_check
 [tls.cert]: configuration#tls.cert
 [tls.key]: configuration#tls.key
 [tracing.endpoint]: configuration#tracing.endpoint
