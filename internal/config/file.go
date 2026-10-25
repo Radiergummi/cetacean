@@ -120,6 +120,7 @@ type fileServer struct {
 	SelfMetrics      *bool     `toml:"self_metrics"`
 	Recommendations  *bool     `toml:"recommendations"`
 	VersionCheck     *bool     `toml:"version_check"`
+	ImageCheck       *bool     `toml:"image_check"`
 	SSE              *fileSSE  `toml:"sse"`
 	CORS             *fileCORS `toml:"cors"`
 	OperationsLevel  *int      `toml:"operations_level"`
