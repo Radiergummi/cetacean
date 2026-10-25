@@ -356,6 +356,7 @@ func (h *Handlers) serviceRepresentation(r *http.Request) (any, error) {
 	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
 		detail.Integrations = detected
 	}
+	detail.ImageUpdate = h.imageUpdate(svc)
 
 	return NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), nil
 }

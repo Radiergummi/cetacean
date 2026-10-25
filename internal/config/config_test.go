@@ -429,3 +429,46 @@ func TestLoad_VersionCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_ImageCheck(t *testing.T) {
+	t.Setenv("CETACEAN_IMAGE_CHECK", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.ImageCheck {
+		t.Error("ImageCheck=false by default, want true")
+	}
+
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[server]\nimage_check = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fc, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	flags, err := ParseFlags([]string{"-image-check=false"})
+	if err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+
+	for name, load := range map[string]func() (*Config, error){
+		"file": func() (*Config, error) { return Load(fc, nil) },
+		"flag": func() (*Config, error) { return Load(nil, flags) },
+		"env": func() (*Config, error) {
+			t.Setenv("CETACEAN_IMAGE_CHECK", "false")
+			defer t.Setenv("CETACEAN_IMAGE_CHECK", "")
+			return Load(nil, nil)
+		},
+	} {
+		cfg, err := load()
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", name, err)
+		}
+		if cfg.ImageCheck {
+			t.Errorf("%s: ImageCheck=true, want false", name)
+		}
+	}
+}

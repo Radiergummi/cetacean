@@ -245,6 +245,7 @@ type Handlers struct {
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
 	dockerVersionCache *dockerVersionCache
 	diskUsage          diskUsageCache
+	imageDigests       ImageDigestSource // nil when server.image_check is off
 
 	// topologyDocs and stackDocs memoise rendered documents that are pure
 	// functions of the cache generation and what the caller may see.
@@ -298,6 +299,27 @@ func NewHandlers(
 // deployment runs at. Already narrowed by the global level when it arrives.
 func (h *Handlers) SetTokenOperationsLevel(level config.OperationsLevel) {
 	h.tokenOperationsLevel = level
+}
+
+// ImageDigestSource is the registry image check as the handlers read it.
+type ImageDigestSource interface {
+	cluster.ImageDigests
+	Generation() uint64
+}
+
+// SetImageDigests reports a newer image for a service's tag from d.
+func (h *Handlers) SetImageDigests(d ImageDigestSource) {
+	h.imageDigests = d
+}
+
+// imageUpdate is what svc's response says about its image tag, nil when the
+// check is off.
+func (h *Handlers) imageUpdate(svc swarm.Service) *cluster.ImageUpdate {
+	if h.imageDigests == nil {
+		return nil
+	}
+
+	return cluster.ServiceImageUpdate(svc, h.imageDigests)
 }
 
 // SetLogReads draws plain log reads from slots, which MCP's log reads share.

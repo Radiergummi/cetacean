@@ -44,6 +44,13 @@ func (h *Handlers) derivedETag(r *http.Request) string {
 	binary.LittleEndian.PutUint64(num[:], h.cache.Generation())
 	_, _ = hash.Write(num[:])
 
+	// A service row carries what the image check last found, which changes
+	// with no cache mutation behind it.
+	if h.imageDigests != nil {
+		binary.LittleEndian.PutUint64(num[:], h.imageDigests.Generation())
+		_, _ = hash.Write(num[:])
+	}
+
 	identity := auth.IdentityFromContext(r.Context())
 	binary.LittleEndian.PutUint64(num[:], h.acl.Fingerprint(identity))
 	_, _ = hash.Write(num[:])

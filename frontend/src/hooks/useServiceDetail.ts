@@ -130,6 +130,7 @@ export function useServiceDetail(id: string | undefined) {
   const service = detail?.service ?? null;
   const changes = detail?.changes ?? emptyChanges;
   const integrations = detail?.integrations ?? emptyIntegrations;
+  const imageUpdate = detail?.imageUpdate;
 
   // A recommendation names its target by ID, so a name-addressed page matches
   // none of them until the fetch has answered.
@@ -272,6 +273,7 @@ export function useServiceDetail(id: string | undefined) {
     containerConfig,
     onContainerConfigSaved: setContainerConfig,
     integrations,
+    imageUpdate,
     allowedMethods,
     editable,
     hasPrometheus,

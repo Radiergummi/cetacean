@@ -156,10 +156,23 @@ export interface Service {
   };
 }
 
+/**
+ * The service's image tag names a newer image in its registry than the digest
+ * the service runs. `suggestedImage` is the tag pinned to that newer digest.
+ */
+export interface ImageUpdate {
+  image: string;
+  currentDigest: string;
+  latestDigest: string;
+  suggestedImage: string;
+  checkedAt: string;
+}
+
 export interface ServiceListItem extends Service {
   "@id"?: string;
   "@type"?: string;
   RunningTasks: number;
+  ImageUpdate?: ImageUpdate | undefined;
 }
 
 export interface Task {
@@ -415,6 +428,7 @@ export interface ServiceDetail {
   service: Service;
   changes?: SpecChange[] | undefined;
   integrations?: Integration[] | undefined;
+  imageUpdate?: ImageUpdate | undefined;
 }
 
 export interface ConfigDetail {
@@ -765,6 +779,7 @@ export type RecommendationCategory =
   | "no-reservations"
   | "no-healthcheck"
   | "no-restart-policy"
+  | "newer-image"
   | "flaky-service"
   | "node-disk-full"
   | "node-memory-pressure"

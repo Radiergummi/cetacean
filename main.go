@@ -22,13 +22,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/imagecheck"
 	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/metrics"
@@ -363,6 +366,8 @@ func main() {
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
+	imageChecker := startImageCheck(ctx, cfg, stateCache.ListServices, watcher.Ready())
+
 	// Recommendations engine
 	var recEngine *recommendations.Engine
 	if cfg.Recommendations {
@@ -385,6 +390,19 @@ func main() {
 			recommendations.NewClusterChecker(stateCache),
 			recommendations.NewOperationalChecker(opQuery, stateCache, sizingCfg.Lookback),
 		)
+		if imageChecker != nil {
+			checkers = append(checkers, recommendations.NewImageChecker(
+				stateCache,
+				func(svc swarm.Service) (string, bool) {
+					update := cluster.ServiceImageUpdate(svc, imageChecker)
+					if update == nil {
+						return "", false
+					}
+
+					return update.Image, true
+				},
+			))
+		}
 		// Register Prometheus-dependent checkers when available.
 		if promClient != nil {
 			checkers = append(
@@ -511,6 +529,10 @@ func main() {
 	)
 	handlers.SetStreamLifetime(streams)
 
+	if imageChecker != nil {
+		handlers.SetImageDigests(imageChecker)
+	}
+
 	logReads := new(sse.Slots)
 	handlers.SetLogReads(logReads)
 
@@ -602,6 +624,7 @@ func main() {
 		acl:          aclEval,
 		rec:          recEngine,
 		prometheus:   promClient,
+		images:       imageChecker,
 		tracer:       mcpTracer,
 		streams:      streams,
 		logReads:     logReads,
@@ -976,6 +999,7 @@ type mcpDeps struct {
 	acl         *acl.Evaluator
 	rec         mcp.RecommendationEngine
 	prometheus  *promapi.Client
+	images      *imagecheck.Checker
 	tracer      oteltrace.Tracer
 	streams     *sse.Lifetime
 	logReads    *sse.Slots
@@ -1057,6 +1081,27 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	return srv
 }
 
+// startImageCheck starts the registry image check, returning nil when it is
+// off so nothing dials a registry and nothing reports an answer.
+func startImageCheck(
+	ctx context.Context,
+	cfg *config.Config,
+	services func() []swarm.Service,
+	ready <-chan struct{},
+) *imagecheck.Checker {
+	if !cfg.ImageCheck {
+		slog.Info("image check disabled")
+
+		return nil
+	}
+
+	checker := imagecheck.New(services)
+	go checker.RunAfter(ctx, ready)
+	slog.Info("image check enabled")
+
+	return checker
+}
+
 // setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
 // when MCP is disabled. The second return is a cleanup function the caller must
 // invoke at shutdown so the MCP server's cache change listener detaches before
@@ -1087,6 +1132,11 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		metricsQuerier = d.prometheus
 	}
 
+	var imageDigests cluster.ImageDigests
+	if d.images != nil {
+		imageDigests = d.images
+	}
+
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
@@ -1099,6 +1149,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		AuthProvider:    d.authProvider,
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
+		ImageDigests:    imageDigests,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,

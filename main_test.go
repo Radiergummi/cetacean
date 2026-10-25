@@ -13,8 +13,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/config"
 )
+
+// Off, the check never starts, so not even the service list is read.
+func TestImageCheckOffStartsNothing(t *testing.T) {
+	services := func() []swarm.Service {
+		t.Error("the services were listed with the image check off")
+
+		return nil
+	}
+
+	ready := make(chan struct{})
+	close(ready)
+
+	if got := startImageCheck(t.Context(), &config.Config{}, services, ready); got != nil {
+		t.Errorf("startImageCheck = %v, want nil", got)
+	}
+}
 
 func TestHealthcheckURL(t *testing.T) {
 	cases := []struct {

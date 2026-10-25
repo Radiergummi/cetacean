@@ -13,6 +13,7 @@ const (
 	// Config hygiene
 	CategoryNoHealthcheck   Category = "no-healthcheck"
 	CategoryNoRestartPolicy Category = "no-restart-policy"
+	CategoryNewerImage      Category = "newer-image"
 
 	// Operational
 	CategoryFlakyService    Category = "flaky-service"

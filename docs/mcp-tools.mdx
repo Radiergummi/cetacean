@@ -427,6 +427,11 @@ to be up, and `recentFailures` drops tasks the orchestrator has already replaced
 every few seconds otherwise describes as healthy. `lastHour` answers whether it's failing now; the ratio
 between the two windows answers whether the fault is new.
 
+A service's `details` carries `imageUpdate` when its image tag names a newer image in its registry than the
+digest the service runs, with the same fields as the [API][api] reports. `suggestedImage`, the tag pinned to
+the newer digest, is what to pass to `update_service_image`. It's absent with
+[`server.image_check`][server.image_check] off.
+
 Every numeric field in `details` names its unit, such as `cpuLimitCores` (a float, in cores) and
 `memoryLimitBytes`, or is reported as a duration string like `"10s"` (`healthcheckInterval`, an update
 policy's `delay` and `monitor`). Docker's own types express these as unlabeled NanoCPU or nanosecond
@@ -505,5 +510,6 @@ a follow-up from a widget as you would any output that quotes the cluster.
 [mcp.tools.get_recommendations]:  mcp-tools#get_recommendations
 [operations-level]:  configuration#operations-level
 [recommendations]:  recommendations
+[server.image_check]:  configuration#server.image_check
 [server.public_url]:  configuration#server.public_url
 [tasks]:  mcp#wait-for-changes-to-take-effect
