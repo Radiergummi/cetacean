@@ -23,6 +23,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
@@ -439,7 +440,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 			// Bridge it into the MCP-handler context so resources/tools can
 			// look it up via auth.IdentityFromContext.
 			if id := auth.IdentityFromContext(r.Context()); id != nil {
-				ctx = auth.ContextWithIdentity(ctx, id)
+				ctx = cluster.Attributed(auth.ContextWithIdentity(ctx, id), cache.TransportMCP)
 			}
 
 			ctx = context.WithValue(ctx, remoteAddrKey{}, r.RemoteAddr)

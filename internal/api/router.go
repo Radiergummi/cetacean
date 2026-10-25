@@ -316,7 +316,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	clusterExists := h.unrepresented(subjectExists)
 	// A create checks the write grant on the name it creates, in the handler.
 	createTier2 := tieredChain{
-		chain: NewChain(h.requireLevel(config.OpsConfiguration)),
+		chain: NewChain(h.requireLevel(config.OpsConfiguration), attributeWrite),
 		level: config.OpsConfiguration,
 	}
 
