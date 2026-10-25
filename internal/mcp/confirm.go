@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -192,6 +193,14 @@ func (s *Server) confirm(
 	build func() (confirmation, error),
 ) (bool, error) {
 	if !clientElicits(ctx, mcplib.ElicitationModeForm) {
+		if s.config.RequireConfirmation {
+			return false, fmt.Errorf(
+				"%s needs a person to confirm it, and this client declares no form "+
+					"elicitation to ask one (mcp.require_confirmation is on)",
+				req.Params.Name,
+			)
+		}
+
 		return false, nil
 	}
 

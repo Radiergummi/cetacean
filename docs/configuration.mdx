@@ -359,6 +359,10 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
   Comma-separated authentication modes that skip the bearer check at `/mcp`, for example `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers`, and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie—an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
 </ConfigParam>
 
+<ConfigParam name="mcp.require_confirmation" env="CETACEAN_MCP_REQUIRE_CONFIRMATION" default="false">
+  Refuse the level-3 tools to a client that can't ask a person to confirm the change. A client that supports elicitation is always asked, whatever this is set to; one that doesn't is served without a confirmation unless this is `true`, and then gets an error naming this setting.
+</ConfigParam>
+
 See [MCP][mcp] for the tools, resources, prompts, and widgets the server exposes.
 
 ## Recommendation sizing

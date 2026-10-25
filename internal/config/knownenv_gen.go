@@ -51,6 +51,7 @@ var knownEnvVars = map[string]bool{
 	"CETACEAN_MCP_MAX_CONCURRENT_TASKS":           true,
 	"CETACEAN_MCP_MAX_TASK_TTL":                   true,
 	"CETACEAN_MCP_OPERATIONS_LEVEL":               true,
+	"CETACEAN_MCP_REQUIRE_CONFIRMATION":           true,
 	"CETACEAN_MCP_TASK_TTL":                       true,
 	"CETACEAN_OAUTH_ACCESS_TOKEN_TTL":             true,
 	"CETACEAN_OAUTH_API_TOKENS":                   true,

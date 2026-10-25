@@ -40,6 +40,10 @@ type MCPConfig struct {
 	// validating a JWT. Only bypassableAuthModes may appear, and a listed mode
 	// authenticates /mcp on its own, so no authorization server is required.
 	AuthBypass []string
+
+	// RequireConfirmation refuses the impactful tools to a client that cannot
+	// put the change to a person through elicitation.
+	RequireConfirmation bool
 }
 
 // DefaultMCPConfig returns an MCPConfig populated with sensible defaults.
@@ -88,6 +92,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fMaxTaskTTL *string
 		fMaxTasks   *int
 		fAuthBypass []string
+		fRequire    *bool
 	)
 	if fm != nil {
 		fEnabled = fm.Enabled
@@ -96,6 +101,7 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		fTaskTTL = fm.TaskTTL
 		fMaxTaskTTL = fm.MaxTaskTTL
 		fAuthBypass = fm.AuthBypass
+		fRequire = fm.RequireConfirmation
 	}
 
 	taskTTL, err := resolveDuration(
@@ -149,6 +155,16 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		return MCPConfig{}, err
 	}
 
+	requireConfirmation, err := resolveBool(
+		nil,
+		"CETACEAN_MCP_REQUIRE_CONFIRMATION",
+		fRequire,
+		def.RequireConfirmation,
+	)
+	if err != nil {
+		return MCPConfig{}, err
+	}
+
 	return MCPConfig{
 		Enabled:            enabled,
 		OperationsLevel:    opsLevel,
@@ -156,6 +172,8 @@ func loadMCP(fm *fileMCP) (MCPConfig, error) {
 		TaskTTL:            taskTTL,
 		MaxTaskTTL:         maxTaskTTL,
 		AuthBypass:         authBypass,
+
+		RequireConfirmation: requireConfirmation,
 	}, nil
 }
 

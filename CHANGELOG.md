@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
+
 ## [0.18.0] - 2026-10-24
 
 ### Added
