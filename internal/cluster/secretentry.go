@@ -12,8 +12,12 @@ import (
 const SecretEntryTTL = 15 * time.Minute
 
 // maxSecretEntries bounds the entries open at once, so a client cannot fill
-// memory by asking and never answering.
-const maxSecretEntries = 1024
+// memory by asking and never answering; the per-subject bound keeps one
+// caller from using up what everyone else shares.
+const (
+	maxSecretEntries           = 1024
+	maxSecretEntriesPerSubject = 16
+)
 
 var (
 	ErrSecretEntryNotFound = errors.New("secret entry not found or expired")
@@ -67,7 +71,7 @@ func (s *SecretEntries) Open(
 
 	s.sweep()
 
-	if len(s.entries) >= maxSecretEntries {
+	if len(s.entries) >= maxSecretEntries || s.openedBy(subject) >= maxSecretEntriesPerSubject {
 		return SecretEntry{}, ErrSecretEntriesFull
 	}
 
@@ -135,6 +139,18 @@ func (s *SecretEntries) lookup(id, subject string) (*SecretEntry, error) {
 	}
 
 	return entry, nil
+}
+
+func (s *SecretEntries) openedBy(subject string) int {
+	n := 0
+
+	for _, entry := range s.entries {
+		if entry.subject == subject {
+			n++
+		}
+	}
+
+	return n
 }
 
 func (s *SecretEntries) sweep() {

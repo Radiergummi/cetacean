@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -68,13 +69,32 @@ func TestSecretEntries_Expire(t *testing.T) {
 func TestSecretEntries_Bounded(t *testing.T) {
 	entries := NewSecretEntries()
 
-	for range maxSecretEntries {
+	for i := range maxSecretEntries {
+		subject := fmt.Sprintf("user-%d", i/maxSecretEntriesPerSubject)
+		if _, err := entries.Open(subject, "x", nil, "utf8"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := entries.Open("bob", "x", nil, "utf8"); !errors.Is(err, ErrSecretEntriesFull) {
+		t.Errorf("opened past the bound: %v", err)
+	}
+}
+
+func TestSecretEntries_BoundedPerSubject(t *testing.T) {
+	entries := NewSecretEntries()
+
+	for range maxSecretEntriesPerSubject {
 		if _, err := entries.Open("alice", "x", nil, "utf8"); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	if _, err := entries.Open("alice", "x", nil, "utf8"); !errors.Is(err, ErrSecretEntriesFull) {
-		t.Errorf("opened past the bound: %v", err)
+		t.Errorf("alice opened past the per-subject bound: %v", err)
+	}
+
+	if _, err := entries.Open("bob", "x", nil, "utf8"); err != nil {
+		t.Errorf("alice's entries kept bob from opening one: %v", err)
 	}
 }
