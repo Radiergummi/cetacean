@@ -681,6 +681,20 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The secret was modified concurrently.",
 		Suggestion:  "Retry the operation with the latest version.",
 	},
+	"SEC006": {
+		Code:        "SEC006",
+		Title:       "Secret Entry Not Found",
+		Status:      http.StatusNotFound,
+		Description: "No secret is waiting to be entered under this ID, or it expired.",
+		Suggestion:  "Ask the agent to call create_secret again, which opens a new entry.",
+	},
+	"SEC007": {
+		Code:        "SEC007",
+		Title:       "Secret Entry Opened By Someone Else",
+		Status:      http.StatusForbidden,
+		Description: "The secret entry was opened by another person's MCP client, so it can't be completed from this session.",
+		Suggestion:  "Sign in as the person whose agent asked for the secret.",
+	},
 }
 
 // WriteErrorCode writes an RFC 9457 problem details response using a

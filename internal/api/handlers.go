@@ -240,6 +240,7 @@ type Handlers struct {
 	logStreams         sse.Slots
 	streams            *sse.Lifetime // ends the metrics stream and log follows at shutdown
 	logReads           *sse.Slots    // see logs.MaxConcurrentReads
+	secretEntries      *cluster.SecretEntries
 	activePreferWaits  atomic.Int64
 	metricsStreamCount atomic.Int64
 	tickerInterval     time.Duration // override for tick interval in tests; zero means use step duration
@@ -320,6 +321,11 @@ func (h *Handlers) imageUpdate(svc swarm.Service) *cluster.ImageUpdate {
 	}
 
 	return cluster.ServiceImageUpdate(svc, h.imageDigests)
+}
+
+// SetSecretEntries lets a secret create complete an entry MCP opened.
+func (h *Handlers) SetSecretEntries(entries *cluster.SecretEntries) {
+	h.secretEntries = entries
 }
 
 // SetLogReads draws plain log reads from slots, which MCP's log reads share.

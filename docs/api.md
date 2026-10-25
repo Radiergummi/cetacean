@@ -763,7 +763,7 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
 | Tasks | `/tasks`, `/tasks/{id}`, `/tasks/{id}/logs` |
 | Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
-| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels` |
+| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels`, `/secret-entries/{id}` |
 | Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |
 | Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |

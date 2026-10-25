@@ -441,6 +441,17 @@ export interface SecretDetail {
   services: ServiceRef[] | null;
 }
 
+/**
+ * A secret an agent asked the person to enter here: everything but the value.
+ */
+export interface SecretEntry {
+  id: string;
+  name: string;
+  labels: Record<string, string>;
+  encoding: "utf8" | "base64";
+  expiresAt: string;
+}
+
 export interface NetworkDetail {
   network: Network;
   services: ServiceRef[] | null;

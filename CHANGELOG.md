@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
+- An MCP tool given a hostname several nodes share asks the person which node they mean, when the client supports elicitation
+- `create_secret` sends the person to the dashboard's `/secrets/new` page to enter the value when the client supports URL elicitation; `mcp.inline_secret_values` refuses values passed as arguments
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 

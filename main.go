@@ -536,6 +536,9 @@ func main() {
 	logReads := new(sse.Slots)
 	handlers.SetLogReads(logReads)
 
+	secretEntries := cluster.NewSecretEntries()
+	handlers.SetSecretEntries(secretEntries)
+
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {
@@ -628,6 +631,8 @@ func main() {
 		tracer:       mcpTracer,
 		streams:      streams,
 		logReads:     logReads,
+
+		secretEntries: secretEntries,
 	}
 
 	oauthSrv := setupOAuth(deps)
@@ -1003,6 +1008,8 @@ type mcpDeps struct {
 	tracer      oteltrace.Tracer
 	streams     *sse.Lifetime
 	logReads    *sse.Slots
+
+	secretEntries *cluster.SecretEntries
 }
 
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
@@ -1156,6 +1163,8 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Tracer:          d.tracer,
 		Streams:         d.streams,
 		LogReads:        d.logReads,
+		SecretEntries:   d.secretEntries,
+		DashboardURL:    d.issuer + d.cfg.BasePath,
 	})
 	if err != nil {
 		slog.Error("MCP server setup failed", "error", err)

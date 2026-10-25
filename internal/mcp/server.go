@@ -237,6 +237,12 @@ type Server struct {
 	// inflight scopes notifications/cancelled to the caller's own requests.
 	inflight inflight
 
+	// confirmations signs the requestState of a confirmation round trip.
+	confirmations *stateSigner
+
+	secretEntries *cluster.SecretEntries
+	dashboardURL  string
+
 	closeOnce sync.Once
 }
 
@@ -291,6 +297,12 @@ type Options struct {
 	// LogReads is the pool get_logs and the logs resource draw on, shared with
 	// REST's log reads. Nil gives this server a pool of its own.
 	LogReads *sse.Slots
+
+	// SecretEntries is where create_secret leaves a secret for a person to
+	// enter in the dashboard, shared with the API that completes it, and
+	// DashboardURL is the dashboard's external base. Either unset turns that off.
+	SecretEntries *cluster.SecretEntries
+	DashboardURL  string
 }
 
 // Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
@@ -314,7 +326,15 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, err
 	}
 
+	confirmations, err := newStateSigner()
+	if err != nil {
+		return nil, fmt.Errorf("mcp: confirmation key: %w", err)
+	}
+
 	srv := &Server{
+		confirmations:  confirmations,
+		secretEntries:  opts.SecretEntries,
+		dashboardURL:   strings.TrimRight(opts.DashboardURL, "/"),
 		guard:          guard,
 		bypass:         resolveBypass(opts),
 		cache:          c,

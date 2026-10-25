@@ -892,6 +892,10 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			ThenFunc(h.HandleRemoveSecret))
 	mux.Handle("POST /secrets", createTier2.ThenFunc(h.HandleCreateSecret))
 	mux.HandleFunc(
+		"GET /secret-entries/{id}",
+		contentNegotiated(h.HandleGetSecretEntry, feedHandlers{}, spa),
+	)
+	mux.HandleFunc(
 		"GET /secrets/{id}/labels",
 		contentNegotiated(h.HandleGetSecretLabels, feedHandlers{}, spa),
 	)
