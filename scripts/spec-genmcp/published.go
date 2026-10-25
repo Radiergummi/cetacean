@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // page is one published document, read into the sections its headings open.
@@ -109,6 +110,7 @@ var (
 	inlineRE    = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
 	refLinkRE   = regexp.MustCompile(`\[([^\]]*)\]\[[^\]]*\]`)
 	insertionRE = regexp.MustCompile(`\s*\[[^\]]*\]`)
+	bracketRE   = regexp.MustCompile(`\[[^\]]*\]`)
 	tagRE       = regexp.MustCompile(`</?[A-Za-z][^>]*>`)
 	strongRE    = regexp.MustCompile(`\*\*([^*]+)\*\*`)
 	emRE        = regexp.MustCompile(`\*([^*\s][^*]*)\*`)
@@ -169,7 +171,8 @@ func sentences(text string) []string {
 			continue
 		}
 
-		if c := rune(text[i+2]); !unicode.IsUpper(c) && !strings.ContainsRune(`"([`, c) {
+		if c, _ := utf8.DecodeRuneInString(text[i+2:]); !unicode.IsUpper(c) &&
+			!strings.ContainsRune(`"“‘([`, c) {
 			continue
 		}
 
@@ -225,7 +228,7 @@ func uniqueSlug(seen map[string]int, heading string) string {
 func fragments(quote string) []string {
 	var out []string
 
-	for _, f := range regexp.MustCompile(`\[[^\]]*\]`).Split(quote, -1) {
+	for _, f := range bracketRE.Split(quote, -1) {
 		if f = strings.Trim(strings.TrimSpace(f), ".,;:"); f != "" {
 			out = append(out, f)
 		}
@@ -238,7 +241,7 @@ func (s *section) holds(quote string) bool {
 	text := s.text
 
 	for _, f := range fragments(quote) {
-		i := strings.Index(text, f)
+		i := indexWhole(text, f)
 		if i < 0 {
 			return false
 		}
@@ -247,4 +250,37 @@ func (s *section) holds(quote string) bool {
 	}
 
 	return true
+}
+
+// indexWhole is strings.Index for a fragment that neither starts nor ends in
+// the middle of a word or identifier: tools/list is not found in
+// notifications/tools/list_changed.
+func indexWhole(text, f string) int {
+	for offset := 0; offset <= len(text); {
+		i := strings.Index(text[offset:], f)
+		if i < 0 {
+			return -1
+		}
+
+		i += offset
+		before, _ := utf8.DecodeLastRuneInString(text[:i])
+		after, _ := utf8.DecodeRuneInString(text[i+len(f):])
+		first, _ := utf8.DecodeRuneInString(f)
+		last, _ := utf8.DecodeLastRuneInString(f)
+
+		splitsStart := wordRune(first) && wordRune(before)
+		splitsEnd := wordRune(last) && wordRune(after)
+
+		if !splitsStart && !splitsEnd {
+			return i
+		}
+
+		offset = i + 1
+	}
+
+	return -1
+}
+
+func wordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || strings.ContainsRune("_/-", r)
 }

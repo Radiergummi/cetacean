@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -25,15 +26,26 @@ var deprecatedAPIs = map[string][]string{
 		"NewLoggingMessageNotification"},
 }
 
-// usesOfDeprecated reports every reference the module's shipped code makes to
-// one feature's mcp-go API, as file:line.
-func usesOfDeprecated(t *testing.T, feature string) []string {
-	t.Helper()
+// deprecatedMethods are the deprecatedAPIs called on a value rather than on
+// the package, *MCPServer's and the sessions', so no import alias qualifies them.
+var deprecatedMethods = map[string]bool{
+	"EnableSampling": true, "RequestSampling": true, "RequestRoots": true,
+	"SendLogMessageToClient": true, "SendLogMessageToSpecificClient": true,
+}
 
-	names := deprecatedAPIs[feature]
+// deprecatedUses maps each feature to every reference the module's shipped
+// code makes to its mcp-go API, as file:line.
+var deprecatedUses = sync.OnceValues(func() (map[string][]string, error) {
+	feature := map[string]string{}
+
+	for name, apis := range deprecatedAPIs {
+		for _, api := range apis {
+			feature[api] = name
+		}
+	}
+
+	uses := map[string][]string{}
 	root := filepath.Join("..", "..")
-
-	var uses []string
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -82,12 +94,14 @@ func usesOfDeprecated(t *testing.T, feature string) []string {
 				return true
 			}
 
-			if pkg, ok := sel.X.(*ast.Ident); ok && aliases[pkg.Name] {
-				for _, name := range names {
-					if sel.Sel.Name == name {
-						uses = append(uses, fset.Position(sel.Pos()).String())
-					}
-				}
+			name, listed := feature[sel.Sel.Name]
+			if !listed {
+				return true
+			}
+
+			if pkg, ok := sel.X.(*ast.Ident); (ok && aliases[pkg.Name]) ||
+				deprecatedMethods[sel.Sel.Name] {
+				uses[name] = append(uses[name], fset.Position(sel.Pos()).String())
 			}
 
 			return true
@@ -95,11 +109,19 @@ func usesOfDeprecated(t *testing.T, feature string) []string {
 
 		return nil
 	})
+
+	return uses, err
+})
+
+func usesOfDeprecated(t *testing.T, feature string) []string {
+	t.Helper()
+
+	uses, err := deprecatedUses()
 	if err != nil {
 		t.Fatalf("walk the module: %v", err)
 	}
 
-	return uses
+	return uses[feature]
 }
 
 func TestDeprecatedFeaturesAreNotAdopted(t *testing.T) {

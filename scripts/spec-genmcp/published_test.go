@@ -67,3 +67,35 @@ func TestAQuoteHoldsOnlyInOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestSentencesOpenOnAMultibyteRune(t *testing.T) {
+	got := sentences("Servers MUST do X. “Foo” clients MAY do Y. Évite Z. Then stop. é stays.")
+	want := []string{
+		"Servers MUST do X.", "“Foo” clients MAY do Y.", "Évite Z.", "Then stop. é stays.",
+	}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestAQuoteHoldsOnlyWholeTokens(t *testing.T) {
+	p := parsePage(pageRef{key: "p"},
+		"# T\n\nThe operations: tools/list_changed, then resources/list.\n")
+
+	s, ok := p.section("t")
+	if !ok {
+		t.Fatalf("no section t in %+v", p.sections)
+	}
+
+	for quote, want := range map[string]bool{
+		"The operations: [...] tools/list":     false,
+		"The operations: [...] resources/list": true,
+		"operations":                           true,
+		"perations":                            false,
+	} {
+		if got := s.holds(quote); got != want {
+			t.Errorf("holds(%q) = %v, want %v", quote, got, want)
+		}
+	}
+}

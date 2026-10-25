@@ -386,9 +386,10 @@ func TestMCPConformanceMethodNotFound(t *testing.T) {
 
 // ─── SEP-2243, the standard request headers ─────────────────────────────
 
-// Servers "MUST reject requests with mismatched or missing standard-header
-// values, returning HTTP 400" with error code -32020 — while comparing header
-// *names* case-insensitively and header *values* case-sensitively.
+// Servers "MUST reject requests where the values specified in the headers do
+// not match" the body, or a required one is missing, with "HTTP status 400 Bad
+// Request" and error code -32020 — while comparing header *names*
+// case-insensitively and header *values* case-sensitively.
 func TestMCPConformanceStandardHeaders(t *testing.T) {
 	spec.Satisfies(t,
 		"mcp/sep-2243/header-name-case-insensitive",
@@ -543,7 +544,7 @@ func TestMCPConformanceCachingHints(t *testing.T) {
 // ─── SEP-2164, reading a resource that is not there ─────────────────────
 
 // "Servers MUST NOT return an empty contents array for a non-existent
-// resource" and SHOULD answer -32602 instead.
+// resource" and MUST answer -32602 instead.
 func TestMCPConformanceResourceNotFound(t *testing.T) {
 	spec.Satisfies(t,
 		"mcp/sep-2164/no-empty-contents",
@@ -586,10 +587,10 @@ func TestMCPConformanceResourceNotFound(t *testing.T) {
 
 // ─── SEP-2575, the subscription stream ──────────────────────────────────
 
-// The acknowledgement "MUST [be] the first message on the stream", and every
-// notification on one "MUST include io.modelcontextprotocol/subscriptionId in
-// _meta". mcp_stream_test.go drives this stream for its ACL filtering and
-// scans past the acknowledgement; the ordering and the tag are what this adds.
+// The acknowledgement is "the first message carrying the subscription's ID";
+// each notification "MUST include io.modelcontextprotocol/subscriptionId in
+// _meta". mcp_stream_test.go scans past the acknowledgement while it drives
+// this stream for ACL filtering; the ordering and the tag are what this adds.
 func TestMCPConformanceSubscriptionStream(t *testing.T) {
 	spec.Satisfies(t,
 		"mcp/sep-2575/server-sends-subscription-ack",

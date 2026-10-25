@@ -607,8 +607,7 @@ func (d *document) verify(out []byte) error {
 				want.id, got.Text, want.text)
 		}
 
-		if len(got.Mutants) != len(want.mutants) ||
-			!slices.Equal(got.Mutants, want.mutants) {
+		if !slices.Equal(got.Mutants, want.mutants) {
 			return fmt.Errorf("%s: mutants did not survive the round trip", want.id)
 		}
 	}

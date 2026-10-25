@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -203,7 +204,8 @@ func TestTaskTerminalStatesOnTheModernWire(t *testing.T) {
 		awaitTerminal(t, handler, handle.Task.TaskId, 5*time.Second)
 
 		got := rawResult(t, handler, "tasks/get", taskParamsJSON(handle.Task.TaskId))
-		if got["status"] != string(mcplib.TaskStatusFailed) || got["statusMessage"] == "" {
+		msg, _ := got["statusMessage"].(string)
+		if got["status"] != string(mcplib.TaskStatusFailed) || msg == "" {
 			t.Fatalf("want a failed task with a statusMessage, got %v", got)
 		}
 
@@ -264,7 +266,10 @@ func TestListenForTaskStatusWithoutTheExtension(t *testing.T) {
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"subscriptions/listen","params":%s}`,
 		withProtocolMeta(t, `{"notifications":{"taskIds":["some-task"]}}`))
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+"/mcp",
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/mcp",
 		strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +291,7 @@ func TestListenForTaskStatusWithoutTheExtension(t *testing.T) {
 	// the result is mcp-go's race, not part of the answer.
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("the listen stream did not end on its own: %v (read %s)", err, raw)
 	}
 
 	frames := 0
