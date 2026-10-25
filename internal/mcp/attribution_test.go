@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -94,5 +95,57 @@ func TestGetEventsCarriesTheActor(t *testing.T) {
 	}
 	if a := actors["other"]; a != nil {
 		t.Errorf("the external change carries an actor: %+v", a)
+	}
+}
+
+// A removal by name reaches Docker as the resolved ID, the key its remove
+// event carries, so the history entry it causes is attributed.
+func TestRemovalsByNameReachDockerAsTheResolvedID(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc-id",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetConfig(swarm.Config{
+		ID:   "cfg-id",
+		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app-config"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-id",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "app-secret"}},
+	})
+	c.SetNetwork(network.Summary{ID: "net-id", Name: "backend"})
+
+	removed := map[string]string{}
+	record := func(kind string) func(context.Context, string) error {
+		return func(_ context.Context, id string) error {
+			removed[kind] = id
+			return nil
+		}
+	}
+
+	writeClient := &fakeWriteClient{
+		removeServiceFn: record("service"),
+		removeConfigFn:  record("config"),
+		removeSecretFn:  record("secret"),
+		removeNetworkFn: record("network"),
+	}
+	handler := newToolTestServer(t, c, writeClient, config.OpsImpactful).Handler()
+
+	for _, tc := range []struct{ tool, name, kind, want string }{
+		{"remove_service", "web", "service", "svc-id"},
+		{"remove_config", "app-config", "config", "cfg-id"},
+		{"remove_secret", "app-secret", "secret", "sec-id"},
+		{"remove_network", "backend", "network", "net-id"},
+	} {
+		_, envelope := mcpModern(t, handler, 1, "tools/call",
+			`{"name":"`+tc.tool+`","arguments":{"id":"`+tc.name+`"}}`)
+		if envelope.Error != nil {
+			t.Fatalf("%s failed: %+v", tc.tool, envelope.Error)
+		}
+
+		if got := removed[tc.kind]; got != tc.want {
+			t.Errorf("%s(%q) reached Docker as %q, want %q", tc.tool, tc.name, got, tc.want)
+		}
 	}
 }
