@@ -40,6 +40,7 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 		Subject:  "alice@example.com",
 		Groups:   []string{"ops", "sre"},
 		Provider: "oauth",
+		Raw:      map[string]any{auth.RawTokenClient: "test-client"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("identity = %+v, want %+v", got, want)

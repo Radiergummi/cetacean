@@ -45,6 +45,9 @@ const ProviderToken = "oauth"
 // as the JSON array the issuer was handed at consent.
 const RawTokenGrants = "tokenGrants"
 
+// RawTokenClient is the Raw key holding the OAuth client a token was issued to.
+const RawTokenClient = "tokenClient"
+
 // FromToken reports whether a bearer token carried this identity. What the
 // caller may do can depend on it: a token is a credential left on a device,
 // which a deployment may hold to less than the person it speaks for.

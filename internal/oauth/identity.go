@@ -48,9 +48,11 @@ func (s *Server) Identify(token, resource string) (*auth.Identity, error) {
 		ExpiresAt:   claims.ExpiresAt,
 	}
 
+	id.Raw = map[string]any{auth.RawTokenClient: claims.ClientID}
+
 	var grants any
 	if len(claims.Grants) > 0 && json.Unmarshal(claims.Grants, &grants) == nil {
-		id.Raw = map[string]any{auth.RawTokenGrants: grants}
+		id.Raw[auth.RawTokenGrants] = grants
 	}
 
 	return id, nil
