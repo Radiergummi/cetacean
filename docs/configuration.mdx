@@ -86,6 +86,10 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Ask `api.github.com` for the latest Docker Engine release, so a node's page can point out a newer one. Turn it off where Cetacean must not reach the internet; the node page then shows no update hint.
 </ConfigParam>
 
+<ConfigParam name="server.image_check" flag="-image-check" env="CETACEAN_IMAGE_CHECK" default="true">
+  Ask each service image's registry, hourly, which image its tag names now, so the service pages and the recommendations can point out a newer one. Only the manifest is requested, anonymously; a private image Cetacean holds no credentials for is skipped. Turn it off where Cetacean must not reach the internet; services then show no update hint.
+</ConfigParam>
+
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
   Enable the recommendation engine, which periodically analyzes swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
 </ConfigParam>
@@ -357,6 +361,14 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 
 <ConfigParam name="mcp.auth_bypass" env="CETACEAN_MCP_AUTH_BYPASS">
   Comma-separated authentication modes that skip the bearer check at `/mcp`, for example `cert`. Use it where the transport already carries a verified identity. Authorization still applies; only the OAuth handshake is skipped. A mode listed here is authenticated by its own provider on every request, so it satisfies `/mcp` on its own and [`oauth.enabled`][oauth.enabled] can stay off. Only `cert`, `headers`, and `tailscale` may be listed, and Cetacean refuses to start on anything else: those carry identity in the transport, where `oidc` authenticates from a session cookie—an ambient credential that `/mcp`'s exemption from cross-origin protection assumes is absent.
+</ConfigParam>
+
+<ConfigParam name="mcp.require_confirmation" env="CETACEAN_MCP_REQUIRE_CONFIRMATION" default="false">
+  Refuse the level-3 tools to a client that can't ask a person to confirm the change. A client that supports elicitation is always asked, whatever this is set to; one that doesn't is served without a confirmation unless this is `true`, and then gets an error naming this setting.
+</ConfigParam>
+
+<ConfigParam name="mcp.inline_secret_values" env="CETACEAN_MCP_INLINE_SECRET_VALUES" default="true">
+  Accept a secret's value as a `create_secret` argument from a client that can't send you to the dashboard to enter it. Set it to `false` to keep every secret value out of agent conversations, at the cost of those clients creating no secrets. A client that supports URL elicitation never passes the value, whatever this is set to.
 </ConfigParam>
 
 See [MCP][mcp] for the tools, resources, prompts, and widgets the server exposes.

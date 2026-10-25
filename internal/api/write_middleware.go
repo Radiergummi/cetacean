@@ -7,6 +7,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -39,6 +40,23 @@ func (h *Handlers) requireLevel(required config.OperationsLevel) Constructor {
 					", but the caller is at level "+strconv.Itoa(int(h.levelFor(r))))
 		})
 	}
+}
+
+// attributeWrite records the caller as the author of the write. The transport
+// is what the browser says about itself, not a credential: a bearer token is
+// never the dashboard's, and only a browser sends Sec-Fetch-Site unprompted.
+func attributeWrite(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(cluster.Attributed(r.Context(), writeTransport(r))))
+	})
+}
+
+func writeTransport(r *http.Request) cache.Transport {
+	if auth.ExtractBearerToken(r) == "" && r.Header.Get("Sec-Fetch-Site") == "same-origin" {
+		return cache.TransportDashboard
+	}
+
+	return cache.TransportREST
 }
 
 // requireWriteACL returns middleware that checks ACL write permission for a

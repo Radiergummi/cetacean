@@ -17,6 +17,9 @@ type HistoryEntry struct {
 	Name       string    `json:"name"`
 	Summary    string    `json:"summary,omitempty"`
 
+	// Actor is who made the change through Cetacean; nil for one made elsewhere.
+	Actor *Actor `json:"actor,omitempty"`
+
 	// Service and Stack are the remove Event's, for authorizing its replay.
 	Service string `json:"-"`
 	Stack   string `json:"-"`

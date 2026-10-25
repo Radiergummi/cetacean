@@ -11,12 +11,18 @@ import (
 func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
 	items := make([]jsonfeed.Item, 0, len(data.Entries))
 	for _, e := range data.Entries {
+		var authors []jsonfeed.Author
+		if e.Author != "" {
+			authors = []jsonfeed.Author{{Name: e.Author}}
+		}
+
 		items = append(items, jsonfeed.Item{
 			ID:           e.ID,
 			Title:        e.Title,
 			ContentHTML:  e.ContentHTML,
 			URL:          e.URL,
 			DateModified: e.Updated,
+			Authors:      authors,
 			Tags:         e.Tags,
 		})
 	}

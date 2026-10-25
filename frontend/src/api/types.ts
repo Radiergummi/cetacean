@@ -156,10 +156,23 @@ export interface Service {
   };
 }
 
+/**
+ * The service's image tag names a newer image in its registry than the digest
+ * the service runs. `suggestedImage` is the tag pinned to that newer digest.
+ */
+export interface ImageUpdate {
+  image: string;
+  currentDigest: string;
+  latestDigest: string;
+  suggestedImage: string;
+  checkedAt: string;
+}
+
 export interface ServiceListItem extends Service {
   "@id"?: string;
   "@type"?: string;
   RunningTasks: number;
+  ImageUpdate?: ImageUpdate | undefined;
 }
 
 export interface Task {
@@ -301,6 +314,18 @@ export interface HistoryEntry {
   resourceId: string;
   name: string;
   summary?: string | undefined;
+  actor?: HistoryActor | undefined;
+}
+
+/**
+ * Who made a change through Cetacean; absent for a change made elsewhere.
+ */
+export interface HistoryActor {
+  subject: string;
+  name?: string | undefined;
+  provider: string;
+  client?: string | undefined;
+  transport: "dashboard" | "rest" | "mcp";
 }
 
 export interface StackDetail {
@@ -403,6 +428,7 @@ export interface ServiceDetail {
   service: Service;
   changes?: SpecChange[] | undefined;
   integrations?: Integration[] | undefined;
+  imageUpdate?: ImageUpdate | undefined;
 }
 
 export interface ConfigDetail {
@@ -413,6 +439,17 @@ export interface ConfigDetail {
 export interface SecretDetail {
   secret: Secret;
   services: ServiceRef[] | null;
+}
+
+/**
+ * A secret an agent asked the person to enter here: everything but the value.
+ */
+export interface SecretEntry {
+  id: string;
+  name: string;
+  labels: Record<string, string>;
+  encoding: "utf8" | "base64";
+  expiresAt: string;
 }
 
 export interface NetworkDetail {
@@ -753,6 +790,7 @@ export type RecommendationCategory =
   | "no-reservations"
   | "no-healthcheck"
   | "no-restart-policy"
+  | "newer-image"
   | "flaky-service"
   | "node-disk-full"
   | "node-memory-pressure"

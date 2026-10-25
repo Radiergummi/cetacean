@@ -29,5 +29,6 @@ type Item struct {
 	Title        string    `json:"title,omitempty"`
 	ContentHTML  string    `json:"content_html,omitempty"`
 	DateModified time.Time `json:"date_modified"`
+	Authors      []Author  `json:"authors,omitempty"`
 	Tags         []string  `json:"tags,omitempty"`
 }

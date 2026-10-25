@@ -19,6 +19,10 @@ type Identity struct {
 	// nothing bounds it here. Only a token this deployment issued sets it.
 	ExpiresAt time.Time `json:"-"`
 
+	// ClientID is the OAuth client a token this deployment issued was minted
+	// for, empty for any other credential.
+	ClientID string `json:"-"`
+
 	derived sync.Map
 }
 

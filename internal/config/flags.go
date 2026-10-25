@@ -22,6 +22,7 @@ type Flags struct {
 	Pprof           *bool
 	SelfMetrics     *bool
 	VersionCheck    *bool
+	ImageCheck      *bool
 	Recommendations *bool
 	BasePath        *string
 	PublicURL       *string
@@ -135,6 +136,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"version-check",
 		false,
 		"Check GitHub for the latest Docker Engine release (env: CETACEAN_VERSION_CHECK, default true)",
+	)
+	imageCheck := fs.Bool(
+		"image-check",
+		false,
+		"Ask registries whether a service's image tag has moved (env: CETACEAN_IMAGE_CHECK, default true)",
 	)
 	recs := fs.Bool(
 		"recommendations",
@@ -261,6 +267,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.Recommendations = recs
 		case "version-check":
 			f.VersionCheck = versionCheck
+		case "image-check":
+			f.ImageCheck = imageCheck
 		case "base-path":
 			f.BasePath = basePath
 		case "auth-mode":

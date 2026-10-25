@@ -5202,6 +5202,12 @@ paths:
                     name: webapp
                     timestamp: "2025-03-20T14:30:00Z"
                     summary: Image updated to nginx:1.28
+                    actor:
+                      subject: 3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90
+                      name: Alice
+                      provider: oauth
+                      client: claude-desktop
+                      transport: mcp
                   - "@id": "/history#1041"
                     "@type": HistoryEntry
                     id: 1041
@@ -5916,6 +5922,14 @@ paths:
                   type: string
                   format: byte
                   description: Secret data (base64-encoded)
+                elicitation:
+                  type: string
+                  description: |
+                    ID of the secret entry an MCP client opened for the caller
+                    (see `GET /secret-entries/{id}`). The secret takes the
+                    entry's name and labels, `name` may be omitted or must
+                    match, and the entry is completed so the agent's retried
+                    `create_secret` call returns it.
             example:
               name: api_key
               data: c3VwZXItc2VjcmV0LWtleQ==
@@ -5947,6 +5961,60 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           description: Secret name conflict
+
+  /secret-entries/{id}:
+    get:
+      operationId: getSecretEntry
+      tags: [Secrets]
+      summary: Secret entry
+      description: |
+        A secret an MCP client asked the caller to enter in the dashboard: the
+        name, labels and encoding the agent chose, never a value. Readable only
+        by the person whose MCP client opened it (`403 SEC007` otherwise), for
+        fifteen minutes (`404 SEC006` after). Create the secret with
+        `POST /secrets`, passing this ID as `elicitation`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The pending secret
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      encoding:
+                        type: string
+                        enum: [utf8, base64]
+                        description: How the agent expects the value to be typed
+                      expiresAt:
+                        type: string
+                        format: date-time
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /secrets/{id}:
     get:
@@ -7701,6 +7769,8 @@ components:
         RunningTasks:
           type: integer
           description: Number of currently running tasks
+        ImageUpdate:
+          $ref: "#/components/schemas/ImageUpdate"
       example:
         ID: r8m2x5nk3p7q
         Version: { Index: 156 }
@@ -7904,6 +7974,7 @@ components:
             - no-reservations
             - no-healthcheck
             - no-restart-policy
+            - newer-image
             - flaky-service
             - node-disk-full
             - node-memory-pressure
@@ -7918,6 +7989,7 @@ components:
             - Service has no CPU or memory reservation set
             - Service has no healthcheck defined
             - Service has no restart policy defined
+            - Service image tag names a newer image than the service runs
             - Service is restarting frequently or failing tasks
             - Node's disk is nearly full
             - Node is under sustained memory pressure
@@ -8229,6 +8301,8 @@ components:
             once the task or its service is gone.
         summary:
           type: string
+        actor:
+          $ref: "#/components/schemas/HistoryActor"
       example:
         id: 8421
         timestamp: "2026-04-13T08:12:34Z"
@@ -8237,6 +8311,41 @@ components:
         resourceId: r8m2x5nk3p7q
         name: webapp
         summary: Image updated to nginx:1.28
+        actor:
+          subject: 3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90
+          name: Alice
+          provider: oidc
+          transport: dashboard
+
+    HistoryActor:
+      type: object
+      description: >-
+        Who made the change through Cetacean. Absent on an entry for a change
+        made elsewhere, such as with the Docker CLI. Shown to every caller who
+        may read the entry.
+      required: [subject, provider, transport]
+      properties:
+        subject:
+          type: string
+          description: The identity's subject
+        name:
+          type: string
+          description: Its display name, when the provider sent one
+        provider:
+          type: string
+          description: >-
+            The auth provider that established the identity, or `oauth` for a
+            token this deployment issued
+        client:
+          type: string
+          description: The OAuth client ID, when the call carried a token this deployment issued
+        transport:
+          type: string
+          enum: [dashboard, rest, mcp]
+          description: >-
+            How the write arrived. `dashboard` is a request the browser marked
+            `Sec-Fetch-Site: same-origin` without a bearer token; any other
+            request to the web API is `rest`. A label, not a credential.
 
     # ── Logs ─────────────────────────────────────────────────────────
 
@@ -8751,6 +8860,39 @@ components:
               description: Detected third-party integrations (e.g. Traefik)
               items:
                 $ref: "#/components/schemas/Integration"
+            imageUpdate:
+              $ref: "#/components/schemas/ImageUpdate"
+
+    ImageUpdate:
+      type: object
+      description: >
+        The service's image tag names a newer image than the digest it runs,
+        as its registry last answered. Absent when the tag still names the
+        running digest, when the image is not pinned to a digest, when the
+        registry could not be asked anonymously, and when
+        `server.image_check` is off.
+      required: [image, currentDigest, latestDigest, suggestedImage, checkedAt]
+      properties:
+        image:
+          type: string
+          description: The tag the service follows, without its digest
+          example: nginx:1.27
+        currentDigest:
+          type: string
+          description: The digest the service runs
+          example: sha256:0d17b565c37bcbd895e9d92315a05c1c3c9a29f762b011a10c54a66cd53c9b31
+        latestDigest:
+          type: string
+          description: The digest the registry says the tag names now
+          example: sha256:6a59f1cbb8d28ac484176d52c473494859a512ddba3ea62a547258cf16c9b3ae
+        suggestedImage:
+          type: string
+          description: The tag pinned to the newer digest, ready for `PUT /services/{id}/image`
+          example: nginx:1.27@sha256:6a59f1cbb8d28ac484176d52c473494859a512ddba3ea62a547258cf16c9b3ae
+        checkedAt:
+          type: string
+          format: date-time
+          description: When the registry was last asked
 
     ServiceAccepted:
       description: >

@@ -26,6 +26,9 @@ type feedEntry struct {
 	URL         string
 	Updated     time.Time
 	Tags        []string
+
+	// Author names who made the change, empty for one made outside Cetacean.
+	Author string
 }
 
 // feedData holds the format-agnostic data needed to render a feed.
@@ -280,6 +283,7 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 			URL:         href,
 			Updated:     e.Timestamp,
 			Tags:        []string{string(e.Type)},
+			Author:      actorName(e.Actor),
 		})
 	}
 
@@ -341,6 +345,12 @@ func historyEntryHTML(e cache.HistoryEntry, href string) string {
 		b.WriteString(": ")
 		b.WriteString(html.EscapeString(e.Summary))
 	}
+	if e.Actor != nil {
+		b.WriteString(" by ")
+		b.WriteString(html.EscapeString(e.Actor.DisplayName()))
+		b.WriteString(" via ")
+		b.WriteString(html.EscapeString(transportLabel[e.Actor.Transport]))
+	}
 	b.WriteString("</p>")
 
 	if href != "" {
@@ -350,6 +360,21 @@ func historyEntryHTML(e cache.HistoryEntry, href string) string {
 	}
 
 	return b.String()
+}
+
+// transportLabel is how a reader names each transport.
+var transportLabel = map[cache.Transport]string{
+	cache.TransportDashboard: "the dashboard",
+	cache.TransportREST:      "the API",
+	cache.TransportMCP:       "MCP",
+}
+
+func actorName(actor *cache.Actor) string {
+	if actor == nil {
+		return ""
+	}
+
+	return actor.DisplayName()
 }
 
 // recommendationTargetPath maps a recommendation to the URL path of its target.

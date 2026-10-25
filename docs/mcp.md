@@ -96,6 +96,37 @@ scale services from the dashboard while agents stay read-only.
 read-only grants is offered only the read tools; resources it may not read are reported as not found rather than as
 forbidden, so the tool list never reveals what exists.
 
+### Confirm impactful changes
+
+A model that says it asked you isn't evidence that it did. So before a level-3 tool removes anything or changes a
+node's availability or role, Cetacean asks you itself, through the client: the question names the resource, what the
+change does to it—the tasks a removal stops, the services that use a secret, what a drain moves, how a promotion or
+demotion leaves the managers' quorum—and what can't be undone. It names only what you may read, and counts the rest.
+Nothing is written unless you confirm, and declining is reported to the agent as an answer, not a failure.
+
+The question needs a client that supports elicitation. One that doesn't is served as before, unless
+[`mcp.require_confirmation`][mcp.require_confirmation] is on, which refuses it the level-3 tools. A `2025-11-25`
+client can't be asked either, since Cetacean serves that revision without sessions.
+
+Swarm doesn't keep hostnames unique. When a tool is given a hostname that several nodes share, a client that supports
+elicitation asks you which one you mean, showing each node's ID, address, role, availability, engine version and
+labels. A client without it gets an error listing the IDs, and reading a node resource by such a hostname always does.
+
+A confirmation is a guard against an agent acting on its own, not an authorization: the operations level and your
+grants are checked before you are asked and again once you have answered.
+
+### Keep secret values out of the conversation
+
+An agent creating a secret would otherwise pass its value as an argument, which puts it in the conversation, the
+host's logs, and the model provider's request. A client that supports URL elicitation sends you to Cetacean's
+dashboard instead: a page opens with the name and labels the agent chose, you enter the value there, and it goes
+from your browser to Cetacean under your own session. The agent only learns that the secret exists. The page
+refuses anyone but the person whose agent asked, so this needs a token from the
+[authorization server][oauth.enabled]; a client authenticated any other way is treated as not supporting it.
+
+Such a client may not pass a value itself. Other clients still can, unless
+[`mcp.inline_secret_values`][mcp.inline_secret_values] is off.
+
 ## Wait for changes to take effect
 
 Docker accepts a change the moment you ask for it, which tells you nothing about whether it worked—the image may still
@@ -241,7 +272,9 @@ carry no expiry—RFC 7591 gives them none.
 [mcp.auth_bypass]: configuration#mcp.auth_bypass
 [mcp.enabled]: configuration#mcp.enabled
 [mcp.max_concurrent_tasks]: configuration#mcp.max_concurrent_tasks
+[mcp.inline_secret_values]: configuration#mcp.inline_secret_values
 [mcp.operations_level]: configuration#mcp.operations_level
+[mcp.require_confirmation]: configuration#mcp.require_confirmation
 [mcp.task_ttl]: configuration#mcp.task_ttl
 [oauth.access_token_ttl]: configuration#oauth.access_token_ttl
 [oauth.consent_ttl]: configuration#oauth.consent_ttl

@@ -21,7 +21,14 @@ func TestServiceDigestReportsRestartCounts(t *testing.T) {
 		Status:    swarm.TaskStatus{State: swarm.TaskStateRunning},
 	}}
 
-	got := ServiceDigest(svc, running, nil, &ServiceRestarts{LastHour: 12, LastWeek: 840}, false)
+	got := ServiceDigest(
+		svc,
+		running,
+		nil,
+		&ServiceRestarts{LastHour: 12, LastWeek: 840},
+		false,
+		nil,
+	)
 
 	if got.Restarts == nil {
 		t.Fatal("Restarts is nil; a caller cannot tell a flapping service from a healthy one")
@@ -43,7 +50,7 @@ func TestServiceDigestOmitsRestartsWhenUnknown(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 
-	got := ServiceDigest(svc, nil, nil, nil, false)
+	got := ServiceDigest(svc, nil, nil, nil, false, nil)
 
 	if got.Restarts != nil {
 		t.Errorf("Restarts = %+v, want nil when no tracker was consulted", got.Restarts)
@@ -59,8 +66,22 @@ func TestServiceRestartsSeparatesRecentFromChronic(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 
-	newlyBroken := ServiceDigest(svc, nil, nil, &ServiceRestarts{LastHour: 20, LastWeek: 20}, false)
-	longBroken := ServiceDigest(svc, nil, nil, &ServiceRestarts{LastHour: 20, LastWeek: 900}, false)
+	newlyBroken := ServiceDigest(
+		svc,
+		nil,
+		nil,
+		&ServiceRestarts{LastHour: 20, LastWeek: 20},
+		false,
+		nil,
+	)
+	longBroken := ServiceDigest(
+		svc,
+		nil,
+		nil,
+		&ServiceRestarts{LastHour: 20, LastWeek: 900},
+		false,
+		nil,
+	)
 
 	if newlyBroken.Restarts.LastWeek != newlyBroken.Restarts.LastHour {
 		t.Error("a fault that started within the hour must not look chronic")
@@ -93,7 +114,7 @@ func TestServiceDigestExplainsAFlappingService(t *testing.T) {
 		},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil, true)
+	got := ServiceDigest(svc, tasks, nil, nil, true, nil)
 
 	if got.State != "flapping" {
 		t.Errorf("State = %q, want flapping", got.State)

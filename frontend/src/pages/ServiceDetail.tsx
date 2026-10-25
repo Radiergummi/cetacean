@@ -104,6 +104,7 @@ export default function ServiceDetail() {
           image={containerSpec?.Image ?? ""}
           serviceId={id}
           canEdit={detail.editable.has("image")}
+          imageUpdate={detail.imageUpdate}
         />
         <ReplicaCard
           service={service}

@@ -23,7 +23,8 @@ make test-stack
 ```
 
 This builds the binary, brings up the environment, runs every lane (`go test -tags e2e -p 1
--count=1 -timeout 30m ./test/e2e/...`), and tears the environment down **only on success** — a
+-count=1 -timeout 30m ./test/e2e/...`), then the [multi-node one](#the-multi-node-lane) on its
+own, and tears the environment down **only on success** — a
 failing run is left up so you can inspect it with `docker compose -f test/e2e/compose.e2e.yaml
 ps`, poke the engine at `tcp://127.0.0.1:12375`, or attach to the SUT's logs. Tear it down by hand
 afterwards with `make e2e-down`.
@@ -63,6 +64,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | Port    | Lane / role                          |
 | ------- | ------------------------------------- |
 | `12375` | Docker-in-Docker engine (`tcp://127.0.0.1:12375`) |
+| `12376` | The multi-node lane's worker engine (`tcp://127.0.0.1:12376`), up only while that lane runs |
 | `19001` | `none` auth mode (also the `e2e-up` SUT) |
 | `19002` | `oidc` auth mode |
 | `19003` | `headers` auth mode (reserved; not currently exercised as a dedicated lane — see below) |
@@ -90,6 +92,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19025` | SSE fan-out isolation: what a client that has stopped reading costs the others |
 | `19026` | The authorization server's opt-in: the configurations the binary refuses, and the mTLS shape that runs without one |
 | `19027` | Conformance: the MCP specification's own requirements against `/mcp`, and the authorization server's metadata document |
+| `19028` | Multi-node: tasks on a worker, reached by the task poll and by event-driven re-lists (runs last, see [below](#the-multi-node-lane)) |
 | `19090` | Prometheus (the metrics lane's, published for the host-side SUT) |
 | `19104` | Caddy, mTLS termination |
 
@@ -238,6 +241,44 @@ worth revisiting when the revision is final.
 Three cases pin an answer the suite disagrees with, each written so that fixing the behaviour
 fails the test rather than passing quietly — the property the suite's expected-failures baseline
 provided. They are listed under [Deferred](#deferred).
+
+## The multi-node lane
+
+Every other lane runs on a one-node swarm, where each task's container is on the engine Cetacean
+reads events from. On a worker it is not: the manager's event stream carries nothing when a
+worker's container dies, so the task's record changes with no event to say so. That is how stale
+tasks on workers went unnoticed until #468, and why `multinode_test.go` exists.
+
+`make test-stack` runs it last, once every other lane has passed. To run it alone:
+
+```bash
+make test-multinode   # CETACEAN_E2E_MULTINODE=1 go test -tags e2e -run '^TestMultiNode$' ./test/e2e/
+make e2e-down
+```
+
+`harness.JoinWorker` starts `dind-worker`, a second engine behind the compose file's `multinode`
+profile, so a plain `docker compose up -d` never starts it, and joins it to the swarm as a worker.
+At cleanup the worker leaves, its node is removed and its container stopped. The lane skips
+without the variable, so the suite's own run passes over it: while the worker is joined, any
+service of the shared baseline can place a task on it, and the lanes after it would then find tasks
+on a node that no longer exists.
+`make e2e-down` passes the profile, since `down` without it leaves the worker running.
+
+The worker reaches the manager as `dind:2377` over the compose network. The swarm advertises
+`127.0.0.1`, which from inside the worker is the worker itself.
+
+What it pins, against a replicated service constrained to `node.role == worker`, whose task
+container the lane kills on the worker:
+
+| Case | Poll | Asserts |
+| ---- | ---- | ------- |
+| The poll | `2s` | `GET /tasks/{id}` reads `failed` within 5s of the manager reporting it, the service's event stream carries the change, and the replacement task reads `running` |
+| Event-driven re-lists | off | The cache still reads `running` for 10s after the task died, which is the control: it is what shows the first case is the poll's doing. A label on the service then re-lists its tasks, and one on the worker node re-lists that node's, each within 5s |
+| Global desired counts | off | A stack of one global service constrained to workers and one unconstrained expects 3 tasks, and 1 once the worker is drained |
+
+Each assertion has been checked against a binary with the behaviour it pins removed: no poll, no
+service-scoped re-list, no node-scoped re-list, placement ignored, drained nodes counted. Each
+fails the case written for it and no other.
 
 ## Running it against the race detector
 

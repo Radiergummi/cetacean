@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { Recommendation, Service, ServiceListItem } from "../api/types";
+import { NewerImageBadge } from "../components/data";
 import type { Column } from "../components/DataTable";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { HealthDot, ReplicaHealth } from "../components/HealthIndicator";
@@ -61,9 +62,12 @@ export default function ServiceList() {
         },
         {
           header: "Image",
-          cell: ({ Spec }) => (
-            <span className="font-mono text-xs">
-              {Spec.TaskTemplate?.ContainerSpec?.Image?.split("@")[0]}
+          cell: ({ Spec, ImageUpdate }) => (
+            <span className="inline-flex items-center gap-2">
+              <span className="font-mono text-xs">
+                {Spec.TaskTemplate?.ContainerSpec?.Image?.split("@")[0]}
+              </span>
+              {ImageUpdate && <NewerImageBadge update={ImageUpdate} />}
             </span>
           ),
         },
@@ -213,7 +217,12 @@ export default function ServiceList() {
               </span>
             }
             to={`/services/${service.ID}`}
-            badge={<ServiceStatusBadge service={service} />}
+            badge={
+              <span className="inline-flex items-center gap-2">
+                {service.ImageUpdate && <NewerImageBadge update={service.ImageUpdate} />}
+                <ServiceStatusBadge service={service} />
+              </span>
+            }
             subtitle={service.Spec.TaskTemplate?.ContainerSpec?.Image?.split("@")[0]}
             meta={[
               desired != null ? (

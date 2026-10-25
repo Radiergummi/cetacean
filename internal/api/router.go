@@ -316,7 +316,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	clusterExists := h.unrepresented(subjectExists)
 	// A create checks the write grant on the name it creates, in the handler.
 	createTier2 := tieredChain{
-		chain: NewChain(h.requireLevel(config.OpsConfiguration)),
+		chain: NewChain(h.requireLevel(config.OpsConfiguration), attributeWrite),
 		level: config.OpsConfiguration,
 	}
 
@@ -891,6 +891,10 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		secTier3.Append(h.precond(h.secretRepresentation)).
 			ThenFunc(h.HandleRemoveSecret))
 	mux.Handle("POST /secrets", createTier2.ThenFunc(h.HandleCreateSecret))
+	mux.HandleFunc(
+		"GET /secret-entries/{id}",
+		contentNegotiated(h.HandleGetSecretEntry, feedHandlers{}, spa),
+	)
 	mux.HandleFunc(
 		"GET /secrets/{id}/labels",
 		contentNegotiated(h.HandleGetSecretLabels, feedHandlers{}, spa),
