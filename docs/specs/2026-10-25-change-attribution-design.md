@@ -136,14 +136,14 @@ never arrived — none of which attribution needs. Recording the actor on the en
 would share, and it is done here; a log can subscribe to attributed entries later without
 touching the matching.
 
-## Decide
+## Decided
 
 1. **Visibility.** Actors are shown to anyone who may read the entry, with no separate grant or
-   setting. Recommended: keep it so. A grant would hide the one answer the history page exists to
-   give from exactly the operators reading it; a deployment that cannot show names can be offered
-   an `acl.*`-scoped redaction later without changing the record.
+   setting. A grant would hide the one answer the history page exists to give from exactly the
+   operators reading it; a deployment that cannot show names can be offered an `acl.*`-scoped
+   redaction later without changing the record.
 2. **Display name in the record.** Included so an OIDC subject does not show up as an opaque
-   string. It is whatever the provider sent at the time of the write. Recommended: keep.
+   string. It is whatever the provider sent at the time of the write.
 3. **No audit log in this change**, as argued above.
-4. **History stays unpersisted.** Attribution follows history; persisting both is a separate
-   issue if wanted.
+4. **History stays unpersisted here.** Attribution follows history; persisting both is
+   [#487](https://github.com/Radiergummi/cetacean/issues/487).
