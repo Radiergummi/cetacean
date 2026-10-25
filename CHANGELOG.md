@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
+
 ## [0.18.0] - 2026-10-24
 
 ### Added

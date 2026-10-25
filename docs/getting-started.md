@@ -14,6 +14,9 @@ tags: [installation, docker, swarm, quickstart]
 - A manager node to run Cetacean on. Cetacean reads the swarm API, which only managers serve.
 - The Docker socket, mounted read-only into the container.
 
+Cetacean exits at startup against an older engine, naming the version it needs. Raising this minimum ships in a
+minor release, marked **Breaking** in the changelog; see [Compatibility][api.compatibility].
+
 ## Run it
 
 Container images are published to `ghcr.io/radiergummi/cetacean`. Pick one of the following paths, run it on a manager
@@ -155,6 +158,7 @@ In `local` Tailscale mode, Cetacean talks only to the host's Tailscale daemon, w
 | [Configuration][configuration]     | Every setting, including [`server.base_path`][server.base_path] for a proxy on a sub-path |
 
 [api]: api
+[api.compatibility]: api#compatibility
 [api.health]: api/explorer#tag/meta/GET/-/health
 [api.ready]: api/explorer#tag/meta/GET/-/ready
 [api.metrics]: api/explorer#tag/monitoring/GET/metrics/status
