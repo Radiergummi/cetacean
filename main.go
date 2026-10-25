@@ -1079,13 +1079,6 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	return srv
 }
 
-// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
-// when MCP is disabled. The second return is a cleanup function the caller must
-// invoke at shutdown so the MCP server's cache change listener detaches before
-// the cache itself is torn down.
-//
-// The authorization server is built separately and arrives as the narrow
-// interface MCP consumes, so MCP is one of its consumers rather than its owner.
 // startImageCheck starts the registry image check, returning nil when it is
 // off so nothing dials a registry and nothing reports an answer.
 func startImageCheck(
@@ -1107,6 +1100,13 @@ func startImageCheck(
 	return checker
 }
 
+// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
+// when MCP is disabled. The second return is a cleanup function the caller must
+// invoke at shutdown so the MCP server's cache change listener detaches before
+// the cache itself is torn down.
+//
+// The authorization server is built separately and arrives as the narrow
+// interface MCP consumes, so MCP is one of its consumers rather than its owner.
 func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http.Handler, func()) {
 	if !d.cfg.MCP.Enabled {
 		return nil, func() {}
