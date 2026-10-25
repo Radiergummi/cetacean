@@ -38,6 +38,9 @@ const categoryDetails: Record<RecommendationCategory, string> = {
   "no-restart-policy":
     "Without a restart policy, containers that crash will stay down until manually restarted. " +
     "Setting a restart policy ensures automatic recovery from transient failures.",
+  "newer-image":
+    "The registry has moved this service's image tag to a newer image than the one it runs, which " +
+    "Swarm pinned when the service was deployed. Update the image to deploy what the tag names now.",
   "single-replica":
     "Running a single replica means any update, crash, or node failure causes downtime. " +
     "At least two replicas allow rolling updates and provide basic fault tolerance.",
@@ -75,7 +78,7 @@ const categoryDetails: Record<RecommendationCategory, string> = {
 
 const filterGroups: Record<string, Set<string>> = {
   sizing: sizingCategories,
-  config: new Set(["no-healthcheck", "no-restart-policy"]),
+  config: new Set(["no-healthcheck", "no-restart-policy", "newer-image"]),
   operational: new Set(["flaky-service", "node-disk-full", "node-memory-pressure"]),
   cluster: new Set(["single-replica", "manager-has-workloads", "uneven-distribution"]),
 };

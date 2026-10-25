@@ -14,6 +14,9 @@ tags: [installation, docker, swarm, quickstart]
 - A manager node to run Cetacean on. Cetacean reads the swarm API, which only managers serve.
 - The Docker socket, mounted read-only into the container.
 
+Cetacean exits at startup against an older engine, naming the version it needs. Raising this minimum ships in a
+minor release, marked **Breaking** in the changelog; see [Compatibility][api.compatibility].
+
 ## Run it
 
 Container images are published to `ghcr.io/radiergummi/cetacean`. Pick one of the following paths, run it on a manager
@@ -120,6 +123,7 @@ allows its own origin only. The server opens these connections, and no others:
 |------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | The Docker daemon at [`docker.host`][docker.host]                                        | Always                                                                                                                                                                                     |
 | `api.github.com`, for the latest Docker Engine release                                   | When a node's page opens, or anyone requests `/-/docker-latest-version`, which needs no credentials. The answer is cached for an hour. [`server.version_check`][server.version_check] turns it off; off or blocked, the node page shows no update hint |
+| The registry of each service image, such as `registry-1.docker.io` and its token service | Hourly per image, for its tag's manifest, anonymously. [`server.image_check`][server.image_check] turns it off; off or blocked, services show no update hint |
 | Prometheus at [`prometheus.url`][prometheus.url]                                         | When set                                                                                                                                                                                   |
 | The OIDC issuer, for discovery, signing keys, and the code exchange                       | With [`auth.mode`][auth.mode] `oidc`                                                                                                                                                       |
 | Tailscale's coordination server and relays, and `log.tailscale.com`                      | With [`auth.tailscale.mode`][auth.tailscale.mode] `tsnet`. The embedded node uploads its own diagnostic logs unless Cetacean's environment sets `TS_NO_LOGS_NO_SUPPORT=true`               |
@@ -155,6 +159,7 @@ In `local` Tailscale mode, Cetacean talks only to the host's Tailscale daemon, w
 | [Configuration][configuration]     | Every setting, including [`server.base_path`][server.base_path] for a proxy on a sub-path |
 
 [api]: api
+[api.compatibility]: api#compatibility
 [api.health]: api/explorer#tag/meta/GET/-/health
 [api.ready]: api/explorer#tag/meta/GET/-/ready
 [api.metrics]: api/explorer#tag/monitoring/GET/metrics/status
@@ -177,6 +182,7 @@ In `local` Tailscale mode, Cetacean talks only to the host's Tailscale daemon, w
 [server.listen_addr]: configuration#server.listen_addr
 [server.operations_level]: configuration#server.operations_level
 [server.version_check]: configuration#server.version_check
+[server.image_check]: configuration#server.image_check
 [tls.cert]: configuration#tls.cert
 [tls.key]: configuration#tls.key
 [tracing.endpoint]: configuration#tracing.endpoint

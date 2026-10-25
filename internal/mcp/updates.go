@@ -409,11 +409,40 @@ func (s *Server) toolUpdateNode(
 		return "", err
 	}
 
-	if err := s.checkNodeWrite(ctx, id); err != nil {
+	var (
+		availability swarm.NodeAvailability
+		role         swarm.NodeRole
+	)
+
+	switch section {
+	case sectionAvailability:
+		availability, err = parseNodeAvailability(value)
+	case sectionRole:
+		role, err = parseNodeRole(value)
+	default:
+		err = fmt.Errorf(
+			"unknown section %q; expected %q or %q",
+			section, sectionAvailability, sectionRole,
+		)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	id, err = s.resolveNodeWrite(ctx, req, id)
+	if err != nil {
 		return "", err
 	}
 
 	ctx, id, cond, err := s.pinVersion(ctx, req, "node", id)
+	if err != nil {
+		return "", err
+	}
+
+	confirmed, err := s.confirm(ctx, req, func() (confirmation, error) {
+		return s.nodeChange(ctx, id, section, availability, role)
+	})
 	if err != nil {
 		return "", err
 	}
@@ -425,33 +454,17 @@ func (s *Server) toolUpdateNode(
 
 	var updated swarm.Node
 
-	switch section {
-	case sectionAvailability:
-		availability, parseErr := parseNodeAvailability(value)
-		if parseErr != nil {
-			return "", parseErr
-		}
-
-		updated, err = writeClient.UpdateNodeAvailability(ctx, id, availability)
-
-	case sectionRole:
-		role, parseErr := parseNodeRole(value)
-		if parseErr != nil {
-			return "", parseErr
-		}
-
+	if section == sectionRole {
 		updated, err = writeClient.UpdateNodeRole(ctx, id, role)
-
-	default:
-		return "", fmt.Errorf(
-			"unknown section %q; expected %q or %q",
-			section, sectionAvailability, sectionRole,
-		)
+	} else {
+		updated, err = writeClient.UpdateNodeAvailability(ctx, id, availability)
 	}
 
 	if err != nil {
 		return "", s.refused(cond, err)
 	}
+
+	logConfirmableWrite(ctx, req.Params.Name, "node:"+id, confirmed)
 
 	return marshalResult(nodeUpdate(section, updated))
 }

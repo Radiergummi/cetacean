@@ -586,4 +586,7 @@ type serviceNetworkRef struct {
 type createResourceRequest struct {
 	Name string `json:"name"`
 	Data string `json:"data"`
+
+	// Elicitation names the secret entry an MCP caller left for this person.
+	Elicitation string `json:"elicitation,omitempty"`
 }

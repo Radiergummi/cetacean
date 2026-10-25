@@ -109,6 +109,30 @@ describe("ServiceList", () => {
     vi.useRealTimers();
   });
 
+  it("marks a service whose image tag names a newer image", async () => {
+    const moved = {
+      ...fakeService("s1", "web"),
+      ImageUpdate: {
+        image: "nginx:latest",
+        currentDigest: "sha256:abc",
+        latestDigest: "sha256:def",
+        suggestedImage: "nginx:latest@sha256:def",
+        checkedAt: "2026-10-01T12:00:00Z",
+      },
+    };
+
+    mockServices.mockResolvedValue({
+      data: { items: [moved, fakeService("s2", "api")], total: 2, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    render(<ServiceList />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByText("web")).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("Newer image")).toHaveLength(1);
+  });
+
   it("shows empty state", async () => {
     mockServices.mockResolvedValue({
       data: { items: [], total: 0, limit: 50, offset: 0 },

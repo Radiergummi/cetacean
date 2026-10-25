@@ -75,6 +75,10 @@ type ServiceSpec struct {
 	Networks []string    // network names to attach
 	Mounts   []MountSpec // volumes to mount
 
+	// Constraints are placement constraints, as `docker service create
+	// --constraint` takes them.
+	Constraints []string
+
 	// Resources sets the service's limits and reservations. Left nil, the
 	// service gets neither, which is what the baseline wants; the sizing
 	// recommendations are only computed for a service that has them.
@@ -292,11 +296,25 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 	return stack
 }
 
-// ensureImage builds the fixture image on the host and loads it into the DinD
+// LoadImage loads the fixture image into another engine of the swarm, which
+// does not share the manager's image store.
+func LoadImage(t *testing.T, docker *client.Client) {
+	t.Helper()
+
+	if err := ensureImageOn(t.Context(), docker); err != nil {
+		t.Fatalf("%v", err)
+	}
+}
+
+func ensureImage(ctx context.Context, env *harness.Env) error {
+	return ensureImageOn(ctx, env.Docker)
+}
+
+// ensureImageOn builds the fixture image on the host and loads it into a DinD
 // engine. Pulling inside DinD on every run would make the suite slow and
 // network-dependent.
-func ensureImage(ctx context.Context, env *harness.Env) error {
-	images, err := env.Docker.ImageList(ctx, image.ListOptions{})
+func ensureImageOn(ctx context.Context, docker *client.Client) error {
+	images, err := docker.ImageList(ctx, image.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("ImageList: %w", err)
 	}
@@ -341,7 +359,7 @@ func ensureImage(ctx context.Context, env *harness.Env) error {
 		return fmt.Errorf("save fixture image: %w", err)
 	}
 
-	resp, err := env.Docker.ImageLoad(ctx, &tar, client.ImageLoadWithQuiet(true))
+	resp, err := docker.ImageLoad(ctx, &tar, client.ImageLoadWithQuiet(true))
 	if err != nil {
 		return fmt.Errorf("ImageLoad: %w", err)
 	}
@@ -528,6 +546,11 @@ func createService(ctx context.Context, env *harness.Env, spec ServiceSpec) erro
 		}
 	}
 
+	var placement *swarm.Placement
+	if len(spec.Constraints) > 0 {
+		placement = &swarm.Placement{Constraints: spec.Constraints}
+	}
+
 	_, err := env.Docker.ServiceCreate(ctx, swarm.ServiceSpec{
 		Annotations: swarm.Annotations{Name: spec.Name, Labels: spec.Labels},
 		Mode:        mode,
@@ -542,6 +565,7 @@ func createService(ctx context.Context, env *harness.Env, spec ServiceSpec) erro
 			},
 			Networks:  networks,
 			Resources: resources,
+			Placement: placement,
 			RestartPolicy: &swarm.RestartPolicy{
 				Condition: swarm.RestartPolicyConditionAny,
 				Delay:     new(2 * time.Second),

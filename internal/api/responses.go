@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -27,6 +28,8 @@ type ServiceResponse struct {
 	Service      swarm.Service `json:"service"`
 	Changes      []SpecChange  `json:"changes,omitempty"`
 	Integrations []any         `json:"integrations,omitempty"`
+
+	ImageUpdate *cluster.ImageUpdate `json:"imageUpdate,omitempty"`
 }
 
 // AcceptedServiceResponse is the payload for the 202 a service mutation answers

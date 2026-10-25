@@ -77,6 +77,7 @@ func (s *Server) configurationTools() []toolDef {
 				),
 			),
 			tier:    config.OpsConfiguration,
+			elicits: true,
 			handler: s.toolUpdateNodeLabels,
 		},
 		{
@@ -84,7 +85,7 @@ func (s *Server) configurationTools() []toolDef {
 				"create_secret",
 				mcplib.WithToolTitle("Create a secret"),
 				mcplib.WithDescription(
-					"Create a Swarm secret. Swarm secrets cannot be changed once created, so rotating one is three calls in order: this tool for the replacement, update_service_secrets to repoint each service that uses the old one (describe the old secret first — its related array names them), then remove_secret once nothing references it. The value is write-only: no tool ever returns it, including this one. Pass encoding as base64 for binary content or anything JSON string escaping would mangle, such as a certificate or a key file; without it the value is stored exactly as given, since plenty of ordinary passwords are also valid base64 and guessing would silently store the wrong thing.",
+					"Create a Swarm secret. Swarm secrets cannot be changed once created, so rotating one is three calls in order: this tool for the replacement, update_service_secrets to repoint each service that uses the old one (describe the old secret first — its related array names them), then remove_secret once nothing references it. The value is write-only: no tool ever returns it, including this one. From a client supporting URL elicitation, omit data: the person is sent to Cetacean's dashboard to enter the value, so it never passes through the conversation, and the call is retried once they have. From any other client data is required, unless the server refuses inline values altogether. Pass encoding as base64 for binary content or anything JSON string escaping would mangle, such as a certificate or a key file; without it the value is stored exactly as given, since plenty of ordinary passwords are also valid base64 and guessing would silently store the wrong thing.",
 				),
 				mcplib.WithOutputSchema[createResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
@@ -99,8 +100,9 @@ func (s *Server) configurationTools() []toolDef {
 					),
 				),
 				mcplib.WithString("data",
-					mcplib.Required(),
-					mcplib.Description("The secret's value."),
+					mcplib.Description(
+						"The secret's value. Leave it out to have the person enter it in Cetacean's dashboard, which a client supporting URL elicitation must do: it refuses a value passed here.",
+					),
 				),
 				mcplib.WithString(
 					"encoding",
@@ -117,6 +119,7 @@ func (s *Server) configurationTools() []toolDef {
 				),
 			),
 			tier:    config.OpsConfiguration,
+			elicits: true,
 			handler: s.createHandler(secretResource),
 		},
 		{

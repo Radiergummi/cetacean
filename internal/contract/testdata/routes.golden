@@ -1,0 +1,145 @@
+/  HTML
+/debug/pprof/
+/debug/pprof/cmdline
+/debug/pprof/profile
+/debug/pprof/symbol
+/debug/pprof/trace
+/mcp
+DELETE /configs/{id}
+DELETE /networks/{id}
+DELETE /nodes/{id}
+DELETE /plugins/{name}
+DELETE /secrets/{id}
+DELETE /services/{id}
+DELETE /stacks/{name}
+DELETE /tasks/{id}
+DELETE /tokens/{subject}
+DELETE /volumes/{name}
+GET /-/docker-latest-version
+GET /-/health
+GET /-/licenses
+GET /-/licenses/texts/{id}
+GET /-/metrics
+GET /-/notices
+GET /-/ready
+GET /-/sbom.cdx
+GET /.well-known/api-catalog
+GET /api
+GET /api/asyncapi
+GET /api/asyncapi.yaml
+GET /api/context.jsonld
+GET /api/errors  HTML JSON
+GET /api/errors/{code}  HTML JSON
+GET /api/openapi.yaml
+GET /api/scalar.js
+GET /auth/whoami
+GET /cluster  HTML JSON
+GET /cluster/capacity  HTML JSON
+GET /cluster/metrics  HTML JSON
+GET /configs  Atom CSV HTML JSON JSONFeed SSE
+GET /configs/{id}  Atom HTML JSON JSONFeed SSE
+GET /configs/{id}/labels  HTML JSON
+GET /disk-usage  HTML JSON
+GET /events  Atom HTML JSONFeed SSE
+GET /history  Atom CSV HTML JSON JSONFeed
+GET /index  HTML JSON
+GET /metrics  HTML JSON SSE
+GET /metrics/labels
+GET /metrics/labels/{name}
+GET /metrics/status
+GET /networks  Atom CSV HTML JSON JSONFeed SSE
+GET /networks/{id}  Atom HTML JSON JSONFeed SSE
+GET /nodes  Atom CSV HTML JSON JSONFeed SSE
+GET /nodes/{id}  Atom HTML JSON JSONFeed SSE
+GET /nodes/{id}/drain-impact  HTML JSON
+GET /nodes/{id}/labels  HTML JSON
+GET /nodes/{id}/role  HTML JSON
+GET /nodes/{id}/tasks  CSV HTML JSON
+GET /opensearch.xml
+GET /plugins  HTML JSON
+GET /plugins/{name}  HTML JSON
+GET /profile  HTML JSON
+GET /recommendations  Atom CSV HTML JSON JSONFeed
+GET /search  Atom HTML JSON JSONFeed
+GET /secret-entries/{id}  HTML JSON
+GET /secrets  Atom CSV HTML JSON JSONFeed SSE
+GET /secrets/{id}  Atom HTML JSON JSONFeed SSE
+GET /secrets/{id}/labels  HTML JSON
+GET /services  Atom CSV HTML JSON JSONFeed SSE
+GET /services/{id}  Atom HTML JSON JSONFeed SSE YAML
+GET /services/{id}/configs  HTML JSON
+GET /services/{id}/container-config  HTML JSON
+GET /services/{id}/endpoint-mode  HTML JSON
+GET /services/{id}/env  HTML JSON
+GET /services/{id}/healthcheck  HTML JSON
+GET /services/{id}/labels  HTML JSON
+GET /services/{id}/log-driver  HTML JSON
+GET /services/{id}/logs  HTML JSON SSE
+GET /services/{id}/mode  HTML JSON
+GET /services/{id}/mounts  HTML JSON
+GET /services/{id}/networks  HTML JSON
+GET /services/{id}/placement  HTML JSON
+GET /services/{id}/ports  HTML JSON
+GET /services/{id}/resources  HTML JSON
+GET /services/{id}/rollback-policy  HTML JSON
+GET /services/{id}/secrets  HTML JSON
+GET /services/{id}/tasks  CSV HTML JSON
+GET /services/{id}/update-policy  HTML JSON
+GET /stacks  Atom CSV HTML JSON JSONFeed SSE
+GET /stacks/summary  HTML JSON
+GET /stacks/{name}  Atom HTML JSON JSONFeed SSE YAML
+GET /swarm  HTML JSON
+GET /swarm/plugins  HTML JSON
+GET /swarm/unlock-key
+GET /tasks  Atom CSV HTML JSON JSONFeed SSE
+GET /tasks/{id}  Atom HTML JSON JSONFeed SSE
+GET /tasks/{id}/logs  HTML JSON SSE
+GET /topology  DOT GraphML HTML JGF JSON
+GET /topology/networks
+GET /topology/placement
+GET /volumes  Atom CSV HTML JSON JSONFeed SSE
+GET /volumes/{name}  Atom HTML JSON JSONFeed SSE
+GET /{$}  HTML JSON
+PATCH /configs/{id}/labels
+PATCH /nodes/{id}/labels
+PATCH /plugins/{name}/settings
+PATCH /secrets/{id}/labels
+PATCH /services/{id}/configs
+PATCH /services/{id}/container-config
+PATCH /services/{id}/env
+PATCH /services/{id}/healthcheck
+PATCH /services/{id}/labels
+PATCH /services/{id}/log-driver
+PATCH /services/{id}/mounts
+PATCH /services/{id}/networks
+PATCH /services/{id}/ports
+PATCH /services/{id}/resources
+PATCH /services/{id}/rollback-policy
+PATCH /services/{id}/secrets
+PATCH /services/{id}/update-policy
+PATCH /swarm/ca
+PATCH /swarm/dispatcher
+PATCH /swarm/encryption
+PATCH /swarm/orchestration
+PATCH /swarm/raft
+POST /-/resync
+POST /configs
+POST /plugins
+POST /plugins/privileges
+POST /plugins/{name}/disable
+POST /plugins/{name}/enable
+POST /plugins/{name}/upgrade
+POST /secrets
+POST /services/{id}/restart
+POST /services/{id}/rollback
+POST /swarm/force-rotate-ca
+POST /swarm/rotate-token
+POST /swarm/rotate-unlock-key
+POST /swarm/unlock
+PUT /nodes/{id}/availability
+PUT /nodes/{id}/role
+PUT /services/{id}/endpoint-mode
+PUT /services/{id}/healthcheck
+PUT /services/{id}/image
+PUT /services/{id}/placement
+PUT /services/{id}/scale

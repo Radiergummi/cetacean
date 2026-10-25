@@ -82,6 +82,9 @@ type fileMCP struct {
 	// AuthBypass is MCP's, not the authorization server's: it names the
 	// upstream auth modes accepted at /mcp without a bearer token.
 	AuthBypass []string `toml:"auth_bypass"`
+
+	RequireConfirmation *bool `toml:"require_confirmation"`
+	InlineSecretValues  *bool `toml:"inline_secret_values"`
 }
 
 // fileOAuth mirrors the [oauth] section. The server is opt-in, so a deployment
@@ -120,6 +123,7 @@ type fileServer struct {
 	SelfMetrics      *bool     `toml:"self_metrics"`
 	Recommendations  *bool     `toml:"recommendations"`
 	VersionCheck     *bool     `toml:"version_check"`
+	ImageCheck       *bool     `toml:"image_check"`
 	SSE              *fileSSE  `toml:"sse"`
 	CORS             *fileCORS `toml:"cors"`
 	OperationsLevel  *int      `toml:"operations_level"`

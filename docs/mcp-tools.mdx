@@ -121,7 +121,8 @@ What the cluster is doing now, and what it did recently.
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
-    tasks' entries unless `types` leaves out `task`.
+    tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
+    made it, as the [history][api.history-actor] does.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
@@ -303,7 +304,9 @@ content can be read back, so use a secret for anything sensitive.
 <McpTool name="create_secret" level={2}>
     <Fragment slot="arguments">`name`, `data`, `encoding` (`utf8`, `base64`), `labels`</Fragment>
 
-    Creates a Swarm secret.
+    Creates a Swarm secret. From a client that supports URL elicitation, leave out `data`: you're sent to the
+    dashboard to enter the value, so it never passes through the conversation, and passing `data` is refused. Other
+    clients pass `data`, unless [`mcp.inline_secret_values`](configuration#mcp.inline_secret_values) is off.
 </McpTool>
 
 <McpTool name="create_config" level={2}>
@@ -448,6 +451,11 @@ to be up, and `recentFailures` drops tasks the orchestrator has already replaced
 every few seconds otherwise describes as healthy. `lastHour` answers whether it's failing now; the ratio
 between the two windows answers whether the fault is new.
 
+A service's `details` carries `imageUpdate` when its image tag names a newer image in its registry than the
+digest the service runs, with the same fields as the [API][api] reports. `suggestedImage`, the tag pinned to
+the newer digest, is what to pass to `update_service_image`. It's absent with
+[`server.image_check`][server.image_check] off.
+
 Every numeric field in `details` names its unit, such as `cpuLimitCores` (a float, in cores) and
 `memoryLimitBytes`, or is reported as a duration string like `"10s"` (`healthcheckInterval`, an update
 policy's `delay` and `monitor`). Docker's own types express these as unlabeled NanoCPU or nanosecond
@@ -511,8 +519,24 @@ a follow-up from a widget as you would any output that quotes the cluster.
 | `ui://cetacean/metrics`         | A [`get_metrics`][mcp.tools.get_metrics] result                 | Line chart with a range picker; changing the range re-runs the tool. Every series is named in a legend with its latest value        |
 | `ui://cetacean/recommendations` | A [`get_recommendations`][mcp.tools.get_recommendations] result | Findings grouped by severity, most serious first. Picking one asks the host to send the model a follow-up, which a host may decline |
 
+## Compatibility
+
+From 1.0, the parts of this catalog a client builds on don't change within a major version. The general rules,
+including how a deprecation is announced, are under [Compatibility][api.compatibility] in the API reference.
+
+- **Covered:** tool names, argument names and types, resource URIs and URI templates, prompt names, and error
+  codes.
+- **Tool results aren't covered.** Their shape is tuned for agents and token cost, and can change in a minor
+  release. Changes are additive by default: a new field rather than a renamed or removed one.
+- **Except where a widget reads them.** A result field a widget renders is covered, because a widget can't adapt
+  to a field that moved.
+- **Widgets:** each `ui://cetacean/*` URI, and which tool names which widget, are covered. What a widget looks like
+  and how it behaves aren't; the bundles ship with the server they render for.
+
 
 [api]:  api
+[api.compatibility]:  api#compatibility
+[api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
 [dashboard]:  dashboard
 [mcp]:  mcp
@@ -525,5 +549,6 @@ a follow-up from a widget as you would any output that quotes the cluster.
 [mcp.tools.get_recommendations]:  mcp-tools#get_recommendations
 [operations-level]:  configuration#operations-level
 [recommendations]:  recommendations
+[server.image_check]:  configuration#server.image_check
 [server.public_url]:  configuration#server.public_url
 [tasks]:  mcp#wait-for-changes-to-take-effect

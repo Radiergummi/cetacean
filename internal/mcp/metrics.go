@@ -244,7 +244,7 @@ func (s *Server) toolGetMetrics(
 	case metricTargetService:
 		name, selector, err = s.serviceMetricSelector(ctx, id)
 	default:
-		name, selector, err = s.nodeMetricSelector(ctx, id)
+		name, selector, err = s.nodeMetricSelector(ctx, req, id)
 	}
 
 	if err != nil {
@@ -387,9 +387,13 @@ func (s *Server) serviceMetricSelector(ctx context.Context, id string) (string, 
 
 // nodeMetricSelector resolves a node by ID or hostname and returns the
 // selector matching its node-exporter instance.
-func (s *Server) nodeMetricSelector(ctx context.Context, id string) (string, string, error) {
-	node, ok, err := s.cache.ResolveNode(id)
-	if err = s.visibleAmbiguity(ctx, "node", err); err != nil {
+func (s *Server) nodeMetricSelector(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+	id string,
+) (string, string, error) {
+	node, ok, err := s.resolveNodeFor(ctx, req, id)
+	if err != nil {
 		return "", "", err
 	}
 

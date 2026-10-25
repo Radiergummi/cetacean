@@ -23,20 +23,28 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 	handleCreateDataResource(w, r, createDataResourceSpec{
 		resource:     "secret",
 		acl:          h.acl,
+		entries:      h.secretEntries,
 		nameErrCode:  "SEC004",
 		conflictCode: "SEC003",
 		basePath:     "/secrets/",
 		typeName:     "Secret",
-		create: func(ctx context.Context, name string, data []byte) (string, error) {
+		create: func(
+			ctx context.Context,
+			name string,
+			labels map[string]string,
+			data []byte,
+		) (string, error) {
 			id, err := h.secretWriter.CreateSecret(ctx, swarm.SecretSpec{
-				Name: name,
+				Name: name, Labels: labels,
 				Data: data,
 			})
 			if err == nil {
 				// Attaching resolves through the cache, which the watcher fills later.
 				h.cache.SetSecret(swarm.Secret{
-					ID:   id,
-					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+					ID: id,
+					Spec: swarm.SecretSpec{
+						Annotations: swarm.Annotations{Name: name, Labels: labels},
+					},
 				})
 			}
 
@@ -84,4 +92,19 @@ func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Reques
 		conflictCode:  "SEC005",
 		stackMember:   true,
 	})
+}
+
+// HandleGetSecretEntry serves what an MCP caller chose for a secret it asked
+// the person to enter: name, labels and encoding, never a value. Only the
+// person whose MCP client opened it may read it.
+func (h *Handlers) HandleGetSecretEntry(w http.ResponseWriter, r *http.Request) {
+	entry, ok := lookupEntry(w, r, h.secretEntries, r.PathValue("id"))
+	if !ok {
+		return
+	}
+
+	writeAllow(w, readOnly)
+	writeCachedJSON(w, r, NewDetailResponse(
+		r.Context(), "/secret-entries/"+entry.ID, "SecretEntry", entry,
+	))
 }

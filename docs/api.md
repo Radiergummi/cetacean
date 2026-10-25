@@ -230,7 +230,7 @@ Docker object is what the JSON representation is for.
 | `/stacks` | `name`, `services`, `id` |
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
 | `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
-| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary` |
+| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
 ### Pagination differs
@@ -334,6 +334,29 @@ GET /history?search=web&before=<entry-id>&limit=50 HTTP/1.1
 curl "http://localhost:9000/history?search=web&limit=50"
 curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 ```
+
+### Who made a change
+
+An entry for a change made through Cetacean carries an `actor`: the identity that made it and how it arrived. An
+entry with no `actor` is a change made somewhere else, such as with the Docker CLI.
+
+```json
+"actor": {
+  "subject": "3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90",
+  "name": "Alice",
+  "provider": "oauth",
+  "client": "claude-desktop",
+  "transport": "mcp"
+}
+```
+
+`client` is the OAuth client ID when the call carried a token Cetacean issued. `transport` is `mcp` for the MCP
+server. On the web API it's `dashboard` for a request the browser marks `Sec-Fetch-Site: same-origin` and that
+carries no bearer token, and `rest` for anything else. The transport is a label for reading, not something a grant
+checks. CSV exports carry the same fields as columns, and Atom and JSON Feed entries name the actor as their
+author.
+
+Swarm settings and plugin changes have no history entries, so they carry no actor either.
 
 ### Sort fields by resource
 
@@ -489,8 +512,8 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-A service's and a node's detail also set `Last-Modified` from the resource's update timestamp and honor
-`If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
+A service's and a node's detail also set `Last-Modified` from the resource's update timestamp, or for a service from
+when a newer image was found if that is later, and honor `If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
 volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
@@ -740,7 +763,7 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
 | Tasks | `/tasks`, `/tasks/{id}`, `/tasks/{id}/logs` |
 | Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
-| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels` |
+| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels`, `/secret-entries/{id}` |
 | Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |
 | Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
@@ -762,6 +785,11 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `GET /nodes/{id}/drain-impact` assesses a drain before you make it: each service with a task on the node is
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
+
+`GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
+names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
+`checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
+whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event
@@ -956,20 +984,85 @@ only when [`oauth.enabled`][oauth.enabled] is set. The web API's own authorizati
 
 URIs are absolute—set [`server.public_url`][server.public_url] behind a reverse proxy.
 
+## Compatibility
+
+Cetacean follows [semantic versioning](https://semver.org/) from 1.0 onward. A change is breaking when a client that
+worked against an earlier 1.x release stops working, or quietly gets a different answer, without changing anything on
+its side. Breaking changes wait for the next major release. Until 1.0, a minor release can still break things, and
+the changelog marks each one **Breaking**.
+
+### What a 1.x release keeps
+
+- **Routes:** each path, its methods and status codes, the `Allow` header, `rel="edit"` targets, and the media
+  types the route serves. The [API explorer][api-explorer] lists them.
+- **Response bodies:** field names, types and meaning, the `@type` of each document, and every term
+  `/api/context.jsonld` defines.
+- **Errors:** every problem code and the status it answers with, as the [error reference](api/errors) lists them.
+- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items` and
+  `Content-Range`, the `?filter=` grammar and its fields, and the `?sort=` fields.
+- **Feeds and spreadsheets:** which endpoints serve them, and CSV column names and order.
+- **Event streams:** event names, payload shapes, `Last-Event-ID` replay and the `sync` and `full_sync` events, as
+  `/api/asyncapi` describes them.
+- **MCP:** tool, argument and prompt names, argument types, resource URIs, and widgets. See
+  [MCP tools and resources][mcp-tools.compatibility] for what that includes.
+- **Configuration:** each setting's TOML path, environment variable, flag and default, and the `_FILE` variants.
+  The [configuration reference][configuration] is the list.
+- **Authorization policies:** grant syntax, resource types, permissions and audience prefixes, as
+  [Authorization][authorization] describes them, and the [operations level][operations-level] each write needs.
+- **Self-metrics:** the `cetacean_*` metric and label names served at `/-/metrics`.
+- **Stored state:** the snapshot, the OAuth token store and registered OAuth clients under
+  [`storage.data_dir`][storage.data_dir] stay readable by every later 1.x release.
+- **The `healthcheck` subcommand** and its exit codes.
+
+### What it doesn't
+
+- **Additions.** A new field, route, tool, argument, event, setting, error code or metric ships in a minor release.
+  Clients must ignore what they don't recognize.
+- **Wording.** Problem `title` and `detail`, tool descriptions, prompt text, log messages and the dashboard's text
+  can change in any release.
+- **The dashboard.** Its pages and any URL beyond the resource routes ship with the server they belong to.
+- **Order.** List items without `?sort=`, members of a JSON object, and the methods in `Allow`.
+- **Defaults that track the outside world:** the recommended Docker Engine version, Go's TLS defaults, and the MCP
+  protocol revisions offered. Raising the [minimum Docker Engine version][requirements] ships in a minor release,
+  marked **Breaking**.
+- **Fixes toward a specification.** When a header, a status code, or a grammar contradicts a specification Cetacean
+  cites, the fix ships in a minor release, marked **Breaking**. Security fixes do too.
+
+### Deprecation
+
+A deprecated route, setting, tool, argument or field keeps working for at least two minor releases, and is
+removed only in the next major release. The changelog lists it under **Deprecated** in the release that deprecates
+it.
+
+- **Routes** answer with a `Deprecation` header ([RFC 9745](https://www.rfc-editor.org/rfc/rfc9745)), a `Sunset`
+  header ([RFC 8594](https://www.rfc-editor.org/rfc/rfc8594)) once the removal date is known, and
+  `Link: <…>; rel="deprecation"` pointing at the changelog entry. The OpenAPI spec marks them `deprecated: true`.
+  Once removed, a route answers `410 Gone` with code `API012`.
+- **MCP tools** say so in the first sentence of their description and in
+  `_meta["io.cetacean/deprecated"]`, which names the release and the replacement:
+  `{"since": "1.3.0", "replacement": "find"}`. A deprecated argument is still accepted, and documented as such.
+- **Settings** are still read, log one warning at startup naming their replacement, and are marked in the
+  [configuration reference][configuration]. Setting both a deprecated setting and its replacement stops Cetacean at
+  startup instead of silently picking one.
+
 [api-explorer]: api/explorer
 [api-tokens]: authentication#api-access-tokens
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [authorization]: authorization
+[configuration]: configuration
 [dashboard]: dashboard
 [mcp]: mcp
 [mcp-tools]: mcp-tools
+[mcp-tools.compatibility]: mcp-tools#compatibility
 [mcp.enabled]: configuration#mcp.enabled
 [oauth.api_tokens]: configuration#oauth.api_tokens
 [oauth.enabled]: configuration#oauth.enabled
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[requirements]: getting-started#requirements
 [server.cors.origins]: configuration#server.cors.origins
 [server.public_url]: configuration#server.public_url
 [server.sse.batch_interval]: configuration#server.sse.batch_interval
 [server.trusted_proxies]: configuration#server.trusted_proxies
+[storage.data_dir]: configuration#storage.data_dir

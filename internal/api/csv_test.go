@@ -460,7 +460,10 @@ func TestHistoryCSV(t *testing.T) {
 
 	records := csvRecords(t, rec.Body.String())
 
-	wantHeader := []string{"timestamp", "type", "action", "name", "id", "summary"}
+	wantHeader := []string{
+		"timestamp", "type", "action", "name", "id", "summary",
+		"actor", "provider", "client", "transport",
+	}
 	if !slices.Equal(records[0], wantHeader) {
 		t.Errorf("header = %v, want %v", records[0], wantHeader)
 	}

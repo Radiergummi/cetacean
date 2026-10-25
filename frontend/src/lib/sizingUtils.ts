@@ -1,7 +1,16 @@
 import type { Recommendation, RecommendationSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
 import { toneBanner, toneText } from "@/lib/statusColor";
-import { ArrowUp, Copy, RefreshCw, Scale, Shield, TrendingDown, TriangleAlert } from "lucide-react";
+import {
+  ArrowUp,
+  CloudDownload,
+  Copy,
+  RefreshCw,
+  Scale,
+  Shield,
+  TrendingDown,
+  TriangleAlert,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export const sizingCategories = new Set<string>([
@@ -45,6 +54,10 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
 
   if (category === "no-healthcheck" || category === "no-restart-policy") {
     return TriangleAlert;
+  }
+
+  if (category === "newer-image") {
+    return CloudDownload;
   }
 
   if (category === "flaky-service") {

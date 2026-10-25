@@ -333,6 +333,7 @@ func ServiceDigest(
 	networks []network.Summary,
 	restarts *ServiceRestarts,
 	flapping bool,
+	imageUpdate *ImageUpdate,
 ) Digest {
 	var (
 		running    int
@@ -418,6 +419,10 @@ func ServiceDigest(
 		Related:        serviceRelated(svc, networks),
 		RecentFailures: failures,
 		Restarts:       restarts,
+	}
+
+	if imageUpdate != nil {
+		digest.Details["imageUpdate"] = imageUpdate
 	}
 
 	// Since dates the state above, so only a state a failure explains may be

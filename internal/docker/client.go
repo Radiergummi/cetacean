@@ -39,7 +39,8 @@ const (
 )
 
 type Client struct {
-	docker *client.Client
+	docker       *client.Client
+	attributions *cache.Attributions
 }
 
 // The Docker API this client speaks, and the Engine release that first served
@@ -593,7 +594,15 @@ func (c *Client) updateNodeSpec(
 	if err := mutate(&node.Spec); err != nil {
 		return swarm.Node{}, err
 	}
+	settle := c.expect(ctx, cache.Expectation{
+		Type:  cache.EventNode,
+		Key:   node.ID,
+		After: node.Version.Index,
+	})
+
 	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
+	settle(err)
+
 	if err != nil {
 		return swarm.Node{}, err
 	}
@@ -601,7 +610,9 @@ func (c *Client) updateNodeSpec(
 }
 
 func (c *Client) RemoveNode(ctx context.Context, id string, force bool) error {
-	return c.docker.NodeRemove(ctx, id, swarm.NodeRemoveOptions{Force: force})
+	return c.removing(ctx, cache.EventNode, id, func() error {
+		return c.docker.NodeRemove(ctx, id, swarm.NodeRemoveOptions{Force: force})
+	})
 }
 
 func (c *Client) RemoveTask(ctx context.Context, id string) error {
@@ -612,31 +623,58 @@ func (c *Client) RemoveTask(ctx context.Context, id string) error {
 	if task.Status.ContainerStatus == nil || task.Status.ContainerStatus.ContainerID == "" {
 		return errdefs.NotFound(fmt.Errorf("task has no running container"))
 	}
-	return c.docker.ContainerRemove(
+
+	// The task outlives its container; what changes is its state.
+	settle := c.expect(ctx, cache.Expectation{
+		Type:  cache.EventTask,
+		Key:   task.ID,
+		After: task.Version.Index,
+	})
+
+	err = c.docker.ContainerRemove(
 		ctx,
 		task.Status.ContainerStatus.ContainerID,
 		container.RemoveOptions{Force: true},
 	)
+	settle(err)
+
+	return err
 }
 
 func (c *Client) RemoveService(ctx context.Context, id string) error {
-	return c.docker.ServiceRemove(ctx, id)
+	return c.removing(ctx, cache.EventService, id, func() error {
+		return c.docker.ServiceRemove(ctx, id)
+	})
 }
 
 func (c *Client) RemoveNetwork(ctx context.Context, id string) error {
-	return c.docker.NetworkRemove(ctx, id)
+	return c.removing(ctx, cache.EventNetwork, id, func() error {
+		return c.docker.NetworkRemove(ctx, id)
+	})
 }
 
 func (c *Client) RemoveConfig(ctx context.Context, id string) error {
-	return c.docker.ConfigRemove(ctx, id)
+	return c.removing(ctx, cache.EventConfig, id, func() error {
+		return c.docker.ConfigRemove(ctx, id)
+	})
 }
 
 func (c *Client) RemoveSecret(ctx context.Context, id string) error {
-	return c.docker.SecretRemove(ctx, id)
+	return c.removing(ctx, cache.EventSecret, id, func() error {
+		return c.docker.SecretRemove(ctx, id)
+	})
 }
 
 func (c *Client) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error) {
+	settle := c.expect(ctx, cache.Expectation{
+		Type:   cache.EventConfig,
+		Key:    spec.Name,
+		Action: "create",
+	})
+
 	resp, err := c.docker.ConfigCreate(ctx, spec)
+	settle(err)
+
 	if err != nil {
 		return "", err
 	}
@@ -644,7 +682,15 @@ func (c *Client) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (strin
 }
 
 func (c *Client) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error) {
+	settle := c.expect(ctx, cache.Expectation{
+		Type:   cache.EventSecret,
+		Key:    spec.Name,
+		Action: "create",
+	})
+
 	resp, err := c.docker.SecretCreate(ctx, spec)
+	settle(err)
+
 	if err != nil {
 		return "", err
 	}
@@ -668,7 +714,15 @@ func (c *Client) UpdateConfigLabels(
 		return swarm.Config{}, err
 	}
 	cfg.Spec.Labels = updated
+	settle := c.expect(ctx, cache.Expectation{
+		Type:  cache.EventConfig,
+		Key:   cfg.ID,
+		After: cfg.Version.Index,
+	})
+
 	err = c.docker.ConfigUpdate(ctx, cfg.ID, cfg.Version, cfg.Spec)
+	settle(err)
+
 	if err != nil {
 		return swarm.Config{}, err
 	}
@@ -692,7 +746,15 @@ func (c *Client) UpdateSecretLabels(
 		return swarm.Secret{}, err
 	}
 	sec.Spec.Labels = updated
+	settle := c.expect(ctx, cache.Expectation{
+		Type:  cache.EventSecret,
+		Key:   sec.ID,
+		After: sec.Version.Index,
+	})
+
 	err = c.docker.SecretUpdate(ctx, sec.ID, sec.Version, sec.Spec)
+	settle(err)
+
 	if err != nil {
 		return swarm.Secret{}, err
 	}
@@ -700,7 +762,23 @@ func (c *Client) UpdateSecretLabels(
 }
 
 func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) error {
-	return c.docker.VolumeRemove(ctx, name, force)
+	return c.removing(ctx, cache.EventVolume, name, func() error {
+		return c.docker.VolumeRemove(ctx, name, force)
+	})
+}
+
+// removing makes the removal of the resource key names, attributed.
+func (c *Client) removing(
+	ctx context.Context,
+	typ cache.EventType,
+	key string,
+	remove func() error,
+) error {
+	settle := c.expect(ctx, cache.Expectation{Type: typ, Key: key, Action: "remove"})
+	err := remove()
+	settle(err)
+
+	return err
 }
 
 // MapMutator transforms a string map. The caller passes a closure knowing the
@@ -828,7 +906,16 @@ func (c *Client) updateService(
 		return swarm.Service{}, err
 	}
 
-	if _, err := c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, opts); err != nil {
+	settle := c.expect(ctx, cache.Expectation{
+		Type:  cache.EventService,
+		Key:   svc.ID,
+		After: svc.Version.Index,
+	})
+
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, opts)
+	settle(err)
+
+	if err != nil {
 		return swarm.Service{}, err
 	}
 
