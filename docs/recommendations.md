@@ -22,6 +22,7 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 |---|---|
 | `no-healthcheck` | The service defines no health check, so Swarm can't tell a hung container from a working one |
 | `no-restart-policy` | Restart policy is `none`, so a failed task is never replaced |
+| `newer-image` | The service's image tag names a newer image in its registry than the one the service runs. Needs [`server.image_check`][server.image_check] |
 | `single-replica` | One replica, so any node problem is an outage |
 | `manager-has-workloads` | A manager node is `active`, so Swarm may schedule ordinary tasks on it alongside cluster management. Not raised unless a ready, active worker could take those tasks |
 | `uneven-distribution` | The busiest node runs more than three times the tasks of the quietest |
@@ -77,6 +78,7 @@ how far back Cetacean looks, which is also the window `flaky-service` counts fai
 [mcp-tools]: mcp-tools
 [monitoring]: monitoring
 [operations-level]: configuration#operations-level
+[server.image_check]: configuration#server.image_check
 [server.recommendations]: configuration#server.recommendations
 [sizing.headroom_multiplier]: configuration#sizing.headroom_multiplier
 [sizing.thresholds.approaching_limit]: configuration#sizing.thresholds.approaching_limit

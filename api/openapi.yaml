@@ -7906,6 +7906,7 @@ components:
             - no-reservations
             - no-healthcheck
             - no-restart-policy
+            - newer-image
             - flaky-service
             - node-disk-full
             - node-memory-pressure
@@ -7920,6 +7921,7 @@ components:
             - Service has no CPU or memory reservation set
             - Service has no healthcheck defined
             - Service has no restart policy defined
+            - Service image tag names a newer image than the service runs
             - Service is restarting frequently or failing tasks
             - Node's disk is nearly full
             - Node is under sustained memory pressure
