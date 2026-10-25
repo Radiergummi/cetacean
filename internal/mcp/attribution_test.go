@@ -62,3 +62,37 @@ func TestWritesOverMCPCarryTheirActor(t *testing.T) {
 		t.Errorf("actor = %+v, want %+v", actor, want)
 	}
 }
+
+// get_events carries the actor of a change made through Cetacean, and none
+// for one made elsewhere.
+func TestGetEventsCarriesTheActor(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "other",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "other"}},
+	})
+
+	alice := cache.Actor{Subject: "u-1", Name: "alice", Provider: "oidc", Transport: "dashboard"}
+	c.Attributions().Expect(
+		cache.Expectation{Type: cache.EventService, Key: "web", Action: "create"},
+		alice,
+	)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	got := eventsCall(t, newResourceTestServer(t, c), map[string]any{})
+
+	actors := map[string]*cache.Actor{}
+	for _, entry := range got.Entries {
+		actors[entry.Name] = entry.Actor
+	}
+
+	if a := actors["web"]; a == nil || *a != alice {
+		t.Errorf("web's actor = %+v, want %+v", a, alice)
+	}
+	if a := actors["other"]; a != nil {
+		t.Errorf("the external change carries an actor: %+v", a)
+	}
+}

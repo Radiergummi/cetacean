@@ -230,7 +230,7 @@ Docker object is what the JSON representation is for.
 | `/stacks` | `name`, `services`, `id` |
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
 | `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
-| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary` |
+| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
 ### Pagination differs
@@ -334,6 +334,29 @@ GET /history?search=web&before=<entry-id>&limit=50 HTTP/1.1
 curl "http://localhost:9000/history?search=web&limit=50"
 curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 ```
+
+### Who made a change
+
+An entry for a change made through Cetacean carries an `actor`: the identity that made it and how it arrived. An
+entry with no `actor` is a change made somewhere else, such as with the Docker CLI.
+
+```json
+"actor": {
+  "subject": "3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90",
+  "name": "Alice",
+  "provider": "oauth",
+  "client": "claude-desktop",
+  "transport": "mcp"
+}
+```
+
+`client` is the OAuth client ID when the call carried a token Cetacean issued. `transport` is `mcp` for the MCP
+server. On the web API it's `dashboard` for a request the browser marks `Sec-Fetch-Site: same-origin` and that
+carries no bearer token, and `rest` for anything else. The transport is a label for reading, not something a grant
+checks. CSV exports carry the same fields as columns, and Atom and JSON Feed entries name the actor as their
+author.
+
+Swarm settings and plugin changes have no history entries, so they carry no actor either.
 
 ### Sort fields by resource
 

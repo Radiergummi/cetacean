@@ -25,7 +25,9 @@ const jsonLDContextDoc = `{
     "updateStatus": "urn:cetacean:updateStatus",
     "driver": "urn:cetacean:driver",
     "scope": "urn:cetacean:scope",
-    "networks": {"@container": "@list"}
+    "networks": {"@container": "@list"},
+    "actor": "urn:cetacean:actor",
+    "transport": "urn:cetacean:transport"
   }
 }`
 

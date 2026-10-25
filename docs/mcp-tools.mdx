@@ -100,7 +100,8 @@ What the cluster is doing now, and what it did recently.
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
-    tasks' entries unless `types` leaves out `task`.
+    tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
+    made it, as the [history][api.history-actor] does.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
@@ -491,6 +492,7 @@ a follow-up from a widget as you would any output that quotes the cluster.
 
 
 [api]:  api
+[api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
 [dashboard]:  dashboard
 [mcp]:  mcp

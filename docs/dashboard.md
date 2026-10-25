@@ -216,6 +216,9 @@ The history page at `/history`, linked from the recent activity on the cluster o
 changes Cetacean has seen. Filter it by resource type, or by name with the search box. The download button saves
 the whole log Cetacean still holds as CSV.
 
+A change made through Cetacean names who made it and how: "by alice via MCP". A change with no name came from
+somewhere else, such as the Docker CLI. The history lives in memory, so it starts empty after a restart.
+
 ## Atom feeds
 
 Every resource list and detail page shows a feed icon in the page header. Click it to open that page's Atom feed,

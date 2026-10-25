@@ -36,6 +36,10 @@ type TimelineEntry struct {
 	// Message is the change's action ("create", "update", "delete") or the
 	// log line's text.
 	Message string `json:"message,omitempty"`
+
+	// Actor is who made a change through Cetacean; absent for a change made
+	// elsewhere, and for a log line.
+	Actor *cache.Actor `json:"actor,omitempty"`
 }
 
 // timelineTimeFormat is RFC 3339 at fixed nanosecond width, the layout

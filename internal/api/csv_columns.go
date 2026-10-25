@@ -82,11 +82,19 @@ func csvColumnsFor(resourceType string) []csvColumn {
 // an event, and what a reader wants from it is when.
 func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 	table := csvTable{
-		header:  []string{"timestamp", "type", "action", "name", "id", "summary"},
+		header: []string{
+			"timestamp", "type", "action", "name", "id", "summary",
+			"actor", "provider", "client", "transport",
+		},
 		records: make([][]string, 0, len(entries)),
 	}
 
 	for _, entry := range entries {
+		var actor cache.Actor
+		if entry.Actor != nil {
+			actor = *entry.Actor
+		}
+
 		table.records = append(table.records, []string{
 			entry.Timestamp.UTC().Format(time.RFC3339),
 			string(entry.Type),
@@ -94,6 +102,10 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			entry.Name,
 			entry.ResourceID,
 			entry.Summary,
+			actor.DisplayName(),
+			actor.Provider,
+			actor.Client,
+			string(actor.Transport),
 		})
 	}
 
