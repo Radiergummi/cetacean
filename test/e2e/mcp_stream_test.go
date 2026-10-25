@@ -86,8 +86,31 @@ func startMCPStream(t *testing.T, env *harness.Env, extra map[string]string) *su
 // issued as a persona.
 
 // serviceIdentAs resolves a service name to its ID through an authenticated
-// listing.
+// listing, waiting for the watcher to bring the service into the cache.
 func serviceIdentAs(t *testing.T, proc *sut.Process, persona readPersona, name string) string {
+	t.Helper()
+
+	deadline := time.Now().Add(60 * time.Second)
+
+	for {
+		if id, ok := listedServiceID(t, proc, persona, name); ok {
+			return id
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("service %q is not in /services as %s", name, persona.name)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func listedServiceID(
+	t *testing.T,
+	proc *sut.Process,
+	persona readPersona,
+	name string,
+) (string, bool) {
 	t.Helper()
 
 	resp := readAs(t, proc, persona, "/services", "")
@@ -102,13 +125,7 @@ func serviceIdentAs(t *testing.T, proc *sut.Process, persona readPersona, name s
 		t.Fatalf("decode /services: %v", err)
 	}
 
-	if id, ok := body.idOf(name); ok {
-		return id
-	}
-
-	t.Fatalf("service %q is not in /services as %s", name, persona.name)
-
-	return ""
+	return body.idOf(name)
 }
 
 // awaitCachedAs waits until Cetacean's own cache holds the resource. Every

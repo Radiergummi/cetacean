@@ -62,7 +62,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "service", s.checkServiceWrite,
+			handler: s.removeResolvedHandler("id", "service", s.resolveServiceWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveService(ctx, id)
 				}),
@@ -106,7 +106,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "config", s.checkConfigWrite,
+			handler: s.removeResolvedHandler("id", "config", s.resolveConfigWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveConfig(ctx, id)
 				}),
@@ -128,7 +128,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "secret", s.checkSecretWrite,
+			handler: s.removeResolvedHandler("id", "secret", s.resolveSecretWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveSecret(ctx, id)
 				}),
@@ -150,7 +150,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "network", s.checkNetworkWrite,
+			handler: s.removeResolvedHandler("id", "network", s.resolveNetworkWrite,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveNetwork(ctx, id)
 				}),

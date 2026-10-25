@@ -507,24 +507,9 @@ func (s *Server) toolRestartService(
 	return marshalResult(s.serviceMutation(svc))
 }
 
-// removeHandler builds a handler for the `{ id } → {"removed":true}` shape the
-// remove_* tools share. idKey is the schema property name (`name` for volumes),
-// aclCheck enforces write permission, remove invokes the writer.
-func (s *Server) removeHandler(
-	idKey, resource string,
-	aclCheck func(ctx context.Context, id string) error,
-	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
-) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	resolve := func(ctx context.Context, id string) (string, error) {
-		return id, aclCheck(ctx, id)
-	}
-
-	return s.removeResolvedHandler(idKey, resource, resolve, remove)
-}
-
-// removeResolvedHandler is removeHandler for a resource whose argument must
-// be resolved before Docker sees it: resolve checks the ACL and returns what
-// remove is passed.
+// removeResolvedHandler builds a handler for the `{ id } → {"removed":true}`
+// shape the remove_* tools share. idKey is the schema property name (`name`
+// for volumes); resolve checks the ACL and returns what remove is passed.
 func (s *Server) removeResolvedHandler(
 	idKey, resource string,
 	resolve func(ctx context.Context, id string) (string, error),

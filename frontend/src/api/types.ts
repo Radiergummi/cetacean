@@ -314,6 +314,18 @@ export interface HistoryEntry {
   resourceId: string;
   name: string;
   summary?: string | undefined;
+  actor?: HistoryActor | undefined;
+}
+
+/**
+ * Who made a change through Cetacean; absent for a change made elsewhere.
+ */
+export interface HistoryActor {
+  subject: string;
+  name?: string | undefined;
+  provider: string;
+  client?: string | undefined;
+  transport: "dashboard" | "rest" | "mcp";
 }
 
 export interface StackDetail {

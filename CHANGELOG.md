@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
+- History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 
 ## [0.18.0] - 2026-10-24
 
