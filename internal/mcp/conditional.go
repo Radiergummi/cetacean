@@ -20,9 +20,11 @@ func versionArg(kind string) mcplib.ToolOption {
 		mcplib.Min(0),
 		mcplib.Description(fmt.Sprintf(
 			"The %[1]s's `version` as you last read it, from describe or an earlier write's "+
-				"result. When given, the write is applied only if the %[1]s is still at that "+
-				"version; if it has changed since, the call is refused with the current "+
-				"version and nothing is written. Omit it to write whatever the %[1]s holds now.",
+				"result. Swarm also moves it on its own while it carries out a change, such as "+
+				"a rolling update, so describe the %[1]s again after one. When given, the write "+
+				"is applied only if the %[1]s is still at that version; if it has changed since, "+
+				"the call is refused with the current version and nothing is written. Omit it to "+
+				"write whatever the %[1]s holds now.",
 			kind,
 		)),
 	)
@@ -114,7 +116,8 @@ func (s *Server) pinChecked(
 
 	return ctx, fmt.Errorf(
 		"service %q: Cetacean has not caught up with version %d yet (it holds %d), "+
-			"and this write is checked against what it holds; nothing was written, retry in a moment",
+			"and this write is checked against what it holds; nothing was written. Retry in a "+
+			"moment, and if it is refused again, describe the service and use the version it reports",
 		c.name, c.version, svc.Version.Index,
 	)
 }

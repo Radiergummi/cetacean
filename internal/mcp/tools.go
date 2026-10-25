@@ -661,8 +661,8 @@ type serviceMutationResult struct {
 	// State is the same derivation the web API and the dashboard report, via
 	// cluster.DeriveServiceState.
 	State string `json:"state"`
-	// Version is the service's Swarm version index, what a following edit
-	// passes back as `version` to be refused if the service moves first.
+	// Version is the service's Swarm version index as the write left it. A
+	// rolling update the write started moves it on again.
 	Version uint64 `json:"version"`
 }
 

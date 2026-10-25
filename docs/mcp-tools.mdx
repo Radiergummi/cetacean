@@ -29,11 +29,15 @@ against. A mutating tool returns an error when someone else changed the resource
 ### Conditional writes
 
 Every tool that edits an existing service or node takes an optional `version`, the MCP counterpart of the
-API's `If-Match`. Pass the `version` that `describe` or the previous write returned, and the write is applied
-only if the resource is still at that version. If it changed in between, the tool refuses with an error saying
-it changed since you read it and naming the version it's at now, and writes nothing: `describe` it again, check
-your change still makes sense, and retry with the new version. Without `version` the write applies to whatever
-the resource holds when it lands.
+API's `If-Match`. Pass the `version` that `describe` returned, and the write is applied only if the resource
+is still at that version. If it changed in between, the tool refuses with an error saying it changed since you
+read it and naming the version it's at now, and writes nothing: `describe` it again, check your change still
+makes sense, and retry with the new version. Without `version` the write applies to whatever the resource holds
+when it lands.
+
+The result of a write carries the `version` it left the resource at, but Swarm also moves a version on its own
+while it carries out a change: the rolling update that follows an image, restart, rollback, or task spec change,
+or a node's role change. After such a write, `describe` the resource again before the next conditional write.
 
 Removals and creates take no `version`. Swarm checks a version only on an update, so a removal couldn't be
 refused atomically, and a create has no earlier state to compare against. No tool edits a config, secret, or
@@ -41,7 +45,7 @@ the swarm itself, so none of those take one either.
 
 `update_service_secrets`, `update_service_configs`, and `update_service_mounts` check the attachment against
 Cetacean's copy of the service, so a `version` newer than that copy is refused until Cetacean catches up,
-typically within a second. Retry it unchanged.
+typically within a second. Retry it unchanged, and if it's still refused, `describe` the service again.
 
 > [!CAUTION]
 > Removals are irreversible: no spec history is retained after a service removal, and a config, secret, or
@@ -170,8 +174,8 @@ Running services: how many replicas, which image, and starting over. All four co
 ```
 
 `running` is the live count, `state` is the same derivation the [dashboard][dashboard] and the [API][api] report,
-and `version` is the Swarm version index, to pass as `version` on the next write (see
-[conditional writes](#conditional-writes)). `replicas` is omitted for a global service.
+and `version` is the Swarm version index the write left the service at (see [conditional
+writes](#conditional-writes) for when it moves on by itself). `replicas` is omitted for a global service.
 
 <McpTool name="scale_service" level={1}>
     <Fragment slot="arguments">`id`, `replicas`, `version`</Fragment>
@@ -431,7 +435,7 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 
 | Field            | Contents                                                                                                                                                          |
 |------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `version`        | The Swarm version index, to pass back as `version` on a write. Services, nodes, configs, and secrets only                                                         |
+| `version`        | The Swarm version index. Services, nodes, configs, and secrets only; a service's or node's is what a write takes as `version`                                     |
 | `reason`         | The cause Swarm gave for a non-healthy `state`; omitted when the state is healthy                                                                                 |
 | `since`          | When the current state began: the oldest still-live failing task's timestamp, or the resource's own last-updated time                                             |
 | `details`        | A type-specific map of facts, such as a service's image, replica counts, reserved CPU and memory, ports, and placement constraints, or a node's role and capacity |

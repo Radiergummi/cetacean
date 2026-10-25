@@ -229,8 +229,8 @@ var nodeSectionKeys = map[string][]string{
 
 // serviceUpdateResult is what the spec-editing service tools return: enough to
 // confirm the edit landed and address the service again. Version comes off the
-// write's own inspect, as the asynchronously filled cache may not hold it yet,
-// and is what a following edit passes back as `version`.
+// write's own inspect, as the asynchronously filled cache may not hold it yet;
+// a rolling update the write started moves it on again.
 type serviceUpdateResult struct {
 	ID      string         `json:"id"`
 	Name    string         `json:"name"`
