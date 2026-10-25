@@ -1,6 +1,6 @@
 # What v1 promises — design
 
-Status: proposed. The questions marked **Decide** need an answer before the sweep starts.
+Status: accepted.
 
 ## Problem
 
@@ -55,8 +55,8 @@ Not covered, and stated as such in the docs:
 
 ## Deprecation
 
-1. A deprecated route, setting, tool, argument or field keeps working for **at least one minor
-   release and at least 90 days**, whichever is longer, and is removed only in the next major.
+1. A deprecated route, setting, tool, argument or field keeps working for **at least two minor
+   releases** and is removed only in the next major.
 2. **REST:** a deprecated route answers with `Deprecation` (RFC 9745) and, once a removal date is
    known, `Sunset` (RFC 8594), plus `Link: <…>; rel="deprecation"` to its changelog entry.
    OpenAPI marks it `deprecated: true`. A removed route answers `410` with `API012`, which
@@ -88,27 +88,21 @@ An addition updates the golden file in the same commit. A removal or rename does
 diff makes it visible in review. That's the whole mechanism: it doesn't decide whether a change
 is allowed, it makes sure nobody makes one without noticing.
 
-## Decide
+## Decided
 
 1. **MCP output schemas.** Agents read tool output more loosely than API clients read JSON, and
-   the digests are tuned for token cost.
-   *Recommendation:* cover tool and argument names, argument types, resource URIs and error
-   codes; leave tool result shapes uncovered but additive by default, and say so in
-   `docs/mcp-tools.mdx`. A result field the widgets read is covered, because the widgets are
-   clients that don't adapt.
-2. **Widget bundles** (`ui://cetacean/*`).
-   *Recommendation:* the URIs and the tool → widget mapping are covered; the bundles' contents
-   aren't, since they ship with the server they render for.
-3. **`application/vnd.cetacean.v1+json`.** Today it's an alias of `application/json`.
-   *Recommendation:* keep it as the alias; a 2.0 that changes bodies can serve `v1` beside
-   `v2` for one major. No other version negotiation.
-4. **Minimum Docker Engine API version.** Raising it can break a deployment that upgrades
-   only Cetacean.
-   *Recommendation:* name the minimum in `docs/getting-started.md`; raising it is a minor
-   release with a **Breaking** entry, the same as a cited-spec fix, because the engine's own
-   support window decides it.
-5. **Deprecation window.** One minor and 90 days is a proposal; a project with frequent
-   minors may want two minors.
+   the digests are tuned for token cost. Tool and argument names, argument types, resource URIs
+   and error codes are covered; tool result shapes are not, but change additively by default,
+   which `docs/mcp-tools.mdx` is to say. A result field the widgets read is covered, because the
+   widgets are clients that don't adapt.
+2. **Widget bundles** (`ui://cetacean/*`). The URIs and the tool → widget mapping are covered;
+   the bundles' contents aren't, since they ship with the server they render for.
+3. **`application/vnd.cetacean.v1+json`** stays an alias of `application/json`. A 2.0 that
+   changes bodies can serve `v1` beside `v2` for one major. No other version negotiation.
+4. **Minimum Docker Engine API version.** `docs/getting-started.md` is to name it. Raising it is a
+   minor release with a **Breaking** entry, the same as a cited-spec fix, because the engine's
+   own support window decides it.
+5. **Deprecation window.** Two minor releases, as set out under [Deprecation](#deprecation).
 
 ## Before 1.0
 
