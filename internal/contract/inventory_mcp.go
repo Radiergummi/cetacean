@@ -13,6 +13,7 @@ type Tool struct {
 	Name         string          `json:"name"`
 	InputSchema  json.RawMessage `json:"inputSchema"`
 	OutputSchema json.RawMessage `json:"outputSchema"`
+	Meta         json.RawMessage `json:"_meta"`
 }
 
 // Catalog is what the running MCP server advertises.
