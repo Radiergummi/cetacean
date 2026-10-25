@@ -235,6 +235,9 @@ type Server struct {
 	// inflight scopes notifications/cancelled to the caller's own requests.
 	inflight inflight
 
+	// confirmations signs the requestState of a confirmation round trip.
+	confirmations *stateSigner
+
 	closeOnce sync.Once
 }
 
@@ -308,7 +311,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, err
 	}
 
+	confirmations, err := newStateSigner()
+	if err != nil {
+		return nil, fmt.Errorf("mcp: confirmation key: %w", err)
+	}
+
 	srv := &Server{
+		confirmations:  confirmations,
 		guard:          guard,
 		bypass:         resolveBypass(opts),
 		cache:          c,

@@ -61,8 +61,9 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Service ID or name."),
 				),
 			),
-			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "service", s.checkServiceWrite,
+			tier:    config.OpsImpactful,
+			elicits: true,
+			handler: s.removeHandler("id", "service", s.checkServiceWrite, s.serviceRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveService(ctx, id)
 				}),
@@ -84,7 +85,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite,
+			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite, nil,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveTask(ctx, id)
 				}),
@@ -106,7 +107,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "config", s.checkConfigWrite,
+			handler: s.removeHandler("id", "config", s.checkConfigWrite, nil,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveConfig(ctx, id)
 				}),
@@ -128,7 +129,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "secret", s.checkSecretWrite,
+			handler: s.removeHandler("id", "secret", s.checkSecretWrite, nil,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveSecret(ctx, id)
 				}),
@@ -150,7 +151,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "network", s.checkNetworkWrite,
+			handler: s.removeHandler("id", "network", s.checkNetworkWrite, nil,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveNetwork(ctx, id)
 				}),
