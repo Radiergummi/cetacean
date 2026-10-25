@@ -100,7 +100,8 @@ What the cluster is doing now, and what it did recently.
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
-    tasks' entries unless `types` leaves out `task`.
+    tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
+    made it, as the [history][api.history-actor] does.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
@@ -282,7 +283,9 @@ content can be read back, so use a secret for anything sensitive.
 <McpTool name="create_secret" level={2}>
     <Fragment slot="arguments">`name`, `data`, `encoding` (`utf8`, `base64`), `labels`</Fragment>
 
-    Creates a Swarm secret.
+    Creates a Swarm secret. From a client that supports URL elicitation, leave out `data`: you're sent to the
+    dashboard to enter the value, so it never passes through the conversation, and passing `data` is refused. Other
+    clients pass `data`, unless [`mcp.inline_secret_values`](configuration#mcp.inline_secret_values) is off.
 </McpTool>
 
 <McpTool name="create_config" level={2}>
@@ -426,6 +429,11 @@ to be up, and `recentFailures` drops tasks the orchestrator has already replaced
 every few seconds otherwise describes as healthy. `lastHour` answers whether it's failing now; the ratio
 between the two windows answers whether the fault is new.
 
+A service's `details` carries `imageUpdate` when its image tag names a newer image in its registry than the
+digest the service runs, with the same fields as the [API][api] reports. `suggestedImage`, the tag pinned to
+the newer digest, is what to pass to `update_service_image`. It's absent with
+[`server.image_check`][server.image_check] off.
+
 Every numeric field in `details` names its unit, such as `cpuLimitCores` (a float, in cores) and
 `memoryLimitBytes`, or is reported as a duration string like `"10s"` (`healthcheckInterval`, an update
 policy's `delay` and `monitor`). Docker's own types express these as unlabeled NanoCPU or nanosecond
@@ -506,6 +514,7 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 
 [api]:  api
 [api.compatibility]:  api#compatibility
+[api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
 [dashboard]:  dashboard
 [mcp]:  mcp
@@ -518,5 +527,6 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 [mcp.tools.get_recommendations]:  mcp-tools#get_recommendations
 [operations-level]:  configuration#operations-level
 [recommendations]:  recommendations
+[server.image_check]:  configuration#server.image_check
 [server.public_url]:  configuration#server.public_url
 [tasks]:  mcp#wait-for-changes-to-take-effect

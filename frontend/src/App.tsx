@@ -39,6 +39,7 @@ const PluginDetail = lazy(() => import("./pages/PluginDetail"));
 const PluginList = lazy(() => import("./pages/PluginList"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const SecretDetail = lazy(() => import("./pages/SecretDetail"));
+const SecretEntryPage = lazy(() => import("./pages/SecretEntryPage"));
 const SecretList = lazy(() => import("./pages/SecretList"));
 const ServiceDetail = lazy(() => import("./pages/ServiceDetail"));
 const ServiceList = lazy(() => import("./pages/ServiceList"));
@@ -345,6 +346,10 @@ export default function App() {
                   <Route
                     path="/secrets"
                     element={<SecretList />}
+                  />
+                  <Route
+                    path="/secrets/new"
+                    element={<SecretEntryPage />}
                   />
                   <Route
                     path="/secrets/:id"

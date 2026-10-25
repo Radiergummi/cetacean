@@ -230,7 +230,7 @@ Docker object is what the JSON representation is for.
 | `/stacks` | `name`, `services`, `id` |
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
 | `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
-| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary` |
+| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
 ### Pagination differs
@@ -334,6 +334,29 @@ GET /history?search=web&before=<entry-id>&limit=50 HTTP/1.1
 curl "http://localhost:9000/history?search=web&limit=50"
 curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 ```
+
+### Who made a change
+
+An entry for a change made through Cetacean carries an `actor`: the identity that made it and how it arrived. An
+entry with no `actor` is a change made somewhere else, such as with the Docker CLI.
+
+```json
+"actor": {
+  "subject": "3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90",
+  "name": "Alice",
+  "provider": "oauth",
+  "client": "claude-desktop",
+  "transport": "mcp"
+}
+```
+
+`client` is the OAuth client ID when the call carried a token Cetacean issued. `transport` is `mcp` for the MCP
+server. On the web API it's `dashboard` for a request the browser marks `Sec-Fetch-Site: same-origin` and that
+carries no bearer token, and `rest` for anything else. The transport is a label for reading, not something a grant
+checks. CSV exports carry the same fields as columns, and Atom and JSON Feed entries name the actor as their
+author.
+
+Swarm settings and plugin changes have no history entries, so they carry no actor either.
 
 ### Sort fields by resource
 
@@ -489,8 +512,8 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-A service's and a node's detail also set `Last-Modified` from the resource's update timestamp and honor
-`If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
+A service's and a node's detail also set `Last-Modified` from the resource's update timestamp, or for a service from
+when a newer image was found if that is later, and honor `If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
 volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
@@ -740,7 +763,7 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
 | Tasks | `/tasks`, `/tasks/{id}`, `/tasks/{id}/logs` |
 | Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
-| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels` |
+| Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels`, `/secret-entries/{id}` |
 | Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |
 | Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
@@ -762,6 +785,11 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `GET /nodes/{id}/drain-impact` assesses a drain before you make it: each service with a task on the node is
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
+
+`GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
+names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
+`checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
+whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

@@ -164,6 +164,7 @@ type Cache struct {
 	notifyMu       sync.Mutex
 	nextListenerID uint64
 	history        *History
+	attributions   *Attributions
 	serviceRef     serviceRefIndex
 	restarts       *RestartTracker
 
@@ -196,6 +197,7 @@ func New(onChange OnChangeFunc) *Cache {
 		stacks:         make(map[string]Stack),
 		serviceRef:     newServiceRefIndex(),
 		history:        NewHistory(10000),
+		attributions:   newAttributions(),
 		restarts:       NewRestartTracker(7*24*time.Hour, time.Hour),
 	}
 	if onChange != nil {
@@ -277,6 +279,10 @@ func New(onChange OnChangeFunc) *Cache {
 
 func (c *Cache) History() *History { return c.history }
 
+// Attributions is where a write registers itself, so the history entry its
+// event produces names who made it.
+func (c *Cache) Attributions() *Attributions { return c.attributions }
+
 // Populated reports whether the cache holds cluster state, from a sync or from
 // a snapshot loaded off disk; a failed sync replaces nothing and leaves it unset.
 func (c *Cache) Populated() bool {
@@ -353,6 +359,9 @@ func (c *Cache) notify(e Event) {
 		}
 		if task, ok := e.Resource.(swarm.Task); ok {
 			entry.ServiceID = task.ServiceID
+		}
+		if actor, ok := c.attributions.match(e); ok {
+			entry.Actor = &actor
 		}
 
 		e.HistoryID = c.history.Append(entry)

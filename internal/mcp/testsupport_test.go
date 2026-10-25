@@ -169,7 +169,9 @@ func withProtocolMeta(t *testing.T, params string) json.RawMessage {
 
 	meta[mcplib.MetaKeyProtocolVersion] = mcplib.LATEST_PROTOCOL_VERSION
 	meta[mcplib.MetaKeyClientInfo] = map[string]string{"name": "test", "version": "1.0"}
-	meta[mcplib.MetaKeyClientCapabilities] = map[string]any{}
+	if _, declared := meta[mcplib.MetaKeyClientCapabilities]; !declared {
+		meta[mcplib.MetaKeyClientCapabilities] = map[string]any{}
+	}
 	object["_meta"] = meta
 
 	raw, err := json.Marshal(object)

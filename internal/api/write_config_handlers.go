@@ -27,7 +27,7 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		conflictCode: "CFG003",
 		basePath:     "/configs/",
 		typeName:     "Config",
-		create: func(ctx context.Context, name string, data []byte) (string, error) {
+		create: func(ctx context.Context, name string, _ map[string]string, data []byte) (string, error) {
 			id, err := h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
 				Name: name,
 				Data: data,

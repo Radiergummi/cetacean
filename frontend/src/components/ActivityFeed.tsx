@@ -1,8 +1,21 @@
-import type { HistoryEntry } from "../api/types";
+import type { HistoryActor, HistoryEntry } from "../api/types";
 import { resourcePath } from "../lib/searchConstants";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { Link } from "react-router-dom";
+
+const transportLabels: Record<HistoryActor["transport"], string> = {
+  dashboard: "the dashboard",
+  rest: "the API",
+  mcp: "MCP",
+};
+
+/**
+ * The phrase naming who made a change, such as "by alice via MCP".
+ */
+function attribution({ name, subject, transport }: HistoryActor): string {
+  return `by ${name || subject} via ${transportLabels[transport] ?? transport}`;
+}
 
 interface ActivityFeedProps {
   entries: HistoryEntry[];
@@ -32,7 +45,7 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
     <div className="relative ps-5">
       <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
 
-      {entries.map(({ action, id, name, resourceId, timestamp, type }) => (
+      {entries.map(({ action, actor, id, name, resourceId, timestamp, type }) => (
         <div
           key={id}
           className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3"
@@ -68,6 +81,14 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
               );
             })()}
             <span className="text-muted-foreground">{action}d</span>
+            {actor && (
+              <span
+                className="truncate text-muted-foreground"
+                title={`${actor.subject} (${actor.provider}${actor.client ? `, client ${actor.client}` : ""})`}
+              >
+                {attribution(actor)}
+              </span>
+            )}
           </div>
         </div>
       ))}

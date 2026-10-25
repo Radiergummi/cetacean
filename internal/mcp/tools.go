@@ -151,6 +151,10 @@ type toolDef struct {
 	// Declared here rather than built into the tool above so registerTools can
 	// withhold it when the widget was not built — see registerTools.
 	widget string
+
+	// elicits marks a tool that may ask a person before it acts. Such a tool
+	// must not declare task support: mcp-go cannot pause a task for input.
+	elicits bool
 }
 
 // toolIconCategory maps each tool to one of six verb-category icons served
@@ -267,6 +271,10 @@ func (s *Server) registerTools() {
 				ctx, annotations := withResultAnnotations(ctx)
 
 				text, err := handler(ctx, req)
+				if result, ok := asToolOutcome(err); ok {
+					return result, nil
+				}
+
 				if err != nil {
 					// On a plain call the failure belongs in the result, for
 					// the model to self-correct from (SEP-1303). As a task it
@@ -507,27 +515,14 @@ func (s *Server) toolRestartService(
 	return marshalResult(s.serviceMutation(svc))
 }
 
-// removeHandler builds a handler for the `{ id } → {"removed":true}` shape the
-// remove_* tools share. idKey is the schema property name (`name` for volumes),
-// aclCheck enforces write permission, remove invokes the writer.
-func (s *Server) removeHandler(
-	idKey, resource string,
-	aclCheck func(ctx context.Context, id string) error,
-	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
-) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-	resolve := func(ctx context.Context, id string) (string, error) {
-		return id, aclCheck(ctx, id)
-	}
-
-	return s.removeResolvedHandler(idKey, resource, resolve, remove)
-}
-
-// removeResolvedHandler is removeHandler for a resource whose argument must
-// be resolved before Docker sees it: resolve checks the ACL and returns what
-// remove is passed.
+// removeResolvedHandler builds a handler for the `{ id } → {"removed":true}`
+// shape the remove_* tools share. idKey is the schema property name (`name`
+// for volumes); resolve checks the ACL and returns what remove is passed;
+// impact, when set, builds the question put to a person.
 func (s *Server) removeResolvedHandler(
 	idKey, resource string,
 	resolve func(ctx context.Context, id string) (string, error),
+	impact func(ctx context.Context, id string) (confirmation, error),
 	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
@@ -539,12 +534,26 @@ func (s *Server) removeResolvedHandler(
 		if err != nil {
 			return "", err
 		}
+
+		confirmed := false
+		if impact != nil {
+			confirmed, err = s.confirm(ctx, req, func() (confirmation, error) {
+				return impact(ctx, id)
+			})
+			if err != nil {
+				return "", err
+			}
+		}
+
 		wc, err := s.requireWriteClient()
 		if err != nil {
 			return "", err
 		}
 		if err := remove(wc, ctx, id); err != nil {
 			return "", removalError(err, resource, id)
+		}
+		if impact != nil {
+			logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
 		}
 		return marshalResult(removalResult{Removed: true})
 	}
@@ -574,7 +583,8 @@ func (s *Server) toolUpdateNodeLabels(
 	if err != nil {
 		return "", err
 	}
-	if err := s.checkNodeWrite(ctx, id); err != nil {
+	id, err = s.resolveNodeWrite(ctx, req, id)
+	if err != nil {
 		return "", err
 	}
 
@@ -598,6 +608,12 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 	if err := s.checkWrite(ctx, "volume", name); err != nil {
 		return "", err
 	}
+	confirmed, err := s.confirm(ctx, req, func() (confirmation, error) {
+		return s.volumeRemoval(ctx, name, force), nil
+	})
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -605,6 +621,7 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 	if err := wc.RemoveVolume(ctx, name, force); err != nil {
 		return "", removalError(err, "volume", name)
 	}
+	logConfirmableWrite(ctx, req.Params.Name, "volume:"+name, confirmed)
 	return marshalResult(removalResult{Removed: true})
 }
 

@@ -250,10 +250,11 @@ var pathFixtures = func() map[string]string {
 		"/api/errors/{code}": "/api/errors/SVC001",
 
 		// Not cache fixtures: a text id the embedded license set carries, and
-		// a label name the Prometheus proxy would forward.
+		// a label name the Prometheus proxy would forward, an entry MCP never opened.
 		"/-/licenses/texts/{id}": "/-/licenses/texts/" + licenseTextID,
 		"/metrics/labels/{name}": "/metrics/labels/job",
 		"/tokens/{subject}":      "/tokens/alice",
+		"/secret-entries/{id}":   "/secret-entries/none",
 	}
 
 	for template, id := range specFixtureIDs {
