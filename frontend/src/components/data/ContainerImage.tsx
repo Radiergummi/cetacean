@@ -1,5 +1,7 @@
 import InfoCard from "../InfoCard";
+import { NewerImageBadge, newerImageMessage } from "./NewerImageBadge";
 import { api } from "@/api/client";
+import type { ImageUpdate } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,11 +48,14 @@ function registryIcon(image: string): LucideIcon | null {
 function ImageUpdatePopover({
   serviceId,
   currentImage,
+  imageUpdate,
 }: {
   serviceId: string;
   currentImage: string;
+  imageUpdate?: ImageUpdate | undefined;
 }) {
   const imageWithoutDigest = currentImage.replace(/@sha256:[a-f0-9]+$/, "");
+  const suggestedImage = imageUpdate?.suggestedImage ?? imageWithoutDigest;
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -58,7 +63,7 @@ function ImageUpdatePopover({
 
   function handleOpenChange(next: boolean) {
     if (next) {
-      setValue(imageWithoutDigest);
+      setValue(suggestedImage);
     }
 
     setValidationError(null);
@@ -105,6 +110,11 @@ function ImageUpdatePopover({
         align="end"
       >
         <p className="mb-1 text-xs font-medium text-muted-foreground">New image</p>
+        {imageUpdate && (
+          <p className="mb-2 text-xs text-status-info">
+            {newerImageMessage}. Its digest is filled in below.
+          </p>
+        )}
         <Input
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -152,11 +162,13 @@ export default function ContainerImage({
   label = "Image",
   serviceId,
   canEdit = false,
+  imageUpdate,
 }: {
   image?: string | undefined;
   label?: string | undefined;
   serviceId?: string | undefined;
   canEdit?: boolean | undefined;
+  imageUpdate?: ImageUpdate | undefined;
 }) {
   if (!image) {
     return null;
@@ -197,18 +209,19 @@ export default function ContainerImage({
     <span className="inline-flex items-center gap-1.5">{inner}</span>
   );
 
-  const value =
-    serviceId && canEdit ? (
-      <>
-        {link}
+  const value = (
+    <>
+      {link}
+      {imageUpdate && <NewerImageBadge update={imageUpdate} />}
+      {serviceId && canEdit && (
         <ImageUpdatePopover
           serviceId={serviceId}
           currentImage={image}
+          imageUpdate={imageUpdate}
         />
-      </>
-    ) : (
-      link
-    );
+      )}
+    </>
+  );
 
   return (
     <InfoCard
