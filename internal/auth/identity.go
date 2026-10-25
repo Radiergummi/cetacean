@@ -19,6 +19,10 @@ type Identity struct {
 	// nothing bounds it here. Only a token this deployment issued sets it.
 	ExpiresAt time.Time `json:"-"`
 
+	// ClientID is the OAuth client a token this deployment issued was minted
+	// for, empty for any other credential.
+	ClientID string `json:"-"`
+
 	derived sync.Map
 }
 
@@ -44,9 +48,6 @@ const ProviderToken = "oauth"
 // RawTokenGrants is the Raw key holding the provider grants a token carries,
 // as the JSON array the issuer was handed at consent.
 const RawTokenGrants = "tokenGrants"
-
-// RawTokenClient is the Raw key holding the OAuth client a token was issued to.
-const RawTokenClient = "tokenClient"
 
 // FromToken reports whether a bearer token carried this identity. What the
 // caller may do can depend on it: a token is a credential left on a device,

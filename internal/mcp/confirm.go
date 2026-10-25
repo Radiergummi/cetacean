@@ -399,12 +399,10 @@ func callerAttrs(ctx context.Context) []any {
 		return []any{"subject", ""}
 	}
 
-	client, _ := identity.Raw[auth.RawTokenClient].(string)
-
 	return []any{
 		"subject", identity.Subject,
 		"provider", identity.Provider,
-		"client", client,
+		"client", identity.ClientID,
 	}
 }
 
