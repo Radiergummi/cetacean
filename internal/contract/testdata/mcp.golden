@@ -4,7 +4,7 @@ tool create_config
   create_config.labels: object
   create_config.name: string required
 tool create_secret
-  create_secret.data: string required
+  create_secret.data: string
   create_secret.encoding: string enum(base64,utf8)
   create_secret.labels: object
   create_secret.name: string required

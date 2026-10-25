@@ -61,6 +61,7 @@ GET /plugins/{name}  HTML JSON
 GET /profile  HTML JSON
 GET /recommendations  Atom CSV HTML JSON JSONFeed
 GET /search  Atom HTML JSON JSONFeed
+GET /secret-entries/{id}  HTML JSON
 GET /secrets  Atom CSV HTML JSON JSONFeed SSE
 GET /secrets/{id}  Atom HTML JSON JSONFeed SSE
 GET /secrets/{id}/labels  HTML JSON
