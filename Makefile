@@ -197,7 +197,7 @@ e2e-down:
 		kill $$(cat test/e2e/.sut.pid) 2>/dev/null || true; \
 		rm -f test/e2e/.sut.pid; \
 	fi
-	docker compose -f test/e2e/compose.e2e.yaml down -v
+	docker compose -f test/e2e/compose.e2e.yaml --profile multinode down -v
 	-docker run --rm -v $(PWD)/test/e2e/certs:/certs alpine sh -c 'rm -rf /certs/..?* /certs/.[!.]* /certs/*' 2>/dev/null
 	-rm -rf test/e2e/certs
 

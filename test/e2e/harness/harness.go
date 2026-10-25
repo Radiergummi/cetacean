@@ -93,7 +93,7 @@ func UpCLI() (*Env, error) {
 		return nil, fmt.Errorf("docker client: %w", err)
 	}
 
-	if err := waitForEngine(docker); err != nil {
+	if err := waitForEngine(docker, dockerHost, engineLabel); err != nil {
 		return nil, err
 	}
 
@@ -138,7 +138,7 @@ func waitForCerts(dir string) error {
 // "our" engine and the suite's mutations would land on a stranger's cluster.
 const engineLabel = "cetacean-e2e=true"
 
-func waitForEngine(docker *client.Client) error {
+func waitForEngine(docker *client.Client, host, label string) error {
 	deadline := time.Now().Add(upTimeout)
 
 	var lastErr error
@@ -149,14 +149,14 @@ func waitForEngine(docker *client.Client) error {
 		cancel()
 
 		if err == nil {
-			if slices.Contains(info.Labels, engineLabel) {
+			if slices.Contains(info.Labels, label) {
 				return nil
 			}
 
 			lastErr = fmt.Errorf(
 				"engine at %s does not carry the %q label; refusing to run against a Docker "+
 					"daemon this suite did not start (is something else listening on %s?)",
-				dockerHost, engineLabel, dockerHost,
+				host, label, host,
 			)
 
 			break
@@ -167,7 +167,7 @@ func waitForEngine(docker *client.Client) error {
 		time.Sleep(pollInterval)
 	}
 
-	return fmt.Errorf("engine at %s not usable within %s: %w", dockerHost, upTimeout, lastErr)
+	return fmt.Errorf("engine at %s not usable within %s: %w", host, upTimeout, lastErr)
 }
 
 // SwarmInit makes the engine a swarm manager. It is idempotent: an engine
