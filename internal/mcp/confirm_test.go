@@ -127,6 +127,14 @@ func (f *removalFixture) call(
 	return td.handler(ctx, req)
 }
 
+// verifies is how a retry reads a state: signed here, unexpired, for the
+// same call, and issued with the same question.
+func verifies(signer *stateSigner, token string, want roundTripState) bool {
+	got, ok := signer.open(token)
+
+	return ok && got.sameCall(want) && got.asked(want.Asked, want.Version, want.Bind)
+}
+
 func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
 	signer, err := newStateSigner()
 	if err != nil {
@@ -139,7 +147,7 @@ func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
 	want := roundTripState{Subject: "alice", Tool: "remove_service", Args: "abc", Version: 7}
 	token := signer.sign(want)
 
-	if !signer.verify(token, want) {
+	if !verifies(signer, token, want) {
 		t.Fatal("a fresh state for the same call should verify")
 	}
 
@@ -181,13 +189,13 @@ func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
 	}
 
 	for name, tc := range cases {
-		if signer.verify(tc.token, tc.want) {
+		if verifies(signer, tc.token, tc.want) {
 			t.Errorf("%s: verified", name)
 		}
 	}
 
 	now = now.Add(confirmationTTL)
-	if signer.verify(token, want) {
+	if verifies(signer, token, want) {
 		t.Error("a state past its expiry verified")
 	}
 }

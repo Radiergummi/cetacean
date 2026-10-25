@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 	"time"
 
@@ -43,16 +44,37 @@ func newStateSigner() (*stateSigner, error) {
 	return &stateSigner{key: key, now: time.Now}, nil
 }
 
-// roundTripState is what a requestState binds. Expires is excluded from the
-// match; every other field must equal what the retried call recomputes.
+// roundTripState is what a requestState binds: the call (caller, tool and
+// arguments), the question it was issued with, and the choices a person made
+// in earlier rounds of the same call, which a later round must not lose.
 type roundTripState struct {
-	Subject  string `json:"s,omitempty"`
-	Provider string `json:"p,omitempty"`
-	Tool     string `json:"t"`
-	Args     string `json:"a"`
-	Version  uint64 `json:"v,omitempty"`
-	Bind     string `json:"b,omitempty"`
-	Expires  int64  `json:"e"`
+	Subject  string            `json:"s,omitempty"`
+	Provider string            `json:"p,omitempty"`
+	Tool     string            `json:"t"`
+	Args     string            `json:"a"`
+	Asked    string            `json:"q,omitempty"`
+	Version  uint64            `json:"v,omitempty"`
+	Bind     string            `json:"b,omitempty"`
+	Choices  map[string]choice `json:"c,omitempty"`
+	Expires  int64             `json:"e"`
+}
+
+// choice is a person's answer to a choose question, valid while the options
+// it was chosen from, which Bind identifies, still stand.
+type choice struct {
+	Bind  string `json:"b"`
+	Value string `json:"v"`
+}
+
+// sameCall reports whether two states belong to the same call.
+func (st roundTripState) sameCall(other roundTripState) bool {
+	return st.Subject == other.Subject && st.Provider == other.Provider &&
+		st.Tool == other.Tool && st.Args == other.Args
+}
+
+// asked reports whether the state was issued with exactly this question.
+func (st roundTripState) asked(key string, version uint64, bind string) bool {
+	return st.Asked == key && st.Version == version && st.Bind == bind
 }
 
 func (s *stateSigner) mac(payload []byte) []byte {
@@ -62,46 +84,44 @@ func (s *stateSigner) mac(payload []byte) []byte {
 	return h.Sum(nil)
 }
 
-// sign issues a state for want, expiring confirmationTTL from now.
-func (s *stateSigner) sign(want roundTripState) string {
-	want.Expires = s.now().Add(confirmationTTL).Unix()
+// sign issues state, expiring confirmationTTL from now.
+func (s *stateSigner) sign(state roundTripState) string {
+	state.Expires = s.now().Add(confirmationTTL).Unix()
 
-	payload, _ := json.Marshal(want) //nolint:errchkjson // a struct of strings and ints
+	payload, _ := json.Marshal(state) //nolint:errchkjson // strings, ints and a map of them
 
 	return base64.RawURLEncoding.EncodeToString(payload) + "." +
 		base64.RawURLEncoding.EncodeToString(s.mac(payload))
 }
 
-// verify reports whether token is a state this process signed for exactly
-// want, and has not expired.
-func (s *stateSigner) verify(token string, want roundTripState) bool {
+// open returns the state token carries, if this process signed it and it has
+// not expired.
+func (s *stateSigner) open(token string) (roundTripState, bool) {
 	encoded, signature, ok := strings.Cut(token, ".")
 	if !ok {
-		return false
+		return roundTripState{}, false
 	}
 
 	payload, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
-		return false
+		return roundTripState{}, false
 	}
 
 	mac, err := base64.RawURLEncoding.DecodeString(signature)
 	if err != nil || !hmac.Equal(mac, s.mac(payload)) {
-		return false
+		return roundTripState{}, false
 	}
 
-	var got roundTripState
-	if err := json.Unmarshal(payload, &got); err != nil {
-		return false
+	var state roundTripState
+	if err := json.Unmarshal(payload, &state); err != nil {
+		return roundTripState{}, false
 	}
 
-	if s.now().Unix() >= got.Expires {
-		return false
+	if s.now().Unix() >= state.Expires {
+		return roundTripState{}, false
 	}
 
-	got.Expires, want.Expires = 0, 0
-
-	return got == want
+	return state, true
 }
 
 // argumentsDigest hashes a call's arguments. encoding/json writes map keys
@@ -210,11 +230,13 @@ func (s *Server) confirm(
 	}
 
 	tool := req.Params.Name
-	want := s.roundTripState(ctx, req, question.version, question.bind)
+	prior, valid := s.priorRound(ctx, req)
 
 	answer := mcpserver.ElicitationResponse(req.Params.InputResponses, tool)
-	if answer == nil || !s.confirmations.verify(req.Params.RequestState, want) {
-		return false, s.askToConfirm(tool, question, want)
+	if answer == nil || !valid || !prior.asked(tool, question.version, question.bind) {
+		state := s.nextRound(ctx, req, tool, question.version, question.bind)
+
+		return false, askToConfirm(tool, question, state)
 	}
 
 	outcome := confirmationOutcome(answer)
@@ -230,18 +252,9 @@ func (s *Server) confirm(
 	return false, &toolOutcome{result: result}
 }
 
-func (s *Server) roundTripState(
-	ctx context.Context,
-	req mcplib.CallToolRequest,
-	version uint64,
-	bind string,
-) roundTripState {
-	state := roundTripState{
-		Tool:    req.Params.Name,
-		Args:    argumentsDigest(req),
-		Version: version,
-		Bind:    bind,
-	}
+// callState is the part of a state that names the call req makes.
+func callState(ctx context.Context, req mcplib.CallToolRequest) roundTripState {
+	state := roundTripState{Tool: req.Params.Name, Args: argumentsDigest(req)}
 
 	if identity := auth.IdentityFromContext(ctx); identity != nil {
 		state.Subject, state.Provider = identity.Subject, identity.Provider
@@ -250,8 +263,62 @@ func (s *Server) roundTripState(
 	return state
 }
 
-func (s *Server) askToConfirm(tool string, question confirmation, want roundTripState) error {
-	builder := mcpserver.NewInputRequestBuilder(s.confirmations.sign(want))
+// priorRound returns the state req echoes, when it is valid and was issued
+// for this same call; anything else is no state at all.
+func (s *Server) priorRound(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+) (roundTripState, bool) {
+	state, ok := s.confirmations.open(req.Params.RequestState)
+	if !ok || !state.sameCall(callState(ctx, req)) {
+		return roundTripState{}, false
+	}
+
+	return state, true
+}
+
+// nextRound signs the state for asking key, carrying every choice made so
+// far, including one answered by this very request.
+func (s *Server) nextRound(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+	key string,
+	version uint64,
+	bind string,
+) string {
+	next := callState(ctx, req)
+	next.Asked, next.Version, next.Bind = key, version, bind
+
+	if prior, ok := s.priorRound(ctx, req); ok {
+		next.Choices = carriedChoices(prior, req.Params.InputResponses)
+	}
+
+	return s.confirmations.sign(next)
+}
+
+func carriedChoices(prior roundTripState, responses mcplib.InputResponses) map[string]choice {
+	choices := maps.Clone(prior.Choices)
+
+	answer := mcpserver.ElicitationResponse(responses, prior.Asked)
+	if prior.Asked == "" || answer == nil ||
+		answer.Action != mcplib.ElicitationResponseActionAccept {
+		return choices
+	}
+
+	content, _ := answer.Content.(map[string]any)
+	if value, ok := content[prior.Asked].(string); ok {
+		if choices == nil {
+			choices = map[string]choice{}
+		}
+
+		choices[prior.Asked] = choice{Bind: prior.Bind, Value: value}
+	}
+
+	return choices
+}
+
+func askToConfirm(tool string, question confirmation, state string) error {
+	builder := mcpserver.NewInputRequestBuilder(state)
 	builder.Elicit(tool, mcplib.ElicitationParams{
 		Mode:    mcplib.ElicitationModeForm,
 		Message: question.message,
