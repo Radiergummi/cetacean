@@ -1,7 +1,7 @@
 # A human in the loop over MCP — design
 
-Status: accepted, except the default of `mcp.inline_secret_values`. Covers #455 and the shape
-of #456, #457 and #459; #458 is addressed under [Plugins](#plugins).
+Status: accepted. Covers #455 and the shape of #456, #457 and #459; #458 is addressed under
+[Plugins](#plugins).
 
 ## Problem
 
@@ -109,10 +109,8 @@ The spec forbids form-mode elicitation for sensitive data, so this is URL mode.
     has a path that keeps the value out of the model, and accepting both would leave the
     model to pick the leaky one.
   - From a client without it, an inline value is accepted unless `mcp.inline_secret_values`
-    is `false`.
-  - **Decide** whether that setting defaults to `true` (no change for today's clients) or
-    `false` (secure by default, so `create_secret` doesn't work from many hosts until they
-    support URL mode). It belongs in #462's pre-1.0 sweep either way: flipping it after 1.0
+    is `false`. It defaults to `true`, so today's clients keep working and each gains URL mode
+    as it declares support. #462's pre-1.0 sweep revisits the default: flipping it after 1.0
     is breaking.
 
 ### Ambiguous hostnames (#459)
@@ -178,7 +176,4 @@ the regenerated base family from #460.
 1. **`mcp.require_confirmation`** is a setting, defaulting to `false`, rather than an
    unconditional refusal of level-3 tools to clients without elicitation.
 2. **#458** is re-scoped, not closed (see [Plugins](#plugins)).
-
-## Decide
-
-1. **`mcp.inline_secret_values`:** default `true` or `false` (see [Secret values](#secret-values-456)).
+3. **`mcp.inline_secret_values`** defaults to `true` (see [Secret values](#secret-values-456)).
