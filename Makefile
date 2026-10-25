@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-e2e test-stack test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
+.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-e2e test-stack test-multinode test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -125,6 +125,12 @@ test-stack: build
 	go tool covdata func -i=$(E2E_COVERDIR) \
 		| awk 'END { printf "  %-28s %s\n\n", "TOTAL", $$NF }'; \
 	exit $$status
+
+## Run the multi-node lane, which joins a second engine to the swarm as a worker
+## Opt-in, so test-stack's lanes keep the single-node swarm they assert over.
+## The environment is left up either way; tear it down with `make e2e-down`.
+test-multinode: build
+	CETACEAN_E2E_MULTINODE=1 go test -tags e2e -count=1 -run '^TestMultiNode$$' ./test/e2e/
 
 ## Run the end-to-end stack suite against a race-instrumented binary
 ## CI's `go test -race ./...` covers the packages in isolation; nothing until
