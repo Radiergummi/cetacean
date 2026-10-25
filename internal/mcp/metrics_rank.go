@@ -341,7 +341,7 @@ func (s *Server) rankTarget(
 		// The node's own `instance`, which every exporter scraped on that host
 		// carries. cAdvisor's containers are reachable no other standard way:
 		// node_hostname is a relabel only Cetacean's shipped config defines.
-		name, scope, err = s.nodeMetricSelector(ctx, id)
+		name, scope, err = s.nodeMetricSelector(ctx, req, id)
 		if err != nil {
 			return "", "", "", "", err
 		}

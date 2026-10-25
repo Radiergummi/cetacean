@@ -75,6 +75,7 @@ func (s *Server) configurationTools() []toolDef {
 				),
 			),
 			tier:    config.OpsConfiguration,
+			elicits: true,
 			handler: s.toolUpdateNodeLabels,
 		},
 		{

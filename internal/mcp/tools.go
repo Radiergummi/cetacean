@@ -598,7 +598,8 @@ func (s *Server) toolUpdateNodeLabels(
 	if err != nil {
 		return "", err
 	}
-	if err := s.checkNodeWrite(ctx, id); err != nil {
+	id, err = s.resolveNodeWrite(ctx, req, id)
+	if err != nil {
 		return "", err
 	}
 

@@ -108,6 +108,10 @@ The question needs a client that supports elicitation. One that doesn't is serve
 [`mcp.require_confirmation`][mcp.require_confirmation] is on, which refuses it the level-3 tools. A `2025-11-25`
 client can't be asked either, since Cetacean serves that revision without sessions.
 
+Swarm doesn't keep hostnames unique. When a tool is given a hostname that several nodes share, a client that supports
+elicitation asks you which one you mean, showing each node's ID, address, role, availability, engine version and
+labels. A client without it gets an error listing the IDs, and reading a node resource by such a hostname always does.
+
 A confirmation is a guard against an agent acting on its own, not an authorization: the operations level and your
 grants are checked before you are asked and again once you have answered.
 

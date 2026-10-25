@@ -61,8 +61,8 @@ func (s *Server) drainImpact(
 		return "", fmt.Errorf("node: required for the %q view", cluster.TopologyViewDrainImpact)
 	}
 
-	node, found, err := s.cache.ResolveNode(identifier)
-	if err = s.visibleAmbiguity(ctx, "node", err); err != nil {
+	node, found, err := s.resolveNodeFor(ctx, req, identifier)
+	if err != nil {
 		return "", err
 	}
 	if !found || s.checkRead(ctx, "node", cluster.NodeACLName(node)) != nil {

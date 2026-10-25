@@ -287,12 +287,6 @@ func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
 	return s.checkResolvedWrite(ctx, "service", id, svc.Spec.Name, ok, err)
 }
 
-// checkNodeWrite keys the ACL as `node:<hostname>`, matching REST behaviour.
-func (s *Server) checkNodeWrite(ctx context.Context, id string) error {
-	node, ok, err := s.cache.ResolveNode(id)
-	return s.checkResolvedWrite(ctx, "node", id, cluster.NodeACLName(node), ok, err)
-}
-
 // checkConfigWrite keys the ACL as `config:<name>`, matching REST behaviour.
 func (s *Server) checkConfigWrite(ctx context.Context, id string) error {
 	cfg, ok, err := s.cache.ResolveConfig(id)
