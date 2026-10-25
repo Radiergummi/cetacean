@@ -109,6 +109,7 @@ func (s *Server) toolGetEvents(
 			Name:       e.Name,
 			ResourceID: e.ResourceID,
 			Message:    e.Action,
+			Actor:      e.Actor,
 		})
 	}
 

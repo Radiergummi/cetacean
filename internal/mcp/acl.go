@@ -281,28 +281,53 @@ func (s *Server) checkResolvedWrite(
 	return s.checkWrite(ctx, resourceType, name)
 }
 
+// writeTarget is checkResolvedWrite returning the ID arg resolved to, so the
+// write names the object its history event will; an argument the cache could
+// not resolve passes through for Docker to judge.
+func (s *Server) writeTarget(
+	ctx context.Context,
+	resourceType, arg, id, name string,
+	found bool,
+	err error,
+) (string, error) {
+	if err := s.checkResolvedWrite(ctx, resourceType, arg, name, found, err); err != nil {
+		return "", err
+	}
+	if !found {
+		return arg, nil
+	}
+
+	return id, nil
+}
+
+// resolveServiceWrite is checkServiceWrite for a write that needs the ID.
+func (s *Server) resolveServiceWrite(ctx context.Context, arg string) (string, error) {
+	svc, ok, err := s.cache.ResolveService(arg)
+	return s.writeTarget(ctx, "service", arg, svc.ID, svc.Spec.Name, ok, err)
+}
+
+// resolveConfigWrite keys the ACL as `config:<name>`, matching REST behaviour.
+func (s *Server) resolveConfigWrite(ctx context.Context, arg string) (string, error) {
+	cfg, ok, err := s.cache.ResolveConfig(arg)
+	return s.writeTarget(ctx, "config", arg, cfg.ID, cfg.Spec.Name, ok, err)
+}
+
+// resolveSecretWrite keys the ACL as `secret:<name>`, matching REST behaviour.
+func (s *Server) resolveSecretWrite(ctx context.Context, arg string) (string, error) {
+	sec, ok, err := s.cache.ResolveSecret(arg)
+	return s.writeTarget(ctx, "secret", arg, sec.ID, sec.Spec.Name, ok, err)
+}
+
+// resolveNetworkWrite keys the ACL as `network:<name>`, matching REST behaviour.
+func (s *Server) resolveNetworkWrite(ctx context.Context, arg string) (string, error) {
+	net, ok, err := s.cache.ResolveNetwork(arg)
+	return s.writeTarget(ctx, "network", arg, net.ID, net.Name, ok, err)
+}
+
 // checkServiceWrite keys the ACL as `service:<name>`, matching REST behaviour.
 func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
 	svc, ok, err := s.cache.ResolveService(id)
 	return s.checkResolvedWrite(ctx, "service", id, svc.Spec.Name, ok, err)
-}
-
-// checkConfigWrite keys the ACL as `config:<name>`, matching REST behaviour.
-func (s *Server) checkConfigWrite(ctx context.Context, id string) error {
-	cfg, ok, err := s.cache.ResolveConfig(id)
-	return s.checkResolvedWrite(ctx, "config", id, cfg.Spec.Name, ok, err)
-}
-
-// checkSecretWrite keys the ACL as `secret:<name>`, matching REST behaviour.
-func (s *Server) checkSecretWrite(ctx context.Context, id string) error {
-	sec, ok, err := s.cache.ResolveSecret(id)
-	return s.checkResolvedWrite(ctx, "secret", id, sec.Spec.Name, ok, err)
-}
-
-// checkNetworkWrite keys the ACL as `network:<name>`, matching REST behaviour.
-func (s *Server) checkNetworkWrite(ctx context.Context, id string) error {
-	net, ok, err := s.cache.ResolveNetwork(id)
-	return s.checkResolvedWrite(ctx, "network", id, net.Name, ok, err)
 }
 
 // resolveTaskWrite resolves id to a task ID and routes the ACL check to the

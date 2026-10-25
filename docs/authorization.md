@@ -90,6 +90,8 @@ own terms: Tailscale from the login name, `cert` from the certificate, and `head
 `read` governs list and detail endpoints, search, history, Atom and JSON feeds, topology,
 [recommendations][recommendations] and SSE streams. `write` governs every mutation. Lists never fail on a missing
 grant: unreadable items are filtered out of the response, and `total` counts only what the identity may see.
+A history entry shows who made the change to anyone who may read it. It names their subject, display name,
+provider, and OAuth client, but not their email or groups.
 
 Creating a config or secret needs `write` on the name being created, so `secret:team-*` lets a team create secrets
 inside its own prefix and nowhere else. Installing a plugin needs `write` on `plugin:*`. Attaching a secret, config,

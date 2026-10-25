@@ -5202,6 +5202,12 @@ paths:
                     name: webapp
                     timestamp: "2025-03-20T14:30:00Z"
                     summary: Image updated to nginx:1.28
+                    actor:
+                      subject: 3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90
+                      name: Alice
+                      provider: oauth
+                      client: claude-desktop
+                      transport: mcp
                   - "@id": "/history#1041"
                     "@type": HistoryEntry
                     id: 1041
@@ -8291,6 +8297,8 @@ components:
             once the task or its service is gone.
         summary:
           type: string
+        actor:
+          $ref: "#/components/schemas/HistoryActor"
       example:
         id: 8421
         timestamp: "2026-04-13T08:12:34Z"
@@ -8299,6 +8307,41 @@ components:
         resourceId: r8m2x5nk3p7q
         name: webapp
         summary: Image updated to nginx:1.28
+        actor:
+          subject: 3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90
+          name: Alice
+          provider: oidc
+          transport: dashboard
+
+    HistoryActor:
+      type: object
+      description: >-
+        Who made the change through Cetacean. Absent on an entry for a change
+        made elsewhere, such as with the Docker CLI. Shown to every caller who
+        may read the entry.
+      required: [subject, provider, transport]
+      properties:
+        subject:
+          type: string
+          description: The identity's subject
+        name:
+          type: string
+          description: Its display name, when the provider sent one
+        provider:
+          type: string
+          description: >-
+            The auth provider that established the identity, or `oauth` for a
+            token this deployment issued
+        client:
+          type: string
+          description: The OAuth client ID, when the call carried a token this deployment issued
+        transport:
+          type: string
+          enum: [dashboard, rest, mcp]
+          description: >-
+            How the write arrived. `dashboard` is a request the browser marked
+            `Sec-Fetch-Site: same-origin` without a bearer token; any other
+            request to the web API is `rest`. A label, not a credential.
 
     # ── Logs ─────────────────────────────────────────────────────────
 

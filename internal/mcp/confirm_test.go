@@ -297,7 +297,7 @@ func TestRemoveService_AsksThenRemovesOnAcceptance(t *testing.T) {
 		t.Fatalf("retry: %v", err)
 	}
 
-	if text != `{"removed":true}` || len(f.removed) != 1 || f.removed[0] != "shop_web" {
+	if text != `{"removed":true}` || len(f.removed) != 1 || f.removed[0] != "svc1" {
 		t.Fatalf("result %s, removed %v", text, f.removed)
 	}
 }

@@ -282,6 +282,8 @@ func main() {
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
+	dockerClient.AttributeTo(stateCache.Attributions())
+
 	// A too-old daemon refuses every request, which otherwise surfaces as
 	// empty listings and a failing readiness probe.
 	versionCtx, versionCancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
