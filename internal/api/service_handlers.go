@@ -35,6 +35,8 @@ func (h *Handlers) lookupServiceACL(
 type ServiceListItem struct {
 	swarm.Service
 	RunningTasks int `json:"RunningTasks"`
+
+	ImageUpdate *cluster.ImageUpdate `json:"ImageUpdate,omitempty"`
 }
 
 func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +95,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 				items[i] = ServiceListItem{
 					Service:      svc,
 					RunningTasks: h.cache.RunningTaskCount(svc.ID),
+					ImageUpdate:  h.imageUpdate(svc),
 				}
 			}
 
@@ -113,7 +116,14 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeCachedJSONTimed(w, r, rep, svc.UpdatedAt)
+	// The image check can add an update with no change to the service, and a
+	// client revalidating on the date alone must not be told it has that.
+	lastModified := svc.UpdatedAt
+	if update := h.imageUpdate(svc); update != nil && update.Since.After(lastModified) {
+		lastModified = update.Since
+	}
+
+	writeCachedJSONTimed(w, r, rep, lastModified)
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {

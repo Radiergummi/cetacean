@@ -23,6 +23,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
@@ -185,7 +186,8 @@ type Server struct {
 	mcpServer  *mcpserver.MCPServer
 	httpServer *mcpserver.StreamableHTTPServer
 	recEngine  RecommendationEngine
-	prom       MetricsQuerier // nil when Prometheus is not configured
+	prom       MetricsQuerier       // nil when Prometheus is not configured
+	images     cluster.ImageDigests // nil when server.image_check is off
 
 	// allowedOrigins is the set of origins, serialised, the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
@@ -268,6 +270,10 @@ type Options struct {
 	// charting nothing.
 	Prometheus MetricsQuerier
 
+	// ImageDigests reports a newer image for a service's tag. Nil when
+	// server.image_check is off.
+	ImageDigests cluster.ImageDigests
+
 	// IconBaseURL is the canonical external base URL (issuer + base path) used
 	// to build absolute tool-icon `src` values. Icons are served from the
 	// embedded frontend under /assets/mcp-icons/. Empty disables tool icons.
@@ -323,6 +329,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		authProvider:   opts.AuthProvider,
 		recEngine:      opts.Recommendations,
 		prom:           opts.Prometheus,
+		images:         opts.ImageDigests,
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),

@@ -489,8 +489,8 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 # < HTTP/1.1 304 Not Modified
 ```
 
-A service's and a node's detail also set `Last-Modified` from the resource's update timestamp and honor
-`If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
+A service's and a node's detail also set `Last-Modified` from the resource's update timestamp, or for a service from
+when a newer image was found if that is later, and honor `If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
 volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
@@ -762,6 +762,11 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `GET /nodes/{id}/drain-impact` assesses a drain before you make it: each service with a task on the node is
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
+
+`GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
+names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
+`checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
+whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

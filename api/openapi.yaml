@@ -7701,6 +7701,8 @@ components:
         RunningTasks:
           type: integer
           description: Number of currently running tasks
+        ImageUpdate:
+          $ref: "#/components/schemas/ImageUpdate"
       example:
         ID: r8m2x5nk3p7q
         Version: { Index: 156 }
@@ -8751,6 +8753,39 @@ components:
               description: Detected third-party integrations (e.g. Traefik)
               items:
                 $ref: "#/components/schemas/Integration"
+            imageUpdate:
+              $ref: "#/components/schemas/ImageUpdate"
+
+    ImageUpdate:
+      type: object
+      description: >
+        The service's image tag names a newer image than the digest it runs,
+        as its registry last answered. Absent when the tag still names the
+        running digest, when the image is not pinned to a digest, when the
+        registry could not be asked anonymously, and when
+        `server.image_check` is off.
+      required: [image, currentDigest, latestDigest, suggestedImage, checkedAt]
+      properties:
+        image:
+          type: string
+          description: The tag the service follows, without its digest
+          example: nginx:1.27
+        currentDigest:
+          type: string
+          description: The digest the service runs
+          example: sha256:0d17b565c37bcbd895e9d92315a05c1c3c9a29f762b011a10c54a66cd53c9b31
+        latestDigest:
+          type: string
+          description: The digest the registry says the tag names now
+          example: sha256:6a59f1cbb8d28ac484176d52c473494859a512ddba3ea62a547258cf16c9b3ae
+        suggestedImage:
+          type: string
+          description: The tag pinned to the newer digest, ready for `PUT /services/{id}/image`
+          example: nginx:1.27@sha256:6a59f1cbb8d28ac484176d52c473494859a512ddba3ea62a547258cf16c9b3ae
+        checkedAt:
+          type: string
+          format: date-time
+          description: When the registry was last asked
 
     ServiceAccepted:
       description: >
