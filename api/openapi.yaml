@@ -5916,6 +5916,14 @@ paths:
                   type: string
                   format: byte
                   description: Secret data (base64-encoded)
+                elicitation:
+                  type: string
+                  description: |
+                    ID of the secret entry an MCP client opened for the caller
+                    (see `GET /secret-entries/{id}`). The secret takes the
+                    entry's name and labels, `name` may be omitted or must
+                    match, and the entry is completed so the agent's retried
+                    `create_secret` call returns it.
             example:
               name: api_key
               data: c3VwZXItc2VjcmV0LWtleQ==
@@ -5947,6 +5955,60 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           description: Secret name conflict
+
+  /secret-entries/{id}:
+    get:
+      operationId: getSecretEntry
+      tags: [Secrets]
+      summary: Secret entry
+      description: |
+        A secret an MCP client asked the caller to enter in the dashboard: the
+        name, labels and encoding the agent chose, never a value. Readable only
+        by the person whose MCP client opened it (`403 SEC007` otherwise), for
+        fifteen minutes (`404 SEC006` after). Create the secret with
+        `POST /secrets`, passing this ID as `elicitation`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The pending secret
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      encoding:
+                        type: string
+                        enum: [utf8, base64]
+                        description: How the agent expects the value to be typed
+                      expiresAt:
+                        type: string
+                        format: date-time
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /secrets/{id}:
     get:
