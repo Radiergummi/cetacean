@@ -60,7 +60,7 @@ var operator = cache.Actor{Subject: "u-1", Name: "alice", Provider: "oidc", Tran
 
 func TestWritesAreAttributedToTheActorInTheContext(t *testing.T) {
 	c := cache.New(nil)
-	c.SetService(swarm.Service{ID: "svc", Meta: swarm.Meta{Version: swarm.Version{Index: 7}}})
+	c.SetService(swarm.Service{ID: "svc", Version: swarm.Version{Index: 7}})
 
 	client := attributionDaemon(t, false)
 	client.AttributeTo(c.Attributions())
@@ -79,7 +79,7 @@ func TestWritesAreAttributedToTheActorInTheContext(t *testing.T) {
 	}
 
 	// The watcher observes the version the write produced.
-	c.SetService(swarm.Service{ID: "svc", Meta: swarm.Meta{Version: swarm.Version{Index: 9}}})
+	c.SetService(swarm.Service{ID: "svc", Version: swarm.Version{Index: 9}})
 
 	entries := c.History().List(cache.HistoryQuery{Limit: 1})
 	if len(entries) != 1 || entries[0].Actor == nil || *entries[0].Actor != operator {
@@ -103,7 +103,7 @@ func TestEveryKindOfWriteRegistersItself(t *testing.T) {
 		},
 		"config create": func(c *Client, ctx context.Context) error {
 			_, err := c.CreateConfig(ctx, swarm.ConfigSpec{
-				Annotations: swarm.Annotations{Name: "app.conf"},
+				Name: "app.conf",
 			})
 			return err
 		},

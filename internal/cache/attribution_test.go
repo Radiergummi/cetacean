@@ -14,9 +14,9 @@ var alice = Actor{Subject: "u-1", Name: "alice", Provider: "oidc", Transport: Tr
 
 func serviceAt(id string, index uint64) swarm.Service {
 	return swarm.Service{
-		ID:   id,
-		Meta: swarm.Meta{Version: swarm.Version{Index: index}},
-		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+		ID:      id,
+		Version: swarm.Version{Index: index},
+		Spec:    swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 }
 
@@ -100,7 +100,8 @@ func TestTheNewestPendingWriteWinsAndOlderOnesGo(t *testing.T) {
 func TestAttributionMatchesCreatesByNameAndRemovesByKey(t *testing.T) {
 	c := New(nil)
 
-	c.Attributions().Expect(Expectation{Type: EventConfig, Key: "app.conf", Action: "create"}, alice)
+	c.Attributions().
+		Expect(Expectation{Type: EventConfig, Key: "app.conf", Action: "create"}, alice)
 	c.SetConfig(swarm.Config{ID: "c1", Spec: swarm.ConfigSpec{
 		Annotations: swarm.Annotations{Name: "app.conf"},
 	}})
@@ -122,7 +123,8 @@ func TestWithdrawnAttributionMatchesNothing(t *testing.T) {
 	c := New(nil)
 	c.SetService(serviceAt("s1", 10))
 
-	withdraw := c.Attributions().Expect(Expectation{Type: EventService, Key: "s1", After: 10}, alice)
+	withdraw := c.Attributions().
+		Expect(Expectation{Type: EventService, Key: "s1", After: 10}, alice)
 	withdraw()
 
 	c.SetService(serviceAt("s1", 11))
