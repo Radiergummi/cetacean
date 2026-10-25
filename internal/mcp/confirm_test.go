@@ -145,7 +145,7 @@ func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
 	signer.now = func() time.Time { return now }
 
 	want := roundTripState{Subject: "alice", Tool: "remove_service", Args: "abc", Version: 7}
-	token := signer.sign(want)
+	token := signer.sign(want, confirmationTTL)
 
 	if !verifies(signer, token, want) {
 		t.Fatal("a fresh state for the same call should verify")
@@ -166,7 +166,7 @@ func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
 			payload + "." + strings.Repeat("A", len(signature)),
 			want,
 		},
-		"another key": {other.sign(want), want},
+		"another key": {other.sign(want, confirmationTTL), want},
 		"other subject": {
 			token,
 			roundTripState{Subject: "bob", Tool: "remove_service", Args: "abc", Version: 7},

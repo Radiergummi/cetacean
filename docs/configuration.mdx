@@ -363,6 +363,10 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
   Refuse the level-3 tools to a client that can't ask a person to confirm the change. A client that supports elicitation is always asked, whatever this is set to; one that doesn't is served without a confirmation unless this is `true`, and then gets an error naming this setting.
 </ConfigParam>
 
+<ConfigParam name="mcp.inline_secret_values" env="CETACEAN_MCP_INLINE_SECRET_VALUES" default="true">
+  Accept a secret's value as a `create_secret` argument from a client that can't send you to the dashboard to enter it. Set it to `false` to keep every secret value out of agent conversations, at the cost of those clients creating no secrets. A client that supports URL elicitation never passes the value, whatever this is set to.
+</ConfigParam>
+
 See [MCP][mcp] for the tools, resources, prompts, and widgets the server exposes.
 
 ## Recommendation sizing

@@ -23,6 +23,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
@@ -238,6 +239,9 @@ type Server struct {
 	// confirmations signs the requestState of a confirmation round trip.
 	confirmations *stateSigner
 
+	secretEntries *cluster.SecretEntries
+	dashboardURL  string
+
 	closeOnce sync.Once
 }
 
@@ -288,6 +292,12 @@ type Options struct {
 	// LogReads is the pool get_logs and the logs resource draw on, shared with
 	// REST's log reads. Nil gives this server a pool of its own.
 	LogReads *sse.Slots
+
+	// SecretEntries is where create_secret leaves a secret for a person to
+	// enter in the dashboard, shared with the API that completes it, and
+	// DashboardURL is the dashboard's external base. Either unset turns that off.
+	SecretEntries *cluster.SecretEntries
+	DashboardURL  string
 }
 
 // Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
@@ -318,6 +328,8 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 
 	srv := &Server{
 		confirmations:  confirmations,
+		secretEntries:  opts.SecretEntries,
+		dashboardURL:   strings.TrimRight(opts.DashboardURL, "/"),
 		guard:          guard,
 		bypass:         resolveBypass(opts),
 		cache:          c,

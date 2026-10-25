@@ -84,9 +84,9 @@ func (s *stateSigner) mac(payload []byte) []byte {
 	return h.Sum(nil)
 }
 
-// sign issues state, expiring confirmationTTL from now.
-func (s *stateSigner) sign(state roundTripState) string {
-	state.Expires = s.now().Add(confirmationTTL).Unix()
+// sign issues state, expiring ttl from now.
+func (s *stateSigner) sign(state roundTripState, ttl time.Duration) string {
+	state.Expires = s.now().Add(ttl).Unix()
 
 	payload, _ := json.Marshal(state) //nolint:errchkjson // strings, ints and a map of them
 
@@ -286,6 +286,18 @@ func (s *Server) nextRound(
 	version uint64,
 	bind string,
 ) string {
+	return s.nextRoundLasting(ctx, req, key, version, bind, confirmationTTL)
+}
+
+// nextRoundLasting is nextRound for a question that takes longer to answer.
+func (s *Server) nextRoundLasting(
+	ctx context.Context,
+	req mcplib.CallToolRequest,
+	key string,
+	version uint64,
+	bind string,
+	ttl time.Duration,
+) string {
 	next := callState(ctx, req)
 	next.Asked, next.Version, next.Bind = key, version, bind
 
@@ -293,7 +305,7 @@ func (s *Server) nextRound(
 		next.Choices = carriedChoices(prior, req.Params.InputResponses)
 	}
 
-	return s.confirmations.sign(next)
+	return s.confirmations.sign(next, ttl)
 }
 
 func carriedChoices(prior roundTripState, responses mcplib.InputResponses) map[string]choice {

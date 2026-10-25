@@ -19,6 +19,7 @@ func clearMCPEnv(t *testing.T) {
 		"CETACEAN_MCP_MAX_TASK_TTL",
 		"CETACEAN_MCP_AUTH_BYPASS",
 		"CETACEAN_MCP_REQUIRE_CONFIRMATION",
+		"CETACEAN_MCP_INLINE_SECRET_VALUES",
 	} {
 		t.Setenv(key, "")
 	}
@@ -404,6 +405,37 @@ func TestMCPConfigRequireConfirmation(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	if cfg.MCP.RequireConfirmation {
+		t.Error("the environment should win over the file")
+	}
+}
+
+func TestMCPConfigInlineSecretValues(t *testing.T) {
+	clearMCPEnv(t)
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.MCP.InlineSecretValues {
+		t.Error("InlineSecretValues should default to true")
+	}
+
+	off := false
+	cfg, err = Load(&fileConfig{MCP: &fileMCP{InlineSecretValues: &off}}, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.MCP.InlineSecretValues {
+		t.Error("InlineSecretValues should be false from file")
+	}
+
+	t.Setenv("CETACEAN_MCP_INLINE_SECRET_VALUES", "true")
+
+	cfg, err = Load(&fileConfig{MCP: &fileMCP{InlineSecretValues: &off}}, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.MCP.InlineSecretValues {
 		t.Error("the environment should win over the file")
 	}
 }

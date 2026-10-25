@@ -81,6 +81,9 @@ type dataResourceSpec struct {
 		data []byte,
 	) (string, error)
 
+	// entersValue lets a person enter the value in the dashboard instead.
+	entersValue bool
+
 	// seed writes the created record into the cache, which resolution reads and
 	// the watcher fills only a few hundred milliseconds later — otherwise the
 	// documented rotation sequence fails its second step with "no such secret".
@@ -94,7 +97,8 @@ type dataResourceSpec struct {
 // route — there is no ID yet, which is the one way a create differs.
 var (
 	secretResource = dataResourceSpec{
-		kind: "secret",
+		kind:        "secret",
+		entersValue: true,
 		create: func(
 			wc DockerWriteClient,
 			ctx context.Context,
@@ -156,6 +160,25 @@ func (s *Server) createHandler(
 			return "", err
 		}
 
+		labels, err := createLabels(req)
+		if err != nil {
+			return "", err
+		}
+
+		if err := cluster.CheckStackLabel(nil, labels, s.writePredicate(ctx)); err != nil {
+			return "", err
+		}
+
+		if spec.entersValue {
+			if err := s.checkInlineValue(ctx, req); err != nil {
+				return "", err
+			}
+
+			if req.GetString("data", "") == "" {
+				return s.enterSecretValue(ctx, req, name, labels)
+			}
+		}
+
 		writeClient, err := s.requireWriteClient()
 		if err != nil {
 			return "", err
@@ -163,15 +186,6 @@ func (s *Server) createHandler(
 
 		data, err := decodePayload(req)
 		if err != nil {
-			return "", err
-		}
-
-		labels, err := createLabels(req)
-		if err != nil {
-			return "", err
-		}
-
-		if err := cluster.CheckStackLabel(nil, labels, s.writePredicate(ctx)); err != nil {
 			return "", err
 		}
 

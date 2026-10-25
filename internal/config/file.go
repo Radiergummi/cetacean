@@ -84,6 +84,7 @@ type fileMCP struct {
 	AuthBypass []string `toml:"auth_bypass"`
 
 	RequireConfirmation *bool `toml:"require_confirmation"`
+	InlineSecretValues  *bool `toml:"inline_secret_values"`
 }
 
 // fileOAuth mirrors the [oauth] section. The server is opt-in, so a deployment

@@ -148,3 +148,4 @@
 #                                           # A listed mode authenticates /mcp on its own, so oauth.enabled can stay off
 #                                           # Only "cert", "headers" and "tailscale"; anything else is refused at startup
 # require_confirmation = false              # Refuse level-3 tools to clients that can't ask a person to confirm
+# inline_secret_values = true               # Accept a secret value as a create_secret argument from clients without URL elicitation
