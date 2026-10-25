@@ -1,7 +1,7 @@
 # A human in the loop over MCP — design
 
-Status: proposed. Covers #455 and the shape of #456, #457 and #459; #458 is addressed under
-[Plugins](#plugins).
+Status: accepted, except the default of `mcp.inline_secret_values`. Covers #455 and the shape
+of #456, #457 and #459; #458 is addressed under [Plugins](#plugins).
 
 ## Problem
 
@@ -137,13 +137,9 @@ The spec forbids form-mode elicitation for sensitive data, so this is URL mode.
 ### Plugins
 
 There are no MCP plugin tools. #458 assumes install and upgrade tools that would take a
-privilege list; REST has them, MCP doesn't. Two options:
-1. Close #458 until plugin tools are proposed. Adding them would be a 1.x feature, so the
-   privilege review lands with them, never without.
-2. Keep it open as the requirement on any future plugin tool.
-
-**Recommendation:** option 2, re-scoped. Its acceptance criterion becomes "no MCP plugin
-install or upgrade tool ships without the review".
+privilege list; REST has them, MCP doesn't. #458 stays open, re-scoped as the requirement on
+any future plugin tool: its acceptance criterion becomes "no MCP plugin install or upgrade tool
+ships without the review".
 
 ## Audit
 
@@ -177,9 +173,12 @@ the regenerated base family from #460.
 4. URL mode and the dashboard route (#456). Last, because it is the only part that needs a
    new frontend route and a pending-record store.
 
+## Decided
+
+1. **`mcp.require_confirmation`** is a setting, defaulting to `false`, rather than an
+   unconditional refusal of level-3 tools to clients without elicitation.
+2. **#458** is re-scoped, not closed (see [Plugins](#plugins)).
+
 ## Decide
 
-1. **`mcp.require_confirmation`:** a setting, or always refuse level-3 tools to clients
-   without elicitation? *Recommendation:* the setting, defaulting to `false`.
-2. **`mcp.inline_secret_values`:** default `true` or `false` (see [Secret values](#secret-values-456)).
-3. **#458:** re-scope or close (see [Plugins](#plugins)).
+1. **`mcp.inline_secret_values`:** default `true` or `false` (see [Secret values](#secret-values-456)).
