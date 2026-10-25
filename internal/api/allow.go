@@ -29,7 +29,10 @@ type tieredChain struct {
 }
 
 func (h *Handlers) tiered(acl Constructor, level config.OperationsLevel) tieredChain {
-	return tieredChain{chain: NewChain(acl, h.requireLevel(level)), level: level}
+	return tieredChain{
+		chain: NewChain(acl, h.requireLevel(level), attributeWrite),
+		level: level,
+	}
 }
 
 func (c tieredChain) Append(constructors ...Constructor) tieredChain {

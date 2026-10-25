@@ -40,10 +40,17 @@ func feedEntriesToAtom(r *http.Request, entries []feedEntry) []atomxml.Entry {
 			categories = append(categories, atomxml.Category{Term: tag})
 		}
 
+		// An entry without an author of its own inherits the feed's.
+		var author *atomxml.Author
+		if e.Author != "" {
+			author = &atomxml.Author{Name: e.Author}
+		}
+
 		result = append(result, atomxml.Entry{
 			ID:      e.ID,
 			Title:   e.Title,
 			Updated: e.Updated,
+			Author:  author,
 			Content: atomxml.ContentElement{
 				Type:  "html",
 				Value: e.ContentHTML,
