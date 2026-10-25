@@ -49,7 +49,7 @@ const (
 func TestMultiNode(t *testing.T) {
 	if os.Getenv("CETACEAN_E2E_MULTINODE") == "" {
 		t.Skip(
-			"the multi-node lane is opt-in: set CETACEAN_E2E_MULTINODE=1, or run make test-multinode",
+			"the multi-node lane runs on its own, last: make test-stack runs it, or make test-multinode",
 		)
 	}
 

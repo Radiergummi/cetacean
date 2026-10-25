@@ -5,7 +5,13 @@
 E2E_BINARY   := cetacean.cover
 E2E_RACE_BIN := cetacean.race
 E2E_COVERDIR := coverdata
+
 SPEC_VET     := spec-vet
+
+# The multi-node lane skips unless its variable is set, which only this sets:
+# run inside the main suite, its worker would outlive the lanes after it.
+MULTINODE_TEST := CETACEAN_E2E_MULTINODE=1 go test -tags e2e -count=1 -timeout 10m \
+	-run '^TestMultiNode$$' ./test/e2e/
 
 # Where a run writes what it exercised. Gitignored.
 SPEC_CLAIMS  := .spec-claims
@@ -103,13 +109,16 @@ test-e2e:
 
 ## Run the end-to-end stack suite (local only; needs Docker)
 ## -p 1 serialises packages: each reserves the same lane ports, so parallel
-## packages would fight over them. The environment is torn down on success and
-## deliberately left running on failure, so a failed case can be inspected.
+## packages would fight over them. The multi-node lane runs last, once the rest
+## pass, since a joined worker can take the tasks the other lanes assert over.
+## The environment is torn down on success and left running on failure.
 test-stack: build
 	go build -cover -coverpkg=./... -ldflags "$(LDFLAGS)" -o $(E2E_BINARY) .
 	rm -rf $(E2E_COVERDIR) && mkdir -p $(E2E_COVERDIR)
 	@GOCOVERDIR=$(PWD)/$(E2E_COVERDIR) CETACEAN_E2E_BINARY=$(PWD)/$(E2E_BINARY) \
-		go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/...; \
+		go test -tags e2e -p 1 -count=1 -timeout 30m ./test/e2e/... && \
+	GOCOVERDIR=$(PWD)/$(E2E_COVERDIR) CETACEAN_E2E_BINARY=$(PWD)/$(E2E_BINARY) \
+		$(MULTINODE_TEST); \
 	status=$$?; \
 	if [ $$status -eq 0 ]; then \
 		$(MAKE) e2e-down; \
@@ -126,11 +135,10 @@ test-stack: build
 		| awk 'END { printf "  %-28s %s\n\n", "TOTAL", $$NF }'; \
 	exit $$status
 
-## Run the multi-node lane, which joins a second engine to the swarm as a worker
-## Opt-in, so test-stack's lanes keep the single-node swarm they assert over.
+## Run only the multi-node lane, which joins a second engine as a worker
 ## The environment is left up either way; tear it down with `make e2e-down`.
 test-multinode: build
-	CETACEAN_E2E_MULTINODE=1 go test -tags e2e -count=1 -run '^TestMultiNode$$' ./test/e2e/
+	$(MULTINODE_TEST)
 
 ## Run the end-to-end stack suite against a race-instrumented binary
 ## CI's `go test -race ./...` covers the packages in isolation; nothing until
@@ -144,7 +152,9 @@ test-multinode: build
 test-stack-race: build
 	go build -race -ldflags "$(LDFLAGS)" -o $(E2E_RACE_BIN) .
 	@GORACE=halt_on_error=1 CETACEAN_E2E_BINARY=$(PWD)/$(E2E_RACE_BIN) \
-		go test -tags e2e -p 1 -count=1 -timeout 60m ./test/e2e/...; \
+		go test -tags e2e -p 1 -count=1 -timeout 60m ./test/e2e/... && \
+	GORACE=halt_on_error=1 CETACEAN_E2E_BINARY=$(PWD)/$(E2E_RACE_BIN) \
+		$(MULTINODE_TEST); \
 	status=$$?; \
 	if [ $$status -eq 0 ]; then \
 		$(MAKE) e2e-down; \
