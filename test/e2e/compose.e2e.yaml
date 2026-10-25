@@ -14,6 +14,21 @@ services:
     networks:
       - e2e
 
+  # A second engine joined to dind's swarm as a worker, for the multi-node
+  # lane only: the profile keeps a plain `up -d` from starting it. Its own
+  # label lets the harness tell it from the manager on the next port.
+  dind-worker:
+    image: docker:28-dind
+    privileged: true
+    profiles: ["multinode"]
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false", "--label=cetacean-e2e-worker=true"]
+    ports:
+      - "12376:2375"
+    volumes:
+      - dind-worker-data:/var/lib/docker
+    networks:
+      - e2e
+
   cert-init:
     # The dind image above, reused because it already ships openssl. This was
     # `alpine` plus `apk add openssl`, which reached the Alpine CDN on every
@@ -132,6 +147,7 @@ networks:
 # but a targeted one cannot. A named volume is reused, and `down -v` removes it.
 volumes:
   dind-data:
+  dind-worker-data:
   cert-init-docker:
   prometheus-data:
 
