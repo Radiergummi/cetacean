@@ -622,6 +622,12 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 	if err := s.checkWrite(ctx, "volume", name); err != nil {
 		return "", err
 	}
+	confirmed, err := s.confirm(ctx, req, func() (confirmation, error) {
+		return s.volumeRemoval(ctx, name, force), nil
+	})
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -629,6 +635,7 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 	if err := wc.RemoveVolume(ctx, name, force); err != nil {
 		return "", removalError(err, "volume", name)
 	}
+	logConfirmableWrite(ctx, req.Params.Name, "volume:"+name, confirmed)
 	return marshalResult(removalResult{Removed: true})
 }
 

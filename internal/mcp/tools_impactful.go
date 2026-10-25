@@ -43,6 +43,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier:    config.OpsImpactful,
+			elicits: true,
 			handler: s.toolUpdateNode,
 		},
 		{
@@ -84,8 +85,9 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Task ID, or `<service>.<slot>` naming a live replica."),
 				),
 			),
-			tier: config.OpsImpactful,
-			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite, nil,
+			tier:    config.OpsImpactful,
+			elicits: true,
+			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite, s.taskRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveTask(ctx, id)
 				}),
@@ -106,8 +108,9 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Config ID."),
 				),
 			),
-			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "config", s.checkConfigWrite, nil,
+			tier:    config.OpsImpactful,
+			elicits: true,
+			handler: s.removeHandler("id", "config", s.checkConfigWrite, s.configRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveConfig(ctx, id)
 				}),
@@ -128,8 +131,9 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Secret ID."),
 				),
 			),
-			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "secret", s.checkSecretWrite, nil,
+			tier:    config.OpsImpactful,
+			elicits: true,
+			handler: s.removeHandler("id", "secret", s.checkSecretWrite, s.secretRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveSecret(ctx, id)
 				}),
@@ -150,8 +154,9 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Network ID."),
 				),
 			),
-			tier: config.OpsImpactful,
-			handler: s.removeHandler("id", "network", s.checkNetworkWrite, nil,
+			tier:    config.OpsImpactful,
+			elicits: true,
+			handler: s.removeHandler("id", "network", s.checkNetworkWrite, s.networkRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveNetwork(ctx, id)
 				}),
@@ -179,6 +184,7 @@ func (s *Server) impactfulTools() []toolDef {
 				),
 			),
 			tier:    config.OpsImpactful,
+			elicits: true,
 			handler: s.toolRemoveVolume,
 		},
 	}
