@@ -27,6 +27,7 @@ import type {
   SearchResponse,
   Secret,
   SecretDetail,
+  SecretEntry,
   ServiceConfigRef,
   ServiceDetail,
   ServiceListItem,
@@ -877,6 +878,12 @@ export const api = {
   allSecrets: (signal?: AbortSignal) => fetchAll<Secret>("/secrets", signal, schema.secretSchema),
   secret: (id: string, signal?: AbortSignal) =>
     fetchJSON<SecretDetail>(`/secrets/${id}`, signal, schema.secretDetailSchema),
+  secretEntry: (id: string, signal?: AbortSignal) =>
+    fetchJSON<SecretEntry>(
+      `/secret-entries/${encodeURIComponent(id)}`,
+      signal,
+      schema.secretEntrySchema,
+    ).then(({ data }) => data),
   networks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Network>("/networks", params, signal, schema.networkSchema),
   allNetworks: (signal?: AbortSignal) =>
@@ -1037,6 +1044,8 @@ export const api = {
     mutationFetch<ConfigDetail>("/configs", "POST", { name, data }, "application/json"),
   createSecret: (name: string, data: string) =>
     mutationFetch<SecretDetail>("/secrets", "POST", { name, data }, "application/json"),
+  completeSecretEntry: (elicitation: string, data: string) =>
+    mutationFetch<SecretDetail>("/secrets", "POST", { data, elicitation }, "application/json"),
   patchConfigLabels: (id: string, ops: PatchOp[], ifMatch?: string | undefined) =>
     patch<{ labels: Record<string, string> }>(
       `/configs/${id}/labels`,

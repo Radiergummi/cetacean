@@ -95,6 +95,14 @@ const serviceRefs = z.array(z.looseObject({ id: z.string(), name: z.string() }))
 export const serviceDetailSchema = z.looseObject({ service: serviceSchema });
 export const configDetailSchema = z.looseObject({ config: configSchema, services: serviceRefs });
 export const secretDetailSchema = z.looseObject({ secret: secretSchema, services: serviceRefs });
+
+export const secretEntrySchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  labels: z.record(z.string(), z.string()),
+  encoding: z.enum(["utf8", "base64"]),
+  expiresAt: z.string(),
+});
 export const networkDetailSchema = z.looseObject({ network: networkSchema, services: serviceRefs });
 export const volumeDetailSchema = z.looseObject({ volume: volumeSchema, services: serviceRefs });
 export const nodeDetailSchema = z.looseObject({ node: nodeSchema });
