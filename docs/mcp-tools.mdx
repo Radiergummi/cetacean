@@ -497,8 +497,23 @@ a follow-up from a widget as you would any output that quotes the cluster.
 | `ui://cetacean/metrics`         | A [`get_metrics`][mcp.tools.get_metrics] result                 | Line chart with a range picker; changing the range re-runs the tool. Every series is named in a legend with its latest value        |
 | `ui://cetacean/recommendations` | A [`get_recommendations`][mcp.tools.get_recommendations] result | Findings grouped by severity, most serious first. Picking one asks the host to send the model a follow-up, which a host may decline |
 
+## Compatibility
+
+From 1.0, the parts of this catalog a client builds on don't change within a major version. The general rules,
+including how a deprecation is announced, are under [Compatibility][api.compatibility] in the API reference.
+
+- **Covered:** tool names, argument names and types, resource URIs and URI templates, prompt names, and error
+  codes.
+- **Tool results aren't covered.** Their shape is tuned for agents and token cost, and can change in a minor
+  release. Changes are additive by default: a new field rather than a renamed or removed one.
+- **Except where a widget reads them.** A result field a widget renders is covered, because a widget can't adapt
+  to a field that moved.
+- **Widgets:** each `ui://cetacean/*` URI, and which tool names which widget, are covered. What a widget looks like
+  and how it behaves aren't; the bundles ship with the server they render for.
+
 
 [api]:  api
+[api.compatibility]:  api#compatibility
 [api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
 [dashboard]:  dashboard

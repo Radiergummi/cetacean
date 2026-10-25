@@ -984,20 +984,85 @@ only when [`oauth.enabled`][oauth.enabled] is set. The web API's own authorizati
 
 URIs are absolute—set [`server.public_url`][server.public_url] behind a reverse proxy.
 
+## Compatibility
+
+Cetacean follows [semantic versioning](https://semver.org/) from 1.0 onward. A change is breaking when a client that
+worked against an earlier 1.x release stops working, or quietly gets a different answer, without changing anything on
+its side. Breaking changes wait for the next major release. Until 1.0, a minor release can still break things, and
+the changelog marks each one **Breaking**.
+
+### What a 1.x release keeps
+
+- **Routes:** each path, its methods and status codes, the `Allow` header, `rel="edit"` targets, and the media
+  types the route serves. The [API explorer][api-explorer] lists them.
+- **Response bodies:** field names, types and meaning, the `@type` of each document, and every term
+  `/api/context.jsonld` defines.
+- **Errors:** every problem code and the status it answers with, as the [error reference](api/errors) lists them.
+- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items` and
+  `Content-Range`, the `?filter=` grammar and its fields, and the `?sort=` fields.
+- **Feeds and spreadsheets:** which endpoints serve them, and CSV column names and order.
+- **Event streams:** event names, payload shapes, `Last-Event-ID` replay and the `sync` and `full_sync` events, as
+  `/api/asyncapi` describes them.
+- **MCP:** tool, argument and prompt names, argument types, resource URIs, and widgets. See
+  [MCP tools and resources][mcp-tools.compatibility] for what that includes.
+- **Configuration:** each setting's TOML path, environment variable, flag and default, and the `_FILE` variants.
+  The [configuration reference][configuration] is the list.
+- **Authorization policies:** grant syntax, resource types, permissions and audience prefixes, as
+  [Authorization][authorization] describes them, and the [operations level][operations-level] each write needs.
+- **Self-metrics:** the `cetacean_*` metric and label names served at `/-/metrics`.
+- **Stored state:** the snapshot, the OAuth token store and registered OAuth clients under
+  [`storage.data_dir`][storage.data_dir] stay readable by every later 1.x release.
+- **The `healthcheck` subcommand** and its exit codes.
+
+### What it doesn't
+
+- **Additions.** A new field, route, tool, argument, event, setting, error code or metric ships in a minor release.
+  Clients must ignore what they don't recognize.
+- **Wording.** Problem `title` and `detail`, tool descriptions, prompt text, log messages and the dashboard's text
+  can change in any release.
+- **The dashboard.** Its pages and any URL beyond the resource routes ship with the server they belong to.
+- **Order.** List items without `?sort=`, members of a JSON object, and the methods in `Allow`.
+- **Defaults that track the outside world:** the recommended Docker Engine version, Go's TLS defaults, and the MCP
+  protocol revisions offered. Raising the [minimum Docker Engine version][requirements] ships in a minor release,
+  marked **Breaking**.
+- **Fixes toward a specification.** When a header, a status code, or a grammar contradicts a specification Cetacean
+  cites, the fix ships in a minor release, marked **Breaking**. Security fixes do too.
+
+### Deprecation
+
+A deprecated route, setting, tool, argument or field keeps working for at least two minor releases, and is
+removed only in the next major release. The changelog lists it under **Deprecated** in the release that deprecates
+it.
+
+- **Routes** answer with a `Deprecation` header ([RFC 9745](https://www.rfc-editor.org/rfc/rfc9745)), a `Sunset`
+  header ([RFC 8594](https://www.rfc-editor.org/rfc/rfc8594)) once the removal date is known, and
+  `Link: <…>; rel="deprecation"` pointing at the changelog entry. The OpenAPI spec marks them `deprecated: true`.
+  Once removed, a route answers `410 Gone` with code `API012`.
+- **MCP tools** say so in the first sentence of their description and in
+  `_meta["io.cetacean/deprecated"]`, which names the release and the replacement:
+  `{"since": "1.3.0", "replacement": "find"}`. A deprecated argument is still accepted, and documented as such.
+- **Settings** are still read, log one warning at startup naming their replacement, and are marked in the
+  [configuration reference][configuration]. Setting both a deprecated setting and its replacement stops Cetacean at
+  startup instead of silently picking one.
+
 [api-explorer]: api/explorer
 [api-tokens]: authentication#api-access-tokens
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [authorization]: authorization
+[configuration]: configuration
 [dashboard]: dashboard
 [mcp]: mcp
 [mcp-tools]: mcp-tools
+[mcp-tools.compatibility]: mcp-tools#compatibility
 [mcp.enabled]: configuration#mcp.enabled
 [oauth.api_tokens]: configuration#oauth.api_tokens
 [oauth.enabled]: configuration#oauth.enabled
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[requirements]: getting-started#requirements
 [server.cors.origins]: configuration#server.cors.origins
 [server.public_url]: configuration#server.public_url
 [server.sse.batch_interval]: configuration#server.sse.batch_interval
 [server.trusted_proxies]: configuration#server.trusted_proxies
+[storage.data_dir]: configuration#storage.data_dir

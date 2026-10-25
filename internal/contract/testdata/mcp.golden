@@ -1,0 +1,132 @@
+tool create_config
+  create_config.data: string required
+  create_config.encoding: string enum(base64,utf8)
+  create_config.labels: object
+  create_config.name: string required
+tool create_secret
+  create_secret.data: string
+  create_secret.encoding: string enum(base64,utf8)
+  create_secret.labels: object
+  create_secret.name: string required
+tool describe
+  describe.id: string required
+  describe.raw: boolean
+  describe.type: string enum(config,network,node,secret,service,stack,task,volume) required
+tool find -> ui://cetacean/table
+  find.image: string
+  find.label: string
+  find.limit: number
+  find.node: string
+  find.offset: number
+  find.query: string
+  find.raw: boolean
+  find.stack: string
+  find.state: string
+  find.type: string enum(configs,networks,nodes,secrets,services,stacks,tasks,volumes)
+tool get_cluster_status
+tool get_events
+  get_events.limit: number
+  get_events.resource: string
+  get_events.since: string
+  get_events.types: string[]
+  get_events.until: string
+tool get_logs -> ui://cetacean/logs
+  get_logs.cluster: boolean
+  get_logs.contains: string
+  get_logs.level: string enum(debug,error,fatal,info,warn)
+  get_logs.service: string
+  get_logs.since: string
+  get_logs.stack: string
+  get_logs.tail: number
+  get_logs.task: string
+tool get_metrics -> ui://cetacean/metrics
+  get_metrics.by: string enum(node,service)
+  get_metrics.id: string
+  get_metrics.metric: string enum(cpu,memory,network)
+  get_metrics.range: string enum(1h,24h,6h,7d)
+  get_metrics.target: string enum(cluster,node,service) required
+  get_metrics.top: number
+tool get_recommendations -> ui://cetacean/recommendations
+  get_recommendations.severity: string
+tool get_topology -> ui://cetacean/topology
+  get_topology.node: string
+  get_topology.view: string enum(drain-impact,network,placement)
+tool remove_config
+  remove_config.id: string required
+tool remove_network
+  remove_network.id: string required
+tool remove_secret
+  remove_secret.id: string required
+tool remove_service
+  remove_service.id: string required
+tool remove_task
+  remove_task.id: string required
+tool remove_volume
+  remove_volume.force: boolean
+  remove_volume.name: string required
+tool restart_service
+  restart_service.id: string required
+tool rollback_service
+  rollback_service.id: string required
+tool scale_service
+  scale_service.id: string required
+  scale_service.replicas: number required
+tool update_node
+  update_node.id: string required
+  update_node.section: string enum(availability,role) required
+  update_node.value: string required
+tool update_node_labels
+  update_node_labels.id: string required
+  update_node_labels.labels: object required
+tool update_service
+  update_service.id: string required
+  update_service.section: string enum(command,env,healthcheck,labels,log-driver,placement,ports,resources,rollback-policy,update-policy) required
+  update_service.value: any required
+tool update_service_configs
+  update_service_configs.configs: object[] required
+  update_service_configs.configs[].name: string required
+  update_service_configs.configs[].target: string
+  update_service_configs.id: string required
+tool update_service_image
+  update_service_image.id: string required
+  update_service_image.image: string required
+tool update_service_mounts
+  update_service_mounts.id: string required
+  update_service_mounts.mounts: object[] required
+  update_service_mounts.mounts[].readOnly: boolean
+  update_service_mounts.mounts[].source: string
+  update_service_mounts.mounts[].target: string required
+  update_service_mounts.mounts[].type: string enum(bind,tmpfs,volume) required
+tool update_service_secrets
+  update_service_secrets.id: string required
+  update_service_secrets.secrets: object[] required
+  update_service_secrets.secrets[].name: string required
+  update_service_secrets.secrets[].target: string
+tool watch
+  watch.service: string required
+  watch.timeout: number
+resource-template cetacean://configs/{id}
+resource-template cetacean://networks/{id}
+resource-template cetacean://nodes/{id}
+resource-template cetacean://secrets/{id}
+resource-template cetacean://services/{id}
+resource-template cetacean://services/{id}/compose
+resource-template cetacean://services/{id}/logs
+resource-template cetacean://stacks/{name}
+resource-template cetacean://stacks/{name}/compose
+resource-template cetacean://tasks/{id}
+resource-template cetacean://volumes/{name}
+resource cetacean://cluster
+resource cetacean://history
+resource cetacean://recommendations
+resource ui://cetacean/logs
+resource ui://cetacean/metrics
+resource ui://cetacean/recommendations
+resource ui://cetacean/table
+resource ui://cetacean/topology
+prompt diagnose_service
+prompt drain_node
+prompt explain_unschedulable
+prompt review_capacity
+prompt right_size_service
+prompt roll_back_service
