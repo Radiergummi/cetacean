@@ -124,7 +124,14 @@ them.
 - **MCP.** `get_events` reports `trackingSince` from the oldest entry. After a restore, that claims
   a window with a hole in it. The result gains a `gaps` array of `{from, to}`, which is an
   addition under the v1 rules, and the tool description says what it means.
-- **REST and the dashboard.** See [Open](#open).
+- **REST.** The JSON history collection gains a `gaps` member of the same `{from, to}` objects,
+  with a JSON-LD term and an OpenAPI schema. A gap is listed on the page whose entries it ends
+  among: its `to` is after the page's oldest entry and at or before the entry the `before` cursor
+  names. The first page has no upper bound, and the last page (no `next` link) has no lower bound.
+  That lists every gap exactly once across a full paging, filtered or not. CSV and the feeds carry
+  no gaps; they are lists of changes, and a gap is not one.
+- **Dashboard.** The history page and every resource's recent changes draw a divider where a gap
+  falls: "Cetacean was not running from … to …; changes in this window were not recorded".
 
 ## Replay
 
@@ -166,20 +173,26 @@ the ring and must never be fed from `notify`.
 2. **The writer tails the ring every second.** `notify` neither blocks on the disk nor drops
    entries; a crash loses at most a second, inside a recorded gap.
 3. **Own record types on disk**, carrying the fields the API hides.
-4. **Gaps are recorded and reported** to MCP, so a restored history never claims coverage it
-   doesn't have.
+4. **Gaps are recorded and reported** on MCP, on the REST history collection and on the
+   dashboard, so a restored history never claims coverage it doesn't have.
 5. **The epoch stays per process.** Pre-restart cursors get `full_sync`, because replaying across
    a gap would report a stream complete that isn't.
 6. **No new setting.** Persistence rides on `storage.snapshot`, and the ring's size stays fixed.
 
 ## Open
 
-1. **Gaps on REST and the dashboard.** The history page should show a divider ("Cetacean was not
-   running from … to …") where a gap falls. That needs the gaps on the wire. The smallest
-   addition is a `gaps` member on the history collection response, which is additive and needs a
-   JSON-LD term. Alternatively, a separate resource. Recommendation: the member. Whether it
-   ships in this change or right after is the question.
-2. **Recording what changed during a gap.** Comparing the restored snapshot with the first sync
-   could produce entries for the differences, marked as observed rather than timed, since their
-   timestamp is when Cetacean noticed, not when the change happened. Left for later. It needs a
-   marker on the entry and a decision on how such entries read in every output.
+1. **Recording what changed during a gap.** Two ways, both left out of this change:
+   - *Comparing the restored snapshot with the first sync.* This sees only net differences, with
+     no timestamps and no actors, and misses anything created and removed while Cetacean was
+     down. Not worth building.
+   - *Replaying the daemon's events.* The engine keeps its last 256 events in memory and serves
+     them to a subscription with `since`, so starting the first subscription at the gap's start
+     would recover real actions with real timestamps. This covers the common case, Cetacean's own
+     restart or redeploy. Its limits:
+     - The buffer is shared with container events (health checks among them), so on a busy
+       manager it spans minutes.
+     - It is lost when the daemon restarts.
+     - It is per daemon, and whether another manager logged the same swarm events is unverified.
+     - Tasks have no swarm events at all, so their changes stay unrecorded.
+
+     The gap would then narrow, never close. A candidate follow-up issue.
