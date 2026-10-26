@@ -10524,7 +10524,7 @@ Some files carry the "BSD" license, noted at the top of each file:
 
 ------------------------------------------------------------------------------
 
-tailscale.com v1.104.1
+tailscale.com v1.104.2
 License: BSD-3-Clause
 
 BSD 3-Clause License
