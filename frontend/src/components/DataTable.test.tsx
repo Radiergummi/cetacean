@@ -185,10 +185,13 @@ describe("DataTable", () => {
       name: `Row ${index}`,
     }));
 
-    // The virtualizer sizes its window from the scroll element's offset box,
-    // which jsdom reports as zero — it would render no rows at all.
-    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
-    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+    // The virtualizer sizes its window from the scroll element's box, which
+    // jsdom reports as zero — it would render no rows at all. Which box it
+    // reads differs between virtual-core releases, so both are faked.
+    const sizes = (["offset", "client"] as const).flatMap((box) => [
+      vi.spyOn(HTMLElement.prototype, `${box}Height`, "get").mockReturnValue(600),
+      vi.spyOn(HTMLElement.prototype, `${box}Width`, "get").mockReturnValue(800),
+    ]);
 
     const table = () => (
       <DataTable
@@ -218,8 +221,9 @@ describe("DataTable", () => {
       expect(row.hasAttribute("data-virtual-row")).toBe(true);
     }
 
-    height.mockRestore();
-    width.mockRestore();
+    for (const size of sizes) {
+      size.mockRestore();
+    }
   });
 
   it("drops a selection that the data no longer holds", () => {

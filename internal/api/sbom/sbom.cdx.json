@@ -2304,18 +2304,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/tailscale.com@v1.104.1?type=module",
+      "bom-ref": "pkg:golang/tailscale.com@v1.104.2?type=module",
       "type": "library",
       "name": "tailscale.com",
-      "version": "v1.104.1",
+      "version": "v1.104.2",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f4634e9bd233aa597d447e6303935670b882cd78bf5ada98e041d06360f2db39"
+          "content": "cc16d25b4b48e178b63e1ad9125f72b7aa166b2de5f00f8cf2c72c4e7669c809"
         }
       ],
-      "purl": "pkg:golang/tailscale.com@v1.104.1?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/tailscale.com@v1.104.2?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
