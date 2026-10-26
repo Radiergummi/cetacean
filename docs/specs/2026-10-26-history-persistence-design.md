@@ -13,7 +13,8 @@ exactly when someone needs that record.
 ## Scope
 
 The disk makes the ring survive a restart; it does not become the history. Reads stay in memory,
-the ring keeps its size, and the file is read once, at startup. Retention beyond the ring, an audit
+the ring's size becomes a setting (see [Settings](#settings)), and the file is read once, at
+startup. Retention beyond the ring, an audit
 log, and queries over more than memory holds are out of scope. If they come, they are a different
 store (most likely SQLite), and this file is what it imports once.
 
@@ -98,7 +99,9 @@ At startup, before the watcher starts and so before any `Append`, the file is re
   *Overrun*).
 - **The newest ring's worth of entries** are restored, through a new `History.Restore`. It fills
   the ring in order, rebuilds the per-resource index, and sets the counter to the last entry's ID,
-  not to the number of entries. New entries continue from there, so IDs never repeat.
+  not to the number of entries. New entries continue from there, so IDs never repeat. The ring's
+  size is the one configured now, not the one the file was written under. A smaller size keeps
+  the newest entries; a larger one restores everything the file holds.
 - **`Since` reads the oldest ID from the ring** instead of deriving it as `count - size + 1`. That
   derivation assumes IDs run without jumps from 1, which a restored ring does not promise.
 
@@ -145,12 +148,19 @@ restoring needs no change to the broadcaster.
 ## Settings
 
 Persistence follows `storage.snapshot`. History is cluster state like the snapshot, and an operator
-who has turned off writing cluster state to disk has turned off this too. No new setting. The
-documentation of `storage.snapshot` and `storage.data_dir` names the new file.
+who has turned off writing cluster state to disk has turned off this too. The documentation of
+`storage.snapshot` and `storage.data_dir` names the new file.
 
-The ring's size stays fixed at 10,000. Making it a setting is independent of persistence, since the
-ring still has to fit in memory. `Restore` already truncates to the ring's size and keeps the
-newest, so a configurable size could be added later without a format change.
+The ring's size becomes `storage.history_entries` (`CETACEAN_HISTORY_ENTRIES`,
+`-history-entries`), defaulting to 10,000. It applies with or without persistence, since it sizes
+the ring in memory. It accepts 1,000 to 100,000, and startup refuses anything outside that range,
+as it does for the `sizing.*` ranges. The upper bound exists because the ring is held in memory.
+A search with no match also walks all of it under the read lock that every `Append` waits on. The
+size also sets how much a few other things cover:
+
+- how far `Last-Event-ID` replay can reach back before answering `full_sync`
+- how much an unpaginated CSV download returns
+- the file's bound on disk, at about twice the ring
 
 ## Secrets and privacy
 
@@ -177,7 +187,8 @@ the ring and must never be fed from `notify`.
    dashboard, so a restored history never claims coverage it doesn't have.
 5. **The epoch stays per process.** Pre-restart cursors get `full_sync`, because replaying across
    a gap would report a stream complete that isn't.
-6. **No new setting.** Persistence rides on `storage.snapshot`, and the ring's size stays fixed.
+6. **One new setting.** Persistence rides on `storage.snapshot`. The ring's size becomes
+   `storage.history_entries`, defaulting to 10,000 and bounded to 1,000–100,000.
 
 ## Open
 
