@@ -10559,7 +10559,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-@ai-sdk/gateway 3.0.13
+@ai-sdk/gateway 3.0.139
 https://ai-sdk.dev/docs
 License: Apache-2.0
 
@@ -10579,7 +10579,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-@ai-sdk/provider 3.0.2
+@ai-sdk/provider 3.0.12
 https://ai-sdk.dev/docs
 License: Apache-2.0
 
@@ -10599,7 +10599,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-@ai-sdk/provider-utils 4.0.5
+@ai-sdk/provider-utils 4.0.33
 https://ai-sdk.dev/docs
 License: Apache-2.0
 
@@ -10619,7 +10619,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-@ai-sdk/vue 3.0.33
+@ai-sdk/vue 3.0.214
 https://ai-sdk.dev/docs
 License: Apache-2.0
 
@@ -13222,7 +13222,7 @@ would assert a copyright holder and year the authors never stated.
 
 ------------------------------------------------------------------------------
 
-@scalar/agent-chat 0.12.43
+@scalar/agent-chat 0.12.45
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13251,7 +13251,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/api-client 3.23.0
+@scalar/api-client 3.23.2
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13280,7 +13280,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/api-reference 1.74.0
+@scalar/api-reference 1.75.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13309,7 +13309,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/asyncapi-upgrader 0.1.17
+@scalar/asyncapi-upgrader 0.1.18
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13338,7 +13338,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/blocks 0.5.2
+@scalar/blocks 0.5.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13367,7 +13367,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/code-highlight 0.4.9
+@scalar/code-highlight 0.4.10
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13396,7 +13396,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/components 0.31.1
+@scalar/components 0.32.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13425,7 +13425,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/helpers 0.16.3
+@scalar/helpers 0.16.4
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13454,7 +13454,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/icons 0.7.6
+@scalar/icons 0.7.7
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13483,7 +13483,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/json-magic 0.15.7
+@scalar/json-magic 0.16.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13512,7 +13512,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/localization 0.2.7
+@scalar/localization 0.2.8
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13541,7 +13541,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/oas-utils 0.20.12
+@scalar/oas-utils 0.20.14
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13570,7 +13570,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-to-markdown 1.5.4
+@scalar/openapi-to-markdown 1.6.1
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13628,7 +13628,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/openapi-upgrader 0.4.4
+@scalar/openapi-upgrader 0.4.5
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13657,7 +13657,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/schemas 0.13.2
+@scalar/schemas 0.14.0
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13686,7 +13686,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/sidebar 0.12.0
+@scalar/sidebar 0.12.2
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13715,7 +13715,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/snippetz 0.10.8
+@scalar/snippetz 0.10.10
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13744,7 +13744,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/themes 0.19.1
+@scalar/themes 0.19.2
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13805,7 +13805,7 @@ THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/types 0.23.2
+@scalar/types 0.24.0
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13863,7 +13863,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/use-hooks 0.4.20
+@scalar/use-hooks 0.4.21
 https://github.com/scalar/scalar
 License: MIT
 
@@ -13950,7 +13950,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@scalar/workspace-store 0.68.3
+@scalar/workspace-store 0.68.5
 https://github.com/scalar/scalar
 License: MIT
 
@@ -14215,7 +14215,7 @@ limitations under the License.
 
 ------------------------------------------------------------------------------
 
-@tanstack/query-core 5.104.3
+@tanstack/query-core 5.104.5
 https://tanstack.com/query
 License: MIT
 
@@ -14244,7 +14244,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-query 5.104.3
+@tanstack/react-query 5.104.5
 https://tanstack.com/query
 License: MIT
 
@@ -14273,7 +14273,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/react-virtual 3.14.20
+@tanstack/react-virtual 3.14.22
 https://tanstack.com/virtual
 License: MIT
 
@@ -14331,7 +14331,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@tanstack/virtual-core 3.19.5
+@tanstack/virtual-core 3.19.7
 https://tanstack.com/virtual
 License: MIT
 
@@ -15466,7 +15466,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-@vercel/oidc 3.1.0
+@vercel/oidc 3.2.0
 https://vercel.com
 License: Apache-2.0
 
@@ -16198,7 +16198,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-ai 6.0.33
+ai 6.0.214
 https://ai-sdk.dev/docs
 License: Apache-2.0
 
@@ -16414,7 +16414,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-chart.js 4.5.1
+chart.js 4.6.1
 https://www.chartjs.org
 License: MIT
 
@@ -19289,7 +19289,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-lucide-react 1.58.0
+lucide-react 1.61.0
 https://lucide.dev
 License: ISC
 

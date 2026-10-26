@@ -462,16 +462,16 @@
   "go:tailscale.com@v1.104.2": {
    "license": "a7ca6186a7963a0a60740f6047760eec"
   },
-  "npm:@ai-sdk/gateway@3.0.13": {
+  "npm:@ai-sdk/gateway@3.0.139": {
    "license": "b4f9adb7c568904834d0dd6cc98d16c3"
   },
-  "npm:@ai-sdk/provider-utils@4.0.5": {
+  "npm:@ai-sdk/provider-utils@4.0.33": {
    "license": "b4f9adb7c568904834d0dd6cc98d16c3"
   },
-  "npm:@ai-sdk/provider@3.0.2": {
+  "npm:@ai-sdk/provider@3.0.12": {
    "license": "b4f9adb7c568904834d0dd6cc98d16c3"
   },
-  "npm:@ai-sdk/vue@3.0.33": {
+  "npm:@ai-sdk/vue@3.0.214": {
    "license": "b4f9adb7c568904834d0dd6cc98d16c3"
   },
   "npm:@babel/helper-string-parser@7.29.7": {
@@ -621,73 +621,73 @@
   "npm:@replit/codemirror-css-color-picker@6.3.0": {
    "license": "59835d018f6a700d065bda1e58072222"
   },
-  "npm:@scalar/agent-chat@0.12.43": {
+  "npm:@scalar/agent-chat@0.12.45": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/api-client@3.23.0": {
+  "npm:@scalar/api-client@3.23.2": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/api-reference@1.74.0": {
+  "npm:@scalar/api-reference@1.75.1": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/asyncapi-upgrader@0.1.17": {
+  "npm:@scalar/asyncapi-upgrader@0.1.18": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/blocks@0.5.2": {
+  "npm:@scalar/blocks@0.5.4": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/code-highlight@0.4.9": {
+  "npm:@scalar/code-highlight@0.4.10": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/components@0.31.1": {
+  "npm:@scalar/components@0.32.1": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/helpers@0.16.3": {
+  "npm:@scalar/helpers@0.16.4": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/icons@0.7.6": {
+  "npm:@scalar/icons@0.7.7": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/json-magic@0.15.7": {
+  "npm:@scalar/json-magic@0.16.1": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/localization@0.2.7": {
+  "npm:@scalar/localization@0.2.8": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/oas-utils@0.20.12": {
+  "npm:@scalar/oas-utils@0.20.14": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/openapi-to-markdown@1.5.4": {
+  "npm:@scalar/openapi-to-markdown@1.6.1": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/openapi-types@0.9.8": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/openapi-upgrader@0.4.4": {
+  "npm:@scalar/openapi-upgrader@0.4.5": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/schemas@0.13.2": {
+  "npm:@scalar/schemas@0.14.0": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/sidebar@0.12.0": {
+  "npm:@scalar/sidebar@0.12.2": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/snippetz@0.10.8": {
+  "npm:@scalar/snippetz@0.10.10": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/themes@0.19.1": {
+  "npm:@scalar/themes@0.19.2": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/typebox@0.1.3": {
    "license": "be1a8539d969839a161f1efca9c3acda"
   },
-  "npm:@scalar/types@0.23.2": {
+  "npm:@scalar/types@0.24.0": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/use-codemirror@0.14.15": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/use-hooks@0.4.20": {
+  "npm:@scalar/use-hooks@0.4.21": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@scalar/use-toasts@0.10.5": {
@@ -696,7 +696,7 @@
   "npm:@scalar/validation@0.6.7": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
-  "npm:@scalar/workspace-store@0.68.3": {
+  "npm:@scalar/workspace-store@0.68.5": {
    "license": "380cd0a6ad700e1f821f2a509f0dd9ff"
   },
   "npm:@standard-schema/spec@1.1.0": {
@@ -705,19 +705,19 @@
   "npm:@swc/helpers@0.5.23": {
    "license": "d96eba1f1881334d50ffc144276dfa98"
   },
-  "npm:@tanstack/query-core@5.104.3": {
+  "npm:@tanstack/query-core@5.104.5": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-query@5.104.3": {
+  "npm:@tanstack/react-query@5.104.5": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/react-virtual@3.14.20": {
+  "npm:@tanstack/react-virtual@3.14.22": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
   "npm:@tanstack/virtual-core@3.17.11": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
-  "npm:@tanstack/virtual-core@3.19.5": {
+  "npm:@tanstack/virtual-core@3.19.7": {
    "license": "a405ee70c632bb938acb7ac5f210e814"
   },
   "npm:@tanstack/vue-virtual@3.13.39": {
@@ -787,7 +787,7 @@
   "npm:@unhead/vue@2.1.17": {
    "license": "d06451530138de11ec5cee38b458f1aa"
   },
-  "npm:@vercel/oidc@3.1.0": {
+  "npm:@vercel/oidc@3.2.0": {
    "license": "b070d77bfb2c52a1dd6996de0ce5f64c"
   },
   "npm:@vue/compiler-core@3.5.42": {
@@ -844,7 +844,7 @@
   "npm:@xyflow/system@0.0.83": {
    "license": "023119ac20fb1c8c9930abe0bcd19698"
   },
-  "npm:ai@6.0.33": {
+  "npm:ai@6.0.214": {
    "license": "b4f9adb7c568904834d0dd6cc98d16c3"
   },
   "npm:aria-hidden@1.2.6": {
@@ -868,7 +868,7 @@
   "npm:character-entities@2.0.2": {
    "license": "63cb98b3f6abfb3c3592c16f88253c1b"
   },
-  "npm:chart.js@4.5.1": {
+  "npm:chart.js@4.6.1": {
    "license": "41a84aa2caba645f966a18d9c2056b73"
   },
   "npm:chartjs-plugin-zoom@2.2.0": {
@@ -1084,7 +1084,7 @@
   "npm:lowlight@3.3.0": {
    "license": "dd1081884a92952802f4803110a6bb54"
   },
-  "npm:lucide-react@1.58.0": {
+  "npm:lucide-react@1.61.0": {
    "license": "b495047bd93a9b06913511076f504dab"
   },
   "npm:luxon@3.7.2": {
