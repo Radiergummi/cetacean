@@ -15,6 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // taskHandle is the create-task response a task-augmented tools/call returns
@@ -139,6 +140,8 @@ func taskTestServer(t *testing.T, c *cache.Cache) *Server {
 // are running. It runs through the real transport because that is the only
 // place the behaviour exists — none of it is reachable by calling the handler.
 func TestScaleServiceAsTaskCompletesOnConvergence(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2663/tasks-get-status-working")
+
 	c := cache.New(nil)
 	seedService(t, c, "web", 3 /* desired */, 1 /* running */)
 
@@ -340,6 +343,11 @@ func TestTaskAugmentedCallStillEnforcesACL(t *testing.T) {
 // successful result — so a refused mutation would show as completed and an
 // agent polling tasks/get would carry on as though the cluster had changed.
 func TestFailedTaskReportsFailedNotCompleted(t *testing.T) {
+	spec.Satisfies(t,
+		"mcp/sep-2663/failed-status-jsonrpc-only",
+		"mcp/sep-2663/tool-error-uses-completed-status",
+	)
+
 	c := cache.New(nil)
 	seedService(t, c, "web", 2, 2)
 

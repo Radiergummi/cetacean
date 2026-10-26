@@ -2,9 +2,13 @@ package mcp
 
 import (
 	"encoding/json"
+	"regexp"
 	"testing"
+	"testing/fstest"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
 
 // Holds the advertisement and the capability together: if server/discover names
@@ -100,5 +104,83 @@ func TestDiscoverAdvertisesExtensions(t *testing.T) {
 		if _, ok := serverExtensions()[name]; !ok {
 			t.Errorf("server/discover advertises %q, which serverExtensions does not declare", name)
 		}
+	}
+}
+
+// metaKeyRE is the _meta key grammar with its prefix made mandatory: dotted
+// labels opening with a letter and closing with a letter or digit, a slash,
+// then a name that opens and closes alphanumeric.
+var metaKeyRE = regexp.MustCompile(
+	`^[A-Za-z]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z]([A-Za-z0-9-]*[A-Za-z0-9])?)*/` +
+		`[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`,
+)
+
+// withWidget installs one widget bundle for the test, so the UI extension is
+// declared the way a build with widgets declares it.
+func withWidget(t *testing.T) {
+	t.Helper()
+
+	previous := widgetFS
+	SetWidgetFS(fstest.MapFS{"table/index.html": {Data: []byte("<!doctype html>")}})
+	t.Cleanup(func() { SetWidgetFS(previous) })
+}
+
+func TestExtensionIdentifiersFollowTheMetaKeyRules(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2133/identifiers-follow-meta-naming")
+
+	withWidget(t)
+
+	_, env := mcpModern(t, newTestServer(t).Handler(), 1, "server/discover", `{}`)
+	if env.Error != nil {
+		t.Fatalf("server/discover error: %+v", env.Error)
+	}
+
+	var result struct {
+		Capabilities struct {
+			Extensions map[string]json.RawMessage `json:"extensions"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil {
+		t.Fatalf("decode server/discover: %v", err)
+	}
+
+	if _, ok := result.Capabilities.Extensions[extensionUI]; !ok {
+		t.Fatalf("a build with widgets declares no %s: %s", extensionUI, env.Result)
+	}
+
+	for name := range result.Capabilities.Extensions {
+		if !metaKeyRE.MatchString(name) {
+			t.Errorf("extension %q is not a prefixed _meta key", name)
+		}
+	}
+}
+
+// The half of the fallback rule that holds: a UI-enabled tool answers a host
+// that declares no UI extension in text. The Tasks half is pinned with the
+// rest of that extension.
+func TestAToolWithAWidgetAnswersAHostWithoutOneInText(t *testing.T) {
+	spec.Satisfies(t, "mcp/sep-2133/unsupported-extension-falls-back")
+
+	withWidget(t)
+
+	_, env := mcpModern(t, newTestServer(t).Handler(), 1, "tools/call",
+		`{"name":"find","arguments":{"query":"web"}}`)
+	if env.Error != nil {
+		t.Fatalf("tools/call find: %+v", env.Error)
+	}
+
+	var result struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil {
+		t.Fatalf("decode tools/call: %v", err)
+	}
+
+	if len(result.Content) == 0 || result.Content[0].Type != "text" ||
+		result.Content[0].Text == "" {
+		t.Errorf("a host without the UI extension got no text: %s", env.Result)
 	}
 }
