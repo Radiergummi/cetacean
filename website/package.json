@@ -20,36 +20,36 @@
     "lint": "oxlint"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.3",
-    "@astrojs/mdx": "^8.1.0",
+    "@astrojs/markdown-remark": "^7.3.4",
+    "@astrojs/mdx": "^8.1.1",
     "@astrojs/sitemap": "^3.7.4",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/geist": "^5.3.0",
-    "@lucide/astro": "^1.58.0",
-    "@scalar/api-reference": "^1.74.0",
+    "@lucide/astro": "^1.61.0",
+    "@scalar/api-reference": "^1.75.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/fontkit": "^2.0.9",
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
-    "astro": "^7.4.0",
+    "astro": "^7.4.2",
     "fontkit": "^2.0.4",
     "marked": "^18.1.1",
     "pagefind": "^1.5.2",
-    "pele": "^1.5.2",
+    "pele": "^1.9.0",
     "sirv": "^3.0.2",
     "tailwindcss": "^4.3.3",
     "unist-util-visit": "^5.1.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
+    "@astrojs/check": "^0.9.12",
     "@types/unist": "^3.0.3",
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",
     "typescript": "^6.0.3",
     "unified": "^11.0.5",
     "vfile": "^6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.5"
   },
   "allowScripts": {
     "esbuild@0.28.1": true
