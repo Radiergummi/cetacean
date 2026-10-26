@@ -459,7 +459,7 @@
   "go:gvisor.dev/gvisor@v0.0.0-20260915211658-a6f909f08a72": {
    "license": "0fbab5c58efbdf6d31e8085214f2dd82"
   },
-  "go:tailscale.com@v1.104.1": {
+  "go:tailscale.com@v1.104.2": {
    "license": "a7ca6186a7963a0a60740f6047760eec"
   },
   "npm:@ai-sdk/gateway@3.0.13": {
