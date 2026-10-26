@@ -32,6 +32,7 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
+				versionArg("service"),
 				mcplib.WithString("section",
 					mcplib.Required(),
 					// The advertised enum is the accepted list itself, not a
@@ -66,6 +67,7 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Node ID or hostname."),
 				),
+				versionArg("node"),
 				mcplib.WithObject(
 					"labels",
 					mcplib.Required(),
@@ -176,6 +178,7 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
+				versionArg("service"),
 				mcplib.WithArray("secrets",
 					mcplib.Required(),
 					mcplib.Description(
@@ -203,6 +206,7 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
+				versionArg("service"),
 				mcplib.WithArray("configs",
 					mcplib.Required(),
 					mcplib.Description(
@@ -230,6 +234,7 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Required(),
 					mcplib.Description("Service ID or name."),
 				),
+				versionArg("service"),
 				mcplib.WithArray("mounts",
 					mcplib.Required(),
 					mcplib.Description(

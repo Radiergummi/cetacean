@@ -35,7 +35,7 @@ requirements:
     mutants:
       - file: internal/api/write_helpers.go
         replace: "\tisJSONPatch := ct == \"application/json-patch+json\""
-        with: "\tisJSONPatch := strings.HasPrefix(ct, \"application/json\")"
+        with: "\tisJSONPatch := len(ct) >= 16 && ct[:16] == \"application/json\""
 
   - id: accept-patch-is-advertised
     level: SHOULD

@@ -110,6 +110,15 @@ func TestPreconditionPinsTheWrite(t *testing.T) {
 		}
 	})
 
+	t.Run("the writer refusing the pinned version answers 412", func(t *testing.T) {
+		stale := &docker.StaleVersionError{Kind: "service", ID: "svc1", Pinned: 7, Current: 8}
+
+		router, etag, _ := newServer(t, stale)
+		if got := patch(router, etag); got != http.StatusPreconditionFailed {
+			t.Errorf("status = %d, want 412", got)
+		}
+	})
+
 	t.Run("without If-Match a sequence conflict stays 409", func(t *testing.T) {
 		router, _, _ := newServer(t, sequenceConflict)
 		if got := patch(router, ""); got != http.StatusConflict {

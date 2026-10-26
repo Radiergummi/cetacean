@@ -4,11 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.Request) {
@@ -459,7 +460,7 @@ func writeSwarmErrorCode(
 // writeSwarmConflict answers a write that lost the race against another to the
 // swarm's version, and reports whether it did.
 func writeSwarmConflict(w http.ResponseWriter, r *http.Request, err error) bool {
-	if !strings.Contains(err.Error(), sequenceConflict) {
+	if !docker.IsOutOfSequence(err) {
 		return false
 	}
 

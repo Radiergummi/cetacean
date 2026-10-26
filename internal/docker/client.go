@@ -588,17 +588,19 @@ func (c *Client) updateNodeSpec(
 	if err != nil {
 		return swarm.Node{}, err
 	}
+	if err := checkPinned(ctx, "node", node.ID, node.Version); err != nil {
+		return swarm.Node{}, err
+	}
 	if err := mutate(&node.Spec); err != nil {
 		return swarm.Node{}, err
 	}
-	version := writeVersion(ctx, "node", node.ID, node.Version)
 	settle := c.expect(ctx, cache.Expectation{
 		Type:  cache.EventNode,
 		Key:   node.ID,
-		After: version.Index,
+		After: node.Version.Index,
 	})
 
-	err = c.docker.NodeUpdate(ctx, node.ID, version, node.Spec)
+	err = c.docker.NodeUpdate(ctx, node.ID, node.Version, node.Spec)
 	settle(err)
 
 	if err != nil {
@@ -704,19 +706,21 @@ func (c *Client) UpdateConfigLabels(
 	if err != nil {
 		return swarm.Config{}, err
 	}
+	if err := checkPinned(ctx, "config", cfg.ID, cfg.Version); err != nil {
+		return swarm.Config{}, err
+	}
 	updated, err := mutate(cfg.Spec.Labels)
 	if err != nil {
 		return swarm.Config{}, err
 	}
 	cfg.Spec.Labels = updated
-	version := writeVersion(ctx, "config", cfg.ID, cfg.Version)
 	settle := c.expect(ctx, cache.Expectation{
 		Type:  cache.EventConfig,
 		Key:   cfg.ID,
-		After: version.Index,
+		After: cfg.Version.Index,
 	})
 
-	err = c.docker.ConfigUpdate(ctx, cfg.ID, version, cfg.Spec)
+	err = c.docker.ConfigUpdate(ctx, cfg.ID, cfg.Version, cfg.Spec)
 	settle(err)
 
 	if err != nil {
@@ -734,19 +738,21 @@ func (c *Client) UpdateSecretLabels(
 	if err != nil {
 		return swarm.Secret{}, err
 	}
+	if err := checkPinned(ctx, "secret", sec.ID, sec.Version); err != nil {
+		return swarm.Secret{}, err
+	}
 	updated, err := mutate(sec.Spec.Labels)
 	if err != nil {
 		return swarm.Secret{}, err
 	}
 	sec.Spec.Labels = updated
-	version := writeVersion(ctx, "secret", sec.ID, sec.Version)
 	settle := c.expect(ctx, cache.Expectation{
 		Type:  cache.EventSecret,
 		Key:   sec.ID,
-		After: version.Index,
+		After: sec.Version.Index,
 	})
 
-	err = c.docker.SecretUpdate(ctx, sec.ID, version, sec.Spec)
+	err = c.docker.SecretUpdate(ctx, sec.ID, sec.Version, sec.Spec)
 	settle(err)
 
 	if err != nil {
@@ -892,18 +898,21 @@ func (c *Client) updateService(
 		return swarm.Service{}, err
 	}
 
+	if err := checkPinned(ctx, "service", svc.ID, svc.Version); err != nil {
+		return swarm.Service{}, err
+	}
+
 	if err := mutate(&svc); err != nil {
 		return swarm.Service{}, err
 	}
 
-	version := writeVersion(ctx, "service", svc.ID, svc.Version)
 	settle := c.expect(ctx, cache.Expectation{
 		Type:  cache.EventService,
 		Key:   svc.ID,
-		After: version.Index,
+		After: svc.Version.Index,
 	})
 
-	_, err = c.docker.ServiceUpdate(ctx, svc.ID, version, svc.Spec, opts)
+	_, err = c.docker.ServiceUpdate(ctx, svc.ID, svc.Version, svc.Spec, opts)
 	settle(err)
 
 	if err != nil {

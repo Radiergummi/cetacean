@@ -9,7 +9,6 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -21,6 +20,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // lookupOr404 resolves a resource from the cache by key. Returns false (and
@@ -201,11 +201,6 @@ func writeDockerError(
 	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
 }
 
-// sequenceConflict is Swarmkit's optimistic-concurrency refusal. Matched on
-// its message because Swarmkit raises it with gRPC code Unknown, which Docker
-// renders as a bare 500 with no class to test for.
-const sequenceConflict = "update out of sequence"
-
 // writeResourceError handles Docker API errors for resource mutations,
 // mapping version conflicts to the given conflictCode, or to 412 when the
 // version was the one an If-Match precondition validated.
@@ -215,14 +210,14 @@ func writeResourceError(
 	err error,
 	resource, id, conflictCode string,
 ) {
-	if preconditioned(r.Context()) && strings.Contains(err.Error(), sequenceConflict) {
+	if preconditioned(r.Context()) && docker.IsOutOfSequence(err) {
 		writeErrorCode(w, r, "API013",
 			"If-Match did not match the current state of the resource")
 		return
 	}
 	if cerrdefs.IsConflict(err) ||
 		cerrdefs.IsFailedPrecondition(err) ||
-		strings.Contains(err.Error(), sequenceConflict) {
+		docker.IsOutOfSequence(err) {
 		writeErrorCode(w, r, conflictCode, err.Error())
 		return
 	}

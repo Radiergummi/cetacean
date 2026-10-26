@@ -418,13 +418,17 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 	if err := s.checkServiceWrite(ctx, id); err != nil {
 		return "", err
 	}
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
 	svc, err := wc.ScaleService(ctx, id, uint64(replicas))
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -451,13 +455,17 @@ func (s *Server) toolUpdateServiceImage(
 	if err := s.checkServiceWrite(ctx, id); err != nil {
 		return "", err
 	}
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
 	svc, err := wc.UpdateServiceImage(ctx, id, image)
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -476,13 +484,17 @@ func (s *Server) toolRollbackService(
 	if err := s.checkServiceWrite(ctx, id); err != nil {
 		return "", err
 	}
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
 	svc, err := wc.RollbackService(ctx, id)
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -501,13 +513,17 @@ func (s *Server) toolRestartService(
 	if err := s.checkServiceWrite(ctx, id); err != nil {
 		return "", err
 	}
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
 	}
 	svc, err := wc.RestartService(ctx, id)
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -587,6 +603,10 @@ func (s *Server) toolUpdateNodeLabels(
 	if err != nil {
 		return "", err
 	}
+	ctx, id, cond, err := s.pinVersion(ctx, req, "node", id)
+	if err != nil {
+		return "", err
+	}
 
 	wc, err := s.requireWriteClient()
 	if err != nil {
@@ -594,7 +614,7 @@ func (s *Server) toolUpdateNodeLabels(
 	}
 	updated, err := wc.UpdateNodeLabels(ctx, id, mergePatchMutator(patch))
 	if err != nil {
-		return "", err
+		return "", s.refused(cond, err)
 	}
 	return marshalResult(nodeUpdate(sectionLabels, updated))
 }
@@ -658,8 +678,8 @@ type serviceMutationResult struct {
 	// State is the same derivation the web API and the dashboard report, via
 	// cluster.DeriveServiceState.
 	State string `json:"state"`
-	// Version is the service's Swarm version index, for a caller doing its own
-	// optimistic-concurrency checks.
+	// Version is the service's Swarm version index as the write left it. A
+	// rolling update the write started moves it on again.
 	Version uint64 `json:"version"`
 }
 

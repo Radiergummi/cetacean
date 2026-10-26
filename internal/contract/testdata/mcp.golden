@@ -66,30 +66,38 @@ tool remove_volume
   remove_volume.name: string required
 tool restart_service
   restart_service.id: string required
+  restart_service.version: integer
 tool rollback_service
   rollback_service.id: string required
+  rollback_service.version: integer
 tool scale_service
   scale_service.id: string required
   scale_service.replicas: number required
+  scale_service.version: integer
 tool update_node
   update_node.id: string required
   update_node.section: string enum(availability,role) required
   update_node.value: string required
+  update_node.version: integer
 tool update_node_labels
   update_node_labels.id: string required
   update_node_labels.labels: object required
+  update_node_labels.version: integer
 tool update_service
   update_service.id: string required
   update_service.section: string enum(command,env,healthcheck,labels,log-driver,placement,ports,resources,rollback-policy,update-policy) required
   update_service.value: any required
+  update_service.version: integer
 tool update_service_configs
   update_service_configs.configs: object[] required
   update_service_configs.configs[].name: string required
   update_service_configs.configs[].target: string
   update_service_configs.id: string required
+  update_service_configs.version: integer
 tool update_service_image
   update_service_image.id: string required
   update_service_image.image: string required
+  update_service_image.version: integer
 tool update_service_mounts
   update_service_mounts.id: string required
   update_service_mounts.mounts: object[] required
@@ -97,11 +105,13 @@ tool update_service_mounts
   update_service_mounts.mounts[].source: string
   update_service_mounts.mounts[].target: string required
   update_service_mounts.mounts[].type: string enum(bind,tmpfs,volume) required
+  update_service_mounts.version: integer
 tool update_service_secrets
   update_service_secrets.id: string required
   update_service_secrets.secrets: object[] required
   update_service_secrets.secrets[].name: string required
   update_service_secrets.secrets[].target: string
+  update_service_secrets.version: integer
 tool watch
   watch.service: string required
   watch.timeout: number

@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,7 +41,7 @@ func versionDaemon(t *testing.T) (*Client, func() []string) {
 		case strings.HasPrefix(path, "/services/"):
 			body = swarm.Service{ID: "svc", Meta: meta, Spec: swarm.ServiceSpec{
 				TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}},
-			}}
+			}, PreviousSpec: &swarm.ServiceSpec{}}
 		case strings.HasPrefix(path, "/nodes/"):
 			body = swarm.Node{ID: "node", Meta: meta}
 		case strings.HasPrefix(path, "/configs/"):
@@ -71,9 +72,9 @@ func versionDaemon(t *testing.T) (*Client, func() []string) {
 	}
 }
 
-// A write a precondition pinned must name the validated version, not the one
-// it reads, or a change landing in between is overwritten instead of refused.
-func TestWritesNameThePinnedVersion(t *testing.T) {
+// A pinned write is applied only while the record is still at the pinned
+// version, and is refused without writing anything once it has moved on.
+func TestPinnedWritesRefuseAMovedRecord(t *testing.T) {
 	keep := func(m map[string]string) (map[string]string, error) { return m, nil }
 
 	writes := []struct {
@@ -86,6 +87,10 @@ func TestWritesNameThePinnedVersion(t *testing.T) {
 		}},
 		{"service", "svc", func(c *Client, ctx context.Context) error {
 			_, err := c.UpdateServiceSpec(ctx, "svc", func(*swarm.ServiceSpec) error { return nil })
+			return err
+		}},
+		{"service", "svc", func(c *Client, ctx context.Context) error {
+			_, err := c.RollbackService(ctx, "svc")
 			return err
 		}},
 		{"node", "node", func(c *Client, ctx context.Context) error {
@@ -105,12 +110,11 @@ func TestWritesNameThePinnedVersion(t *testing.T) {
 	for _, w := range writes {
 		t.Run(w.kind, func(t *testing.T) {
 			client, written := versionDaemon(t)
-			pin := swarm.Version{Index: 5}
 
 			contexts := []context.Context{
-				WithPinnedVersion(context.Background(), w.kind, w.id, pin),
+				WithPinnedVersion(context.Background(), w.kind, w.id, swarm.Version{Index: 7}),
 				context.Background(),
-				WithPinnedVersion(context.Background(), w.kind, "other", pin),
+				WithPinnedVersion(context.Background(), w.kind, "other", swarm.Version{Index: 5}),
 			}
 			for _, ctx := range contexts {
 				if err := w.write(client, ctx); err != nil {
@@ -118,11 +122,35 @@ func TestWritesNameThePinnedVersion(t *testing.T) {
 				}
 			}
 
-			got := strings.Join(written(), ",")
-			if got != "5,7,7" {
-				t.Errorf("versions written = %s, want 5 when pinned, else the one read (7)", got)
+			stale := WithPinnedVersion(context.Background(), w.kind, w.id, swarm.Version{Index: 5})
+			err := w.write(client, stale)
+
+			var refused *StaleVersionError
+			if !errors.As(err, &refused) {
+				t.Fatalf("stale pin: err = %v, want a *StaleVersionError", err)
+			}
+			if refused.Kind != w.kind || refused.Pinned != 5 || refused.Current != 7 {
+				t.Errorf("refusal = %+v, want %s pinned at 5, current 7", refused, w.kind)
+			}
+			if !IsOutOfSequence(err) {
+				t.Errorf("IsOutOfSequence(%v) = false, want it read as the engine's refusal", err)
+			}
+
+			if got := strings.Join(written(), ","); got != "7,7,7" {
+				t.Errorf("versions written = %s, want three at 7 and none at the stale 5", got)
 			}
 		})
+	}
+}
+
+func TestIsOutOfSequenceMatchesTheEnginesRefusal(t *testing.T) {
+	engine := errors.New("rpc error: code = Unknown desc = update out of sequence")
+	if !IsOutOfSequence(engine) {
+		t.Errorf("IsOutOfSequence(%v) = false", engine)
+	}
+
+	if IsOutOfSequence(errors.New("boom")) || IsOutOfSequence(nil) {
+		t.Error("IsOutOfSequence matched an unrelated error")
 	}
 }
 

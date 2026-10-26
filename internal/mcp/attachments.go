@@ -11,7 +11,6 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // defaultAttachmentMode is the file mode Swarm gives a mounted secret or
@@ -99,6 +98,11 @@ func (s *Server) toolUpdateServiceSecrets(
 		return "", err
 	}
 
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
+
 	svc, _, _ := s.cache.ResolveService(id)
 
 	writeClient, err := s.requireWriteClient()
@@ -144,13 +148,14 @@ func (s *Server) toolUpdateServiceSecrets(
 		})
 	}
 
-	updated, err := writeClient.UpdateServiceSecrets(
-		docker.PinChecked(ctx, "service", svc.ID, svc.Version),
-		id,
-		resolved,
-	)
+	ctx, err = s.pinChecked(ctx, cond, svc)
 	if err != nil {
-		return "", fmt.Errorf("update service secrets: %w", err)
+		return "", err
+	}
+
+	updated, err := writeClient.UpdateServiceSecrets(ctx, id, resolved)
+	if err != nil {
+		return "", fmt.Errorf("update service secrets: %w", s.refused(cond, err))
 	}
 
 	return marshalResult(serviceUpdate(sectionSecrets, updated))
@@ -169,6 +174,11 @@ func (s *Server) toolUpdateServiceConfigs(
 	}
 
 	if err := s.checkServiceWrite(ctx, id); err != nil {
+		return "", err
+	}
+
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
 		return "", err
 	}
 
@@ -217,13 +227,14 @@ func (s *Server) toolUpdateServiceConfigs(
 		})
 	}
 
-	updated, err := writeClient.UpdateServiceConfigs(
-		docker.PinChecked(ctx, "service", svc.ID, svc.Version),
-		id,
-		resolved,
-	)
+	ctx, err = s.pinChecked(ctx, cond, svc)
 	if err != nil {
-		return "", fmt.Errorf("update service configs: %w", err)
+		return "", err
+	}
+
+	updated, err := writeClient.UpdateServiceConfigs(ctx, id, resolved)
+	if err != nil {
+		return "", fmt.Errorf("update service configs: %w", s.refused(cond, err))
 	}
 
 	return marshalResult(serviceUpdate(sectionConfigs, updated))
@@ -287,6 +298,11 @@ func (s *Server) toolUpdateServiceMounts(
 		return "", err
 	}
 
+	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
+	if err != nil {
+		return "", err
+	}
+
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -320,13 +336,14 @@ func (s *Server) toolUpdateServiceMounts(
 		return "", err
 	}
 
-	updated, err := writeClient.UpdateServiceMounts(
-		docker.PinChecked(ctx, "service", svc.ID, svc.Version),
-		id,
-		mounts,
-	)
+	ctx, err = s.pinChecked(ctx, cond, svc)
 	if err != nil {
-		return "", fmt.Errorf("update service mounts: %w", err)
+		return "", err
+	}
+
+	updated, err := writeClient.UpdateServiceMounts(ctx, id, mounts)
+	if err != nil {
+		return "", fmt.Errorf("update service mounts: %w", s.refused(cond, err))
 	}
 
 	return marshalResult(serviceUpdate(sectionMounts, updated))
