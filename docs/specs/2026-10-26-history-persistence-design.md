@@ -169,11 +169,31 @@ reach the file. The actor is identity data at rest, which the data directory alr
 token file. Compaction bounds how long it is kept: about two rings of entries, after which it is
 gone from disk.
 
+## Annotations
+
+[#498](https://github.com/Radiergummi/cetacean/issues/498) lets people and agents add annotations
+to the timeline, and it is the next thing to use this file format. Annotations are authored data:
+Docker can't give them back, and the ring's churn must not evict them. So they don't go in
+`history.jsonl`. They get their own file with their own lifetime, built from the same parts:
+
+- the header and version rule
+- the separate record types
+- torn-line recovery
+- the atomic rewrite
+
+Unlike history, an edit or a delete rewrites their file, so only the compaction policy differs.
+
 ## Where it lives
 
-`internal/cache`, beside `snapshot.go`: `History.Restore`, the `Since` change, the gap list, and a
-`historyLog` type for the file and the writer. Main wires it next to the snapshot, gated on the same
-setting and on `dataDirReady`. `.claude/ARCHITECTURE.md` gets a line on the trap: the writer tails
+The file handling lives in a small package of its own, with no knowledge of history: the header,
+line reading with torn-line recovery, appending with grouped fsyncs, and the atomic rewrite.
+#498 builds on it. `internal/cache` holds the rest, beside `snapshot.go`:
+
+- `History.Restore` and the `Since` change
+- the gap list
+- the writer that tails the ring and decides when to compact
+
+Main wires it next to the snapshot, gated on the same setting and on `dataDirReady`. `.claude/ARCHITECTURE.md` gets a line on the trap: the writer tails
 the ring and must never be fed from `notify`.
 
 ## Decided
