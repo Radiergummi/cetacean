@@ -72,6 +72,21 @@ describe("PhysicalNodeCard", () => {
     expect(screen.getByText(/CPU/).textContent).toContain("42%");
   });
 
+  it("keeps a barely busy service apart from an idle one", () => {
+    renderCard({
+      usage: {
+        "svc1/n1": { cpu: 0.3, memory: null },
+        "svc2/n1": { cpu: 0, memory: null },
+      },
+    });
+
+    expect(screen.getByRole("button", { name: "Service web" }).textContent).toContain(
+      "<0.01 cores",
+    );
+    expect(screen.getByRole("button", { name: "Service cron" }).textContent).toContain("0 cores");
+    expect(screen.getByRole("button", { name: "Service cron" }).textContent).not.toContain("<");
+  });
+
   it("dims the services off the selected network", () => {
     renderCard({ network: "net1" });
 
