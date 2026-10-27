@@ -62,11 +62,17 @@ export interface SwarmQueryOptions<T> {
   fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>;
   sseType: string;
   getId: (item: T) => string;
-  /** The server selects the rows, so an event can only prompt a refetch. */
+  /**
+   * The server selects the rows, so an event can only prompt a refetch.
+   */
   filtered?: boolean | undefined;
-  /** Events this rejects leave the list alone; a sync always refetches. */
+  /**
+   * Events this rejects leave the list alone; a sync always refetches.
+   */
   relevant?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
-  /** The rows are derived from the streamed resources, so a held remove refetches too. */
+  /**
+   * The rows are derived from the streamed resources, so a held remove refetches too.
+   */
   derived?: boolean | undefined;
   onEvent?: ((event: SSEEvent) => void) | undefined;
 }

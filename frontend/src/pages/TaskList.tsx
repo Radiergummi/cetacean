@@ -12,7 +12,7 @@ import type { SortDir } from "../hooks/useSort";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { sortColumn } from "../lib/sortColumn";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 export default function TaskList() {
@@ -120,7 +120,7 @@ export default function TaskList() {
       itemPath={({ ID }) => `/tasks/${ID}`}
       filter={taskStateExpression(stateFilter)}
       columns={columns}
-      headerContent={(tasks, total) => (
+      belowToolbar={(tasks, total) => (
         <div className="mb-4 flex justify-end">
           <TaskStateFilter
             tasks={tasks}
@@ -133,39 +133,45 @@ export default function TaskList() {
       emptyMessage={(hasSearch) =>
         hasSearch || stateFilter ? "No tasks match your filters" : "No tasks found"
       }
-      renderGrid={(tasks) => (
-        <div className="space-y-6">
-          {groupByService(tasks).map((group) => (
-            <section key={group.id}>
-              <h2 className="mb-2 flex items-center gap-2 text-base font-medium">
-                <Link
-                  to={`/services/${group.id}`}
-                  className="text-link hover:underline"
-                >
-                  <ResourceName name={group.name} />
-                </Link>
-                <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground tabular-nums">
-                  {group.tasks.length}
-                </span>
-              </h2>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {group.tasks.map((task) => (
-                  <ResourceCard
-                    key={task.ID}
-                    title={task.Slot ? `Slot ${task.Slot}` : task.ID.slice(0, 12)}
-                    to={`/tasks/${task.ID}`}
-                    badge={<TaskStatusBadge state={task.Status.State} />}
-                    subtitle={task.NodeHostname}
-                    meta={[<span key="desired">{task.DesiredState}</span>]}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+      renderGrid={(tasks) => <TaskGrid tasks={tasks} />}
     />
+  );
+}
+
+function TaskGrid({ tasks }: { tasks: Task[] }) {
+  const groups = useMemo(() => groupByService(tasks), [tasks]);
+
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => (
+        <section key={group.id}>
+          <h2 className="mb-2 flex items-center gap-2 text-base font-medium">
+            <Link
+              to={`/services/${group.id}`}
+              className="text-link hover:underline"
+            >
+              <ResourceName name={group.name} />
+            </Link>
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground tabular-nums">
+              {group.tasks.length}
+            </span>
+          </h2>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {group.tasks.map((task) => (
+              <ResourceCard
+                key={task.ID}
+                title={task.Slot ? `Slot ${task.Slot}` : task.ID.slice(0, 12)}
+                to={`/tasks/${task.ID}`}
+                badge={<TaskStatusBadge state={task.Status.State} />}
+                subtitle={task.NodeHostname}
+                meta={[<span key="desired">{task.DesiredState}</span>]}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 

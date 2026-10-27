@@ -107,6 +107,15 @@ describe("TaskList", () => {
     expect(requestedFilter()).toBe('state == "failed"');
   });
 
+  it("places the state filter beneath the search toolbar", async () => {
+    renderAt("/tasks");
+
+    const filter = await screen.findByText("Active");
+    const search = screen.getByPlaceholderText("Search tasks…");
+
+    expect(search.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("asks the server for active tasks by default", async () => {
     renderAt("/tasks");
 

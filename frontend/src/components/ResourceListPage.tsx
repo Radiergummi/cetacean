@@ -22,8 +22,11 @@ type ResourceListConfig<T> = UseListPageConfig<T> & {
     toggle: (key: string) => void,
   ) => Column<T>[];
   emptyMessage: (hasSearch: boolean) => string;
-  /** Sits between the header and the toolbar; a function is handed the loaded rows. */
-  headerContent?: ReactNode | ((items: T[], total: number) => ReactNode) | undefined;
+  headerContent?: ReactNode | undefined;
+  /**
+   * Sits beneath the toolbar, handed the loaded rows and the collection's total.
+   */
+  belowToolbar?: ((items: T[], total: number) => ReactNode) | undefined;
   actions?: ((allowedMethods: Set<string>) => ReactNode) | undefined;
   skeletonColumns?: number | undefined;
   /**
@@ -38,7 +41,9 @@ type ResourceListConfig<T> = UseListPageConfig<T> & {
   onItems?: ((items: T[], fetches: number) => void) | undefined;
 } & (
     | { renderCard: (item: T) => ReactNode; renderGrid?: undefined }
-    /** Lays out the whole grid view, for a page that groups its cards. */
+    /**
+     * Lays out the whole grid view, for a page that groups its cards.
+     */
     | { renderGrid: (items: T[]) => ReactNode; renderCard?: undefined }
   );
 
@@ -69,7 +74,7 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
     [sortKey, sortDir, toggle, columnsFn],
   );
 
-  const { arrange, onItems, headerContent, renderCard, renderGrid } = config;
+  const { arrange, onItems, belowToolbar, renderCard, renderGrid } = config;
   const data = useMemo(() => (arrange ? arrange(loaded) : loaded), [arrange, loaded]);
 
   useEffect(() => {
@@ -84,9 +89,8 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
       keyFn={config.keyFn}
       columns={columns}
       emptyMessage={config.emptyMessage}
-      headerContent={
-        typeof headerContent === "function" ? headerContent(loaded, total) : headerContent
-      }
+      headerContent={config.headerContent}
+      belowToolbar={belowToolbar?.(loaded, total)}
       actions={config.actions?.(allowedMethods)}
       skeletonColumns={config.skeletonColumns}
       renderGrid={
@@ -121,6 +125,7 @@ interface ListPageViewProps<T> {
   columns: Column<T>[];
   emptyMessage: (hasSearch: boolean) => string;
   headerContent?: ReactNode | undefined;
+  belowToolbar?: ReactNode | undefined;
   actions?: ReactNode | undefined;
   skeletonColumns?: number | undefined;
   renderGrid: (items: T[]) => ReactNode;
@@ -148,6 +153,7 @@ export function ListPageView<T>({
   columns,
   emptyMessage,
   headerContent,
+  belowToolbar,
   actions,
   skeletonColumns,
   renderGrid,
@@ -196,6 +202,7 @@ export function ListPageView<T>({
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
+      {belowToolbar}
 
       {data.length === 0 ? (
         <EmptyState message={emptyMessage(!!search)} />
