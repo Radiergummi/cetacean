@@ -31,10 +31,7 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 // SecretListItem is a secret as GET /secrets lists it.
-type SecretListItem struct {
-	swarm.Secret
-	VersionFields
-}
+type SecretListItem = cluster.VersionedSecret
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	spec := listSpec[swarm.Secret]{

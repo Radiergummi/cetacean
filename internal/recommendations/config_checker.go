@@ -57,13 +57,8 @@ func (cc *ConfigChecker) Check(_ context.Context) []Recommendation {
 		}
 	}
 
-	var secrets, configs []versions.Item
-	for _, sec := range cc.cache.ListSecrets() {
-		secrets = append(secrets, versions.SecretItem(sec))
-	}
-	for _, cfg := range cc.cache.ListConfigs() {
-		configs = append(configs, versions.ConfigItem(cfg))
-	}
+	secrets := versions.SecretItems(cc.cache.ListSecrets())
+	configs := versions.ConfigItems(cc.cache.ListConfigs())
 
 	recs = append(recs, unusedVersions(ScopeSecret, secrets, cc.cache.ServicesUsingSecret)...)
 	recs = append(recs, unusedVersions(ScopeConfig, configs, cc.cache.ServicesUsingConfig)...)

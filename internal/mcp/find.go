@@ -86,16 +86,6 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", err
 	}
 
-	groups, users := s.versionGroups(listed)
-	if groups != nil {
-		sel, err := cluster.ParseVersionSelection(req.GetString("versions", ""), "")
-		if err != nil {
-			return "", err
-		}
-
-		rows = cluster.SelectVersions(rows, func(r cluster.Row) string { return r.ID }, groups, sel)
-	}
-
 	filters := rowFilters{
 		query: query,
 		state: strings.TrimSpace(req.GetString("state", "")),
@@ -103,6 +93,18 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		node:  strings.TrimSpace(req.GetString("node", "")),
 		image: strings.TrimSpace(req.GetString("image", "")),
 		label: strings.TrimSpace(req.GetString("label", "")),
+	}
+
+	groups, users := s.versionGroups(listed)
+	if groups != nil {
+		sel, err := cluster.ParseVersionSelection(
+			req.GetString("versions", ""), "", !filters.empty(),
+		)
+		if err != nil {
+			return "", err
+		}
+
+		rows = cluster.SelectVersions(rows, func(r cluster.Row) string { return r.ID }, groups, sel)
 	}
 
 	// Only the label filter reads the labels, and it is the rarest of the six;
@@ -119,7 +121,7 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 	rows = paginate(rows, req)
 
 	if groups != nil {
-		annotateVersions(rows, groups, users, s.readPredicate(ctx))
+		cluster.AnnotateVersionRows(rows, groups, users, s.readPredicate(ctx))
 	}
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
@@ -264,22 +266,6 @@ func (s *Server) versionGroups(
 		return cluster.SecretVersionGroups(items), s.cache.ServicesUsingSecret
 	default:
 		return nil, nil
-	}
-}
-
-// annotateVersions places each row of a returned page among its versions and
-// counts the readable services using it.
-func annotateVersions(
-	rows []cluster.Row,
-	groups cluster.VersionGroups,
-	users func(id string) []cache.ServiceRef,
-	canRead func(resource string) bool,
-) {
-	for i := range rows {
-		v := groups.Version(rows[i].ID)
-		rows[i].VersionOf, rows[i].VersionInferred = v.Of, v.Inferred
-		rows[i].NewestVersion, rows[i].OlderVersions = v.Newest, v.OlderVersions
-		rows[i].UsedBy = new(cluster.ReadableUsers(users(rows[i].ID), canRead))
 	}
 }
 

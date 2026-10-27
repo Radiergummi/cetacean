@@ -72,6 +72,7 @@ type mockNodeWriter struct {
 type mockConfigWriter struct {
 	simulatedConfigLabels map[string]string
 	createConfigFn        func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	inspectConfigFn       func(ctx context.Context, id string) (swarm.Config, error)
 	removeConfigFn        func(ctx context.Context, id string) error
 	updateConfigLabelsFn  func(ctx context.Context, id string, labels map[string]string) (swarm.Config, error)
 }
@@ -79,6 +80,7 @@ type mockConfigWriter struct {
 type mockSecretWriter struct {
 	simulatedSecretLabels map[string]string
 	createSecretFn        func(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	inspectSecretFn       func(ctx context.Context, id string) (swarm.Secret, error)
 	removeSecretFn        func(ctx context.Context, id string) error
 	updateSecretLabelsFn  func(ctx context.Context, id string, labels map[string]string) (swarm.Secret, error)
 }
@@ -244,6 +246,20 @@ func (m *mockConfigWriter) CreateConfig(
 		return m.createConfigFn(ctx, spec)
 	}
 	return "", fmt.Errorf("not implemented")
+}
+
+func (m *mockConfigWriter) InspectConfig(ctx context.Context, id string) (swarm.Config, error) {
+	if m.inspectConfigFn != nil {
+		return m.inspectConfigFn(ctx, id)
+	}
+	return swarm.Config{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockSecretWriter) InspectSecret(ctx context.Context, id string) (swarm.Secret, error) {
+	if m.inspectSecretFn != nil {
+		return m.inspectSecretFn(ctx, id)
+	}
+	return swarm.Secret{}, fmt.Errorf("not implemented")
 }
 
 func (m *mockSecretWriter) CreateSecret(

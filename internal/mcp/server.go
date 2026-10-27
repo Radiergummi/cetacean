@@ -163,6 +163,7 @@ const MountPath = "/mcp"
 // Server is the Cetacean MCP server.
 type Server struct {
 	cache          *cache.Cache
+	versions       *cluster.VersionIndex
 	writeClient    DockerWriteClient
 	logs           LogStreamer
 	acl            *acl.Evaluator
@@ -353,6 +354,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
+		versions:       cluster.NewVersionIndex(c),
 		watches:        make(chan struct{}, maxConcurrentWatches),
 		listens:        make(chan struct{}, maxListenStreams),
 		streams:        opts.Streams,

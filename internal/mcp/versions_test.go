@@ -14,6 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
 // versionsServer holds db_v1..3, db_v2 used by one readable and one denied
@@ -131,6 +132,42 @@ func TestFindListsEverySecretVersion(t *testing.T) {
 	}
 }
 
+func TestFindSearchesOlderVersionsToo(t *testing.T) {
+	rows, _ := findSecrets(t, map[string]any{"query": "db_v1"})
+
+	if len(rows) != 1 || rows[0].ID != "db_v1" || rows[0].VersionOf != "db" ||
+		rows[0].NewestVersion {
+		t.Errorf("rows = %+v, want the older db_v1 with its version fields", rows)
+	}
+}
+
+// The listing resource shows what find shows by default.
+func TestSecretsResourceListsTheNewestVersions(t *testing.T) {
+	srv, ctx := versionsServer(t)
+
+	body, err := srv.readResource(ctx, "cetacean://secrets")
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	var items []struct {
+		ID            string
+		OlderVersions int
+		UsedBy        int
+	}
+	if err := json.Unmarshal([]byte(body), &items); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	got := map[string]int{}
+	for _, item := range items {
+		got[item.ID] = item.OlderVersions
+	}
+	if len(got) != 2 || got["db_v3"] != 2 || got["app_v2"] != 1 {
+		t.Errorf("items = %+v, want db_v3 and app_v2 heading their groups", items)
+	}
+}
+
 func TestFindRefusesAnUnknownVersionsValue(t *testing.T) {
 	srv, ctx := versionsServer(t)
 
@@ -170,17 +207,49 @@ func TestDescribeCarriesSecretVersion(t *testing.T) {
 	}
 }
 
+// Without an identity a loaded policy still applies; only an absent policy
+// lets everything through.
+func TestRecommendationsWithoutAnIdentityFollowThePolicy(t *testing.T) {
+	evaluator := acl.NewEvaluator()
+	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:*"},
+		Audience:    []string{"user:agent@example.com"},
+		Permissions: []string{"read"},
+	}}})
+
+	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.ACL = evaluator })
+
+	got := srv.filterRecommendations(context.Background(), []recommendations.Recommendation{
+		{Scope: recommendations.ScopeService, TargetName: "web"},
+	})
+	if len(got) != 0 {
+		t.Errorf("an anonymous caller saw %+v", got)
+	}
+}
+
 // A created version must read as the newest of its group straight away, not as
 // a zero-time record older than every version it replaces.
-func TestCreatedVersionsAreSeededAsNew(t *testing.T) {
+func TestCreatedVersionsAreSeededFromDocker(t *testing.T) {
+	created := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	meta := swarm.Meta{CreatedAt: created, UpdatedAt: created}
+
 	c := cache.New(nil)
 	writeClient := &fakeWriteClient{
 		createSecretFn: func(context.Context, swarm.SecretSpec) (string, error) { return "sec", nil },
 		createConfigFn: func(context.Context, swarm.ConfigSpec) (string, error) { return "cfg", nil },
+		inspectSecretFn: func(_ context.Context, id string) (swarm.Secret, error) {
+			return swarm.Secret{ID: id, Meta: meta, Spec: swarm.SecretSpec{Name: "s_v2"}}, nil
+		},
+		inspectConfigFn: func(_ context.Context, id string) (swarm.Config, error) {
+			return swarm.Config{ID: id, Meta: meta, Spec: swarm.ConfigSpec{
+				Name:   "c_v2",
+				Labels: map[string]string{"com.docker.stack.namespace": "app"},
+				Data:   []byte("x"),
+			}}, nil
+		},
 	}
 	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
 
-	before := time.Now()
 	callTool(t, handler, `{"name":"create_secret","arguments":{"name":"s_v2","data":"x",`+
 		`"labels":{"com.docker.stack.namespace":"app"}}}`)
 	callTool(t, handler, `{"name":"create_config","arguments":{"name":"c_v2","data":"x",`+
@@ -189,13 +258,13 @@ func TestCreatedVersionsAreSeededAsNew(t *testing.T) {
 	sec, _ := c.GetSecret("sec")
 	cfg, _ := c.GetConfig("cfg")
 
-	for name, meta := range map[string]swarm.Meta{"secret": sec.Meta, "config": cfg.Meta} {
-		if meta.CreatedAt.Before(before) || meta.UpdatedAt.Before(before) {
-			t.Errorf("seeded %s Meta = %+v, want the time of the create", name, meta)
+	for name, seeded := range map[string]swarm.Meta{"secret": sec.Meta, "config": cfg.Meta} {
+		if !seeded.CreatedAt.Equal(created) {
+			t.Errorf("seeded %s Meta = %+v, want Docker's", name, seeded)
 		}
 	}
 
-	if cfg.Spec.Labels["com.docker.stack.namespace"] != "app" {
-		t.Errorf("seeded config labels = %v, want the stack label kept", cfg.Spec.Labels)
+	if cfg.Spec.Labels["com.docker.stack.namespace"] != "app" || len(cfg.Spec.Data) != 0 {
+		t.Errorf("seeded config spec = %+v, want Docker's labels and no payload", cfg.Spec)
 	}
 }

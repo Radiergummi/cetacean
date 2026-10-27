@@ -66,28 +66,62 @@ func TestSelectVersions(t *testing.T) {
 }
 
 func TestParseVersionSelection(t *testing.T) {
-	for value, all := range map[string]bool{"": false, "newest": false, "all": true} {
-		if sel, err := ParseVersionSelection(value, ""); err != nil || sel.All != all {
-			t.Errorf("ParseVersionSelection(%q) = %+v, %v", value, sel, err)
+	tests := []struct {
+		value     string
+		searching bool
+		all       bool
+	}{
+		{"", false, false},
+		{"newest", false, false},
+		{"all", false, true},
+		// A search finds an older version by name unless asked not to.
+		{"", true, true},
+		{"newest", true, false},
+	}
+
+	for _, test := range tests {
+		sel, err := ParseVersionSelection(test.value, "", test.searching)
+		if err != nil || sel.All != test.all {
+			t.Errorf(
+				"ParseVersionSelection(%q, %v) = %+v, %v",
+				test.value,
+				test.searching,
+				sel,
+				err,
+			)
 		}
 	}
 
-	if _, err := ParseVersionSelection("latest", ""); err == nil {
+	if _, err := ParseVersionSelection("latest", "", false); err == nil {
 		t.Error("ParseVersionSelection(latest) accepted an unknown value")
 	}
 }
 
-// One detail groups only the readable versions sharing the item's key.
-func TestSecretVersionGroupsOnlyReadableSiblings(t *testing.T) {
+// One detail groups only the readable versions sharing the item's key, and the
+// index follows the cache as it changes.
+func TestVersionIndex(t *testing.T) {
 	c := cache.New(nil)
 	for i, name := range []string{"db_v1", "db_v2", "db_v3", "other_v1", "other_v2"} {
 		c.SetSecret(versionedSecret(name, i+1))
 	}
 
+	index := NewVersionIndex(c)
 	canRead := func(resource string) bool { return resource != "secret:db_v3" }
 
-	if v := SecretVersion(c, versionedSecret("db_v2", 2), canRead); !v.Newest ||
+	if v := index.SecretVersion(versionedSecret("db_v2", 2), canRead); !v.Newest ||
 		v.OlderVersions != 1 || v.Of != "db" {
 		t.Errorf("SecretVersion(db_v2) = %+v, want the newest readable of two", v)
+	}
+
+	c.SetSecret(versionedSecret("db_v4", 9))
+
+	if v := index.SecretVersion(versionedSecret("db_v2", 2), canRead); v.Newest {
+		t.Errorf("SecretVersion(db_v2) = %+v after db_v4 arrived, want an older version", v)
+	}
+
+	event := cache.Event{Type: cache.EventSecret, Resource: versionedSecret("db_v4", 9)}
+	_, touched := index.DigestsTouchedBy(event)
+	if len(touched) != 3 {
+		t.Errorf("DigestsTouchedBy(db_v4) = %v, want the three other db versions", touched)
 	}
 }

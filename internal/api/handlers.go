@@ -162,6 +162,7 @@ type NodeWriter interface {
 
 type ConfigWriter interface {
 	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
 	RemoveConfig(ctx context.Context, id string) error
 	UpdateConfigLabels(
 		ctx context.Context,
@@ -172,6 +173,7 @@ type ConfigWriter interface {
 
 type SecretWriter interface {
 	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
 	RemoveSecret(ctx context.Context, id string) error
 	UpdateSecretLabels(
 		ctx context.Context,
@@ -252,6 +254,8 @@ type Handlers struct {
 	// functions of the cache generation and what the caller may see.
 	topologyDocs *projectionCache
 	stackDocs    *projectionCache
+
+	versions *cluster.VersionIndex
 }
 
 func NewHandlers(
@@ -292,6 +296,7 @@ func NewHandlers(
 		dockerVersionCache:   newDockerVersionCache(),
 		topologyDocs:         newProjectionCache(),
 		stackDocs:            newProjectionCache(),
+		versions:             cluster.NewVersionIndex(c),
 		logReads:             new(sse.Slots),
 	}
 }

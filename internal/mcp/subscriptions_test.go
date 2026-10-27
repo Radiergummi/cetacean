@@ -76,6 +76,43 @@ func TestSubscriptionStackFollowsMembers(t *testing.T) {
 	assertUpdated(t, drainUpdated(t, name))
 }
 
+// A secret's digest counts its other versions and the services using it, so a
+// subscriber hears when either changes.
+func TestSubscriptionSecretFollowsVersionsAndUsers(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-v1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "db_v1"}},
+	})
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://secrets/sec-v1", nil)
+
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-v2",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "db_v2"}},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://secrets/sec-v1")
+
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-other",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "other"}},
+	})
+	assertUpdated(t, drainUpdated(t, name))
+
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+				Secrets: []*swarm.SecretReference{{SecretID: "sec-v1", SecretName: "db_v1"}},
+			}},
+		},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://secrets/sec-v1")
+}
+
 func TestSubscriptionByNameResolvesToID(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-byname", "web_api", ""))

@@ -1,6 +1,6 @@
 // Package versions groups the configs and secrets that rotation leaves behind
-// into versions of one logical resource. It is a leaf so the domain layer and
-// the recommendations engine share one reading of it.
+// into versions of one logical resource. It sits below internal/cluster, which
+// imports the recommendations engine, so both share one reading of it.
 package versions
 
 import (
@@ -45,16 +45,18 @@ type Membership struct {
 // name within it.
 type GroupKey struct{ Stack, Name string }
 
-// Key is an item's group: its Label, or else its name without a version suffix
-// and without the `<stack>_` or `<stack>-` prefix a stack deploy writes. An item
-// joins only the groups of its own stack.
+// Key is an item's group: its Label, or else its name, either way without a
+// version suffix and without the `<stack>_` or `<stack>-` prefix a stack deploy
+// writes. An item joins only the groups of its own stack.
 func Key(it Item) GroupKey {
 	stack := it.Labels[cache.StackLabel]
-	if name := it.Labels[Label]; name != "" {
-		return GroupKey{stack, name}
+
+	name := it.Labels[Label]
+	if name == "" {
+		name = it.Name
 	}
 
-	name := suffix.ReplaceAllString(it.Name, "")
+	name = suffix.ReplaceAllString(name, "")
 	if stack != "" {
 		for _, separator := range []string{"_", "-"} {
 			if rest, ok := strings.CutPrefix(name, stack+separator); ok && rest != "" {
@@ -114,22 +116,32 @@ func ConfigItem(c swarm.Config) Item {
 	return Item{c.ID, c.Spec.Name, c.Spec.Labels, c.CreatedAt}
 }
 
-// Secrets groups secrets by Group.
-func Secrets(secrets []swarm.Secret) map[string]Membership {
+// SecretItems is SecretItem over a slice.
+func SecretItems(secrets []swarm.Secret) []Item {
 	items := make([]Item, len(secrets))
 	for i, s := range secrets {
 		items[i] = SecretItem(s)
 	}
 
-	return Group(items)
+	return items
 }
 
-// Configs groups configs by Group.
-func Configs(configs []swarm.Config) map[string]Membership {
+// ConfigItems is ConfigItem over a slice.
+func ConfigItems(configs []swarm.Config) []Item {
 	items := make([]Item, len(configs))
 	for i, c := range configs {
 		items[i] = ConfigItem(c)
 	}
 
-	return Group(items)
+	return items
+}
+
+// Secrets groups secrets by Group.
+func Secrets(secrets []swarm.Secret) map[string]Membership {
+	return Group(SecretItems(secrets))
+}
+
+// Configs groups configs by Group.
+func Configs(configs []swarm.Config) map[string]Membership {
+	return Group(ConfigItems(configs))
 }

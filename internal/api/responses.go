@@ -61,7 +61,7 @@ type TaskNodeRef struct {
 	Hostname string `json:"hostname"`
 }
 
-// DetailVersionFields is VersionFields as a config or secret detail spells it.
+// DetailVersionFields is cluster.VersionFields as a detail spells it.
 type DetailVersionFields struct {
 	VersionOf       string `json:"versionOf,omitempty"`
 	VersionInferred bool   `json:"versionInferred,omitempty"`

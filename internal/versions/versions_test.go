@@ -129,6 +129,19 @@ func TestGroup(t *testing.T) {
 			map[string]placed{},
 		},
 		{
+			"a label is normalised like a name",
+			[]Item{
+				item("a", "myapp_db_password", 1, labels("myapp", "")),
+				item("b", "rotated", 2, labels("myapp", "myapp_db_password")),
+				item("c", "again", 3, labels("myapp", "db_password_v3")),
+			},
+			map[string]placed{
+				"a": {"db_password", true, 2},
+				"b": {"db_password", true, 1},
+				"c": {"db_password", true, 0},
+			},
+		},
+		{
 			"an unstacked name keeps what looks like a prefix",
 			[]Item{item("a", "myapp_db_v1", 1, nil), item("b", "db_v2", 2, nil)},
 			map[string]placed{},

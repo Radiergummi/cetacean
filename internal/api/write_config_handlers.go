@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
@@ -28,27 +28,13 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		conflictCode: "CFG003",
 		basePath:     "/configs/",
 		typeName:     "Config",
-		create: func(
-			ctx context.Context,
-			name string,
-			labels map[string]string,
-			data []byte,
-		) (string, error) {
+		create: func(ctx context.Context, name string, _ map[string]string, data []byte) (string, error) {
 			id, err := h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
-				Name: name, Labels: labels,
+				Name: name,
 				Data: data,
 			})
 			if err == nil {
-				// Attaching resolves through the cache, which the watcher fills later.
-				now := time.Now()
-				h.cache.SetConfig(swarm.Config{
-					ID:        id,
-					CreatedAt: now,
-					UpdatedAt: now,
-					Spec: swarm.ConfigSpec{
-						Annotations: swarm.Annotations{Name: name, Labels: labels},
-					},
-				})
+				cluster.SeedCreatedConfig(ctx, h.cache, h.configWriter.InspectConfig, id, name, nil)
 			}
 
 			return id, err

@@ -276,12 +276,12 @@ func TestEveryListEndpointRendersCSV(t *testing.T) {
 			{"shop", "1", "shop"},
 		},
 		"config": {
-			{"name", "stack", "id"},
-			{"shop_nginx", "shop", "c1"},
+			{"name", "stack", "version of", "newest", "used by", "id"},
+			{"shop_nginx", "shop", "", "", "0", "c1"},
 		},
 		"secret": {
-			{"name", "stack", "id"},
-			{"shop_token", "shop", "sec1"},
+			{"name", "stack", "version of", "newest", "used by", "id"},
+			{"shop_token", "shop", "", "", "0", "sec1"},
 		},
 		"network": {
 			{"name", "stack", "driver", "id"},

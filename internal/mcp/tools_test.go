@@ -70,6 +70,8 @@ type fakeWriteClient struct {
 	) (swarm.Service, error)
 	createSecretFn         func(ctx context.Context, spec swarm.SecretSpec) (string, error)
 	createConfigFn         func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	inspectSecretFn        func(ctx context.Context, id string) (swarm.Secret, error)
+	inspectConfigFn        func(ctx context.Context, id string) (swarm.Config, error)
 	updateServiceSecretsFn func(
 		ctx context.Context,
 		id string,
@@ -132,6 +134,22 @@ func (f *fakeWriteClient) CreateSecret(
 	}
 
 	return f.createSecretFn(ctx, spec)
+}
+
+func (f *fakeWriteClient) InspectSecret(ctx context.Context, id string) (swarm.Secret, error) {
+	if f.inspectSecretFn == nil {
+		return swarm.Secret{}, errNotImplemented
+	}
+
+	return f.inspectSecretFn(ctx, id)
+}
+
+func (f *fakeWriteClient) InspectConfig(ctx context.Context, id string) (swarm.Config, error) {
+	if f.inspectConfigFn == nil {
+		return swarm.Config{}, errNotImplemented
+	}
+
+	return f.inspectConfigFn(ctx, id)
 }
 
 func (f *fakeWriteClient) CreateConfig(

@@ -3,6 +3,7 @@ package cluster
 import (
 	"errors"
 	"slices"
+	"sync"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -18,6 +19,39 @@ type Version struct {
 	Inferred      bool
 	Newest        bool
 	OlderVersions int
+}
+
+// VersionFields is what a config or secret listing adds to each Docker record,
+// spelled as the record's own fields are.
+type VersionFields struct {
+	VersionOf       string `json:"VersionOf,omitempty"`
+	VersionInferred bool   `json:"VersionInferred,omitempty"`
+	NewestVersion   bool   `json:"NewestVersion,omitempty"`
+	OlderVersions   int    `json:"OlderVersions,omitempty"`
+	UsedBy          int    `json:"UsedBy"`
+}
+
+// Fields spells v for a listing, with usedBy readable services using it.
+func (v Version) Fields(usedBy int) VersionFields {
+	return VersionFields{
+		VersionOf:       v.Of,
+		VersionInferred: v.Inferred,
+		NewestVersion:   v.Newest,
+		OlderVersions:   v.OlderVersions,
+		UsedBy:          usedBy,
+	}
+}
+
+// VersionedConfig is a config as a listing shows it.
+type VersionedConfig struct {
+	swarm.Config
+	VersionFields
+}
+
+// VersionedSecret is a secret as a listing shows it.
+type VersionedSecret struct {
+	swarm.Secret
+	VersionFields
 }
 
 // VersionGroups is the grouping of the configs or secrets one caller may read.
@@ -59,10 +93,14 @@ type VersionSelection struct {
 // ErrUnknownVersions is a versions value that is neither "newest" nor "all".
 var ErrUnknownVersions = errors.New(`versions must be "newest" or "all"`)
 
-// ParseVersionSelection reads the versions and versionsOf arguments.
-func ParseVersionSelection(versionsArg, of string) (VersionSelection, error) {
+// ParseVersionSelection reads the versions and versionsOf arguments. A search
+// or filter shows every version it matches unless versions says otherwise, so
+// an older version can still be found by name.
+func ParseVersionSelection(versionsArg, of string, searching bool) (VersionSelection, error) {
 	switch versionsArg {
-	case "", "newest":
+	case "":
+		return VersionSelection{All: searching, Of: of}, nil
+	case "newest":
 		return VersionSelection{Of: of}, nil
 	case "all":
 		return VersionSelection{All: true, Of: of}, nil
@@ -116,37 +154,132 @@ func ReadableUsers(refs []cache.ServiceRef, canRead func(resource string) bool) 
 	return n
 }
 
-// ConfigVersion is the Version of one config, grouped with only the readable
-// configs sharing its key rather than with every config there is.
-func ConfigVersion(c *cache.Cache, cfg swarm.Config, canRead func(resource string) bool) Version {
-	key := versions.Key(versions.ConfigItem(cfg))
-	siblings := []swarm.Config{cfg}
+// AnnotateVersionRows places config or secret rows among their versions in g
+// and counts the readable services users names for each.
+func AnnotateVersionRows(
+	rows []Row,
+	g VersionGroups,
+	users func(id string) []cache.ServiceRef,
+	canRead func(resource string) bool,
+) {
+	for i := range rows {
+		v := g.Version(rows[i].ID)
+		rows[i].VersionOf, rows[i].VersionInferred = v.Of, v.Inferred
+		rows[i].NewestVersion, rows[i].OlderVersions = v.Newest, v.OlderVersions
+		rows[i].UsedBy = new(ReadableUsers(users(rows[i].ID), canRead))
+	}
+}
 
-	c.EachConfig(func(other swarm.Config) bool {
-		if other.ID != cfg.ID && versions.Key(versions.ConfigItem(other)) == key &&
-			canRead("config:"+other.Spec.Name) {
-			siblings = append(siblings, other)
-		}
+// VersionRef names one config or secret in a VersionIndex.
+type VersionRef struct{ ID, Name string }
+
+// VersionIndex holds every config's and secret's group key, rebuilt once per
+// cache generation, so one item's siblings are found without matching every
+// name in the cluster on each read.
+type VersionIndex struct {
+	cache *cache.Cache
+
+	mu         sync.Mutex
+	built      bool
+	generation uint64
+	configs    map[versions.GroupKey][]VersionRef
+	secrets    map[versions.GroupKey][]VersionRef
+}
+
+// NewVersionIndex indexes c's configs and secrets on first use.
+func NewVersionIndex(c *cache.Cache) *VersionIndex { return &VersionIndex{cache: c} }
+
+func (x *VersionIndex) current() (configs, secrets map[versions.GroupKey][]VersionRef) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+
+	generation := x.cache.Generation()
+	if x.built && x.generation == generation {
+		return x.configs, x.secrets
+	}
+
+	configs = map[versions.GroupKey][]VersionRef{}
+	x.cache.EachConfig(func(c swarm.Config) bool {
+		key := versions.Key(versions.ConfigItem(c))
+		configs[key] = append(configs[key], VersionRef{c.ID, c.Spec.Name})
 
 		return true
 	})
+
+	secrets = map[versions.GroupKey][]VersionRef{}
+	x.cache.EachSecret(func(s swarm.Secret) bool {
+		key := versions.Key(versions.SecretItem(s))
+		secrets[key] = append(secrets[key], VersionRef{s.ID, s.Spec.Name})
+
+		return true
+	})
+
+	x.built, x.generation, x.configs, x.secrets = true, generation, configs, secrets
+
+	return configs, secrets
+}
+
+// ConfigVersion is the Version of one config, grouped with only the readable
+// configs sharing its key.
+func (x *VersionIndex) ConfigVersion(cfg swarm.Config, canRead func(resource string) bool) Version {
+	configs, _ := x.current()
+	siblings := []swarm.Config{cfg}
+
+	for _, ref := range configs[versions.Key(versions.ConfigItem(cfg))] {
+		if ref.ID == cfg.ID || !canRead("config:"+ref.Name) {
+			continue
+		}
+		if other, ok := x.cache.GetConfig(ref.ID); ok {
+			siblings = append(siblings, other)
+		}
+	}
 
 	return ConfigVersionGroups(siblings).Version(cfg.ID)
 }
 
 // SecretVersion is ConfigVersion for a secret.
-func SecretVersion(c *cache.Cache, sec swarm.Secret, canRead func(resource string) bool) Version {
-	key := versions.Key(versions.SecretItem(sec))
+func (x *VersionIndex) SecretVersion(sec swarm.Secret, canRead func(resource string) bool) Version {
+	_, secrets := x.current()
 	siblings := []swarm.Secret{sec}
 
-	c.EachSecret(func(other swarm.Secret) bool {
-		if other.ID != sec.ID && versions.Key(versions.SecretItem(other)) == key &&
-			canRead("secret:"+other.Spec.Name) {
+	for _, ref := range secrets[versions.Key(versions.SecretItem(sec))] {
+		if ref.ID == sec.ID || !canRead("secret:"+ref.Name) {
+			continue
+		}
+		if other, ok := x.cache.GetSecret(ref.ID); ok {
 			siblings = append(siblings, other)
 		}
-
-		return true
-	})
+	}
 
 	return SecretVersionGroups(siblings).Version(sec.ID)
+}
+
+// DigestsTouchedBy names the configs and secrets whose digest event changes
+// besides any it names itself: the other versions grouped with a config or
+// secret. A service's references need nothing here, since the cache already
+// sends a ref_changed event for each config or secret one gains or loses.
+func (x *VersionIndex) DigestsTouchedBy(event cache.Event) (configs, secrets []VersionRef) {
+	switch resource := event.Resource.(type) {
+	case swarm.Config:
+		all, _ := x.current()
+		return others(all[versions.Key(versions.ConfigItem(resource))], resource.ID), nil
+
+	case swarm.Secret:
+		_, all := x.current()
+		return nil, others(all[versions.Key(versions.SecretItem(resource))], resource.ID)
+
+	default:
+		return nil, nil
+	}
+}
+
+func others(refs []VersionRef, id string) []VersionRef {
+	var out []VersionRef
+	for _, ref := range refs {
+		if ref.ID != id {
+			out = append(out, ref)
+		}
+	}
+
+	return out
 }

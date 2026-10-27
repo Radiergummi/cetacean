@@ -30,10 +30,7 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // ConfigListItem is a config as GET /configs lists it; see SecretListItem.
-type ConfigListItem struct {
-	swarm.Config
-	VersionFields
-}
+type ConfigListItem = cluster.VersionedConfig
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	spec := listSpec[swarm.Config]{

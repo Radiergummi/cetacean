@@ -5,6 +5,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
@@ -27,17 +29,29 @@ func PortACLName(p cache.PublishedPort) string { return p.ServiceName }
 func PortACLResource(p cache.PublishedPort) string { return "service:" + PortACLName(p) }
 
 // ReadableRecommendations keeps the recommendations whose target and every
-// resource they reveal canRead allows.
+// resource they reveal id may read, by acl.Filter's rules.
 func ReadableRecommendations(
+	e *acl.Evaluator,
+	id *auth.Identity,
 	recs []recommendations.Recommendation,
-	canRead func(resource string) bool,
 ) []recommendations.Recommendation {
-	out := make([]recommendations.Recommendation, 0, len(recs))
-	for _, rec := range recs {
-		if canRead(RecommendationACLResource(rec)) &&
-			!slices.ContainsFunc(rec.Reveals, func(r string) bool {
-				return !canRead(r)
-			}) {
+	readable := acl.Filter(e, id, "read", recs, RecommendationACLResource)
+
+	canRead := e.Checker(id, "read")
+	hidden := func(rec recommendations.Recommendation) bool {
+		return slices.ContainsFunc(rec.Reveals, func(r string) bool { return !canRead(r) })
+	}
+
+	// Copied only once a finding must go, since an allow-all Filter hands back
+	// the engine's own slice.
+	first := slices.IndexFunc(readable, hidden)
+	if first < 0 {
+		return readable
+	}
+
+	out := slices.Clone(readable[:first])
+	for _, rec := range readable[first+1:] {
+		if !hidden(rec) {
 			out = append(out, rec)
 		}
 	}

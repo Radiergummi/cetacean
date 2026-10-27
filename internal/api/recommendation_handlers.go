@@ -14,9 +14,13 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 	}
 
 	results := cluster.ReadableRecommendations(
+		h.acl,
+		auth.IdentityFromContext(r.Context()),
 		h.recEngine.Results(),
-		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
 	)
+	if results == nil {
+		results = []recommendations.Recommendation{}
+	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
 		writeCSV(w, r, "recommendations", csvTableForRecommendations(results))

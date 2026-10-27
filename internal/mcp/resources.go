@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
@@ -219,6 +220,8 @@ func (s *Server) readResourceContents(
 		return string(doc), composeMIMEType, nil
 	}
 
+	data = s.versionedListing(ctx, data)
+
 	// A read of one resource serves the same digest describe builds, through
 	// the same function: a subscription payload and a tool result must not
 	// differ. The URIs stay because they carry the subscriptions, which a tool
@@ -239,6 +242,51 @@ func (s *Server) readResourceContents(
 
 	return string(b), mcpMIMEType, nil
 }
+
+// versionedListing is what cetacean://configs and cetacean://secrets list:
+// what find lists by default, each group's newest readable version, with the
+// version fields its rows carry. Any other listing passes through.
+func (s *Server) versionedListing(ctx context.Context, listed any) any {
+	canRead := s.readPredicate(ctx)
+	newest := cluster.VersionSelection{}
+
+	switch items := listed.(type) {
+	case []swarm.Config:
+		groups := cluster.ConfigVersionGroups(items)
+		shown := cluster.SelectVersions(items, configID, groups, newest)
+		out := make([]cluster.VersionedConfig, len(shown))
+		for i, cfg := range shown {
+			usedBy := cluster.ReadableUsers(s.cache.ServicesUsingConfig(cfg.ID), canRead)
+			out[i] = cluster.VersionedConfig{
+				Config:        cfg,
+				VersionFields: groups.Version(cfg.ID).Fields(usedBy),
+			}
+		}
+
+		return out
+
+	case []swarm.Secret:
+		groups := cluster.SecretVersionGroups(items)
+		shown := cluster.SelectVersions(items, secretID, groups, newest)
+		out := make([]cluster.VersionedSecret, len(shown))
+		for i, sec := range shown {
+			usedBy := cluster.ReadableUsers(s.cache.ServicesUsingSecret(sec.ID), canRead)
+			out[i] = cluster.VersionedSecret{
+				Secret:        sec,
+				VersionFields: groups.Version(sec.ID).Fields(usedBy),
+			}
+		}
+
+		return out
+
+	default:
+		return listed
+	}
+}
+
+func configID(c swarm.Config) string { return c.ID }
+
+func secretID(s swarm.Secret) string { return s.ID }
 
 // composeDoc renders the document both compose resources return.
 func composeDoc(file compose.File, warnings []string) (composeDocument, error) {

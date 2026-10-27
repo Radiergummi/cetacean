@@ -90,16 +90,7 @@ type versionedPage struct {
 func listVersions(t *testing.T, path string) (*httptest.ResponseRecorder, versionedPage) {
 	t.Helper()
 
-	h := versionsHandlers(t)
-	req := httptest.NewRequest("GET", path, nil)
-	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "u"}))
-	w := httptest.NewRecorder()
-
-	if req.URL.Path == "/secrets" {
-		h.HandleListSecrets(w, req)
-	} else {
-		h.HandleListConfigs(w, req)
-	}
+	w := serveVersions(t, httptest.NewRequest("GET", path, nil))
 
 	var page versionedPage
 	if w.Code == http.StatusOK {
@@ -109,6 +100,22 @@ func listVersions(t *testing.T, path string) (*httptest.ResponseRecorder, versio
 	}
 
 	return w, page
+}
+
+func serveVersions(t *testing.T, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+
+	h := versionsHandlers(t)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "u"}))
+	w := httptest.NewRecorder()
+
+	if req.URL.Path == "/secrets" {
+		h.HandleListSecrets(w, req)
+	} else {
+		h.HandleListConfigs(w, req)
+	}
+
+	return w
 }
 
 func ids(page versionedPage) []string {
@@ -173,6 +180,40 @@ func TestListVersions(t *testing.T) {
 				}
 			})
 
+			t.Run("a search finds an older version", func(t *testing.T) {
+				_, page := listVersions(t, base+"?search=db_v1")
+
+				want := []versionedItem{{"db_v1", "db", true, false, 0, 0}}
+				if !slices.Equal(page.Items, want) {
+					t.Errorf("items = %+v, want %+v", page.Items, want)
+				}
+			})
+
+			t.Run("a filter finds an older version", func(t *testing.T) {
+				_, page := listVersions(t, base+`?filter=name=="db_v2"`)
+
+				if got := ids(page); !slices.Equal(got, []string{"db_v2"}) {
+					t.Errorf("ids = %v, want db_v2", got)
+				}
+			})
+
+			t.Run("a CSV export holds every version", func(t *testing.T) {
+				req := withContentType(
+					httptest.NewRequest("GET", base+"?sort=name", nil),
+					ContentTypeCSV,
+				)
+				body := serveVersions(t, req).Body.String()
+
+				lines := strings.Split(strings.TrimSpace(body), "\r\n")
+				if lines[0] != "name,stack,version of,newest,used by,id" || len(lines) != 6 {
+					t.Fatalf("csv = %q, want a header and five versions", body)
+				}
+				if !slices.Contains(lines, "db_v2,,db,,1,db_v2") ||
+					!slices.Contains(lines, "db_v3,,db,true,0,db_v3") {
+					t.Errorf("csv = %q, want each version's group, newest flag and users", body)
+				}
+			})
+
 			t.Run("an unknown value is refused", func(t *testing.T) {
 				w, _ := listVersions(t, base+"?versions=some")
 				if w.Code != http.StatusBadRequest {
@@ -184,13 +225,29 @@ func TestListVersions(t *testing.T) {
 	}
 }
 
-// A created version must read as the newest of its group straight away, not as
-// a zero-time record older than every version it replaces.
-func TestCreatedVersionsAreSeededAsNew(t *testing.T) {
+// A created version is seeded with Docker's own record, so its creation time
+// is the manager's and it is the newest of its group straight away.
+func TestCreatedVersionsAreSeededFromDocker(t *testing.T) {
+	created := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	stack := map[string]string{"com.docker.stack.namespace": "app"}
+
 	c := cache.New(nil)
-	wc := &mockWriteClient{
-		createConfigFn: func(context.Context, swarm.ConfigSpec) (string, error) { return "cfg", nil },
-		createSecretFn: func(context.Context, swarm.SecretSpec) (string, error) { return "sec", nil },
+	wc := &mockWriteClient{}
+	wc.createConfigFn = func(context.Context, swarm.ConfigSpec) (string, error) { return "cfg", nil }
+	wc.createSecretFn = func(context.Context, swarm.SecretSpec) (string, error) { return "sec", nil }
+	wc.inspectConfigFn = func(_ context.Context, id string) (swarm.Config, error) {
+		return swarm.Config{
+			ID:        id,
+			CreatedAt: created, UpdatedAt: created,
+			Spec: swarm.ConfigSpec{Name: "x_v2", Labels: stack, Data: []byte("x")},
+		}, nil
+	}
+	wc.inspectSecretFn = func(_ context.Context, id string) (swarm.Secret, error) {
+		return swarm.Secret{
+			ID:        id,
+			CreatedAt: created, UpdatedAt: created,
+			Spec: swarm.SecretSpec{Name: "x_v2", Labels: stack},
+		}, nil
 	}
 	h := newTestHandlers(
 		t,
@@ -199,7 +256,6 @@ func TestCreatedVersionsAreSeededAsNew(t *testing.T) {
 		withOpsLevel(config.OpsConfiguration),
 	)
 
-	before := time.Now()
 	for path, handle := range map[string]http.HandlerFunc{
 		"/configs": h.HandleCreateConfig,
 		"/secrets": h.HandleCreateSecret,
@@ -212,9 +268,13 @@ func TestCreatedVersionsAreSeededAsNew(t *testing.T) {
 	sec, _ := c.GetSecret("sec")
 
 	for name, meta := range map[string]swarm.Meta{"config": cfg.Meta, "secret": sec.Meta} {
-		if meta.CreatedAt.Before(before) || meta.UpdatedAt.Before(before) {
-			t.Errorf("seeded %s Meta = %+v, want the time of the create", name, meta)
+		if !meta.CreatedAt.Equal(created) {
+			t.Errorf("seeded %s Meta = %+v, want Docker's", name, meta)
 		}
+	}
+
+	if cfg.Spec.Labels["com.docker.stack.namespace"] != "app" || len(cfg.Spec.Data) != 0 {
+		t.Errorf("seeded config spec = %+v, want Docker's labels and no payload", cfg.Spec)
 	}
 }
 

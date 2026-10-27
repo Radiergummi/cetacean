@@ -6984,7 +6984,9 @@ components:
       description: >-
         Which versions of a config or secret to list. `newest`, the default, lists only the
         newest readable version of each group of versions, which counts the rest in
-        `OlderVersions`; `all` lists every version. Any other value is refused with `API016`.
+        `OlderVersions`; `all` lists every version. Without it, a `search` or `filter` matches
+        every version, and a CSV export always holds every version. Any other value is refused
+        with `API016`.
       schema:
         type: string
         enum: [newest, all]

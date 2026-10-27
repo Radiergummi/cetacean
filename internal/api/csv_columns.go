@@ -35,6 +35,18 @@ func (c csvColumn) value(row cluster.Row) string {
 		return strconv.Itoa(row.Desired)
 	case "running":
 		return strconv.Itoa(row.Running)
+	case "versionOf":
+		return row.VersionOf
+	case "newestVersion":
+		if row.NewestVersion {
+			return "true"
+		}
+		return ""
+	case "usedBy":
+		if row.UsedBy == nil {
+			return ""
+		}
+		return strconv.Itoa(*row.UsedBy)
 	default:
 		return ""
 	}
@@ -55,10 +67,21 @@ var csvRowColumns = map[string][]csvColumn{
 	"node":    {{"name", "name"}, {"state", "state"}, {"detail", "role"}, {"id", "id"}},
 	"task":    {{"name", "name"}, {"state", "state"}, {"detail", "node"}, {"id", "id"}},
 	"stack":   {{"name", "name"}, {"desired", "services"}, {"id", "id"}},
-	"config":  {{"name", "name"}, {"stack", "stack"}, {"id", "id"}},
-	"secret":  {{"name", "name"}, {"stack", "stack"}, {"id", "id"}},
+	"config":  versionedColumns,
+	"secret":  versionedColumns,
 	"network": {{"name", "name"}, {"stack", "stack"}, {"detail", "driver"}, {"id", "id"}},
 	"volume":  {{"name", "name"}, {"stack", "stack"}, {"detail", "driver"}, {"id", "id"}},
+}
+
+// versionedColumns are a config's or secret's: every version is exported, so
+// each row says which group it is in, whether it is the newest, and who uses it.
+var versionedColumns = []csvColumn{
+	{"name", "name"},
+	{"stack", "stack"},
+	{"versionOf", "version of"},
+	{"newestVersion", "newest"},
+	{"usedBy", "used by"},
+	{"id", "id"},
 }
 
 // csvFallbackColumns answers for a type the map has not been taught about: a

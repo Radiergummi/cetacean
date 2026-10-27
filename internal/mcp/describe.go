@@ -153,13 +153,13 @@ func (s *Server) digestOf(
 
 	case swarm.Config:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID))
-		version := cluster.ConfigVersion(s.cache, resource, s.readPredicate(ctx))
+		version := s.versions.ConfigVersion(resource, s.readPredicate(ctx))
 
 		return withVersion(cluster.ConfigDigest(resource, users), version, len(users)), nil
 
 	case swarm.Secret:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID))
-		version := cluster.SecretVersion(s.cache, resource, s.readPredicate(ctx))
+		version := s.versions.SecretVersion(resource, s.readPredicate(ctx))
 
 		return withVersion(cluster.SecretDigest(resource, users), version, len(users)), nil
 
