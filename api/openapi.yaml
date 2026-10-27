@@ -8169,6 +8169,7 @@ components:
             - single-manager
             - even-managers
             - quorum-at-risk
+            - network-addresses-low
           x-enum-descriptions:
             - Service consistently uses far less than its reserved resources
             - Service usage is nearing its configured resource limit
@@ -8187,6 +8188,7 @@ components:
             - The swarm has one manager although it has the nodes for three
             - An even number of managers tolerates no more failures than one fewer
             - A manager is unreachable; critical once one more loss would break quorum, or it is already lost
+            - An overlay network has used 80% of its addresses; critical from 95%
         severity:
           type: string
           enum: [info, warning, critical]
@@ -8196,10 +8198,11 @@ components:
             - Urgent, should be addressed immediately
         scope:
           type: string
-          enum: [service, node, cluster]
+          enum: [service, node, network, cluster]
           x-enum-descriptions:
             - Recommendation targets a specific service
             - Recommendation targets a specific node
+            - Recommendation targets a specific network
             - Recommendation applies to the cluster as a whole
         targetId:
           type: string
