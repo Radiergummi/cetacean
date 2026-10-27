@@ -29,11 +29,12 @@ import type {
   Service,
   ServiceConfigRef,
   ServiceDetail,
+  ServiceLink,
   ServiceMount,
   ServiceNetworkRef,
   ServiceRef,
   ServiceSecretRef,
-  StackDetail,
+  StackResponse,
   StackSummary,
   SwarmInfo,
   Task,
@@ -47,6 +48,17 @@ import type {
 import { http, HttpResponse, type JsonBodyType, type PathParams } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
+
+/**
+ * What the server would read from the dataset's `cetacean.link.*` labels,
+ * written out rather than parsed.
+ */
+const demoServiceLinks: Record<string, ServiceLink[]> = {
+  webshop_api: [
+    { id: "grafana", title: "Dashboard", href: "https://grafana.example.com/d/webshop-api" },
+    { id: "oncall", title: "On call", text: "pager:webshop-team" },
+  ],
+};
 
 function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   return HttpResponse.json(data, { status });
@@ -1153,6 +1165,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           service,
           changes: [],
           integrations: [],
+          links: demoServiceLinks[service.Spec.Name] ?? [],
         } satisfies ServiceDetail),
       );
     }),
@@ -1204,13 +1217,15 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = stack.services
+        .map((id) => dataset.servicesByID.get(id))
+        .filter(Boolean) as Service[];
+
       return jsonResponse(
         detailEnvelope(`/stacks/${stackName}`, "Stack", {
           stack: {
             name: stackName,
-            services: stack.services
-              .map((id) => dataset.servicesByID.get(id))
-              .filter(Boolean) as Service[],
+            services,
             configs: stack.configs
               .map((id) => dataset.configsByID.get(id))
               .filter(Boolean) as Config[],
@@ -1224,7 +1239,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
               .map((name) => dataset.volumesByName.get(name))
               .filter(Boolean) as Volume[],
           },
-        } satisfies { stack: StackDetail }),
+          links: services.flatMap(({ Spec: { Name } }) => demoServiceLinks[Name] ?? []),
+        } satisfies StackResponse),
       );
     }),
 

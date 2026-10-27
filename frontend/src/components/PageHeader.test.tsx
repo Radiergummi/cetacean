@@ -65,4 +65,16 @@ describe("PageHeader", () => {
     renderWithRouter(<PageHeader title="Cluster" />, "/cluster");
     expect(screen.queryByLabelText("Atom feed")).not.toBeInTheDocument();
   });
+
+  // The title row truncates; anything wider than the screen must wrap instead.
+  it("renders extra content outside the truncated title row", () => {
+    renderWithRouter(
+      <PageHeader
+        title="web"
+        extra={<span>extra content</span>}
+      />,
+    );
+
+    expect(screen.getByText("extra content").closest(".truncate")).toBeNull();
+  });
 });

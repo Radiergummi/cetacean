@@ -76,9 +76,9 @@ Each `cetacean.link.<id>` label adds one link, and the optional `cetacean.link.<
 the link reads as `<id>`. Links are sorted by `<id>`, and a title without a matching link is ignored. The labels
 belong under `deploy.labels`, on the service rather than its containers.
 
-The service detail page shows the links in its header. The stack detail page shows the links of all its services,
-with exact duplicates merged. Only `http` and `https` URLs become links, opening in a new tab; any other value is
-shown as plain text.
+The service detail page shows the links under its title, and the stack detail page the links of all its services,
+with exact duplicates merged. Only well-formed `http` and `https` URLs become links, opening in a new tab; any other
+value is shown as plain text.
 
 ## API
 

@@ -141,6 +141,19 @@ describe("detail response shapes", () => {
     expect(Array.isArray(data.stack.networks)).toBe(true);
     expect(Array.isArray(data.stack.volumes)).toBe(true);
   });
+
+  it("shows custom links on webshop_api and its stack", async () => {
+    const api = dataset.services.find(({ Spec: { Name } }) => Name === "webshop_api");
+    const service = await fetchJSON(`/services/${api?.ID}`);
+    const stack = await fetchJSON("/stacks/webshop");
+    const expected = [
+      { id: "grafana", title: "Dashboard", href: "https://grafana.example.com/d/webshop-api" },
+      { id: "oncall", title: "On call", text: "pager:webshop-team" },
+    ];
+
+    expect(service.links).toEqual(expected);
+    expect(stack.links).toEqual(expected);
+  });
 });
 
 describe("computed endpoint shapes", () => {

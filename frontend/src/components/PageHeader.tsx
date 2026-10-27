@@ -12,9 +12,14 @@ interface Props {
   subtitle?: string | undefined;
   breadcrumbs?: Crumb[] | undefined;
   actions?: React.ReactNode | undefined;
+
+  /**
+   * A row under the title that wraps, unlike the truncated title row.
+   */
+  extra?: React.ReactNode | undefined;
 }
 
-export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Props) {
+export default function PageHeader({ title, subtitle, breadcrumbs, actions, extra }: Props) {
   const { pathname, search } = useLocation();
   const feed = feedForPath(pathname, search);
 
@@ -99,6 +104,7 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pr
           </div>
         )}
       </div>
+      {extra && <div className="-mt-3 max-w-full min-w-0">{extra}</div>}
     </header>
   );
 }

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { StackResponse, Task } from "../api/types";
+import type { ServiceLink, StackResponse, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
@@ -16,6 +16,8 @@ import { serviceModeLabel } from "../lib/deriveServiceState";
 import type { TaskCount } from "../lib/stackGraph";
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+
+const emptyLinks: ServiceLink[] = [];
 
 const StackGraph = lazy(() => import("../components/stack-detail/stack-graph/StackGraph"));
 
@@ -104,7 +106,7 @@ export default function StackDetail() {
   if (error) {
     return <FetchError message="Failed to load stack" />;
   }
-  if (!stack) {
+  if (!response || !stack) {
     return <LoadingDetail />;
   }
 
@@ -133,20 +135,18 @@ export default function StackDetail() {
         subtitle={subtitle}
         breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
         actions={
-          <>
-            <ServiceLinks links={response?.links ?? []} />
-            <StackActions
-              stackName={stack.name}
-              allowedMethods={allowedMethods}
-              resourceCounts={{
-                services: stack.services?.length ?? 0,
-                networks: stack.networks?.length ?? 0,
-                configs: stack.configs?.length ?? 0,
-                secrets: stack.secrets?.length ?? 0,
-              }}
-            />
-          </>
+          <StackActions
+            stackName={stack.name}
+            allowedMethods={allowedMethods}
+            resourceCounts={{
+              services: stack.services?.length ?? 0,
+              networks: stack.networks?.length ?? 0,
+              configs: stack.configs?.length ?? 0,
+              secrets: stack.secrets?.length ?? 0,
+            }}
+          />
         }
+        extra={<ServiceLinks links={response.links ?? emptyLinks} />}
       />
 
       {stack.services?.length > 0 && (

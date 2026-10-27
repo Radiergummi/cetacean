@@ -84,16 +84,14 @@ export default function ServiceDetail() {
           stack: labels?.[stackNamespaceLabel],
         })}
         actions={
-          <>
-            <ServiceLinks links={detail.links} />
-            <ServiceActions
-              service={service}
-              serviceId={id!}
-              allowedMethods={detail.allowedMethods}
-              editable={detail.editable}
-            />
-          </>
+          <ServiceActions
+            service={service}
+            serviceId={id!}
+            allowedMethods={detail.allowedMethods}
+            editable={detail.editable}
+          />
         }
+        extra={<ServiceLinks links={detail.links} />}
       />
 
       <SizingBanner

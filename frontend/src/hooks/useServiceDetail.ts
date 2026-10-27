@@ -120,7 +120,7 @@ export function useServiceDetail(id: string | undefined) {
           return { ...previous, service };
         });
 
-        // The integrations are read from the labels on the server.
+        // The integrations and links are read from the labels on the server.
         if (labelsChanged) {
           refetch();
         }
