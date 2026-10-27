@@ -56,6 +56,12 @@ func JoinDockerfile(statement []byte, layers []Descriptor) (*Dockerfile, error) 
 	for _, layer := range layers {
 		d.TotalSize += layer.Size
 
+		// A base image swapped in through a build context has no line, but
+		// its source step still says where the layer came from.
+		if base[creator[layer.Digest]] {
+			d.BaseSize += layer.Size
+		}
+
 		step, ok := steps[creator[layer.Digest]]
 		if !ok {
 			d.Unattributed = append(d.Unattributed, layer)
@@ -64,9 +70,6 @@ func JoinDockerfile(statement []byte, layers []Descriptor) (*Dockerfile, error) 
 		}
 
 		step.Layers = append(step.Layers, layer)
-		if step.Base {
-			d.BaseSize += layer.Size
-		}
 	}
 
 	for _, step := range steps {

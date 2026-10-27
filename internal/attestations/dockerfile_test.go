@@ -109,6 +109,28 @@ func TestJoinDockerfileNoSource(t *testing.T) {
 	}
 }
 
+// docker-library swaps nginx's FROM image in through a build context, so its
+// source step has no line; its layer is still the base image's.
+func TestJoinDockerfileCountsABaseWithoutALine(t *testing.T) {
+	base := Descriptor{
+		Digest: "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+		Size:   29843579,
+	}
+
+	d, err := JoinDockerfile(fixture(t, "nginx-provenance.json"), []Descriptor{base})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if d.BaseSize != base.Size {
+		t.Errorf("base = %d, want %d", d.BaseSize, base.Size)
+	}
+
+	if len(d.Unattributed) != 1 || d.Unattributed[0] != base {
+		t.Errorf("unattributed = %v; a layer no line produced is still listed", d.Unattributed)
+	}
+}
+
 func TestJoinDockerfileV02(t *testing.T) {
 	d, err := JoinDockerfile(fixture(t, "nginx-provenance.json"), nil)
 	if err != nil {
