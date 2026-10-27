@@ -13,7 +13,10 @@ interface RangeField<T> {
 }
 
 export interface MetricsMapSpec<T> {
-  labelKey: string;
+  /**
+   * Several labels file each series under their values joined by `/`.
+   */
+  labelKey: string | readonly string[];
   empty: () => T;
   instant?: readonly InstantField<T>[] | undefined;
   range?: readonly RangeField<T>[] | undefined;

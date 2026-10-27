@@ -2,11 +2,25 @@ import type { PrometheusResponse } from "../api/types";
 import { escapePromQL } from "./utils";
 
 /**
+ * The key a series is filed under: one label's value, or several joined by `/`.
+ */
+function seriesKey(
+  metric: Record<string, string> | undefined,
+  labelKey: string | readonly string[],
+): string {
+  if (typeof labelKey === "string") {
+    return metric?.[labelKey] || "";
+  }
+
+  return labelKey.map((label) => metric?.[label] ?? "").join("/");
+}
+
+/**
  * Extracts [label, value] pairs from a Prometheus instant query response.
  */
 export function parseInstant(
   response: PrometheusResponse | null,
-  labelKey: string,
+  labelKey: string | readonly string[],
 ): [string, number][] | null {
   const results = response?.data?.result;
 
@@ -15,7 +29,7 @@ export function parseInstant(
   }
 
   return results.map(
-    ({ metric, value }) => [metric?.[labelKey] || "", Number(value?.[1])] as [string, number],
+    ({ metric, value }) => [seriesKey(metric, labelKey), Number(value?.[1])] as [string, number],
   );
 }
 
@@ -24,7 +38,7 @@ export function parseInstant(
  */
 export function parseRange(
   response: PrometheusResponse | null,
-  labelKey: string,
+  labelKey: string | readonly string[],
 ): [string, number[]][] | null {
   const results = response?.data?.result;
 
@@ -34,7 +48,7 @@ export function parseRange(
 
   return results.map(
     ({ metric, values }) =>
-      [metric?.[labelKey] || "", (values || []).map((value) => Number(value[1]))] as [
+      [seriesKey(metric, labelKey), (values || []).map((value) => Number(value[1]))] as [
         string,
         number[],
       ],
