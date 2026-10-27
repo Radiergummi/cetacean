@@ -5775,7 +5775,7 @@ paths:
                         type: boolean
                         description: >-
                           True when the group was matched by name rather than declared by the
-                          cetacean.version-of label on every version. Absent when false.
+                          cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
                       newestVersion:
                         type: boolean
                         description: >-
@@ -6179,7 +6179,7 @@ paths:
                         type: boolean
                         description: >-
                           True when the group was matched by name rather than declared by the
-                          cetacean.version-of label on every version. Absent when false.
+                          cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
                       newestVersion:
                         type: boolean
                         description: >-
@@ -7866,13 +7866,13 @@ components:
                     type: string
                     description: >-
                       The logical name this config is a version of, when other versions of it
-                      are readable: its cetacean.version-of label, or its name without a version
+                      are readable: its cetacean.version-of or com.matchory.deployment.name label, or its name without a version
                       suffix. Absent when it has no other version.
                   VersionInferred:
                     type: boolean
                     description: >-
                       True when the group was matched by name rather than declared by the
-                      cetacean.version-of label on every version. Absent when false.
+                      cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
                   NewestVersion:
                     type: boolean
                     description: >-
@@ -7914,13 +7914,13 @@ components:
                     type: string
                     description: >-
                       The logical name this secret is a version of, when other versions of it
-                      are readable: its cetacean.version-of label, or its name without a version
+                      are readable: its cetacean.version-of or com.matchory.deployment.name label, or its name without a version
                       suffix. Absent when it has no other version.
                   VersionInferred:
                     type: boolean
                     description: >-
                       True when the group was matched by name rather than declared by the
-                      cetacean.version-of label on every version. Absent when false.
+                      cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
                   NewestVersion:
                     type: boolean
                     description: >-
@@ -9358,6 +9358,7 @@ components:
           caddy: "#/components/schemas/CaddyIntegration"
           doco-cd: "#/components/schemas/DocoCDIntegration"
           gantry: "#/components/schemas/GantryIntegration"
+          docker-swarm-deployment-action: "#/components/schemas/DeploymentActionIntegration"
       oneOf:
         - $ref: "#/components/schemas/TraefikIntegration"
         - $ref: "#/components/schemas/ShepherdIntegration"
@@ -9366,6 +9367,7 @@ components:
         - $ref: "#/components/schemas/CaddyIntegration"
         - $ref: "#/components/schemas/DocoCDIntegration"
         - $ref: "#/components/schemas/GantryIntegration"
+        - $ref: "#/components/schemas/DeploymentActionIntegration"
 
     TraefikIntegration:
       type: object
@@ -9772,3 +9774,69 @@ components:
         manifestCmd: manifest
         rollbackOnFailure: true
         updateTimeoutSeconds: 300
+
+    DeploymentActionIntegration:
+      type: object
+      description: >
+        The deployment provenance matchory/docker-swarm-deployment-action
+        writes onto the services it deploys, and the settings a service's
+        labels override. An absent override leaves the action's input in place.
+      required: [name, enabled, labels]
+      properties:
+        name:
+          type: string
+          enum: [docker-swarm-deployment-action]
+        enabled:
+          type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        version:
+          type: string
+          description: The deployed version
+        repository:
+          type: string
+          description: The repository, read from the workflow run URL
+          example: acme/shop
+        repositoryUrl:
+          type: string
+          format: uri
+          description: The repository on the GitHub server that ran the workflow
+        ref:
+          type: string
+          description: The branch or tag that triggered the workflow
+          example: refs/heads/main
+        commit:
+          type: string
+        commitUrl:
+          type: string
+          format: uri
+          description: The commit on the GitHub server that ran the workflow
+        runUrl:
+          type: string
+          format: uri
+          description: The workflow run that deployed the service; absent unless the label is a GitHub Actions run URL
+        actor:
+          type: string
+          description: The user that triggered the workflow run
+        monitor:
+          type: boolean
+        monitorTimeoutSeconds:
+          type: integer
+          minimum: 1
+        healthCheckWarnings:
+          type: boolean
+      example:
+        name: docker-swarm-deployment-action
+        enabled: true
+        labels: [com.matchory.deployment.commit, com.matchory.deployment.run-url]
+        version: 1.4.0
+        repository: acme/shop
+        repositoryUrl: https://github.com/acme/shop
+        ref: refs/heads/main
+        commit: 0123456789abcdef0123456789abcdef01234567
+        commitUrl: https://github.com/acme/shop/commit/0123456789abcdef0123456789abcdef01234567
+        runUrl: https://github.com/acme/shop/actions/runs/123
+        actor: octocat

@@ -172,7 +172,8 @@ version none of the services you can see uses says so. A search, a filter expres
 version it matches; narrowing by stack, state, node or image does not.
 
 Versions group only within one stack, by their `com.docker.stack.namespace` label, so a replacement must carry the
-same stack label as the version it replaces. Within a stack, a config or secret labeled `cetacean.version-of=<name>`
+same stack label as the version it replaces. Within a stack, a config or secret labeled `cetacean.version-of=<name>`,
+or `com.matchory.deployment.name=<name>` as [Docker Swarm Deployment Action][deployment-action] writes,
 is a version of `<name>`, taken as written apart from a `<stack>_` or `<stack>-` prefix, so `api-v1` and `api-v2`
 are two names. Without that label, Cetacean matches names instead, dropping the same prefix and a version suffix,
 which is `_` or `-` followed by either eight or more hex digits with at least one letter among them
@@ -281,6 +282,7 @@ attribution document.
 [api]: api
 [authentication]: authentication
 [authorization]: authorization
+[deployment-action]: https://github.com/matchory/docker-swarm-deployment-action
 [feeds]: api#feeds
 [filter-fields-by-resource]: api#filter-fields-by-resource
 [monitoring]: monitoring

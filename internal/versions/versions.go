@@ -18,6 +18,15 @@ import (
 // Label names the logical resource a config or secret is a version of.
 const Label = "cetacean.version-of"
 
+// deploymentActionLabel is how matchory/docker-swarm-deployment-action names
+// it. Its 7-digit name hash is too short for stripSuffix to take as a version.
+const deploymentActionLabel = "com.matchory.deployment.name"
+
+// declared is the logical name an item's labels give, or "".
+func declared(labels map[string]string) string {
+	return cmp.Or(labels[Label], labels[deploymentActionLabel])
+}
+
 // suffix is a version stamp: a hash of eight or more hex digits, or a v-number.
 // A number alone is not one, short or long: `worker_1` and `backup_20240101`
 // are siblings, so stripSuffix also wants a hash to hold a letter.
@@ -46,7 +55,7 @@ type Item struct {
 
 // Membership places one item in its group of Count versions. Rank orders the
 // group newest first, so the newest is 0. Inferred is true unless every member
-// declared the group with Label.
+// declared the group with a label.
 type Membership struct {
 	Of       string
 	Stack    string
@@ -59,13 +68,13 @@ type Membership struct {
 // name within it.
 type GroupKey struct{ Stack, Name string }
 
-// Key is an item's group: its Label as written, or else its name without a
+// Key is an item's group: the name its labels declare, as written, or else its name without a
 // version suffix; either way without the `<stack>_` or `<stack>-` prefix a
 // stack deploy writes. An item joins only the groups of its own stack.
 func Key(it Item) GroupKey {
 	stack := it.Labels[cache.StackLabel]
 
-	name := it.Labels[Label]
+	name := declared(it.Labels)
 	if name == "" {
 		name = stripSuffix(it.Name)
 	}
@@ -104,7 +113,10 @@ func Group(items []Item) map[string]Membership {
 			return cmp.Compare(b.ID, a.ID)
 		})
 
-		inferred := slices.ContainsFunc(members, func(m Item) bool { return m.Labels[Label] == "" })
+		inferred := slices.ContainsFunc(
+			members,
+			func(m Item) bool { return declared(m.Labels) == "" },
+		)
 		for rank, m := range members {
 			out[m.ID] = Membership{
 				Of:       k.Name,

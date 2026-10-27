@@ -13,7 +13,7 @@ function shortRevision(value: string): string {
   return fullCommitSHA.test(value) ? value.slice(0, 7) : value;
 }
 
-function Commit({ commit, commitUrl }: { commit: string; commitUrl?: string | undefined }) {
+export function Commit({ commit, commitUrl }: { commit: string; commitUrl?: string | undefined }) {
   const short = <code title={commit}>{shortRevision(commit)}</code>;
 
   if (!commitUrl) {
