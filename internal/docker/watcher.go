@@ -492,7 +492,10 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			if key.id == "" {
 				continue // unrecognized event, skip
 			}
-			pending[key] = coalesced{action: action}
+			// An update coalesced onto a create keeps the create's retry.
+			if prev, ok := pending[key]; !ok || prev.action != "create" || action != "update" {
+				pending[key] = coalesced{action: action}
+			}
 			if timerC == nil {
 				if timer == nil {
 					timer = time.NewTimer(debounceWindow)
@@ -626,7 +629,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	for range workers {
 		wg.Go(func() {
 			for key := range work {
-				w.inspectAndApply(ctx, key)
+				w.inspectAndApply(ctx, key, batch[key].action == "create")
 			}
 		})
 	}
@@ -773,7 +776,7 @@ type settledRead struct {
 // burst of exits holds neither the loop nor a Refresh behind it. It reports
 // whether the task has caught up, which ends the re-reads.
 func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) bool {
-	resource, err := w.inspectWithRetry(ctx, key)
+	resource, err := w.inspectWithRetry(ctx, key, false)
 
 	var read settledRead
 	switch {
@@ -874,13 +877,12 @@ func (w *Watcher) applyRemove(key eventKey) {
 	}
 }
 
-func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
-	resource, err := w.inspectWithRetry(ctx, key)
+func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey, created bool) {
+	resource, err := w.inspectWithRetry(ctx, key, created)
 	if err != nil {
-		// A not-found that outlived every retry is the daemon's answer, not a
-		// race: Swarm garbage-collects a task's record without emitting a
-		// removal event, so this is the only signal it went. The retries are
-		// what tell it from "not registered yet" during a stack deploy.
+		// A not-found is the daemon's answer, not a race: Swarm garbage-collects
+		// a task's record without emitting a removal event, so this is the only
+		// signal it went. Only a create retries it, as "not registered yet".
 		if cerrdefs.IsNotFound(err) {
 			slog.Debug(
 				"resource no longer exists; dropping cached record",
@@ -1014,10 +1016,14 @@ func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
 }
 
 // inspectWithRetry retries transient inspect failures with capped exponential
-// backoff. Rapid stack deploys race: an event arrives for a resource the daemon
-// has not registered yet. A one-shot inspect drops the event and leaves the
-// cache stale until the periodic re-sync.
-func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, error) {
+// backoff, holding the event loop meanwhile. A not-found is retried only after a
+// create, which can outrun the object during a stack deploy; anywhere else the
+// object is gone, and a task outlives every container event that names it.
+func (w *Watcher) inspectWithRetry(
+	ctx context.Context,
+	key eventKey,
+	created bool,
+) (any, error) {
 	const maxAttempts = 4
 	backoff := 100 * time.Millisecond
 
@@ -1028,11 +1034,10 @@ func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, erro
 			return resource, nil
 		}
 		lastErr = err
-		// Don't retry on definitive 404s if the event was a "remove" raced
-		// with us — but during stack deploy a 404 means "not visible yet",
-		// so we still retry. Cancel/deadline shortcuts here only when the
-		// outer context is dead.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if cerrdefs.IsNotFound(err) && !created {
 			return nil, err
 		}
 		// Don't waste retries on errors that won't change (auth, not implemented).

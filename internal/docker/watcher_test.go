@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -769,11 +770,14 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 
 // Swarm garbage-collects a task's record once it leaves the history window and
 // emits no removal event, so the only trace is that the next inspect 404s. A
-// not-found surviving every retry is the daemon's answer rather than a race —
-// the retries still run, since during a deploy a 404 means "not registered yet".
+// task outlives its container, so a 404 for one is final, not worth a retry
+// that would hold the event loop.
 func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
+	var calls atomic.Int32
+
 	mc := newMockClient()
 	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+		calls.Add(1)
 		return nil, cerrdefs.ErrNotFound
 	}
 
@@ -787,13 +791,117 @@ func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 
 	w := NewWatcher(mc, c, "")
 	deliver(context.Background(), w, events.Message{
-		Type:  "task",
-		Actor: events.Actor{ID: "t1"},
+		Type:   events.ContainerEventType,
+		Action: "destroy",
+		Actor: events.Actor{
+			ID:         "container1",
+			Attributes: map[string]string{"com.docker.swarm.task.id": "t1"},
+		},
 	})
+	w.waitForSettles()
 
 	if _, ok := c.GetTask("t1"); ok {
 		t.Error("task Docker no longer has is still in the cache")
 	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("inspected a missing task %d times, want 1", got)
+	}
+}
+
+// During a stack deploy a create event can outrun the object it announces, so
+// a 404 on a create is retried rather than taken as the answer.
+func TestCreateEventRetriesAnObjectNotVisibleYet(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		if calls.Add(1) == 1 {
+			return nil, cerrdefs.ErrNotFound
+		}
+		return swarm.Service{ID: id}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	deliver(context.Background(), w, events.Message{
+		Type:   events.ServiceEventType,
+		Action: "create",
+		Actor:  events.Actor{ID: "svc1"},
+	})
+
+	if _, ok := c.GetService("svc1"); !ok {
+		t.Error("a service created a moment before its inspect was dropped")
+	}
+}
+
+// Past its create, a 404 means the object is gone: its remove event is on the
+// way, and retrying would only hold the event loop until it arrives.
+func TestUpdateEventTakesNotFoundAsFinal(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+		calls.Add(1)
+		return nil, cerrdefs.ErrNotFound
+	}
+
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	w := NewWatcher(mc, c, "")
+	deliver(context.Background(), w, events.Message{
+		Type:   events.ServiceEventType,
+		Action: "update",
+		Actor:  events.Actor{ID: "svc1"},
+	})
+
+	if _, ok := c.GetService("svc1"); ok {
+		t.Error("a service Docker no longer has is still in the cache")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("inspected a missing service %d times, want 1", got)
+	}
+}
+
+// An update coalesced onto a create in the same window must keep the create's
+// retry, or the object the deploy just made is dropped.
+func TestCoalescedCreateKeepsItsRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var calls atomic.Int32
+
+		mc := newMockClient()
+		mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+			if calls.Add(1) == 1 {
+				return nil, cerrdefs.ErrNotFound
+			}
+			return swarm.Service{ID: id}, nil
+		}
+
+		c := cache.New(nil)
+		w := NewWatcher(mc, c, "")
+		for _, action := range []events.Action{"create", "update"} {
+			mc.eventsCh <- events.Message{
+				Type:   events.ServiceEventType,
+				Action: action,
+				Actor:  events.Actor{ID: "svc1"},
+			}
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.watchEvents(ctx, time.Time{})
+		}()
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+		cancel()
+		<-done
+
+		if _, ok := c.GetService("svc1"); !ok {
+			t.Error("a create coalesced with an update lost its retry")
+		}
+	})
 }
 
 // A transient failure is not evidence of absence. Dropping the record on one

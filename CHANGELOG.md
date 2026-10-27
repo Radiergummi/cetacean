@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
 
 ## [0.18.0] - 2026-10-24
 
