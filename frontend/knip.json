@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/demo/index.ts", "src/widgets/*/main.tsx", "scripts/*.mjs", "vite.config*.ts"],
+  "project": ["src/**/*.{ts,tsx,css}", "scripts/*.mjs"],
+  "vite": false,
+  "vitest": { "config": ["vite.config.ts"] },
+  "ignoreIssues": { "src/components/ui/**": ["exports", "types"] },
+  "ignoreDependencies": ["@scalar/api-reference"],
+  "ignoreExportsUsedInFile": true
+}

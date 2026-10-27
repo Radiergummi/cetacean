@@ -33,6 +33,10 @@ func Detect(labels map[string]string) []any {
 		integrations = append(integrations, g)
 	}
 
+	if d := detectDeploymentAction(labels); d != nil {
+		integrations = append(integrations, d)
+	}
+
 	return integrations
 }
 

@@ -13,7 +13,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../api/client", () => ({
   pageSize: 50,
   emptyMethods: new Set(),
-  setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
     services: vi.fn<() => void>(),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),

@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -100,7 +101,7 @@ func resolveTracesEndpoint(parsed *url.URL) string {
 // second time.
 func validateEndpoint(endpoint string) (*url.URL, error) {
 	if endpoint == "" {
-		return nil, fmt.Errorf("tracing: endpoint is empty")
+		return nil, errors.New("tracing: endpoint is empty")
 	}
 
 	parsed, err := url.Parse(endpoint)

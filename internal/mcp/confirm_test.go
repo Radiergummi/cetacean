@@ -136,10 +136,7 @@ func verifies(signer *stateSigner, token string, want roundTripState) bool {
 }
 
 func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
-	signer, err := newStateSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	signer := newStateSigner()
 
 	now := time.Unix(1_700_000_000, 0)
 	signer.now = func() time.Time { return now }
@@ -155,7 +152,7 @@ func TestStateSigner_RefusesTamperingExpiryAndMismatch(t *testing.T) {
 	flipped := []byte(payload)
 	flipped[len(flipped)-2] ^= 1
 
-	other, _ := newStateSigner()
+	other := newStateSigner()
 
 	cases := map[string]struct {
 		token string

@@ -207,18 +207,13 @@ func (t *TokenIssuer) IssueAccessToken(
 		return "", fmt.Errorf("%w: aud is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
 
-	jtiBytes := make([]byte, 16)
-	if _, err := rand.Read(jtiBytes); err != nil {
-		panic(fmt.Sprintf("jwt: crypto/rand.Read failed (host RNG broken): %v", err))
-	}
-
 	now := time.Now()
 	payload := jwtPayload{
 		Issuer:    t.Issuer,
 		Audience:  audience{aud},
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(ttl).Unix(),
-		JTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),
+		JTIID:     rand.Text(),
 		Subject:   claims.Subject,
 		Email:     claims.Email,
 		Name:      claims.DisplayName,
