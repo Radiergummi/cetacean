@@ -50,6 +50,15 @@ const categoryDetails: Record<RecommendationCategory, string> = {
   "uneven-distribution":
     "An uneven task distribution means some nodes are overloaded while others sit idle. " +
     "This can be caused by placement constraints, resource reservations, or stale task assignments.",
+  "single-manager":
+    "With one manager, losing it leaves the swarm unable to schedule, update or recover anything " +
+    "until it returns. Promote two workers so three managers can tolerate one failure.",
+  "even-managers":
+    "Raft needs a majority of managers, so an even number tolerates no more failures than one " +
+    "fewer, while adding one more node that can fail. Run an odd number: three, five or seven.",
+  "quorum-at-risk":
+    "Too few managers are reachable to survive another loss. Without quorum the swarm keeps its " +
+    "tasks running but cannot schedule, update or recover them. Bring the managers back first.",
   "flaky-service":
     "Frequent task restarts indicate a recurring failure — OOM kills, crash loops, or failing " +
     "health checks. Investigate container logs and resource usage for the root cause.",
@@ -80,7 +89,14 @@ const filterGroups: Record<string, Set<string>> = {
   sizing: sizingCategories,
   config: new Set(["no-healthcheck", "no-restart-policy", "newer-image"]),
   operational: new Set(["flaky-service", "node-disk-full", "node-memory-pressure"]),
-  cluster: new Set(["single-replica", "manager-has-workloads", "uneven-distribution"]),
+  cluster: new Set([
+    "single-replica",
+    "manager-has-workloads",
+    "uneven-distribution",
+    "single-manager",
+    "even-managers",
+    "quorum-at-risk",
+  ]),
 };
 
 const filterTabs = ["all", "sizing", "config", "operational", "cluster"] as const;

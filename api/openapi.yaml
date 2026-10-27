@@ -7981,6 +7981,9 @@ components:
             - single-replica
             - manager-has-workloads
             - uneven-distribution
+            - single-manager
+            - even-managers
+            - quorum-at-risk
           x-enum-descriptions:
             - Service consistently uses far less than its reserved resources
             - Service usage is nearing its configured resource limit
@@ -7996,6 +7999,9 @@ components:
             - Service has only one replica (no redundancy)
             - Manager node is running non-system workloads
             - Tasks for a service are unevenly distributed across nodes
+            - The swarm has one manager although it has the nodes for three
+            - An even number of managers tolerates no more failures than one fewer
+            - One more manager loss would break quorum, or quorum is already lost
         severity:
           type: string
           enum: [info, warning, critical]
@@ -8107,6 +8113,8 @@ components:
         lastSync:
           type: string
           format: date-time
+        quorum:
+          $ref: "#/components/schemas/ManagerQuorum"
         prometheusConfigured:
           type: boolean
         localNodeID:
@@ -8129,8 +8137,35 @@ components:
         maxNodeCPU: 4
         maxNodeMemory: 8589934592
         lastSync: "2026-04-13T12:00:00Z"
+        quorum: { managers: 3, reachable: 3, size: 2, canLose: 1 }
         prometheusConfigured: true
         localNodeID: qz7k3v9xm2p4
+
+    ManagerQuorum:
+      type: object
+      description: >
+        The swarm's Raft quorum, counted over every manager whatever the
+        caller's grants, like the node counts beside it.
+      required: [managers, reachable, size, canLose]
+      properties:
+        managers:
+          type: integer
+        reachable:
+          type: integer
+          description: Managers their peers can reach
+        size:
+          type: integer
+          description: Reachable managers needed to accept changes, a majority of `managers`
+        canLose:
+          type: integer
+          description: >
+            Reachable managers the swarm can lose and still accept changes;
+            0 when quorum is lost or one more loss would lose it
+      example:
+        managers: 3
+        reachable: 3
+        size: 2
+        canLose: 1
 
     ClusterCapacity:
       type: object

@@ -60,7 +60,8 @@ resources they returned, so a host can offer somewhere to go next.
     <Fragment slot="arguments">none</Fragment>
 
     Answers whether the cluster is healthy and, when it's not, names the services not in their desired state or
-    restarting in a loop, the nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here.
+    restarting in a loop, the nodes down or draining, the rollouts in flight, reserved against total CPU and memory, and
+    how many managers are reachable and how many more failures quorum survives. Start here.
 </McpTool>
 
 <McpTool name="find" level={0}>
@@ -368,7 +369,7 @@ Resources are read-only views returned as `application/json`. Three are static, 
 
 | URI                          | Contents                                                                                                                                                                                                                  |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `cetacean://cluster`         | Node, service, task, and stack counts, node readiness, task counts by state, total and reserved CPU and memory, the largest node's capacity, converged and degraded service counts, last sync time                        |
+| `cetacean://cluster`         | Node, service, task, and stack counts, node readiness, task counts by state, total and reserved CPU and memory, the largest node's capacity, converged and degraded service counts, manager quorum, last sync time        |
 | `cetacean://recommendations` | Current [recommendation][recommendations] engine findings, each with severity, category, target resource, and rationale                                                                                                   |
 | `cetacean://history`         | The most recent create, update, and delete events across every resource type, newest first, up to 100. A task event is named after its service (`demo_flaky.3`) rather than by task ID; `resourceId` still carries the ID |
 

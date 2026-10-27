@@ -63,6 +63,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		ReservedMemory:       snap.ReservedMemory,
 		TotalCPU:             snap.TotalCPU,
 		TotalMemory:          snap.TotalMemory,
+		Quorum:               snap.Quorum,
 		PrometheusConfigured: h.promClient != nil,
 		LocalNodeID:          h.getLocalNodeID(),
 	}

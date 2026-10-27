@@ -4,6 +4,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // ClusterStatus is the landing read: everything needed to decide whether to
@@ -31,6 +32,7 @@ type ClusterStatus struct {
 	Rollouts          []Row `json:"rollouts"`
 
 	Capacity ClusterCapacity `json:"capacity"`
+	Quorum   quorum.Quorum   `json:"quorum"`
 }
 
 // ClusterCapacity is the reserved-versus-available picture, in named units.
@@ -78,6 +80,7 @@ func BuildClusterStatus(
 		DrainingNodes:     []Row{},
 		Rollouts:          []Row{},
 		Capacity:          CapacityOf(snap),
+		Quorum:            snap.Quorum,
 	}
 
 	// Rows are sorted, so the raw services are indexed rather than walked

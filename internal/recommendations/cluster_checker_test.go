@@ -351,3 +351,106 @@ func TestClusterChecker_UnevenDistribution(t *testing.T) {
 		}
 	})
 }
+
+func TestClusterChecker_Quorum(t *testing.T) {
+	node := func(id string, role swarm.NodeRole, reachability swarm.Reachability) swarm.Node {
+		n := swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}
+		if role == swarm.NodeRoleManager {
+			n.ManagerStatus = &swarm.ManagerStatus{Reachability: reachability}
+		}
+
+		return n
+	}
+	up, down := swarm.ReachabilityReachable, swarm.ReachabilityUnreachable
+	manager, worker := swarm.NodeRoleManager, swarm.NodeRoleWorker
+
+	tests := []struct {
+		name  string
+		nodes []swarm.Node
+		want  map[Category]Severity
+	}{
+		{
+			name:  "a single-node swarm has nothing to promote",
+			nodes: []swarm.Node{node("m1", manager, up)},
+			want:  map[Category]Severity{},
+		},
+		{
+			name: "one manager beside two workers could have three",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("w1", worker, ""),
+				node("w2", worker, ""),
+			},
+			want: map[Category]Severity{CategorySingleManager: SeverityWarning},
+		},
+		{
+			name:  "two managers tolerate no more failures than one",
+			nodes: []swarm.Node{node("m1", manager, up), node("m2", manager, up)},
+			want:  map[Category]Severity{CategoryEvenManagers: SeverityWarning},
+		},
+		{
+			name: "three healthy managers raise nothing",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("m2", manager, up),
+				node("m3", manager, up),
+			},
+			want: map[Category]Severity{},
+		},
+		{
+			name: "one more loss breaks quorum",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("m2", manager, up),
+				node("m3", manager, down),
+			},
+			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+		{
+			name: "quorum lost",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("m2", manager, down),
+				node("m3", manager, down),
+			},
+			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+	}
+
+	quorumCategories := map[Category]bool{
+		CategorySingleManager: true,
+		CategoryEvenManagers:  true,
+		CategoryQuorumAtRisk:  true,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := cache.New(nil)
+			for _, n := range tt.nodes {
+				c.SetNode(n)
+			}
+
+			got := map[Category]Severity{}
+
+			for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+				if quorumCategories[rec.Category] {
+					if rec.Scope != ScopeCluster {
+						t.Errorf("%s scope = %s, want cluster", rec.Category, rec.Scope)
+					}
+
+					got[rec.Category] = rec.Severity
+				}
+			}
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+
+			for category, severity := range tt.want {
+				if got[category] != severity {
+					t.Errorf("%s severity = %q, want %q", category, got[category], severity)
+				}
+			}
+		})
+	}
+}

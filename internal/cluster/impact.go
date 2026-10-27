@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // Impact is what an impactful write will do, as a person confirming it is
@@ -244,26 +245,15 @@ func RoleImpact(node swarm.Node, nodes []swarm.Node, role swarm.NodeRole) Impact
 		return Impact{Summary: fmt.Sprintf("Node %s is already a %s; nothing changes.", name, role)}
 	}
 
-	managers, reachable := 0, 0
-
-	for _, n := range nodes {
-		if n.Spec.Role != swarm.NodeRoleManager {
-			continue
-		}
-
-		managers++
-
-		if managerReachable(n) {
-			reachable++
-		}
-	}
+	q := quorum.Of(nodes)
+	managers, reachable := q.Managers, q.Reachable
 
 	after, reachableAfter := managers+1, reachable+1
 	summary := fmt.Sprintf("Promote node %s to manager.", name)
 
 	if role == swarm.NodeRoleWorker {
 		after, reachableAfter = managers-1, reachable
-		if managerReachable(node) {
+		if quorum.Reachable(node) {
 			reachableAfter--
 		}
 
@@ -274,7 +264,7 @@ func RoleImpact(node swarm.Node, nodes []swarm.Node, role swarm.NodeRole) Impact
 		fmt.Sprintf("Managers: %d before, %d after.", managers, after),
 	}
 
-	needed := after/2 + 1
+	needed := quorum.Size(after)
 
 	switch {
 	case after < 1:
@@ -291,10 +281,6 @@ func RoleImpact(node swarm.Node, nodes []swarm.Node, role swarm.NodeRole) Impact
 	}
 
 	return Impact{Summary: summary, Effects: effects}
-}
-
-func managerReachable(n swarm.Node) bool {
-	return n.ManagerStatus != nil && n.ManagerStatus.Reachability == swarm.ReachabilityReachable
 }
 
 func plural(n int, one, many string) string {

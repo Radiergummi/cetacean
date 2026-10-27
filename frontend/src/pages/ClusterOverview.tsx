@@ -2,7 +2,7 @@
 // to render deltas against. It is written in an effect cleanup and read during
 // render, which is the flagged pattern; replacing it with the state-adjustment
 // idiom changes when deltas reset, so it is left as-is deliberately.
-import { api, type ClusterSnapshot } from "../api/client";
+import { api, type ClusterSnapshot, type ManagerQuorum } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import FetchError from "../components/FetchError";
@@ -70,8 +70,8 @@ export default function ClusterOverview() {
     return (
       <div>
         <PageHeader title="Cluster Overview" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
             <div
               key={index}
               className="rounded-lg border bg-card p-6"
@@ -97,7 +97,7 @@ export default function ClusterOverview() {
       {monitoring && <MonitoringStatus status={monitoring} />}
 
       {/* Health Row */}
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
         <HealthCard
           label="Nodes"
           primary={`${snapshot.nodesReady}/${snapshot.nodeCount} ready`}
@@ -111,6 +111,11 @@ export default function ClusterOverview() {
           }
           status={snapshot.nodesDown > 0 ? "red" : snapshot.nodesDraining > 0 ? "amber" : "green"}
           to="/nodes"
+        />
+        <HealthCard
+          label="Managers"
+          to="/nodes"
+          {...describeQuorum(snapshot.quorum)}
         />
         <HealthCard
           label="Services"
@@ -179,6 +184,37 @@ export default function ClusterOverview() {
       )}
     </div>
   );
+}
+
+/**
+ * Describe the manager quorum for its health card. Only an unreachable manager
+ * turns it red: a manager set with no failure tolerance by design is left to
+ * the recommendations, which know when there are nodes to promote.
+ */
+export function describeQuorum({ managers, reachable, size, canLose }: ManagerQuorum): {
+  primary: string;
+  secondary: string;
+  status: "green" | "red" | "neutral";
+} {
+  const primary = `${reachable}/${managers} reachable`;
+
+  if (reachable < size) {
+    return { primary, secondary: `quorum lost, ${size} needed`, status: "red" };
+  }
+
+  if (reachable < managers && canLose === 0) {
+    return { primary, secondary: "one more loss breaks quorum", status: "red" };
+  }
+
+  if (canLose === 0) {
+    return { primary, secondary: "tolerates no manager failure", status: "neutral" };
+  }
+
+  return {
+    primary,
+    secondary: `tolerates ${canLose} manager ${canLose === 1 ? "failure" : "failures"}`,
+    status: "green",
+  };
 }
 
 function HealthCard({

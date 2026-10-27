@@ -24,6 +24,9 @@ const (
 	CategorySingleReplica       Category = "single-replica"
 	CategoryManagerHasWorkloads Category = "manager-has-workloads"
 	CategoryUnevenDistribution  Category = "uneven-distribution"
+	CategorySingleManager       Category = "single-manager"
+	CategoryEvenManagers        Category = "even-managers"
+	CategoryQuorumAtRisk        Category = "quorum-at-risk"
 )
 
 type Severity string

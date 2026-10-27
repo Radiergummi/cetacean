@@ -827,6 +827,27 @@ func TestSnapshot_ResourceTotals(t *testing.T) {
 	}
 }
 
+func TestSnapshot_Quorum(t *testing.T) {
+	c := New(nil)
+	for id, reachability := range map[string]swarm.Reachability{
+		"m1": swarm.ReachabilityReachable,
+		"m2": swarm.ReachabilityReachable,
+		"m3": swarm.ReachabilityUnreachable,
+	} {
+		c.SetNode(swarm.Node{
+			ID:            id,
+			Spec:          swarm.NodeSpec{Role: swarm.NodeRoleManager},
+			ManagerStatus: &swarm.ManagerStatus{Reachability: reachability},
+		})
+	}
+	c.SetNode(swarm.Node{ID: "w1", Spec: swarm.NodeSpec{Role: swarm.NodeRoleWorker}})
+
+	got := c.Snapshot().Quorum
+	if got.Managers != 3 || got.Reachable != 2 || got.Size != 2 || got.CanLose != 0 {
+		t.Errorf("Quorum = %+v, want 3 managers, 2 reachable, size 2, can lose 0", got)
+	}
+}
+
 func TestSnapshot_MaxNodeResources(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{
