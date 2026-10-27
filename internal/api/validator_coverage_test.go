@@ -30,10 +30,7 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 	// are listed rather than skipped so the debt is visible and cannot grow
 	// quietly: an entry that starts passing fails as stale, and an endpoint
 	// not listed fails outright.
-	knownBypasses := map[string]string{
-		"/metrics/status": "writes with plain writeJSON; one of 12 such call " +
-			"sites across 7 files, so fixing it belongs with that sweep",
-	}
+	knownBypasses := map[string]string{}
 	seenBypass := map[string]bool{}
 
 	var checked int

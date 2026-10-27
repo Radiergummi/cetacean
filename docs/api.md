@@ -511,7 +511,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 
 ## Caching
 
-JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. Use `If-None-Match` for conditional requests:
+JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. `GET /auth/whoami` sends `no-store` and no `ETag`: it describes the caller, and a validator on it would invite the sharing `no-store` forbids. Use `If-None-Match` for conditional requests:
 
 ```bash
 curl -v http://localhost:9000/services

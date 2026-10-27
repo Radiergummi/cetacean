@@ -374,10 +374,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /metrics/labels", h.withReadEverything(metricsProxy.HandleMetricsLabels))
+	mux.HandleFunc(
+		"GET /metrics/labels",
+		jsonOnly(h.withReadEverything(metricsProxy.HandleMetricsLabels)),
+	)
 	mux.HandleFunc(
 		"GET /metrics/labels/{name}",
-		h.withReadEverything(metricsProxy.HandleMetricsLabelValues),
+		jsonOnly(h.withReadEverything(metricsProxy.HandleMetricsLabelValues)),
 	)
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
 		h.withReadEverything(metricsProxy.HandleMetrics),
@@ -1004,10 +1007,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
 		case ContentTypeJGF, ContentTypeJSON:
+			allowReads(w)
 			h.HandleTopology(w, r)
 		case ContentTypeGraphML:
+			allowReads(w)
 			h.HandleTopologyGraphML(w, r)
 		case ContentTypeDOT:
+			allowReads(w)
 			h.HandleTopologyDOT(w, r)
 		default:
 			notAcceptable(
@@ -1224,5 +1230,6 @@ func writeIdentityJSONLD(w http.ResponseWriter, r *http.Request, id *auth.Identi
 		return
 	}
 
+	allowReads(w)
 	writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
 }

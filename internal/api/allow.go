@@ -219,6 +219,25 @@ func (h *Handlers) setAllowSubResource(
 
 var readOnly = offeredWrites{methods: []string{"GET", "HEAD"}}
 
+// allowReads is the Allow of an endpoint no write is routed at. It does not
+// vary by caller, so it adds no Vary; a handler with writes overwrites it.
+func allowReads(w http.ResponseWriter) {
+	w.Header().Set("Allow", "GET, HEAD")
+}
+
+// jsonOnly serves next, a read that sends only JSON, to a client that takes it.
+func jsonOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !acceptable(r, ContentTypeJSON) {
+			notAcceptable(w, r, "application/json")
+			return
+		}
+
+		allowReads(w)
+		next(w, r)
+	}
+}
+
 // writeAllow writes Allow, and Accept-Patch when the methods take a PATCH.
 func writeAllow(w http.ResponseWriter, offer offeredWrites) {
 	w.Header().Set("Allow", strings.Join(offer.methods, ", "))
