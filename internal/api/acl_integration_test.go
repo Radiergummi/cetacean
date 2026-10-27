@@ -1201,6 +1201,46 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 	}
 }
 
+// A task's rendered name is its service's, so the write key resolves through
+// it only for a caller who can read that service.
+func TestTaskWriteResourceResolvesANameThroughAReadableService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetTask(swarm.Task{
+		ID: "task1", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	for resources, want := range map[string]string{
+		"service:webapp": "service:webapp",
+		"task:*":         "task:webapp.1",
+	} {
+		e := acl.NewEvaluator()
+		e.SetResolver(c)
+		e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+			Resources:   []string{resources},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		}}})
+
+		h := newTestHandlers(t, withCache(c), withACL(e))
+
+		req := httptest.NewRequest("DELETE", "/tasks/webapp.1", nil)
+		req.SetPathValue("id", "webapp.1")
+		req = req.WithContext(
+			auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}),
+		)
+
+		if got := h.writeResource("task")(req); got != want {
+			t.Errorf("reading %s: write resource = %q, want %q", resources, got, want)
+		}
+	}
+}
+
 func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{

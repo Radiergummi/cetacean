@@ -86,7 +86,17 @@ func (h *Handlers) requireWriteACL(
 func (h *Handlers) writeResource(kind string) func(*http.Request) string {
 	return func(r *http.Request) string {
 		id := r.PathValue("id")
-		canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+
+		// Only a task addressed by name consults the reader, so the caller's
+		// grants are collected for that alone.
+		var checker func(string) bool
+		canRead := func(resource string) bool {
+			if checker == nil {
+				checker = h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+			}
+
+			return checker(resource)
+		}
 
 		if record, found, _ := cluster.LookupAs(h.cache, kind, id, canRead); found {
 			return record.WriteResource()
