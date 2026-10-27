@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
 - `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one
-- An MCP write the Docker engine refuses, or cannot be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log
+- An MCP write the Docker engine refuses, or can't be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log
 - A history or `get_events` query naming a task as `<service>.<slot>` resolves only for callers who can read that service
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
