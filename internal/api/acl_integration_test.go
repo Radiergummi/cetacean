@@ -1733,6 +1733,14 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 			Message:    "an older version of webapp",
 		},
 		{
+			// Readable itself, but it reveals a newer version the caller may not read.
+			Scope:      recommendations.ScopeSecret,
+			TargetID:   "sec1",
+			TargetName: "webapp_v1",
+			Message:    "an older version of webapp",
+			Reveals:    []string{"secret:webapp_v2"},
+		},
+		{
 			Scope:      recommendations.ScopeConfig,
 			TargetID:   "cfg1",
 			TargetName: "billing_v1",

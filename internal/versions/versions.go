@@ -4,7 +4,10 @@
 package versions
 
 import (
+	"cmp"
 	"regexp"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -27,27 +30,49 @@ type Item struct {
 	Created time.Time
 }
 
-// Membership places one item in its group. Inferred is true unless every
-// member declared the group with Label.
+// Membership places one item in its group of Count versions. Rank orders the
+// group newest first, so the newest is 0. Inferred is true unless every member
+// declared the group with Label.
 type Membership struct {
 	Of       string
+	Stack    string
 	Inferred bool
-	Newest   bool
+	Rank     int
+	Count    int
 }
 
-type key struct{ stack, name string }
+// GroupKey identifies a group: the stack an item belongs to, and its logical
+// name within it.
+type GroupKey struct{ Stack, Name string }
+
+// Key is an item's group: its Label, or else its name without a version suffix
+// and without the `<stack>_` or `<stack>-` prefix a stack deploy writes. An item
+// joins only the groups of its own stack.
+func Key(it Item) GroupKey {
+	stack := it.Labels[cache.StackLabel]
+	if name := it.Labels[Label]; name != "" {
+		return GroupKey{stack, name}
+	}
+
+	name := suffix.ReplaceAllString(it.Name, "")
+	if stack != "" {
+		for _, separator := range []string{"_", "-"} {
+			if rest, ok := strings.CutPrefix(name, stack+separator); ok && rest != "" {
+				name = rest
+				break
+			}
+		}
+	}
+
+	return GroupKey{stack, name}
+}
 
 // Group returns the membership of every item that has at least one other
-// version in the same stack, keyed by ID. An item's logical name is its Label,
-// or else its name with any version suffix removed.
+// version, keyed by ID. The newest is the last created, the greater ID on a tie.
 func Group(items []Item) map[string]Membership {
-	groups := map[key][]Item{}
+	groups := map[GroupKey][]Item{}
 	for _, it := range items {
-		name, ok := it.Labels[Label]
-		if !ok || name == "" {
-			name = suffix.ReplaceAllString(it.Name, "")
-		}
-		k := key{it.Labels[cache.StackLabel], name}
+		k := Key(it)
 		groups[k] = append(groups[k], it)
 	}
 
@@ -57,31 +82,43 @@ func Group(items []Item) map[string]Membership {
 			continue
 		}
 
-		inferred := false
-		newest := members[0]
-		for _, m := range members {
-			if m.Labels[Label] == "" {
-				inferred = true
+		slices.SortFunc(members, func(a, b Item) int {
+			if c := b.Created.Compare(a.Created); c != 0 {
+				return c
 			}
-			if m.Created.After(newest.Created) ||
-				(m.Created.Equal(newest.Created) && m.ID > newest.ID) {
-				newest = m
-			}
-		}
+			return cmp.Compare(b.ID, a.ID)
+		})
 
-		for _, m := range members {
-			out[m.ID] = Membership{Of: k.name, Inferred: inferred, Newest: m.ID == newest.ID}
+		inferred := slices.ContainsFunc(members, func(m Item) bool { return m.Labels[Label] == "" })
+		for rank, m := range members {
+			out[m.ID] = Membership{
+				Of:       k.Name,
+				Stack:    k.Stack,
+				Inferred: inferred,
+				Rank:     rank,
+				Count:    len(members),
+			}
 		}
 	}
 
 	return out
 }
 
+// SecretItem is what grouping reads of a secret.
+func SecretItem(s swarm.Secret) Item {
+	return Item{s.ID, s.Spec.Name, s.Spec.Labels, s.CreatedAt}
+}
+
+// ConfigItem is what grouping reads of a config.
+func ConfigItem(c swarm.Config) Item {
+	return Item{c.ID, c.Spec.Name, c.Spec.Labels, c.CreatedAt}
+}
+
 // Secrets groups secrets by Group.
 func Secrets(secrets []swarm.Secret) map[string]Membership {
 	items := make([]Item, len(secrets))
 	for i, s := range secrets {
-		items[i] = Item{s.ID, s.Spec.Name, s.Spec.Labels, s.CreatedAt}
+		items[i] = SecretItem(s)
 	}
 
 	return Group(items)
@@ -91,7 +128,7 @@ func Secrets(secrets []swarm.Secret) map[string]Membership {
 func Configs(configs []swarm.Config) map[string]Membership {
 	items := make([]Item, len(configs))
 	for i, c := range configs {
-		items[i] = Item{c.ID, c.Spec.Name, c.Spec.Labels, c.CreatedAt}
+		items[i] = ConfigItem(c)
 	}
 
 	return Group(items)

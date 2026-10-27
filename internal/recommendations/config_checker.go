@@ -57,38 +57,55 @@ func (cc *ConfigChecker) Check(_ context.Context) []Recommendation {
 		}
 	}
 
-	secrets := cc.cache.ListSecrets()
-	secretVersions := versions.Secrets(secrets)
-	for _, sec := range secrets {
-		if m := secretVersions[sec.ID]; unusedVersion(m, cc.cache.ServicesUsingSecret(sec.ID)) {
-			recs = append(recs, unusedVersionRec(ScopeSecret, sec.ID, sec.Spec.Name, m.Of))
-		}
+	var secrets, configs []versions.Item
+	for _, sec := range cc.cache.ListSecrets() {
+		secrets = append(secrets, versions.SecretItem(sec))
+	}
+	for _, cfg := range cc.cache.ListConfigs() {
+		configs = append(configs, versions.ConfigItem(cfg))
 	}
 
-	configs := cc.cache.ListConfigs()
-	configVersions := versions.Configs(configs)
-	for _, cfg := range configs {
-		if m := configVersions[cfg.ID]; unusedVersion(m, cc.cache.ServicesUsingConfig(cfg.ID)) {
-			recs = append(recs, unusedVersionRec(ScopeConfig, cfg.ID, cfg.Spec.Name, m.Of))
-		}
-	}
+	recs = append(recs, unusedVersions(ScopeSecret, secrets, cc.cache.ServicesUsingSecret)...)
+	recs = append(recs, unusedVersions(ScopeConfig, configs, cc.cache.ServicesUsingConfig)...)
 
 	return recs
 }
 
-// unusedVersion reports an older version of a grouped config or secret that no
-// service references. The newest is never one: it is what a rotation deploys next.
-func unusedVersion(m versions.Membership, users []cache.ServiceRef) bool {
-	return m.Of != "" && !m.Newest && len(users) == 0
-}
+// unusedVersions flags each older version of a grouped config or secret that
+// no service references. The newest is never one: it is what a rotation
+// deploys next. A finding discloses that the newest exists, so it Reveals it.
+func unusedVersions(
+	scope Scope,
+	items []versions.Item,
+	users func(id string) []cache.ServiceRef,
+) []Recommendation {
+	grouped := versions.Group(items)
 
-func unusedVersionRec(scope Scope, id, name, of string) Recommendation {
-	return Recommendation{
-		Category:   CategoryUnusedVersion,
-		Severity:   SeverityInfo,
-		Scope:      scope,
-		TargetID:   id,
-		TargetName: name,
-		Message:    fmt.Sprintf("An older version of %s %q that no service uses", scope, of),
+	newest := map[versions.GroupKey]string{}
+	for _, it := range items {
+		if m, ok := grouped[it.ID]; ok && m.Rank == 0 {
+			newest[versions.GroupKey{Stack: m.Stack, Name: m.Of}] = it.Name
+		}
 	}
+
+	var recs []Recommendation
+	for _, it := range items {
+		m, ok := grouped[it.ID]
+		if !ok || m.Rank == 0 || len(users(it.ID)) > 0 {
+			continue
+		}
+
+		head := newest[versions.GroupKey{Stack: m.Stack, Name: m.Of}]
+		recs = append(recs, Recommendation{
+			Category:   CategoryUnusedVersion,
+			Severity:   SeverityInfo,
+			Scope:      scope,
+			TargetID:   it.ID,
+			TargetName: it.Name,
+			Message:    fmt.Sprintf("An older version of %s %q that no service uses", scope, m.Of),
+			Reveals:    []string{string(scope) + ":" + head},
+		})
+	}
+
+	return recs
 }

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -183,12 +182,9 @@ func (h *Handlers) handleFeedRecommendations(
 		return
 	}
 
-	results := acl.Filter(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
-		"read",
+	results := cluster.ReadableRecommendations(
 		h.recEngine.Results(),
-		cluster.RecommendationACLResource,
+		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
 	)
 
 	lastTick := h.recEngine.LastTick()

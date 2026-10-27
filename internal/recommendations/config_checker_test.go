@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -250,6 +251,11 @@ func TestConfigChecker_UnusedVersion(t *testing.T) {
 	sec := got["s1"]
 	if sec.Scope != ScopeSecret || sec.Severity != SeverityInfo || sec.TargetName != "db_v1" {
 		t.Errorf("unexpected secret finding %+v", sec)
+	}
+
+	// The finding discloses that db_v3 exists, so reading it takes db_v3 too.
+	if !slices.Equal(sec.Reveals, []string{"secret:db_v3"}) {
+		t.Errorf("Reveals = %v, want the newest version", sec.Reveals)
 	}
 
 	cfg := got["c1"]

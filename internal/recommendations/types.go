@@ -61,6 +61,9 @@ type Recommendation struct {
 	Configured *float64 `json:"configured,omitempty"`
 	Suggested  *float64 `json:"suggested,omitempty"`
 	FixAction  *string  `json:"fixAction,omitempty"`
+	// Reveals names ACL resources besides the target that the finding
+	// discloses; a caller must read them too.
+	Reveals []string `json:"-"`
 }
 
 type Summary struct {
