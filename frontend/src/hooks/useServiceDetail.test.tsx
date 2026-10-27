@@ -302,4 +302,42 @@ describe("useServiceDetail", () => {
     );
     expect(result.current.serviceLabels).toEqual(labels);
   });
+
+  // A save on one service says nothing about the next one the page shows.
+  it("forgets a pending labels echo when the page moves to another service", async () => {
+    const { result, rerender } = renderHook(({ id }) => useServiceDetail(id), {
+      initialProps: { id: "svc1" },
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+
+    act(() => {
+      result.current.onLabelsSaved({ "caddy.encode": "gzip" });
+    });
+
+    const other = { ...service, ID: "svc2", Spec: { ...service.Spec, Name: "other" } };
+
+    vi.mocked(api.service).mockResolvedValue({
+      data: { service: other },
+      allowedMethods: new Set<string>(),
+      canonicalPath: "/services/svc2",
+    } as never);
+    rerender({ id: "svc2" });
+
+    await waitFor(() => expect(result.current.service?.ID).toBe("svc2"));
+    const fetches = vi.mocked(api.service).mock.calls.length;
+
+    act(() => {
+      emit({
+        type: "service",
+        action: "update",
+        id: "svc2",
+        resource: { ...other, Version: { Index: 5 } },
+      });
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(api.service).toHaveBeenCalledTimes(fetches);
+  });
 });

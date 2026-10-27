@@ -84,9 +84,9 @@ export function useServiceDetail(id: string | undefined) {
   });
   const tasks = tasksQuery.data ?? emptyTasks;
 
-  // The index a labels save was written back under, until the stream echoes
-  // the save: the echo then matches the cache, but the integrations do not.
-  const savedLabelsIndex = useRef<number | null>(null);
+  // The service and index a labels save was written back under, until the
+  // stream echoes it: the echo then matches the cache, the integrations do not.
+  const savedLabels = useRef<{ id: string; index: number } | null>(null);
 
   // The per-service stream also delivers task events for this service's tasks,
   // so only treat `resource` as a Service when the event is a service event —
@@ -100,12 +100,11 @@ export function useServiceDetail(id: string | undefined) {
         setData((previous) => {
           labelsChanged = !sameLabels(previous.service.Spec.Labels, service.Spec.Labels);
 
-          if (
-            savedLabelsIndex.current !== null &&
-            service.Version.Index > savedLabelsIndex.current
-          ) {
+          const saved = savedLabels.current;
+
+          if (saved?.id === service.ID && service.Version.Index > saved.index) {
             labelsChanged = true;
-            savedLabelsIndex.current = null;
+            savedLabels.current = null;
           }
 
           return { ...previous, service };
@@ -183,7 +182,7 @@ export function useServiceDetail(id: string | undefined) {
   const onLabelsSaved = useCallback(
     (labels: Record<string, string>) => {
       updateService((current) => {
-        savedLabelsIndex.current = current.Version.Index;
+        savedLabels.current = { id: current.ID, index: current.Version.Index };
 
         return { ...current, Spec: { ...current.Spec, Labels: labels } };
       });
