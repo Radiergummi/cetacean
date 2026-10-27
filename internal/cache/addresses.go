@@ -24,8 +24,13 @@ func (c *Cache) NetworkAddresses() map[string]ipam.Addresses {
 		return memo.counts
 	}
 
-	// Concurrent misses on one generation share a single count.
+	// Concurrent misses on one generation share a single count. A miss that
+	// reaches Do after the first flight landed finds its memo instead.
 	counted, _, _ := c.addressCounts.Do(strconv.FormatUint(generation, 10), func() (any, error) {
+		if memo := c.addresses.Load(); memo != nil && memo.generation == generation {
+			return memo.counts, nil
+		}
+
 		counts := ipam.Count(
 			c.ListNetworks(),
 			c.eachServiceUnordered,
