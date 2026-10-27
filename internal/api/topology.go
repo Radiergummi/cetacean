@@ -73,12 +73,9 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	// Build service name/image lookup and readable set from ACL-filtered services.
 	svcNames := make(map[string]string, len(services))
 	svcImages := make(map[string]string, len(services))
-	svcNetworks := make(map[string][]map[string]any, len(services))
 	readableServiceIDs := make(map[string]bool, len(services))
-	overlays := cluster.OverlayNetworks(networks)
 	for _, svc := range services {
 		svcNames[svc.ID] = svc.Spec.Name
-		svcNetworks[svc.ID] = placementNetworks(svc, overlays)
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
 			svcImages[svc.ID] = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
@@ -90,7 +87,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		h.cache,
 		svcNames,
 		svcImages,
-		svcNetworks,
+		cluster.OverlayNetworks(networks),
 		readableServiceIDs,
 		contextURL,
 	)
@@ -375,12 +372,12 @@ func placementNetworks(svc swarm.Service, overlays map[string]network.Summary) [
 }
 
 // buildPlacementJGF produces a JGF hypergraph of the placement topology.
-// svcNetworks must already be limited to the networks the caller may read.
+// overlays must already be limited to the networks the caller may read.
 func buildPlacementJGF(
 	clusterNodes []swarm.Node,
 	c *cache.Cache,
 	svcNames, svcImages map[string]string,
-	svcNetworks map[string][]map[string]any,
+	overlays map[string]network.Summary,
 	readableServiceIDs map[string]bool,
 	contextURL string,
 ) jgf.Graph {
@@ -447,13 +444,14 @@ func buildPlacementJGF(
 	// Add service nodes and build hyperedges.
 	for svcID, sp := range placements {
 		svcURN := jgf.URN("service", svcID)
+		svc, _ := c.GetService(svcID)
 		nodes[svcURN] = jgf.Node{
 			Label: svcNames[svcID],
 			Metadata: jgf.Metadata{
 				"@context": contextURL,
 				"kind":     "service",
 				"image":    svcImages[svcID],
-				"networks": svcNetworks[svcID],
+				"networks": placementNetworks(svc, overlays),
 			},
 		}
 
