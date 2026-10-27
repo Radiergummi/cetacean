@@ -426,7 +426,7 @@ func (p *OIDCProvider) validateAzp(idToken *oidc.IDToken, claims map[string]any)
 	}
 	azp, _ := claims["azp"].(string)
 	if azp == "" {
-		return fmt.Errorf("multi-audience token missing required azp claim")
+		return errors.New("multi-audience token missing required azp claim")
 	}
 	if azp != p.oauth2Config.ClientID {
 		return fmt.Errorf("azp claim %q does not match client_id %q", azp, p.oauth2Config.ClientID)
@@ -514,8 +514,6 @@ func isRelativePath(s string) bool {
 // generateState returns 16 random bytes hex-encoded for CSRF protection.
 func generateState() string {
 	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic("auth: failed to generate state: " + err.Error())
-	}
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }

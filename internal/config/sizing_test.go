@@ -111,6 +111,20 @@ func TestLoadSizing_InvalidThreshold(t *testing.T) {
 	}
 }
 
+// The lookback is a PromQL subquery range stepped every 5m: under a minute it
+// holds one sample at most, which is no p95.
+func TestLoadSizing_RefusesALookbackUnderAMinute(t *testing.T) {
+	t.Setenv("CETACEAN_SIZING_LOOKBACK", "30s")
+	if _, err := LoadSizing(nil); err == nil {
+		t.Error("a 30s lookback was accepted")
+	}
+
+	t.Setenv("CETACEAN_SIZING_LOOKBACK", "1m")
+	if _, err := LoadSizing(nil); err != nil {
+		t.Errorf("a 1m lookback was refused: %v", err)
+	}
+}
+
 // The evaluator reads the thresholds as bands in this order; out of order, a
 // service can be reported over-provisioned and at its limit at once.
 func TestLoadSizing_RefusesThresholdsOutOfOrder(t *testing.T) {

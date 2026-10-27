@@ -57,7 +57,7 @@ type Row struct {
 // cloning the whole task table here to reduce it to one integer per service.
 func RowsForServices(
 	services []swarm.Service,
-	running, completed map[string]int,
+	running, completed, eligible map[string]int,
 	flapping map[string]bool,
 ) []Row {
 	rows := make([]Row, 0, len(services))
@@ -69,11 +69,17 @@ func RowsForServices(
 		}
 
 		rows = append(rows, Row{
-			ID:      svc.ID,
-			Name:    svc.Spec.Name,
-			Type:    "service",
-			Stack:   svc.Spec.Labels[StackNamespaceLabel],
-			State:   DeriveServiceState(svc, running[svc.ID], completed[svc.ID], flapping[svc.ID]),
+			ID:    svc.ID,
+			Name:  svc.Spec.Name,
+			Type:  "service",
+			Stack: svc.Spec.Labels[StackNamespaceLabel],
+			State: DeriveServiceState(
+				svc,
+				running[svc.ID],
+				completed[svc.ID],
+				eligible[svc.ID],
+				flapping[svc.ID],
+			),
 			Detail:  image,
 			Desired: ReplicaCount(svc),
 			Running: running[svc.ID],
@@ -342,6 +348,7 @@ func ServiceDigest(
 	networks []network.Summary,
 	restarts *ServiceRestarts,
 	flapping bool,
+	eligibleNodes int,
 	imageUpdate *ImageUpdate,
 ) Digest {
 	var (
@@ -416,7 +423,7 @@ func ServiceDigest(
 		failures = failures[:maxRecentFailures]
 	}
 
-	state := DeriveServiceState(svc, running, completed, flapping)
+	state := DeriveServiceState(svc, running, completed, eligibleNodes, flapping)
 
 	digest := Digest{
 		ID:             svc.ID,

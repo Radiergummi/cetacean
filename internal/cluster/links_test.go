@@ -302,7 +302,12 @@ func TestDigestsCarryLinks(t *testing.T) {
 
 	want[0].Services = []string{"web"}
 
-	stack := StackDigest(cache.StackDetail{Name: "demo", Services: []swarm.Service{svc}}, nil, nil)
+	stack := StackDigest(
+		cache.StackDetail{Name: "demo", Services: []swarm.Service{svc}},
+		nil,
+		nil,
+		nil,
+	)
 	if got := stack.Details["links"]; !reflect.DeepEqual(got, want) {
 		t.Errorf("stack links = %+v, want %+v", got, want)
 	}
@@ -315,7 +320,12 @@ func TestDigestsOmitLinksWhenNone(t *testing.T) {
 		t.Error("service links present with no link labels")
 	}
 
-	stack := StackDigest(cache.StackDetail{Name: "demo", Services: []swarm.Service{svc}}, nil, nil)
+	stack := StackDigest(
+		cache.StackDetail{Name: "demo", Services: []swarm.Service{svc}},
+		nil,
+		nil,
+		nil,
+	)
 	if _, present := stack.Details["links"]; present {
 		t.Error("stack links present with no link labels")
 	}

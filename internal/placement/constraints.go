@@ -25,8 +25,8 @@ func Satisfies(node swarm.Node, constraints []string) (bool, string) {
 		}
 
 		// An absent label is unset rather than empty: it equals nothing and
-		// differs from everything, which is how Swarm reads it too.
-		matches := actual == value
+		// differs from everything. Values compare without case, as Swarm's do.
+		matches := strings.EqualFold(actual, value)
 		if op == "!=" {
 			matches = !matches
 		}
@@ -66,17 +66,17 @@ func splitConstraint(raw string) (key, op, value string, ok bool) {
 // nodeAttribute resolves a constraint key against a node, reporting whether the
 // key is one Swarm defines at all. Unknown-key is separate from empty-value:
 // `node.labels.gpu` on a node without it is known and unset, so `!=` holds,
-// while `weird.key` is one Swarm rejects outright.
+// while `weird.key` is one Swarm rejects outright. Only a label's name has case.
 func nodeAttribute(node swarm.Node, key string) (string, bool) {
-	if label, found := strings.CutPrefix(key, "node.labels."); found {
+	if label, found := cutPrefixFold(key, "node.labels."); found {
 		return node.Spec.Labels[label], label != ""
 	}
 
-	if label, found := strings.CutPrefix(key, "engine.labels."); found {
+	if label, found := cutPrefixFold(key, "engine.labels."); found {
 		return node.Description.Engine.Labels[label], label != ""
 	}
 
-	switch key {
+	switch strings.ToLower(key) {
 	case "node.id":
 		return node.ID, true
 	case "node.hostname":
@@ -90,4 +90,13 @@ func nodeAttribute(node swarm.Node, key string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// cutPrefixFold is strings.CutPrefix with the prefix matched without case.
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) < len(prefix) || !strings.EqualFold(s[:len(prefix)], prefix) {
+		return s, false
+	}
+
+	return s[len(prefix):], true
 }

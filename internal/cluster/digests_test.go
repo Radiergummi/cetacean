@@ -323,7 +323,7 @@ func TestStackDigestReportsWorstMemberState(t *testing.T) {
 
 	stack := cache.StackDetail{Name: "demo", Services: []swarm.Service{ok, stuck}}
 
-	got := StackDigest(stack, tasks, nil)
+	got := StackDigest(stack, tasks, nil, nil)
 
 	if got.State != "failed" {
 		t.Fatalf("state = %q, want failed", got.State)
@@ -335,7 +335,7 @@ func TestStackDigestReportsWorstMemberState(t *testing.T) {
 
 // A stack holding no services has nothing wrong with it.
 func TestStackDigestEmptyStackIsRunning(t *testing.T) {
-	got := StackDigest(cache.StackDetail{Name: "empty"}, nil, nil)
+	got := StackDigest(cache.StackDetail{Name: "empty"}, nil, nil, nil)
 
 	if got.State != "running" {
 		t.Errorf("state = %q, want running for a stack with no services", got.State)
@@ -362,7 +362,7 @@ func TestStackDigestRelatedIncludesAllMemberTypes(t *testing.T) {
 		Volumes:  []volume.Volume{{Name: "data", Driver: "local"}},
 	}
 
-	got := StackDigest(stack, nil, nil)
+	got := StackDigest(stack, nil, nil, nil)
 
 	if len(got.Related) != 5 {
 		t.Fatalf("related = %d, want 5 (one per member type)", len(got.Related))
@@ -402,7 +402,7 @@ func TestStackDigestSinceIsNewestMemberUpdate(t *testing.T) {
 
 	stack := cache.StackDetail{Name: "demo", Services: []swarm.Service{older, newer}}
 
-	got := StackDigest(stack, nil, nil)
+	got := StackDigest(stack, nil, nil, nil)
 
 	want := newer.UpdatedAt.UTC().Format(time.RFC3339)
 	if got.Since != want {
@@ -560,7 +560,7 @@ func TestDigestBuildersMarshalEmptySlicesNotNull(t *testing.T) {
 	digests := map[string]Digest{
 		"node":    NodeDigest(swarm.Node{ID: "n1"}, nil, nil),
 		"task":    TaskDigest(swarm.Task{ID: "t1"}, nil, nil),
-		"stack":   StackDigest(cache.StackDetail{Name: "empty"}, nil, nil),
+		"stack":   StackDigest(cache.StackDetail{Name: "empty"}, nil, nil, nil),
 		"config":  ConfigDigest(swarm.Config{ID: "c1"}, nil),
 		"secret":  SecretDigest(swarm.Secret{ID: "s1"}, nil),
 		"network": NetworkDigest(network.Summary{ID: "net1"}, nil, nil),

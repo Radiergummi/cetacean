@@ -117,10 +117,6 @@ func TestApplyJSONPatch_Test_Fail(t *testing.T) {
 }
 
 func TestApplyJSONPatch_Test_Missing(t *testing.T) {
-	spec.Satisfies(t,
-		"http/rfc5789/a-failed-patch-changes-nothing",
-	)
-
 	m := map[string]string{"a": "1"}
 	_, err := applyJSONPatch(m, []PatchOp{{Op: "test", Path: "z", Value: "1"}})
 	if err == nil {
@@ -259,10 +255,6 @@ func TestApplyJSONPatch_DoesNotMutateInput(t *testing.T) {
 }
 
 func TestApplyJSONPatch_MultipleOps(t *testing.T) {
-	spec.Satisfies(t,
-		"http/rfc5789/patch-is-atomic",
-	)
-
 	m := map[string]string{"a": "1"}
 	result, err := applyJSONPatch(m, []PatchOp{
 		{Op: "add", Path: "b", Value: "2"},

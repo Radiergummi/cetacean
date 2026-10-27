@@ -2,6 +2,7 @@ import type { Integration } from "../../api/types";
 import { rawLabelsForIntegration } from "../../lib/integrationLabels";
 import { CaddyPanel } from "./CaddyPanel";
 import { CronjobPanel } from "./CronjobPanel";
+import { DeploymentActionPanel } from "./DeploymentActionPanel";
 import { DiunPanel } from "./DiunPanel";
 import { DocoCDPanel } from "./DocoCDPanel";
 import { GantryPanel } from "./GantryPanel";
@@ -91,6 +92,14 @@ export function IntegrationPanels({
           case "gantry":
             return (
               <GantryPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "docker-swarm-deployment-action":
+            return (
+              <DeploymentActionPanel
                 key={integration.name}
                 integration={integration}
                 {...panelProps}

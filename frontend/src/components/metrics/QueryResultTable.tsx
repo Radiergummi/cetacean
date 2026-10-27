@@ -1,6 +1,6 @@
 import type { PrometheusResponse } from "@/api/types";
 import SimpleTable from "@/components/SimpleTable";
-import { formatMetricIdentifier, normalizePrometheusRows } from "@/lib/metricsParser";
+import { normalizePrometheusRows } from "@/lib/metricsParser";
 
 interface Props {
   data: PrometheusResponse["data"];
@@ -62,62 +62,5 @@ export default function QueryResultTable({ data }: Props) {
         </>
       )}
     />
-  );
-}
-
-/**
- * Renders all raw data points from a matrix result, like the Prometheus UI table tab.
- * Each series is a collapsible group showing every [timestamp, value] pair.
- */
-export function MatrixResultTable({ data }: Props) {
-  if (data?.resultType !== "matrix" || data.result.length === 0) {
-    return <p className="py-4 text-center text-sm text-muted-foreground">No results</p>;
-  }
-
-  return (
-    <div className="space-y-4">
-      {data.result.map(({ metric, values }, seriesIndex) => {
-        const label = formatMetricIdentifier(metric ?? {});
-        const points = values ?? [];
-
-        return (
-          <div
-            key={seriesIndex}
-            className="overflow-hidden rounded-lg border"
-          >
-            <div className="border-b bg-muted/50 px-3 py-2">
-              <span className="font-mono text-sm font-medium">{label}</span>
-              <span className="ml-2 text-xs text-muted-foreground">
-                {points.length} {points.length === 1 ? "sample" : "samples"}
-              </span>
-            </div>
-
-            <div className="max-h-64 overflow-auto">
-              <table className="w-full">
-                <thead className="sticky top-0 bg-background text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left font-medium">Timestamp</th>
-                    <th className="px-3 py-1.5 text-right font-medium">Value</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {points.map(([timestamp, value], pointIndex) => (
-                    <tr
-                      key={pointIndex}
-                      className="border-t border-border/50"
-                    >
-                      <td className="px-3 py-1 text-muted-foreground">
-                        {new Date(timestamp * 1000).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-1 text-right font-mono">{value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }

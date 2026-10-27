@@ -222,3 +222,36 @@ func TestClusterSnapshot_LastSync(t *testing.T) {
 		t.Error("expected LastSync to be recent")
 	}
 }
+
+// Restoring a snapshot is not a sync from Docker: the first live sync after it
+// still finds Swarm's retained failures, including those from while Cetacean
+// was down, and they feed the flapping window but not the counts.
+func TestFirstLiveSyncAfterASnapshotBackfills(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := New(nil).WriteToDisk(path); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	c := New(nil)
+	if err := c.LoadFromDisk(path); err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	now := time.Now()
+	tasks := []swarm.Task{failedTask("old", "old", now.Add(-48*time.Hour))}
+	for i := range flappingRestarts {
+		id := fmt.Sprintf("loop-%d", i)
+		tasks = append(tasks, failedTask(id, "loop", now.Add(-time.Duration(i+1)*5*time.Second)))
+	}
+	c.ReplaceAll(FullSyncData{HasTasks: true, Tasks: tasks})
+
+	if got := c.RestartCount("old", 7*24*time.Hour); got != 0 {
+		t.Errorf("a failure retained from before the restart counted: got %d", got)
+	}
+	if got := c.RestartCount("loop", time.Hour); got != 0 {
+		t.Errorf("failures the first live sync found counted: got %d", got)
+	}
+	if !c.IsFlapping("loop") {
+		t.Error("a loop the first live sync found is not flapping")
+	}
+}

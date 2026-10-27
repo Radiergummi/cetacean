@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -162,7 +163,7 @@ func (s *Server) findAcrossTypes(
 	query string,
 ) (string, error) {
 	if query == "" {
-		return "", fmt.Errorf("`query` is required when `type` is omitted")
+		return "", errors.New("`query` is required when `type` is omitted")
 	}
 
 	limit := req.GetInt("limit", 3)
@@ -223,6 +224,7 @@ func (s *Server) rowsFor(
 			items,
 			c.RunningTaskCounts(),
 			c.CompletedJobTaskCounts(),
+			c.EligibleNodeCounts(items...),
 			c.FlappingServices(),
 		), nil
 

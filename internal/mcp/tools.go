@@ -342,7 +342,7 @@ func (s *Server) toolCatalog() []toolDef {
 // tests can omit a write client when exercising read tools.
 func (s *Server) requireWriteClient() (DockerWriteClient, error) {
 	if s.writeClient == nil {
-		return nil, fmt.Errorf("MCP server has no write client configured")
+		return nil, errors.New("MCP server has no write client configured")
 	}
 	return s.writeClient, nil
 }
@@ -376,7 +376,7 @@ func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (s
 
 	switch {
 	case len(named) == 0:
-		return "", fmt.Errorf("one of `service`, `task`, `stack` or `cluster` is required")
+		return "", errors.New("one of `service`, `task`, `stack` or `cluster` is required")
 	case len(named) > 1:
 		return "", fmt.Errorf(
 			"%s are mutually exclusive; name exactly one scope",
@@ -438,7 +438,7 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 		return "", err
 	}
 	if replicas < 0 {
-		return "", fmt.Errorf("replicas must be >= 0")
+		return "", errors.New("replicas must be >= 0")
 	}
 	if err := s.checkServiceWrite(ctx, id); err != nil {
 		return "", err
@@ -475,7 +475,7 @@ func (s *Server) toolUpdateServiceImage(
 	}
 	image = cluster.ServiceImage(image)
 	if image == "" {
-		return "", fmt.Errorf("image must not be empty")
+		return "", errors.New("image must not be empty")
 	}
 	if err := s.checkServiceWrite(ctx, id); err != nil {
 		return "", err
@@ -721,6 +721,7 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 			svc,
 			running,
 			s.cache.CompletedJobTaskCount(svc.ID),
+			s.cache.EligibleNodeCounts(svc)[svc.ID],
 			s.cache.IsFlapping(svc.ID),
 		),
 		Version: svc.Version.Index,

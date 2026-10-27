@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The networks list and network pages show how many of an overlay network's addresses are in use, as do `GET /networks` and MCP network reads; `network-addresses-low` flags one running out
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
+- Service pages show a GitHub Deployment panel for Docker Swarm Deployment Action, with the commit and workflow run that deployed a service; configs and secrets it rotates group as versions by `com.matchory.deployment.name`
 - Each entry in a service's `integrations` lists the `labels` it was read from
 - The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
 - The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
@@ -25,16 +26,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
 
 ### Changed
+- The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
+- The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed
 - Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
 - `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one
 - An MCP write the Docker engine refuses, or can't be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log
 - A history or `get_events` query naming a task as `<service>.<slot>` resolves only for callers who can read that service
+- A global service no node can run reads as running rather than pending wherever a service state is shown
+- The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
+- Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting
+- A `sizing.thresholds.lookback` under an hour, or not a whole number of hours, is queried as set instead of being cut to whole hours; startup refuses one under `1m`
+- Placement constraints match values, built-in keys and label prefixes regardless of case, as Swarm does, in drain impact and the desired task count of global services
+- MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
+- A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
 
 ## [0.18.0] - 2026-10-24
 

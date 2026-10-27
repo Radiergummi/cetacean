@@ -376,26 +376,3 @@ func PortEnv(p cache.PublishedPort, m map[string]any) map[string]any {
 	m["nodes"] = len(p.Nodes)
 	return m
 }
-
-// ResourceEnv builds an expression environment from an interface{} resource,
-// as stored in cache.Event.Resource. Returns nil for unrecognized types.
-func ResourceEnv(resource any) map[string]any {
-	switch r := resource.(type) {
-	case swarm.Node:
-		return NodeEnv(r, nil)
-	case swarm.Service:
-		return ServiceEnv(r, nil)
-	case swarm.Task:
-		return TaskEnv(r, nil)
-	case swarm.Config:
-		return ConfigEnv(r, nil)
-	case swarm.Secret:
-		return SecretEnv(r, nil)
-	case network.Summary:
-		return NetworkEnv(r, nil)
-	case volume.Volume:
-		return VolumeEnv(r, nil)
-	default:
-		return nil
-	}
-}

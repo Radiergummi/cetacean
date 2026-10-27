@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-e2e test-stack test-multinode test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
+.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-frontend test-e2e test-stack test-multinode test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -23,6 +23,7 @@ lint: lint-docs
 	actionlint
 	zizmor --config .github/zizmor.yml .github/workflows/
 	pnpm --filter frontend exec oxlint
+	pnpm --filter frontend exec knip
 	pnpm --filter website exec oxlint
 
 ## Lint the prose of the published docs
@@ -83,7 +84,11 @@ fmt-check:
 ## Build everything
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+# A clean tree is stamped with its commit's time, so rebuilding a commit is
+# reproducible; a dirty one (as VERSION's -dirty counts it) with the clock's.
+DATE    ?= $(shell if [ -z "$$(git status --porcelain --untracked-files=no 2>/dev/null)" ] \
+             && d=$$(TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd 2>/dev/null) \
+             && [ -n "$$d" ]; then echo "$$d"; else date -u +%Y-%m-%dT%H:%M:%SZ; fi)
 LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION) \
            -X github.com/radiergummi/cetacean/internal/version.Commit=$(COMMIT) \
            -X github.com/radiergummi/cetacean/internal/version.Date=$(DATE)
@@ -91,7 +96,7 @@ LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION
 build: node_modules
 	pnpm --filter frontend build
 	pnpm --filter frontend build:widgets
-	go build -ldflags "$(LDFLAGS)" -o cetacean .
+	go build -trimpath -ldflags "$(LDFLAGS)" -o cetacean .
 
 ## Install the workspace the build embeds. Not phony: the stamp is the
 ## directory itself, so a second `make build` skips the install.
@@ -102,6 +107,10 @@ node_modules: pnpm-lock.yaml
 ## Run all tests
 test:
 	go test ./...
+
+## Run the frontend unit tests (vitest), as CI's test-frontend job does
+test-frontend:
+	pnpm --filter frontend test --run
 
 ## Run end-to-end tests
 test-e2e:
@@ -296,8 +305,11 @@ spec-genmcp:
 	go run ./scripts/spec-genmcp
 	git diff --exit-code internal/spec/registry/mcp/
 
-## Run all checks (lint + type check + format check + test + spec)
-check: lint typecheck fmt-check test spec
+## Run all checks (lint + type check + format check + Go and frontend tests + spec)
+#
+# vuln is not here: govulncheck fetches its database on every run, so it
+# needs the network, and CI runs it on its own.
+check: lint typecheck fmt-check test test-frontend spec
 
 ## Run the Go benchmark suite, writing results to bench.txt
 #

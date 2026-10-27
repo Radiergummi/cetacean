@@ -108,6 +108,28 @@ func TestSizingChecker_Interval(t *testing.T) {
 	}
 }
 
+// A lookback under an hour, or not a whole number of them, must not reach the
+// query as "0h" or lose its remainder.
+func TestFormatPromDuration(t *testing.T) {
+	cases := []struct {
+		in   time.Duration
+		want string
+	}{
+		{30 * time.Minute, "30m"},
+		{90 * time.Minute, "90m"},
+		{45 * time.Second, "45s"},
+		{1500 * time.Millisecond, "1500ms"},
+		{25 * time.Hour, "25h"},
+		{7 * 24 * time.Hour, "7d"},
+	}
+
+	for _, tc := range cases {
+		if got := formatPromDuration(tc.in); got != tc.want {
+			t.Errorf("formatPromDuration(%s) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 // A Prometheus that answers without error but returns no series for a service —
 // no cAdvisor, an exporter that has not scraped it, a service too new — is
 // silence, not a measurement. Reading the absent key yields 0, which is under

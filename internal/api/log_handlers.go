@@ -127,10 +127,8 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	defer stream.Close() //nolint:errcheck
 
 	// Docker's ServiceLogs with Follow=false may not close the stream
-	// after sending all data. Use an idle cancel: once we've received
-	// some data, if no new data arrives within 2s, cancel the context
-	// so the blocked read unblocks immediately.
-	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, 2*time.Second)
+	// after sending all data, so the read ends once it goes idle instead.
+	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, logs.IdleCancelAfter)
 	if err != nil {
 		slog.Error("failed to parse logs", "error", err)
 		writeErrorCode(w, r, "LOG007", "failed to parse logs")

@@ -72,9 +72,13 @@ const stateCompleted = "completed"
 
 // DeriveServiceState returns "running", "flapping", "pending", "failed",
 // "updating", or for a job "completed", and is read by both transports so they
-// cannot report differently. completedCount is cache.CompletedJobTaskCount's,
-// read only for a job; flapping keeps a crash loop with replicas up off "running".
-func DeriveServiceState(svc swarm.Service, runningCount, completedCount int, flapping bool) string {
+// cannot report differently. completedCount is read only for a job, eligibleNodes
+// (cache.EligibleNodeCounts) only for a global service; flapping overrides "running".
+func DeriveServiceState(
+	svc swarm.Service,
+	runningCount, completedCount, eligibleNodes int,
+	flapping bool,
+) string {
 	if serviceUpdateInFlight(svc) {
 		return "updating"
 	}
@@ -83,8 +87,10 @@ func DeriveServiceState(svc swarm.Service, runningCount, completedCount int, fla
 		return jobState(svc, runningCount, completedCount)
 	}
 
+	// A global service no node can take has nothing outstanding, like one
+	// scaled to zero.
 	if svc.Spec.Mode.Global != nil {
-		if runningCount == 0 {
+		if runningCount == 0 && eligibleNodes > 0 {
 			return "pending"
 		}
 		if flapping {

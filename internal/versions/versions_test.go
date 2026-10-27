@@ -128,6 +128,47 @@ func TestGroup(t *testing.T) {
 			map[string]placed{"a": {"tls", false, 1}, "b": {"tls", false, 0}},
 		},
 		{
+			"docker-swarm-deployment-action's name label declares the group",
+			[]Item{
+				item("a", "shop-db_password-4813494", 1, map[string]string{
+					"com.docker.stack.namespace":   "shop",
+					"com.matchory.deployment.name": "db_password",
+				}),
+				item("b", "shop-db_password-9f8e7d6", 2, map[string]string{
+					"com.docker.stack.namespace":   "shop",
+					"com.matchory.deployment.name": "db_password",
+				}),
+			},
+			map[string]placed{"a": {"db_password", false, 1}, "b": {"db_password", false, 0}},
+		},
+		{
+			"the deployment action's label keeps what looks like a stack prefix",
+			[]Item{
+				item("a", "shop-cert-1111111", 1, map[string]string{
+					"com.docker.stack.namespace":   "shop",
+					"com.matchory.deployment.name": "cert",
+				}),
+				item("b", "shop-shop_cert-2222222", 2, map[string]string{
+					"com.docker.stack.namespace":   "shop",
+					"com.matchory.deployment.name": "shop_cert",
+				}),
+			},
+			map[string]placed{},
+		},
+		{
+			"cetacean.version-of wins over the deployment action's label",
+			[]Item{
+				item(
+					"a",
+					"x-1",
+					1,
+					map[string]string{Label: "x", "com.matchory.deployment.name": "y"},
+				),
+				item("b", "x-2", 2, labels("", "x")),
+			},
+			map[string]placed{"a": {"x", false, 1}, "b": {"x", false, 0}},
+		},
+		{
 			"a labeled replacement joins the stack-prefixed original",
 			[]Item{
 				item("a", "myapp_db_password", 1, labels("myapp", "")),

@@ -138,3 +138,23 @@ func TestSatisfiesToleratesWhitespace(t *testing.T) {
 		t.Error("ok = false for a constraint written with spaces")
 	}
 }
+
+// Swarm compares values, the built-in keys and the label prefixes without
+// regard to case, but a label's own name exactly.
+func TestSatisfiesFollowsSwarmOnCase(t *testing.T) {
+	for _, constraint := range []string{
+		"node.labels.gpu==TRUE",
+		"node.role==Worker",
+		"Node.Hostname==WORKER-1",
+		"NODE.LABELS.zone==EU",
+		"node.platform.os!=Windows",
+	} {
+		if ok, reason := Satisfies(gpuNode(), []string{constraint}); !ok {
+			t.Errorf("%q not satisfied: %s", constraint, reason)
+		}
+	}
+
+	if ok, _ := Satisfies(gpuNode(), []string{"node.labels.GPU==true"}); ok {
+		t.Error("a label name matched in another case")
+	}
+}

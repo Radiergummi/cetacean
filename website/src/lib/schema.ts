@@ -481,14 +481,16 @@ export const properties: Property[] = [
   {
     name: "servicesConverged",
     iri: "urn:cetacean:servicesConverged",
-    description: "Number of services with all tasks running.",
+    description:
+      "Number of services running as desired, counting a job whose run completed. A service mid-update is in neither this count nor servicesDegraded.",
     expectedType: "Integer",
     usedOn: ["Cluster"],
   },
   {
     name: "servicesDegraded",
     iri: "urn:cetacean:servicesDegraded",
-    description: "Number of services with fewer tasks than desired.",
+    description:
+      "Number of failed, pending or flapping services, as the service state reports them.",
     expectedType: "Integer",
     usedOn: ["Cluster"],
   },
@@ -618,7 +620,7 @@ export const properties: Property[] = [
     name: "versionInferred",
     iri: "urn:cetacean:versionInferred",
     description:
-      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` label.",
+      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` or `com.matchory.deployment.name` label.",
     expectedType: "Boolean",
     usedOn: ["Config", "Secret"],
   },

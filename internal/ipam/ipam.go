@@ -27,6 +27,21 @@ type Addresses struct {
 	ExcludesAttachedContainers bool `json:"excludesAttachedContainers"`
 }
 
+// Counted reports whether Count gives n a figure, without counting anything.
+func Counted(n network.Summary) bool {
+	if n.Scope != "swarm" || (n.IPAM.Driver != "" && n.IPAM.Driver != "default") {
+		return false
+	}
+
+	for _, cfg := range n.IPAM.Config {
+		if _, ok := usable(cfg); ok {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Count reads the address pool of every swarm-scoped network on the default
 // IPAM driver with an IPv4 subnet, keyed by network ID; the others are absent.
 // IPv6 is left out: each family is allocated separately and a /64 never runs out.
@@ -46,20 +61,15 @@ func Count(
 	tallies := make(map[string]*tally)
 
 	for _, n := range networks {
-		if n.Scope != "swarm" || (n.IPAM.Driver != "" && n.IPAM.Driver != "default") {
+		if !Counted(n) {
 			continue
 		}
 
-		total, any4 := 0, false
+		total := 0
 		for _, cfg := range n.IPAM.Config {
 			if count, ok := usable(cfg); ok {
 				total += count
-				any4 = true
 			}
-		}
-
-		if !any4 {
-			continue
 		}
 
 		tallies[n.ID] = &tally{
