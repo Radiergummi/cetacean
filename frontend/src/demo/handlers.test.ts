@@ -265,6 +265,25 @@ describe("topology endpoint shapes", () => {
       }
     }
   });
+
+  it("the placement graph names the networks each service is on", async () => {
+    const data = await fetchJSON("/topology");
+    const placement = (data.graphs as Record<string, unknown>[]).find(
+      ({ id }) => id === "placement",
+    );
+
+    expect(placement).toBeDefined();
+
+    const nodes = Object.values(
+      placement?.nodes as Record<string, { metadata: Record<string, unknown> }>,
+    );
+    const networks = nodes
+      .filter(({ metadata }) => metadata.kind === "service")
+      .flatMap(({ metadata }) => metadata.networks as { id: string; name: string }[]);
+
+    expect(networks.length).toBeGreaterThan(0);
+    expect(networks[0]?.id).toMatch(/^urn:cetacean:network:/);
+  });
 });
 
 describe("metrics endpoint shapes", () => {

@@ -29,6 +29,16 @@ describe("parseInstant", () => {
       ["mem", 128],
     ]);
   });
+
+  it("joins several labels into one key", () => {
+    const response: PrometheusResponse = {
+      data: {
+        resultType: "vector",
+        result: [{ metric: { service: "svc1", node: "node1" }, value: [1000, "2"] }],
+      },
+    };
+    expect(parseInstant(response, ["service", "node"])).toEqual([["svc1/node1", 2]]);
+  });
 });
 
 describe("parseRange", () => {

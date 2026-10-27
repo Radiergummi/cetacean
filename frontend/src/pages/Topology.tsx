@@ -17,13 +17,19 @@ import GroupNode from "../components/topology/GroupNode";
 import { HighlightProvider } from "../components/topology/HighlightContext";
 import NetworkEdge from "../components/topology/NetworkEdge";
 import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
+import { PhysicalViewContext } from "../components/topology/PhysicalViewContext";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
+import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { nodeCpu, nodeMemory, useNodeMetrics } from "../hooks/useNodeMetrics";
+import { usePlacementMetrics } from "../hooks/usePlacementMetrics";
+import { useUrlParam } from "../hooks/useUrlParam";
 import { computeLayout } from "../lib/layoutElk";
 import {
   networkGraphToReactFlow,
   placementGraphToReactFlow,
+  placementNetworks,
   stackColors,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
@@ -39,6 +45,8 @@ const logicalNodeTypes = {
 };
 const logicalEdgeTypes = { networkEdge: NetworkEdge };
 const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
+const nodeUsageInstant = [nodeCpu, nodeMemory];
+const nodeUsageRange: never[] = [];
 
 type View = "logical" | "physical";
 
@@ -188,8 +196,27 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
   );
 }
 
-function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
+function PhysicalView({
+  data,
+  isMobile,
+  network,
+}: {
+  data: JGFGraph;
+  isMobile: boolean;
+  network: string | null;
+}) {
   const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
+  const usage = usePlacementMetrics();
+  const { getForNode } = useNodeMetrics({
+    instant: nodeUsageInstant,
+    range: nodeUsageRange,
+    enabled: isNodeExporterReady(useMonitoringStatus()),
+  });
+
+  const overlay = useMemo(
+    () => ({ network, usage, nodeMetrics: getForNode }),
+    [network, usage, getForNode],
+  );
 
   if (Object.values(data.nodes).every(({ metadata }) => metadata.kind !== "node")) {
     return (
@@ -201,34 +228,38 @@ function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean })
   }
 
   return (
-    <div
-      style={{
-        height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
-      }}
-    >
-      <ReactFlow
-        aria-label="Task placement across cluster nodes"
-        className="bg-background"
-        nodes={nodes}
-        edges={[]}
-        nodeTypes={physicalNodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable
-        {...readOnlyKeyboard}
+    <PhysicalViewContext.Provider value={overlay}>
+      <div
+        style={{
+          height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
+        }}
       >
-        <Background />
-        <GraphControls />
-        <FitOnResize />
-      </ReactFlow>
-    </div>
+        <ReactFlow
+          aria-label="Task placement across cluster nodes"
+          className="bg-background"
+          nodes={nodes}
+          edges={[]}
+          nodeTypes={physicalNodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable
+          {...readOnlyKeyboard}
+        >
+          <Background />
+          <GraphControls />
+          <FitOnResize />
+        </ReactFlow>
+      </div>
+    </PhysicalViewContext.Provider>
   );
 }
 
 export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
-  const [view, setView] = useState<View>("logical");
+  const [viewParam, setView] = useUrlParam("view", "logical");
+  const view: View = viewParam === "physical" ? "physical" : "logical";
+  const [network, setNetwork] = useUrlParam("network");
   const queryClient = useQueryClient();
 
   const {
@@ -243,13 +274,20 @@ export default function Topology() {
   const networkData = topologyData?.graphs.find((graph) => graph.id === "network") ?? null;
   const placementData = topologyData?.graphs.find((graph) => graph.id === "placement") ?? null;
   const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
+  const networks = useMemo(
+    () => (placementData ? placementNetworks(placementData) : []),
+    [placementData],
+  );
+
+  // A network that has since gone, or was never readable, selects nothing.
+  const selectedNetwork = networks.some(({ id }) => id === network) ? network : null;
 
   useDebouncedInvalidation("/events", [["topology"]], 2_000);
 
   return (
     <div>
       <PageHeader title="Topology" />
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <SegmentedControl
           segments={[
             { value: "logical" as const, label: "Logical" },
@@ -258,6 +296,25 @@ export default function Topology() {
           value={view}
           onChange={setView}
         />
+        {view === "physical" && networks.length > 0 && (
+          <select
+            value={selectedNetwork ?? ""}
+            onChange={({ target }) => setNetwork(target.value || null)}
+            title="Emphasise the services on a network"
+            aria-label="Network"
+            className="h-8 rounded-md border bg-background px-2 text-xs"
+          >
+            <option value="">All networks</option>
+            {networks.map(({ id, label }) => (
+              <option
+                key={id}
+                value={id}
+              >
+                {label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading && <LoadingPage />}
@@ -298,6 +355,7 @@ export default function Topology() {
               <PhysicalView
                 data={placementData}
                 isMobile={isMobile}
+                network={selectedNetwork}
               />
             </ReactFlowProvider>
           ) : (

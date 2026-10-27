@@ -179,6 +179,17 @@ function createTask(service: Service, slot: number, node: Node): Task {
 }
 
 /**
+ * Plain string comparison, the order the Go handler sorts in.
+ */
+function compareStrings(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+
+  return a < b ? -1 : 1;
+}
+
+/**
  * Parse the Range header (e.g. "items 0-49") into offset and limit.
  */
 function parseRange(request: Request): { offset: number; limit: number } {
@@ -791,6 +802,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             role: node.Spec.Role,
             state: node.Status.State,
             availability: node.Spec.Availability,
+            address: node.Status.Addr,
           },
         };
 
@@ -835,6 +847,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             "@context": context,
             kind: "service",
             image: (service?.Spec.TaskTemplate?.ContainerSpec?.Image ?? "").split("@")[0],
+            networks: (serviceNetworks.get(serviceId) ?? [])
+              .map((id) => ({ id: urn("network", id), name: overlays.get(id)?.Name ?? id }))
+              .sort((a, b) => compareStrings(a.name, b.name) || compareStrings(a.id, b.id)),
           },
         };
 

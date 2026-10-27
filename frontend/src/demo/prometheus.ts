@@ -78,6 +78,44 @@ function matchQuery(
     );
   }
 
+  if (
+    query.includes(
+      "sum by (container_label_com_docker_swarm_service_id, container_label_com_docker_swarm_node_id)",
+    )
+  ) {
+    // Each node gets the share of its service's usage that its tasks make up,
+    // so the per-node figures add up to the service totals shown elsewhere.
+    const running = dataset.tasks.filter(({ DesiredState }) => DesiredState === "running");
+    const tasksPerPair = new Map<string, number>();
+    const tasksPerService = new Map<string, number>();
+
+    for (const { ServiceID, NodeID } of running) {
+      const pair = `${ServiceID}/${NodeID ?? ""}`;
+      tasksPerPair.set(pair, (tasksPerPair.get(pair) ?? 0) + 1);
+      tasksPerService.set(ServiceID, (tasksPerService.get(ServiceID) ?? 0) + 1);
+    }
+
+    return [...tasksPerPair].map(([pair, count]) => {
+      const [serviceId = "", nodeId = ""] = pair.split("/");
+      const profile = profileFor(dataset.servicesByID.get(serviceId)?.Spec.Name ?? serviceId);
+      const memory = query.includes("container_memory");
+      const share = count / (tasksPerService.get(serviceId) ?? count);
+
+      return build(
+        {
+          base: (memory ? profile.memBase : profile.cpuBase) * share,
+          amplitude: (memory ? profile.memDrift : profile.cpuSpike) * share,
+          noise: profile.noiseScale,
+          period: profile.period,
+        },
+        {
+          container_label_com_docker_swarm_service_id: serviceId,
+          container_label_com_docker_swarm_node_id: nodeId,
+        },
+      );
+    });
+  }
+
   if (query.includes("container_cpu")) {
     return dataset.services.map((service) => {
       const profile = profileFor(service.Spec.Name);

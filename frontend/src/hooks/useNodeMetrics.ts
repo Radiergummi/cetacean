@@ -1,5 +1,5 @@
 import { useInstanceResolver } from "./useInstanceResolver";
-import { useMetricsMap } from "./useMetricsMap";
+import { useMetricsMap, type MetricsMapSpec } from "./useMetricsMap";
 import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useCallback, useMemo } from "react";
 
@@ -21,46 +21,65 @@ const cpuQuery = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="id
 const memQuery = `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`;
 const diskQuery = `max by (instance) ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`;
 
-const spec = {
-  labelKey: "instance",
-  empty: (): NodeMetrics => ({ ...emptyMetrics, cpuHistory: [] }),
-  instant: [
-    {
-      query: cpuQuery,
-      assign: (m: NodeMetrics, v: number) => {
-        m.cpu = v;
-      },
-    },
-    {
-      query: memQuery,
-      assign: (m: NodeMetrics, v: number) => {
-        m.memory = v;
-      },
-    },
-    {
-      query: diskQuery,
-      assign: (m: NodeMetrics, v: number) => {
-        m.disk = v;
-      },
-    },
-  ],
-  range: [
-    {
-      query: cpuQuery,
-      assign: (m: NodeMetrics, v: number[]) => {
-        m.cpuHistory = v;
-      },
-    },
-  ],
-} as const;
+type InstantField = NonNullable<MetricsMapSpec<NodeMetrics>["instant"]>[number];
+type RangeField = NonNullable<MetricsMapSpec<NodeMetrics>["range"]>[number];
 
-// Fetches per-instance metrics from Prometheus and maps them by instance label.
-// Nodes are matched to instances via useInstanceResolver (hostname-based).
-export function useNodeMetrics() {
-  const monitoring = useMonitoringStatus();
-  const hasPrometheus = isPrometheusReady(monitoring);
-  const { resolve } = useInstanceResolver();
-  const byInstance = useMetricsMap("node-metrics", spec, hasPrometheus);
+export const nodeCpu: InstantField = {
+  query: cpuQuery,
+  assign: (metrics, value) => {
+    metrics.cpu = value;
+  },
+};
+
+export const nodeMemory: InstantField = {
+  query: memQuery,
+  assign: (metrics, value) => {
+    metrics.memory = value;
+  },
+};
+
+const nodeDisk: InstantField = {
+  query: diskQuery,
+  assign: (metrics, value) => {
+    metrics.disk = value;
+  },
+};
+
+const nodeCpuHistory: RangeField = {
+  query: cpuQuery,
+  assign: (metrics, value) => {
+    metrics.cpuHistory = value;
+  },
+};
+
+const everyInstant = [nodeCpu, nodeMemory, nodeDisk];
+const everyRange = [nodeCpuHistory];
+
+// Fetches per-instance node-exporter metrics, by default every field, and maps
+// them by instance label. Nodes are matched to instances via
+// useInstanceResolver (hostname-based). Never fetches without Prometheus.
+export function useNodeMetrics({
+  instant = everyInstant,
+  range = everyRange,
+  enabled: requested = true,
+}: {
+  instant?: readonly InstantField[] | undefined;
+  range?: readonly RangeField[] | undefined;
+  enabled?: boolean | undefined;
+} = {}) {
+  const enabled = isPrometheusReady(useMonitoringStatus()) && requested;
+  const { resolve } = useInstanceResolver(enabled);
+  const queries = [...instant, ...range].map(({ query }) => query).join("|");
+  const byInstance = useMetricsMap(
+    `node-metrics:${queries}`,
+    {
+      labelKey: "instance",
+      empty: (): NodeMetrics => ({ ...emptyMetrics, cpuHistory: [] }),
+      instant,
+      range,
+    },
+    enabled,
+  );
 
   const instanceEntries = useMemo(() => Object.entries(byInstance), [byInstance]);
 
