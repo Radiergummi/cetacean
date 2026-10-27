@@ -758,18 +758,8 @@ func (c *Cache) DeleteTask(id string) {
 
 // addTaskIndex adds a task to the secondary indexes. Must be called with c.mu held for writing.
 func (c *Cache) addTaskIndex(t swarm.Task) {
-	if t.ServiceID != "" {
-		if c.tasksByService[t.ServiceID] == nil {
-			c.tasksByService[t.ServiceID] = make(map[string]struct{})
-		}
-		c.tasksByService[t.ServiceID][t.ID] = struct{}{}
-	}
-	if t.NodeID != "" {
-		if c.tasksByNode[t.NodeID] == nil {
-			c.tasksByNode[t.NodeID] = make(map[string]struct{})
-		}
-		c.tasksByNode[t.NodeID][t.ID] = struct{}{}
-	}
+	addIndexed(c.tasksByService, t.ServiceID, t.ID)
+	addIndexed(c.tasksByNode, t.NodeID, t.ID)
 }
 
 // pruneGoneServices forgets removed services no task refers to any more. Must
@@ -1386,105 +1376,6 @@ func (c *Cache) nodeTotalsLocked() NodeTotals {
 	return totals
 }
 
-// --- Bulk replace (for full sync) ---
-
-func (c *Cache) replaceNodes(nodes []swarm.Node) {
-	m := make(map[string]swarm.Node, len(nodes))
-	for _, n := range nodes {
-		m[n.ID] = n
-	}
-	c.mu.Lock()
-	c.nodes.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceServices(services []swarm.Service) {
-	m := make(map[string]swarm.Service, len(services))
-	for _, s := range services {
-		m[s.ID] = s
-	}
-	c.mu.Lock()
-	c.services = m
-	c.serviceRef.rebuild(c.services)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceTasks(tasks []swarm.Task) {
-	m := make(map[string]swarm.Task, len(tasks))
-	byService := make(map[string]map[string]struct{})
-	byNode := make(map[string]map[string]struct{})
-	for _, t := range tasks {
-		m[t.ID] = t
-		if t.ServiceID != "" {
-			if byService[t.ServiceID] == nil {
-				byService[t.ServiceID] = make(map[string]struct{})
-			}
-			byService[t.ServiceID][t.ID] = struct{}{}
-		}
-		if t.NodeID != "" {
-			if byNode[t.NodeID] == nil {
-				byNode[t.NodeID] = make(map[string]struct{})
-			}
-			byNode[t.NodeID][t.ID] = struct{}{}
-		}
-	}
-	c.mu.Lock()
-	c.tasks = m
-	c.tasksByService = byService
-	c.tasksByNode = byNode
-	c.pruneGoneServices()
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceConfigs(configs []swarm.Config) {
-	m := make(map[string]swarm.Config, len(configs))
-	for _, cfg := range configs {
-		m[cfg.ID] = cfg
-	}
-	c.mu.Lock()
-	c.configs.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceSecrets(secrets []swarm.Secret) {
-	m := make(map[string]swarm.Secret, len(secrets))
-	for _, s := range secrets {
-		s.Spec.Data = nil
-		m[s.ID] = s
-	}
-	c.mu.Lock()
-	c.secrets.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceNetworks(networks []network.Summary) {
-	m := make(map[string]network.Summary, len(networks))
-	for _, n := range networks {
-		m[n.ID] = n
-	}
-	c.mu.Lock()
-	c.networks.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceVolumes(volumes []volume.Volume) {
-	m := make(map[string]volume.Volume, len(volumes))
-	for _, v := range volumes {
-		m[v.Name] = v
-	}
-	c.mu.Lock()
-	c.volumes.Replace(m)
-	c.mu.Unlock()
-}
-
-// rebuildStacksSynced acquires the lock and rebuilds derived stack data.
-// Used by tests after calling individual replace* methods.
-func (c *Cache) rebuildStacksSynced() {
-	c.mu.Lock()
-	c.rebuildStacks()
-	c.mu.Unlock()
-}
-
 func addIndexed(by map[string]map[string]struct{}, parent, id string) {
 	if parent == "" {
 		return
@@ -1548,18 +1439,8 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		byNode = make(map[string]map[string]struct{})
 		for _, t := range data.Tasks {
 			tasks[t.ID] = t
-			if t.ServiceID != "" {
-				if byService[t.ServiceID] == nil {
-					byService[t.ServiceID] = make(map[string]struct{})
-				}
-				byService[t.ServiceID][t.ID] = struct{}{}
-			}
-			if t.NodeID != "" {
-				if byNode[t.NodeID] == nil {
-					byNode[t.NodeID] = make(map[string]struct{})
-				}
-				byNode[t.NodeID][t.ID] = struct{}{}
-			}
+			addIndexed(byService, t.ServiceID, t.ID)
+			addIndexed(byNode, t.NodeID, t.ID)
 		}
 	}
 
