@@ -877,7 +877,7 @@ var toolACLSpecs = map[string]toolACLSpec{
 	"update_service_image":   {"service", "write"},
 	"rollback_service":       {"service", "write"},
 	"restart_service":        {"service", "write"},
-	"remove_task":            {"service", "write"}, // task ACL delegates to parent service
+	"remove_task":            {"task", "write"},
 	"update_service":         {"service", "write"},
 	"update_node_labels":     {"node", "write"},
 	"update_node":            {"node", "write"},

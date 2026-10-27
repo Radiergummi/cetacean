@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 
 ### Fixed
+- Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
+- A history or `get_events` query naming a task as `<service>.<slot>` resolves only for callers who can read that service
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 

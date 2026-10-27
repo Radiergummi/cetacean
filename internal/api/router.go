@@ -9,9 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/swarm"
-
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -254,37 +251,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
 	// ACL wrappers for write endpoints.
-	svcACL := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
-	)
-	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, cluster.NodeACLName))
-	taskACL := h.requireWriteACL(h.taskServiceResource)
+	svcACL := h.requireWriteACL(h.writeResource("service"))
+	nodeACL := h.requireWriteACL(h.writeResource("node"))
+	taskACL := h.requireWriteACL(h.writeResource("task"))
 	stackACL := h.requireWriteACL(pathResource("stack", "name"))
-	cfgACL := h.requireWriteACL(
-		resolveResource(
-			"config",
-			h.cache.GetConfig,
-			func(c swarm.Config) string { return c.Spec.Name },
-		),
-	)
-	secACL := h.requireWriteACL(
-		resolveResource(
-			"secret",
-			h.cache.GetSecret,
-			func(s swarm.Secret) string { return s.Spec.Name },
-		),
-	)
-	netACL := h.requireWriteACL(
-		resolveResource(
-			"network",
-			h.cache.GetNetwork,
-			func(n network.Summary) string { return n.Name },
-		),
-	)
+	cfgACL := h.requireWriteACL(h.writeResource("config"))
+	secACL := h.requireWriteACL(h.writeResource("secret"))
+	netACL := h.requireWriteACL(h.writeResource("network"))
 	volACL := h.requireWriteACL(pathResource("volume", "name"))
 	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
 	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))

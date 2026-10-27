@@ -234,7 +234,7 @@ func TestResolveIdentifierTurnsANameIntoTheIDTheRingKeysBy(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_web"}},
 	})
 
-	id, err := cluster.ResolveIdentifier(c, "service", "shop_web")
+	id, err := cluster.ResolveIdentifier(c, "service", "shop_web", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(service, shop_web) = %v", err)
 	}
@@ -251,7 +251,7 @@ func TestResolveIdentifierPassesAnUnmatchedIdentifierThrough(t *testing.T) {
 	c := newTestCache()
 
 	for _, resourceType := range []string{"service", "volume", "nonsense", ""} {
-		id, err := cluster.ResolveIdentifier(c, resourceType, "gone")
+		id, err := cluster.ResolveIdentifier(c, resourceType, "gone", nil)
 		if err != nil {
 			t.Fatalf("ResolveIdentifier(%q, gone) = %v", resourceType, err)
 		}
@@ -267,7 +267,7 @@ func TestResolveIdentifierPassesAnUnmatchedIdentifierThrough(t *testing.T) {
 func TestResolveIdentifierLeavesANameKeyedTypeAlone(t *testing.T) {
 	c := newTestCache()
 
-	id, err := cluster.ResolveIdentifier(c, "volume", "pgdata")
+	id, err := cluster.ResolveIdentifier(c, "volume", "pgdata", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(volume, pgdata) = %v", err)
 	}
@@ -294,7 +294,7 @@ func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
 		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "shared"}},
 	})
 
-	id, err := cluster.ResolveIdentifier(c, "", "unique")
+	id, err := cluster.ResolveIdentifier(c, "", "unique", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(, unique) = %v", err)
 	}
@@ -305,7 +305,7 @@ func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
 
 	// A config and a secret both named "shared" answer different questions,
 	// and picking either would be picking whichever map ranged first.
-	id, err = cluster.ResolveIdentifier(c, "", "shared")
+	id, err = cluster.ResolveIdentifier(c, "", "shared", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(, shared) = %v", err)
 	}
@@ -315,7 +315,7 @@ func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
 	}
 
 	// Naming the type is what makes it answerable.
-	id, err = cluster.ResolveIdentifier(c, "secret", "shared")
+	id, err = cluster.ResolveIdentifier(c, "secret", "shared", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(secret, shared) = %v", err)
 	}

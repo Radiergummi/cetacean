@@ -123,7 +123,6 @@ var excusedUncovered = map[string]string{
 	"DELETE /secrets/{id}":                  "mutates through the Docker daemon; covered by the e2e write lane",
 	"DELETE /services/{id}":                 "mutates through the Docker daemon; covered by the e2e write lane",
 	"DELETE /stacks/{name}":                 "mutates through the Docker daemon; covered by the e2e write lane",
-	"DELETE /tasks/{id}":                    "mutates through the Docker daemon; covered by the e2e write lane",
 	"DELETE /volumes/{name}":                "mutates through the Docker daemon; covered by the e2e write lane",
 	"PATCH /configs/{id}/labels":            "mutates through the Docker daemon; covered by the e2e write lane",
 	"PATCH /nodes/{id}/labels":              "mutates through the Docker daemon; covered by the e2e write lane",

@@ -37,8 +37,12 @@ func (s *Server) checkRead(ctx context.Context, resourceType, resourceName strin
 // readPredicate is checkRead in the predicate form the shared rules in
 // internal/cluster take.
 func (s *Server) readPredicate(ctx context.Context) func(resource string) bool {
-	identity := auth.IdentityFromContext(ctx)
+	return s.readerFor(auth.IdentityFromContext(ctx))
+}
 
+// readerFor is readPredicate for an identity already in hand; a nil identity
+// reads all, as in checkRead.
+func (s *Server) readerFor(identity *auth.Identity) func(resource string) bool {
 	return func(resource string) bool {
 		return identity == nil || s.canRead(identity, resource)
 	}
@@ -242,13 +246,14 @@ func (s *Server) writePredicate(ctx context.Context) func(resource string) bool 
 	}
 }
 
-// checkResolvedWrite enforces write on the resource arg resolved to, by exact
+// checkResolvedWrite enforces write on the record arg resolved to, by exact
 // ID or name. Docker also takes an ID prefix, which the ACL would have checked
 // as written, so an argument the cache does not resolve is refused as missing,
 // as is one the caller cannot read, which a denial would otherwise name.
 func (s *Server) checkResolvedWrite(
 	ctx context.Context,
-	resourceType, arg, name string,
+	kind, arg string,
+	record cluster.Record,
 	found bool,
 	err error,
 ) error {
@@ -261,87 +266,59 @@ func (s *Server) checkResolvedWrite(
 	}
 
 	if err != nil {
-		if s.acl.Can(identity, "read", resourceType+":"+arg) {
+		if s.acl.Can(identity, "read", kind+":"+arg) {
 			return err
 		}
 		found = false
 	}
-	if !found || !s.acl.Can(identity, "read", resourceType+":"+name) {
-		return fmt.Errorf("%s %q not found", resourceType, arg)
+
+	resource := record.WriteResource()
+	if !found || !s.acl.Can(identity, "read", resource) {
+		return fmt.Errorf("%s %q not found", kind, arg)
+	}
+	if !s.acl.Can(identity, "write", resource) {
+		return fmt.Errorf("write access denied for %s", resource)
 	}
 
-	return s.checkWrite(ctx, resourceType, name)
+	return nil
 }
 
-// writeTarget is checkResolvedWrite returning the ID arg resolved to, so the
+// resolveWrite is checkResolvedWrite returning the ID arg resolved to, so the
 // write names the object its history event will; an argument the cache could
 // not resolve passes through for Docker to judge.
-func (s *Server) writeTarget(
-	ctx context.Context,
-	resourceType, arg, id, name string,
-	found bool,
-	err error,
-) (string, error) {
-	if err := s.checkResolvedWrite(ctx, resourceType, arg, name, found, err); err != nil {
-		return "", err
+func (s *Server) resolveWrite(kind string) func(ctx context.Context, arg string) (string, error) {
+	return func(ctx context.Context, arg string) (string, error) {
+		record, found, err := cluster.Lookup(s.cache, kind, arg)
+		if err := s.checkResolvedWrite(ctx, kind, arg, record, found, err); err != nil {
+			return "", err
+		}
+		if !found {
+			return arg, nil
+		}
+
+		return record.ID, nil
 	}
-	if !found {
-		return arg, nil
-	}
-
-	return id, nil
 }
 
-// resolveServiceWrite is checkServiceWrite for a write that needs the ID.
-func (s *Server) resolveServiceWrite(ctx context.Context, arg string) (string, error) {
-	svc, ok, err := s.cache.ResolveService(arg)
-	return s.writeTarget(ctx, "service", arg, svc.ID, svc.Spec.Name, ok, err)
-}
-
-// resolveConfigWrite keys the ACL as `config:<name>`, matching REST behaviour.
-func (s *Server) resolveConfigWrite(ctx context.Context, arg string) (string, error) {
-	cfg, ok, err := s.cache.ResolveConfig(arg)
-	return s.writeTarget(ctx, "config", arg, cfg.ID, cfg.Spec.Name, ok, err)
-}
-
-// resolveSecretWrite keys the ACL as `secret:<name>`, matching REST behaviour.
-func (s *Server) resolveSecretWrite(ctx context.Context, arg string) (string, error) {
-	sec, ok, err := s.cache.ResolveSecret(arg)
-	return s.writeTarget(ctx, "secret", arg, sec.ID, sec.Spec.Name, ok, err)
-}
-
-// resolveNetworkWrite keys the ACL as `network:<name>`, matching REST behaviour.
-func (s *Server) resolveNetworkWrite(ctx context.Context, arg string) (string, error) {
-	net, ok, err := s.cache.ResolveNetwork(arg)
-	return s.writeTarget(ctx, "network", arg, net.ID, net.Name, ok, err)
-}
-
-// checkServiceWrite keys the ACL as `service:<name>`, matching REST behaviour.
+// checkServiceWrite is resolveWrite for a service write that keeps the
+// caller's identifier.
 func (s *Server) checkServiceWrite(ctx context.Context, id string) error {
-	svc, ok, err := s.cache.ResolveService(id)
-	return s.checkResolvedWrite(ctx, "service", id, svc.Spec.Name, ok, err)
+	_, err := s.resolveWrite("service")(ctx, id)
+
+	return err
 }
 
-// resolveTaskWrite resolves id to a task ID and routes the ACL check to the
-// task's parent service so an MCP `remove_task` evaluates the same key REST
-// DELETE /tasks/{id} does (`service:<name>`), falling back to `task:<id>` as
-// REST does when the cache cannot resolve the parent service.
+// resolveTaskWrite resolves id to a task the caller may name, then checks the
+// write under the key cluster.TaskRecord gives it.
 func (s *Server) resolveTaskWrite(ctx context.Context, id string) (string, error) {
 	task, err := s.resolveTaskArg(ctx, id)
 	if err != nil {
 		return "", err
 	}
 
-	svc, found := s.cache.GetService(task.ServiceID)
-	if !found || svc.Spec.Name == "" {
-		return task.ID, s.checkResolvedWrite(ctx, "task", id, task.ID, true, nil)
-	}
+	record := cluster.TaskRecord(s.cache, task)
 
-	if s.checkRead(ctx, "service", svc.Spec.Name) != nil {
-		return "", fmt.Errorf("task %q not found", id)
-	}
-
-	return task.ID, s.checkWrite(ctx, "service", svc.Spec.Name)
+	return task.ID, s.checkResolvedWrite(ctx, "task", id, record, true, nil)
 }
 
 // resolveTaskArg resolves a task ID or "<service>.<slot>" through the cache.
@@ -360,28 +337,10 @@ func (s *Server) resolveTaskArg(ctx context.Context, arg string) (swarm.Task, er
 	return task, nil
 }
 
-// resolveTaskAs resolves a task ID or "<service>.<slot>" for identity. A slot
-// resolves only through a service identity can read, since its name is the
-// service's; every transport resolving a task argument goes through here.
+// resolveTaskAs resolves a task ID or "<service>.<slot>" for identity, by the
+// rule every transport resolving a task argument shares.
 func (s *Server) resolveTaskAs(identity *auth.Identity, arg string) (swarm.Task, bool, error) {
-	task, ok, err := s.resolveTask(arg)
-	if err != nil || !ok {
-		return swarm.Task{}, false, err
-	}
-
-	if task.ID != arg && !s.serviceReadable(identity, task.ServiceID) {
-		return swarm.Task{}, false, nil
-	}
-
-	return task, true, nil
-}
-
-// serviceReadable reports whether identity may read the service with this ID;
-// a nil identity reads all, as in checkRead.
-func (s *Server) serviceReadable(identity *auth.Identity, serviceID string) bool {
-	svc, ok := s.cache.GetService(serviceID)
-
-	return ok && (identity == nil || s.canRead(identity, "service:"+svc.Spec.Name))
+	return cluster.ResolveTaskAs(s.cache, arg, s.readerFor(identity))
 }
 
 // resolveTaskRead is resolveTaskArg for a read of the task it names.
