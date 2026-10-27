@@ -120,6 +120,7 @@ type TokenIssuer struct {
 	signer *ecdsa.PrivateKey
 	header string
 	Issuer string
+	now    func() time.Time
 }
 
 func NewTokenIssuer(root []byte, issuer string) (*TokenIssuer, error) {
@@ -140,6 +141,7 @@ func newTokenIssuer(km *keyMaterial, issuer string) *TokenIssuer {
 			`{"alg":"ES256","kid":"` + km.kid + `","typ":"` + accessTokenType + `"}`,
 		)),
 		Issuer: issuer,
+		now:    time.Now,
 	}
 }
 
@@ -207,7 +209,7 @@ func (t *TokenIssuer) IssueAccessToken(
 		return "", fmt.Errorf("%w: aud is required (RFC 9068 §2.2)", ErrIncompleteClaims)
 	}
 
-	now := time.Now()
+	now := t.now()
 	payload := jwtPayload{
 		Issuer:    t.Issuer,
 		Audience:  audience{aud},
@@ -308,7 +310,7 @@ func (t *TokenIssuer) VerifyAccessToken(
 		)
 	}
 
-	if payload.NotBefore != 0 && time.Now().Before(time.Unix(payload.NotBefore, 0)) {
+	if payload.NotBefore != 0 && t.now().Before(time.Unix(payload.NotBefore, 0)) {
 		return nil, fmt.Errorf(
 			"%w: not valid before %v",
 			ErrTokenExpired,
@@ -323,7 +325,7 @@ func (t *TokenIssuer) VerifyAccessToken(
 			ErrIncompleteClaims)
 	}
 
-	if time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {
+	if time.Unix(payload.ExpiresAt, 0).Before(t.now()) {
 		return nil, fmt.Errorf(
 			"%w: expired at %v",
 			ErrTokenExpired,

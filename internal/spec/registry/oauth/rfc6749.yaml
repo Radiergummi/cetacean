@@ -34,8 +34,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc6749#section-4.1.3
     mutants:
       - file: internal/oauth/store.go
-        replace: "\tif !exists {\n\t\treturn AuthCodeData{}, false\n\t}\n\tif time.Now().After(entry.expiresAt) {"
-        with: "\tif !exists {\n\t\treturn AuthCodeData{}, false\n\t}\n\tif false && time.Now().After(entry.expiresAt) {"
+        replace: "\tif !exists {\n\t\treturn AuthCodeData{}, false\n\t}\n\tif s.now().After(entry.expiresAt) {"
+        with: "\tif !exists {\n\t\treturn AuthCodeData{}, false\n\t}\n\tif false && s.now().After(entry.expiresAt) {"
       - file: internal/oauth/store.go
         replace: "\tdelete(s.codes, h)"
         with: "\t_ = h"

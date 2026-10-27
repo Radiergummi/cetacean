@@ -215,8 +215,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9068#section-4
     mutants:
       - file: internal/oauth/jwt.go
-        replace: "\tif time.Unix(payload.ExpiresAt, 0).Before(time.Now()) {"
-        with: "\tif time.Unix(payload.ExpiresAt, 0).Before(time.Now()) && false {"
+        replace: "\tif time.Unix(payload.ExpiresAt, 0).Before(t.now()) {"
+        with: "\tif time.Unix(payload.ExpiresAt, 0).Before(t.now()) && false {"
 
   - id: failure-answers-invalid-token
     level: MUST

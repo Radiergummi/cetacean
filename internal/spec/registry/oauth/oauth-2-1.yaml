@@ -132,8 +132,8 @@ requirements:
     url: https://www.ietf.org/archive/id/draft-ietf-oauth-v2-1-16.html#section-2.4
     mutants:
       - file: internal/oauth/store.go
-        replace: "\tnewExpiry := time.Now().Add(ttl)\n\tif entry.grantExpiresAt.Before(newExpiry) {\n\t\tnewExpiry = entry.grantExpiresAt\n\t}"
-        with: "\tnewExpiry := time.Now().Add(ttl)"
+        replace: "\tnewExpiry := s.now().Add(ttl)\n\tif entry.grantExpiresAt.Before(newExpiry) {\n\t\tnewExpiry = entry.grantExpiresAt\n\t}"
+        with: "\tnewExpiry := s.now().Add(ttl)"
 
   - id: privileges-follow-the-client-identification-process
     level: MUST

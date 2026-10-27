@@ -54,12 +54,14 @@ type authCodeEntry struct {
 type AuthCodeStore struct {
 	mu    sync.Mutex
 	codes map[string]authCodeEntry // hash → entry
+	now   func() time.Time
 }
 
 // NewAuthCodeStore returns a ready-to-use AuthCodeStore.
 func NewAuthCodeStore() *AuthCodeStore {
 	return &AuthCodeStore{
 		codes: make(map[string]authCodeEntry),
+		now:   time.Now,
 	}
 }
 
@@ -69,7 +71,7 @@ func NewAuthCodeStore() *AuthCodeStore {
 func (s *AuthCodeStore) Issue(data AuthCodeData, ttl time.Duration) string {
 	raw := generateOpaqueToken()
 	h := hashToken(raw)
-	now := time.Now()
+	now := s.now()
 
 	s.mu.Lock()
 	for hash, entry := range s.codes {
@@ -101,7 +103,7 @@ func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
 	if !exists {
 		return AuthCodeData{}, false
 	}
-	if time.Now().After(entry.expiresAt) {
+	if s.now().After(entry.expiresAt) {
 		return AuthCodeData{}, false
 	}
 
@@ -164,6 +166,7 @@ type RefreshTokenStore struct {
 	tokens   map[string]refreshTokenEntry // hash → live entry
 	consumed map[string]string            // hash → grantID (rotated-away tokens)
 	grants   map[string][]string          // grantID → ordered slice of recent hashes (capped at maxGrantHistorySize)
+	now      func() time.Time
 }
 
 // NewRefreshTokenStore returns a ready-to-use RefreshTokenStore.
@@ -172,6 +175,7 @@ func NewRefreshTokenStore() *RefreshTokenStore {
 		tokens:   make(map[string]refreshTokenEntry),
 		consumed: make(map[string]string),
 		grants:   make(map[string][]string),
+		now:      time.Now,
 	}
 }
 
@@ -186,7 +190,7 @@ func (s *RefreshTokenStore) Issue(data RefreshTokenData, ttl time.Duration) stri
 	grantID := generateOpaqueToken()
 	data.grantID = grantID
 
-	expires := time.Now().Add(ttl)
+	expires := s.now().Add(ttl)
 
 	s.mu.Lock()
 	s.tokens[h] = refreshTokenEntry{
@@ -216,7 +220,7 @@ func (s *RefreshTokenStore) Validate(token string) (RefreshTokenData, bool) {
 	if !exists {
 		return RefreshTokenData{}, false
 	}
-	if time.Now().After(entry.expiresAt) {
+	if s.now().After(entry.expiresAt) {
 		return RefreshTokenData{}, false
 	}
 
@@ -274,7 +278,7 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateRe
 
 	// Step 4: expiry check. Tear down the whole family so consumed and grants
 	// don't accumulate orphaned entries past the token's natural lifetime.
-	if time.Now().After(entry.expiresAt) {
+	if s.now().After(entry.expiresAt) {
 		// The identity is deliberately dropped: an expired grant must not
 		// clear the user's consent.
 		s.revokeGrantLocked(entry.data.grantID)
@@ -289,7 +293,7 @@ func (s *RefreshTokenStore) rotate(oldToken string, ttl time.Duration) (RotateRe
 	delete(s.tokens, oldHash)
 	s.consumed[oldHash] = grantID
 
-	newExpiry := time.Now().Add(ttl)
+	newExpiry := s.now().Add(ttl)
 	if entry.grantExpiresAt.Before(newExpiry) {
 		newExpiry = entry.grantExpiresAt
 	}
