@@ -42,6 +42,8 @@ var (
 
 	// ErrNotFound is a registry that does not know the tag.
 	ErrNotFound = errors.New("tag not found in registry")
+
+	errForeignRealm = errors.New("registry named a token realm on another site")
 )
 
 // Client resolves tags against registries over HTTPS, anonymously.
@@ -57,13 +59,18 @@ type bearerToken struct {
 	expires time.Time
 }
 
-// NewClient returns a client sending its requests through httpClient.
+// NewClient returns a client sending its requests through a copy of
+// httpClient that follows only redirects checkRedirect admits.
 func NewClient(httpClient *http.Client) *Client {
-	return &Client{http: httpClient, tokens: map[string]bearerToken{}}
+	guarded := *httpClient
+	guarded.CheckRedirect = checkRedirect
+
+	return &Client{http: &guarded, tokens: map[string]bearerToken{}}
 }
 
 // Resolve returns the digest of the manifest ref's tag names now.
 func (c *Client) Resolve(ctx context.Context, ref Reference) (string, error) {
+	ctx = withRegistry(ctx, ref.Host)
 	manifestURL := "https://" + ref.Host + "/v2/" + ref.Repository + "/manifests/" +
 		url.PathEscape(ref.Tag)
 
@@ -179,7 +186,7 @@ func (c *Client) send(
 		return nil, ErrUnauthorized
 	}
 
-	token, err := c.fetchToken(ctx, *bearer, ref)
+	token, err := c.fetchToken(ctx, *bearer, ref, resp.Request.URL.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -224,12 +231,21 @@ func (c *Client) cachedToken(key string) string {
 }
 
 // fetchToken asks the challenge's realm for an anonymous pull token. The realm
-// must be HTTPS: it is the registry's to name, and a token sent in the clear
-// would let anyone on the path replay it.
-func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (bearerToken, error) {
+// must be HTTPS, or anyone on the path could replay the token, and on the site
+// of the host that challenged, or any registry could aim the request anywhere.
+func (c *Client) fetchToken(
+	ctx context.Context,
+	ch challenge,
+	ref Reference,
+	challenger string,
+) (bearerToken, error) {
 	realm, err := url.Parse(ch.params["realm"])
 	if err != nil || realm.Scheme != "https" || realm.Host == "" {
 		return bearerToken{}, fmt.Errorf("registry named an unusable token realm")
+	}
+
+	if !sameSite(realm.Host, challenger) {
+		return bearerToken{}, fmt.Errorf("%w: %s", errForeignRealm, realm.Host)
 	}
 
 	scope := ch.params["scope"]
