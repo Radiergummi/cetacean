@@ -234,4 +234,63 @@ describe("useServiceDetail", () => {
 
     await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1));
   });
+
+  // A save is written onto the cached service, so a stream event that follows
+  // re-derives from the saved spec rather than reverting the editor.
+  it("writes a saved sub-resource into the detail cache", async () => {
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useServiceDetail("svc1"), {
+      wrapper: createWrapper(client),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+
+    act(() => {
+      result.current.onEnvSaved({ MODE: "production" });
+      result.current.onPortsSaved([{ TargetPort: 80, PublishedPort: 8080 }]);
+      result.current.onHealthcheckSaved(null);
+    });
+
+    await waitFor(() => expect(result.current.envVars).toEqual({ MODE: "production" }));
+    expect(result.current.specPorts).toEqual([{ TargetPort: 80, PublishedPort: 8080 }]);
+    expect(result.current.healthcheck).toBeNull();
+
+    const cached = client.getQueryData<{ data: { service: typeof service } }>([
+      "detail",
+      "/services/svc1",
+    ]);
+
+    expect(cached?.data.service.Spec.TaskTemplate.ContainerSpec).toEqual(
+      expect.objectContaining({ Image: "nginx:1.27", Env: ["MODE=production"] }),
+    );
+  });
+
+  it("refetches the detail after a labels save, for the integrations read from them", async () => {
+    const { result } = renderHook(() => useServiceDetail("svc1"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+    const fetches = vi.mocked(api.service).mock.calls.length;
+    const labels = { "caddy.encode": "gzip" };
+
+    vi.mocked(api.service).mockResolvedValue({
+      data: {
+        service: { ...service, Spec: { ...service.Spec, Labels: labels } },
+        integrations: [{ kind: "caddy" }],
+      },
+      allowedMethods: new Set<string>(),
+      canonicalPath: "/services/svc1",
+    } as never);
+
+    act(() => {
+      result.current.onLabelsSaved(labels);
+    });
+
+    await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1));
+    await waitFor(() =>
+      expect(result.current.integrations).toEqual([expect.objectContaining({ kind: "caddy" })]),
+    );
+    expect(result.current.serviceLabels).toEqual(labels);
+  });
 });

@@ -1,4 +1,5 @@
 import { ResourcesEditor } from "./ResourcesEditor";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +18,7 @@ describe("ResourcesEditor", () => {
         }}
         onSaved={() => {}}
       />,
+      { wrapper: createWrapper(createTestQueryClient(), { withRouter: false }) },
     );
 
     expect(screen.queryByText("No resource limits configured")).not.toBeInTheDocument();

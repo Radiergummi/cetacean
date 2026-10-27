@@ -1,12 +1,13 @@
 import { DockerDocsLink } from "./DockerDocsLink";
 import { ResourceRangeSlider } from "./resource-range-slider";
 import { api } from "@/api/client";
-import type { ClusterCapacity, GenericResource } from "@/api/types";
+import type { GenericResource } from "@/api/types";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { useEditSession } from "@/hooks/useEditSession";
 import { useEditVersion } from "@/hooks/useEditVersion";
 import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
+import { useQuery } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
@@ -109,8 +110,6 @@ export function ResourcesEditor({
     reservation: undefined,
     limit: undefined,
   });
-  const [capacity, setCapacity] = useState<ClusterCapacity | null>(null);
-  const [capacityError, setCapacityError] = useState(false);
   const patch = buildResourcesPatch(cpu, memory);
 
   const {
@@ -132,18 +131,18 @@ export function ResourcesEditor({
           Reservations?.MemoryBytes != null ? Reservations.MemoryBytes / (1024 * 1024) : undefined,
         limit: Limits?.MemoryBytes != null ? Limits.MemoryBytes / (1024 * 1024) : undefined,
       });
-
-      setCapacity(null);
-      setCapacityError(false);
-      api
-        .clusterCapacity()
-        .then(setCapacity)
-        .catch(() => setCapacityError(true));
     },
     onSave: async () => {
       onSaved(await api.patchServiceResources(serviceId, patch, await version.ifMatch()));
     },
   });
+
+  const capacityQuery = useQuery({
+    queryKey: ["cluster-capacity"],
+    queryFn: () => api.clusterCapacity(),
+    enabled: editing,
+  });
+  const capacity = capacityQuery.data;
 
   function save() {
     // No-op: nothing changed
@@ -317,7 +316,7 @@ export function ResourcesEditor({
             formatLabel={formatMemoryTick}
           />
         </div>
-      ) : capacityError ? (
+      ) : capacityQuery.isError ? (
         <p className="text-xs text-status-danger">
           Failed to load cluster capacity. Try closing and reopening the editor.
         </p>

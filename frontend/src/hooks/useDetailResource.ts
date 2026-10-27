@@ -45,6 +45,14 @@ export interface DetailResourceActions<T> {
   refetch: () => void;
 }
 
+/**
+ * The cache key a detail page keeps its resource under, for a page that reads
+ * the same resource as a neighbour and should share its request.
+ */
+export function detailQueryKey(collection: DetailCollection, key: string | undefined) {
+  return ["detail", key ? `${collection}/${encodeURIComponent(key)}` : undefined] as const;
+}
+
 export function useDetailResource<T>(
   key: string | undefined,
   fetchFn: (key: string, signal?: AbortSignal) => Promise<FetchResult<T>>,
@@ -58,7 +66,7 @@ export function useDetailResource<T>(
   // the first render, where the canonical ID is not.
   const routePath = key ? `${collection}/${encodeURIComponent(key)}` : undefined;
 
-  const detailKey = useMemo(() => ["detail", routePath], [routePath]);
+  const detailKey = useMemo(() => detailQueryKey(collection, key), [collection, key]);
   const historyKey = useMemo(() => ["detail-history", routePath], [routePath]);
 
   const resourceQuery = useQuery({
@@ -97,19 +105,24 @@ export function useDetailResource<T>(
     invalidationKeys.push(...extraQueryKeys);
   }
 
+  const setData = useCallback(
+    (update: (previous: T) => T) =>
+      queryClient.setQueryData<FetchResult<T>>(detailKey, (previous) =>
+        previous ? { ...previous, data: update(previous.data) } : previous,
+      ),
+    [queryClient, detailKey],
+  );
+
   const handleEvent = useCallback(
     (event: SSEEvent) => {
       onEvent?.(event, {
-        setData: (update: (previous: T) => T) =>
-          queryClient.setQueryData<FetchResult<T>>(detailKey, (previous) =>
-            previous ? { ...previous, data: update(previous.data) } : previous,
-          ),
+        setData,
         refetch: () => {
           void queryClient.invalidateQueries({ queryKey: detailKey });
         },
       });
     },
-    [onEvent, queryClient, detailKey],
+    [onEvent, queryClient, detailKey, setData],
   );
 
   useDebouncedInvalidation(ssePath, invalidationKeys, 500, onEvent ? handleEvent : undefined);
@@ -134,5 +147,5 @@ export function useDetailResource<T>(
     }
   }, [queryClient, detailKey, historyKey, fetchHistory, extraQueryKeys]);
 
-  return { data, history, error, retry, allowedMethods, editable };
+  return { data, history, error, retry, setData, allowedMethods, editable };
 }

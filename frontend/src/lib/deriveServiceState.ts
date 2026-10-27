@@ -32,6 +32,60 @@ export function deriveServiceSubResources(service: Service): DerivedServiceState
   };
 }
 
+type ContainerSpec = NonNullable<NonNullable<Service["Spec"]["TaskTemplate"]>["ContainerSpec"]>;
+
+/**
+ * The inverse of each derivation above: a saved sub-resource written back onto
+ * the service, so the cached detail shows the save before the stream does.
+ */
+export function withContainerSpec(service: Service, fields: Partial<ContainerSpec>): Service {
+  const taskTemplate = service.Spec.TaskTemplate;
+
+  return withTaskTemplate(service, {
+    ContainerSpec: { ...taskTemplate?.ContainerSpec, ...fields },
+  });
+}
+
+export function withTaskTemplate(
+  service: Service,
+  fields: Partial<NonNullable<Service["Spec"]["TaskTemplate"]>>,
+): Service {
+  return {
+    ...service,
+    Spec: { ...service.Spec, TaskTemplate: { ...service.Spec.TaskTemplate, ...fields } },
+  };
+}
+
+export function envMapToSlice(env: Record<string, string>): string[] {
+  return Object.entries(env).map(([key, value]) => `${key}=${value}`);
+}
+
+export function containerSpecFromConfig(config: ContainerConfig): Partial<ContainerSpec> {
+  return {
+    Command: config.command,
+    Args: config.args,
+    Dir: config.dir,
+    User: config.user,
+    Hostname: config.hostname,
+    Init: config.init ?? undefined,
+    TTY: config.tty,
+    ReadOnly: config.readOnly,
+    StopSignal: config.stopSignal,
+    StopGracePeriod: config.stopGracePeriod ?? undefined,
+    CapabilityAdd: config.capabilityAdd,
+    CapabilityDrop: config.capabilityDrop,
+    Groups: config.groups,
+    Hosts: config.hosts,
+    DNSConfig: config.dnsConfig
+      ? {
+          Nameservers: config.dnsConfig.nameservers,
+          Search: config.dnsConfig.search,
+          Options: config.dnsConfig.options,
+        }
+      : undefined,
+  };
+}
+
 function envSliceToMap(env?: string[] | null): Record<string, string> {
   const result: Record<string, string> = {};
 
