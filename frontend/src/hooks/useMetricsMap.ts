@@ -114,5 +114,6 @@ export function useMetricsMapResult<T>(
     staleTime: refreshInterval,
   });
 
-  return data ?? (noResult as MetricsMapResult<T>);
+  // keepPreviousData would hand a disabled query the last answer of another key.
+  return (enabled && data) || (noResult as MetricsMapResult<T>);
 }
