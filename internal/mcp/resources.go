@@ -135,7 +135,7 @@ var (
 			uri:         "cetacean://networks/{id}",
 			name:        "network",
 			title:       "Network detail",
-			description: "Compact digest of one network by ID: driver, scope, subnets, the internal/attachable/ingress/IPv6 flags that decide whether a service could attach at all, stack, labels, and the services currently attached. Same shape the describe tool returns; subscribe for updates.",
+			description: "Compact digest of one network by ID: driver, scope, subnets, the internal/attachable/ingress/IPv6 flags that decide whether a service could attach at all, stack, labels, the services currently attached, and for a swarm overlay how many of its IPv4 addresses are usable and in use. Same shape the describe tool returns; subscribe for updates.",
 		},
 		{
 			uri:         "cetacean://volumes/{name}",
@@ -417,7 +417,10 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	case "networks":
 		if resourceID == "" {
-			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
+			return cluster.NetworkListItems(
+				s.filterNetworks(ctx, s.cache.ListNetworks()),
+				s.cache.NetworkAddresses(),
+			), nil
 		}
 		net, found, err := s.cache.ResolveNetwork(resourceID)
 		net, err = resolved(net, found, s.visibleAmbiguity(ctx, "network", err))(uri)

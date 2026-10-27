@@ -403,7 +403,7 @@ Templated resources return the same compact digest the `describe` tool builds. T
 | `cetacean://stacks/{name}/compose` | The stack as a Compose file; secrets and configs are referenced, never exported |
 | `cetacean://configs/{id}`          | Config digest; the payload's size in bytes, never the payload                   |
 | `cetacean://secrets/{id}`          | Secret digest; the payload is never read, not even its length                   |
-| `cetacean://networks/{id}`         | Network digest, with the attached services                                      |
+| `cetacean://networks/{id}`         | Network digest, with the attached services and how many addresses are in use    |
 | `cetacean://volumes/{name}`        | Volume digest, keyed by name                                                    |
 
 ### Subscriptions
@@ -413,15 +413,17 @@ wants and the resource URIs to watch, and the server sends nothing the stream di
 gone from that revision. A `2025-11-25` client gets no subscriptions at all, since it has no stream to receive them on.
 
 A watched URI may name its resource by ID or by name. The server sends `notifications/resources/updated` for it when
-the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, and
-after a full resync, and the client re-reads. A name keeps following whatever holds it: a service removed and created
-again under the same name, a node that rejoins with the same hostname, the replica that takes over a
-`<service>.<slot>`, and a resource created after the stream opened. A service's logs URI is notified on the same
-changes as the service, not on every new line; read new lines with `get_logs` and the previous cursor. The cluster
-overview, `cetacean://history`, `cetacean://recommendations`, and the listing URIs are never notified.
-`notifications/resources/list_changed` fires when resources are created or removed. Both are filtered by grants per
-notification: a client is only notified about resources its identity can read, and through a service, node, or stack
-only when it can read that too.
+the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, when
+a task attached to it, any service, or for `ingress` a node changes for a network, and after a full resync, and the
+client re-reads. A name keeps following whatever holds it: a service removed and created again under the same name, a
+node that rejoins with the same hostname, the replica that takes over a `<service>.<slot>`, and a resource created
+after the stream opened. A service's logs URI is notified on the same changes as the service, not on every new line;
+read new lines with `get_logs` and the previous cursor. The cluster overview, `cetacean://history`,
+`cetacean://recommendations`, and the listing URIs are never notified. `notifications/resources/list_changed` fires
+when resources are created or removed. Both are filtered by grants per notification: a client is only notified about
+resources its identity can read, and through a service, node, or stack only when it can read that too. A network is
+the exception: what moves its address count is notified to anyone who can read the network, since the notification
+names nothing else.
 
 One stream watches at most 256 resource URIs. A `subscriptions/listen` naming more is refused with an
 `Invalid params` error; open a second stream, or watch the stack rather than each of its services.

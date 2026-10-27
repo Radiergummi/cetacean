@@ -100,6 +100,10 @@ describe("recommendationLink", () => {
     expect(recommendationLink(hint({ scope: "config", targetId: "c1" }))).toBe("/configs/c1");
   });
 
+  it("returns network path for network scope", () => {
+    expect(recommendationLink(hint({ scope: "network", targetId: "net1" }))).toBe("/networks/net1");
+  });
+
   it("returns null for cluster scope", () => {
     expect(recommendationLink(hint({ scope: "cluster" as Recommendation["scope"] }))).toBeNull();
   });

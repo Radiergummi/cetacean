@@ -284,8 +284,8 @@ func TestEveryListEndpointRendersCSV(t *testing.T) {
 			{"shop_token", "shop", "", "true", "0", "sec1"},
 		},
 		"network": {
-			{"name", "stack", "driver", "id"},
-			{"shop_default", "shop", "overlay", "net1"},
+			{"name", "stack", "driver", "used", "usable", "id"},
+			{"shop_default", "shop", "overlay", "", "", "net1"},
 		},
 		"volume": {
 			{"name", "stack", "driver", "id"},

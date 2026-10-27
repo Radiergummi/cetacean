@@ -21,8 +21,11 @@ export interface UseListPageConfig<T> {
    * so an event can't patch a row in place and every one refetches instead.
    */
   derived?: boolean | undefined;
-  /** Events this rejects leave the list alone; a sync always refetches. */
-  relevantEvent?: ((event: SSEEvent) => boolean) | undefined;
+  /**
+   * Events this rejects leave the list alone; a sync always refetches. It is
+   * handed the rows loaded so far.
+   */
+  relevantEvent?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
 }
 
 interface UseListPageResult<T> {

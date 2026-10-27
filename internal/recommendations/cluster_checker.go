@@ -6,8 +6,10 @@ import (
 	"slices"
 	"time"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/ipam"
 	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
@@ -25,7 +27,8 @@ func (cc *ClusterChecker) Name() string            { return "cluster" }
 func (cc *ClusterChecker) Interval() time.Duration { return 60 * time.Second }
 
 // Check inspects the cluster topology for single-replica services, manager nodes
-// accepting workloads, the manager quorum, and uneven task distribution.
+// accepting workloads, the manager quorum, overlay networks running out of
+// addresses, and uneven task distribution.
 func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 	var recs []Recommendation
 
@@ -73,6 +76,11 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 	}
 
 	recs = append(recs, quorumRecommendations(nodes)...)
+
+	recs = append(recs, addressRecommendations(
+		cc.cache.ListNetworks(),
+		cc.cache.NetworkAddresses(),
+	)...)
 
 	// Uneven task distribution
 	taskCountByNode := make(map[string]int)
@@ -162,6 +170,44 @@ func quorumRecommendations(nodes []swarm.Node) []Recommendation {
 		recs = append(recs, cluster(CategoryQuorumAtRisk, SeverityWarning, fmt.Sprintf(
 			"%d of %d managers reachable: quorum survives %d more %s",
 			q.Reachable, q.Managers, q.CanLose, plural(q.CanLose, "loss", "losses"))))
+	}
+
+	return recs
+}
+
+// addressRecommendations flags a network with 80% of its addresses in use, and
+// raises it to critical from 95%.
+func addressRecommendations(
+	networks []network.Summary,
+	counts map[string]ipam.Addresses,
+) []Recommendation {
+	var recs []Recommendation
+
+	for _, n := range networks {
+		a, ok := counts[n.ID]
+		if !ok || a.Usable == 0 || a.Used*100 < a.Usable*80 {
+			continue
+		}
+
+		severity := SeverityWarning
+		if a.Used*100 >= a.Usable*95 {
+			severity = SeverityCritical
+		}
+
+		recs = append(recs, Recommendation{
+			Category:   CategoryNetworkAddressesLow,
+			Severity:   severity,
+			Scope:      ScopeNetwork,
+			TargetID:   n.ID,
+			TargetName: n.Name,
+			Message: fmt.Sprintf(
+				"%d of %d addresses in use; a start-first rolling update needs one more per task it starts",
+				a.Used,
+				a.Usable,
+			),
+			Current:    new(float64(a.Used)),
+			Configured: new(float64(a.Usable)),
+		})
 	}
 
 	return recs

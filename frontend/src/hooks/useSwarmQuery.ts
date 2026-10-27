@@ -25,6 +25,7 @@ const ssePathMap: Record<string, string> = {
 const enrichedFields = [
   "ServiceName",
   "NodeHostname",
+  "Addresses",
   "UsedBy",
   "VersionOf",
   "VersionInferred",
@@ -61,7 +62,7 @@ export function useSwarmQuery<T>(
   sseType: string,
   getId: (item: T) => string,
   filtered = false,
-  relevant?: (event: SSEEvent) => boolean,
+  relevant?: (event: SSEEvent, loaded: readonly T[]) => boolean,
   derived = false,
 ) {
   const queryClient = useQueryClient();
@@ -113,11 +114,14 @@ export function useSwarmQuery<T>(
           return;
         }
 
-        if (relevantRef.current && !relevantRef.current(event)) {
+        const currentData = queryClient.getQueryData<InfinitePages<T>>(key);
+
+        if (
+          relevantRef.current &&
+          !relevantRef.current(event, currentData?.pages.flatMap(({ data }) => data.items) ?? [])
+        ) {
           return;
         }
-
-        const currentData = queryClient.getQueryData<InfinitePages<T>>(key);
 
         if (!currentData?.pages) {
           return;

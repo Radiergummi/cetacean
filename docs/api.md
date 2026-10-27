@@ -229,7 +229,8 @@ Docker object is what the JSON representation is for.
 | `/tasks` | `name`, `state`, `node`, `id` |
 | `/stacks` | `name`, `services`, `id` |
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
-| `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
+| `/networks` | `name`, `stack`, `driver`, `used`, `usable`, `id` (the addresses, empty without a figure) |
+| `/volumes` | `name`, `stack`, `driver`, `id` |
 | `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
@@ -368,7 +369,7 @@ Swarm settings and plugin changes have no history entries, so they carry no acto
 | Stacks   | `name`                                       |
 | Configs  | `name`, `created`, `updated`                 |
 | Secrets  | `name`, `created`, `updated`                 |
-| Networks | `name`, `driver`, `scope`                    |
+| Networks | `name`, `driver`, `scope`, `addresses`       |
 | Volumes  | `name`, `driver`, `scope`                    |
 
 ### Filter fields by resource
@@ -603,8 +604,9 @@ Send `Accept: text/event-stream` to any resource list or detail URL to open a st
 ### Per-resource streams
 
 A list stream carries events for one resource type. A detail stream carries events for one resource plus the resources
-that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, and a stack
-stream includes its member services, tasks, configs, secrets, networks, and volumes.
+that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, a network
+stream includes the tasks attached to it and every service event, plus node events on `ingress`, and a stack stream
+includes its member services, tasks, configs, secrets, networks, and volumes.
 
 ```http tab
 GET /nodes HTTP/1.1
@@ -812,6 +814,13 @@ in `UsedBy`. For one of several versions, the detail carries `versionOf`, naming
 carries `newestVersion` and `olderVersions`, the number of older ones. A list item spells them `VersionOf`,
 `VersionInferred`, `NewestVersion` and `OlderVersions`. All of them count only the configs, secrets, and services
 the caller may read, so the newest version a caller can read is the newest it is shown.
+
+`GET /networks/{id}` carries `addresses`, and each `GET /networks` item `Addresses`, for a swarm network on the
+default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `taskAddresses` and
+`loadBalancers`. `excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't
+counted. Sorting by `addresses` orders by the share in use, with networks that have no figure last either way. The
+counts cover every service and task on the network, including ones the caller can't read. [Network
+addresses](dashboard#network-addresses) explains the figure.
 
 `GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
 `GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either

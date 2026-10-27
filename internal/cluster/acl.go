@@ -49,8 +49,8 @@ func ReadableRecommendations(
 }
 
 // RecommendationACLResource maps a recommendation to the resource it is
-// authorized as: the service, node, secret or config it targets, or the swarm
-// itself.
+// authorized as: the service, node, network, secret or config it targets, or
+// the swarm itself.
 func RecommendationACLResource(rec recommendations.Recommendation) string {
 	switch rec.Scope {
 	case recommendations.ScopeService:
@@ -61,6 +61,8 @@ func RecommendationACLResource(rec recommendations.Recommendation) string {
 		return "secret:" + rec.TargetName
 	case recommendations.ScopeConfig:
 		return "config:" + rec.TargetName
+	case recommendations.ScopeNetwork:
+		return "network:" + rec.TargetName
 	default:
 		return "swarm:cluster"
 	}

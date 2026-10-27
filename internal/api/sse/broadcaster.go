@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
@@ -556,6 +558,21 @@ func ResourceMatcher(typ cache.EventType, id string) func(cache.Event) bool {
 		return func(e cache.Event) bool {
 			return e.Type == cache.EventSync || (e.Type == typ && e.ID == id)
 		}
+	}
+}
+
+// NetworkMatcher returns a match function for a network's SSE stream: its own
+// events, and those cluster.AddressNetworks says may move its address figure.
+// Sync events always pass through so clients can trigger a full refetch.
+func NetworkMatcher(c *cache.Cache, id string) func(cache.Event) bool {
+	own := ResourceMatcher(cache.EventNetwork, id)
+
+	return func(e cache.Event) bool {
+		if own(e) {
+			return true
+		}
+
+		return slices.Contains(cluster.AddressNetworks(c, e), id)
 	}
 }
 

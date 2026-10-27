@@ -16,6 +16,7 @@ const categoryLabels: Partial<Record<Recommendation["category"], string>> = {
   "single-manager": "Single manager",
   "even-managers": "Even managers",
   "quorum-at-risk": "Quorum at risk",
+  "network-addresses-low": "Addresses low",
   "flaky-service": "Flaky",
   "node-disk-full": "Disk full",
   "node-memory-pressure": "Memory pressure",

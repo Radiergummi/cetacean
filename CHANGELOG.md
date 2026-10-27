@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
 - A published ports page at `/ports` (`g` `o`, or from the networks list) lists every port the services publish, with the service, stack and publish mode; `GET /ports` and the MCP tool `get_published_ports` serve the same list
 - The config and secret lists show only the newest of each set of rotated versions, with older ones a click away, and count each one's services; `cetacean.version-of` names a set, and `unused-version` flags old versions nothing uses
+- The networks list and network pages show how many of an overlay network's addresses are in use, as do `GET /networks` and MCP network reads; `network-addresses-low` flags one running out
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
 - Each entry in a service's `integrations` lists the `labels` it was read from

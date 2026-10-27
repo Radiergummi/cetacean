@@ -245,8 +245,13 @@ func (s *Server) rowsFor(
 	case []swarm.Secret:
 		return cluster.RowsForSecrets(items), nil
 
-	case []network.Summary:
-		return cluster.RowsForNetworks(items), nil
+	case []cluster.NetworkListItem:
+		networks := make([]network.Summary, len(items))
+		for i, item := range items {
+			networks[i] = item.Summary
+		}
+
+		return cluster.RowsForNetworks(networks), nil
 
 	case []volume.Volume:
 		return cluster.RowsForVolumes(items), nil
@@ -405,8 +410,8 @@ func listedRecords(listed any) []listedRecord {
 		return recordsOf(items, func(sec swarm.Secret) listedRecord {
 			return listedRecord{sec.ID, sec.Spec.Labels, sec}
 		})
-	case []network.Summary:
-		return recordsOf(items, func(n network.Summary) listedRecord {
+	case []cluster.NetworkListItem:
+		return recordsOf(items, func(n cluster.NetworkListItem) listedRecord {
 			return listedRecord{n.ID, n.Labels, n}
 		})
 	case []volume.Volume:

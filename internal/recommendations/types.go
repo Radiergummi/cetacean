@@ -28,6 +28,7 @@ const (
 	CategorySingleManager       Category = "single-manager"
 	CategoryEvenManagers        Category = "even-managers"
 	CategoryQuorumAtRisk        Category = "quorum-at-risk"
+	CategoryNetworkAddressesLow Category = "network-addresses-low"
 )
 
 type Severity string
@@ -43,6 +44,7 @@ type Scope string
 const (
 	ScopeService Scope = "service"
 	ScopeNode    Scope = "node"
+	ScopeNetwork Scope = "network"
 	ScopeCluster Scope = "cluster"
 	ScopeSecret  Scope = "secret"
 	ScopeConfig  Scope = "config"

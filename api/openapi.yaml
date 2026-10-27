@@ -6346,7 +6346,7 @@ paths:
           description: Field to sort the result list by
           schema:
             type: string
-            enum: [name, driver, scope]
+            enum: [name, driver, scope, addresses]
           example: name
         - $ref: "#/components/parameters/dir"
       responses:
@@ -6378,6 +6378,13 @@ paths:
                         - Subnet: 10.0.1.0/24
                     Labels:
                       com.docker.stack.namespace: myapp
+                    Addresses:
+                      usable: 253
+                      used: 9
+                      vips: 2
+                      taskAddresses: 4
+                      loadBalancers: 3
+                      excludesAttachedContainers: false
                 total: 6
                 limit: 50
                 offset: 0
@@ -6442,6 +6449,8 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      addresses:
+                        $ref: "#/components/schemas/NetworkAddresses"
               example:
                 "@context": /api/context.jsonld
                 "@id": /networks/net_ghi789
@@ -6461,6 +6470,13 @@ paths:
                   - "@id": /services/r8m2x5nk3p7q
                     id: r8m2x5nk3p7q
                     name: webapp
+                addresses:
+                  usable: 253
+                  used: 9
+                  vips: 2
+                  taskAddresses: 4
+                  loadBalancers: 3
+                  excludesAttachedContainers: false
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -7920,6 +7936,49 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Network)
+                  Addresses:
+                    $ref: "#/components/schemas/NetworkAddresses"
+
+    NetworkAddresses:
+      type: object
+      description: >
+        How much of a network's IPv4 address pool is in use. Present only for
+        swarm-scoped networks on the default IPAM driver with an IPv4 subnet.
+        Counted over every service and task on the network, including those
+        the caller may not read.
+      required: [usable, used, vips, taskAddresses, loadBalancers, excludesAttachedContainers]
+      properties:
+        usable:
+          type: integer
+          description: >
+            Addresses the subnets (or their IP ranges) can hand out, less the
+            network, broadcast and gateway addresses
+        used:
+          type: integer
+          description: The sum of `vips`, `taskAddresses` and `loadBalancers`
+        vips:
+          type: integer
+          description: Service virtual IPs on the network
+        taskAddresses:
+          type: integer
+          description: Addresses held by tasks that have not stopped
+        loadBalancers:
+          type: integer
+          description: >
+            One per node with such a task on the network; on the ingress
+            network, one per node in the swarm
+        excludesAttachedContainers:
+          type: boolean
+          description: >
+            Whether the network is attachable, so containers attached outside
+            a service may hold addresses not counted here
+      example:
+        usable: 253
+        used: 9
+        vips: 2
+        taskAddresses: 4
+        loadBalancers: 3
+        excludesAttachedContainers: false
 
     VolumeCollection:
       allOf:
@@ -8241,6 +8300,7 @@ components:
             - single-manager
             - even-managers
             - quorum-at-risk
+            - network-addresses-low
           x-enum-descriptions:
             - Service consistently uses far less than its reserved resources
             - Service usage is nearing its configured resource limit
@@ -8260,6 +8320,7 @@ components:
             - The swarm has one manager although it has the nodes for three
             - An even number of managers tolerates no more failures than one fewer
             - A manager is unreachable; critical once one more loss would break quorum, or it is already lost
+            - An overlay network has used 80% of its addresses; critical from 95%
         severity:
           type: string
           enum: [info, warning, critical]
@@ -8269,10 +8330,11 @@ components:
             - Urgent, should be addressed immediately
         scope:
           type: string
-          enum: [service, node, cluster, secret, config]
+          enum: [service, node, network, cluster, secret, config]
           x-enum-descriptions:
             - Recommendation targets a specific service
             - Recommendation targets a specific node
+            - Recommendation targets a specific network
             - Recommendation applies to the cluster as a whole
             - Recommendation targets a specific secret
             - Recommendation targets a specific config

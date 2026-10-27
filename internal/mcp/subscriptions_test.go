@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // drainUpdated empties the session's notification channel, returning the URIs
@@ -269,6 +271,92 @@ func TestSubscriptionServiceAndNodeFollowTheirTasks(t *testing.T) {
 	}
 }
 
+func TestSubscriptionNetworkFollowsWhatMovesItsAddresses(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:    "net-follow",
+		Name:  "backend",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
+	})
+	c.SetNetwork(network.Summary{
+		ID:      "net-ingress",
+		Name:    "ingress",
+		Scope:   "swarm",
+		Ingress: true,
+		IPAM:    network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.0.0/24"}}},
+	})
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://networks/backend", nil)
+	srv.notifications.Subscribe(session(name), "cetacean://networks/ingress", nil)
+
+	c.SetTask(swarm.Task{ID: "task-elsewhere"})
+	c.SetTask(swarm.Task{
+		ID: "task-attached",
+		NetworksAttachments: []swarm.NetworkAttachment{{
+			Network: swarm.Network{ID: "net-follow"},
+		}},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/backend")
+
+	c.SetNode(swarm.Node{ID: "node-joined"})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/ingress")
+
+	c.SetService(swarm.Service{ID: "svc-any"})
+	got := drainUpdated(t, name)
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://networks/backend", "cetacean://networks/ingress")
+}
+
+func TestSubscriptionWithoutNetworkWatchersAsksNoNetworks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net-ingress", Name: "ingress", Ingress: true})
+	c.SetService(stackService("svc-watched", "watched", ""))
+	srv := newResourceTestServer(t, c)
+
+	asked := 0
+	srv.addressNetworks = func(c *cache.Cache, ev cache.Event) []string {
+		asked++
+
+		return cluster.AddressNetworks(c, ev)
+	}
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://services/watched", nil)
+
+	c.SetNode(swarm.Node{ID: "node-quiet"})
+	c.SetService(stackService("svc-watched", "watched", ""))
+	c.SetTask(swarm.Task{
+		ID:                  "task-quiet",
+		NetworksAttachments: []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net-ingress"}}},
+	})
+
+	if asked != 0 {
+		t.Errorf("worked out the networks of %d events with no network watched", asked)
+	}
+
+	srv.notifications.Subscribe(session(name), "cetacean://networks/ingress", nil)
+	drainUpdated(t, name)
+
+	c.SetNode(swarm.Node{ID: "node-loud"})
+
+	if asked == 0 {
+		t.Error("a watched network did not ask which networks an event reaches")
+	}
+
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/ingress")
+
+	srv.notifications.Unsubscribe(session(name), "cetacean://networks/ingress")
+	asked = 0
+	c.SetNode(swarm.Node{ID: "node-quiet-again"})
+
+	if asked != 0 {
+		t.Error("an unsubscribed network still made events ask")
+	}
+}
+
 func TestSubscriptionLogsFollowServiceTasks(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-logs", "logger", ""))
@@ -312,6 +400,32 @@ func TestClusterResourceDoesNotPromisePush(t *testing.T) {
 
 // A task reaches its service's subscribers only where the service itself is
 // readable, or the timing of its tasks would confirm a guessed name.
+// The notification names only the watched network, so a subscriber who may
+// read it hears of a change to a service it may not.
+func TestSubscriptionNetworkHearsOfUnreadableService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:    "net-open",
+		Name:  "open",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.7.0/24"}}},
+	})
+	c.SetService(stackService("svc-hidden", "hidden", ""))
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(readOnlyPolicy("network:open"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	id := &auth.Identity{Subject: "alice"}
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://networks/open", id)
+	srv.notifications.Subscribe(session(name), "cetacean://services/hidden", id)
+
+	c.SetService(stackService("svc-hidden", "hidden", ""))
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/open")
+}
+
 func TestSubscriptionParentMustBeReadable(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-hidden", "hidden", "shop"))
