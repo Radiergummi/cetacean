@@ -188,6 +188,18 @@ describe("api client", () => {
     );
   });
 
+  it("encodes the stack name into its path", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({
+        stack: { name: "a#b", services: [], configs: [], secrets: [], networks: [], volumes: [] },
+      }),
+    );
+
+    await api.stack("a#b");
+
+    expect(mockFetch).toHaveBeenCalledWith("/stacks/a%23b", expect.anything());
+  });
+
   it("fetches cluster snapshot", async () => {
     const snapshot = { nodeCount: 3, serviceCount: 5 };
     mockFetch.mockReturnValue(jsonResponse(snapshot));

@@ -12,8 +12,15 @@ interface RangeField<T> {
   assign: (metrics: T, values: number[]) => void;
 }
 
+// One instance, so a consumer memoising on the result does not rebuild on every
+// render while the query is disabled or pending.
+const noMetrics: Record<string, never> = {};
+
 export interface MetricsMapSpec<T> {
-  labelKey: string;
+  /**
+   * Several labels file each series under their values joined by `/`.
+   */
+  labelKey: string | readonly string[];
   empty: () => T;
   instant?: readonly InstantField<T>[] | undefined;
   range?: readonly RangeField<T>[] | undefined;
@@ -92,5 +99,5 @@ export function useMetricsMap<T>(
     staleTime: refreshInterval,
   });
 
-  return data ?? {};
+  return data ?? (noMetrics as Record<string, T>);
 }

@@ -304,6 +304,10 @@ func StackDigest(stack cache.StackDetail, tasks []swarm.Task, flapping map[strin
 		RecentFailures: make([]TaskFailure, 0),
 	}
 
+	if links := StackLinks(stack.Services); len(links) > 0 {
+		digest.Details["links"] = links
+	}
+
 	// A stack is not a Docker primitive and has no timestamp of its own; the
 	// last time its composition changed — the newest member service's
 	// UpdatedAt — is the only honest answer, and leaving it empty would read

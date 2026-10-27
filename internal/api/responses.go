@@ -24,11 +24,12 @@ type NodeResponse struct {
 }
 
 // ServiceResponse is the extra payload for GET /services/{id}.
-// Changes and Integrations are populated only when present.
+// Changes, Integrations and Links are populated only when present.
 type ServiceResponse struct {
-	Service      swarm.Service `json:"service"`
-	Changes      []SpecChange  `json:"changes,omitempty"`
-	Integrations []any         `json:"integrations,omitempty"`
+	Service      swarm.Service         `json:"service"`
+	Changes      []SpecChange          `json:"changes,omitempty"`
+	Integrations []any                 `json:"integrations,omitempty"`
+	Links        []cluster.ServiceLink `json:"links,omitempty"`
 
 	ImageUpdate *cluster.ImageUpdate `json:"imageUpdate,omitempty"`
 }
@@ -98,7 +99,8 @@ type VolumeResponse struct {
 
 // StackResponse is the extra payload for GET /stacks/{name}.
 type StackResponse struct {
-	Stack cache.StackDetail `json:"stack"`
+	Stack cache.StackDetail     `json:"stack"`
+	Links []cluster.ServiceLink `json:"links,omitempty"`
 }
 
 // PluginResponse is the extra payload for GET /plugins/{name}.

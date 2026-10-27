@@ -788,6 +788,11 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
 
+`GET /topology` as JSON Graph Format holds two graphs. `network` has a vertex per service and an edge between two
+services sharing an overlay network. `placement` has a vertex per node and per service, and a placement entry per
+service listing the nodes its tasks run on. A node vertex carries `address`, and a service vertex `networks`, the
+overlays it's attached to as `id` and `name`, limited to the networks you may read.
+
 `GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
@@ -799,12 +804,17 @@ first. A `search` or `filter` matches every version unless `?versions=newest` sa
 holds every version, with `version of`, `newest` and `used by` columns. Any other `versions` value answers `400`
 ([`API016`](api/errors#API016)). The total, the pagination links and the ETag follow what is listed.
 
-`GET /configs/{id}` and `GET /secrets/{id}` carry `usedBy`, the number of services whose spec or previous spec uses it, and each list item
-`UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and `versionInferred` when
-it was matched by name rather than declared with the `cetacean.version-of` label; the newest carries
-`newestVersion` and `olderVersions`, the number of older ones. A list item spells them `VersionOf`,
+`GET /configs/{id}` and `GET /secrets/{id}` carry `usedBy`, the number of services whose spec or previous spec uses
+it, and each list item `UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and
+`versionInferred` when it was matched by name rather than declared with the `cetacean.version-of` label; the newest
+carries `newestVersion` and `olderVersions`, the number of older ones. A list item spells them `VersionOf`,
 `VersionInferred`, `NewestVersion` and `OlderVersions`. All of them count only the configs, secrets, and services
 the caller may read, so the newest version a caller can read is the newest it is shown.
+
+`GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
+`GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either
+an `href`, for an `http` or `https` URL, or a `text`, for any other value. A stack's links also name the `services`
+declaring each one.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

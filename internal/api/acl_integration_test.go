@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1842,6 +1843,67 @@ func TestHandleTopology_ACLFiltering(t *testing.T) {
 	}
 	if _, ok := networkGraph.Nodes[jgf.URN("service", "svc1")]; !ok {
 		t.Error("expected webapp (svc1) in network graph")
+	}
+}
+
+func TestHandleTopology_PlacementServiceNetworksACLFiltered(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetNetwork(network.Summary{ID: "net2", Name: "billing", Driver: "overlay"})
+	c.SetNetwork(network.Summary{ID: "net3", Name: "bridge", Driver: "bridge"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{
+			{NetworkID: "net1"}, {NetworkID: "net2"}, {NetworkID: "net3"},
+		}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady, Addr: "10.0.0.5"},
+	})
+	c.SetTask(swarm.Task{
+		ID:           "t1",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:webapp", "node:*", "network:frontend", "network:bridge"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleTopology(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var doc jgf.Document
+	if err := json.NewDecoder(w.Body).Decode(&doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	placement := doc.Graphs[1]
+	networks, _ := placement.Nodes[jgf.URN("service", "svc1")].Metadata["networks"].([]any)
+	want := []any{map[string]any{"id": jgf.URN("network", "net1"), "name": "frontend"}}
+	if !reflect.DeepEqual(networks, want) {
+		t.Errorf("networks=%v, want only the readable overlay %v", networks, want)
+	}
+
+	if addr := placement.Nodes[jgf.URN("node", "node1")].Metadata["address"]; addr != "10.0.0.5" {
+		t.Errorf("address=%v, want 10.0.0.5", addr)
 	}
 }
 

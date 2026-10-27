@@ -31,6 +31,7 @@ import {
 import { DeployConfigSection } from "../components/service-detail/DeployConfigSection";
 import { IntegrationPanels } from "../components/service-detail/IntegrationPanels";
 import { ServiceStatusCard } from "../components/service-detail/ServiceStatusCard";
+import ServiceLinks from "../components/ServiceLinks";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { useEditVersion } from "../hooks/useEditVersion";
@@ -90,6 +91,7 @@ export default function ServiceDetail() {
             editable={detail.editable}
           />
         }
+        extra={detail.links.length > 0 ? <ServiceLinks links={detail.links} /> : undefined}
       />
 
       <SizingBanner

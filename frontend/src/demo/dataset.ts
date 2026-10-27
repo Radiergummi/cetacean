@@ -509,7 +509,13 @@ function buildServices(): Service[] {
       UpdatedAt: ago3d,
       Spec: {
         Name: "webshop_api",
-        Labels: webshopLabels("registry.example.com/webshop/api:v2.4.1"),
+        Labels: {
+          ...webshopLabels("registry.example.com/webshop/api:v2.4.1"),
+          "cetacean.link.grafana": "https://grafana.example.com/d/webshop-api",
+          "cetacean.link.grafana.title": "Dashboard",
+          "cetacean.link.oncall": "pager:webshop-team",
+          "cetacean.link.oncall.title": "On call",
+        },
         TaskTemplate: {
           ContainerSpec: {
             Image: `registry.example.com/webshop/api:v2.4.1@${digestWebshopAPI}`,

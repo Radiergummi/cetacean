@@ -141,6 +141,28 @@ describe("detail response shapes", () => {
     expect(Array.isArray(data.stack.networks)).toBe(true);
     expect(Array.isArray(data.stack.volumes)).toBe(true);
   });
+
+  it("shows custom links on webshop_api and its stack", async () => {
+    const api = dataset.services.find(({ Spec: { Name } }) => Name === "webshop_api");
+    const service = await fetchJSON(`/services/${api?.ID}`);
+    const stack = await fetchJSON("/stacks/webshop");
+    const expected = [
+      { id: "grafana", title: "Dashboard", href: "https://grafana.example.com/d/webshop-api" },
+      { id: "oncall", title: "On call", text: "pager:webshop-team" },
+    ];
+
+    expect(service.links).toEqual(expected);
+    expect(stack.links).toEqual(expected.map((link) => ({ ...link, services: ["webshop_api"] })));
+  });
+
+  it("omits links where none are declared, as the server does", async () => {
+    const frontend = dataset.services.find(({ Spec: { Name } }) => Name === "webshop_frontend");
+    const service = await fetchJSON(`/services/${frontend?.ID}`);
+    const stack = await fetchJSON("/stacks/monitoring");
+
+    expect(service).not.toHaveProperty("links");
+    expect(stack).not.toHaveProperty("links");
+  });
 });
 
 describe("computed endpoint shapes", () => {
@@ -264,6 +286,25 @@ describe("topology endpoint shapes", () => {
         expect(hyperedge.nodes).toContain(task.node);
       }
     }
+  });
+
+  it("the placement graph names the networks each service is on", async () => {
+    const data = await fetchJSON("/topology");
+    const placement = (data.graphs as Record<string, unknown>[]).find(
+      ({ id }) => id === "placement",
+    );
+
+    expect(placement).toBeDefined();
+
+    const nodes = Object.values(
+      placement?.nodes as Record<string, { metadata: Record<string, unknown> }>,
+    );
+    const networks = nodes
+      .filter(({ metadata }) => metadata.kind === "service")
+      .flatMap(({ metadata }) => metadata.networks as { id: string; name: string }[]);
+
+    expect(networks.length).toBeGreaterThan(0);
+    expect(networks[0]?.id).toMatch(/^urn:cetacean:network:/);
   });
 });
 
