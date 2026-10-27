@@ -34,10 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Detail pages, the cluster overview, topology and history keep refreshing during a rollout or crash loop instead of waiting for the events to stop
 - A node without its own node-exporter no longer shows the metrics of another node whose name starts the same, like `worker-1` for `worker-12`
 - In a table, Enter on a link or button opens that link instead of the selected row, and the selection stays on its row as rows come and go
-- A global service with nothing running shows as failing on the stack page instead of a green 0/0; every service health indicator now follows the same rule
-- Every detail page that fails to load says why and offers Retry
+- A global service with nothing running, or a job whose tasks all failed, shows as failing on the stack and services pages instead of green; every service health indicator follows one rule
+- Detail pages and a stack page's task counts say why they failed to load and offer Retry
 - Attaching a config in place of one removed in the same edit defaults to the removed config's path, as secrets already did
-- The task list asks Prometheus only for the services it shows, and list metrics stop polling while the tab is in the background
+- The task list asks Prometheus only for the services it shows, keeps its sparklines while loading more, and says when metrics fail; metrics stop polling in a background tab
 
 ## [0.18.0] - 2026-10-24
 
