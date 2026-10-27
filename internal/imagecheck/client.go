@@ -259,7 +259,7 @@ func (c *Client) fetchToken(
 ) (bearerToken, error) {
 	realm, err := url.Parse(ch.params["realm"])
 	if err != nil || realm.Scheme != "https" || realm.Host == "" {
-		return bearerToken{}, fmt.Errorf("registry named an unusable token realm")
+		return bearerToken{}, errors.New("registry named an unusable token realm")
 	}
 
 	if !realmAllowed(ctx, realm.Host, challenger) {
@@ -307,7 +307,7 @@ func (c *Client) fetchToken(
 	}
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTokenSize)).Decode(&body); err != nil {
-		return bearerToken{}, fmt.Errorf("token service answered an unreadable body")
+		return bearerToken{}, errors.New("token service answered an unreadable body")
 	}
 
 	value := body.Token
@@ -316,7 +316,7 @@ func (c *Client) fetchToken(
 	}
 
 	if value == "" {
-		return bearerToken{}, fmt.Errorf("token service answered no token")
+		return bearerToken{}, errors.New("token service answered no token")
 	}
 
 	lifetime := defaultTokenLifetime

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The networks list and network pages show how many of an overlay network's addresses are in use, as do `GET /networks` and MCP network reads; `network-addresses-low` flags one running out
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
+- Service pages show a GitHub Deployment panel for Docker Swarm Deployment Action, with the commit and workflow run that deployed a service; configs and secrets it rotates group as versions by `com.matchory.deployment.name`
 - Each entry in a service's `integrations` lists the `labels` it was read from
 - The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
 - The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
+- The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 - **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
@@ -34,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The image check no longer follows a registry's redirect to plain HTTP or to a private address on another domain, nor asks another domain's token service
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
 
 ## [0.18.0] - 2026-10-24
 

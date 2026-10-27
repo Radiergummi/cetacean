@@ -129,7 +129,7 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9068#section-2.2
     mutants:
       - file: internal/oauth/jwt.go
-        replace: "\t\tJTIID:     base64.RawURLEncoding.EncodeToString(jtiBytes),"
+        replace: "\t\tJTIID:     rand.Text(),"
         with: "\t\tJTIID:     \"\","
 
   # § 4, validating

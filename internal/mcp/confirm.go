@@ -35,13 +35,11 @@ type stateSigner struct {
 	now func() time.Time
 }
 
-func newStateSigner() (*stateSigner, error) {
+func newStateSigner() *stateSigner {
 	key := make([]byte, sha256.Size)
-	if _, err := rand.Read(key); err != nil {
-		return nil, err
-	}
+	_, _ = rand.Read(key)
 
-	return &stateSigner{key: key, now: time.Now}, nil
+	return &stateSigner{key: key, now: time.Now}
 }
 
 // roundTripState is what a requestState binds: the call (caller, tool and

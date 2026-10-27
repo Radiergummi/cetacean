@@ -343,13 +343,8 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, err
 	}
 
-	confirmations, err := newStateSigner()
-	if err != nil {
-		return nil, fmt.Errorf("mcp: confirmation key: %w", err)
-	}
-
 	srv := &Server{
-		confirmations:  confirmations,
+		confirmations:  newStateSigner(),
 		secretEntries:  opts.SecretEntries,
 		dashboardURL:   strings.TrimRight(opts.DashboardURL, "/"),
 		guard:          guard,

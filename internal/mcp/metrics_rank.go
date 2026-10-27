@@ -122,7 +122,7 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 		}
 
 		if len(names) == 0 {
-			return "", fmt.Errorf("no services you can read, so there is nothing to rank")
+			return "", errors.New("no services you can read, so there is nothing to rank")
 		}
 
 		return fmt.Sprintf(`,%s=~"%s"`, swarmServiceLabel, strings.Join(names, "|")), nil
@@ -138,7 +138,7 @@ func (s *Server) rankScope(ctx context.Context, by string) (string, error) {
 		}
 
 		if len(hosts) == 0 {
-			return "", fmt.Errorf("no nodes you can read, so there is nothing to rank")
+			return "", errors.New("no nodes you can read, so there is nothing to rank")
 		}
 
 		return fmt.Sprintf(`,instance=~"(%s):.*"`, strings.Join(hosts, "|")), nil

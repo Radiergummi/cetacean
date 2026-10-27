@@ -818,7 +818,7 @@ version is its own newest. Any other `versions` value answers `400`
 `GET /configs/{id}` and `GET /secrets/{id}` list in `services` every service whose spec or previous spec uses it,
 marking with `rollback` one that only a rollback would need, and count them in `usedBy`; each list item counts them
 in `UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and
-`versionInferred` when it was matched by name rather than declared with the `cetacean.version-of` label; the newest
+`versionInferred` when it was matched by name rather than declared with the `cetacean.version-of` or `com.matchory.deployment.name` label; the newest
 carries `newestVersion` and `olderVersions`, the number of older ones no current spec uses, which a default
 listing hides; an older one still in use carries `inUse`. A list item spells them `VersionOf`, `VersionInferred`,
 `NewestVersion`, `OlderVersions` and `InUse`. All of them count only the configs, secrets, and services
