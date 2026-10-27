@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"maps"
 	"slices"
 	"testing"
 
@@ -60,6 +61,19 @@ func TestAddressNetworks(t *testing.T) {
 		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
 	})
 	c.SetNetwork(network.Summary{ID: "bridge", Scope: "local"})
+	c.SetNetwork(network.Summary{
+		ID:    "v6",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "fd00::/64"}}},
+	})
+	c.SetNetwork(network.Summary{
+		ID:    "plugin",
+		Scope: "swarm",
+		IPAM: network.IPAM{
+			Driver: "infoblox",
+			Config: []network.IPAMConfig{{Subnet: "10.0.2.0/24"}},
+		},
+	})
 
 	attached := swarm.Task{NetworksAttachments: []swarm.NetworkAttachment{
 		{Network: swarm.Network{ID: "backend"}},
@@ -92,5 +106,16 @@ func TestAddressNetworks(t *testing.T) {
 		if got := AddressNetworks(c, tt.event); !slices.Equal(got, tt.want) {
 			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
 		}
+	}
+
+	counted := slices.Sorted(maps.Keys(c.NetworkAddresses()))
+	if got := AddressNetworks(
+		c,
+		cache.Event{Type: cache.EventService},
+	); !slices.Equal(
+		got,
+		counted,
+	) {
+		t.Errorf("a service names %v, but the networks with a figure are %v", got, counted)
 	}
 }
