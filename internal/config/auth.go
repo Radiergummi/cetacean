@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
-	"slices"
 	"strings"
 )
 
@@ -407,10 +406,18 @@ func (c *Config) ValidateTsnetMode(tlsEnabled bool) error {
 	return nil
 }
 
+// WildcardCORS reports whether origins is the single entry "*", meaning any
+// origin. Every reader asks here, so two cannot answer differently for one
+// configuration. A "*" alongside real origins is not a wildcard: the list is
+// matched literally and "*" matches nothing.
+func WildcardCORS(origins []string) bool {
+	return len(origins) == 1 && origins[0] == "*"
+}
+
 // RefuseWildcardCORS refuses server.cors.origins "*" where identity is the
 // network address: any page a visitor opens would read the API as them.
 func RefuseWildcardCORS(origins []string, authMode string) error {
-	if !slices.Contains(origins, "*") || authMode != "none" && authMode != "tailscale" {
+	if !WildcardCORS(origins) || authMode != "none" && authMode != "tailscale" {
 		return nil
 	}
 

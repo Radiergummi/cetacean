@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // CORSConfig holds CORS middleware settings. A nil or zero-value
@@ -19,12 +21,10 @@ func (c *CORSConfig) Enabled() bool {
 	return c != nil && len(c.AllowedOrigins) > 0
 }
 
-// Wildcard reports whether the allowlist is the single entry "*", meaning any
-// origin. Every reader asks here rather than deciding for itself, so two
-// cannot answer differently for one configuration. A "*" alongside real
-// origins is not a wildcard: the list is matched literally and "*" matches nothing.
+// Wildcard reports whether the allowlist means any origin, as
+// config.WildcardCORS decides it.
 func (c *CORSConfig) Wildcard() bool {
-	return c.Enabled() && len(c.AllowedOrigins) == 1 && c.AllowedOrigins[0] == "*"
+	return c.Enabled() && config.WildcardCORS(c.AllowedOrigins)
 }
 
 // exposedHeaders lists response headers the browser should expose to

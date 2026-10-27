@@ -679,7 +679,7 @@ func TestRefuseWildcardCORS(t *testing.T) {
 	}{
 		{[]string{"*"}, "none", true},
 		{[]string{"*"}, "tailscale", true},
-		{[]string{"https://a.example", "*"}, "none", true},
+		{[]string{"https://a.example", "*"}, "none", false},
 		{[]string{"*"}, "oidc", false},
 		{[]string{"*"}, "headers", false},
 		{[]string{"*"}, "cert", false},
