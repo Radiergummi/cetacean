@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The networks list and network pages show how many of an overlay network's addresses are in use, as do `GET /networks` and MCP network reads; `network-addresses-low` flags one running out
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
+- Service pages show a GitHub Deployment panel for Docker Swarm Deployment Action, with the commit and workflow run that deployed a service; configs and secrets it rotates group as versions by `com.matchory.deployment.name`
 - Each entry in a service's `integrations` lists the `labels` it was read from
 - The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
 - The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
 - A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
+- The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
@@ -40,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Read-only endpoints report `Allow`, `/metrics/status` sends an `ETag`, and `/metrics/labels` refuses a non-JSON `Accept`
 - A Prometheus answer over 10 MiB returns `502 MTR008` instead of a truncated body that blanked the charts
 - Problem details for `413`, `416` and `422` carry RFC 9110's titles, such as `Range Not Satisfiable`
+- A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
 
 ## [0.18.0] - 2026-10-24
 

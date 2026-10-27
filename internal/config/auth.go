@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"net/url"
@@ -187,7 +188,7 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 			)
 		}
 		if cfg.Tailscale.Mode == "tsnet" && cfg.Tailscale.AuthKey == "" {
-			return nil, fmt.Errorf("tailscale tsnet mode requires auth.tailscale.authkey")
+			return nil, errors.New("tailscale tsnet mode requires auth.tailscale.authkey")
 		}
 
 	case "cert":
@@ -248,7 +249,7 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 			SecretValue: secretValue,
 		}
 		if cfg.Headers.Subject == "" {
-			return nil, fmt.Errorf("headers mode requires auth.headers.subject")
+			return nil, errors.New("headers mode requires auth.headers.subject")
 		}
 		if cfg.Headers.SecretHeader != "" && cfg.Headers.SecretValue == "" {
 			return nil, fmt.Errorf(

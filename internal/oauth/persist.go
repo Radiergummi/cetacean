@@ -116,7 +116,7 @@ func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
 // with none can never rotate again, and carrying its consumed hashes forward
 // would only grow the file.
 func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
-	now := time.Now()
+	now := s.now()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

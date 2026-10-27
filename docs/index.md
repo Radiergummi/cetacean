@@ -28,7 +28,7 @@ New here? Start with [Getting started][getting-started].
 | [Authentication][authentication]     | OIDC, Tailscale, mTLS client certificates, proxy headers               |
 | [Authorization][authorization]       | Grant-based RBAC, policy files, provider grant sources                 |
 | [Dashboard][dashboard]               | Navigation, command palette, charts, logs, topology                    |
-| [Integrations][integrations]         | Traefik, Caddy, Shepherd, Gantry, swarm-cronjob, Diun, and doco-cd panels |
+| [Integrations][integrations]         | Panels for Traefik, Caddy, Gantry, doco-cd, and other Swarm tools         |
 | [Recommendations][recommendations]   | Automated sizing, config, operational, and cluster checks              |
 | [API guide][api]                     | REST endpoints, SSE, feeds, write operations, error codes              |
 | [MCP server][mcp]                    | Enable the MCP server, authorize an agent, prompts, and widgets        |

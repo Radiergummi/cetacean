@@ -229,7 +229,7 @@ func (c *Client) cachedToken(key string) string {
 func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (bearerToken, error) {
 	realm, err := url.Parse(ch.params["realm"])
 	if err != nil || realm.Scheme != "https" || realm.Host == "" {
-		return bearerToken{}, fmt.Errorf("registry named an unusable token realm")
+		return bearerToken{}, errors.New("registry named an unusable token realm")
 	}
 
 	scope := ch.params["scope"]
@@ -273,7 +273,7 @@ func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (b
 	}
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTokenSize)).Decode(&body); err != nil {
-		return bearerToken{}, fmt.Errorf("token service answered an unreadable body")
+		return bearerToken{}, errors.New("token service answered an unreadable body")
 	}
 
 	value := body.Token
@@ -282,7 +282,7 @@ func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (b
 	}
 
 	if value == "" {
-		return bearerToken{}, fmt.Errorf("token service answered no token")
+		return bearerToken{}, errors.New("token service answered no token")
 	}
 
 	lifetime := defaultTokenLifetime

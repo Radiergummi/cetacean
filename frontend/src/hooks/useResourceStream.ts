@@ -12,7 +12,7 @@ export interface SSEEvent {
 
 export type SSEListener = (event: SSEEvent) => void;
 
-export const sseEventTypes = [
+const sseEventTypes = [
   "node",
   "service",
   "task",

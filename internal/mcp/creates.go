@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -29,7 +30,7 @@ type createResult struct {
 func decodePayload(req mcplib.CallToolRequest) ([]byte, error) {
 	raw := req.GetString("data", "")
 	if raw == "" {
-		return nil, fmt.Errorf("data: required, and may not be empty")
+		return nil, errors.New("data: required, and may not be empty")
 	}
 
 	switch encoding := req.GetString("encoding", "utf8"); encoding {

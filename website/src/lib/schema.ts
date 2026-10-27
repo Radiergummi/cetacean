@@ -618,7 +618,7 @@ export const properties: Property[] = [
     name: "versionInferred",
     iri: "urn:cetacean:versionInferred",
     description:
-      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` label.",
+      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` or `com.matchory.deployment.name` label.",
     expectedType: "Boolean",
     usedOn: ["Config", "Secret"],
   },
