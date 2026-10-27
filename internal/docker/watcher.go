@@ -974,7 +974,7 @@ var fullSyncTimeout = 2 * time.Minute
 var taskListTimeout = 30 * time.Second
 
 // inspectTimeout bounds one inspect attempt, which holds the event loop too.
-var inspectTimeout = 30 * time.Second
+var inspectTimeout = 10 * time.Second
 
 // inspect reads one resource under inspectTimeout.
 func (w *Watcher) inspect(ctx context.Context, kind events.Type, id string) (any, error) {
