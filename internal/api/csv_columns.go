@@ -38,8 +38,7 @@ func (c csvColumn) value(row cluster.Row) string {
 	case "versionOf":
 		return row.VersionOf
 	case "newestVersion":
-		// An ungrouped config or secret is its own newest version.
-		return strconv.FormatBool(row.NewestVersion || row.VersionOf == "")
+		return strconv.FormatBool(row.NewestVersion)
 	case "usedBy":
 		if row.UsedBy == nil {
 			return ""

@@ -5779,7 +5779,7 @@ paths:
                       newestVersion:
                         type: boolean
                         description: >-
-                          True for the newest version of its group that the caller may read.
+                          True for the newest version of its group that the caller may read, and for one with no other.
                       olderVersions:
                         type: integer
                         description: >-
@@ -6178,7 +6178,7 @@ paths:
                       newestVersion:
                         type: boolean
                         description: >-
-                          True for the newest version of its group that the caller may read.
+                          True for the newest version of its group that the caller may read, and for one with no other.
                       olderVersions:
                         type: integer
                         description: >-
@@ -7851,7 +7851,7 @@ components:
                     type: boolean
                     description: >-
                       True for the newest version of its group that the caller may read.
-                      Absent for an ungrouped config and for older versions.
+                      Also true for a config with no other version; absent for older versions.
                   OlderVersions:
                     type: integer
                     description: >-
@@ -7893,7 +7893,7 @@ components:
                     type: boolean
                     description: >-
                       True for the newest version of its group that the caller may read.
-                      Absent for an ungrouped secret and for older versions.
+                      Also true for a secret with no other version; absent for older versions.
                   OlderVersions:
                     type: integer
                     description: >-

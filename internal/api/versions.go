@@ -8,7 +8,8 @@ import (
 
 // versionedList narrows spec's readable items by ?versions and ?versionsOf,
 // gives its CSV rows their version columns, and returns what each item of the
-// JSON page gains once rendered. A CSV export holds every version.
+// JSON page gains once rendered. A CSV export holds every version unless
+// ?versions says otherwise.
 func versionedList[T any](
 	h *Handlers,
 	r *http.Request,
@@ -30,7 +31,7 @@ func versionedList[T any](
 			return nil, err
 		}
 
-		if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		if ContentTypeFromContext(r.Context()) == ContentTypeCSV && query.Get("versions") == "" {
 			sel.All = true
 		}
 

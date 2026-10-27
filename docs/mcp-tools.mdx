@@ -308,8 +308,8 @@ than read as empty.
 Configs, secrets, networks, and volumes. Swarm secrets and configs are immutable, so rotating one is three
 calls in order: `create_secret` for the replacement, labeled `cetacean.version-of=<logical name>` and with the old
 version's `com.docker.stack.namespace` label so it [groups with the versions it replaces](dashboard#versions), [`update_service_secrets`](#update_service_secrets) to
-repoint each service that uses it (`describe` the secret first, its `related` array names them), then
-`remove_secret` once nothing references it. Configs follow the same sequence, and unlike a secret a config's
+repoint each service that uses it (`describe` the secret first: its `related` array names them as `used-by`, and a service only a rollback needs as `used-by-rollback`, which stays), then
+`remove_secret` once no `used-by` service is left. Configs follow the same sequence, and unlike a secret a config's
 content can be read back, so use a secret for anything sensitive.
 
 <McpTool name="create_secret" level={2}>
@@ -329,13 +329,15 @@ content can be read back, so use a secret for anything sensitive.
 <McpTool name="remove_secret" level={3}>
     <Fragment slot="arguments">`id`</Fragment>
 
-    Deletes a secret. Fails if any service still references it.
+    Deletes a secret. Fails while a service's current spec references it; one only a previous spec names is removed,
+    and the confirmation names the rollbacks it breaks.
 </McpTool>
 
 <McpTool name="remove_config" level={3}>
     <Fragment slot="arguments">`id`</Fragment>
 
-    Deletes a config. Fails if any service still references it.
+    Deletes a config. Fails while a service's current spec references it; one only a previous spec names is removed,
+    and the confirmation names the rollbacks it breaks.
 </McpTool>
 
 <McpTool name="remove_network" level={3}>

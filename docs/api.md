@@ -800,8 +800,9 @@ whenever there is nothing to report, including when [`server.image_check`](confi
 
 `GET /configs` and `GET /secrets` list only the newest version of each group of [versions](dashboard#versions)
 by default; `?versions=all` lists every version, and `?versionsOf={id}` only those grouped with that ID, newest
-first. A `search` or `filter` matches every version unless `?versions=newest` says otherwise, and a CSV export
-holds every version, with `version of`, `newest` and `used by` columns. Any other `versions` value answers `400`
+first unless `sort` orders them otherwise. A `search` or `filter` matches every version, and a CSV export holds
+every version with `version of`, `newest` and `used by` columns, both unless `?versions=newest` says otherwise; a
+config or secret with no other version is its own newest. Any other `versions` value answers `400`
 ([`API016`](api/errors#API016)). The total, the pagination links and the ETag follow what is listed.
 
 `GET /configs/{id}` and `GET /secrets/{id}` list in `services` every service whose spec or previous spec uses it,

@@ -67,11 +67,11 @@ func SecretVersionGroups(readable []swarm.Secret) VersionGroups {
 	return versions.Group(versions.SecretItems(readable))
 }
 
-// Version reports where id sits in g; the zero Version for an ungrouped item.
+// Version reports where id sits in g. An ungrouped item is its own newest.
 func (g VersionGroups) Version(id string) Version {
 	m, ok := g[id]
 	if !ok {
-		return Version{}
+		return Version{Newest: true}
 	}
 
 	v := Version{Of: m.Of, Inferred: m.Inferred, Newest: m.Rank == 0}
@@ -146,7 +146,7 @@ func SelectVersions[T any](
 func ReadableUsers(refs []cache.ServiceRef, canRead func(resource string) bool) int {
 	n := 0
 	for _, ref := range refs {
-		if canRead("service:" + ref.Name) {
+		if canRead(ServiceRefACLResource(ref)) {
 			n++
 		}
 	}
@@ -342,6 +342,23 @@ func (x *VersionIndex) DigestsTouchedBy(event cache.Event) (configs, secrets []V
 	default:
 		return nil, nil
 	}
+}
+
+// TouchesDigest reports whether event changes the digest of the config or
+// secret typ and id name, by what DigestsTouchedBy finds.
+func (x *VersionIndex) TouchesDigest(event cache.Event, typ cache.EventType, id string) bool {
+	if event.Type != cache.EventConfig && event.Type != cache.EventSecret {
+		return false
+	}
+
+	configs, secrets := x.DigestsTouchedBy(event)
+
+	refs := configs
+	if typ == cache.EventSecret {
+		refs = secrets
+	}
+
+	return slices.ContainsFunc(refs, func(ref VersionRef) bool { return ref.ID == id })
 }
 
 // touched is every member but id of the groups keys name, each group once.

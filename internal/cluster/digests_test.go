@@ -427,6 +427,24 @@ func TestConfigDigestReportsSizeBytes(t *testing.T) {
 // A secret's digest must never leak its data, not even accidentally through
 // some other field's formatting — the same style as ServiceDetails' env-leak
 // test.
+// A service only a previous spec ties to a secret is told apart from one using
+// it now, so a rotation repoints only the latter.
+func TestSecretDigestMarksRollbackUsers(t *testing.T) {
+	digest := SecretDigest(swarm.Secret{ID: "s1"}, []cache.ServiceRef{
+		{ID: "a", Name: "api"},
+		{ID: "b", Name: "billing", Rollback: true},
+	})
+
+	relations := map[string]string{}
+	for _, related := range digest.Related {
+		relations[related.Name] = related.Relation
+	}
+
+	if relations["api"] != "used-by" || relations["billing"] != "used-by-rollback" {
+		t.Errorf("relations = %v, want api used-by and billing used-by-rollback", relations)
+	}
+}
+
 func TestSecretDigestNeverLeaksData(t *testing.T) {
 	sec := swarm.Secret{
 		ID: "s1",

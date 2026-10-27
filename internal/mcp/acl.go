@@ -167,9 +167,7 @@ func (s *Server) filterServiceRefs(
 		auth.IdentityFromContext(ctx),
 		"read",
 		items,
-		func(ref cache.ServiceRef) string {
-			return "service:" + ref.Name
-		},
+		cluster.ServiceRefACLResource,
 	)
 }
 

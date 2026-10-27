@@ -40,8 +40,8 @@ type Event struct {
 	Resource  any       `json:"resource,omitempty"`
 	HistoryID uint64    `json:"-"`
 
-	// Previous is the record an update replaced, for a reader that must know
-	// what changed: a config or secret relabelled out of one version group.
+	// Previous is the config or secret an update replaced, for a reader that
+	// must know what changed: one relabelled out of its version group.
 	Previous any `json:"-"`
 
 	// Service and Stack name what a removed resource belonged to, which the
@@ -586,11 +586,11 @@ func (c *Cache) SetService(s swarm.Service) {
 	if existed {
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, old.ID, old.Spec.Labels)
-		c.serviceRef.remove(old)
+		c.serviceRef.remove(old, oldRefs)
 	}
 	c.services[s.ID] = s
 	c.addToStack(EventService, s.ID, s.Spec.Labels)
-	c.serviceRef.add(s)
+	c.serviceRef.add(s, newRefs)
 	c.mu.Unlock()
 
 	c.notify(Event{Type: EventService, Action: setAction(existed), ID: s.ID, Resource: s})
@@ -613,7 +613,7 @@ func (c *Cache) DeleteService(id string) {
 		name = old.Spec.Name
 		oldRefs = serviceRefs(old)
 		c.removeFromStack(EventService, id, old.Spec.Labels)
-		c.serviceRef.remove(old)
+		c.serviceRef.remove(old, oldRefs)
 		if len(c.tasksByService[id]) > 0 {
 			c.goneServices[id] = old
 		}

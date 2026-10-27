@@ -60,8 +60,8 @@ func TestSelectVersions(t *testing.T) {
 	if v := groups.Version("db_v3"); !v.Newest || v.OlderVersions != 2 || v.Of != "db" {
 		t.Errorf("Version(db_v3) = %+v", v)
 	}
-	if v := groups.Version("api"); v != (Version{}) {
-		t.Errorf("Version(api) = %+v, want the zero Version", v)
+	if v := groups.Version("api"); v != (Version{Newest: true}) {
+		t.Errorf("Version(api) = %+v, want its own newest version", v)
 	}
 }
 

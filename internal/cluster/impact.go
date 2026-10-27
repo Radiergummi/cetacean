@@ -51,10 +51,16 @@ func (i Impact) Message() string {
 }
 
 func (i Impact) dependentsLine() string {
-	named := len(i.Dependents)
-	if named == 0 && i.HiddenDependents == 0 {
+	if len(i.Dependents) == 0 && i.HiddenDependents == 0 {
 		return ""
 	}
+
+	return i.Relation + " " + i.dependentList() + "."
+}
+
+// dependentList names the dependents and counts the ones the caller can't see.
+func (i Impact) dependentList() string {
+	named := len(i.Dependents)
 
 	parts := make([]string, 0, 2)
 	if named > 0 {
@@ -71,7 +77,7 @@ func (i Impact) dependentsLine() string {
 			" you can't see")
 	}
 
-	return i.Relation + " " + strings.Join(parts, " and ") + "."
+	return strings.Join(parts, " and ")
 }
 
 // splitReadable names the services readable admits and counts the rest.
@@ -129,19 +135,24 @@ var irreversibleRemovals = map[string]string{
 }
 
 // ReferenceRemovalImpact describes removing a config, secret, network or
-// volume named name, which users reference. Only the users readable admits
-// are named.
+// volume named name, which users reference. Docker refuses only while a
+// current spec uses it; one only a previous spec names is a rollback target
+// the removal breaks. Only the users readable admits are named.
 func ReferenceRemovalImpact(
 	resourceType, name string,
 	users []cache.ServiceRef,
 	readable func(resource string) bool,
 ) Impact {
-	names := make([]string, 0, len(users))
+	var current, rollback []string
 	for _, user := range users {
-		names = append(names, user.Name)
+		if user.Rollback {
+			rollback = append(rollback, user.Name)
+		} else {
+			current = append(current, user.Name)
+		}
 	}
 
-	named, hidden := splitReadable(names, readable)
+	named, hidden := splitReadable(current, readable)
 
 	impact := Impact{
 		Summary:          fmt.Sprintf("Remove %s %s.", resourceType, name),
@@ -151,8 +162,15 @@ func ReferenceRemovalImpact(
 		Irreversible:     irreversibleRemovals[resourceType],
 	}
 
-	if len(users) > 0 {
-		impact.Effects = []string{"Docker refuses the removal while a service still uses it."}
+	if len(current) > 0 {
+		impact.Effects = append(impact.Effects,
+			"Docker refuses the removal while a service still uses it.")
+	}
+
+	if len(rollback) > 0 {
+		rollbackNamed, rollbackHidden := splitReadable(rollback, readable)
+		impact.Effects = append(impact.Effects, "Removing it breaks a rollback of "+
+			Impact{Dependents: rollbackNamed, HiddenDependents: rollbackHidden}.dependentList()+".")
 	}
 
 	return impact

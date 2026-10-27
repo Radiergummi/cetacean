@@ -21,6 +21,9 @@ func NodeACLName(n swarm.Node) string {
 	return n.ID
 }
 
+// ServiceRefACLResource is the resource a service reference is read as.
+func ServiceRefACLResource(ref cache.ServiceRef) string { return "service:" + ref.Name }
+
 // PortACLName names a published port for the ACL: it is read as part of the
 // service publishing it.
 func PortACLName(p cache.PublishedPort) string { return p.ServiceName }
@@ -29,19 +32,19 @@ func PortACLName(p cache.PublishedPort) string { return p.ServiceName }
 func PortACLResource(p cache.PublishedPort) string { return "service:" + PortACLName(p) }
 
 // ReadableRecommendations keeps the recommendations whose target and every
-// resource they reveal id may read, by acl.Filter's rules. It may reuse recs,
+// resource they reveal id may read, by the evaluator's rules for a missing
+// identity too. It may reuse recs,
 // which every caller has copied from the engine.
 func ReadableRecommendations(
 	e *acl.Evaluator,
 	id *auth.Identity,
 	recs []recommendations.Recommendation,
 ) []recommendations.Recommendation {
-	readable := acl.Filter(e, id, "read", recs, RecommendationACLResource)
-
 	canRead := e.Checker(id, "read")
 
-	return slices.DeleteFunc(readable, func(rec recommendations.Recommendation) bool {
-		return slices.ContainsFunc(rec.Reveals, func(r string) bool { return !canRead(r) })
+	return slices.DeleteFunc(recs, func(rec recommendations.Recommendation) bool {
+		return !canRead(RecommendationACLResource(rec)) ||
+			slices.ContainsFunc(rec.Reveals, func(r string) bool { return !canRead(r) })
 	})
 }
 

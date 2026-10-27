@@ -39,10 +39,9 @@ func newServiceRefIndex() serviceRefIndex {
 	}
 }
 
-// add populates the reverse indexes for a service's resource references.
-func (idx *serviceRefIndex) add(s swarm.Service) {
+// add populates the reverse indexes for a service's references, refs.
+func (idx *serviceRefIndex) add(s swarm.Service, refs refSet) {
 	idx.byName[s.Spec.Name] = s.ID
-	refs := serviceRefs(s)
 	for id, current := range refs.configs {
 		idx.byConfig[id] = setRef(idx.byConfig[id], s.ID, current)
 	}
@@ -57,12 +56,11 @@ func (idx *serviceRefIndex) add(s swarm.Service) {
 	}
 }
 
-// remove removes a service from all reverse indexes.
-func (idx *serviceRefIndex) remove(s swarm.Service) {
+// remove removes a service and its references, refs, from all reverse indexes.
+func (idx *serviceRefIndex) remove(s swarm.Service, refs refSet) {
 	if idx.byName[s.Spec.Name] == s.ID {
 		delete(idx.byName, s.Spec.Name)
 	}
-	refs := serviceRefs(s)
 	for id := range refs.configs {
 		removeRef(idx.byConfig, id, s.ID)
 	}
@@ -82,7 +80,7 @@ func (idx *serviceRefIndex) rebuild(services map[string]swarm.Service) {
 	*idx = newServiceRefIndex()
 	idx.byName = make(map[string]string, len(services))
 	for _, svc := range services {
-		idx.add(svc)
+		idx.add(svc, serviceRefs(svc))
 	}
 }
 

@@ -321,3 +321,31 @@ func TestGetVersions(t *testing.T) {
 		}
 	}
 }
+
+// A secret's stream hears another version of it arrive, since that changes its
+// newest flag and count, and still ignores an unrelated secret.
+func TestSecretStreamHearsItsVersions(t *testing.T) {
+	c := versionedCache()
+	h := newTestHandlers(t, withCache(c))
+	match := h.resourceMatcher(cache.EventSecret, "db_v2")
+
+	var events []cache.Event
+	c.AddOnChangeListener(func(e cache.Event) { events = append(events, e) })
+
+	c.SetSecret(swarm.Secret{
+		ID:   "db_v9",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "db_v9"}},
+	})
+	c.SetSecret(swarm.Secret{
+		ID:   "other",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "other"}},
+	})
+
+	if len(events) != 2 || !match(events[0]) || match(events[1]) {
+		t.Errorf(
+			"matched %v of %+v, want only the db version",
+			[]bool{match(events[0]), match(events[1])},
+			events,
+		)
+	}
+}

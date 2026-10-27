@@ -117,7 +117,7 @@ func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) (event Event,
 		Name:     name,
 		Resource: v,
 	}
-	if existed {
+	if existed && (eventType == EventConfig || eventType == EventSecret) {
 		event.Previous = old
 	}
 

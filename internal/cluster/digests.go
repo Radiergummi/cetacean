@@ -447,18 +447,23 @@ func stackScopedDetails(labels map[string]string) map[string]any {
 }
 
 // usersRelated builds the "which services reference this resource" half of a
-// Digest, from the cache's reverse index. A cache.ServiceRef already carries a
-// real ID and name, so unlike a Related built from a raw attachment there is
-// nothing here to fall back to an ID for.
+// Digest from the cache's reverse index, whose refs carry real IDs and names.
+// A service only a previous spec ties to a config or secret is related as
+// "used-by-rollback": a rollback needs it.
 func usersRelated(users []cache.ServiceRef, relation string) []Related {
 	related := make([]Related, 0, len(users))
 
 	for _, ref := range users {
+		rel := relation
+		if ref.Rollback {
+			rel = relation + "-rollback"
+		}
+
 		related = append(related, Related{
 			ID:       ref.ID,
 			Name:     ref.Name,
 			Type:     "service",
-			Relation: relation,
+			Relation: rel,
 		})
 	}
 
