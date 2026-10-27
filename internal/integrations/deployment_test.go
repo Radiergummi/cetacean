@@ -55,6 +55,8 @@ func TestDetectDeploymentAction_UnrecognisedRunURL(t *testing.T) {
 		"https://user:token@github.com/acme/shop/actions/runs/1",
 		"https://github.com/acme/shop/actions/runs/1/attempts/2",
 		"https://github.com/acme/actions/runs/1",
+		"https://github.com#x/acme/shop/actions/runs/1",
+		"https://github.com/acme/shop?x=/actions/runs/1",
 	} {
 		got := detectDeploymentAction(map[string]string{
 			"com.matchory.deployment.commit":  docoSHA,

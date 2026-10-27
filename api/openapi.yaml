@@ -5775,7 +5775,8 @@ paths:
                         type: boolean
                         description: >-
                           True when the group was matched by name rather than declared by the
-                          cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
+                          cetacean.version-of or com.matchory.deployment.name label on every
+                          version. Absent when false.
                       newestVersion:
                         type: boolean
                         description: >-
@@ -6179,7 +6180,8 @@ paths:
                         type: boolean
                         description: >-
                           True when the group was matched by name rather than declared by the
-                          cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
+                          cetacean.version-of or com.matchory.deployment.name label on every
+                          version. Absent when false.
                       newestVersion:
                         type: boolean
                         description: >-
@@ -7866,13 +7868,15 @@ components:
                     type: string
                     description: >-
                       The logical name this config is a version of, when other versions of it
-                      are readable: its cetacean.version-of or com.matchory.deployment.name label, or its name without a version
-                      suffix. Absent when it has no other version.
+                      are readable: its cetacean.version-of or com.matchory.deployment.name
+                      label, or its name without a version suffix. Absent when it has no other
+                      version.
                   VersionInferred:
                     type: boolean
                     description: >-
                       True when the group was matched by name rather than declared by the
-                      cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
+                      cetacean.version-of or com.matchory.deployment.name label on every
+                      version. Absent when false.
                   NewestVersion:
                     type: boolean
                     description: >-
@@ -7914,13 +7918,15 @@ components:
                     type: string
                     description: >-
                       The logical name this secret is a version of, when other versions of it
-                      are readable: its cetacean.version-of or com.matchory.deployment.name label, or its name without a version
-                      suffix. Absent when it has no other version.
+                      are readable: its cetacean.version-of or com.matchory.deployment.name
+                      label, or its name without a version suffix. Absent when it has no other
+                      version.
                   VersionInferred:
                     type: boolean
                     description: >-
                       True when the group was matched by name rather than declared by the
-                      cetacean.version-of or com.matchory.deployment.name label on every version. Absent when false.
+                      cetacean.version-of or com.matchory.deployment.name label on every
+                      version. Absent when false.
                   NewestVersion:
                     type: boolean
                     description: >-

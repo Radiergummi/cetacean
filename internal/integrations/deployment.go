@@ -29,13 +29,17 @@ type DeploymentActionIntegration struct {
 
 // actionRunURL is the run URL the action builds from GITHUB_SERVER_URL,
 // GITHUB_REPOSITORY and GITHUB_RUN_ID.
-var actionRunURL = regexp.MustCompile(`^(https?://[^/@\s]+)/([^/\s]+/[^/\s]+)/actions/runs/\d+$`)
+var actionRunURL = regexp.MustCompile(
+	`^(https?://[^/@?#\s]+)/([^/?#\s]+/[^/?#\s]+)/actions/runs/\d+$`,
+)
 
 func detectDeploymentAction(labels map[string]string) *DeploymentActionIntegration {
 	integration := &DeploymentActionIntegration{
 		Name:    "docker-swarm-deployment-action",
 		Enabled: true,
 	}
+
+	var server string
 
 	for k, v := range labels {
 		suffix, ok := strings.CutPrefix(k, "com.matchory.deployment.")
@@ -55,7 +59,7 @@ func detectDeploymentAction(labels map[string]string) *DeploymentActionIntegrati
 		case "run-url":
 			if m := actionRunURL.FindStringSubmatch(v); m != nil {
 				integration.RunURL = v
-				integration.Repository = m[2]
+				server, integration.Repository = m[1], m[2]
 			}
 		case "actor":
 			integration.Actor = v
@@ -77,7 +81,6 @@ func detectDeploymentAction(labels map[string]string) *DeploymentActionIntegrati
 	slices.Sort(integration.Labels)
 
 	if integration.Repository != "" {
-		server := actionRunURL.FindStringSubmatch(integration.RunURL)[1]
 		integration.RepositoryURL = server + "/" + integration.Repository
 
 		if commitSHA.MatchString(integration.Commit) {

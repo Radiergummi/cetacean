@@ -4,6 +4,7 @@ import { KVTable } from "@/components/data";
 import TimeAgo from "@/components/TimeAgo";
 import { formatDateTime, formatYesNo } from "@/lib/format";
 import { ExternalLink } from "lucide-react";
+import type React from "react";
 
 const docsUrl = "https://github.com/kimdre/doco-cd/wiki";
 
@@ -13,6 +14,20 @@ function shortRevision(value: string): string {
   return fullCommitSHA.test(value) ? value.slice(0, 7) : value;
 }
 
+export function ExternalAnchor({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 hover:underline"
+    >
+      {children}
+      <ExternalLink className="size-3" />
+    </a>
+  );
+}
+
 export function Commit({ commit, commitUrl }: { commit: string; commitUrl?: string | undefined }) {
   const short = <code title={commit}>{shortRevision(commit)}</code>;
 
@@ -20,17 +35,7 @@ export function Commit({ commit, commitUrl }: { commit: string; commitUrl?: stri
     return short;
   }
 
-  return (
-    <a
-      href={commitUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 hover:underline"
-    >
-      {short}
-      <ExternalLink className="size-3" />
-    </a>
-  );
+  return <ExternalAnchor href={commitUrl}>{short}</ExternalAnchor>;
 }
 
 /**

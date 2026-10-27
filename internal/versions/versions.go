@@ -19,7 +19,8 @@ import (
 const Label = "cetacean.version-of"
 
 // deploymentActionLabel is how matchory/docker-swarm-deployment-action names
-// it. Its 7-digit name hash is too short for stripSuffix to take as a version.
+// it, as the bare Compose key. Its 7-digit name hash is too short for
+// stripSuffix to take as a version.
 const deploymentActionLabel = "com.matchory.deployment.name"
 
 // declared is the logical name an item's labels give, or "".
@@ -68,16 +69,19 @@ type Membership struct {
 // name within it.
 type GroupKey struct{ Stack, Name string }
 
-// Key is an item's group: the name its labels declare, as written, or else its name without a
-// version suffix; either way without the `<stack>_` or `<stack>-` prefix a
-// stack deploy writes. An item joins only the groups of its own stack.
+// Key is an item's group: its deploymentActionLabel as written, or else its
+// Label or its name without a version suffix, less the `<stack>_` or
+// `<stack>-` prefix a stack deploy writes. An item joins only its own stack's.
 func Key(it Item) GroupKey {
 	stack := it.Labels[cache.StackLabel]
 
-	name := declared(it.Labels)
-	if name == "" {
-		name = stripSuffix(it.Name)
+	if it.Labels[Label] == "" {
+		if name := it.Labels[deploymentActionLabel]; name != "" {
+			return GroupKey{stack, name}
+		}
 	}
+
+	name := cmp.Or(it.Labels[Label], stripSuffix(it.Name))
 
 	if stack != "" {
 		for _, separator := range []string{"_", "-"} {

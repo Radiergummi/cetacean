@@ -1,26 +1,10 @@
-import { Commit } from "./DocoCDPanel";
+import { Commit, ExternalAnchor } from "./DocoCDPanel";
 import { IntegrationSection } from "./IntegrationSection";
 import type { DeploymentActionIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import { formatYesNo } from "@/lib/format";
-import { ExternalLink } from "lucide-react";
-import type React from "react";
 
 const docsUrl = "https://github.com/matchory/docker-swarm-deployment-action#deployment-labels";
-
-function ExternalAnchor({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 hover:underline"
-    >
-      {children}
-      <ExternalLink className="size-3" />
-    </a>
-  );
-}
 
 function overrideTooltip(input: string): string {
   return `Overrides the action's ${input} input for this service, read from the Compose file on deploy`;
@@ -58,10 +42,6 @@ export function DeploymentActionPanel({
     monitorTimeoutSeconds,
     healthCheckWarnings,
   } = integration;
-  const hasOverrides =
-    monitor !== undefined ||
-    monitorTimeoutSeconds !== undefined ||
-    healthCheckWarnings !== undefined;
 
   return (
     <IntegrationSection
@@ -110,7 +90,7 @@ export function DeploymentActionPanel({
                 key="run"
                 href={runUrl}
               >
-                #{runUrl.slice(runUrl.lastIndexOf("/") + 1)}
+                {runUrl.slice(runUrl.lastIndexOf("/") + 1)}
               </ExternalAnchor>,
               undefined,
               runUrl,
@@ -119,23 +99,21 @@ export function DeploymentActionPanel({
           ]}
         />
 
-        {hasOverrides && (
-          <KVTable
-            rows={[
-              ["Monitor", formatYesNo(monitor), overrideTooltip("monitor")],
-              monitorTimeoutSeconds !== undefined && [
-                "Monitor timeout",
-                `${monitorTimeoutSeconds}s`,
-                overrideTooltip("monitor-timeout"),
-              ],
-              [
-                "Health check warnings",
-                formatYesNo(healthCheckWarnings),
-                overrideTooltip("health-check-warnings"),
-              ],
-            ]}
-          />
-        )}
+        <KVTable
+          rows={[
+            ["Monitor", formatYesNo(monitor), overrideTooltip("monitor")],
+            monitorTimeoutSeconds !== undefined && [
+              "Monitor timeout",
+              `${monitorTimeoutSeconds}s`,
+              overrideTooltip("monitor-timeout"),
+            ],
+            [
+              "Health check warnings",
+              formatYesNo(healthCheckWarnings),
+              overrideTooltip("health-check-warnings"),
+            ],
+          ]}
+        />
       </div>
     </IntegrationSection>
   );

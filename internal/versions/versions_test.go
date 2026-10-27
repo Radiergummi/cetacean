@@ -142,6 +142,20 @@ func TestGroup(t *testing.T) {
 			map[string]placed{"a": {"db_password", false, 1}, "b": {"db_password", false, 0}},
 		},
 		{
+			"the deployment action's label keeps what looks like a stack prefix",
+			[]Item{
+				item("a", "shop-cert-1111111", 1, map[string]string{
+					"com.docker.stack.namespace":   "shop",
+					"com.matchory.deployment.name": "cert",
+				}),
+				item("b", "shop-shop_cert-2222222", 2, map[string]string{
+					"com.docker.stack.namespace":   "shop",
+					"com.matchory.deployment.name": "shop_cert",
+				}),
+			},
+			map[string]placed{},
+		},
+		{
 			"cetacean.version-of wins over the deployment action's label",
 			[]Item{
 				item(

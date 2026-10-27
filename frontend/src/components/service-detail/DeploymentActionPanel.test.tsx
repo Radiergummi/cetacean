@@ -39,7 +39,7 @@ describe("DeploymentActionPanel", () => {
     expect(screen.getByText("0123456").closest("a")?.getAttribute("href")).toBe(
       `https://github.com/acme/shop/commit/${sha}`,
     );
-    expect(screen.getByText("#123").closest("a")?.getAttribute("href")).toBe(
+    expect(screen.getByText("123").closest("a")?.getAttribute("href")).toBe(
       "https://github.com/acme/shop/actions/runs/123",
     );
     expect(screen.queryByText("Monitor")).toBeNull();
