@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"os"
 	"slices"
 
 	"github.com/docker/docker/api/types/mount"
@@ -12,12 +11,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
-
-// defaultAttachmentMode is the file mode Swarm gives a mounted secret or
-// config: readable by everyone in the container, writable by no one. It
-// matches what the REST handler writes, so the same attachment made through
-// either transport lands identically.
-const defaultAttachmentMode os.FileMode = 0o444
 
 // attachmentRef is one secret or config a container should receive. It names
 // the resource rather than giving its ID, because a model holds names: every
@@ -28,27 +21,9 @@ type attachmentRef struct {
 
 	// Target is the file the resource is mounted as. A secret's target is
 	// relative to /run/secrets unless it is an absolute path; a config's is
-	// the path itself. Left empty, it defaults to defaultSecretDir or the
-	// container root plus the resource's own name.
+	// the path itself. Left empty, cluster.SecretReference and
+	// cluster.ConfigReference choose it.
 	Target string `json:"target,omitempty"`
-}
-
-// Where a secret and a config land when the caller names no target: the paths
-// REST's PATCH routes default to and Docker's CLI produces. Swarm reads a bare
-// config name as relative to the container's working directory, so without
-// these the same attachment mounts at two paths over the two transports.
-const (
-	defaultSecretDir = "/run/secrets/"
-	defaultConfigDir = "/"
-)
-
-// file builds the mount target, defaulting to dir + the resource's own name.
-func (a attachmentRef) file(dir, resourceName string) string {
-	if a.Target != "" {
-		return a.Target
-	}
-
-	return dir + resourceName
 }
 
 // attachmentItemSchema is the JSON Schema for one entry of either array. It is
@@ -136,16 +111,7 @@ func (s *Server) toolUpdateServiceSecrets(
 			return "", err
 		}
 
-		resolved = append(resolved, &swarm.SecretReference{
-			SecretID:   sec.ID,
-			SecretName: sec.Spec.Name,
-			File: &swarm.SecretReferenceFileTarget{
-				Name: ref.file(defaultSecretDir, sec.Spec.Name),
-				UID:  "0",
-				GID:  "0",
-				Mode: defaultAttachmentMode,
-			},
-		})
+		resolved = append(resolved, cluster.SecretReference(sec, ref.Target))
 	}
 
 	ctx, err = s.pinChecked(ctx, cond, svc)
@@ -215,16 +181,7 @@ func (s *Server) toolUpdateServiceConfigs(
 			return "", err
 		}
 
-		resolved = append(resolved, &swarm.ConfigReference{
-			ConfigID:   cfg.ID,
-			ConfigName: cfg.Spec.Name,
-			File: &swarm.ConfigReferenceFileTarget{
-				Name: ref.file(defaultConfigDir, cfg.Spec.Name),
-				UID:  "0",
-				GID:  "0",
-				Mode: defaultAttachmentMode,
-			},
-		})
+		resolved = append(resolved, cluster.ConfigReference(cfg, ref.Target))
 	}
 
 	ctx, err = s.pinChecked(ctx, cond, svc)

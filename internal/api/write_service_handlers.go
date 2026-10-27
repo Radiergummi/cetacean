@@ -796,20 +796,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		if !h.checkAttachable(w, r, svc, cluster.AttachConfig, ref.ConfigID, cfg.Spec.Name, found) {
 			return
 		}
-		fileName := ref.FileName
-		if fileName == "" {
-			fileName = "/" + cfg.Spec.Name
-		}
-		configs[i] = &swarm.ConfigReference{
-			ConfigID:   ref.ConfigID,
-			ConfigName: cfg.Spec.Name,
-			File: &swarm.ConfigReferenceFileTarget{
-				Name: fileName,
-				UID:  "0",
-				GID:  "0",
-				Mode: 0444,
-			},
-		}
+		configs[i] = cluster.ConfigReference(cfg, ref.FileName)
 	}
 
 	slog.Info("updating service configs", "service", id)
@@ -904,20 +891,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		if !h.checkAttachable(w, r, svc, cluster.AttachSecret, ref.SecretID, sec.Spec.Name, found) {
 			return
 		}
-		fileName := ref.FileName
-		if fileName == "" {
-			fileName = "/run/secrets/" + sec.Spec.Name
-		}
-		secrets[i] = &swarm.SecretReference{
-			SecretID:   ref.SecretID,
-			SecretName: sec.Spec.Name,
-			File: &swarm.SecretReferenceFileTarget{
-				Name: fileName,
-				UID:  "0",
-				GID:  "0",
-				Mode: 0444,
-			},
-		}
+		secrets[i] = cluster.SecretReference(sec, ref.FileName)
 	}
 
 	slog.Info("updating service secrets", "service", id)
