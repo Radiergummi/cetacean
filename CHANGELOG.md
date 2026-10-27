@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
 
 ## [0.18.0] - 2026-10-24
 

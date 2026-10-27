@@ -50,21 +50,25 @@ export interface Service {
         TTY?: boolean | undefined;
         Groups?: string[] | null | undefined;
         Hosts?: string[] | null | undefined;
-        DNSConfig?: {
-          Nameservers?: string[] | null | undefined;
-          Search?: string[] | null | undefined;
-          Options?: string[] | null | undefined;
-        };
+        DNSConfig?:
+          | {
+              Nameservers?: string[] | null | undefined;
+              Search?: string[] | null | undefined;
+              Options?: string[] | null | undefined;
+            }
+          | undefined;
         CapabilityAdd?: string[] | null | undefined;
         CapabilityDrop?: string[] | null | undefined;
-        Healthcheck?: {
-          Test?: string[] | null | undefined;
-          Interval?: number | undefined;
-          Timeout?: number | undefined;
-          Retries?: number | undefined;
-          StartPeriod?: number | undefined;
-          StartInterval?: number | undefined;
-        };
+        Healthcheck?:
+          | {
+              Test?: string[] | null | undefined;
+              Interval?: number | undefined;
+              Timeout?: number | undefined;
+              Retries?: number | undefined;
+              StartPeriod?: number | undefined;
+              StartInterval?: number | undefined;
+            }
+          | undefined;
         Configs?: Array<{
           ConfigID: string;
           ConfigName: string;
@@ -315,11 +319,6 @@ export interface Stack {
   secrets: string[];
   networks: string[];
   volumes: string[];
-}
-
-export interface PagedResponse<T> {
-  items: T[];
-  total: number;
 }
 
 export interface CollectionResponse<T> {

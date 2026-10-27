@@ -19,7 +19,6 @@ vi.mock("../components/metrics", () => ({
 vi.mock("../api/client", () => ({
   pageSize: 50,
   emptyMethods: new Set(),
-  setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
     nodes: vi.fn<() => void>(),
     cluster: vi.fn<() => Promise<unknown>>().mockResolvedValue({ prometheusConfigured: false }),

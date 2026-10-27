@@ -24,11 +24,17 @@ import { useRecommendations } from "../hooks/useRecommendations";
 import type { SSEEvent } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
-import { deriveServiceSubResources } from "../lib/deriveServiceState";
+import {
+  containerSpecFromConfig,
+  deriveServiceSubResources,
+  envMapToSlice,
+  withContainerSpec,
+  withTaskTemplate,
+} from "../lib/deriveServiceState";
 import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 // Stable empties, so an absent list does not remount every consumer.
 const emptyChanges: SpecChange[] = [];
@@ -62,37 +68,10 @@ function sameLabels(
 
 export function useServiceDetail(id: string | undefined) {
   const queryClient = useQueryClient();
-  const [envVars, setEnvVars] = useState<Record<string, string> | null>(null);
-  const [serviceResources, setServiceResources] = useState<ServiceResourceShape | null>(null);
-  const [serviceLabels, setServiceLabels] = useState<Record<string, string> | null>(null);
-  const [healthcheck, setHealthcheck] = useState<Healthcheck | null | undefined>(undefined);
-  const [specPorts, setSpecPorts] = useState<PortConfig[] | null>(null);
-  const [serviceMounts, setServiceMounts] = useState<ServiceMount[] | null>(null);
-  const [containerConfig, setContainerConfig] = useState<ContainerConfig | null>(null);
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
   const hasCadvisor = isCadvisorReady(monitoring);
-  const [networkNames, setNetworkNames] = useState<Record<string, string>>({});
   const { items: recommendations } = useRecommendations();
-
-  const applyDerivedState = useCallback((service: Service) => {
-    const {
-      envVars,
-      serviceResources,
-      serviceLabels,
-      healthcheck,
-      specPorts,
-      serviceMounts,
-      containerConfig,
-    } = deriveServiceSubResources(service);
-    setEnvVars(envVars);
-    setServiceResources(serviceResources);
-    setServiceLabels(serviceLabels);
-    setHealthcheck(healthcheck);
-    setSpecPorts(specPorts);
-    setServiceMounts(serviceMounts);
-    setContainerConfig(containerConfig);
-  }, []);
 
   // Tasks are the one side request this page still owns: they are a
   // collection of their own rather than part of the detail response.
@@ -105,6 +84,10 @@ export function useServiceDetail(id: string | undefined) {
   });
   const tasks = tasksQuery.data ?? emptyTasks;
 
+  // The service and index a labels save was written back under, until the
+  // stream echoes it: the echo then matches the cache, the integrations do not.
+  const savedLabels = useRef<{ id: string; index: number } | null>(null);
+
   // The per-service stream also delivers task events for this service's tasks,
   // so only treat `resource` as a Service when the event is a service event —
   // otherwise the page's own resource would be replaced with a Task.
@@ -116,6 +99,13 @@ export function useServiceDetail(id: string | undefined) {
 
         setData((previous) => {
           labelsChanged = !sameLabels(previous.service.Spec.Labels, service.Spec.Labels);
+
+          const saved = savedLabels.current;
+
+          if (saved?.id === service.ID && service.Version.Index > saved.index) {
+            labelsChanged = true;
+            savedLabels.current = null;
+          }
 
           return { ...previous, service };
         });
@@ -145,6 +135,7 @@ export function useServiceDetail(id: string | undefined) {
     history,
     error,
     retry: refetchService,
+    setData,
     allowedMethods,
     editable,
   } = useDetailResource<ServiceDetail>(id, api.service, "/services", {
@@ -165,31 +156,70 @@ export function useServiceDetail(id: string | undefined) {
     [recommendations, service?.ID],
   );
 
-  // The sub-resource editors write their own results back, so these cannot be
-  // derived on the fly — the fetch seeds them and a save replaces them.
-  // Seeding during render rather than in an effect is React's own answer to
-  // state that follows a value: an effect would show one frame of the previous
-  // service's sub-resources first.
-  const [derivedFrom, setDerivedFrom] = useState<Service | null>(null);
+  const derived = useMemo(() => (service ? deriveServiceSubResources(service) : null), [service]);
 
-  if (service && service !== derivedFrom) {
-    setDerivedFrom(service);
-    applyDerivedState(service);
-  }
+  // A save answers with the sub-resource alone; writing it onto the cached
+  // service shows it at once, and the stream's copy replaces it after.
+  const updateService = useCallback(
+    (update: (service: Service) => Service) => {
+      setData((previous) => ({ ...previous, service: update(previous.service) }));
+    },
+    [setData],
+  );
 
-  useEffect(() => {
-    api
-      .allNetworks()
-      .then((networks) => {
-        const map: Record<string, string> = {};
+  const onEnvSaved = useCallback(
+    (env: Record<string, string>) =>
+      updateService((current) => withContainerSpec(current, { Env: envMapToSlice(env) })),
+    [updateService],
+  );
 
-        for (const network of networks) {
-          map[network.Id] = network.Name;
-        }
-        setNetworkNames(map);
-      })
-      .catch(console.warn);
-  }, []);
+  const onResourcesSaved = useCallback(
+    (resources: ServiceResourceShape) =>
+      updateService((current) => withTaskTemplate(current, { Resources: resources })),
+    [updateService],
+  );
+
+  const onLabelsSaved = useCallback(
+    (labels: Record<string, string>) => {
+      updateService((current) => {
+        savedLabels.current = { id: current.ID, index: current.Version.Index };
+
+        return { ...current, Spec: { ...current.Spec, Labels: labels } };
+      });
+    },
+    [updateService],
+  );
+
+  const onHealthcheckSaved = useCallback(
+    (healthcheck: Healthcheck | null) =>
+      updateService((current) =>
+        withContainerSpec(current, { Healthcheck: healthcheck ?? undefined }),
+      ),
+    [updateService],
+  );
+
+  const onPortsSaved = useCallback(
+    (ports: PortConfig[]) =>
+      updateService((current) => ({
+        ...current,
+        Spec: { ...current.Spec, EndpointSpec: { ...current.Spec.EndpointSpec, Ports: ports } },
+      })),
+    [updateService],
+  );
+
+  const onMountsSaved = useCallback(
+    (mounts: ServiceMount[]) =>
+      updateService((current) => withContainerSpec(current, { Mounts: mounts })),
+    [updateService],
+  );
+
+  const onContainerConfigSaved = useCallback(
+    (config: ContainerConfig) =>
+      updateService((current) => withContainerSpec(current, containerSpecFromConfig(config))),
+    [updateService],
+  );
+
+  const serviceLabels = derived?.serviceLabels ?? null;
 
   const serviceName = service?.Spec.Name || "";
   const taskMetrics = useTaskMetrics(
@@ -271,20 +301,21 @@ export function useServiceDetail(id: string | undefined) {
     changes,
     tasks,
     history,
-    envVars,
-    onEnvSaved: setEnvVars,
-    serviceResources,
-    onResourcesSaved: setServiceResources,
+    envVars: derived?.envVars ?? null,
+    onEnvSaved,
+    serviceResources: derived?.serviceResources ?? null,
+    onResourcesSaved,
     serviceLabels,
-    onLabelsSaved: setServiceLabels,
-    healthcheck,
-    onHealthcheckSaved: setHealthcheck,
-    specPorts,
-    onPortsSaved: setSpecPorts,
-    serviceMounts,
-    onMountsSaved: setServiceMounts,
-    containerConfig,
-    onContainerConfigSaved: setContainerConfig,
+    onLabelsSaved,
+    // Undefined until the service loads; null once it has none.
+    healthcheck: derived ? derived.healthcheck : undefined,
+    onHealthcheckSaved,
+    specPorts: derived?.specPorts ?? null,
+    onPortsSaved,
+    serviceMounts: derived?.serviceMounts ?? null,
+    onMountsSaved,
+    containerConfig: derived?.containerConfig ?? null,
+    onContainerConfigSaved,
     integrations,
     links,
     imageUpdate,
@@ -293,7 +324,6 @@ export function useServiceDetail(id: string | undefined) {
     hasPrometheus,
     hasCadvisor,
     error,
-    networkNames,
     cpuActual,
     memActual,
     serviceRecommendations,

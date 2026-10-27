@@ -6,58 +6,44 @@ import SimpleTable from "@/components/SimpleTable";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { MultiCombobox } from "@/components/ui/multi-combobox";
 import { useEditVersion } from "@/hooks/useEditVersion";
-import { useCallback, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 interface NetworksEditorProps {
   serviceId: string;
   networks: ServiceNetworkRef[];
-  networkNames: Record<string, string>;
   onSaved: (networks: ServiceNetworkRef[]) => void;
 }
 
 export function NetworksEditor({
   serviceId,
   networks,
-  networkNames,
   onSaved,
   canEdit = false,
 }: NetworksEditorProps & { canEdit?: boolean }) {
   const version = useEditVersion(`/services/${serviceId}/networks`);
-  const [availableNetworks, setAvailableNetworks] = useState<ComboboxOption[]>([]);
   const [newNetworkId, setNewNetworkId] = useState("");
   const [newAliases, setNewAliases] = useState<string[]>([]);
+  const networksQuery = useQuery({
+    queryKey: ["all-networks"],
+    queryFn: ({ signal }) => api.allNetworks(signal),
+  });
 
-  const fetchNetworks = useCallback(() => {
-    api
-      .allNetworks()
-      .then((networks) => {
-        setAvailableNetworks(
-          networks.map((network) => ({
-            value: network.Id,
-            label: network.Name,
-            description: network.Id.slice(0, 12),
-          })),
-        );
-      })
-      .catch(console.warn);
-  }, []);
+  const availableNetworks = useMemo<ComboboxOption[]>(
+    () =>
+      (networksQuery.data ?? []).map(({ Id, Name }) => ({
+        value: Id,
+        label: Name,
+        description: Id.slice(0, 12),
+      })),
+    [networksQuery.data],
+  );
 
-  /**
-   * Build a merged name lookup from props and fetched networks,
-   * so draft rows always have a displayable name.
-   */
-  const nameMap = useMemo(() => {
-    const map: Record<string, string> = { ...networkNames };
-
-    for (const option of availableNetworks) {
-      if (!map[option.value]) {
-        map[option.value] = option.label;
-      }
-    }
-
-    return map;
-  }, [networkNames, availableNetworks]);
+  const nameMap = useMemo(
+    () => Object.fromEntries(availableNetworks.map(({ value, label }) => [value, label])),
+    [availableNetworks],
+  );
 
   return (
     <EditableTable<ServiceNetworkRef>
@@ -68,7 +54,7 @@ export function NetworksEditor({
       editDisabled={!canEdit}
       onEditStart={() => {
         version.capture();
-        fetchNetworks();
+        void networksQuery.refetch({ cancelRefetch: false });
       }}
       emptyLabel="No networks attached"
       emptyHint="Click Edit to attach Docker networks to this service."
@@ -85,7 +71,7 @@ export function NetworksEditor({
                   to={`/networks/${target}`}
                   className="text-link hover:underline"
                 >
-                  <ResourceName name={networkNames[target] || target} />
+                  <ResourceName name={nameMap[target] || target} />
                 </Link>
               </td>
               <td className="p-3 font-mono text-sm">{aliases?.join(", ") || "\u2014"}</td>
@@ -113,13 +99,20 @@ export function NetworksEditor({
         const filteredOptions = availableNetworks.filter((option) => !draftIds.has(option.value));
 
         return (
-          <Combobox
-            value={newNetworkId}
-            onChange={setNewNetworkId}
-            options={filteredOptions}
-            placeholder="Select network..."
-            allowCustom={false}
-          />
+          <>
+            <Combobox
+              value={newNetworkId}
+              onChange={setNewNetworkId}
+              options={filteredOptions}
+              placeholder="Select network..."
+              allowCustom={false}
+            />
+            {networksQuery.isError && !networksQuery.isFetching && (
+              <p className="mt-1 text-xs text-status-danger">
+                Failed to load networks. Try closing and reopening the editor.
+              </p>
+            )}
+          </>
         );
       }}
       renderAddValueCell={() => (
