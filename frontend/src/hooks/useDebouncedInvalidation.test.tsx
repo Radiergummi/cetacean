@@ -40,6 +40,33 @@ describe("useDebouncedInvalidation", () => {
     expect(invalidate).toHaveBeenCalledTimes(2);
   });
 
+  it("ignores events the caller does not count, but never a sync", () => {
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    renderHook(
+      () =>
+        useDebouncedInvalidation(
+          "/tasks",
+          [["job-outcomes"]],
+          500,
+          undefined,
+          ({ id }) => id === "wanted",
+        ),
+      { wrapper: createWrapper(client) },
+    );
+
+    listener?.(event);
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).not.toHaveBeenCalled();
+
+    listener?.({ type: "sync", action: "sync", id: "" });
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it("waits for a burst to go quiet before refetching once", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");

@@ -1,5 +1,5 @@
 import { useLatestRef } from "./useLatestRef";
-import type { SSEListener } from "./useResourceStream";
+import type { SSEEvent, SSEListener } from "./useResourceStream";
 import { useResourceStream } from "./useResourceStream";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
@@ -17,12 +17,15 @@ export function useDebouncedInvalidation(
   queryKeys: readonly (readonly unknown[])[],
   delay = 500,
   onEvent?: SSEListener | undefined,
+  /** Narrows which events invalidate; a sync always does. */
+  relevant?: ((event: SSEEvent) => boolean) | undefined,
 ) {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const burstStartRef = useRef<number | null>(null);
   const queryKeysRef = useLatestRef(queryKeys);
   const onEventRef = useLatestRef(onEvent);
+  const relevantRef = useLatestRef(relevant);
 
   useResourceStream(
     ssePath,
@@ -31,6 +34,10 @@ export function useDebouncedInvalidation(
         // One stream serves both: a second useResourceStream for a caller that
         // wants the events themselves would open a second EventSource.
         onEventRef.current?.(event);
+
+        if (event.type !== "sync" && relevantRef.current && !relevantRef.current(event)) {
+          return;
+        }
 
         if (debounceRef.current) {
           clearTimeout(debounceRef.current);
@@ -51,7 +58,7 @@ export function useDebouncedInvalidation(
           }
         }, wait);
       },
-      [queryClient, delay, queryKeysRef, onEventRef],
+      [queryClient, delay, queryKeysRef, onEventRef, relevantRef],
     ),
   );
 

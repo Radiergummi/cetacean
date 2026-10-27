@@ -177,6 +177,42 @@ describe("ServiceList", () => {
     });
   });
 
+  // The service stream carries no task events; a job re-run in place that now
+  // completes only shows on the task stream.
+  it("refreshes a job card when one of its tasks changes", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeJob("job1", "migrate")], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    vi.mocked(api.allTasks).mockResolvedValue([
+      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
+    ] as never);
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByRole("img", { name: "critical" })).toBeInTheDocument();
+
+    const completed = { ID: "t2", ServiceID: "job1", Status: { State: "complete" } };
+    const stream = [...MockEventSource.instances]
+      .reverse()
+      .find(({ listeners }) => listeners.has("task"));
+
+    vi.mocked(api.allTasks).mockResolvedValue([completed] as never);
+    act(() =>
+      stream?.simulateEvent("task", {
+        type: "task",
+        action: "update",
+        id: "t2",
+        resource: completed,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("img", { name: "healthy" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
+  });
+
   // The cards share one question about every job on the page.
   it("asks how every loaded job ended in one request", async () => {
     showCards();

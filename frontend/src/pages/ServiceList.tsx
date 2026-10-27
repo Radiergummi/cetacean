@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Recommendation, Service, ServiceListItem } from "../api/types";
+import type { Recommendation, Service, ServiceListItem, Task } from "../api/types";
 import { NewerImageBadge } from "../components/data";
 import type { Column } from "../components/DataTable";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -9,7 +9,8 @@ import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
-import { useJobOutcomes } from "../hooks/useJobOutcomes";
+import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
+import { jobOutcomesKey, useJobOutcomes } from "../hooks/useJobOutcomes";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
@@ -30,6 +31,26 @@ export default function ServiceList() {
   // One question for every job loaded, rather than one per card.
   const [loaded, setLoaded] = useState<ServiceListItem[]>([]);
   const outcomes = useJobOutcomes(loaded);
+
+  // How a job's tasks end reaches only the task stream; follow it while the
+  // list holds a job. A re-run changes the service, which re-keys the outcomes.
+  const jobIds = useMemo(
+    () =>
+      new Set(
+        loaded
+          .filter(({ Spec: { Mode } }) => Mode.ReplicatedJob || Mode.GlobalJob)
+          .map(({ ID }) => ID),
+      ),
+    [loaded],
+  );
+
+  useDebouncedInvalidation(
+    jobIds.size > 0 ? "/tasks" : undefined,
+    [jobOutcomesKey],
+    undefined,
+    undefined,
+    ({ resource }) => jobIds.has((resource as Task | undefined)?.ServiceID ?? ""),
+  );
 
   const recommendationsByService = useMemo(() => {
     const map = new Map<string, Recommendation[]>();
