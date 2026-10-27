@@ -426,7 +426,7 @@ func (p *OIDCProvider) validateAzp(idToken *oidc.IDToken, claims map[string]any)
 	}
 	azp, _ := claims["azp"].(string)
 	if azp == "" {
-		return fmt.Errorf("multi-audience token missing required azp claim")
+		return errors.New("multi-audience token missing required azp claim")
 	}
 	if azp != p.oauth2Config.ClientID {
 		return fmt.Errorf("azp claim %q does not match client_id %q", azp, p.oauth2Config.ClientID)

@@ -262,7 +262,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 	if _, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
 		spec.CAConfig.ForceRotate++
 
-		slog.Info("forcing CA certificate rotation", "forceRotate", spec.CAConfig.ForceRotate)
+		slog.Info("forcing CA certificate rotation", "force_rotate", spec.CAConfig.ForceRotate)
 
 		return swarm.UpdateFlags{}
 	}, swarmFailure{"SWM003", "failed to force CA rotation"}); !ok {

@@ -755,7 +755,7 @@ func main() {
 
 	slog.Info(
 		"server started",
-		"addr",
+		"listen_addr",
 		cfg.ListenAddr,
 		"base_path",
 		cfg.BasePath,
@@ -964,7 +964,7 @@ func serveDualListeners(
 	// failing HEALTHCHECK takes the start period plus its retries, and outside
 	// Swarm nothing restarts a container for being unhealthy.
 	go func() {
-		slog.Info("meta server started", "addr", cfg.ListenAddr)
+		slog.Info("meta server started", "listen_addr", cfg.ListenAddr)
 		if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("meta server error", "error", err)
 			os.Exit(1)

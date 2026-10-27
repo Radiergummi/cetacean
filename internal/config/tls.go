@@ -1,6 +1,6 @@
 package config
 
-import "fmt"
+import "errors"
 
 type TLSConfig struct {
 	Cert string // path to TLS certificate file
@@ -37,7 +37,7 @@ func LoadTLS(flags *Flags, fc *fileConfig) TLSConfig {
 
 func ValidateTLS(cfg TLSConfig) error {
 	if (cfg.Cert == "") != (cfg.Key == "") {
-		return fmt.Errorf("both tls.cert and tls.key must be set, or neither")
+		return errors.New("both tls.cert and tls.key must be set, or neither")
 	}
 	return nil
 }
