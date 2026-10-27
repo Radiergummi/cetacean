@@ -27,7 +27,7 @@ Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so 
 ## Running checks
 
 ```bash
-make check       # Full suite: lint + type check + format check + tests + spec registry
+make check       # Full suite: lint + type check + format check + Go and frontend tests + spec registry
 make test        # Go tests only
 make lint        # golangci-lint + actionlint + zizmor + oxlint + Vale
 make fmt         # Auto-format Go + frontend code
