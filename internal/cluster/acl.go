@@ -25,13 +25,18 @@ func PortACLName(p cache.PublishedPort) string { return p.ServiceName }
 func PortACLResource(p cache.PublishedPort) string { return "service:" + PortACLName(p) }
 
 // RecommendationACLResource maps a recommendation to the resource it is
-// authorized as: the service or node it targets, or the swarm itself.
+// authorized as: the service, node, secret or config it targets, or the swarm
+// itself.
 func RecommendationACLResource(rec recommendations.Recommendation) string {
 	switch rec.Scope {
 	case recommendations.ScopeService:
 		return "service:" + rec.TargetName
 	case recommendations.ScopeNode:
 		return "node:" + rec.TargetName
+	case recommendations.ScopeSecret:
+		return "secret:" + rec.TargetName
+	case recommendations.ScopeConfig:
+		return "config:" + rec.TargetName
 	default:
 		return "swarm:cluster"
 	}

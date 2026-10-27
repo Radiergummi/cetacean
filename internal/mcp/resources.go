@@ -63,7 +63,7 @@ var (
 			uri:         "cetacean://recommendations",
 			name:        "recommendations",
 			title:       "Cluster recommendations",
-			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution. Each entry includes severity, category, target resource, and rationale.",
+			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution, unused old config and secret versions. Each entry includes severity, category, target resource, and rationale.",
 		},
 		{
 			uri:         "cetacean://history",

@@ -14,6 +14,7 @@ const (
 	CategoryNoHealthcheck   Category = "no-healthcheck"
 	CategoryNoRestartPolicy Category = "no-restart-policy"
 	CategoryNewerImage      Category = "newer-image"
+	CategoryUnusedVersion   Category = "unused-version"
 
 	// Operational
 	CategoryFlakyService    Category = "flaky-service"
@@ -43,6 +44,8 @@ const (
 	ScopeService Scope = "service"
 	ScopeNode    Scope = "node"
 	ScopeCluster Scope = "cluster"
+	ScopeSecret  Scope = "secret"
+	ScopeConfig  Scope = "config"
 )
 
 type Recommendation struct {

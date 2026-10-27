@@ -384,6 +384,10 @@ func recommendationTargetPath(rec recommendations.Recommendation) string {
 		return "/services/" + rec.TargetID
 	case recommendations.ScopeNode:
 		return "/nodes/" + rec.TargetID
+	case recommendations.ScopeSecret:
+		return "/secrets/" + rec.TargetID
+	case recommendations.ScopeConfig:
+		return "/configs/" + rec.TargetID
 	default:
 		return "/cluster"
 	}

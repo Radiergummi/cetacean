@@ -15,7 +15,7 @@ It's on by default. Turn it off with [`server.recommendations`][server.recommend
 
 ## What gets flagged
 
-Each finding names a service, a node or the cluster, and carries a severity of `info`, `warning` or
+Each finding names a service, a node, a config, a secret or the cluster, and carries a severity of `info`, `warning` or
 `critical`.
 
 | Finding | Meaning |
@@ -24,6 +24,7 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 | `no-restart-policy` | Restart policy is `none`, so a failed task is never replaced |
 | `newer-image` | The service's image tag names a newer image in its registry than the one the service runs. Needs [`server.image_check`][server.image_check] |
 | `single-replica` | One replica, so any node problem is an outage |
+| `unused-version` | An older [version][versions] of a config or secret that no service uses. Never raised for the newest version |
 | `manager-has-workloads` | A manager node is `active`, so Swarm may schedule ordinary tasks on it alongside cluster management. Not raised unless a ready, active worker could take those tasks |
 | `uneven-distribution` | The busiest node runs more than three times the tasks of the quietest |
 | `single-manager` | One manager, so losing it leaves the swarm unable to schedule or update anything. Not raised unless at least three nodes are ready, enough for three managers |
@@ -88,3 +89,4 @@ how far back Cetacean looks, which is also the window `flaky-service` counts fai
 [sizing.thresholds.at_limit]: configuration#sizing.thresholds.at_limit
 [sizing.thresholds.lookback]: configuration#sizing.thresholds.lookback
 [sizing.thresholds.over_provisioned]: configuration#sizing.thresholds.over_provisioned
+[versions]: dashboard#versions

@@ -271,7 +271,7 @@ func (s *Server) readTools() []toolDef {
 				"get_recommendations",
 				mcplib.WithToolTitle("Get cluster recommendations"),
 				mcplib.WithDescription(
-					"Return what Cetacean's recommendation engine currently finds: over- and under-provisioned resources, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance and uneven node distribution. Each entry carries a severity, the resource it concerns and why it was raised. Only findings about resources the caller may read are returned.",
+					"Return what Cetacean's recommendation engine currently finds: over- and under-provisioned resources, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution and old config or secret versions nothing uses. Each entry carries a severity, the resource it concerns and why it was raised. Only findings about resources the caller may read are returned.",
 				),
 				mcplib.WithOutputSchema[recommendationsResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
