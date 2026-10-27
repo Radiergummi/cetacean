@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/docker/docker/api/types/network"
@@ -77,6 +78,35 @@ func TestHandleListNetworks_Addresses(t *testing.T) {
 
 	if resp.Items[2].Addresses != nil {
 		t.Errorf("bridge: Addresses = %+v, want none", resp.Items[2].Addresses)
+	}
+}
+
+func TestHandleListNetworks_AddressesCSV(t *testing.T) {
+	router := newTestRouterWithCache(t, addressesCache())
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest("GET", "/networks.csv?sort=name", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	want := [][]string{
+		{"name", "stack", "driver", "used", "usable", "id"},
+		{"bridge", "", "bridge", "", "", "bridge"},
+		{"busy", "", "overlay", "2", "5", "busy"},
+		{"empty", "", "overlay", "0", "253", "empty"},
+	}
+
+	got := csvRecords(t, rec.Body.String())
+	if len(got) != len(want) {
+		t.Fatalf("records = %v, want %v", got, want)
+	}
+
+	for i := range want {
+		if !slices.Equal(got[i], want[i]) {
+			t.Errorf("record %d = %v, want %v", i, got[i], want[i])
+		}
 	}
 }
 

@@ -1,24 +1,13 @@
 import { api } from "../api/client";
-import type { Network, NetworkAddresses, Task } from "../api/types";
+import type { Network, Task } from "../api/types";
+import AddressUse from "../components/AddressUse";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import { buttonVariants } from "../components/ui/button";
 import type { SSEEvent } from "../hooks/useResourceStream";
-import { addressTone } from "../lib/networkAddresses";
 import { sortColumn } from "../lib/sortColumn";
-import { toneText } from "../lib/statusColor";
 import { Link } from "react-router-dom";
-
-function AddressUse({ addresses }: { addresses: NetworkAddresses }) {
-  const tone = addressTone(addresses);
-
-  return (
-    <span className={`tabular-nums ${tone ? toneText[tone] : ""}`}>
-      {addresses.used} / {addresses.usable}
-    </span>
-  );
-}
 
 /**
  * A network's address figure moves with its own changes, the VIPs services

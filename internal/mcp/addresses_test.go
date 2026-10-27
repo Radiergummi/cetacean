@@ -14,24 +14,7 @@ import (
 // The network resource and describe read through one digest, so pinning the
 // resource pins both.
 func TestNetworkResourceCarriesAddresses(t *testing.T) {
-	c := cache.New(nil)
-	c.SetNetwork(network.Summary{
-		ID:     "net1",
-		Name:   "backend",
-		Driver: "overlay",
-		Scope:  "swarm",
-		IPAM:   network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
-	})
-	c.SetTask(swarm.Task{
-		ID:     "t1",
-		NodeID: "n1",
-		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
-		NetworksAttachments: []swarm.NetworkAttachment{{
-			Network:   swarm.Network{ID: "net1"},
-			Addresses: []string{"10.0.1.3/24"},
-		}},
-	})
-
+	c := addressesCache()
 	srv := newResourceTestServer(t, c)
 
 	body, err := srv.readResource(context.Background(), "cetacean://networks/net1")
@@ -53,4 +36,63 @@ func TestNetworkResourceCarriesAddresses(t *testing.T) {
 		got["loadBalancers"] != 1.0 {
 		t.Errorf("addresses = %v, want usable 253, used 2, taskAddresses 1, loadBalancers 1", got)
 	}
+}
+
+func TestNetworkListingCarriesAddresses(t *testing.T) {
+	c := addressesCache()
+	c.SetNetwork(network.Summary{ID: "net2", Name: "bridge", Driver: "bridge", Scope: "local"})
+	srv := newResourceTestServer(t, c)
+
+	body, err := srv.readResource(context.Background(), "cetacean://networks")
+	if err != nil {
+		t.Fatalf("readResource: %v", err)
+	}
+
+	var listing []struct {
+		ID        string         `json:"Id"`
+		Addresses map[string]any `json:"Addresses"`
+	}
+	if err := json.Unmarshal([]byte(body), &listing); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, entry := range listing {
+		switch entry.ID {
+		case "net1":
+			if entry.Addresses["used"] != 2.0 {
+				t.Errorf("net1: Addresses = %v, want used 2", entry.Addresses)
+			}
+		case "net2":
+			if entry.Addresses != nil {
+				t.Errorf("net2: Addresses = %v, want none", entry.Addresses)
+			}
+		}
+	}
+
+	if len(listing) != 2 {
+		t.Errorf("listing = %d networks, want 2", len(listing))
+	}
+}
+
+// addressesCache holds an overlay with one running task on it.
+func addressesCache() *cache.Cache {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:     "net1",
+		Name:   "backend",
+		Driver: "overlay",
+		Scope:  "swarm",
+		IPAM:   network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
+	})
+	c.SetTask(swarm.Task{
+		ID:     "t1",
+		NodeID: "n1",
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+		NetworksAttachments: []swarm.NetworkAttachment{{
+			Network:   swarm.Network{ID: "net1"},
+			Addresses: []string{"10.0.1.3/24"},
+		}},
+	})
+
+	return c
 }

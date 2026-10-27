@@ -167,7 +167,7 @@ func (s *Server) digestOf(
 		return cluster.NetworkDigest(
 			resource,
 			s.filterServiceRefs(ctx, s.cache.ServicesUsingNetwork(resource.ID)),
-			cluster.NetworkAddressesOf(s.cache, resource.ID),
+			s.cache.NetworkAddressesOf(resource.ID),
 		), nil
 
 	case volume.Volume:

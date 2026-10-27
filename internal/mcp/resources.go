@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/network"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 const (
@@ -232,12 +234,38 @@ func (s *Server) readResourceContents(
 		data = digest
 	}
 
+	if networks, ok := data.([]network.Summary); ok {
+		data = s.networkListing(networks)
+	}
+
 	b, err := json.Marshal(data)
 	if err != nil {
 		return "", "", fmt.Errorf("marshal resource: %w", err)
 	}
 
 	return string(b), mcpMIMEType, nil
+}
+
+// networkListEntry is a network as the cetacean://networks listing serves it,
+// with its address figure beside Docker's fields as GET /networks has it.
+type networkListEntry struct {
+	network.Summary
+
+	Addresses *ipam.Addresses `json:"Addresses,omitempty"`
+}
+
+func (s *Server) networkListing(networks []network.Summary) []networkListEntry {
+	addresses := s.cache.NetworkAddresses()
+	entries := make([]networkListEntry, len(networks))
+
+	for i, net := range networks {
+		entries[i] = networkListEntry{Summary: net}
+		if a, ok := addresses[net.ID]; ok {
+			entries[i].Addresses = &a
+		}
+	}
+
+	return entries
 }
 
 // composeDoc renders the document both compose resources return.

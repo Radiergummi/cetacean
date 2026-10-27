@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/docker/docker/api/types/network"
@@ -208,22 +207,29 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 // has nothing left to notify about, so only cached ones are named.
 func (s *Server) addressNetworkKeys(event cache.Event) []eventKey {
 	ids, all := cluster.AddressNetworks(s.cache, event)
-	if !all && len(ids) == 0 {
-		return nil
-	}
 
 	var keys []eventKey
 
-	for net := range s.cache.EachNetwork {
-		if !all && !slices.Contains(ids, net.ID) {
-			continue
-		}
-
+	add := func(net network.Summary) {
 		via := "network:" + net.Name
 		keys = append(keys,
 			eventKey{target: subscriptionTarget{typ: cache.EventNetwork, id: net.ID}, via: via},
 			eventKey{target: subscriptionTarget{typ: cache.EventNetwork, id: net.Name}, via: via},
 		)
+	}
+
+	if all {
+		for net := range s.cache.EachNetwork {
+			add(net)
+		}
+
+		return keys
+	}
+
+	for _, id := range ids {
+		if net, ok := s.cache.GetNetwork(id); ok {
+			add(net)
+		}
 	}
 
 	return keys

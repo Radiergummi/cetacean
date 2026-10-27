@@ -4,24 +4,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/ipam"
 )
-
-// NetworkAddresses is the address figure of every network that has one, keyed
-// by network ID. It counts every service and task, the caller's readable ones
-// or not: only the totals leave, never which tasks hold an address.
-func NetworkAddresses(c *cache.Cache) map[string]ipam.Addresses {
-	return c.NetworkAddresses()
-}
-
-// NetworkAddressesOf is the figure of one network, nil when it has none.
-func NetworkAddressesOf(c *cache.Cache, id string) *ipam.Addresses {
-	if a, ok := c.NetworkAddresses()[id]; ok {
-		return &a
-	}
-
-	return nil
-}
 
 // AddressNetworks names the networks whose address figure an event may move:
 // a task's own networks, ingress for a node, and every network for a service,

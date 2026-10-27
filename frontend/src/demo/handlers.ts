@@ -231,7 +231,9 @@ function findServicesUsing(
     .map((service) => ({ id: service.ID, name: service.Spec.Name }));
 }
 
-/** Task states that still hold their addresses; past running they are freed. */
+/**
+ * Task states that still hold their addresses; past running they are freed.
+ */
 const addressHoldingStates = new Set([
   "new",
   "allocated",

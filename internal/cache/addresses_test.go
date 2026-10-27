@@ -7,6 +7,25 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
+func TestStoreAddressesKeepsTheNewerGeneration(t *testing.T) {
+	c := New(nil)
+
+	newer := &addressMemo{generation: 5}
+	c.storeAddresses(newer)
+	c.storeAddresses(&addressMemo{generation: 4})
+
+	if c.addresses.Load() != newer {
+		t.Error("an older count overwrote a newer one")
+	}
+
+	newest := &addressMemo{generation: 6}
+	c.storeAddresses(newest)
+
+	if c.addresses.Load() != newest {
+		t.Error("a newer count was not stored")
+	}
+}
+
 func TestNetworkAddressesCountsOncePerGeneration(t *testing.T) {
 	c := New(nil)
 	c.SetNetwork(network.Summary{

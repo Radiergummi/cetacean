@@ -3,6 +3,8 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"slices"
+	"strconv"
 
 	"github.com/docker/docker/api/types/network"
 	json "github.com/goccy/go-json"
@@ -66,7 +68,9 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
-	addresses := cluster.NetworkAddresses(h.cache)
+	// Read only once the validator is taken, so a body is never older than
+	// its ETag; a 304 skips the count altogether.
+	var addresses map[string]ipam.Addresses
 
 	spec := listSpec[network.Summary]{
 		resourceType: "network",
@@ -98,6 +102,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r, validator = h.ifRange(r, validator)
+	addresses = h.cache.NetworkAddresses()
 
 	networks, p, ok := prepareList(h, w, r, spec)
 	if !ok {
@@ -105,7 +110,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		writeListCSV(w, r, "network", networks, p, cluster.RowsForNetworks)
+		writeCSV(w, r, "networks", csvTableForNetworks(csvPage(networks, p), addresses))
 
 		return
 	}
@@ -131,4 +136,24 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 			return items
 		},
 	)
+}
+
+// csvTableForNetworks is the rows' table with the address figure before the
+// ID, left empty for a network that has none.
+func csvTableForNetworks(networks []network.Summary, addresses map[string]ipam.Addresses) csvTable {
+	table := csvTableForRows("network", csvRowsInOrder(networks, cluster.RowsForNetworks))
+	last := len(table.header) - 1
+
+	table.header = slices.Insert(table.header, last, "used", "usable")
+
+	for i, net := range networks {
+		used, usable := "", ""
+		if a, ok := addresses[net.ID]; ok {
+			used, usable = strconv.Itoa(a.Used), strconv.Itoa(a.Usable)
+		}
+
+		table.records[i] = slices.Insert(table.records[i], last, used, usable)
+	}
+
+	return table
 }

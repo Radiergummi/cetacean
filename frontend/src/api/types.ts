@@ -252,7 +252,9 @@ export interface Network {
   };
   Options: Record<string, string> | null;
   Labels: Record<string, string> | null;
-  /** Present on list items only, for a network with an address figure. */
+  /**
+   * Present on list items only, for a network with an address figure.
+   */
   Addresses?: NetworkAddresses | undefined;
 }
 

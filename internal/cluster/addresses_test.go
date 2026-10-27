@@ -38,7 +38,7 @@ func TestNetworkAddresses(t *testing.T) {
 		}},
 	})
 
-	got := NetworkAddresses(c)["ingress"]
+	got := c.NetworkAddresses()["ingress"]
 	want := ipam.Addresses{Usable: 253, Used: 4, VIPs: 1, TaskAddresses: 1, LoadBalancers: 2}
 
 	if got != want {

@@ -229,7 +229,8 @@ Docker object is what the JSON representation is for.
 | `/tasks` | `name`, `state`, `node`, `id` |
 | `/stacks` | `name`, `services`, `id` |
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
-| `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
+| `/networks` | `name`, `stack`, `driver`, `used`, `usable`, `id` (the addresses, empty without a figure) |
+| `/volumes` | `name`, `stack`, `driver`, `id` |
 | `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
