@@ -64,8 +64,9 @@ Maintainers only. A release is cut from `main`, in this order:
 2. Create a signed tag on a commit already on `main`: `git tag -s vX.Y.Z <commit>`, never `-a`
 3. Push the tag
 
-The release workflow's `verify-tag` job refuses a tag that is unsigned, that has moved since it was
-pushed, or that names a commit not on `main`.
+The tag must carry a signature GitHub can verify against a key on the tagger's account. The release
+workflow's `verify-tag` job refuses a lightweight tag, a tag GitHub shows as unverified, a tag moved
+since it was pushed, and a tag on a commit not on `main`.
 
 ## Commit messages
 
