@@ -151,6 +151,11 @@ license, and where in the image it was found, searchable by name or package URL 
 license, with the list downloadable as CSV or as the SPDX document itself. Distribution packages usually declare a
 license; Go modules in a Syft SBOM never do, and the page says so instead of leaving the column unexplained.
 
+When the provenance was recorded with `mode=max`, it embeds the Dockerfile, and the section links a **Dockerfile**
+page: the file, with the size of the layers each instruction produced beside it, scaled so the heaviest stand out,
+and how much of the image came from its base. It answers why an image is as large as it is. A layer no line
+produced is listed beneath, rather than guessed at.
+
 ## Network addresses
 
 An overlay network that runs out of addresses fails new tasks, and the default `/24` holds 253. The networks list
