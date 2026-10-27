@@ -164,7 +164,7 @@ type Cache struct {
 	volumes        ResourceMap[volume.Volume]
 	stacks         map[string]Stack
 	lastSync       time.Time
-	tasksSynced    bool // a task list has been synced, so later ones can be diffed
+	tasksSynced    bool // Docker's task list has been synced, so later ones can be diffed
 	listenerMu     sync.RWMutex
 	listeners      []listenerEntry
 
