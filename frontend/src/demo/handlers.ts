@@ -60,6 +60,43 @@ const demoServiceLinks: Record<string, ServiceLink[]> = {
   ],
 };
 
+/**
+ * The server's merge: exact duplicates become one link naming every service
+ * that declares it, ordered by id, then value, then title.
+ */
+function stackLinks(services: Service[]): ServiceLink[] {
+  const merged = new Map<string, ServiceLink & { services: string[] }>();
+
+  for (const {
+    Spec: { Name },
+  } of services) {
+    for (const link of demoServiceLinks[Name] ?? []) {
+      const key = JSON.stringify([link.id, link.title, link.href, link.text]);
+      const existing = merged.get(key);
+
+      if (existing) {
+        existing.services.push(Name);
+      } else {
+        merged.set(key, { ...link, services: [Name] });
+      }
+    }
+  }
+
+  const compare = (a = "", b = "") => (a < b ? -1 : a > b ? 1 : 0);
+  const links: ServiceLink[] = [...merged.values()].map((link) => ({
+    ...link,
+    services: [...link.services].sort(compare),
+  }));
+
+  return links.sort(
+    (a, b) =>
+      compare(a.id, b.id) ||
+      compare(a.href, b.href) ||
+      compare(a.text, b.text) ||
+      compare(a.title, b.title),
+  );
+}
+
 function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   return HttpResponse.json(data, { status });
 }
@@ -1165,7 +1202,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           service,
           changes: [],
           integrations: [],
-          links: demoServiceLinks[service.Spec.Name] ?? [],
+          ...(demoServiceLinks[service.Spec.Name] && {
+            links: demoServiceLinks[service.Spec.Name],
+          }),
         } satisfies ServiceDetail),
       );
     }),
@@ -1220,6 +1259,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       const services = stack.services
         .map((id) => dataset.servicesByID.get(id))
         .filter(Boolean) as Service[];
+      const links = stackLinks(services);
 
       return jsonResponse(
         detailEnvelope(`/stacks/${stackName}`, "Stack", {
@@ -1239,7 +1279,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
               .map((name) => dataset.volumesByName.get(name))
               .filter(Boolean) as Volume[],
           },
-          links: services.flatMap(({ Spec: { Name } }) => demoServiceLinks[Name] ?? []),
+          ...(links.length > 0 && { links }),
         } satisfies StackResponse),
       );
     }),

@@ -91,7 +91,7 @@ export default function ServiceDetail() {
             editable={detail.editable}
           />
         }
-        extra={<ServiceLinks links={detail.links} />}
+        extra={detail.links.length > 0 ? <ServiceLinks links={detail.links} /> : undefined}
       />
 
       <SizingBanner

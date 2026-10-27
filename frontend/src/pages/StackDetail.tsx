@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { ServiceLink, StackResponse, Task } from "../api/types";
+import type { StackResponse, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
@@ -16,8 +16,6 @@ import { serviceModeLabel } from "../lib/deriveServiceState";
 import type { TaskCount } from "../lib/stackGraph";
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-
-const emptyLinks: ServiceLink[] = [];
 
 const StackGraph = lazy(() => import("../components/stack-detail/stack-graph/StackGraph"));
 
@@ -49,6 +47,7 @@ export default function StackDetail() {
     extraQueryKeys,
   });
   const stack = response?.stack;
+  const links = response?.links;
 
   const [taskCounts, setTaskCounts] = useState<Record<string, TaskCount>>({});
 
@@ -106,7 +105,7 @@ export default function StackDetail() {
   if (error) {
     return <FetchError message="Failed to load stack" />;
   }
-  if (!response || !stack) {
+  if (!stack) {
     return <LoadingDetail />;
   }
 
@@ -146,7 +145,7 @@ export default function StackDetail() {
             }}
           />
         }
-        extra={<ServiceLinks links={response.links ?? emptyLinks} />}
+        extra={links?.length ? <ServiceLinks links={links} /> : undefined}
       />
 
       {stack.services?.length > 0 && (

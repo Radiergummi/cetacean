@@ -152,7 +152,16 @@ describe("detail response shapes", () => {
     ];
 
     expect(service.links).toEqual(expected);
-    expect(stack.links).toEqual(expected);
+    expect(stack.links).toEqual(expected.map((link) => ({ ...link, services: ["webshop_api"] })));
+  });
+
+  it("omits links where none are declared, as the server does", async () => {
+    const frontend = dataset.services.find(({ Spec: { Name } }) => Name === "webshop_frontend");
+    const service = await fetchJSON(`/services/${frontend?.ID}`);
+    const stack = await fetchJSON("/stacks/monitoring");
+
+    expect(service).not.toHaveProperty("links");
+    expect(stack).not.toHaveProperty("links");
   });
 });
 

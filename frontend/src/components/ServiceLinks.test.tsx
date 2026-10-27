@@ -58,4 +58,32 @@ describe("ServiceLinks", () => {
     expect(entry).toHaveClass("truncate");
     expect(entry).toHaveAttribute("title", `Note: ${"x".repeat(300)}`);
   });
+
+  it("names the declaring services only where titles collide", () => {
+    render(
+      <ServiceLinks
+        links={[
+          {
+            id: "grafana",
+            title: "grafana",
+            href: "https://grafana.example.com/api",
+            services: ["app_api"],
+          },
+          {
+            id: "grafana",
+            title: "grafana",
+            href: "https://grafana.example.com/worker",
+            services: ["app_worker", "app_cron"],
+          },
+          { id: "repo", title: "repo", href: "https://git.example.com", services: ["app_api"] },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "grafana · app_api" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "grafana · app_worker, app_cron" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "repo" })).toBeInTheDocument();
+  });
 });

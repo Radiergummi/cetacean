@@ -496,6 +496,11 @@ export interface ServiceLink {
   title: string;
   href?: string | undefined;
   text?: string | undefined;
+
+  /**
+   * The member services declaring the link, on a stack's links only.
+   */
+  services?: string[] | undefined;
 }
 
 export interface ServiceDetail {
