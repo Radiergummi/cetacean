@@ -554,7 +554,11 @@ A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a m
 spelled exactly so; any other member answers `400`. A patch without the member changes nothing; `null` or `[]` empties
 the list.
 
-A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
+A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does. That
+includes a `GET` on a path only writes are routed at, such as `/services/{id}/scale`, from a client whose `Accept`
+rules out HTML; a browser there gets the dashboard. `OPTIONS` on any routed path answers `204` with that `Allow`, and
+with `Accept-Patch` where the path takes a `PATCH`. A `415` for a patch format the path doesn't take carries
+`Accept-Patch` too.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated

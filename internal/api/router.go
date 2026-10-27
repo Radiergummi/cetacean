@@ -212,7 +212,8 @@ func (r *routeRecorder) serves(req *http.Request) bool {
 	return pattern != "" && pattern != "/"
 }
 
-// allows lists the methods a route of its own answers at req's path.
+// allows lists the methods a route of its own answers at req's path, and
+// OPTIONS, which the catch-all answers for every such path.
 func (r *routeRecorder) allows(req *http.Request) []string {
 	var methods []string
 
@@ -225,7 +226,26 @@ func (r *routeRecorder) allows(req *http.Request) []string {
 		}
 	}
 
-	return methods
+	if len(methods) == 0 {
+		return nil
+	}
+
+	return append(methods, http.MethodOptions)
+}
+
+// acceptPatch is the Accept-Patch of the PATCH route at req's path, if any.
+func (r *routeRecorder) acceptPatch(req *http.Request) string {
+	probe := req.Clone(req.Context())
+	probe.Method = http.MethodPatch
+
+	_, path, _ := strings.Cut(r.route(probe), " ")
+	for _, route := range r.tiered {
+		if route.method == http.MethodPatch && route.path == path {
+			return route.acceptPatch
+		}
+	}
+
+	return ""
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -1063,11 +1083,18 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 		// The SPA has no route under /-/ and answers only GET and HEAD, so a
 		// method some route serves at this path is a wrong one, not the
-		// dashboard; under /-/, so is a disabled or unknown endpoint.
+		// dashboard; under /-/, or for a client that rules out HTML, so is a read.
 		meta := strings.HasPrefix(r.URL.Path, "/-/")
-		if meta || r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if meta || !isSafeMethod(r.Method) || htmlUnacceptable(r.Context()) {
 			if allow := mux.allows(r); len(allow) > 0 {
 				w.Header().Set("Allow", strings.Join(allow, ", "))
+				if r.Method == http.MethodOptions {
+					if patch := mux.acceptPatch(r); patch != "" {
+						w.Header().Set("Accept-Patch", patch)
+					}
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 				writeProblem(w, r, http.StatusMethodNotAllowed, r.Method+" is not allowed here")
 				return
 			}
