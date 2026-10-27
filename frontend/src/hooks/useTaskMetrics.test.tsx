@@ -44,6 +44,27 @@ describe("useTaskMetricsResult", () => {
     expect(result.current.metrics).toEqual({});
   });
 
+  it("asks again only for the filter that changed", async () => {
+    vi.mocked(api.metricsQueryRange).mockResolvedValue(series("t1", "5") as never);
+
+    const { rerender } = renderHook(({ filters }) => useTaskMetricsResult(filters, true), {
+      initialProps: { filters: ['service_id=~"a"', 'service_id=~"b"'] as readonly string[] },
+      wrapper: createWrapper(createTestQueryClient(), { withRouter: false }),
+    });
+
+    await waitFor(() => expect(api.metricsQueryRange).toHaveBeenCalledTimes(4));
+
+    rerender({ filters: ['service_id=~"a"', 'service_id=~"c"'] });
+
+    await waitFor(() => expect(api.metricsQueryRange).toHaveBeenCalledTimes(6));
+
+    const askedForA = vi
+      .mocked(api.metricsQueryRange)
+      .mock.calls.filter(([query]) => (query as string).includes('"a"'));
+
+    expect(askedForA).toHaveLength(2);
+  });
+
   it("merges the series of every filter", async () => {
     vi.mocked(api.metricsQueryRange).mockImplementation(
       async (query: string) => series(query.includes("s1") ? "t1" : "t2", "5") as never,

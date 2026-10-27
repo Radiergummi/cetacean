@@ -17,6 +17,7 @@ import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStat
 import { useTaskMetricsResult } from "../hooks/useTaskMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { sortColumn } from "../lib/sortColumn";
+import { stableBatches } from "../lib/stableBatches";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -69,24 +70,17 @@ export default function TaskList() {
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
-  // Scoped to the services of the running tasks loaded so far, in batches no
-  // larger than a page of rows: every query is a GET, and its URL must stay
-  // inside what a proxy in front of Prometheus accepts.
+  // Scoped to the services of the running tasks loaded so far, in batches of
+  // about a page of rows: every query is a GET whose URL must stay inside what
+  // a proxy in front of Prometheus accepts. A batch is its own cached query.
   const metricsFilters = useMemo(() => {
-    const serviceIds = [
-      ...new Set(
-        tasks.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
-      ),
-    ].sort();
-    const filters: string[] = [];
+    const serviceIds = new Set(
+      tasks.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
+    );
 
-    for (let offset = 0; offset < serviceIds.length; offset += pageSize) {
-      const batch = serviceIds.slice(offset, offset + pageSize).join("|");
-
-      filters.push(`container_label_com_docker_swarm_service_id=~"${batch}"`);
-    }
-
-    return filters;
+    return stableBatches([...serviceIds], pageSize).map(
+      (batch) => `container_label_com_docker_swarm_service_id=~"${batch.join("|")}"`,
+    );
   }, [tasks]);
   const { metrics: taskMetrics, error: metricsError } = useTaskMetricsResult(
     metricsFilters,

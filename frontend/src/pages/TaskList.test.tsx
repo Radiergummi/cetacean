@@ -159,8 +159,8 @@ describe("TaskList", () => {
 
   // The page holds a page of tasks; the series of every task in the cluster
   // would be most of the response and none of the rows.
-  // Every row keeps its sparklines, but no single query names more services
-  // than one page of rows can, so the URL stays well inside proxy limits.
+  // Every row keeps its sparklines, but each query names about a page of
+  // services at most, so the URL stays well inside proxy limits.
   it("asks for the metrics of the shown services in bounded batches", async () => {
     enableCadvisor();
     vi.mocked(api.metricsQueryRange).mockResolvedValue(null as never);
