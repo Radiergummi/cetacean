@@ -56,6 +56,17 @@ Playwright suite (`make test-e2e`) at the environment.
 6. Commit with a descriptive message (see [Commit messages](#commit-messages))
 7. Open a pull request against `main`
 
+## Releases
+
+Maintainers only. A release is cut from `main`, in this order:
+
+1. Merge to `main` and push `main`
+2. Create a signed tag on a commit already on `main`: `git tag -s vX.Y.Z <commit>`, never `-a`
+3. Push the tag
+
+The release workflow's `verify-tag` job refuses a tag that is unsigned, that has moved since it was
+pushed, or that names a commit not on `main`.
+
 ## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
