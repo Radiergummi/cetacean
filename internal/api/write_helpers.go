@@ -75,9 +75,7 @@ func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) [
 		auth.IdentityFromContext(r.Context()),
 		"read",
 		refs,
-		func(ref cache.ServiceRef) string {
-			return "service:" + ref.Name
-		},
+		cluster.ServiceRefACLResource,
 	)
 	if filtered == nil {
 		return []cache.ServiceRef{}

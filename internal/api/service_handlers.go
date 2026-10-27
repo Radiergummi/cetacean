@@ -62,7 +62,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 
 	r, validator = h.ifRange(r, validator)
 
-	services, p, ok := prepareList(h, w, r, spec)
+	services, _, p, ok := prepareList(h, w, r, spec, cluster.VersionSelection{})
 	if !ok {
 		return
 	}

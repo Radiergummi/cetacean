@@ -71,7 +71,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	r, validator = h.ifRange(r, validator)
 	addresses = h.cache.NetworkAddresses()
 
-	networks, p, ok := prepareList(h, w, r, spec)
+	networks, _, p, ok := prepareList(h, w, r, spec, cluster.VersionSelection{})
 	if !ok {
 		return
 	}

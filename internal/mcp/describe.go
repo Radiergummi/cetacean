@@ -152,16 +152,16 @@ func (s *Server) digestOf(
 		), nil
 
 	case swarm.Config:
-		return cluster.ConfigDigest(
-			resource,
-			s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID)),
-		), nil
+		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID))
+		version := s.versions.ConfigVersion(resource, s.readPredicate(ctx))
+
+		return withVersion(cluster.ConfigDigest(resource, users), version, len(users)), nil
 
 	case swarm.Secret:
-		return cluster.SecretDigest(
-			resource,
-			s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID)),
-		), nil
+		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID))
+		version := s.versions.SecretVersion(resource, s.readPredicate(ctx))
+
+		return withVersion(cluster.SecretDigest(resource, users), version, len(users)), nil
 
 	case network.Summary:
 		return cluster.NetworkDigest(
@@ -308,4 +308,12 @@ func digestibleResourceType(uri string) (string, bool) {
 	}
 
 	return parts[0], true
+}
+
+// withVersion adds to a config or secret digest its version group, found among
+// what the caller may read, and how many of the services it may read use it.
+func withVersion(d cluster.Digest, v cluster.Version, usedBy int) cluster.Digest {
+	maps.Copy(d.Details, v.Detail(usedBy).Map())
+
+	return d
 }

@@ -21,6 +21,7 @@ type listSpec[T any] struct {
 	filterEnv    filter.Env[T]                                 // filter.Nodes, filter.Tasks, …
 	sortKeys     map[string]func(T) string                     // sort field accessors
 	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
+	versions     *versionedSpec[T]                             // optional: groups a config or secret list into versions
 	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
 	idFunc       func(T) string                                // extracts JSON-LD @id path for each item
 	rows         func([]T) []cluster.Row                       // builds the CSV rendering; required unless csv is set
@@ -60,10 +61,41 @@ func listNotModified[T any](
 // Use this for resources that need no post-pagination transformation.
 // Each item is wrapped with JSON-LD @id and @type fields.
 func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec listSpec[T]) {
+	handleListOf(
+		h,
+		w,
+		r,
+		spec,
+		spec.idFunc,
+		func(page []T, _ cluster.VersionView) []T { return page },
+	)
+}
+
+// handleListOf is handleList for a list whose page renders into another shape.
+// What render adds must come from the cache and the caller's grants, or the
+// derived validator no longer covers it.
+func handleListOf[T, U any](
+	h *Handlers,
+	w http.ResponseWriter,
+	r *http.Request,
+	spec listSpec[T],
+	idFunc func(U) string,
+	render func(page []T, versions cluster.VersionView) []U,
+) {
+	// A query the list refuses is refused before any 304: no validator vouches
+	// for a request that has no answer.
+	var sel cluster.VersionSelection
+	if spec.versions != nil {
+		var err error
+		if sel, err = versionSelection(r); err != nil {
+			writeErrorCode(w, r, "API016", err.Error())
+			return
+		}
+	}
+
 	// A list is a pure function of the cache, the caller's grants and the
-	// request, so the validator is knowable before any of the work. Answering
-	// here skips the cache read, the filtering, the sort and the marshal that
-	// a 304 would otherwise pay for in full.
+	// request, so the validator is knowable before any of the work, and a 304
+	// skips the cache read, filtering, sort and marshal it would otherwise pay.
 	validator := h.derivedETag(r)
 	if listNotModified(h, w, r, spec, validator) {
 		return
@@ -71,25 +103,34 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 
 	r, validator = h.ifRange(r, validator)
 
-	items, p, ok := prepareList(h, w, r, spec)
+	items, versions, p, ok := prepareList(h, w, r, spec, sel)
 	if !ok {
 		return
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		rows := spec.rows
+		if spec.versions != nil {
+			rows = func(page []T) []cluster.Row {
+				out := spec.rows(page)
+				cluster.AnnotateVersionRows(out, versions)
+
+				return out
+			}
+		}
+
 		if spec.csv != nil {
 			spec.csv(w, r, csvPage(items, p))
 		} else {
-			writeListCSV(w, r, spec.resourceType, items, p, spec.rows)
+			writeListCSV(w, r, spec.resourceType, items, p, rows)
 		}
 
 		return
 	}
 
 	writeLinkTemplate(w, r, spec.linkTemplate)
-	writeListPage(w, r, items, p, validator, spec.itemType, spec.idFunc, func(page []T) []T {
-		return page
-	})
+	writeListPage(w, r, items, p, validator, spec.itemType, idFunc,
+		func(page []T) []U { return render(page, versions) })
 }
 
 // writeListPage writes the page of items p names as the JSON collection, each
@@ -128,7 +169,8 @@ func prepareList[T any](
 	w http.ResponseWriter,
 	r *http.Request,
 	spec listSpec[T],
-) ([]T, PageParams, bool) {
+	sel cluster.VersionSelection,
+) ([]T, cluster.VersionView, PageParams, bool) {
 	h.setAllowList(w, r, spec.resourceType)
 	items := spec.list()
 
@@ -148,22 +190,29 @@ func prepareList[T any](
 		spec.aclName,
 	)
 
+	// Grouped over every readable item, before a search narrows them.
+	var versions cluster.VersionView
+	if spec.versions != nil {
+		versions = spec.versions.view(items, h.readChecker(r))
+		items = cluster.SelectVersions(items, spec.versions.id, versions.Groups, sel)
+	}
+
 	if spec.searchName != nil {
 		items = searchFilter(items, r.URL.Query().Get("search"), spec.searchName)
 	}
 
 	var ok bool
 	if items, ok = exprFilter(items, r.URL.Query().Get("filter"), spec.filterEnv, w, r); !ok {
-		return nil, PageParams{}, false
+		return nil, versions, PageParams{}, false
 	}
 
 	p, err := parsePagination(r)
 	if err != nil {
 		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return nil, PageParams{}, false
+		return nil, versions, PageParams{}, false
 	}
 
 	items = sortItems(items, p.Sort, p.Dir, spec.sortKeys)
 
-	return items, p, true
+	return items, versions, p, true
 }

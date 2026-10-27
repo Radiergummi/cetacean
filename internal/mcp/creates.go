@@ -88,7 +88,13 @@ type dataResourceSpec struct {
 	// the watcher fills only a few hundred milliseconds later — otherwise the
 	// documented rotation sequence fails its second step with "no such secret".
 	// Neither seed carries the payload: the cache backs every listing.
-	seed func(c *cache.Cache, id, name string, labels map[string]string)
+	seed func(
+		ctx context.Context,
+		wc DockerWriteClient,
+		c *cache.Cache,
+		id, name string,
+		labels map[string]string,
+	)
 }
 
 // Swarm secrets and configs are immutable, so "rotate this password" is three
@@ -111,11 +117,14 @@ var (
 				Data: data,
 			})
 		},
-		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
-			c.SetSecret(swarm.Secret{
-				ID:   id,
-				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
-			})
+		seed: func(
+			ctx context.Context,
+			wc DockerWriteClient,
+			c *cache.Cache,
+			id, name string,
+			labels map[string]string,
+		) {
+			cluster.SeedCreatedSecret(ctx, c, wc.InspectSecret, id, name, labels)
 		},
 	}
 
@@ -133,11 +142,14 @@ var (
 				Data: data,
 			})
 		},
-		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
-			c.SetConfig(swarm.Config{
-				ID:   id,
-				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
-			})
+		seed: func(
+			ctx context.Context,
+			wc DockerWriteClient,
+			c *cache.Cache,
+			id, name string,
+			labels map[string]string,
+		) {
+			cluster.SeedCreatedConfig(ctx, c, wc.InspectConfig, id, name, labels)
 		},
 	}
 )
@@ -194,7 +206,7 @@ func (s *Server) createHandler(
 			return "", fmt.Errorf("create %s: %w", spec.kind, err)
 		}
 
-		spec.seed(s.cache, id, name, labels)
+		spec.seed(ctx, writeClient, s.cache, id, name, labels)
 
 		return marshalResult(createResult{ID: id, Name: name, Type: spec.kind})
 	}

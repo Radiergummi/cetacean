@@ -1,28 +1,65 @@
 import { api } from "../api/client";
-import type { Config } from "../api/types";
+import type { ConfigListItem } from "../api/types";
 import CreateDataResourceForm from "../components/CreateDataResourceForm";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
-import ResourceName from "../components/ResourceName";
+import {
+  OlderVersionsToggle,
+  UsedBy,
+  VersionedName,
+  useVersionExpansion,
+  type VersionRow,
+} from "../components/ResourceVersions";
 import TimeAgo from "../components/TimeAgo";
 import { sortColumn } from "../lib/sortColumn";
+import { useCallback } from "react";
+
+type Row = VersionRow<ConfigListItem>;
 
 export default function ConfigList() {
+  const {
+    expanded,
+    toggle: toggleVersions,
+    arrange,
+    follow,
+    onEvent,
+  } = useVersionExpansion(
+    "/configs",
+    useCallback((id: string, signal: AbortSignal) => api.configVersions(id, signal), []),
+  );
+
   return (
-    <ResourceListPage<Config>
+    <ResourceListPage<Row>
       title="Configs"
       path="/configs"
       sseType="config"
+      derived
       defaultSort="name"
       searchPlaceholder="Search configs…"
       viewModeKey="configs"
       fetchFn={(params, signal) => api.configs(params, signal)}
+      arrange={arrange}
+      onItems={follow}
+      onEvent={onEvent}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/configs/${ID}`}
       columns={(sortKey, sortDir, toggle) => [
         {
           ...sortColumn("Name", "name", sortKey, sortDir, toggle),
-          cell: ({ ID, Spec: { Name } }) => <ResourceName name={Name || ID} />,
+          cell: (item) => (
+            <span className="flex items-center gap-2">
+              <VersionedName item={item} />
+              <OlderVersionsToggle
+                item={item}
+                expanded={expanded}
+                onToggle={toggleVersions}
+              />
+            </span>
+          ),
+        },
+        {
+          header: "Used by",
+          cell: (item) => <UsedBy item={item} />,
         },
         {
           ...sortColumn("Created", "created", sortKey, sortDir, toggle),
@@ -33,17 +70,31 @@ export default function ConfigList() {
           cell: ({ UpdatedAt }) => (UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"),
         },
       ]}
-      renderCard={({ CreatedAt, ID, Spec: { Name }, UpdatedAt }) => (
-        <ResourceCard
-          title={<ResourceName name={Name || ID} />}
-          to={`/configs/${ID}`}
-        >
-          <div className="space-y-1 text-xs text-muted-foreground">
-            <div>Created: {CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"}</div>
-            <div>Updated: {UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"}</div>
+      renderCard={(item) => {
+        const { CreatedAt, ID, UpdatedAt } = item;
+
+        return (
+          <div className="space-y-2">
+            <ResourceCard
+              title={<VersionedName item={item} />}
+              to={`/configs/${ID}`}
+            >
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <div>
+                  Used by: <UsedBy item={item} />
+                </div>
+                <div>Created: {CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"}</div>
+                <div>Updated: {UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"}</div>
+              </div>
+            </ResourceCard>
+            <OlderVersionsToggle
+              item={item}
+              expanded={expanded}
+              onToggle={toggleVersions}
+            />
           </div>
-        </ResourceCard>
-      )}
+        );
+      }}
       emptyMessage={(hasSearch) =>
         hasSearch ? "No configs match your search" : "No configs found"
       }

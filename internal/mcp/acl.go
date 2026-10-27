@@ -167,9 +167,7 @@ func (s *Server) filterServiceRefs(
 		auth.IdentityFromContext(ctx),
 		"read",
 		items,
-		func(ref cache.ServiceRef) string {
-			return "service:" + ref.Name
-		},
+		cluster.ServiceRefACLResource,
 	)
 }
 
@@ -178,13 +176,7 @@ func (s *Server) filterRecommendations(
 	ctx context.Context,
 	items []recommendations.Recommendation,
 ) []recommendations.Recommendation {
-	return acl.Filter(
-		s.acl,
-		auth.IdentityFromContext(ctx),
-		"read",
-		items,
-		cluster.RecommendationACLResource,
-	)
+	return cluster.ReadableRecommendations(s.acl, auth.IdentityFromContext(ctx), items)
 }
 
 // readableEnrichedTasks filters tasks to the ones the caller may read, then

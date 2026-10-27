@@ -74,6 +74,25 @@ func (r *ResourceMap[T]) list() []T {
 	return listSorted(r.items)
 }
 
+// Add stores v only while key is absent, so a record already held is never
+// replaced; ok is false when it was.
+func (r *ResourceMap[T]) Add(key string, v T, eventType EventType) (event Event, ok bool) {
+	r.mu.Lock()
+	if _, existed := r.items[key]; existed {
+		r.mu.Unlock()
+		return Event{}, false
+	}
+	r.set(key, &v)
+	r.mu.Unlock()
+
+	var name string
+	if r.nameFunc != nil {
+		name = r.nameFunc(v)
+	}
+
+	return Event{Type: eventType, Action: setAction(false), ID: key, Name: name, Resource: v}, true
+}
+
 // Set stores a value, calling the onSet hook under the write lock. The event
 // reports whether the key was new, which is what lets a client distinguish a
 // resource appearing from one it already counts changing. ok is false when the
@@ -91,13 +110,18 @@ func (r *ResourceMap[T]) Set(key string, v T, eventType EventType) (event Event,
 	if r.nameFunc != nil {
 		name = r.nameFunc(v)
 	}
-	return Event{
+	event = Event{
 		Type:     eventType,
 		Action:   setAction(existed),
 		ID:       key,
 		Name:     name,
 		Resource: v,
-	}, true
+	}
+	if existed && (eventType == EventConfig || eventType == EventSecret) {
+		event.Previous = old
+	}
+
+	return event, true
 }
 
 // Get retrieves a value by key.

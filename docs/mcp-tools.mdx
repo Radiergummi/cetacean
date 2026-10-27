@@ -66,8 +66,8 @@ resources they returned, so a host can offer somewhere to go next.
 
 <McpTool name="find" level={0}>
     <Fragment slot="arguments">`type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`, `secrets`, `networks`,
-        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `limit` (200 typed, 3 per type otherwise),
-        `offset`, `raw`</Fragment>
+        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `versions` (`newest`, `all`), `limit` (200
+        typed, 3 per type otherwise), `offset`, `raw`</Fragment>
 
     Locates resources. With `type` it enumerates that type, paged by `offset` and capped at the same 200 the default
     sets. Without `type` it searches every type at once: `offset` is ignored, and the result carries `counts`, the
@@ -306,9 +306,10 @@ than read as empty.
 ### Cluster resources
 
 Configs, secrets, networks, and volumes. Swarm secrets and configs are immutable, so rotating one is three
-calls in order: `create_secret` for the replacement, [`update_service_secrets`](#update_service_secrets) to
-repoint each service that uses it (`describe` the secret first, its `related` array names them), then
-`remove_secret` once nothing references it. Configs follow the same sequence, and unlike a secret a config's
+calls in order: `create_secret` for the replacement, labeled `cetacean.version-of=<logical name>` and with the old
+version's `com.docker.stack.namespace` label so it [groups with the versions it replaces](dashboard#versions), [`update_service_secrets`](#update_service_secrets) to
+repoint each service that uses it (`describe` the secret first: its `related` array names them as `used-by`, and a service only a rollback needs as `used-by-rollback`, which stays), then
+`remove_secret` once no `used-by` service is left. Configs follow the same sequence, and unlike a secret a config's
 content can be read back, so use a secret for anything sensitive.
 
 <McpTool name="create_secret" level={2}>
@@ -328,13 +329,15 @@ content can be read back, so use a secret for anything sensitive.
 <McpTool name="remove_secret" level={3}>
     <Fragment slot="arguments">`id`</Fragment>
 
-    Deletes a secret. Fails if any service still references it.
+    Deletes a secret. Fails while a service's current spec references it; one only a previous spec names is removed,
+    and the confirmation names the rollbacks it breaks.
 </McpTool>
 
 <McpTool name="remove_config" level={3}>
     <Fragment slot="arguments">`id`</Fragment>
 
-    Deletes a config. Fails if any service still references it.
+    Deletes a config. Fails while a service's current spec references it; one only a previous spec names is removed,
+    and the confirmation names the rollbacks it breaks.
 </McpTool>
 
 <McpTool name="remove_network" level={3}>
@@ -444,6 +447,16 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 - services set both, the desired replica count and how many are running
 - stacks set `desired` alone, counting member services rather than replicas
 - nodes, tasks, configs, secrets, networks, and volumes set neither
+
+A config or secret listing, from `find` or a read of `cetacean://configs` or `cetacean://secrets`, shows the newest
+version of each group of [versions](dashboard#versions) and every older one a service's current spec uses, unless
+`versions` is `all`; a `find` given `query` or `label` matches every version, while `stack`, `state`, `node` and
+`image` keep the default. Config and secret rows carry `usedBy`, the number of services whose spec or previous spec
+uses them, and, when they're one of several versions, `versionOf` naming the group, `versionInferred` when it was
+matched by name, `inUse` on an older one still in use, and on the newest `newestVersion` and `olderVersions`, the
+number of older ones the listing hides. A config or secret digest carries the
+same in `details`, and a subscription to one hears when another version in its group comes or goes. All of them
+count only what the caller may read.
 
 **Digest** is the detail view of one resource, returned by `describe` and by every templated
 `cetacean://<type>/{id}` read. Alongside `id`, `name`, `type`, and `state` it adds:

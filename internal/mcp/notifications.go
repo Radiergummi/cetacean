@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -26,6 +27,10 @@ type NotificationManager struct {
 	// index finds the subscriptions a key names, so an event touches only
 	// those that could match it rather than every subscribed URI.
 	index map[subscriptionTarget]map[*subscriptionEntry]struct{}
+
+	// versioned counts the subscriptions to a config or secret, so the write
+	// path looks for an event's other versions only while someone listens.
+	versioned atomic.Int64
 
 	// networks counts the index's network targets, so an event can skip
 	// working out which networks it reaches when nobody watches one.
@@ -111,7 +116,19 @@ func (nm *NotificationManager) Subscribe(
 			nm.networks[key]++
 		}
 	}
+
+	if isVersioned(sub) {
+		nm.versioned.Add(1)
+	}
 }
+
+func isVersioned(sub subscription) bool {
+	t := sub.target
+	return t.id != "" && (t.typ == cache.EventConfig || t.typ == cache.EventSecret)
+}
+
+// watchesVersions reports whether any session subscribes to a config or secret.
+func (nm *NotificationManager) watchesVersions() bool { return nm.versioned.Load() > 0 }
 
 func (nm *NotificationManager) stateLocked(session mcpserver.ClientSession) *sessionState {
 	st := nm.sessions[session]
@@ -124,6 +141,10 @@ func (nm *NotificationManager) stateLocked(session mcpserver.ClientSession) *ses
 }
 
 func (nm *NotificationManager) unindexLocked(entry *subscriptionEntry) {
+	if isVersioned(entry.sub) {
+		nm.versioned.Add(-1)
+	}
+
 	for _, key := range entry.sub.keys() {
 		delete(nm.index[key], entry)
 		if len(nm.index[key]) == 0 {

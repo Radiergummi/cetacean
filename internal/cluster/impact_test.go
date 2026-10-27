@@ -51,6 +51,34 @@ func TestReferenceRemovalImpact_AllHidden(t *testing.T) {
 	}
 }
 
+// Docker refuses only while a current spec uses a secret; a previous spec
+// alone does not stop it, so that is a broken rollback rather than a refusal.
+func TestReferenceRemovalImpact_RollbackOnly(t *testing.T) {
+	users := []cache.ServiceRef{
+		{Name: "shop_web", Rollback: true},
+		{Name: "billing_api", Rollback: true},
+	}
+	readable := func(resource string) bool { return strings.HasPrefix(resource, "service:shop_") }
+
+	message := ReferenceRemovalImpact("secret", "db_v1", users, readable).Message()
+
+	if strings.Contains(message, "refuses") || strings.Contains(message, "Used by") {
+		t.Errorf("a rollback-only secret reads as refused:\n%s", message)
+	}
+	if want := "Removing it breaks a rollback of shop_web and 1 other service you can't see."; !strings.Contains(
+		message,
+		want,
+	) {
+		t.Errorf("message lacks %q:\n%s", want, message)
+	}
+
+	mixed := ReferenceRemovalImpact("secret", "db_v1",
+		append(users, cache.ServiceRef{Name: "shop_api"}), readable).Message()
+	if !strings.Contains(mixed, "refuses") || !strings.Contains(mixed, "Used by shop_api.") {
+		t.Errorf("a current user is not reported as one:\n%s", mixed)
+	}
+}
+
 func TestReferenceRemovalImpact_Unused(t *testing.T) {
 	impact := ReferenceRemovalImpact("network", "web", nil, func(string) bool { return true })
 

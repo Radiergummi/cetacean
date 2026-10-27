@@ -161,6 +161,14 @@ export const properties: Property[] = [
     container: "@set",
   },
   {
+    name: "inUse",
+    iri: "urn:cetacean:inUse",
+    description:
+      "Whether a service's current spec uses this older config or secret version, which a listing shows by default.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "kind",
     iri: "urn:cetacean:kind",
     description: "The resource kind for history and SSE events (e.g., `service`, `node`).",
@@ -262,6 +270,13 @@ export const properties: Property[] = [
     usedOn: ["Node"],
   },
   {
+    name: "newestVersion",
+    iri: "urn:cetacean:newestVersion",
+    description: "Whether this is the newest readable version of its config or secret group.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "nodeCount",
     iri: "urn:cetacean:nodeCount",
     description: "Number of nodes in the cluster.",
@@ -340,6 +355,14 @@ export const properties: Property[] = [
       "The manager quorum: managers, how many are reachable, how many must be, whether they are, and how many more can be lost.",
     expectedType: "Object",
     usedOn: ["Cluster"],
+  },
+  {
+    name: "olderVersions",
+    iri: "urn:cetacean:olderVersions",
+    description:
+      "On the newest version of a config or secret, how many older readable versions it has.",
+    expectedType: "Integer",
+    usedOn: ["Config", "Secret"],
   },
   {
     name: "query",
@@ -578,11 +601,33 @@ export const properties: Property[] = [
     usedOn: ["Service"],
   },
   {
+    name: "usedBy",
+    iri: "urn:cetacean:usedBy",
+    description: "Number of services the caller may read that use this config or secret.",
+    expectedType: "Integer",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "version",
     iri: "urn:cetacean:version",
     description: "Software version string.",
     expectedType: "String",
     usedOn: ["Health"],
+  },
+  {
+    name: "versionInferred",
+    iri: "urn:cetacean:versionInferred",
+    description:
+      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` label.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
+    name: "versionOf",
+    iri: "urn:cetacean:versionOf",
+    description: "The logical config or secret this one is a version of, when others are readable.",
+    expectedType: "String",
+    usedOn: ["Config", "Secret"],
   },
   {
     name: "volume",
@@ -681,13 +726,33 @@ export const types: ResourceType[] = [
     name: "Config",
     description: "A Docker Swarm config object.",
     endpoint: "/configs/{id}",
-    properties: ["config", "name", "services"],
+    properties: [
+      "config",
+      "name",
+      "services",
+      "usedBy",
+      "versionOf",
+      "versionInferred",
+      "newestVersion",
+      "inUse",
+      "olderVersions",
+    ],
   },
   {
     name: "Secret",
     description: "A Docker Swarm secret (data always redacted).",
     endpoint: "/secrets/{id}",
-    properties: ["secret", "name", "services"],
+    properties: [
+      "secret",
+      "name",
+      "services",
+      "usedBy",
+      "versionOf",
+      "versionInferred",
+      "newestVersion",
+      "inUse",
+      "olderVersions",
+    ],
   },
   {
     name: "PublishedPort",

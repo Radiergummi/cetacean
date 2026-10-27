@@ -5,6 +5,7 @@ import type {
   CollectionResponse,
   Config,
   ConfigDetail,
+  ConfigListItem,
   ContainerConfig,
   DiskUsageSummary,
   DrainImpact,
@@ -27,6 +28,7 @@ import type {
   RecommendationsResponse,
   SearchResponse,
   Secret,
+  SecretListItem,
   SecretDetail,
   SecretEntry,
   ServiceConfigRef,
@@ -565,6 +567,14 @@ export interface ListParams {
   dir?: "asc" | "desc" | undefined;
   search?: string | undefined;
   filter?: string | undefined;
+  /**
+   * Configs and secrets: `all` lists every version, not only each group's newest.
+   */
+  versions?: "newest" | "all" | undefined;
+  /**
+   * Configs and secrets: only the versions grouped with this ID, newest first.
+   */
+  versionsOf?: string | undefined;
 }
 
 /** Items per Range request page. Backend default is also 50; the max is 200. */
@@ -587,6 +597,14 @@ function buildListQueryString(params?: ListParams): string {
 
   if (params?.filter) {
     queryParams.set("filter", params.filter);
+  }
+
+  if (params?.versions) {
+    queryParams.set("versions", params.versions);
+  }
+
+  if (params?.versionsOf) {
+    queryParams.set("versionsOf", params.versionsOf);
   }
 
   const query = queryParams.toString();
@@ -656,6 +674,7 @@ async function fetchAll<T>(
   path: string,
   signal: AbortSignal | undefined,
   itemSchema: z.ZodType,
+  params?: ListParams,
 ): Promise<T[]> {
   const items: T[] = [];
 
@@ -663,7 +682,7 @@ async function fetchAll<T>(
     // eslint-disable-next-line no-await-in-loop
     const { data } = await fetchRange<T>(
       path,
-      { offset: items.length },
+      { ...params, offset: items.length },
       signal,
       itemSchema,
       maximumPageSize,
@@ -881,13 +900,19 @@ export const api = {
   stackCompose: (name: string, signal?: AbortSignal) =>
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Config>("/configs", params, signal, schema.configSchema),
-  allConfigs: (signal?: AbortSignal) => fetchAll<Config>("/configs", signal, schema.configSchema),
+    fetchRange<ConfigListItem>("/configs", params, signal, schema.configListSchema),
+  configVersions: (id: string, signal?: AbortSignal) =>
+    fetchAll<ConfigListItem>("/configs", signal, schema.configListSchema, { versionsOf: id }),
+  allConfigs: (signal?: AbortSignal) =>
+    fetchAll<Config>("/configs", signal, schema.configSchema, { versions: "all" }),
   config: (id: string, signal?: AbortSignal) =>
     fetchJSON<ConfigDetail>(`/configs/${id}`, signal, schema.configDetailSchema),
   secrets: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Secret>("/secrets", params, signal, schema.secretSchema),
-  allSecrets: (signal?: AbortSignal) => fetchAll<Secret>("/secrets", signal, schema.secretSchema),
+    fetchRange<SecretListItem>("/secrets", params, signal, schema.secretListSchema),
+  secretVersions: (id: string, signal?: AbortSignal) =>
+    fetchAll<SecretListItem>("/secrets", signal, schema.secretListSchema, { versionsOf: id }),
+  allSecrets: (signal?: AbortSignal) =>
+    fetchAll<Secret>("/secrets", signal, schema.secretSchema, { versions: "all" }),
   secret: (id: string, signal?: AbortSignal) =>
     fetchJSON<SecretDetail>(`/secrets/${id}`, signal, schema.secretDetailSchema),
   secretEntry: (id: string, signal?: AbortSignal) =>

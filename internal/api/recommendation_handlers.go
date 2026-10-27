@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 
-	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/recommendations"
@@ -14,12 +13,10 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	results := acl.Filter(
+	results := cluster.ReadableRecommendations(
 		h.acl,
 		auth.IdentityFromContext(r.Context()),
-		"read",
 		h.recEngine.Results(),
-		cluster.RecommendationACLResource,
 	)
 	if results == nil {
 		results = []recommendations.Recommendation{}

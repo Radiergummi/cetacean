@@ -388,9 +388,13 @@ func (h *Handlers) configRepresentation(r *http.Request) (any, error) {
 
 // configBody is the body the config GET and the create response share.
 func (h *Handlers) configBody(r *http.Request, cfg swarm.Config) ConfigResponse {
+	users := h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID))
+	version := h.versions.ConfigVersion(cfg, h.readChecker(r))
+
 	return ConfigResponse{
-		Config:   cfg,
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID)),
+		Config:        cfg,
+		Services:      users,
+		VersionDetail: version.Detail(len(users)),
 	}
 }
 
@@ -408,9 +412,13 @@ func (h *Handlers) secretRepresentation(r *http.Request) (any, error) {
 // secretBody is the body the secret GET and the create response share. It
 // clears the secret data: never expose it.
 func (h *Handlers) secretBody(r *http.Request, sec swarm.Secret) SecretResponse {
+	users := h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID))
+	version := h.versions.SecretVersion(sec, h.readChecker(r))
+
 	return SecretResponse{
-		Secret:   cluster.RedactSecret(sec),
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID)),
+		Secret:        cluster.RedactSecret(sec),
+		Services:      users,
+		VersionDetail: version.Detail(len(users)),
 	}
 }
 

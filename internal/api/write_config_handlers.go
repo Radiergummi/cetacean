@@ -3,10 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
@@ -33,23 +34,21 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 				Data: data,
 			})
 			if err == nil {
-				// Attaching resolves through the cache, which the watcher fills later.
-				h.cache.SetConfig(swarm.Config{
-					ID:   id,
-					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
-				})
+				cluster.SeedCreatedConfig(ctx, h.cache, h.configWriter.InspectConfig, id, name, nil)
 			}
 
 			return id, err
 		},
-		buildFallback: func(id string, name string) any {
-			return ConfigResponse{
-				Config: swarm.Config{
-					ID:   id,
-					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
-				},
-				Services: []cache.ServiceRef{},
-			}
+		// Created now and labelled as asked, so it ranks and groups as the
+		// real record will.
+		buildFallback: func(id, name string, labels map[string]string) any {
+			now := time.Now()
+
+			return h.configBody(r, swarm.Config{
+				ID:        id,
+				CreatedAt: now, UpdatedAt: now,
+				Spec: swarm.ConfigSpec{Name: name, Labels: labels},
+			})
 		},
 		buildResponse: func(id string) (any, bool) {
 			cfg, ok := h.cache.GetConfig(id)

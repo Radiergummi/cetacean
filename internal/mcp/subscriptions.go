@@ -138,7 +138,28 @@ func (s *Server) eventKeys(event cache.Event) []eventKey {
 			keys = append(keys, stackKey(stack))
 		}
 
+		versionEvent := event.Type == cache.EventConfig || event.Type == cache.EventSecret
+		if versionEvent && s.notifications.watchesVersions() {
+			configs, secrets := s.versions.DigestsTouchedBy(event)
+			keys = append(keys, refKeys(cache.EventConfig, configs)...)
+			keys = append(keys, refKeys(cache.EventSecret, secrets)...)
+		}
+
 	case cache.EventNode, cache.EventStack, cache.EventSync:
+	}
+
+	return keys
+}
+
+// refKeys reaches each config or secret by its ID and its name. The event's own
+// read check covers them: a digest counts only what its reader may read.
+func refKeys(typ cache.EventType, refs []cluster.VersionRef) []eventKey {
+	var keys []eventKey
+	for _, ref := range refs {
+		keys = append(keys, eventKey{target: subscriptionTarget{typ: typ, id: ref.ID}})
+		if ref.Name != "" {
+			keys = append(keys, eventKey{target: subscriptionTarget{typ: typ, id: ref.Name}})
+		}
 	}
 
 	return keys

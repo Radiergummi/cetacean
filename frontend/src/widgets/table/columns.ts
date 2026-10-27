@@ -20,6 +20,9 @@ export interface ResourceRecord {
   detail?: string;
   desired?: number;
   running?: number;
+  versionOf?: string;
+  newestVersion?: boolean;
+  usedBy?: number;
 }
 
 export interface WidgetColumn {
@@ -58,6 +61,14 @@ function column(key: keyof ResourceRecord, header: string): WidgetColumn {
   return { key: String(key), header, value: field(key) };
 }
 
+/**
+ * A yes/no column. `find` omits a false flag, so an absent one reads "no"
+ * rather than an em dash, as the CSV export's `false` does.
+ */
+function flag(key: keyof ResourceRecord, header: string): WidgetColumn {
+  return { key: String(key), header, value: (record) => (record[key] ? "yes" : "no") };
+}
+
 const columnsByType: Record<string, WidgetColumn[]> = {
   services: [
     column("name", "Name"),
@@ -81,8 +92,22 @@ const columnsByType: Record<string, WidgetColumn[]> = {
     column("id", "ID"),
   ],
   stacks: [column("name", "Name"), column("desired", "Services"), column("id", "ID")],
-  configs: [column("name", "Name"), column("stack", "Stack"), column("id", "ID")],
-  secrets: [column("name", "Name"), column("stack", "Stack"), column("id", "ID")],
+  configs: [
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("versionOf", "Version of"),
+    flag("newestVersion", "Newest"),
+    column("usedBy", "Used by"),
+    column("id", "ID"),
+  ],
+  secrets: [
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("versionOf", "Version of"),
+    flag("newestVersion", "Newest"),
+    column("usedBy", "Used by"),
+    column("id", "ID"),
+  ],
   networks: [
     column("name", "Name"),
     column("stack", "Stack"),

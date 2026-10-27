@@ -30,13 +30,16 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSON(w, r, rep)
 }
 
+// SecretListItem is a secret as GET /secrets lists it.
+type SecretListItem = cluster.VersionedSecret
+
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
-	handleList(h, w, r, listSpec[swarm.Secret]{
+	spec := listSpec[swarm.Secret]{
 		resourceType: "secret",
 		linkTemplate: "/secrets/{id}",
 		list:         h.cache.ListSecrets,
-		aclName:      func(s swarm.Secret) string { return s.Spec.Name },
-		searchName:   func(s swarm.Secret) string { return s.Spec.Name },
+		aclName:      secretName,
+		searchName:   secretName,
 		filterEnv:    filter.Secrets,
 		prepare:      cluster.RedactSecrets,
 		sortKeys: map[string]func(swarm.Secret) string{
@@ -45,7 +48,22 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 			"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 		},
 		itemType: "Secret",
-		idFunc:   func(s swarm.Secret) string { return "/secrets/" + s.ID },
 		rows:     cluster.RowsForSecrets,
-	})
+		versions: &versionedSpec[swarm.Secret]{
+			id: secretID,
+			view: func(readable []swarm.Secret, canRead func(string) bool) cluster.VersionView {
+				return cluster.SecretVersionView(h.cache, readable, canRead)
+			},
+		},
+	}
+
+	handleListOf(h, w, r, spec, func(item SecretListItem) string { return "/secrets/" + item.ID },
+		func(page []swarm.Secret, versions cluster.VersionView) []SecretListItem {
+			return versions.Secrets(page)
+		},
+	)
 }
+
+func secretName(s swarm.Secret) string { return s.Spec.Name }
+
+func secretID(s swarm.Secret) string { return s.ID }

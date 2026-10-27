@@ -40,6 +40,15 @@ type Row struct {
 	// means something, so a caller can tell "2 of 3" from "no such concept".
 	Desired int `json:"desired,omitempty"`
 	Running int `json:"running,omitempty"`
+
+	// The version fields place a config or secret among its other versions;
+	// UsedBy counts its services, and is nil for every other type.
+	VersionOf       string `json:"versionOf,omitempty"`
+	VersionInferred bool   `json:"versionInferred,omitempty"`
+	NewestVersion   bool   `json:"newestVersion,omitempty"`
+	InUse           bool   `json:"inUse,omitempty"`
+	OlderVersions   int    `json:"olderVersions,omitempty"`
+	UsedBy          *int   `json:"usedBy,omitempty"`
 }
 
 // RowsForServices builds the list view of services. State and running count

@@ -32,6 +32,20 @@ interface DataResourceDetailProps {
 }
 
 /**
+ * Names the services a removal leaves without a rollback target. Docker lets
+ * it through, since only their previous spec names the resource.
+ */
+function rollbackWarning(services: ServiceRef[]): string | undefined {
+  const names = services.filter(({ rollback }) => rollback).map(({ name, id }) => name || id);
+
+  if (names.length === 0) {
+    return undefined;
+  }
+
+  return `${names.join(", ")} can no longer roll back to the spec that uses it.`;
+}
+
+/**
  * Shared detail page layout for configs and secrets.
  *
  * Renders metadata, labels editor, service cross-references, and activity.
@@ -84,8 +98,9 @@ export default function DataResourceDetail({
             listPath={resourceParentPath({ listPath, stack })}
             onRemove={onRemove}
             canDelete={allowedMethods.has("DELETE")}
-            disabled={services.length > 0}
+            disabled={services.some(({ rollback }) => !rollback)}
             disabledTitle={`Cannot remove a ${resourceType} that is in use by services`}
+            warning={rollbackWarning(services)}
           />
         }
       />

@@ -66,6 +66,9 @@ export const secretSchema = z.looseObject({
   Spec: z.looseObject({ Name: z.string() }),
 });
 
+export const configListSchema = configSchema.extend({ UsedBy: z.number() });
+export const secretListSchema = secretSchema.extend({ UsedBy: z.number() });
+
 const networkAddresses = z.looseObject({
   usable: z.number(),
   used: z.number(),

@@ -29,13 +29,16 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSON(w, r, rep)
 }
 
+// ConfigListItem is a config as GET /configs lists it; see SecretListItem.
+type ConfigListItem = cluster.VersionedConfig
+
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
-	handleList(h, w, r, listSpec[swarm.Config]{
+	spec := listSpec[swarm.Config]{
 		resourceType: "config",
 		linkTemplate: "/configs/{id}",
 		list:         h.cache.ListConfigs,
-		aclName:      func(c swarm.Config) string { return c.Spec.Name },
-		searchName:   func(c swarm.Config) string { return c.Spec.Name },
+		aclName:      configName,
+		searchName:   configName,
 		filterEnv:    filter.Configs,
 		sortKeys: map[string]func(swarm.Config) string{
 			"name":    func(c swarm.Config) string { return c.Spec.Name },
@@ -43,7 +46,22 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 			"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 		},
 		itemType: "Config",
-		idFunc:   func(c swarm.Config) string { return "/configs/" + c.ID },
 		rows:     cluster.RowsForConfigs,
-	})
+		versions: &versionedSpec[swarm.Config]{
+			id: configID,
+			view: func(readable []swarm.Config, canRead func(string) bool) cluster.VersionView {
+				return cluster.ConfigVersionView(h.cache, readable, canRead)
+			},
+		},
+	}
+
+	handleListOf(h, w, r, spec, func(item ConfigListItem) string { return "/configs/" + item.ID },
+		func(page []swarm.Config, versions cluster.VersionView) []ConfigListItem {
+			return versions.Configs(page)
+		},
+	)
 }
+
+func configName(c swarm.Config) string { return c.Spec.Name }
+
+func configID(c swarm.Config) string { return c.ID }

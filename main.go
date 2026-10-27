@@ -536,6 +536,9 @@ func main() {
 	logReads := new(sse.Slots)
 	handlers.SetLogReads(logReads)
 
+	versionIndex := cluster.NewVersionIndex(stateCache)
+	handlers.SetVersionIndex(versionIndex)
+
 	secretEntries := cluster.NewSecretEntries()
 	handlers.SetSecretEntries(secretEntries)
 
@@ -631,6 +634,7 @@ func main() {
 		tracer:       mcpTracer,
 		streams:      streams,
 		logReads:     logReads,
+		versions:     versionIndex,
 
 		secretEntries: secretEntries,
 	}
@@ -1008,6 +1012,7 @@ type mcpDeps struct {
 	tracer      oteltrace.Tracer
 	streams     *sse.Lifetime
 	logReads    *sse.Slots
+	versions    *cluster.VersionIndex
 
 	secretEntries *cluster.SecretEntries
 }
@@ -1163,6 +1168,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Tracer:          d.tracer,
 		Streams:         d.streams,
 		LogReads:        d.logReads,
+		Versions:        d.versions,
 		SecretEntries:   d.secretEntries,
 		DashboardURL:    d.issuer + d.cfg.BasePath,
 	})

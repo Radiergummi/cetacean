@@ -112,6 +112,8 @@ type ServiceSpecWriter interface {
 type ResourceCreator interface {
 	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
 	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
+	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
 }
 
 // NodeWriter is the subset of Docker node operations exposed via MCP tools.

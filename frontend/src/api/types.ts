@@ -234,6 +234,29 @@ export interface Secret {
   };
 }
 
+/**
+ * What a config or secret list item adds: the logical resource it is one
+ * version of, when other versions are readable, whether it is the newest of
+ * them and how many older ones there are, and how many services use it.
+ */
+export interface VersionedListItem {
+  VersionOf?: string | undefined;
+  VersionInferred?: boolean | undefined;
+  NewestVersion?: boolean | undefined;
+  /**
+   * An older version a service's current spec uses, which a listing shows by default.
+   */
+  InUse?: boolean | undefined;
+  /**
+   * On the newest version, how many older ones no current spec uses.
+   */
+  OlderVersions?: number | undefined;
+  UsedBy: number;
+}
+
+export type ConfigListItem = Config & VersionedListItem;
+export type SecretListItem = Secret & VersionedListItem;
+
 export interface Network {
   "@id"?: string;
   "@type"?: string;
@@ -372,6 +395,10 @@ export interface SpecChange {
 export interface ServiceRef {
   id: string;
   name: string;
+  /**
+   * Only the service's previous spec names the config or secret: a rollback needs it.
+   */
+  rollback?: boolean | undefined;
 }
 
 export interface TraefikTLSDomain {
@@ -532,11 +559,23 @@ export interface ServiceDetail {
 export interface ConfigDetail {
   config: Config;
   services: ServiceRef[] | null;
+  versionOf?: string | undefined;
+  versionInferred?: boolean | undefined;
+  newestVersion?: boolean | undefined;
+  inUse?: boolean | undefined;
+  olderVersions?: number | undefined;
+  usedBy: number;
 }
 
 export interface SecretDetail {
   secret: Secret;
   services: ServiceRef[] | null;
+  versionOf?: string | undefined;
+  versionInferred?: boolean | undefined;
+  newestVersion?: boolean | undefined;
+  inUse?: boolean | undefined;
+  olderVersions?: number | undefined;
+  usedBy: number;
 }
 
 /**
@@ -890,6 +929,7 @@ export type RecommendationCategory =
   | "no-healthcheck"
   | "no-restart-policy"
   | "newer-image"
+  | "unused-version"
   | "flaky-service"
   | "node-disk-full"
   | "node-memory-pressure"
@@ -902,7 +942,7 @@ export type RecommendationCategory =
   | "network-addresses-low";
 
 export type RecommendationSeverity = "info" | "warning" | "critical";
-export type RecommendationScope = "service" | "node" | "network" | "cluster";
+export type RecommendationScope = "service" | "node" | "network" | "cluster" | "secret" | "config";
 
 export interface Recommendation {
   category: RecommendationCategory;

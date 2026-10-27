@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
@@ -63,7 +64,7 @@ var (
 			uri:         "cetacean://recommendations",
 			name:        "recommendations",
 			title:       "Cluster recommendations",
-			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution. Each entry includes severity, category, target resource, and rationale.",
+			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution, unused old config and secret versions. Each entry includes severity, category, target resource, and rationale.",
 		},
 		{
 			uri:         "cetacean://history",
@@ -219,6 +220,8 @@ func (s *Server) readResourceContents(
 		return string(doc), composeMIMEType, nil
 	}
 
+	data = s.versionedListing(ctx, data)
+
 	// A read of one resource serves the same digest describe builds, through
 	// the same function: a subscription payload and a tool result must not
 	// differ. The URIs stay because they carry the subscriptions, which a tool
@@ -238,6 +241,26 @@ func (s *Server) readResourceContents(
 	}
 
 	return string(b), mcpMIMEType, nil
+}
+
+// versionedListing is what cetacean://configs and cetacean://secrets list:
+// what find lists by default, each group's newest readable version, with the
+// version fields its rows carry. Any other listing passes through.
+func (s *Server) versionedListing(ctx context.Context, listed any) any {
+	newest := cluster.VersionSelection{}
+
+	switch items := listed.(type) {
+	case []swarm.Config:
+		view := cluster.ConfigVersionView(s.cache, items, s.readPredicate(ctx))
+		return cluster.VersionedConfigs(view, items, newest)
+
+	case []swarm.Secret:
+		view := cluster.SecretVersionView(s.cache, items, s.readPredicate(ctx))
+		return cluster.VersionedSecrets(view, items, newest)
+
+	default:
+		return listed
+	}
 }
 
 // composeDoc renders the document both compose resources return.

@@ -59,6 +59,8 @@ const idCfgProxyConf = objectId();
 
 const idSecDBPassword = objectId();
 const idSecAPIKey = objectId();
+const idCfgProxyConfOld = objectId();
+const idSecDBPasswordOld = objectId();
 
 const idSwarm = objectId();
 
@@ -75,6 +77,7 @@ const digestTraefik = digest();
 const digestRegistry = digest();
 
 const now = Date.now();
+const ago9d = new Date(now - 9 * 24 * 60 * 60 * 1000).toISOString();
 const ago4d = new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString();
 const ago3d = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
 const ago2h = new Date(now - 2 * 60 * 60 * 1000).toISOString();
@@ -395,6 +398,18 @@ scrape_configs:
         Data: btoa(proxyTOML),
       },
     },
+    // What a hash-suffixed rotation leaves behind, grouped by its name.
+    {
+      ID: idCfgProxyConfOld,
+      Version: { Index: 12 },
+      CreatedAt: ago9d,
+      UpdatedAt: ago9d,
+      Spec: {
+        Name: "infra_proxy-config_3f9a1c2b7d4e",
+        Labels: { "com.docker.stack.namespace": "infra" },
+        Data: btoa(proxyTOML),
+      },
+    },
   ];
 }
 
@@ -407,7 +422,24 @@ function buildSecrets(): Secret[] {
       UpdatedAt: ago4d,
       Spec: {
         Name: "webshop_db-password",
-        Labels: { "com.docker.stack.namespace": "webshop" },
+        Labels: {
+          "com.docker.stack.namespace": "webshop",
+          "cetacean.version-of": "db-password",
+        },
+      },
+    },
+    // The version it replaced, grouped by label.
+    {
+      ID: idSecDBPasswordOld,
+      Version: { Index: 14 },
+      CreatedAt: ago9d,
+      UpdatedAt: ago9d,
+      Spec: {
+        Name: "webshop_db-password-2025",
+        Labels: {
+          "com.docker.stack.namespace": "webshop",
+          "cetacean.version-of": "db-password",
+        },
       },
     },
     {

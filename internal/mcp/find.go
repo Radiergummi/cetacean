@@ -73,6 +73,15 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		)
 	}
 
+	// Checked for every type, so a bad value is refused whatever it is given with.
+	label := strings.TrimSpace(req.GetString("label", ""))
+	sel, err := cluster.ParseVersionSelection(
+		req.GetString("versions", ""), "", cluster.Narrowing{Search: query, Label: label},
+	)
+	if err != nil {
+		return "", err
+	}
+
 	// Reuse the resource dispatch rather than the cache directly: it is where
 	// ACL filtering and redaction live, and duplicating it here would be a
 	// second path to keep in step.
@@ -92,7 +101,17 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		stack: strings.TrimSpace(req.GetString("stack", "")),
 		node:  strings.TrimSpace(req.GetString("node", "")),
 		image: strings.TrimSpace(req.GetString("image", "")),
-		label: strings.TrimSpace(req.GetString("label", "")),
+		label: label,
+	}
+
+	view, versioned := s.versionView(ctx, listed)
+	if versioned {
+		rows = cluster.SelectVersions(
+			rows,
+			func(r cluster.Row) string { return r.ID },
+			view.Groups,
+			sel,
+		)
 	}
 
 	// Only the label filter reads the labels, and it is the rarest of the six;
@@ -107,6 +126,10 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 	total := len(rows)
 	rows = paginate(rows, req)
+
+	if versioned {
+		cluster.AnnotateVersionRows(rows, view)
+	}
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
 
@@ -240,6 +263,19 @@ func (s *Server) rowsFor(
 		return nil, fmt.Errorf(
 			"resource type %q has no row builder for %T", resourceType, listed,
 		)
+	}
+}
+
+// versionView groups a config or secret listing, which holds only what the
+// caller may read; any other listing has no versions.
+func (s *Server) versionView(ctx context.Context, listed any) (cluster.VersionView, bool) {
+	switch items := listed.(type) {
+	case []swarm.Config:
+		return cluster.ConfigVersionView(s.cache, items, s.readPredicate(ctx)), true
+	case []swarm.Secret:
+		return cluster.SecretVersionView(s.cache, items, s.readPredicate(ctx)), true
+	default:
+		return cluster.VersionView{}, false
 	}
 }
 

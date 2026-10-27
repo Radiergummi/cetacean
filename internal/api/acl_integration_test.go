@@ -1727,6 +1727,26 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 			TargetName: "worker-1",
 			Message:    "worker-1 disk pressure",
 		},
+		{
+			Scope:      recommendations.ScopeSecret,
+			TargetID:   "sec1",
+			TargetName: "webapp_v1",
+			Message:    "an older version of webapp",
+		},
+		{
+			// Readable itself, but it reveals a newer version the caller may not read.
+			Scope:      recommendations.ScopeSecret,
+			TargetID:   "sec1",
+			TargetName: "webapp_v1",
+			Message:    "an older version of webapp",
+			Reveals:    []string{"secret:webapp_v2"},
+		},
+		{
+			Scope:      recommendations.ScopeConfig,
+			TargetID:   "cfg1",
+			TargetName: "billing_v1",
+			Message:    "an older version of billing",
+		},
 	}
 
 	engine := recommendations.NewEngine(&stubChecker{results: recs})
@@ -1739,9 +1759,9 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		// Only grant read on service:webapp — billing and node recs should be filtered out.
+		// Only service:webapp and secret:webapp_v1 — the rest should be filtered out.
 		{
-			Resources:   []string{"service:webapp"},
+			Resources:   []string{"service:webapp", "secret:webapp_v1"},
 			Audience:    []string{"*"},
 			Permissions: []string{"read"},
 		},
@@ -1763,8 +1783,8 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Total != 1 {
-		t.Fatalf("expected 1 recommendation (webapp only), got %d", resp.Total)
+	if resp.Total != 2 {
+		t.Fatalf("expected 2 recommendations (webapp and its secret), got %d", resp.Total)
 	}
 }
 

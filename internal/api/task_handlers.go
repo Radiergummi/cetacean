@@ -63,7 +63,7 @@ func (h *Handlers) HandleListTasks(w http.ResponseWriter, r *http.Request) {
 
 	r, validator = h.ifRange(r, validator)
 
-	tasks, p, ok := prepareList(h, w, r, spec)
+	tasks, _, p, ok := prepareList(h, w, r, spec, cluster.VersionSelection{})
 	if !ok {
 		return
 	}

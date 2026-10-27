@@ -41,6 +41,9 @@ const categoryDetails: Record<RecommendationCategory, string> = {
   "newer-image":
     "The registry has moved this service's image tag to a newer image than the one it runs, which " +
     "Swarm pinned when the service was deployed. Update the image to deploy what the tag names now.",
+  "unused-version":
+    "Rotation replaced this config or secret with a newer version, and no service uses it any " +
+    "more. Remove it once nothing deployed from a Compose file still names it.",
   "single-replica":
     "Running a single replica means any update, crash, or node failure causes downtime. " +
     "At least two replicas allow rolling updates and provide basic fault tolerance.",
@@ -91,7 +94,7 @@ const categoryDetails: Record<RecommendationCategory, string> = {
 
 const filterGroups: Record<string, Set<string>> = {
   sizing: sizingCategories,
-  config: new Set(["no-healthcheck", "no-restart-policy", "newer-image"]),
+  config: new Set(["no-healthcheck", "no-restart-policy", "newer-image", "unused-version"]),
   operational: new Set(["flaky-service", "node-disk-full", "node-memory-pressure"]),
   cluster: new Set([
     "single-replica",

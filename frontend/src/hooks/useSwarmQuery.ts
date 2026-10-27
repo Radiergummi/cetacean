@@ -5,7 +5,7 @@ import { type SSEEvent, useResourceStream } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -22,7 +22,17 @@ const ssePathMap: Record<string, string> = {
  * Fields the list endpoints resolve onto a row but the stream's raw resource
  * lacks; an update keeps them from the row it replaces.
  */
-const enrichedFields = ["ServiceName", "NodeHostname", "Addresses"] as const;
+const enrichedFields = [
+  "ServiceName",
+  "NodeHostname",
+  "Addresses",
+  "UsedBy",
+  "VersionOf",
+  "VersionInferred",
+  "NewestVersion",
+  "InUse",
+  "OlderVersions",
+] as const;
 
 function keepEnrichment<T>(cached: T, incoming: T): T {
   const kept: Record<string, unknown> = {};
@@ -54,12 +64,16 @@ export function useSwarmQuery<T>(
   getId: (item: T) => string,
   filtered = false,
   relevant?: (event: SSEEvent, loaded: readonly T[]) => boolean,
+  derived = false,
+  onEvent?: (event: SSEEvent) => void,
 ) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
   const filteredRef = useLatestRef(filtered);
+  const derivedRef = useLatestRef(derived);
   const relevantRef = useLatestRef(relevant);
+  const onEventRef = useLatestRef(onEvent);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
@@ -98,6 +112,7 @@ export function useSwarmQuery<T>(
         const key = [...queryKeyRef.current];
 
         if (event.type === "sync") {
+          onEventRef.current?.(event);
           void queryClient.invalidateQueries({ queryKey: key });
 
           return;
@@ -112,6 +127,8 @@ export function useSwarmQuery<T>(
           return;
         }
 
+        onEventRef.current?.(event);
+
         if (!currentData?.pages) {
           return;
         }
@@ -121,9 +138,10 @@ export function useSwarmQuery<T>(
         );
 
         // Only the server can say whether a change moves a resource into or
-        // out of a filtered collection, so ask it again — once per burst, and
-        // for whole pages, keeping the total and the loaded rows in step.
-        if (filteredRef.current && !(held && event.action === "remove")) {
+        // out of a filtered collection, so ask it again — once per burst, for
+        // whole pages. A derived list asks on a held remove too: what replaces
+        // the row may be one it does not hold yet.
+        if (filteredRef.current && !(held && event.action === "remove" && !derivedRef.current)) {
           refetchTimer.current ??= setTimeout(() => {
             refetchTimer.current = undefined;
             void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
@@ -242,9 +260,22 @@ export function useSwarmQuery<T>(
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      [queryClient, queryKeyRef, getIdRef, filteredRef],
+      [queryClient, queryKeyRef, getIdRef, filteredRef, derivedRef],
     ),
   );
+
+  // Counts the fetches that finished, so a reader can tell a list the server
+  // answered from one only a stream event has edited.
+  const [fetches, setFetches] = useState(0);
+  const wasFetching = useRef(false);
+
+  useEffect(() => {
+    if (wasFetching.current && !query.isFetching) {
+      setFetches((count) => count + 1);
+    }
+
+    wasFetching.current = query.isFetching;
+  }, [query.isFetching]);
 
   const loading = query.isLoading;
   const loadingMore = query.isFetchingNextPage;
@@ -262,5 +293,16 @@ export function useSwarmQuery<T>(
     void queryClient.invalidateQueries({ queryKey: [...queryKey] });
   }, [queryClient, queryKey]);
 
-  return { data, total, loading, loadingMore, error, retry, hasMore, loadMore, allowedMethods };
+  return {
+    data,
+    total,
+    loading,
+    loadingMore,
+    error,
+    retry,
+    hasMore,
+    loadMore,
+    allowedMethods,
+    fetches,
+  };
 }

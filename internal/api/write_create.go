@@ -37,7 +37,7 @@ type createDataResourceSpec struct {
 		labels map[string]string,
 		data []byte,
 	) (string, error)
-	buildFallback func(id string, name string) any
+	buildFallback func(id, name string, labels map[string]string) any
 	buildResponse func(id string) (any, bool)
 }
 
@@ -114,7 +114,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 
 	resp, ok := spec.buildResponse(id)
 	if !ok {
-		resp = spec.buildFallback(id, req.Name)
+		resp = spec.buildFallback(id, req.Name, labels)
 	}
 
 	writeJSONStatus(

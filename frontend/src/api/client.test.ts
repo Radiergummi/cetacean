@@ -106,6 +106,26 @@ describe("api client", () => {
     );
   });
 
+  it("pages through every version of one secret group", async () => {
+    const versions = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `s${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `db_v${from + index}` },
+        UsedBy: 0,
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: versions(0, 200), total: 230, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: versions(200, 30), total: 230, limit: 200, offset: 200 }),
+      );
+
+    expect(await api.secretVersions("s0")).toHaveLength(230);
+    expect(mockFetch).toHaveBeenLastCalledWith("/secrets?versionsOf=s0", expect.anything());
+  });
+
   it("pages through every secret for a picker", async () => {
     const secrets = (from: number, count: number) =>
       Array.from({ length: count }, (_, index) => ({
@@ -125,8 +145,9 @@ describe("api client", () => {
 
     expect(all).toHaveLength(250);
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    // A picker offers every version, not only the newest of each group.
     expect(mockFetch).toHaveBeenLastCalledWith(
-      "/secrets",
+      "/secrets?versions=all",
       expect.objectContaining({
         headers: { Accept: "application/json", Range: "items 200-399" },
       }),

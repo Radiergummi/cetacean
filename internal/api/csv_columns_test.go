@@ -11,7 +11,7 @@ const widgetColumnsPath = "../../frontend/src/widgets/table/columns.ts"
 
 var (
 	widgetTypeBlock = regexp.MustCompile(`(?ms)^  (\w+): \[(.*?)\],$`)
-	widgetColumn    = regexp.MustCompile(`column\("(\w+)",\s*"([^"]+)"\)`)
+	widgetColumn    = regexp.MustCompile(`(?:column|flag)\("(\w+)",\s*"([^"]+)"\)`)
 )
 
 // TestCSVColumnsMatchTheWidget holds csvRowColumns and the widget's map

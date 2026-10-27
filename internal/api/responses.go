@@ -67,12 +67,14 @@ type TaskNodeRef struct {
 type ConfigResponse struct {
 	Config   swarm.Config       `json:"config"`
 	Services []cache.ServiceRef `json:"services"`
+	cluster.VersionDetail
 }
 
 // SecretResponse is the extra payload for GET /secrets/{id}.
 type SecretResponse struct {
 	Secret   swarm.Secret       `json:"secret"`
 	Services []cache.ServiceRef `json:"services"`
+	cluster.VersionDetail
 }
 
 // NetworkResponse is the extra payload for GET /networks/{id}.

@@ -147,17 +147,43 @@ Swarm can't change a secret or a config once it exists, so rotating one means re
 
 1. On the **Secrets** list, create the replacement under a new name, such as `db_password_v2`. This needs
    [operations level][operations-level] 2.
-2. Open the old secret. Its page lists every service that mounts it. On each service, edit **Secrets**: add the
+2. On the replacement's page, add the label `cetacean.version-of=db_password` so it
+   [groups with the old one](#versions). If the old one carries a `com.docker.stack.namespace` label, add that too.
+3. Open the old secret. Its page lists every service that mounts it. On each service, edit **Secrets**: add the
    replacement with the same **Target** the old one had, so the container reads the same file, and remove the old
    one. Saving rolls the service out once. This also needs level 2.
-3. Once the old secret's page lists no services, remove it. This needs level 3, and Docker refuses while any service
-   still mounts it.
+4. Once the old secret's page lists no services but those marked **for a rollback**, remove it. This needs level 3,
+   and Docker refuses while any service still mounts it. The confirmation names the services that lose their
+   rollback target.
 
 Configs follow the same steps from the **Configs** list and each service's **Configs** editor. A service deployed
 from a Compose file gets the old reference back on the next `docker stack deploy`, so change the file as well.
 
 Over the API, the same sequence is `POST /secrets`, then `PATCH /services/{id}/secrets` for each service named in
 `GET /secrets/{id}`, then `DELETE /secrets/{id}`; see the [API guide][api].
+
+### Versions
+
+Rotation leaves a trail of versions behind, so the config and secret lists show the newest version of each group,
+and beside it any older version a service still runs, marked **older, in use**: a version in use is never hidden.
+**+N older** loads the rest beneath the newest. The **Used by** column counts the services using each one, or whose
+previous spec does, since a rollback needs it (the detail page lists those as **for a rollback**), and an older
+version none of the services you can see uses says so. A search, a filter expression, or a label filter shows every
+version it matches; narrowing by stack, state, node or image does not.
+
+Versions group only within one stack, by their `com.docker.stack.namespace` label, so a replacement must carry the
+same stack label as the version it replaces. Within a stack, a config or secret labeled `cetacean.version-of=<name>`
+is a version of `<name>`, taken as written apart from a `<stack>_` or `<stack>-` prefix, so `api-v1` and `api-v2`
+are two names. Without that label, Cetacean matches names instead, dropping the same prefix and a version suffix,
+which is `_` or `-` followed by either eight or more hex digits with at least one letter among them
+(`app_env_0a1b2c3d4e5f`, as `docker-stack-deploy` and SwarmCD write) or `v` and a number (`db_password_v3`). A number
+alone isn't one, so `worker_1` and `backup_20240101` stay apart. So `myapp_db_password` groups with
+`myapp_db_password_v2`, and with a replacement labeled `db_password` in the same stack. A group matched by name says
+**inferred from names**, because a name can match by accident; label your versions to make it certain.
+
+The newest version is the one created last. Each older version that no service uses is flagged as an
+`unused-version` [recommendation][recommendations], so you know what's safe to remove. Both the groups and the counts
+cover only the configs, secrets, and services you may read.
 
 ## Charts
 
