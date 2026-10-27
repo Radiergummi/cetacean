@@ -286,9 +286,8 @@ func TestOperationalChecker_AllHealthy(t *testing.T) {
 }
 
 // The window a count covers is reported so a chronic fault reads differently
-// from a new one — and formatPromDuration, a PromQL range formatter, truncates
-// to whole hours. The tracker starts with the process, so for the first hour
-// after a restart every one of these reads "over the past 0h".
+// from a new one. The tracker starts with the process, so for the first hour
+// after a restart that window is under an hour, and must not read "past 0h".
 func TestOperationalChecker_FlakyServiceWindowIsNeverZero(t *testing.T) {
 	c := newOperationalCache([]swarm.Service{
 		{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}}},
@@ -315,8 +314,7 @@ func TestOperationalChecker_FlakyServiceWindowIsNeverZero(t *testing.T) {
 	}
 }
 
-// formatCountedWindow must still defer to the PromQL formatter above an hour,
-// so the long windows keep reading the way the sizing recommendations do.
+// formatCountedWindow reads like the sizing lookback, to the minute.
 func TestFormatCountedWindow(t *testing.T) {
 	cases := []struct {
 		in   time.Duration
@@ -324,7 +322,7 @@ func TestFormatCountedWindow(t *testing.T) {
 	}{
 		{30 * time.Second, "1m"},
 		{45 * time.Minute, "45m"},
-		{90 * time.Minute, "1h"},
+		{90*time.Minute + 20*time.Second, "90m"},
 		{25 * time.Hour, "25h"},
 		{7 * 24 * time.Hour, "7d"},
 	}
