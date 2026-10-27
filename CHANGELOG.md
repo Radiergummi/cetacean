@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- Detail pages, the cluster overview, topology and history keep refreshing during a rollout or crash loop instead of waiting for the events to stop
+- A node without its own node-exporter no longer shows the metrics of another node whose name starts the same, like `worker-1` for `worker-12`
+- In a table, Enter on a link or button opens that link instead of the selected row, and the selection stays on its row as rows come and go
+- A global service with nothing running shows as failing on the stack page instead of a green 0/0; every service health indicator now follows the same rule
+- Every detail page that fails to load says why and offers Retry
+- Attaching a config in place of one removed in the same edit defaults to the removed config's path, as secrets already did
+- The task list asks Prometheus only for the services it shows, and list metrics stop polling while the tab is in the background
 
 ## [0.18.0] - 2026-10-24
 
