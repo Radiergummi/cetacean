@@ -446,3 +446,39 @@ export const drainImpactSchema = z.looseObject({
 export const unlockKeySchema = z.looseObject({ unlockKey: z.string() });
 export const metricsLabelsSchema = z.looseObject({ data: z.array(z.string()) });
 export const dockerVersionSchema = z.looseObject({ version: z.string(), url: z.string() });
+
+export const imageProvenanceSchema = z.looseObject({
+  image: z.string(),
+  status: z.enum([
+    "available",
+    "none",
+    "unpinned",
+    "private",
+    "missing",
+    "unavailable",
+    "disabled",
+  ]),
+  retryAfter: z.string().optional(),
+  platforms: z
+    .array(
+      z.looseObject({
+        platform: z.string(),
+        manifestDigest: z.string(),
+        runningTasks: z.number(),
+        dockerfile: z.boolean(),
+      }),
+    )
+    .optional(),
+});
+export const imageSBOMSchema = z.looseObject({
+  platform: z.string(),
+  summary: z.looseObject({ total: z.number(), licensed: z.number() }),
+  packages: z.array(z.looseObject({ name: z.string(), ecosystem: z.string() })),
+});
+export const imageDockerfileSchema = z.looseObject({
+  platform: z.string(),
+  lines: z.array(z.string()),
+  steps: z.array(z.looseObject({ ranges: z.array(z.array(z.number())) })).nullable(),
+  totalSize: z.number(),
+  baseSize: z.number(),
+});

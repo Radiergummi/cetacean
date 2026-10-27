@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { Node, Service, Task } from "../api/types";
+import BuildSection from "../components/build/BuildSection";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import ErrorBoundary from "../components/ErrorBoundary";
 import FetchError from "../components/FetchError";
@@ -272,6 +273,13 @@ export default function TaskDetail() {
           </div>
         )}
       </div>
+
+      <ErrorBoundary inline>
+        <BuildSection
+          kind="task"
+          id={task.ID}
+        />
+      </ErrorBoundary>
 
       {hasCadvisor && taskState === "running" && myMetrics && (
         <TaskResourceGauges

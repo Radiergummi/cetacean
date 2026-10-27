@@ -10,6 +10,9 @@ import type {
   ContainerConfig,
   DiskUsageSummary,
   Healthcheck,
+  ImageDockerfile,
+  ImageProvenance,
+  ImageSBOM,
   HistoryEntry,
   LogDriver,
   MonitoringStatus,
@@ -102,6 +105,106 @@ function stackLinks(services: Service[]): ServiceLink[] {
 function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   return HttpResponse.json(data, { status });
 }
+
+/**
+ * Every demo image claims the same build, modelled on what BuildKit records
+ * for an image built on GitHub Actions with mode=max provenance.
+ */
+function demoProvenance(service: boolean): ImageProvenance {
+  return {
+    image:
+      "ghcr.io/example/app:1.4.2@sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    status: "available",
+    platforms: [
+      {
+        platform: "linux/amd64",
+        manifestDigest: "sha256:3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+        runningTasks: service ? 2 : 0,
+        dockerfile: true,
+        sbom: {
+          digest: "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+          size: 48_213,
+          tooLarge: false,
+        },
+        provenance: {
+          source: {
+            repository: "https://github.com/example/app.git",
+            ref: "refs/tags/v1.4.2",
+            commit: "1c368712e124e90ee912ec8615afa78974ddad19",
+            repositoryUrl: "https://github.com/example/app",
+            commitUrl:
+              "https://github.com/example/app/commit/1c368712e124e90ee912ec8615afa78974ddad19",
+          },
+          dockerfilePath: "Dockerfile",
+          builder: { value: "https://github.com/example/app/actions/runs/1234/attempts/1" },
+          startedOn: "2026-10-20T09:12:00Z",
+          finishedOn: "2026-10-20T09:13:41Z",
+          inputs: [{ uri: "pkg:docker/alpine@3.20", image: "alpine:3.20" }],
+          ci: {
+            actor: "demo-user",
+            event: "push",
+            ref: "refs/tags/v1.4.2",
+            workflow: ".github/workflows/release.yaml",
+            runId: "1234",
+            runUrl: "https://github.com/example/app/actions/runs/1234/attempts/1",
+          },
+        },
+      },
+    ],
+  };
+}
+
+const demoSBOM: ImageSBOM = {
+  platform: "linux/amd64",
+  generators: ["Tool: syft-v1.42.3", "Tool: buildkit-v0.32.2"],
+  created: "2026-10-20T09:13:40Z",
+  summary: { total: 3, licensed: 2, ecosystems: { apk: 2, golang: 1 } },
+  packages: [
+    {
+      name: "busybox",
+      version: "1.36.1-r29",
+      ecosystem: "apk",
+      license: "GPL-2.0-only",
+      purl: "pkg:apk/alpine/busybox@1.36.1-r29",
+      foundIn: "apk db cataloger: /lib/apk/db/installed",
+    },
+    {
+      name: "github.com/example/app",
+      version: "v1.4.2",
+      ecosystem: "golang",
+      license: "",
+      purl: "pkg:golang/github.com/example/app@v1.4.2",
+      foundIn: "go module information: /bin/app",
+    },
+    {
+      name: "musl",
+      version: "1.2.5-r0",
+      ecosystem: "apk",
+      license: "MIT",
+      purl: "pkg:apk/alpine/musl@1.2.5-r0",
+      foundIn: "apk db cataloger: /lib/apk/db/installed",
+    },
+  ],
+};
+
+const demoDockerfile: ImageDockerfile = {
+  platform: "linux/amd64",
+  path: "Dockerfile",
+  lines: [
+    "FROM alpine:3.20",
+    "RUN apk add --no-cache ca-certificates",
+    "COPY app /bin/app",
+    'ENTRYPOINT ["/bin/app"]',
+  ],
+  steps: [
+    { ranges: [[1, 1]], base: true, layers: [{ digest: "sha256:base", size: 3_623_807 }] },
+    { ranges: [[2, 2]], base: false, layers: [{ digest: "sha256:certs", size: 182_330 }] },
+    { ranges: [[3, 3]], base: false, layers: [{ digest: "sha256:app", size: 9_412_602 }] },
+  ],
+  unattributed: [],
+  totalSize: 13_218_739,
+  baseSize: 3_623_807,
+};
 
 /**
  * The demo visitor is an operator at operations level 3 holding every grant, so
@@ -1297,6 +1400,14 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         healthcheck: service.Spec.TaskTemplate!.ContainerSpec?.Healthcheck ?? null,
       });
     }),
+
+    ...["services", "tasks"].flatMap((kind) => [
+      get(`*/${kind}/:id/provenance`, () =>
+        jsonResponse<ImageProvenance>(demoProvenance(kind === "services")),
+      ),
+      get(`*/${kind}/:id/sbom`, () => jsonResponse<ImageSBOM>(demoSBOM)),
+      get(`*/${kind}/:id/dockerfile`, () => jsonResponse<ImageDockerfile>(demoDockerfile)),
+    ]),
 
     get("*/services/:id/configs", ({ params }) => {
       const service = dataset.servicesByID.get(params.id as string);

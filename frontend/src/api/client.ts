@@ -11,6 +11,9 @@ import type {
   DrainImpact,
   Healthcheck,
   HistoryEntry,
+  ImageDockerfile,
+  ImageProvenance,
+  ImageSBOM,
   Identity,
   JGFDocument,
   LicensesResponse,
@@ -299,6 +302,28 @@ async function fetchJSON<T>(
     editable: editableOf(response),
     canonicalPath: canonicalPathOf(data),
   };
+}
+
+/**
+ * The resources whose image attestations can be read: a service's image is the
+ * one its spec names, a task's the one it runs.
+ */
+export type AttestedKind = "service" | "task";
+
+/**
+ * The path of an image's SBOM or Dockerfile, with the suffix that picks a
+ * download representation when one is given.
+ */
+export function attestationPath(
+  kind: AttestedKind,
+  id: string,
+  resource: "sbom" | "dockerfile",
+  platform?: string | undefined,
+  suffix = "",
+) {
+  const query = platform ? `?platform=${encodeURIComponent(platform)}` : "";
+
+  return `/${kind}s/${encodeURIComponent(id)}/${resource}${suffix}${query}`;
 }
 
 /**
@@ -1141,6 +1166,24 @@ export const api = {
       signal,
       schema.healthcheckSchema,
     ).then(({ data }) => data.healthcheck),
+  provenance: (kind: AttestedKind, id: string, signal?: AbortSignal) =>
+    fetchJSON<ImageProvenance>(
+      `/${kind}s/${id}/provenance`,
+      signal,
+      schema.imageProvenanceSchema,
+    ).then(({ data }) => data),
+  sbom: (kind: AttestedKind, id: string, platform?: string, signal?: AbortSignal) =>
+    fetchJSON<ImageSBOM>(
+      attestationPath(kind, id, "sbom", platform),
+      signal,
+      schema.imageSBOMSchema,
+    ).then(({ data }) => data),
+  dockerfile: (kind: AttestedKind, id: string, platform?: string, signal?: AbortSignal) =>
+    fetchJSON<ImageDockerfile>(
+      attestationPath(kind, id, "dockerfile", platform),
+      signal,
+      schema.imageDockerfileSchema,
+    ).then(({ data }) => data),
   serviceConfigs: (id: string, signal?: AbortSignal) =>
     fetchJSON<{ configs: ServiceConfigRef[] }>(
       `/services/${id}/configs`,

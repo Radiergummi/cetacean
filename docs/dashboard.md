@@ -131,6 +131,21 @@ compose document, with buttons to copy it or download it as a `.yaml` file. It r
 is running now, so it isn't the file the stack was first deployed from, and it references secrets and configs
 rather than exporting their contents.
 
+## Build information
+
+When an image was pushed by BuildKit with attestations, which minimal provenance is by default, and which the Docker
+Official Images all carry, service and task pages show a **Build** section under the overview. It's read from the
+image's registry, anonymously, when the section scrolls into view, and it shows what the build recorded:
+
+- the source repository and commit, linked on GitHub, GitLab, and Codeberg
+- for an image built on GitHub Actions, who pushed what, the workflow, and a link to the run
+- the builder, when the build ran and how long it took, the Dockerfile's path, and the images it was built from
+
+Nothing in it is verified: it's what the image says about itself. A multi-platform image gets a platform picker,
+which starts on the platform most of the service's running tasks are on; a task shows the platform its node runs.
+When there is nothing to show, the section says why in one line: the image has no attestations, isn't pinned by
+digest, is private, or is gone from its registry. [`server.image_attestations`][configuration] turns it off.
+
 ## Network addresses
 
 An overlay network that runs out of addresses fails new tasks, and the default `/24` holds 253. The networks list
@@ -283,6 +298,7 @@ attribution document.
 [api]: api
 [authentication]: authentication
 [authorization]: authorization
+[configuration]: configuration
 [deployment-action]: https://github.com/matchory/docker-swarm-deployment-action
 [feeds]: api#feeds
 [filter-fields-by-resource]: api#filter-fields-by-resource
