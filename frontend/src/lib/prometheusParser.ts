@@ -15,11 +15,9 @@ function seriesKey(
   metric: Record<string, string> | undefined,
   labelKey: string | readonly string[],
 ): string {
-  if (typeof labelKey === "string") {
-    return metric?.[labelKey] || "";
-  }
+  const labels = typeof labelKey === "string" ? [labelKey] : labelKey;
 
-  return joinLabelValues(labelKey.map((label) => metric?.[label] ?? ""));
+  return joinLabelValues(labels.map((label) => metric?.[label] ?? ""));
 }
 
 /**

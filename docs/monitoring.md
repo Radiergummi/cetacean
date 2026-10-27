@@ -103,10 +103,14 @@ The [dashboard][dashboard] also maps a node to its instance through `node_uname_
 
 ### ② cAdvisor must emit the Swarm service label
 
-Container metrics are attributed to services through `container_label_com_docker_swarm_service_name`. The task
-charts and the per-node usage in the physical topology also read `container_label_com_docker_swarm_service_id`,
-`container_label_com_docker_swarm_node_id` and `container_label_com_docker_swarm_task_id`. cAdvisor emits all four
-when started with `--store_container_labels=true`.
+Container metrics are attributed to services through `container_label_com_docker_swarm_service_name`. Other
+features read further Swarm labels:
+
+- `container_label_com_docker_swarm_task_id`: the task charts, and the per-node usage in the physical topology.
+- `container_label_com_docker_swarm_node_id`: the node page's container charts, and the physical topology.
+- `container_label_com_docker_swarm_service_id`: the physical topology and the sizing recommendations.
+
+cAdvisor emits all four when started with `--store_container_labels=true`.
 
 cAdvisor also needs containerd's socket, not just Docker's. Without it Prometheus looks healthy and `container_*`
 metrics exist, but none carries the service label, so per-service charts stay empty and no sizing recommendation is

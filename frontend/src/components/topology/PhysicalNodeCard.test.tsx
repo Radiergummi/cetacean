@@ -54,10 +54,10 @@ function renderCard(state: Partial<PhysicalViewState>) {
 
 describe("PhysicalNodeCard", () => {
   it("shows a service's usage on this node, keyed by the node's own ID", () => {
-    renderCard({ usage: { "svc1/n1": { cpu: 12.5, memory: null } } });
+    renderCard({ usage: { "svc1/n1": { cpu: 250, memory: null } } });
 
-    expect(screen.getByRole("button", { name: "Service web" }).textContent).toContain("12.5%");
-    expect(screen.getByTitle("12.5%").className).toContain("truncate");
+    expect(screen.getByRole("button", { name: "Service web" }).textContent).toContain("2.5 cores");
+    expect(screen.getByTitle("2.5 cores").className).toContain("truncate");
   });
 
   it("shows no node figures when the node has none", () => {

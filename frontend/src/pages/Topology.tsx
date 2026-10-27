@@ -21,6 +21,7 @@ import { PhysicalViewContext } from "../components/topology/PhysicalViewContext"
 import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
+import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { nodeCpu, nodeMemory, useNodeMetrics } from "../hooks/useNodeMetrics";
 import { usePlacementMetrics } from "../hooks/usePlacementMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
@@ -44,7 +45,8 @@ const logicalNodeTypes = {
 };
 const logicalEdgeTypes = { networkEdge: NetworkEdge };
 const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
-const nodeUsage = { instant: [nodeCpu, nodeMemory], range: [] };
+const nodeUsageInstant = [nodeCpu, nodeMemory];
+const nodeUsageRange: never[] = [];
 
 type View = "logical" | "physical";
 
@@ -205,7 +207,11 @@ function PhysicalView({
 }) {
   const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
   const usage = usePlacementMetrics();
-  const { getForNode } = useNodeMetrics(nodeUsage);
+  const { getForNode } = useNodeMetrics({
+    instant: nodeUsageInstant,
+    range: nodeUsageRange,
+    enabled: isNodeExporterReady(useMonitoringStatus()),
+  });
 
   const overlay = useMemo(
     () => ({ network, usage, nodeMetrics: getForNode }),

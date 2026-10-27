@@ -1,6 +1,6 @@
 import { useInstanceResolver } from "./useInstanceResolver";
 import { useMetricsMap, type MetricsMapSpec } from "./useMetricsMap";
-import { isNodeExporterReady, useMonitoringStatus } from "./useMonitoringStatus";
+import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useCallback, useMemo } from "react";
 
 export interface NodeMetrics {
@@ -26,29 +26,29 @@ type RangeField = NonNullable<MetricsMapSpec<NodeMetrics>["range"]>[number];
 
 export const nodeCpu: InstantField = {
   query: cpuQuery,
-  assign: (m, v) => {
-    m.cpu = v;
+  assign: (metrics, value) => {
+    metrics.cpu = value;
   },
 };
 
 export const nodeMemory: InstantField = {
   query: memQuery,
-  assign: (m, v) => {
-    m.memory = v;
+  assign: (metrics, value) => {
+    metrics.memory = value;
   },
 };
 
-export const nodeDisk: InstantField = {
+const nodeDisk: InstantField = {
   query: diskQuery,
-  assign: (m, v) => {
-    m.disk = v;
+  assign: (metrics, value) => {
+    metrics.disk = value;
   },
 };
 
-export const nodeCpuHistory: RangeField = {
+const nodeCpuHistory: RangeField = {
   query: cpuQuery,
-  assign: (m, v) => {
-    m.cpuHistory = v;
+  assign: (metrics, value) => {
+    metrics.cpuHistory = value;
   },
 };
 
@@ -57,15 +57,17 @@ const everyRange = [nodeCpuHistory];
 
 // Fetches per-instance node-exporter metrics, by default every field, and maps
 // them by instance label. Nodes are matched to instances via
-// useInstanceResolver (hostname-based).
+// useInstanceResolver (hostname-based). Never fetches without Prometheus.
 export function useNodeMetrics({
   instant = everyInstant,
   range = everyRange,
+  enabled: requested = true,
 }: {
   instant?: readonly InstantField[] | undefined;
   range?: readonly RangeField[] | undefined;
+  enabled?: boolean | undefined;
 } = {}) {
-  const enabled = isNodeExporterReady(useMonitoringStatus());
+  const enabled = isPrometheusReady(useMonitoringStatus()) && requested;
   const { resolve } = useInstanceResolver(enabled);
   const queries = [...instant, ...range].map(({ query }) => query).join("|");
   const byInstance = useMetricsMap(

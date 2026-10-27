@@ -3,7 +3,7 @@ import { usePhysicalView } from "./PhysicalViewContext";
 import { colorForValue } from "@/components/metrics/ResourceGauge";
 import type { NodeMetrics } from "@/hooks/useNodeMetrics";
 import { placementUsageKey, type PlacementUsage } from "@/hooks/usePlacementMetrics";
-import { formatBytes, formatPercentage } from "@/lib/format";
+import { formatBytes, formatCores, formatPercentage } from "@/lib/format";
 import { replicaHealthColor } from "@/lib/statusColor";
 import { dimmedByNetwork, urnToId } from "@/lib/topologyTransform";
 import type { NodeProps } from "@xyflow/react";
@@ -55,7 +55,7 @@ function NodeUsage({ metrics }: { metrics: NodeMetrics }) {
 
 function ServiceUsage({ usage }: { usage: PlacementUsage }) {
   const figures = [
-    usage.cpu != null ? formatPercentage(usage.cpu, 1) : null,
+    usage.cpu != null ? formatCores(usage.cpu / 100) : null,
     usage.memory != null ? formatBytes(usage.memory) : null,
   ].filter((figure) => figure !== null);
 
