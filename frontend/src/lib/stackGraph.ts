@@ -21,8 +21,8 @@ export type ServiceNodeData = {
   tasks?: TaskCount | undefined;
 };
 
-/** What the page's own task poll found, absent until the first answer lands. */
-export type TaskCount = { running: number; desired: number };
+/** The running count each service reports; `desired` is absent for a global service. */
+export type TaskCount = { running: number; desired?: number | undefined };
 
 export type MountNodeData = {
   name: string;

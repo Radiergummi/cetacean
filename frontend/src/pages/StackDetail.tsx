@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { StackResponse, Task } from "../api/types";
+import type { StackResponse } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
@@ -13,30 +13,24 @@ import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { serviceModeLabel } from "../lib/deriveServiceState";
+import { desiredTasks } from "../lib/serviceHealth";
 import type { TaskCount } from "../lib/stackGraph";
-import { lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { lazy, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 
 const StackGraph = lazy(() => import("../components/stack-detail/stack-graph/StackGraph"));
 
-/** The poll re-runs on every stack event; an unchanged answer should not redraw. */
-function sameCounts(before: Record<string, TaskCount>, after: Record<string, TaskCount>) {
-  const ids = Object.keys(after);
-
-  return (
-    ids.length === Object.keys(before).length &&
-    ids.every(
-      (id) =>
-        before[id]?.running === after[id]?.running && before[id]?.desired === after[id]?.desired,
-    )
-  );
-}
-
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
 
-  // Any of the stack's resources changing changes the document it projects.
-  const extraQueryKeys = useMemo(() => [composeQueryKey(`stack:${name}`)] as const, [name]);
+  // Any of the stack's resources changing changes the document it projects,
+  // and the running counts its services report.
+  const servicesKey = useMemo(() => ["stack-services", name] as const, [name]);
+  const extraQueryKeys = useMemo(
+    () => [composeQueryKey(`stack:${name}`), servicesKey] as const,
+    [name, servicesKey],
+  );
 
   const {
     data: response,
@@ -49,58 +43,21 @@ export default function StackDetail() {
   const stack = response?.stack;
   const links = response?.links;
 
-  const [taskCounts, setTaskCounts] = useState<Record<string, TaskCount>>({});
+  const { data: members } = useQuery({
+    queryKey: servicesKey,
+    queryFn: ({ signal }) => api.services({ filter: `stack == ${JSON.stringify(name)}` }, signal),
+    enabled: !!stack?.services?.length,
+  });
 
-  const taskDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasInitialTaskFetchRef = useRef(false);
+  const taskCounts = useMemo(() => {
+    const counts: Record<string, TaskCount> = {};
 
-  useEffect(() => {
-    if (!stack?.services?.length) {
-      return;
+    for (const { ID, RunningTasks, Spec } of members?.data.items ?? []) {
+      counts[ID] = { running: RunningTasks, desired: desiredTasks(Spec.Mode) };
     }
 
-    if (taskDebounceRef.current) {
-      clearTimeout(taskDebounceRef.current);
-    }
-
-    const controller = new AbortController();
-    const delay = hasInitialTaskFetchRef.current ? 2000 : 0;
-
-    taskDebounceRef.current = setTimeout(() => {
-      hasInitialTaskFetchRef.current = true;
-
-      Promise.all(
-        stack.services.map((service) =>
-          api
-            .serviceTasks(service.ID, controller.signal)
-            .then((tasks: Task[]) => [service, tasks] as const)
-            .catch(() => [service, []] as const),
-        ),
-      ).then((results) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        const counts: Record<string, TaskCount> = {};
-
-        for (const [service, tasks] of results) {
-          const { Global, GlobalJob, ReplicatedJob } = service.Spec.Mode;
-          const running = tasks.filter(({ Status: { State } }) => State === "running").length;
-          const desired =
-            service.Spec.Mode.Replicated?.Replicas ??
-            (Global || GlobalJob || ReplicatedJob ? running : 1);
-
-          counts[service.ID] = { running, desired };
-        }
-        setTaskCounts((previous) => (sameCounts(previous, counts) ? previous : counts));
-      });
-    }, delay);
-
-    return () => {
-      clearTimeout(taskDebounceRef.current!);
-      controller.abort();
-    };
-  }, [stack]);
+    return counts;
+  }, [members]);
 
   if (error) {
     return <FetchError message="Failed to load stack" />;
@@ -185,7 +142,8 @@ export default function StackDetail() {
                 <td className="p-3 text-sm tabular-nums">
                   {taskCounts[ID] ? (
                     <span>
-                      <TaskHealth {...taskCounts[ID]} />/{taskCounts[ID].desired}
+                      <TaskHealth {...taskCounts[ID]} />
+                      {taskCounts[ID].desired !== undefined && `/${taskCounts[ID].desired}`}
                     </span>
                   ) : (
                     "—"

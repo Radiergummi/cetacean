@@ -13,6 +13,7 @@ import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStat
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { rolloutToneClass, serviceModeLabel, serviceUpdateStatus } from "../lib/deriveServiceState";
+import { desiredTasks } from "../lib/serviceHealth";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
 import { cn } from "../lib/utils";
@@ -211,7 +212,7 @@ export default function ServiceList() {
               <span className="flex items-center gap-2">
                 <HealthDot
                   running={service.RunningTasks}
-                  desired={desired ?? service.RunningTasks}
+                  desired={desiredTasks(service.Spec.Mode)}
                 />
                 <ResourceName name={service.Spec.Name} />
               </span>

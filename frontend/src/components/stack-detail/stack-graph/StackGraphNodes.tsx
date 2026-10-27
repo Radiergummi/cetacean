@@ -106,7 +106,8 @@ export const ServiceNode = memo(function ServiceNode({
           <span className="text-xs text-muted-foreground tabular-nums">
             {data.tasks ? (
               <>
-                <TaskHealth {...data.tasks} />/{data.tasks.desired} running
+                <TaskHealth {...data.tasks} />
+                {data.tasks.desired !== undefined && `/${data.tasks.desired}`} running
               </>
             ) : (
               replicas

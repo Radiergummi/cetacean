@@ -25,6 +25,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/client")>()),
   api: {
     stack: vi.fn<() => Promise<unknown>>(),
+    services: vi.fn<() => Promise<unknown>>(),
     serviceTasks: vi.fn<() => Promise<unknown>>(),
   },
 }));
@@ -50,6 +51,10 @@ beforeEach(() => {
     allowedMethods: new Set<string>(),
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
+  vi.mocked(api.services).mockResolvedValue({
+    data: { items: [], total: 0, limit: 50, offset: 0 },
+    allowedMethods: new Set<string>(),
+  } as never);
 });
 
 describe("StackDetail", () => {
@@ -119,6 +124,35 @@ describe("StackDetail", () => {
 
     expect(screen.queryByRole("list", { name: "Links" })).not.toBeInTheDocument();
     expect(Array.from(header?.children ?? []).every((child) => child.hasChildNodes())).toBe(true);
+  });
+
+  // A global service's target is not known to the page, so a crash loop that
+  // leaves nothing running must not read as 0/0 and healthy.
+  it("shows a global service with nothing running as critical", async () => {
+    const global = { ID: "svc2", Spec: { Name: "web_agent", Mode: { Global: {} } } };
+
+    vi.mocked(api.stack).mockResolvedValue({
+      data: { stack: { ...stack, services: [global] } },
+      allowedMethods: new Set<string>(),
+    } as never);
+    vi.mocked(api.services).mockResolvedValue({
+      data: { items: [{ ...global, RunningTasks: 0 }], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set<string>(),
+    } as never);
+
+    const { container } = renderStackDetail();
+
+    await waitFor(() => {
+      expect(container.querySelector("td [data-health]")).toHaveAttribute(
+        "data-health",
+        "critical",
+      );
+    });
+    expect(api.services).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: 'stack == "web"' }),
+      expect.anything(),
+    );
+    expect(api.serviceTasks).not.toHaveBeenCalled();
   });
 });
 
