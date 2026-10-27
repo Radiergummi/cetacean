@@ -2,7 +2,7 @@ package cluster
 
 import (
 	"cmp"
-	"net/url"
+	"net/netip"
 	"slices"
 	"strings"
 
@@ -22,6 +22,9 @@ type ServiceLink struct {
 	Title string `json:"title"`
 	Href  string `json:"href,omitempty"`
 	Text  string `json:"text,omitempty"`
+
+	// Services names the member services declaring the link. Stack links only.
+	Services []string `json:"services,omitempty"`
 }
 
 // ServiceLinks reads the cetacean.link.<id>=<url> labels, with the optional
@@ -31,6 +34,8 @@ func ServiceLinks(labels map[string]string) []ServiceLink {
 
 	for key, value := range labels {
 		id, ok := strings.CutPrefix(key, linkLabelPrefix)
+		value = strings.TrimSpace(value)
+
 		if !ok || id == "" || value == "" || strings.HasSuffix(id, linkTitleSuffix) {
 			continue
 		}
@@ -55,13 +60,28 @@ func ServiceLinks(labels map[string]string) []ServiceLink {
 	return links
 }
 
-// StackLinks is the union of its member services' links, with exact
-// duplicates merged. The order is total, so the response's ETag is stable.
+// StackLinks is the union of its member services' links. Exact duplicates
+// merge into one link naming every service that declares it. The order is
+// total, so the response's ETag is stable.
 func StackLinks(services []swarm.Service) []ServiceLink {
-	var links []ServiceLink
+	type key struct{ id, title, href, text string }
+
+	declaredBy := make(map[key][]string)
 
 	for _, svc := range services {
-		links = append(links, ServiceLinks(svc.Spec.Labels)...)
+		for _, link := range ServiceLinks(svc.Spec.Labels) {
+			k := key{link.ID, link.Title, link.Href, link.Text}
+			declaredBy[k] = append(declaredBy[k], svc.Spec.Name)
+		}
+	}
+
+	links := make([]ServiceLink, 0, len(declaredBy))
+
+	for k, names := range declaredBy {
+		slices.Sort(names)
+		links = append(links, ServiceLink{
+			ID: k.id, Title: k.title, Href: k.href, Text: k.text, Services: names,
+		})
 	}
 
 	slices.SortFunc(links, func(a, b ServiceLink) int {
@@ -73,25 +93,104 @@ func StackLinks(services []swarm.Service) []ServiceLink {
 		)
 	})
 
-	return slices.Compact(links)
+	if len(links) == 0 {
+		return nil
+	}
+
+	return links
 }
 
-// isHTTPURL accepts an absolute http(s) URL with a hostname, written only in
-// the characters RFC 3986 allows, so an href is always a valid URI.
+// isHTTPURL accepts only an absolute http(s) URL that is a valid URI by the
+// RFC 3986 grammar, with a non-empty host, so an href is always well-formed.
 func isHTTPURL(value string) bool {
-	if strings.ContainsFunc(value, func(r rune) bool { return !isURIChar(r) }) {
+	scheme, rest, ok := strings.Cut(value, "://")
+	if !ok || !strings.EqualFold(scheme, "http") && !strings.EqualFold(scheme, "https") {
 		return false
 	}
 
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Hostname() == "" {
+	rest, fragment, hasFragment := strings.Cut(rest, "#")
+	if hasFragment && !validURIPart(fragment, ":@/?") {
 		return false
 	}
 
-	return strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")
+	rest, query, hasQuery := strings.Cut(rest, "?")
+	if hasQuery && !validURIPart(query, ":@/?") {
+		return false
+	}
+
+	authority, path := rest, ""
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		authority, path = rest[:i], rest[i:]
+	}
+
+	return validURIPart(path, ":@/") && validAuthority(authority)
 }
 
-func isURIChar(r rune) bool {
-	return 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' ||
-		strings.ContainsRune("-._~:/?#[]@!$&'()*+,;=%", r)
+// validAuthority checks [userinfo "@"] host [":" port], where host is a
+// bracketed IPv6 literal or a non-empty reg-name.
+func validAuthority(authority string) bool {
+	if i := strings.LastIndexByte(authority, '@'); i >= 0 {
+		if !validURIPart(authority[:i], ":") {
+			return false
+		}
+
+		authority = authority[i+1:]
+	}
+
+	var host, port string
+
+	if literal, ok := strings.CutPrefix(authority, "["); ok {
+		var after string
+
+		host, after, ok = strings.Cut(literal, "]")
+		if !ok {
+			return false
+		}
+
+		addr, err := netip.ParseAddr(host)
+		if err != nil || !addr.Is6() || addr.Zone() != "" {
+			return false
+		}
+
+		if after != "" {
+			if port, ok = strings.CutPrefix(after, ":"); !ok {
+				return false
+			}
+		}
+	} else {
+		host, port, _ = strings.Cut(authority, ":")
+		if !validURIPart(host, "") {
+			return false
+		}
+	}
+
+	return host != "" &&
+		!strings.ContainsFunc(port, func(r rune) bool { return r < '0' || r > '9' })
+}
+
+// validURIPart reports whether s holds only unreserved characters, sub-delims,
+// well-formed percent-escapes, and the extra characters its component allows.
+func validURIPart(s, extra string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		switch {
+		case c == '%':
+			if i+2 >= len(s) || !isHex(s[i+1]) || !isHex(s[i+2]) {
+				return false
+			}
+
+			i += 2
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9':
+		case strings.IndexByte("-._~!$&'()*+,;="+extra, c) >= 0:
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+func isHex(c byte) bool {
+	return '0' <= c && c <= '9' || 'a' <= c && c <= 'f' || 'A' <= c && c <= 'F'
 }

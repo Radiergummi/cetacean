@@ -73,20 +73,20 @@ services:
 ```
 
 Each `cetacean.link.<id>` label adds one link, and the optional `cetacean.link.<id>.title` names it; without one,
-the link reads as `<id>`. Links are sorted by `<id>`, and a title without a matching link is ignored. The labels
-belong under `deploy.labels`, on the service rather than its containers.
+the link reads as `<id>`. Links are sorted by `<id>`, and a title without a matching link is ignored, as is a value
+that is empty or only whitespace. The labels belong under `deploy.labels`, on the service rather than its containers.
 
 The service detail page shows the links under its title, and the stack detail page the links of all its services,
-with exact duplicates merged. Only well-formed `http` and `https` URLs become links, opening in a new tab; any other
-value is shown as plain text.
+with exact duplicates merged. Where two links on a stack share a title, each also names the services declaring it.
+Only well-formed `http` and `https` URLs become links, opening in a new tab; any other value is shown as plain text.
 
 ## API
 
 Detected integrations appear as an `integrations` array on `GET /services/{id}`, omitted when nothing was detected.
 Each one names the service `labels` it was read from, which the dashboard leaves out of the generic labels section.
 Custom links appear as a `links` array on `GET /services/{id}` and `GET /stacks/{name}`, each with an `id`, a
-`title`, and either an `href` for an `http` or `https` URL or a `text` for anything else. See the [API reference][api] for the
-full schema.
+`title`, and either an `href` for an `http` or `https` URL or a `text` for anything else. A stack's links also name
+the `services` declaring each one. See the [API reference][api] for the full schema.
 
 [api]: api
 [detail-pages]: dashboard#detail-pages

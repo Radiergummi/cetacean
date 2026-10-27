@@ -5486,7 +5486,8 @@ paths:
                         type: array
                         description: >
                           The custom links of every member service, with exact
-                          duplicates merged. Absent when no member declares one.
+                          duplicates merged into one link naming each service
+                          that declares it. Absent when no member declares one.
                         items:
                           $ref: "#/components/schemas/ServiceLink"
               example:
@@ -9068,6 +9069,14 @@ components:
           type: string
           description: The label's value, when it is not an http or https URL
           example: pager:web-team
+        services:
+          type: array
+          description: >
+            The member services declaring the link, sorted. Present on a
+            stack's links only.
+          items:
+            type: string
+          example: [myapp_api, myapp_worker]
 
     ImageUpdate:
       type: object

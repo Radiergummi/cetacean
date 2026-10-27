@@ -76,6 +76,16 @@ func TestServiceLinks(t *testing.T) {
 			[]ServiceLink{{ID: "x", Title: "x", Href: "https://example.com/a%20b?q=1#top"}},
 		},
 		{
+			"surrounding whitespace is trimmed",
+			map[string]string{"cetacean.link.x": "  https://example.com/a \n"},
+			[]ServiceLink{{ID: "x", Title: "x", Href: "https://example.com/a"}},
+		},
+		{
+			"whitespace-only value is ignored",
+			map[string]string{"cetacean.link.x": " \t ", "cetacean.link.x.title": "X"},
+			nil,
+		},
+		{
 			"title without url is ignored",
 			map[string]string{"cetacean.link.orphan.title": "Orphan"},
 			nil,
@@ -122,39 +132,105 @@ func TestServiceLinks(t *testing.T) {
 	}
 }
 
+func TestHTTPURLFollowsRFC3986(t *testing.T) {
+	tests := []struct {
+		value string
+		want  bool
+	}{
+		{"https://example.com", true},
+		{"http://example.com/", true},
+		{"HTTPS://Example.COM/a/b", true},
+		{"https://example.com/a%20b?q=1&r=a/b?c#top/x?y", true},
+		{"https://user:pass@example.com:8443/p", true},
+		{"https://[2001:db8::1]:8080/p", true},
+		{"https://[::1]/", true},
+		{"https://example.com:/p", true},
+		{"https://example.com/a:b@c!$&'()*+,;=-._~", true},
+
+		{"ftp://example.com", false},
+		{"javascript:alert(1)", false},
+		{"https:example.com", false},
+		{"https://", false},
+		{"https://:8080/path", false},
+		{"https://example.com/a b", false},
+		{"https://example.com/a\x7f", false},
+		{"https://example.com/ä", false},
+		{"https://example.com/a[b]", false},
+		{"https://example.com/#a#b", false},
+		{"https://example.com/?q=%zz", false},
+		{"https://example.com/%2", false},
+		{"https://example.com/%", false},
+		{"https://ex[ample.com/", false},
+		{"https://[example.com]/", false},
+		{"https://[192.0.2.1]/", false},
+		{"https://[fe80::1%25en0]/", false},
+		{"https://[::1/", false},
+		{"https://[::1]x/", false},
+		{"https://example.com:80a/", false},
+		{"https://example.com:80:81/", false},
+		{"https://us er@example.com/", false},
+		{`https://example.com/"q"`, false},
+		{"https://example.com/a\\b", false},
+		{"https://example.com/{x}", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			if got := isHTTPURL(tt.value); got != tt.want {
+				t.Errorf("isHTTPURL(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestStackLinks(t *testing.T) {
-	service := func(labels map[string]string) swarm.Service {
+	service := func(name string, labels map[string]string) swarm.Service {
 		return swarm.Service{
-			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Labels: labels}},
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
 		}
 	}
 
 	services := []swarm.Service{
-		service(map[string]string{
+		service("app_api", map[string]string{
 			"cetacean.link.repo":    "https://git.example.com/app",
 			"cetacean.link.grafana": "https://grafana.example.com/api",
 		}),
-		service(map[string]string{
+		service("app_worker", map[string]string{
 			"cetacean.link.repo":    "https://git.example.com/app",
 			"cetacean.link.grafana": "https://grafana.example.com/worker",
 		}),
-		service(map[string]string{
+		service("app_docs", map[string]string{
 			"cetacean.link.source":       "https://git.example.com/app",
 			"cetacean.link.source.title": "repo",
 		}),
-		service(map[string]string{
+		service("app_cron", map[string]string{
 			"cetacean.link.repo":       "https://git.example.com/app",
 			"cetacean.link.repo.title": "Code",
 		}),
-		service(nil),
+		service("app_db", nil),
 	}
 
 	want := []ServiceLink{
-		{ID: "grafana", Title: "grafana", Href: "https://grafana.example.com/api"},
-		{ID: "grafana", Title: "grafana", Href: "https://grafana.example.com/worker"},
-		{ID: "repo", Title: "Code", Href: "https://git.example.com/app"},
-		{ID: "repo", Title: "repo", Href: "https://git.example.com/app"},
-		{ID: "source", Title: "repo", Href: "https://git.example.com/app"},
+		{
+			ID: "grafana", Title: "grafana", Href: "https://grafana.example.com/api",
+			Services: []string{"app_api"},
+		},
+		{
+			ID: "grafana", Title: "grafana", Href: "https://grafana.example.com/worker",
+			Services: []string{"app_worker"},
+		},
+		{
+			ID: "repo", Title: "Code", Href: "https://git.example.com/app",
+			Services: []string{"app_cron"},
+		},
+		{
+			ID: "repo", Title: "repo", Href: "https://git.example.com/app",
+			Services: []string{"app_api", "app_worker"},
+		},
+		{
+			ID: "source", Title: "repo", Href: "https://git.example.com/app",
+			Services: []string{"app_docs"},
+		},
 	}
 
 	if got := StackLinks(services); !reflect.DeepEqual(got, want) {
@@ -179,6 +255,8 @@ func TestDigestsCarryLinks(t *testing.T) {
 	if got := ServiceDetails(svc)["links"]; !reflect.DeepEqual(got, want) {
 		t.Errorf("service links = %+v, want %+v", got, want)
 	}
+
+	want[0].Services = []string{"web"}
 
 	stack := StackDigest(cache.StackDetail{Name: "demo", Services: []swarm.Service{svc}}, nil, nil)
 	if got := stack.Details["links"]; !reflect.DeepEqual(got, want) {

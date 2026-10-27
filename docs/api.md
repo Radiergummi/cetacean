@@ -795,7 +795,8 @@ whenever there is nothing to report, including when [`server.image_check`](confi
 
 `GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
 `GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either
-an `href`, for an `http` or `https` URL, or a `text`, for any other value.
+an `href`, for an `http` or `https` URL, or a `text`, for any other value. A stack's links also name the `services`
+declaring each one.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

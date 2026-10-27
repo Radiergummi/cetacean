@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -2616,7 +2617,7 @@ func TestHandleGetService_Links(t *testing.T) {
 		{ID: "grafana", Title: "Dashboard", Href: "https://grafana.example.com/d/web"},
 		{ID: "oncall", Title: "oncall", Text: "pager:web-team"},
 	}
-	if !slices.Equal(body.Links, want) {
+	if !reflect.DeepEqual(body.Links, want) {
 		t.Errorf("links = %+v, want %+v", body.Links, want)
 	}
 }
@@ -2647,9 +2648,12 @@ func TestHandleGetStack_LinksAreTheUnionOfItsServices(t *testing.T) {
 	}
 
 	want := []cluster.ServiceLink{
-		{ID: "repo", Title: "repo", Href: "https://git.example.com/mystack"},
+		{
+			ID: "repo", Title: "repo", Href: "https://git.example.com/mystack",
+			Services: []string{"svc1", "svc2"},
+		},
 	}
-	if !slices.Equal(body.Links, want) {
+	if !reflect.DeepEqual(body.Links, want) {
 		t.Errorf("links = %+v, want %+v", body.Links, want)
 	}
 }
