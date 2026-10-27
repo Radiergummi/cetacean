@@ -156,6 +156,41 @@ describe("useSwarmQuery", () => {
     await waitFor(() => expect(result.current.data).toEqual([{ ...enriched, Name: "shutdown" }]));
   });
 
+  it("SSE updates keep the version fields the list computed for a secret", async () => {
+    const listed = {
+      ID: "s1",
+      Name: "db_v2",
+      UsedBy: 2,
+      VersionOf: "db",
+      VersionInferred: true,
+      NewestVersion: true,
+      OlderVersions: 1,
+    };
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([listed], 1));
+
+    const { result } = renderHook(
+      () => useSwarmQuery(["secrets"], fetchFn, "secret", ({ ID }: Item) => ID),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("secret", {
+        type: "secret",
+        action: "update",
+        id: "s1",
+        resource: { ID: "s1", Name: "db_v2 relabeled" },
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ ...listed, Name: "db_v2 relabeled" }]),
+    );
+  });
+
   it("SSE bumps total when an unknown item is created", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

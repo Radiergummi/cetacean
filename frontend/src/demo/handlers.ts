@@ -38,6 +38,7 @@ import type {
   SwarmInfo,
   Task,
   UpdateConfig,
+  VersionedListItem,
   Volume,
   VolumeDetail,
   JGFNode,
@@ -244,6 +245,122 @@ function servicesUsingSecret(dataset: Dataset, id: string): ServiceRef[] {
     ({ Spec }) =>
       Spec.TaskTemplate?.ContainerSpec?.Secrets?.some(({ SecretID }) => SecretID === id) ?? false,
   );
+}
+
+const versionLabel = "cetacean.version-of";
+const versionSuffix = /[_-](?:[0-9a-f]{8,}|v[0-9]+)$/i;
+
+interface Versionable {
+  ID: string;
+  CreatedAt: string;
+  Spec: { Name: string; Labels: Record<string, string> | null };
+}
+
+/**
+ * The server's grouping of config and secret versions, as much of it as the
+ * demo's data needs: a label names the group, else the name less its stack
+ * prefix and version suffix, within one stack.
+ */
+function versionKey({ Spec: { Name, Labels } }: Versionable): { stack: string; name: string } {
+  const stack = Labels?.[stackLabel] ?? "";
+  const declared = Labels?.[versionLabel];
+
+  if (declared) {
+    return { stack, name: declared };
+  }
+
+  const name = Name.replace(versionSuffix, "");
+  const prefix = [`${stack}_`, `${stack}-`].find(
+    (candidate) => stack && name.startsWith(candidate) && name.length > candidate.length,
+  );
+
+  return { stack, name: prefix ? name.slice(prefix.length) : name };
+}
+
+/**
+ * Annotates every item with its place among its versions and its users.
+ */
+function annotateVersions<T extends Versionable>(
+  items: T[],
+  usedBy: (id: string) => number,
+): Array<T & VersionedListItem & { groupKey: string; rank: number }> {
+  const groups = new Map<string, T[]>();
+
+  for (const item of items) {
+    const { stack, name } = versionKey(item);
+    const key = `${stack}\u0000${name}`;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+
+  return items.map((item) => {
+    const { stack, name } = versionKey(item);
+    const key = `${stack}\u0000${name}`;
+    const members = [...(groups.get(key) ?? [])].sort(
+      (left, right) =>
+        Date.parse(right.CreatedAt) - Date.parse(left.CreatedAt) || right.ID.localeCompare(left.ID),
+    );
+    const rank = members.findIndex(({ ID }) => ID === item.ID);
+    const grouped = members.length > 1;
+
+    return {
+      ...item,
+      groupKey: grouped ? key : item.ID,
+      rank,
+      UsedBy: usedBy(item.ID),
+      ...(grouped && {
+        VersionOf: name,
+        VersionInferred: members.some(({ Spec: { Labels } }) => !Labels?.[versionLabel]),
+        NewestVersion: rank === 0,
+        ...(rank === 0 && { OlderVersions: members.length - 1 }),
+      }),
+    };
+  });
+}
+
+/**
+ * Applies `?versions` and `?versionsOf` the way the server does.
+ */
+function selectVersions<T extends Versionable>(
+  items: T[],
+  usedBy: (id: string) => number,
+  request: Request,
+): Array<T & VersionedListItem> {
+  const params = new URL(request.url).searchParams;
+  const annotated = annotateVersions(items, usedBy);
+  const of = params.get("versionsOf");
+  let selected = annotated.filter(({ rank }) => params.get("versions") === "all" || rank === 0);
+
+  if (of) {
+    const target = annotated.find(({ ID }) => ID === of);
+    selected = annotated
+      .filter(({ groupKey }) => groupKey === target?.groupKey)
+      .sort((left, right) => left.rank - right.rank);
+  }
+
+  return selected.map(
+    ({ groupKey: _groupKey, rank: _rank, ...item }) => item as T & VersionedListItem,
+  );
+}
+
+/**
+ * One item's version fields as a detail spells them.
+ */
+function versionDetail<T extends Versionable>(
+  items: T[],
+  id: string,
+  usedBy: (id: string) => number,
+) {
+  const item = annotateVersions(items, usedBy).find(({ ID }) => ID === id);
+
+  return {
+    usedBy: item?.UsedBy ?? 0,
+    ...(item?.VersionOf && {
+      versionOf: item.VersionOf,
+      versionInferred: item.VersionInferred,
+      newestVersion: item.NewestVersion,
+      olderVersions: item.OlderVersions,
+    }),
+  };
 }
 
 function deriveStacks(dataset: Dataset) {
@@ -1271,16 +1388,21 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         detailEnvelope(`/configs/${config.ID}`, "Config", {
           config,
           services,
-          usedBy: services.length,
+          ...versionDetail(
+            dataset.configs,
+            config.ID,
+            (id) => servicesUsingConfig(dataset, id).length,
+          ),
         } satisfies ConfigDetail),
       );
     }),
 
     get("*/configs", ({ request }) => {
-      const items = dataset.configs.map((config) => ({
-        ...config,
-        UsedBy: servicesUsingConfig(dataset, config.ID).length,
-      }));
+      const items = selectVersions(
+        dataset.configs,
+        (id) => servicesUsingConfig(dataset, id).length,
+        request,
+      );
 
       return jsonResponse(paginateWrapped(items, request, "Config", (c) => `/configs/${c.ID}`));
     }),
@@ -1299,16 +1421,21 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         detailEnvelope(`/secrets/${secret.ID}`, "Secret", {
           secret,
           services,
-          usedBy: services.length,
+          ...versionDetail(
+            dataset.secrets,
+            secret.ID,
+            (id) => servicesUsingSecret(dataset, id).length,
+          ),
         } satisfies SecretDetail),
       );
     }),
 
     get("*/secrets", ({ request }) => {
-      const items = dataset.secrets.map((secret) => ({
-        ...secret,
-        UsedBy: servicesUsingSecret(dataset, secret.ID).length,
-      }));
+      const items = selectVersions(
+        dataset.secrets,
+        (id) => servicesUsingSecret(dataset, id).length,
+        request,
+      );
 
       return jsonResponse(paginateWrapped(items, request, "Secret", (s) => `/secrets/${s.ID}`));
     }),

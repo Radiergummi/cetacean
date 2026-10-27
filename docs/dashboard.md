@@ -135,13 +135,14 @@ rather than exporting their contents.
 
 Swarm can't change a secret or a config once it exists, so rotating one means replacing it:
 
-1. On the **Secrets** list, create the replacement under a new name, such as `db_password_v2`, and label it
-   `cetacean.version-of=db_password` so it [groups with the old one](#versions). This needs
+1. On the **Secrets** list, create the replacement under a new name, such as `db_password_v2`. This needs
    [operations level][operations-level] 2.
-2. Open the old secret. Its page lists every service that mounts it. On each service, edit **Secrets**: add the
+2. On the replacement's page, add the label `cetacean.version-of=db_password` so it
+   [groups with the old one](#versions). If the old one carries a `com.docker.stack.namespace` label, add that too.
+3. Open the old secret. Its page lists every service that mounts it. On each service, edit **Secrets**: add the
    replacement with the same **Target** the old one had, so the container reads the same file, and remove the old
    one. Saving rolls the service out once. This also needs level 2.
-3. Once the old secret's page lists no services, remove it. This needs level 3, and Docker refuses while any service
+4. Once the old secret's page lists no services, remove it. This needs level 3, and Docker refuses while any service
    still mounts it.
 
 Configs follow the same steps from the **Configs** list and each service's **Configs** editor. A service deployed
@@ -152,17 +153,18 @@ Over the API, the same sequence is `POST /secrets`, then `PATCH /services/{id}/s
 
 ### Versions
 
-Rotation leaves a trail of versions behind, so the config and secret lists group them. The newest version is the
-row; **+N older** under its name shows the others beneath it. The **Used by** column counts the services using each
-one, and an older version no service uses reads as unused.
+Rotation leaves a trail of versions behind, so the config and secret lists show only the newest version of each
+group; **+N older** loads the others beneath it. The **Used by** column counts the services using each one, and an
+older version no service uses reads as unused.
 
-A config or secret labeled `cetacean.version-of=<name>` is a version of `<name>`. Without that label, Cetacean
-matches names instead: two belong together when they're in the same stack and their names differ only in a version
-suffix, which is `_` or `-` followed by either eight or more hex digits (`app_env_0a1b2c3d4e5f`, as
-`docker-stack-deploy` and SwarmCD write) or `v` and a number (`db_password_v3`). A suffix like `_1` isn't one. A name
-without a suffix joins the versions it's the base of, so `db_password` groups with `db_password_v2`. A group
-matched by name says **inferred from names**, because a name can match by accident; label your versions to
-make it certain.
+Versions group only within one stack, by their `com.docker.stack.namespace` label, so a replacement must carry the
+same stack label as the version it replaces. Within a stack, a config or secret labeled `cetacean.version-of=<name>`
+is a version of `<name>`. Without that label, Cetacean matches names instead: the name less its `<stack>_` or
+`<stack>-` prefix and less a version suffix, which is `_` or `-` followed by either eight or more hex digits
+(`app_env_0a1b2c3d4e5f`, as `docker-stack-deploy` and SwarmCD write) or `v` and a number (`db_password_v3`). A suffix
+like `_1` isn't one. So `myapp_db_password` groups with `myapp_db_password_v2`, and with a replacement labeled
+`db_password` in the same stack. A group matched by name says **inferred from names**, because a name can match by
+accident; label your versions to make it certain.
 
 The newest version is the one created last. Each older version that no service uses is flagged as an
 `unused-version` [recommendation][recommendations], so you know what's safe to remove. Both the groups and the counts

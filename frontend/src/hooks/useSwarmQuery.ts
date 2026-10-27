@@ -22,7 +22,15 @@ const ssePathMap: Record<string, string> = {
  * Fields the list endpoints resolve onto a row but the stream's raw resource
  * lacks; an update keeps them from the row it replaces.
  */
-const enrichedFields = ["ServiceName", "NodeHostname"] as const;
+const enrichedFields = [
+  "ServiceName",
+  "NodeHostname",
+  "UsedBy",
+  "VersionOf",
+  "VersionInferred",
+  "NewestVersion",
+  "OlderVersions",
+] as const;
 
 function keepEnrichment<T>(cached: T, incoming: T): T {
   const kept: Record<string, unknown> = {};

@@ -26,7 +26,8 @@ interface ResourceListConfig<T> extends UseListPageConfig<T> {
   actions?: ((allowedMethods: Set<string>) => ReactNode) | undefined;
   skeletonColumns?: number | undefined;
   /**
-   * Reorders or collapses the loaded items before both views render them.
+   * Adds rows among the loaded items before both views render them, such as a
+   * group's older versions beneath its newest. Keep it stable between renders.
    */
   arrange?: ((items: T[]) => T[]) | undefined;
 }
@@ -57,7 +58,8 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
     [sortKey, sortDir, toggle, columnsFn],
   );
 
-  const data = config.arrange ? config.arrange(loaded) : loaded;
+  const { arrange } = config;
+  const data = useMemo(() => (arrange ? arrange(loaded) : loaded), [arrange, loaded]);
 
   if (loading) {
     return (

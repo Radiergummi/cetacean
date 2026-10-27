@@ -125,8 +125,9 @@ describe("api client", () => {
 
     expect(all).toHaveLength(250);
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    // A picker offers every version, not only the newest of each group.
     expect(mockFetch).toHaveBeenLastCalledWith(
-      "/secrets",
+      "/secrets?versions=all",
       expect.objectContaining({
         headers: { Accept: "application/json", Range: "items 200-399" },
       }),

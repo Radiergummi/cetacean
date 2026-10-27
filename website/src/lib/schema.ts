@@ -254,6 +254,13 @@ export const properties: Property[] = [
     usedOn: ["Node"],
   },
   {
+    name: "newestVersion",
+    iri: "urn:cetacean:newestVersion",
+    description: "Whether this is the newest readable version of its config or secret group.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "nodeCount",
     iri: "urn:cetacean:nodeCount",
     description: "Number of nodes in the cluster.",
@@ -332,6 +339,14 @@ export const properties: Property[] = [
       "The manager quorum: managers, how many are reachable, how many must be, whether they are, and how many more can be lost.",
     expectedType: "Object",
     usedOn: ["Cluster"],
+  },
+  {
+    name: "olderVersions",
+    iri: "urn:cetacean:olderVersions",
+    description:
+      "On the newest version of a config or secret, how many older readable versions it has.",
+    expectedType: "Integer",
+    usedOn: ["Config", "Secret"],
   },
   {
     name: "query",
@@ -695,13 +710,31 @@ export const types: ResourceType[] = [
     name: "Config",
     description: "A Docker Swarm config object.",
     endpoint: "/configs/{id}",
-    properties: ["config", "name", "services", "usedBy", "versionOf", "versionInferred"],
+    properties: [
+      "config",
+      "name",
+      "services",
+      "usedBy",
+      "versionOf",
+      "versionInferred",
+      "newestVersion",
+      "olderVersions",
+    ],
   },
   {
     name: "Secret",
     description: "A Docker Swarm secret (data always redacted).",
     endpoint: "/secrets/{id}",
-    properties: ["secret", "name", "services", "usedBy", "versionOf", "versionInferred"],
+    properties: [
+      "secret",
+      "name",
+      "services",
+      "usedBy",
+      "versionOf",
+      "versionInferred",
+      "newestVersion",
+      "olderVersions",
+    ],
   },
   {
     name: "PublishedPort",

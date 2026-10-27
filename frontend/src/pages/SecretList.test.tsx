@@ -7,7 +7,7 @@ import {
 } from "../test/mocks";
 import SecretList from "./SecretList";
 import { QueryClient } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../api/client", () => ({
@@ -31,14 +31,8 @@ const fakeSecret = (id: string, name: string): SecretListItem => ({
   UsedBy: 0,
 });
 
-const version = (
-  id: string,
-  createdAt: string,
-  usedBy: number,
-  versionInferred: boolean,
-): SecretListItem => ({
+const version = (id: string, usedBy: number, versionInferred: boolean): SecretListItem => ({
   ...fakeSecret(id, id),
-  CreatedAt: createdAt,
   UsedBy: usedBy,
   VersionOf: "db",
   VersionInferred: versionInferred,
@@ -80,51 +74,77 @@ describe("SecretList", () => {
     expect(screen.getByText("api-key")).toBeInTheDocument();
   });
 
-  it("collapses versions into the newest, with the older ones a toggle away", async () => {
-    mockSecrets.mockResolvedValue({
-      data: {
-        items: [
-          version("db-v1", "2024-01-01T00:00:00Z", 0, true),
-          version("db-v3", "2024-01-03T00:00:00Z", 2, true),
-          version("db-v2", "2024-01-02T00:00:00Z", 1, true),
-        ],
-        total: 3,
-        limit: 50,
-        offset: 0,
-      },
+  it("loads a group's older versions beneath its newest on request", async () => {
+    const head = { ...version("db-v3", 2, true), NewestVersion: true, OlderVersions: 2 };
+
+    mockSecrets.mockImplementation(async (params) => ({
+      data:
+        params?.versionsOf === "db-v3"
+          ? {
+              items: [head, version("db-v2", 1, true), version("db-v1", 0, true)],
+              total: 3,
+              limit: 50,
+              offset: 0,
+            }
+          : { items: [head, fakeSecret("s9", "api-key")], total: 2, limit: 50, offset: 0 },
       allowedMethods: new Set(),
-    });
+    }));
     render(<SecretList />, { wrapper });
 
     const toggle = await screen.findByRole("button", { name: "+2 older" });
 
-    expect(screen.getByText("db-v3")).toBeInTheDocument();
-    expect(screen.queryByText("db-v1")).not.toBeInTheDocument();
     expect(screen.getByText("inferred from names")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Used by" })).toBeInTheDocument();
+    expect(screen.queryByText("db-v1")).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
 
     expect(await screen.findByText("db-v1")).toBeInTheDocument();
-    expect(screen.getByText("db-v2")).toBeInTheDocument();
+    expect(mockSecrets).toHaveBeenCalledWith({ versionsOf: "db-v3" }, expect.anything());
 
     const rows = screen.getAllByRole("row").map(({ textContent }) => textContent ?? "");
+    const position = (name: string) => rows.findIndex((text) => text.includes(name));
 
-    expect(rows.findIndex((text) => text.includes("db-v2"))).toBeLessThan(
-      rows.findIndex((text) => text.includes("db-v1")),
-    );
-    expect(rows.find((text) => text.includes("db-v1"))).toContain("Unused");
-    expect(rows.find((text) => text.includes("db-v2"))).not.toContain("Unused");
+    expect(position("db-v3")).toBeLessThan(position("db-v2"));
+    expect(position("db-v2")).toBeLessThan(position("db-v1"));
+    expect(position("db-v1")).toBeLessThan(position("api-key"));
+    expect(rows[position("db-v1")]).toContain("Unused");
+    expect(rows[position("db-v2")]).not.toContain("Unused");
   });
 
-  it("does not call a version grouped by label inferred", async () => {
+  it("refetches when a service changes, since that changes who uses a secret", async () => {
+    mockSecrets.mockResolvedValue({
+      data: { items: [fakeSecret("s1", "db-password")], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    render(<SecretList />, { wrapper });
+
+    await screen.findByText("db-password");
+
+    const calls = mockSecrets.mock.calls.length;
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "service",
+        action: "update",
+        id: "svc1",
+        resource: { ID: "svc1" },
+      }),
+    );
+
+    await waitFor(() => expect(mockSecrets.mock.calls.length).toBeGreaterThan(calls), {
+      timeout: 2000,
+    });
+  });
+
+  it("keeps the toggle outside the card link in grid view", async () => {
+    vi.stubGlobal("localStorage", {
+      ...localStorageStub,
+      getItem: (key: string) => (key === "viewMode:secrets" ? "grid" : null),
+    });
     mockSecrets.mockResolvedValue({
       data: {
-        items: [
-          version("db-v1", "2024-01-01T00:00:00Z", 0, false),
-          version("db-v2", "2024-01-02T00:00:00Z", 1, false),
-        ],
-        total: 2,
+        items: [{ ...version("db-v2", 1, false), NewestVersion: true, OlderVersions: 1 }],
+        total: 1,
         limit: 50,
         offset: 0,
       },
@@ -132,8 +152,9 @@ describe("SecretList", () => {
     });
     render(<SecretList />, { wrapper });
 
-    await screen.findByRole("button", { name: "+1 older" });
+    const toggle = await screen.findByRole("button", { name: "+1 older" });
 
+    expect(toggle.closest("a")).toBeNull();
     expect(screen.queryByText("inferred from names")).not.toBeInTheDocument();
   });
 

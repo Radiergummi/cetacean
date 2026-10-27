@@ -235,11 +235,14 @@ export interface Secret {
 
 /**
  * What a config or secret list item adds: the logical resource it is one
- * version of, when other versions are readable, and how many services use it.
+ * version of, when other versions are readable, whether it is the newest of
+ * them and how many older ones there are, and how many services use it.
  */
 export interface VersionedListItem {
   VersionOf?: string | undefined;
   VersionInferred?: boolean | undefined;
+  NewestVersion?: boolean | undefined;
+  OlderVersions?: number | undefined;
   UsedBy: number;
 }
 
@@ -507,6 +510,8 @@ export interface ConfigDetail {
   services: ServiceRef[] | null;
   versionOf?: string | undefined;
   versionInferred?: boolean | undefined;
+  newestVersion?: boolean | undefined;
+  olderVersions?: number | undefined;
   usedBy: number;
 }
 
@@ -515,6 +520,8 @@ export interface SecretDetail {
   services: ServiceRef[] | null;
   versionOf?: string | undefined;
   versionInferred?: boolean | undefined;
+  newestVersion?: boolean | undefined;
+  olderVersions?: number | undefined;
   usedBy: number;
 }
 
