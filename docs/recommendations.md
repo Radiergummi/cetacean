@@ -15,7 +15,7 @@ It's on by default. Turn it off with [`server.recommendations`][server.recommend
 
 ## What gets flagged
 
-Each finding names a service, a node or the cluster, and carries a severity of `info`, `warning` or
+Each finding names a service, a node, a network or the cluster, and carries a severity of `info`, `warning` or
 `critical`.
 
 | Finding | Meaning |
@@ -29,6 +29,7 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 | `single-manager` | One manager, so losing it leaves the swarm unable to schedule or update anything. Not raised unless at least three nodes are ready, enough for three managers |
 | `even-managers` | An even number of managers, which tolerates no more failures than one fewer |
 | `quorum-at-risk` | A manager is unreachable. A warning while quorum survives more losses, critical once one more loss would break it or it's already lost |
+| `network-addresses-low` | An overlay network has 80% of its addresses in use, critical from 95%. A start-first rolling update needs one more address per task it starts. See [network addresses][network-addresses] |
 | `flaky-service` | More than 5 involuntary task failures within the lookback window |
 | `node-disk-full` | Node disk above 90% |
 | `node-memory-pressure` | Node memory above 90% |
@@ -80,6 +81,7 @@ how far back Cetacean looks, which is also the window `flaky-service` counts fai
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
 [monitoring]: monitoring
+[network-addresses]: dashboard#network-addresses
 [operations-level]: configuration#operations-level
 [server.image_check]: configuration#server.image_check
 [server.recommendations]: configuration#server.recommendations

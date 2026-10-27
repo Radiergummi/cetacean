@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 // A drained node still reports "ready" in Status.State while Swarm evacuates
@@ -465,7 +466,7 @@ func TestNetworkDigestReportsSubnets(t *testing.T) {
 	net := overlay("net1", "demo_overlay")
 	net.IPAM = network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.0.0/24"}}}
 
-	got := NetworkDigest(net, nil)
+	got := NetworkDigest(net, nil, nil)
 
 	subnets, ok := got.Details["subnets"].([]string)
 	if !ok {
@@ -473,6 +474,19 @@ func TestNetworkDigestReportsSubnets(t *testing.T) {
 	}
 	if len(subnets) != 1 || subnets[0] != "10.0.0.0/24" {
 		t.Errorf("subnets = %v, want [10.0.0.0/24]", subnets)
+	}
+}
+
+func TestNetworkDigestReportsAddresses(t *testing.T) {
+	net := overlay("net1", "demo_overlay")
+	addresses := ipam.Addresses{Usable: 253, Used: 3, TaskAddresses: 2, LoadBalancers: 1}
+
+	if got := NetworkDigest(net, nil, &addresses).Details["addresses"]; got != addresses {
+		t.Errorf("addresses = %+v, want %+v", got, addresses)
+	}
+
+	if _, ok := NetworkDigest(net, nil, nil).Details["addresses"]; ok {
+		t.Error("a network with no figure carries addresses")
 	}
 }
 
@@ -531,7 +545,7 @@ func TestDigestBuildersMarshalEmptySlicesNotNull(t *testing.T) {
 		"stack":   StackDigest(cache.StackDetail{Name: "empty"}, nil, nil),
 		"config":  ConfigDigest(swarm.Config{ID: "c1"}, nil),
 		"secret":  SecretDigest(swarm.Secret{ID: "s1"}, nil),
-		"network": NetworkDigest(network.Summary{ID: "net1"}, nil),
+		"network": NetworkDigest(network.Summary{ID: "net1"}, nil, nil),
 		"volume":  VolumeDigest(volume.Volume{Name: "data"}, nil),
 	}
 

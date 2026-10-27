@@ -423,8 +423,9 @@ func (h *Handlers) networkRepresentation(r *http.Request) (any, error) {
 	}
 
 	return NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
-		Network:  net,
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
+		Network:   net,
+		Services:  h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
+		Addresses: h.cache.NetworkAddressesOf(id),
 	}), nil
 }
 

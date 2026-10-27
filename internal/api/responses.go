@@ -11,6 +11,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/ipam"
 	"github.com/radiergummi/cetacean/internal/quorum"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -76,8 +77,9 @@ type SecretResponse struct {
 
 // NetworkResponse is the extra payload for GET /networks/{id}.
 type NetworkResponse struct {
-	Network  network.Summary    `json:"network"`
-	Services []cache.ServiceRef `json:"services"`
+	Network   network.Summary    `json:"network"`
+	Services  []cache.ServiceRef `json:"services"`
+	Addresses *ipam.Addresses    `json:"addresses,omitempty"`
 }
 
 // VolumeResponse is the extra payload for GET /volumes/{name}.

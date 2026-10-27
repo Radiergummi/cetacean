@@ -1,6 +1,7 @@
 import { api } from "../api/client";
-import type { Network } from "../api/types";
+import type { Network, NetworkAddresses } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
+import AddressUse from "../components/AddressUse";
 import CollapsibleSection from "../components/CollapsibleSection";
 import {
   KeyValuePills,
@@ -57,6 +58,38 @@ function NetworkFlags({ network }: { network: Network }) {
         </span>
       ))}
     </div>
+  );
+}
+
+function AddressesPanel({ addresses }: { addresses: NetworkAddresses }) {
+  return (
+    <CollapsibleSection title="Addresses">
+      <MetadataGrid>
+        <InfoCard
+          label="In use"
+          value={<AddressUse addresses={addresses} />}
+        />
+        <InfoCard
+          label="Service VIPs"
+          value={String(addresses.vips)}
+        />
+        <InfoCard
+          label="Task addresses"
+          value={String(addresses.taskAddresses)}
+        />
+        <InfoCard
+          label="Load balancers"
+          value={String(addresses.loadBalancers)}
+        />
+      </MetadataGrid>
+
+      {addresses.excludesAttachedContainers && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          This network is attachable. Containers attached with <code>docker run --network</code>{" "}
+          aren't counted, so more addresses may be in use.
+        </p>
+      )}
+    </CollapsibleSection>
   );
 }
 
@@ -193,6 +226,8 @@ export default function NetworkDetail() {
       </MetadataGrid>
 
       <NetworkFlags network={network} />
+
+      {data.addresses && <AddressesPanel addresses={data.addresses} />}
 
       <IPAMPanel network={network} />
 

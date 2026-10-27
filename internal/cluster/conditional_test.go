@@ -41,7 +41,7 @@ func TestDigestsReportTheVersionAConditionalWriteTakes(t *testing.T) {
 		SecretDigest(swarm.Secret{ID: "x", Meta: meta}, nil),
 		TaskDigest(swarm.Task{ID: "t", Meta: meta}, nil, nil),
 		StackDigest(cache.StackDetail{}, nil, nil),
-		NetworkDigest(network.Summary{ID: "net"}, nil),
+		NetworkDigest(network.Summary{ID: "net"}, nil, nil),
 		VolumeDigest(volume.Volume{Name: "v"}, nil),
 	}
 

@@ -5,6 +5,7 @@ import {
   ArrowUp,
   CloudDownload,
   Copy,
+  Network,
   RefreshCw,
   Scale,
   Shield,
@@ -85,6 +86,10 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
     return Scale;
   }
 
+  if (category === "network-addresses-low") {
+    return Network;
+  }
+
   return TrendingDown;
 }
 
@@ -144,6 +149,10 @@ export function recommendationLink(hint: Recommendation): string | null {
 
   if (hint.scope === "node") {
     return `/nodes/${hint.targetId}`;
+  }
+
+  if (hint.scope === "network") {
+    return `/networks/${hint.targetId}`;
   }
 
   return null;

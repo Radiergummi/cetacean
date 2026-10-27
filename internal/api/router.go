@@ -921,7 +921,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiatedWithSSE(
 			h.HandleGetNetwork,
 			func(w http.ResponseWriter, r *http.Request) {
-				h.streamResource(w, r, cache.EventNetwork, r.PathValue("id"))
+				// Per-resource streams have no replay; see streamResource.
+				networkMatch := sse.NetworkMatcher(h.cache, r.PathValue("id"))
+				h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, networkMatch), "")
 			},
 			h.detailFeeds(cache.EventNetwork, "id", func(id string) string {
 				if n, ok := h.cache.GetNetwork(id); ok {

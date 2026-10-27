@@ -4,8 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 func TestClusterChecker_SingleReplica(t *testing.T) {
@@ -481,4 +483,77 @@ func TestClusterChecker_Quorum(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAddressRecommendations(t *testing.T) {
+	networks := []network.Summary{{ID: "net1", Name: "backend"}}
+
+	tests := []struct {
+		name   string
+		counts map[string]ipam.Addresses
+		want   Severity
+	}{
+		{"no figure", map[string]ipam.Addresses{}, ""},
+		{"below 80%", map[string]ipam.Addresses{"net1": {Usable: 100, Used: 79}}, ""},
+		{"at 80%", map[string]ipam.Addresses{"net1": {Usable: 100, Used: 80}}, SeverityWarning},
+		{"below 95%", map[string]ipam.Addresses{"net1": {Usable: 253, Used: 240}}, SeverityWarning},
+		{"at 95%", map[string]ipam.Addresses{"net1": {Usable: 100, Used: 95}}, SeverityCritical},
+		{"over", map[string]ipam.Addresses{"net1": {Usable: 5, Used: 7}}, SeverityCritical},
+		{"nothing usable", map[string]ipam.Addresses{"net1": {Usable: 0, Used: 0}}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recs := addressRecommendations(networks, tt.counts)
+
+			if tt.want == "" {
+				if len(recs) != 0 {
+					t.Errorf("got %+v, want none", recs)
+				}
+
+				return
+			}
+
+			if len(recs) != 1 {
+				t.Fatalf("got %d recommendations, want 1", len(recs))
+			}
+
+			rec := recs[0]
+			if rec.Severity != tt.want || rec.Category != CategoryNetworkAddressesLow ||
+				rec.Scope != ScopeNetwork || rec.TargetID != "net1" || rec.TargetName != "backend" {
+				t.Errorf("got %+v, want a %s network-addresses-low on net1", rec, tt.want)
+			}
+		})
+	}
+}
+
+func TestClusterChecker_NetworkAddresses(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:    "net1",
+		Name:  "backend",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/29"}}},
+	})
+	c.SetTask(swarm.Task{
+		ID:     "t1",
+		NodeID: "n1",
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+		NetworksAttachments: []swarm.NetworkAttachment{{
+			Network:   swarm.Network{ID: "net1"},
+			Addresses: []string{"10.0.1.2/29", "10.0.1.3/29", "10.0.1.4/29"},
+		}},
+	})
+
+	for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+		if rec.Category == CategoryNetworkAddressesLow {
+			if rec.Severity != SeverityWarning {
+				t.Errorf("4 of 5 addresses: severity %s, want warning", rec.Severity)
+			}
+
+			return
+		}
+	}
+
+	t.Error("no network-addresses-low for a network with 4 of 5 addresses in use")
 }

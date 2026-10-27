@@ -66,12 +66,22 @@ export const secretSchema = z.looseObject({
   Spec: z.looseObject({ Name: z.string() }),
 });
 
+const networkAddresses = z.looseObject({
+  usable: z.number(),
+  used: z.number(),
+  vips: z.number(),
+  taskAddresses: z.number(),
+  loadBalancers: z.number(),
+  excludesAttachedContainers: z.boolean(),
+});
+
 /** Docker's network summary keys the id as `Id`, not `ID`. */
 export const networkSchema = z.looseObject({
   Id: z.string(),
   Name: z.string(),
   Driver: z.string(),
   Scope: z.string(),
+  Addresses: networkAddresses.optional(),
 });
 
 export const volumeSchema = z.looseObject({
@@ -118,7 +128,11 @@ export const secretEntrySchema = z.looseObject({
   encoding: z.enum(["utf8", "base64"]),
   expiresAt: z.string(),
 });
-export const networkDetailSchema = z.looseObject({ network: networkSchema, services: serviceRefs });
+export const networkDetailSchema = z.looseObject({
+  network: networkSchema,
+  services: serviceRefs,
+  addresses: networkAddresses.optional(),
+});
 export const volumeDetailSchema = z.looseObject({ volume: volumeSchema, services: serviceRefs });
 export const nodeDetailSchema = z.looseObject({ node: nodeSchema });
 export const taskDetailSchema = z.looseObject({ task: taskSchema });

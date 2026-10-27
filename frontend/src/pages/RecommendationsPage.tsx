@@ -59,6 +59,10 @@ const categoryDetails: Record<RecommendationCategory, string> = {
   "quorum-at-risk":
     "Too few managers are reachable to survive another loss. Without quorum the swarm keeps its " +
     "tasks running but cannot schedule, update or recover them. Bring the managers back first.",
+  "network-addresses-low":
+    "An overlay network that runs out of addresses fails new tasks. A start-first rolling update " +
+    "needs one more address per task it starts, so a busy network runs out mid-deploy. Recreate " +
+    "the network with a larger subnet, or move services onto a network of their own.",
   "flaky-service":
     "Frequent task restarts indicate a recurring failure — OOM kills, crash loops, or failing " +
     "health checks. Investigate container logs and resource usage for the root cause.",
@@ -96,6 +100,7 @@ const filterGroups: Record<string, Set<string>> = {
     "single-manager",
     "even-managers",
     "quorum-at-risk",
+    "network-addresses-low",
   ]),
 };
 

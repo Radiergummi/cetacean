@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 // NodeDigest builds the detail view of one cluster node. State comes from
@@ -362,11 +363,15 @@ func SecretDigest(sec swarm.Secret, users []cache.ServiceRef) Digest {
 	}
 }
 
-// NetworkDigest builds the detail view of one network. A network's ID tells
-// a caller nothing about whether a service could actually attach to it —
-// that's what the driver, scope and reachability booleans (internal,
-// attachable, ingress) and the subnets are for.
-func NetworkDigest(net network.Summary, users []cache.ServiceRef) Digest {
+// NetworkDigest builds the detail view of one network. Its ID says nothing
+// about whether a service could attach; the driver, scope, reachability
+// booleans (internal, attachable, ingress) and subnets do. A nil addresses
+// leaves the address figure out.
+func NetworkDigest(
+	net network.Summary,
+	users []cache.ServiceRef,
+	addresses *ipam.Addresses,
+) Digest {
 	details := stackScopedDetails(net.Labels)
 	details["driver"] = net.Driver
 	details["scope"] = net.Scope
@@ -387,6 +392,10 @@ func NetworkDigest(net network.Summary, users []cache.ServiceRef) Digest {
 		if len(subnets) > 0 {
 			details["subnets"] = subnets
 		}
+	}
+
+	if addresses != nil {
+		details["addresses"] = *addresses
 	}
 
 	return Digest{
