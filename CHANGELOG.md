@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting
 - A `sizing.thresholds.lookback` under an hour, or not a whole number of hours, is queried as set instead of being cut to whole hours
 - Placement constraints match values, built-in keys and label prefixes regardless of case, as Swarm does, in drain impact and the desired task count of global services
+- MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 

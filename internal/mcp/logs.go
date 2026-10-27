@@ -117,11 +117,9 @@ func (s *Server) readLogsImpl(
 	}
 	defer reader.Close()
 
-	// Use the idle-cancel variant: Docker's ServiceLogs with Follow=false
-	// often leaves the stream open until the deadline expires. Cancelling
-	// the fetch context 250ms after the last frame returns control without
-	// waiting out the full logFetchTimeout. Mirrors REST log_handlers.go.
-	lines, err := logs.ParseDockerLogsWithIdleCancel(reader, cancel, 250*time.Millisecond)
+	// Docker's ServiceLogs with Follow=false often leaves the stream open
+	// until the deadline, so the read ends once it goes idle instead.
+	lines, err := logs.ParseDockerLogsWithIdleCancel(reader, cancel, logs.IdleCancelAfter)
 	if err != nil {
 		return LogResourceResponse{}, fmt.Errorf("parse logs: %w", err)
 	}
