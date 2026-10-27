@@ -91,9 +91,11 @@ An agent is never more privileged than the identity that signed in. Two controls
 
 A service has host access when its spec carries a bind, named-pipe, or cluster mount, a volume with driver options, or
 an added capability; a named volume the manager doesn't hold doesn't count. Below level `3`, an agent may scale and
-restart such a service but not change what runs in it—its image, command, health check command, placement, secrets,
-configs, or mounts—since the new code would inherit the access. Rolling back needs level `3` when either spec has host
-access. Environment changes aren't covered by this rule.
+restart such a service but not change what runs in it or how it is reached—its image, command, health check command,
+environment, placement, published ports, secrets, configs, or mounts—since the new code or a newly exposed port would
+inherit the access. Resending the same values isn't a change. Rolling back needs level `3` when either spec has host
+access. A named volume on a worker can't be inspected from the manager, so host access that comes only through one
+isn't held to this rule.
 
 It inherits [`server.operations_level`][server.operations_level] when unset. Setting it lower is how you let your team
 scale services from the dashboard while agents stay read-only.

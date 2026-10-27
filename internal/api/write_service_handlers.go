@@ -146,7 +146,8 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 }
 
 // checkHostAccessHeld answers OPS001 for a change cluster.CheckHostAccessHeld
-// refuses. A write the check was consulted for is pinned to the version it read.
+// refuses. Below level 3 the write is pinned to the cached version the change
+// was judged against, found or not, so a stale cache cannot pass for "unchanged".
 func (h *Handlers) checkHostAccessHeld(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -154,7 +155,7 @@ func (h *Handlers) checkHostAccessHeld(
 	change string,
 ) (context.Context, bool) {
 	level := h.levelFor(r)
-	if level >= config.OpsImpactful || change == "" {
+	if level >= config.OpsImpactful {
 		return r.Context(), true
 	}
 
@@ -216,11 +217,10 @@ func (h *Handlers) HandleGetServiceEnv(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	// Cache lookup is for ACL + 404 only — the actual merge runs against the
-	// freshly-inspected service spec inside the writer (M-42). Pre-merging
-	// against the cache would race third-party writers and silently drop
-	// concurrent changes to other env keys.
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	// The merge runs against the freshly-inspected spec inside the writer
+	// (M-42); pre-merging against the cache would drop concurrent changes.
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -229,9 +229,32 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, "")
+	if !ok {
+		return
+	}
+
+	level := h.levelFor(r)
+	var refused error
+	guarded := func(current map[string]string) (map[string]string, error) {
+		updated, err := mutate(current)
+		if err != nil {
+			return nil, err
+		}
+
+		change := cluster.EnvChange(current, updated)
+		refused = cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level)
+
+		return updated, refused
+	}
+
 	slog.Info("patching service env", "service", id)
 
-	result, err := h.serviceSpec.UpdateServiceEnv(r.Context(), id, mutate)
+	result, err := h.serviceSpec.UpdateServiceEnv(ctx, id, guarded)
+	if refused != nil {
+		writeErrorCode(w, r, "OPS001", refused.Error())
+		return
+	}
 	if err != nil {
 		if isPatchApplyError(err) {
 			writePatchError(w, r, err)
@@ -432,10 +455,19 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
+		var current []swarm.PortConfig
+		if updated.Spec.EndpointSpec != nil {
+			current = updated.Spec.EndpointSpec.Ports
+		}
+		ctx, ok := h.checkHostAccessHeld(w, r, updated, cluster.PortsChange(current, ports))
+		if !ok {
+			return
+		}
+
 		slog.Info("updating service ports", "service", id)
 
 		var err error
-		if updated, err = h.serviceSpec.UpdateServicePorts(r.Context(), id, ports); err != nil {
+		if updated, err = h.serviceSpec.UpdateServicePorts(ctx, id, ports); err != nil {
 			writeResourceError(w, r, err, "service", id, "SVC001")
 			return
 		}
@@ -1112,6 +1144,11 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 			Target:  target.ID,
 			Aliases: ref.Aliases,
 		}
+	}
+
+	change := cluster.NetworksChange(svc.Spec.TaskTemplate.Networks, networks)
+	if _, ok := h.checkHostAccessHeld(w, r, svc, change); !ok {
+		return
 	}
 
 	slog.Info("updating service networks", "service", id)

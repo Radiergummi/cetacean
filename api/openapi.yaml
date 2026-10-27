@@ -3588,7 +3588,7 @@ paths:
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service
         environment variables. Requires `Content-Type: application/json-patch+json` or
-        `application/merge-patch+json`.
+        `application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3806,7 +3806,7 @@ paths:
       summary: Patch service port bindings
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service port bindings.
-        Requires `Content-Type: application/merge-patch+json`.
+        Requires `Content-Type: application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4313,7 +4313,7 @@ paths:
       description: >-
         Replaces the config references for the service. Requires operations level 2, and read access to
         each config the service does not already carry. A config ID that is not known answers
-        `400 SVC021`.
+        `400 SVC021`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4422,7 +4422,7 @@ paths:
       description: >-
         Replaces the secret references for the service. Requires operations level 2, and read access to
         each secret the service does not already carry. A secret ID that is not known answers
-        `400 SVC021`.
+        `400 SVC021`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4531,7 +4531,7 @@ paths:
       description: >-
         Replaces the network attachments for the service. Requires operations level 2, and read access to
         each network the service does not already join. A network that is not known answers
-        `400 SVC021`; a name several networks share answers `409 API015`.
+        `400 SVC021`; a name several networks share answers `409 API015`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4628,7 +4628,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service mount configuration
-      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have.
+      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have, or to change the mounts of a service with host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"

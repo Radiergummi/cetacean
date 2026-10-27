@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -235,6 +236,38 @@ var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, 
 	},
 	sectionPlacement: func(swarm.Service, mcplib.CallToolRequest, string) string {
 		return "changing the placement of"
+	},
+	sectionEnv: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return ""
+		}
+
+		current := make(map[string]string)
+		for _, variable := range containerSpec(svc).Env {
+			name, value, _ := strings.Cut(variable, "=")
+			current[name] = value
+		}
+
+		updated, err := mergePatchMutator(patch)(current)
+		if err != nil {
+			return ""
+		}
+
+		return cluster.EnvChange(current, updated)
+	},
+	sectionPorts: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		ports, err := decodeSection[[]swarm.PortConfig](req, section)
+		if err != nil {
+			return ""
+		}
+
+		var current []swarm.PortConfig
+		if svc.Spec.EndpointSpec != nil {
+			current = svc.Spec.EndpointSpec.Ports
+		}
+
+		return cluster.PortsChange(current, ports)
 	},
 	sectionHealthcheck: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
 		value, err := decodeSection[healthcheckValue](req, section)

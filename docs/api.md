@@ -909,10 +909,11 @@ hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capabi
 A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
 capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
 a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
-`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `secrets`, `configs`, or `mounts` that
-changes the set attached. `POST /services/{id}/rollback` needs it when either the current or the previous spec has host
-access. Below that they answer `403` (`OPS001`). A named volume the manager doesn't hold doesn't count, and environment
-changes aren't covered.
+`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `ports`, `networks`, `secrets`,
+`configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change.
+`POST /services/{id}/rollback` needs it when either the current or the previous spec has host access. Below that they
+answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so host access that comes
+only through one isn't held to this rule.
 
 ### Preconditions
 

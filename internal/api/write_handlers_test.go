@@ -5156,6 +5156,7 @@ const (
 	pinWhenChecked pinRule = iota // below level 3, when the write changes something
 	pinNever                      // the check reads the spec inside the write itself
 	pinAlways                     // the attachment checks pin regardless
+	pinCacheJudged                // below level 3: "unchanged" was judged against the cache
 )
 
 // Host access a service already holds is exempt from the mount and capability
@@ -5182,6 +5183,9 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 	secrets := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceSecrets }
 	configs := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceConfigs }
 	mounts := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts }
+	env := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceEnv }
+	ports := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServicePorts }
+	networks := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceNetworks }
 
 	const (
 		tier1 = config.OpsOperational
@@ -5261,7 +5265,7 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		{
 			"healthcheck interval only",
 			current, "PUT", "/healthcheck", `{"Interval":1000000000}`,
-			putHealthcheck, tier2, false, false, pinWhenChecked,
+			putHealthcheck, tier2, false, false, pinCacheJudged,
 		},
 		{
 			"patched healthcheck test",
@@ -5312,6 +5316,42 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			unbound, "POST", "/rollback", "",
 			rollback, tier1, false, true, pinWhenChecked,
 		},
+		{
+			"environment",
+			current, "PATCH", "/env", `{"DOCKER_HOST":"tcp://0.0.0.0:2375"}`,
+			env, tier2, true, true, pinCacheJudged,
+		},
+		{
+			"environment unchanged",
+			current, "PATCH", "/env", `{}`,
+			env, tier2, false, false, pinCacheJudged,
+		},
+		{
+			"environment without host access",
+			unbound, "PATCH", "/env", `{"FOO":"bar"}`,
+			env, tier2, false, true, pinCacheJudged,
+		},
+		{
+			"published port",
+			current, "PATCH", "/ports",
+			`{"ports":[{"Protocol":"tcp","TargetPort":2375,"PublishedPort":2375}]}`,
+			ports, tier2, true, true, pinCacheJudged,
+		},
+		{
+			"ports unchanged",
+			current, "PATCH", "/ports", `{"ports":[]}`,
+			ports, tier2, false, false, pinCacheJudged,
+		},
+		{
+			"network attached",
+			current, "PATCH", "/networks", `{"networks":[{"target":"net1"}]}`,
+			networks, tier2, true, true, pinAlways,
+		},
+		{
+			"networks unchanged",
+			current, "PATCH", "/networks", `{"networks":[]}`,
+			networks, tier2, false, false, pinAlways,
+		},
 	}
 
 	for _, tc := range cases {
@@ -5326,6 +5366,7 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 				c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{
 					Annotations: swarm.Annotations{Name: "c"},
 				}})
+				c.SetNetwork(network.Summary{ID: "net1", Name: "n"})
 
 				written := false
 				var pinned swarm.Version
@@ -5369,6 +5410,21 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 				) (swarm.Service, error) {
 					return write(ctx)
 				}
+				mock.updateServiceEnvFn = func(
+					ctx context.Context, _ string, _ map[string]string,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServicePortsFn = func(
+					ctx context.Context, _ string, _ []swarm.PortConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceNetworksFn = func(
+					ctx context.Context, _ string, _ []swarm.NetworkAttachmentConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
 
 				h := newTestHandlers(t, withCache(c), withWriteClient(mock), withOpsLevel(level))
 				req := httptest.NewRequest(
@@ -5391,8 +5447,10 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 							w.Code, written, w.Body.String())
 					}
 
+					below := level < config.OpsImpactful
 					wantPin := tc.pin == pinAlways ||
-						tc.pin == pinWhenChecked && tc.changes && level < config.OpsImpactful
+						tc.pin == pinWhenChecked && tc.changes && below ||
+						tc.pin == pinCacheJudged && below
 					if wantPin && pinned.Index != 7 {
 						t.Errorf("write pinned to %v, want the checked version 7", pinned)
 					}

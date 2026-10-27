@@ -21,6 +21,7 @@ type pinRule int
 const (
 	pinWhenChecked pinRule = iota // below level 3, when the write changes something
 	pinAlways                     // the attachment checks pin regardless
+	pinCacheJudged                // below level 3: "unchanged" was judged against the cache
 )
 
 const socketBoundID = "svc1abcdef"
@@ -87,6 +88,16 @@ func hostAccessWriteClient(
 		) (swarm.Service, error) {
 			return record(ctx)
 		},
+		updateServiceEnvFn: func(
+			ctx context.Context, _ string, _ map[string]string,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServicePortsFn: func(
+			ctx context.Context, _ string, _ []swarm.PortConfig,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
 	}
 }
 
@@ -138,7 +149,7 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		},
 		{
 			"command unchanged", current, section("command", `{}`),
-			tier2, false, false, pinWhenChecked,
+			tier2, false, false, pinCacheJudged,
 		},
 		{
 			"placement", current, section("placement", `{"Constraints":["node.role==manager"]}`),
@@ -150,7 +161,7 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		},
 		{
 			"healthcheck interval only", current, section("healthcheck", `{"interval":"10s"}`),
-			tier2, false, false, pinWhenChecked,
+			tier2, false, false, pinCacheJudged,
 		},
 		{
 			"secret added", current,
@@ -189,6 +200,27 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			`{"name":"rollback_service","arguments":{"id":"web"}}`,
 			tier1, false, true, pinWhenChecked,
 		},
+		{
+			"environment", current, section("env", `{"DOCKER_HOST":"tcp://0.0.0.0:2375"}`),
+			tier2, true, true, pinCacheJudged,
+		},
+		{
+			"environment unchanged", current, section("env", `{}`),
+			tier2, false, false, pinCacheJudged,
+		},
+		{
+			"environment without host access", unbound, section("env", `{"FOO":"bar"}`),
+			tier2, false, true, pinCacheJudged,
+		},
+		{
+			"published port", current,
+			section("ports", `[{"Protocol":"tcp","TargetPort":2375,"PublishedPort":2375}]`),
+			tier2, true, true, pinCacheJudged,
+		},
+		{
+			"ports unchanged", current, section("ports", `[]`),
+			tier2, false, false, pinCacheJudged,
+		},
 	}
 
 	for _, tc := range cases {
@@ -220,8 +252,9 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 						t.Fatal("the write did not run")
 					}
 
-					wantPin := tc.pin == pinAlways ||
-						tc.changes && level < config.OpsImpactful
+					below := level < config.OpsImpactful
+					wantPin := tc.pin == pinAlways || tc.changes && below ||
+						tc.pin == pinCacheJudged && below
 					if wantPin && pinned.Index != 7 {
 						t.Errorf("write pinned to %v, want the checked version 7", pinned)
 					}

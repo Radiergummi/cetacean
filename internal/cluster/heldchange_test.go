@@ -59,6 +59,36 @@ func TestHealthcheckChange(t *testing.T) {
 	}
 }
 
+func TestEnvPortsAndNetworksChanges(t *testing.T) {
+	if EnvChange(map[string]string{"A": "1"}, map[string]string{"A": "1"}) != "" {
+		t.Error("an unchanged environment counted as a change")
+	}
+	if EnvChange(map[string]string{"A": "1"}, map[string]string{"A": "2"}) == "" {
+		t.Error("a changed variable went unnoticed")
+	}
+
+	web := swarm.PortConfig{Protocol: "tcp", TargetPort: 80, PublishedPort: 8080}
+	api := swarm.PortConfig{Protocol: "tcp", TargetPort: 2375, PublishedPort: 2375}
+	if PortsChange([]swarm.PortConfig{web, api}, []swarm.PortConfig{api, web}) != "" {
+		t.Error("reordering ports counted as a change")
+	}
+	if PortsChange([]swarm.PortConfig{web}, []swarm.PortConfig{web, api}) == "" {
+		t.Error("a published port went unnoticed")
+	}
+
+	front := swarm.NetworkAttachmentConfig{Target: "n1", Aliases: []string{"a", "b"}}
+	reordered := swarm.NetworkAttachmentConfig{Target: "n1", Aliases: []string{"b", "a"}}
+	if NetworksChange(
+		[]swarm.NetworkAttachmentConfig{front},
+		[]swarm.NetworkAttachmentConfig{reordered},
+	) != "" {
+		t.Error("reordering aliases counted as a change")
+	}
+	if NetworksChange(nil, []swarm.NetworkAttachmentConfig{front}) == "" {
+		t.Error("an attached network went unnoticed")
+	}
+}
+
 func TestAttachmentChanges(t *testing.T) {
 	secret := func(id, name string) *swarm.SecretReference {
 		return &swarm.SecretReference{

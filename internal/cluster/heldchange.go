@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 
@@ -93,6 +94,44 @@ func MountsChange(before, after []mount.Mount) string {
 	}
 
 	return "changing the mounts of"
+}
+
+// EnvChange compares environments; a variable can redirect what an entrypoint
+// does, or point a socket proxy at a listener.
+func EnvChange(before, after map[string]string) string {
+	if maps.Equal(before, after) {
+		return ""
+	}
+
+	return "changing the environment of"
+}
+
+// PortsChange compares published ports, which can expose a socket the service
+// holds to the network.
+func PortsChange(before, after []swarm.PortConfig) string {
+	if sameSet(before, after, jsonKey[swarm.PortConfig]) {
+		return ""
+	}
+
+	return "changing the published ports of"
+}
+
+// NetworksChange compares network attachments, which can do the same.
+func NetworksChange(before, after []swarm.NetworkAttachmentConfig) string {
+	key := func(n swarm.NetworkAttachmentConfig) string {
+		n.Aliases = slices.Sorted(slices.Values(n.Aliases))
+		return jsonKey(n)
+	}
+	if sameSet(before, after, key) {
+		return ""
+	}
+
+	return "changing the networks of"
+}
+
+func jsonKey[T any](v T) string {
+	encoded, _ := json.Marshal(v)
+	return string(encoded)
 }
 
 func fileKey(f *swarm.SecretReferenceFileTarget) string {
