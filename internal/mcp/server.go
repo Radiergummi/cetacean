@@ -8,7 +8,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -194,6 +196,10 @@ type Server struct {
 	// 403 (DNS-rebinding defense).
 	allowedOrigins []string
 
+	// publicHost is server.public_url's hostname, the one non-loopback Host
+	// hostGuard admits on a loopback connection. Empty admits none.
+	publicHost string
+
 	// iconBaseURL is the canonical external base (issuer + base path) that tool
 	// icon `src` values are built from, e.g. "https://cetacean.example.com".
 	// Icons live under the un-authed /assets/ prefix. Empty disables icons.
@@ -351,6 +357,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		prom:           opts.Prometheus,
 		images:         opts.ImageDigests,
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
+		publicHost:     publicHostname(opts.PublicURL),
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 		watches:        make(chan struct{}, maxConcurrentWatches),
@@ -460,9 +467,8 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// state to keep: each request is served by its own ephemeral session.
 		// WithStateful(false) would not do: it leaves mcp-go minting IDs.
 		mcpserver.WithStateLess(true),
-		// mcp-go refuses a non-loopback Host on a loopback connection, which is
-		// every request through a reverse proxy on the same host. originGuard
-		// is the DNS-rebinding defense instead.
+		// hostGuard replaces this check: it also admits server.public_url's
+		// host, which a same-host proxy that keeps the public Host sends.
 		mcpserver.WithDisableLocalhostProtection(true),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			// The bearer-validating middleware (see Handler) stamps an
@@ -518,14 +524,60 @@ func (s *Server) Handler() http.Handler {
 	case guardNone:
 	}
 
-	return s.originGuard(h)
+	return s.originGuard(s.hostGuard(h))
+}
+
+// hostGuard refuses a non-loopback Host on a loopback connection, as mcp-go's
+// own DNS-rebinding check does, unless it is server.public_url's host: a
+// same-host reverse proxy dials loopback and may keep the public Host.
+func (s *Server) hostGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+		host := hostname(r.Host)
+
+		if local == nil || !isLoopback(hostname(local.String())) || isLoopback(host) ||
+			(s.publicHost != "" && strings.EqualFold(host, s.publicHost)) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		http.Error(w, "forbidden host", http.StatusForbidden)
+	})
+}
+
+// hostname strips the port, and an IPv6 literal's brackets, from host[:port].
+func hostname(hostport string) string {
+	if host, _, err := net.SplitHostPort(hostport); err == nil {
+		return host
+	}
+
+	return strings.Trim(hostport, "[]")
+}
+
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ip, err := netip.ParseAddr(host)
+
+	return err == nil && ip.IsLoopback()
+}
+
+// publicHostname is publicURL's hostname, or empty when there is none.
+func publicHostname(publicURL string) string {
+	u, err := url.Parse(publicURL)
+	if publicURL == "" || err != nil {
+		return ""
+	}
+
+	return u.Hostname()
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport
-// requires. It checks Origin rather than Host, so it holds behind a reverse
-// proxy. A request with no Origin passes
-// through. Origins match as RFC 6454 serialises them, so "*" admits nothing:
-// every call is a POST that may write, and a wildcard is not trusted for that.
+// requires. It reads Origin, not Host, so it holds behind a proxy. A request
+// with no Origin passes. Origins match as RFC 6454 serialises them, so "*"
+// admits nothing: a wildcard is not trusted with POSTs that may write.
 func (s *Server) originGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
