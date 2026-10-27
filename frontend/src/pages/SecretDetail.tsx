@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 import DataResourceDetail from "../components/DataResourceDetail";
-import FetchError from "../components/FetchError";
+import DetailError from "../components/DetailError";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { useParams } from "react-router-dom";
@@ -15,8 +15,9 @@ export default function SecretDetail() {
 
   if (error) {
     return (
-      <FetchError
-        message={error.message || "Failed to load secret"}
+      <DetailError
+        error={error}
+        fallback="Failed to load secret"
         onRetry={retry}
       />
     );

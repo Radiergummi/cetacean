@@ -3,7 +3,7 @@ import StackDetail from "./StackDetail";
 import { api } from "@/api/client";
 import { createTestQueryClient } from "@/test/mocks";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -124,6 +124,19 @@ describe("StackDetail", () => {
 
     expect(screen.queryByRole("list", { name: "Links" })).not.toBeInTheDocument();
     expect(Array.from(header?.children ?? []).every((child) => child.hasChildNodes())).toBe(true);
+  });
+
+  it("says why the stack failed to load and offers a retry", async () => {
+    vi.mocked(api.stack).mockRejectedValue(new Error("stack web is not visible to you"));
+
+    renderStackDetail();
+
+    expect(await screen.findByText("stack web is not visible to you")).toBeInTheDocument();
+
+    vi.mocked(api.stack).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(api.stack).toHaveBeenCalled());
   });
 
   // A global service's target is not known to the page, so a crash loop that

@@ -2,7 +2,7 @@ import { api } from "../api/client";
 import type { StackResponse } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
-import FetchError from "../components/FetchError";
+import DetailError from "../components/DetailError";
 import { GraphFrame } from "../components/graph/GraphFrame";
 import { TaskHealth } from "../components/HealthIndicator";
 import { LoadingDetail } from "../components/LoadingSkeleton";
@@ -35,6 +35,7 @@ export default function StackDetail() {
   const {
     data: response,
     error,
+    retry,
     allowedMethods,
   } = useDetailResource<StackResponse>(name, api.stack, "/stacks", {
     history: false,
@@ -60,7 +61,13 @@ export default function StackDetail() {
   }, [members]);
 
   if (error) {
-    return <FetchError message="Failed to load stack" />;
+    return (
+      <DetailError
+        error={error}
+        fallback="Failed to load stack"
+        onRetry={retry}
+      />
+    );
   }
   if (!stack) {
     return <LoadingDetail />;

@@ -13,7 +13,7 @@ export function useSwarmPage() {
   const data = swarmQuery.data?.data ?? null;
   const editable = swarmQuery.data?.editable ?? emptyMethods;
   const canInstallPlugins = pluginsQuery.data?.allowedMethods.has("POST") ?? false;
-  const error = swarmQuery.isError;
+  const error = swarmQuery.error;
   const plugins = pluginsQuery.data?.data ?? emptyPlugins;
 
   const fetchSwarmInfo = useCallback(() => {

@@ -3,8 +3,8 @@ import ActivityFeed from "../components/ActivityFeed";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection from "../components/ComposeSection";
 import { ContainerImage, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
+import DetailError from "../components/DetailError";
 import ErrorBoundary from "../components/ErrorBoundary";
-import FetchError from "../components/FetchError";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
@@ -47,7 +47,13 @@ export default function ServiceDetail() {
   const labelsVersion = useEditVersion(`/services/${id}/labels`);
 
   if (detail.error) {
-    return <FetchError message="Failed to load service" />;
+    return (
+      <DetailError
+        error={detail.error}
+        fallback="Failed to load service"
+        onRetry={detail.refetchService}
+      />
+    );
   }
 
   if (!detail.service) {
