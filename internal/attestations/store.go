@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -239,7 +240,11 @@ func (s *Store) lookup(ctx context.Context, image string) (imageEntry, imagechec
 		return imageEntry{image: Image{Status: StatusUnpinned}}, ref
 	}
 
-	value, err := s.cachedOrFetch(ctx, "image:"+digest, func(ctx context.Context) (cached, error) {
+	// Keyed by repository too: a refusal is about the repository, and a
+	// public mirror of a private image must not inherit its answer.
+	key := "image:" + ref.Host + "/" + ref.Repository + "@" + digest
+
+	value, err := s.cachedOrFetch(ctx, key, func(ctx context.Context) (cached, error) {
 		return s.fetchImage(ctx, ref, digest), nil
 	})
 	if err != nil {
@@ -274,7 +279,9 @@ func (s *Store) fetchImage(ctx context.Context, ref imagecheck.Reference, digest
 		return s.failure(err)
 	}
 
-	if attested == nil {
+	if !slices.ContainsFunc(attested, func(a Attested) bool {
+		return a.Provenance != nil || a.SBOM != nil
+	}) {
 		return cached{value: imageEntry{image: Image{Status: StatusNone}}, cost: cost}
 	}
 

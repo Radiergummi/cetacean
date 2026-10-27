@@ -16,14 +16,15 @@ import (
 	"github.com/radiergummi/cetacean/internal/imagecheck"
 )
 
-// Everything under a platform manifest digest is immutable, so a browser may
-// keep an SBOM or a Dockerfile view; provenance carries task counts and is
-// revalidated instead.
+// A task never changes the image it runs, so a browser may keep its SBOM or
+// Dockerfile view. A service's changes with every deploy, and its URLs are
+// revalidated against the ETag instead, as provenance always is.
 const attestationCacheControl = "private, max-age=3600"
 
 // imageTarget is the attestation target of the resource a request addresses.
 type imageTarget struct {
-	path string // for @id
+	path      string // for @id
+	immutable bool   // a task's, whose image never changes
 	cluster.AttestationTarget
 }
 
@@ -171,7 +172,8 @@ func (h *Handlers) taskImage(
 	}
 
 	return imageTarget{
-		path: "/tasks/" + task.ID + suffix,
+		path:      "/tasks/" + task.ID + suffix,
+		immutable: true,
 		AttestationTarget: cluster.TaskAttestationTarget(
 			r.Context(), task, h.taskNode(task), h.attestations,
 		),
@@ -254,7 +256,9 @@ func (h *Handlers) writeSBOM(
 		return
 	}
 
-	w.Header().Set("Cache-Control", attestationCacheControl)
+	if target.immutable {
+		w.Header().Set("Cache-Control", attestationCacheControl)
+	}
 
 	switch ct {
 	case ContentTypeSPDX:
@@ -290,7 +294,9 @@ func (h *Handlers) writeDockerfile(
 		return
 	}
 
-	w.Header().Set("Cache-Control", attestationCacheControl)
+	if target.immutable {
+		w.Header().Set("Cache-Control", attestationCacheControl)
+	}
 
 	if ct == ContentTypePlain {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

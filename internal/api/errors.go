@@ -604,7 +604,7 @@ var errorRegistry = map[string]ErrorDef{
 	"ATT001": {
 		Code:        "ATT001",
 		Title:       "Registry Unavailable",
-		Status:      http.StatusBadGateway,
+		Status:      http.StatusServiceUnavailable,
 		Description: "The image's registry could not be reached, or failed, while its attestations were being read.",
 		Suggestion:  "Try again after the time Retry-After names. The registry's own status page may say more.",
 	},

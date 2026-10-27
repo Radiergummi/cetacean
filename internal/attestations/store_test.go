@@ -440,6 +440,35 @@ func TestEvictsByBytes(t *testing.T) {
 	}
 }
 
+// A multi-platform index pushed without attestations has nothing to show on
+// any platform; that is "none", not a platform picker full of blanks.
+func TestImageIndexWithoutAttestationsIsNone(t *testing.T) {
+	f := newFakeFetcher()
+	f.manifests[syntheticIndex] = `{"mediaType":"` + ociIndexType + `","manifests":[
+		{"digest":"sha256:amd","platform":{"os":"linux","architecture":"amd64"}},
+		{"digest":"sha256:arm","platform":{"os":"linux","architecture":"arm64"}}]}`
+	s, _ := newTestStore(f)
+
+	if got := s.Image(context.Background(), syntheticImage); got.Status != StatusNone {
+		t.Errorf("status = %s, want none", got.Status)
+	}
+}
+
+// A refusal is about a repository, not a digest: the same image mirrored
+// publicly elsewhere must not inherit a private copy's answer.
+func TestRefusalIsCachedPerRepository(t *testing.T) {
+	f := newFakeFetcher()
+	f.failWith[syntheticIndex] = imagecheck.ErrUnauthorized
+	s, _ := newTestStore(f)
+
+	s.Image(context.Background(), "private.test/app@"+syntheticIndex)
+	s.Image(context.Background(), "public.test/app@"+syntheticIndex)
+
+	if n := f.count(syntheticIndex); n != 2 {
+		t.Errorf("%d fetches; the second repository was answered from the first's refusal", n)
+	}
+}
+
 func TestNilStoreIsDisabled(t *testing.T) {
 	var s *Store
 

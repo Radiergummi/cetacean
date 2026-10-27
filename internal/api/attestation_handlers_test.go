@@ -299,8 +299,9 @@ func TestSBOMErrors(t *testing.T) {
 		{attestations.ErrNoSBOM, http.StatusNotFound, "ATT002"},
 		{imagecheck.ErrTooLarge, http.StatusNotFound, "ATT005"},
 		{
+			// Retry-After is defined for 503 (RFC 9110 §10.2.3), not for 502.
 			&attestations.UnavailableError{RetryAfter: time.Now().Add(time.Minute)},
-			http.StatusBadGateway,
+			http.StatusServiceUnavailable,
 			"ATT001",
 		},
 		{
@@ -322,6 +323,23 @@ func TestSBOMErrors(t *testing.T) {
 		if tc.code == "ATT001" && w.Header().Get("Retry-After") == "" {
 			t.Error("ATT001 without Retry-After")
 		}
+	}
+}
+
+// A service's image changes with every deploy, so its SBOM URL is revalidated;
+// a task's never does, so a browser may keep it.
+func TestSBOMCachingFollowsTheImage(t *testing.T) {
+	src := &fakeAttestationSource{image: twoPlatformImage()}
+	h := newTestRouterWithCache(t, attestedCluster(), withAttestations(src))
+
+	service := getAttested(t, h, "/services/svc1/sbom?platform=linux/amd64", "application/json")
+	if got := service.Header().Get("Cache-Control"); strings.Contains(got, "max-age") {
+		t.Errorf("service Cache-Control = %q; it must revalidate", got)
+	}
+
+	task := getAttested(t, h, "/tasks/task1/sbom", "application/json")
+	if got := task.Header().Get("Cache-Control"); !strings.Contains(got, "max-age=3600") {
+		t.Errorf("task Cache-Control = %q", got)
 	}
 }
 

@@ -354,7 +354,7 @@ func summarise(p *attestations.Provenance) *ProvenanceSummary {
 		FinishedOn:     p.FinishedOn,
 		Frontend:       p.Frontend,
 		Reproducible:   p.Reproducible,
-		Inputs:         p.Inputs,
+		Inputs:         strippedInputs(p.Inputs),
 		CI:             ciSummary(p.CI),
 	}
 
@@ -363,6 +363,17 @@ func summarise(p *attestations.Provenance) *ProvenanceSummary {
 	}
 
 	return s
+}
+
+// strippedInputs drops credentials an input URI may carry, as for the source.
+func strippedInputs(inputs []attestations.Input) []attestations.Input {
+	out := make([]attestations.Input, len(inputs))
+	for i, in := range inputs {
+		in.URI = stripUserinfo(in.URI)
+		out[i] = in
+	}
+
+	return out
 }
 
 func sourceSummary(src *attestations.Source) *SourceSummary {

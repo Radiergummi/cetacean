@@ -220,6 +220,15 @@ func TestSourceStripsUserinfo(t *testing.T) {
 	if s.Repository != "https://github.com/a/b.git" || s.RepositoryURL != "https://github.com/a/b" {
 		t.Errorf("source = %+v", s)
 	}
+
+	credentialed := attestations.Input{ //nolint:gosec // G101: fake credentials, stripped here.
+		URI: "https://user:tok@github.com/a/b.git#main",
+	}
+
+	inputs := summaryOf(&attestations.Provenance{Inputs: []attestations.Input{credentialed}}).Inputs
+	if len(inputs) != 1 || inputs[0].URI != "https://github.com/a/b.git#main" {
+		t.Errorf("inputs = %+v", inputs)
+	}
 }
 
 func TestBuilderLink(t *testing.T) {
