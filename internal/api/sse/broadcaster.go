@@ -32,10 +32,12 @@ type ReplaySource interface {
 }
 
 // frameEvent is an event on its way to a client. sync numbers a sync event
-// among every one broadcast, so a cursor can say which it has seen.
+// among every one broadcast, so a cursor can say which it has seen; data is
+// its payload, encoded once for every client, or nil to encode on write.
 type frameEvent struct {
 	cache.Event
 	sync uint64
+	data []byte
 }
 
 // syncMark is the newest sync broadcast: its history position and number.
@@ -200,6 +202,9 @@ func (b *Broadcaster) fanOut() {
 			for c := range b.clients {
 				if !c.accepts(e.Event) {
 					continue
+				}
+				if e.data == nil {
+					e.data = encodeEvent(e.Event, b.basePath)
 				}
 				select {
 				case c.events <- e:
@@ -724,6 +729,12 @@ func ToSSEEvent(e cache.Event, basePath string) Event {
 	}
 }
 
+// encodeEvent is an event's payload as every client receives it.
+func encodeEvent(e cache.Event, basePath string) []byte {
+	data, _ := json.Marshal(ToSSEEvent(e, basePath))
+	return data
+}
+
 // ResourcePath returns the canonical API path for a resource.
 func ResourcePath(typ cache.EventType, id string) string {
 	switch typ {
@@ -810,20 +821,31 @@ func writeBatch(
 		id += "." + strconv.FormatUint(synced, 10)
 	}
 
+	encoded := func(e frameEvent) []byte {
+		if e.data != nil {
+			return e.data
+		}
+
+		return encodeEvent(e.Event, basePath)
+	}
+
 	if len(events) == 1 {
-		data, _ := json.Marshal(ToSSEEvent(events[0].Event, basePath))
 		_, err := fmt.Fprintf(
-			w, "id: %s\nevent: %s\ndata: %s\n\n", id, events[0].Type, data,
+			w, "id: %s\nevent: %s\ndata: %s\n\n", id, events[0].Type, encoded(events[0]),
 		)
 		if err != nil {
 			return err
 		}
 	} else {
-		enriched := make([]Event, len(events))
+		data := []byte{'['}
 		for i, e := range events {
-			enriched[i] = ToSSEEvent(e.Event, basePath)
+			if i > 0 {
+				data = append(data, ',')
+			}
+			data = append(data, encoded(e)...)
 		}
-		data, _ := json.Marshal(enriched)
+		data = append(data, ']')
+
 		_, err := fmt.Fprintf(w, "id: %s\nevent: batch\ndata: %s\n\n", id, data)
 		if err != nil {
 			return err
