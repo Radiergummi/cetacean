@@ -793,6 +793,10 @@ names a newer image in its registry than the digest the service runs: `image`, `
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
+`GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
+`GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either
+an `href`, for an `http` or `https` URL, or a `text`, for any other value.
+
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event
 stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last successful read. `/-/metrics` carries the same as
