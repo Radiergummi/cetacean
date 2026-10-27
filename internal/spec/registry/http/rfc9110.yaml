@@ -368,9 +368,9 @@ requirements:
     text: >-
       A recipient cache or origin server MUST evaluate the request
       preconditions defined by this specification in the following order:
-      If-Match, If-Unmodified-Since when If-Match is absent, If-None-Match,
-      If-Modified-Since when If-None-Match is absent and the method is GET or
-      HEAD, and If-Range last.
+      [1. If-Match; 2. If-Unmodified-Since when If-Match is absent;
+      3. If-None-Match; 4. If-Modified-Since for GET or HEAD when If-None-Match
+      is absent; 5. If-Range.]
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.2
     mutants:
       - file: internal/api/list.go
