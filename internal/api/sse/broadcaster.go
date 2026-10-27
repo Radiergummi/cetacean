@@ -270,7 +270,7 @@ func TypesFilter(r *http.Request) func(cache.Event) bool {
 
 // ServeHead answers a HEAD on a stream with the headers a GET opens it with,
 // and reports whether it did. net/http discards a HEAD's body, so a stream
-// served to one never ends; the caller returns before taking any slot.
+// served to one never ends; the caller checks its cap first and takes no slot.
 func ServeHead(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodHead {
 		return false
@@ -289,10 +289,6 @@ func (b *Broadcaster) ServeSSE(
 	match func(cache.Event) bool,
 	replayType cache.EventType,
 ) {
-	if ServeHead(w, r) {
-		return
-	}
-
 	if _, ok := w.(http.Flusher); !ok {
 		b.writeError(w, r, "API005", "streaming not supported")
 		return
@@ -320,6 +316,11 @@ func (b *Broadcaster) ServeSSE(
 		b.mu.Unlock()
 		w.Header().Set("Retry-After", RetryAfter())
 		b.writeError(w, r, "SSE001", "too many SSE connections from this client")
+		return
+	}
+	if r.Method == http.MethodHead {
+		b.mu.Unlock()
+		ServeHead(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

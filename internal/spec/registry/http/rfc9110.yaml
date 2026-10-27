@@ -44,8 +44,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-8.8.2.1
     mutants:
       - file: internal/api/etag.go
-        replace: "\t\tif now := time.Now(); lastModified.After(now) {"
-        with: "\t\tif now := time.Now(); false && lastModified.After(now) {"
+        replace: "\tif now := time.Now(); t.After(now) {"
+        with: "\tif now := time.Now(); false && t.After(now) {"
 
   - id: an-etag-is-sent-when-changes-are-detectable
     level: SHOULD
@@ -258,8 +258,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
     mutants:
       - file: internal/api/etag.go
-        replace: "\treturn err == nil && lastModified.Truncate(time.Second).After(t.Truncate(time.Second))"
-        with: "\treturn err != nil || lastModified.Truncate(time.Second).After(t.Truncate(time.Second))"
+        replace: "\treturn err == nil &&\n\t\tnotAfterNow(lastModified)"
+        with: "\treturn err != nil ||\n\t\tnotAfterNow(lastModified)"
 
   - id: if-unmodified-since-needs-a-modification-date
     level: MUST

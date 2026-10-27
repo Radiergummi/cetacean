@@ -223,14 +223,7 @@ func writeRenderedJSON(
 	}
 
 	if !lastModified.IsZero() {
-		// RFC 9110 §8.8.2.1: a value later than the response's own origination
-		// date is replaced by it. The engine stamps these, and a manager whose
-		// clock runs ahead of this one would otherwise hand a cache a
-		// representation that never goes stale.
-		if now := time.Now(); lastModified.After(now) {
-			lastModified = now
-		}
-
+		lastModified = notAfterNow(lastModified)
 		w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
 	}
 
@@ -274,7 +267,19 @@ func modifiedAfter(field string, lastModified time.Time) bool {
 
 	t, err := http.ParseTime(field)
 
-	return err == nil && lastModified.Truncate(time.Second).After(t.Truncate(time.Second))
+	return err == nil &&
+		notAfterNow(lastModified).Truncate(time.Second).After(t.Truncate(time.Second))
+}
+
+// notAfterNow is t, or now when t is later (RFC 9110 §8.8.2.1). The engine
+// stamps these, and a manager whose clock runs ahead would otherwise hand a
+// cache a date that never goes stale, and refuse the same date echoed back.
+func notAfterNow(t time.Time) time.Time {
+	if now := time.Now(); t.After(now) {
+		return now
+	}
+
+	return t
 }
 
 // refusedByPrecondition answers 412 when preconditionFailed says so, and

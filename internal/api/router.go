@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -174,7 +176,7 @@ func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
 	r.patterns = append(r.patterns, pattern)
 	if gated, ok := handler.(tieredHandler); ok {
 		method, path, _ := strings.Cut(pattern, " ")
-		route := tieredRoute{method, path, gated.level, ""}
+		route := tieredRoute{method, path, gated.level, "", gated.permits}
 		if method == http.MethodPatch {
 			route.acceptPatch = cmp.Or(gated.acceptPatch, AcceptMergePatch)
 		}
@@ -233,19 +235,58 @@ func (r *routeRecorder) allows(req *http.Request) []string {
 	return append(methods, http.MethodOptions)
 }
 
-// acceptPatch is the Accept-Patch of the PATCH route at req's path, if any.
-func (r *routeRecorder) acceptPatch(req *http.Request) string {
-	probe := req.Clone(req.Context())
-	probe.Method = http.MethodPatch
+// open is allows less the writes level or the caller's write grant closes, as
+// a GET's Allow leaves them out, with the Accept-Patch of a PATCH among them.
+func (r *routeRecorder) open(
+	req *http.Request,
+	level config.OperationsLevel,
+) (methods []string, acceptPatch string) {
+	for _, method := range r.allows(req) {
+		probe := req.Clone(req.Context())
+		probe.Method = method
+		pattern := r.route(probe)
+		_, path, _ := strings.Cut(pattern, " ")
 
-	_, path, _ := strings.Cut(r.route(probe), " ")
-	for _, route := range r.tiered {
-		if route.method == http.MethodPatch && route.path == path {
-			return route.acceptPatch
+		idx := slices.IndexFunc(r.tiered, func(route tieredRoute) bool {
+			return route.method == method && route.path == path
+		})
+		if idx >= 0 {
+			route := r.tiered[idx]
+			if level < route.level || !route.permits(withPathValues(probe, path)) {
+				continue
+			}
+			if method == http.MethodPatch {
+				acceptPatch = route.acceptPatch
+			}
+		}
+
+		methods = append(methods, method)
+	}
+
+	return methods, acceptPatch
+}
+
+// withPathValues sets on req the values the wildcards of path name, which
+// ServeMux.Handler matches without setting.
+func withPathValues(req *http.Request, path string) *http.Request {
+	segments := strings.Split(strings.Trim(req.URL.EscapedPath(), "/"), "/")
+	for i, part := range strings.Split(strings.Trim(path, "/"), "/") {
+		name, ok := strings.CutPrefix(part, "{")
+		if !ok || i >= len(segments) {
+			continue
+		}
+		name = strings.TrimSuffix(name, "}")
+
+		value := segments[i]
+		if rest, wild := strings.CutSuffix(name, "..."); wild {
+			name, value = rest, strings.Join(segments[i:], "/")
+		}
+		if unescaped, err := url.PathUnescape(value); err == nil {
+			req.SetPathValue(name, unescaped)
 		}
 	}
 
-	return ""
+	return req
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -273,42 +314,34 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
-	// ACL wrappers for write endpoints.
-	svcACL := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
+	// The ACL resource each write endpoint checks the write grant on.
+	svcACL := resolveResource(
+		"service",
+		h.cache.GetService,
+		func(s swarm.Service) string { return s.Spec.Name },
 	)
-	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, cluster.NodeACLName))
-	taskACL := h.requireWriteACL(h.taskServiceResource)
-	stackACL := h.requireWriteACL(pathResource("stack", "name"))
-	cfgACL := h.requireWriteACL(
-		resolveResource(
-			"config",
-			h.cache.GetConfig,
-			func(c swarm.Config) string { return c.Spec.Name },
-		),
+	nodeACL := resolveResource("node", h.cache.GetNode, cluster.NodeACLName)
+	taskACL := h.taskServiceResource
+	stackACL := pathResource("stack", "name")
+	cfgACL := resolveResource(
+		"config",
+		h.cache.GetConfig,
+		func(c swarm.Config) string { return c.Spec.Name },
 	)
-	secACL := h.requireWriteACL(
-		resolveResource(
-			"secret",
-			h.cache.GetSecret,
-			func(s swarm.Secret) string { return s.Spec.Name },
-		),
+	secACL := resolveResource(
+		"secret",
+		h.cache.GetSecret,
+		func(s swarm.Secret) string { return s.Spec.Name },
 	)
-	netACL := h.requireWriteACL(
-		resolveResource(
-			"network",
-			h.cache.GetNetwork,
-			func(n network.Summary) string { return n.Name },
-		),
+	netACL := resolveResource(
+		"network",
+		h.cache.GetNetwork,
+		func(n network.Summary) string { return n.Name },
 	)
-	volACL := h.requireWriteACL(pathResource("volume", "name"))
-	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
-	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))
-	swarmACL := h.requireWriteACL(swarmResource)
+	volACL := pathResource("volume", "name")
+	pluginACL := pathResource("plugin", "name")
+	pluginWildACL := wildcardResource("plugin")
+	swarmACL := swarmResource
 
 	// Derived (ACL, tier) chains for the gated route registrations below.
 	svcTier1 := h.tiered(svcACL, config.OpsOperational)
@@ -336,8 +369,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	clusterExists := h.unrepresented(subjectExists)
 	// A create checks the write grant on the name it creates, in the handler.
 	createTier2 := tieredChain{
-		chain: NewChain(h.requireLevel(config.OpsConfiguration), attributeWrite),
-		level: config.OpsConfiguration,
+		gates:   NewChain(h.requireLevel(config.OpsConfiguration), attributeWrite),
+		level:   config.OpsConfiguration,
+		permits: h.mayCreate,
 	}
 
 	authProvider.RegisterRoutes(mux.mux)
@@ -496,9 +530,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"POST /plugins/privileges",
-		pluginWildTier3.Append(clusterExists).ThenFunc(h.HandlePluginPrivileges),
+		pluginWildTier3.Append(clusterExists).AnswersWithABody().ThenFunc(h.HandlePluginPrivileges),
 	)
-	mux.Handle("POST /plugins", pluginWildTier3.ThenFunc(h.HandleInstallPlugin))
+	mux.Handle("POST /plugins", pluginWildTier3.AnswersWithABody().ThenFunc(h.HandleInstallPlugin))
 	mux.Handle(
 		"POST /plugins/{name}/enable",
 		pluginTier2.Append(pluginExists).AnswersNoContent().ThenFunc(h.HandleEnablePlugin),
@@ -1095,10 +1129,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		// dashboard; under /-/, or for a client that rules out HTML, so is a read.
 		meta := strings.HasPrefix(r.URL.Path, "/-/")
 		if meta || !isSafeMethod(r.Method) || htmlUnacceptable(r.Context()) {
-			if allow := mux.allows(r); len(allow) > 0 {
+			if len(mux.allows(r)) > 0 {
+				allow, patch := mux.open(r, h.levelFor(r))
 				w.Header().Set("Allow", strings.Join(allow, ", "))
+				varyByIdentity(w)
 				if r.Method == http.MethodOptions {
-					if patch := mux.acceptPatch(r); patch != "" {
+					if patch != "" {
 						w.Header().Set("Accept-Patch", patch)
 					}
 					w.WriteHeader(http.StatusNoContent)

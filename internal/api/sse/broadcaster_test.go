@@ -799,6 +799,30 @@ func TestSSE_HeadAnswersWithoutRegisteringAClient(t *testing.T) {
 	}
 }
 
+// HEAD answers what a GET would at the cap, without taking a slot itself.
+func TestSSE_HeadAtTheCapAnswers429(t *testing.T) {
+	b := NewBroadcaster(0, recordingErrorWriter(&recordedError{}), nil)
+	defer b.Close()
+
+	req := httptest.NewRequest(http.MethodHead, "/events", nil)
+	b.mu.Lock()
+	b.owners[ownerOf(req)] = MaxClientsPerOwner
+	b.mu.Unlock()
+
+	fw := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	b.ServeSSE(fw, req, nil, ReplayAll)
+
+	if fw.Code != http.StatusTooManyRequests || fw.Header().Get("Retry-After") == "" {
+		t.Errorf("HEAD at the cap = %d, Retry-After %q; want 429 with one",
+			fw.Code, fw.Header().Get("Retry-After"))
+	}
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if len(b.clients) != 0 || b.owners[ownerOf(req)] != MaxClientsPerOwner {
+		t.Errorf("HEAD registered a client")
+	}
+}
+
 func (f *flushRecorder) bodyString() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

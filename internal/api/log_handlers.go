@@ -183,7 +183,13 @@ func (h *Handlers) serveLogsSSE(
 	fetch logFetcher,
 	since, streamFilter string,
 ) {
-	if sse.ServeHead(w, r) {
+	if r.Method == http.MethodHead {
+		if callerFull, full := h.logStreams.Full(r, maxLogSSEConns); full {
+			w.Header().Set("Retry-After", sse.RetryAfter())
+			writeErrorCode(w, r, "LOG001", tooMany("active log streams", callerFull))
+			return
+		}
+		sse.ServeHead(w, r)
 		return
 	}
 

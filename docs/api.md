@@ -562,16 +562,18 @@ the list.
 A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does. That
 includes a `GET` on a path only writes are routed at, such as `/services/{id}/scale`, from a client whose `Accept`
 rules out HTML; a browser there gets the dashboard. `OPTIONS` on any routed path answers `204` with that `Allow`, and
-with `Accept-Patch` where the path takes a `PATCH`. A `415` for a patch format the path doesn't take carries
+with `Accept-Patch` where it offers a `PATCH`. Both list only the writes your operations level and grants open, as
+a `GET`'s `Allow` does. A `415` for a patch format the path doesn't take carries
 `Accept-Patch` too.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
 resource.
 
-A write answering with a body checks `Accept` before it changes anything: an `Accept` that rules out JSON answers
-`406` ([`API003`](api/errors#API003)) and the write doesn't happen. `Prefer: return=minimal` lifts the check, since
-the answer then has no body, as do the writes that always answer `204`.
+A write answering with a body checks `Accept` once you're authorized and before it changes anything: an `Accept`
+that rules out both JSON and `application/problem+json` answers `406` ([`API003`](api/errors#API003)) and the write
+doesn't happen. The writes that always answer `204` skip the check, as does one sent with `Prefer: return=minimal`
+and no `wait` or `respond-async`, except `POST /plugins` and `POST /plugins/privileges`, which always send a body.
 
 Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
 is added when TLS is enabled.

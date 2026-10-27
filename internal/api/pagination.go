@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type PageParams struct {
@@ -188,6 +189,17 @@ func writeCollectionResponse[T any](
 		}
 
 		if resp.Offset >= resp.Total {
+			// The preconditions come before the Range (RFC 9110 §13.2.2).
+			if validator != "" {
+				if refusedByPrecondition(w, r, validator, time.Time{}) {
+					return
+				}
+				if tagged := matchedValidator(r, validator); tagged != "" {
+					writeNotModified(w, tagged)
+					return
+				}
+			}
+
 			w.Header().Set("Content-Range", fmt.Sprintf("items */%d", resp.Total))
 			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable,
 				"range start is beyond the total number of items")
