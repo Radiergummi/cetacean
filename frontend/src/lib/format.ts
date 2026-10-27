@@ -220,3 +220,10 @@ function formatUnit(value: number, unit: string, maximumFractionDigits = 0): str
     maximumFractionDigits,
   }).format(value);
 }
+
+/**
+ * Format an optional boolean as "Yes" or "No", leaving an unset value unset.
+ */
+export function formatYesNo(value: boolean | undefined): string | undefined {
+  return value === undefined ? undefined : value ? "Yes" : "No";
+}

@@ -21,6 +21,18 @@ func Detect(labels map[string]string) []any {
 		integrations = append(integrations, d)
 	}
 
+	if c := detectCaddy(labels); c != nil {
+		integrations = append(integrations, c)
+	}
+
+	if d := detectDocoCD(labels); d != nil {
+		integrations = append(integrations, d)
+	}
+
+	if g := detectGantry(labels); g != nil {
+		integrations = append(integrations, g)
+	}
+
 	return integrations
 }
 

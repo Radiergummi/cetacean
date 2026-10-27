@@ -13,7 +13,7 @@ vi.mock("@/api/client", () => ({
 }));
 
 function integrationWithPort(port: number): TraefikIntegration {
-  return { name: "traefik", enabled: true, services: [{ name: "web", port }] };
+  return { name: "traefik", enabled: true, labels: [], services: [{ name: "web", port }] };
 }
 
 describe("TraefikPanel", () => {

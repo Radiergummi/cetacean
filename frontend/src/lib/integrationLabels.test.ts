@@ -3,14 +3,10 @@ import { describe, expect, it } from "vitest";
 
 describe("rawLabelsForIntegration", () => {
   it("returns empty array for null labels", () => {
-    expect(rawLabelsForIntegration(null, "traefik")).toEqual([]);
+    expect(rawLabelsForIntegration(null, ["traefik.enable"])).toEqual([]);
   });
 
-  it("returns empty array for unknown integration name", () => {
-    expect(rawLabelsForIntegration({ "foo.bar": "baz" }, "unknown")).toEqual([]);
-  });
-
-  it("filters traefik labels from mixed labels", () => {
+  it("keeps only the labels the integration claimed", () => {
     const labels = {
       "traefik.enable": "true",
       "traefik.http.routers.app.rule": "Host(`app.example.com`)",
@@ -18,7 +14,10 @@ describe("rawLabelsForIntegration", () => {
       "com.docker.stack.namespace": "mystack",
     };
 
-    const result = rawLabelsForIntegration(labels, "traefik");
+    const result = rawLabelsForIntegration(labels, [
+      "traefik.enable",
+      "traefik.http.routers.app.rule",
+    ]);
 
     expect(result).toEqual([
       ["traefik.enable", "true"],
@@ -26,53 +25,10 @@ describe("rawLabelsForIntegration", () => {
     ]);
   });
 
-  it("filters shepherd labels correctly", () => {
-    const labels = {
-      "shepherd.enable": "true",
-      "shepherd.image-update": "monitor",
-      "traefik.enable": "true",
-    };
-
-    const result = rawLabelsForIntegration(labels, "shepherd");
-
-    expect(result).toEqual([
-      ["shepherd.enable", "true"],
-      ["shepherd.image-update", "monitor"],
+  it("skips a claimed label the service no longer has", () => {
+    expect(rawLabelsForIntegration({ caddy: "example.com" }, ["caddy", "caddy.encode"])).toEqual([
+      ["caddy", "example.com"],
     ]);
-  });
-
-  it("filters swarm-cronjob labels with swarm.cronjob. prefix", () => {
-    const labels = {
-      "swarm.cronjob.enable": "true",
-      "swarm.cronjob.schedule": "0 * * * *",
-      "swarm.other": "nope",
-    };
-
-    const result = rawLabelsForIntegration(labels, "swarm-cronjob");
-
-    expect(result).toEqual([
-      ["swarm.cronjob.enable", "true"],
-      ["swarm.cronjob.schedule", "0 * * * *"],
-    ]);
-  });
-
-  it("filters diun labels correctly", () => {
-    const labels = {
-      "diun.enable": "true",
-      "diun.watch_repo": "true",
-      "other.label": "value",
-    };
-
-    const result = rawLabelsForIntegration(labels, "diun");
-
-    expect(result).toEqual([
-      ["diun.enable", "true"],
-      ["diun.watch_repo", "true"],
-    ]);
-  });
-
-  it("returns empty array for empty labels object", () => {
-    expect(rawLabelsForIntegration({}, "traefik")).toEqual([]);
   });
 });
 

@@ -11,6 +11,7 @@ import (
 type TraefikIntegration struct {
 	Name        string              `json:"name"`
 	Enabled     bool                `json:"enabled"`
+	Labels      []string            `json:"labels"`
 	Routers     []TraefikRouter     `json:"routers,omitempty"`
 	Services    []TraefikService    `json:"services,omitempty"`
 	Middlewares []TraefikMiddleware `json:"middlewares,omitempty"`
@@ -62,7 +63,7 @@ const maxTLSDomains = 100
 
 func detectTraefik(labels map[string]string) *TraefikIntegration {
 	var (
-		found      bool
+		claimed    []string
 		routerMap  map[string]*TraefikRouter
 		serviceMap map[string]*TraefikService
 		mwMap      map[string]*TraefikMiddleware
@@ -76,7 +77,7 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 			continue
 		}
 
-		found = true
+		claimed = append(claimed, k)
 
 		if len(parts) < 5 || !strings.EqualFold(parts[1], "http") {
 			continue
@@ -111,13 +112,16 @@ func detectTraefik(labels map[string]string) *TraefikIntegration {
 		}
 	}
 
-	if !found {
+	if len(claimed) == 0 {
 		return nil
 	}
+
+	slices.Sort(claimed)
 
 	integration := &TraefikIntegration{
 		Name:    "traefik",
 		Enabled: traefikEnabled(labels),
+		Labels:  claimed,
 	}
 
 	integration.Routers = sortedValues(routerMap, func(r TraefikRouter) string { return r.Name })

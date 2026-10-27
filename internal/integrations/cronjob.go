@@ -1,24 +1,24 @@
 package integrations
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
 
 // CronjobIntegration represents parsed Swarm Cronjob configuration.
 type CronjobIntegration struct {
-	Name          string `json:"name"`
-	Enabled       bool   `json:"enabled"`
-	Schedule      string `json:"schedule,omitempty"`
-	SkipRunning   bool   `json:"skipRunning,omitempty"`
-	Replicas      int    `json:"replicas,omitempty"`
-	RegistryAuth  bool   `json:"registryAuth,omitempty"`
-	QueryRegistry bool   `json:"queryRegistry,omitempty"`
+	Name          string   `json:"name"`
+	Enabled       bool     `json:"enabled"`
+	Labels        []string `json:"labels"`
+	Schedule      string   `json:"schedule,omitempty"`
+	SkipRunning   bool     `json:"skipRunning,omitempty"`
+	Replicas      int      `json:"replicas,omitempty"`
+	RegistryAuth  bool     `json:"registryAuth,omitempty"`
+	QueryRegistry bool     `json:"queryRegistry,omitempty"`
 }
 
 func detectCronjob(labels map[string]string) *CronjobIntegration {
-	var found bool
-
 	integration := &CronjobIntegration{Name: "swarm-cronjob"}
 
 	for k, v := range labels {
@@ -27,7 +27,7 @@ func detectCronjob(labels map[string]string) *CronjobIntegration {
 			continue
 		}
 
-		found = true
+		integration.Labels = append(integration.Labels, k)
 
 		switch suffix {
 		case "schedule":
@@ -45,9 +45,11 @@ func detectCronjob(labels map[string]string) *CronjobIntegration {
 		}
 	}
 
-	if !found {
+	if len(integration.Labels) == 0 {
 		return nil
 	}
+
+	slices.Sort(integration.Labels)
 
 	integration.Enabled = enabled(labels, "swarm.cronjob.")
 

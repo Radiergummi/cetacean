@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
+- Each entry in a service's `integrations` lists the `labels` it was read from
 - The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
 - The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
 - An MCP tool given a hostname several nodes share asks the person which node they mean, when the client supports elicitation

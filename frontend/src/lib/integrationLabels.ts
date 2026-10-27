@@ -112,31 +112,18 @@ export const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-90
 export const badgePurple = `${badgeBase} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300`;
 export const badgeTeal = `${badgeBase} bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300`;
 
-export const integrationLabelPrefix = {
-  traefik: "traefik.",
-  shepherd: "shepherd.",
-  "swarm-cronjob": "swarm.cronjob.",
-  diun: "diun.",
-} as const;
-
-export type IntegrationName = keyof typeof integrationLabelPrefix;
-
 /**
- * Filter a label map to entries matching a known integration prefix.
+ * Filter a label map to the labels an integration's detector claimed.
  */
 export function rawLabelsForIntegration(
   labels: Record<string, string> | null,
-  integrationName: string,
+  claimed: string[],
 ): [string, string][] {
   if (!labels) {
     return [];
   }
 
-  const prefix = integrationLabelPrefix[integrationName as IntegrationName];
+  const keys = new Set(claimed);
 
-  if (!prefix) {
-    return [];
-  }
-
-  return Object.entries(labels).filter(([key]) => key.startsWith(prefix));
+  return Object.entries(labels).filter(([key]) => keys.has(key));
 }

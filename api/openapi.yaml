@@ -8922,16 +8922,22 @@ components:
           shepherd: "#/components/schemas/ShepherdIntegration"
           swarm-cronjob: "#/components/schemas/CronjobIntegration"
           diun: "#/components/schemas/DiunIntegration"
+          caddy: "#/components/schemas/CaddyIntegration"
+          doco-cd: "#/components/schemas/DocoCDIntegration"
+          gantry: "#/components/schemas/GantryIntegration"
       oneOf:
         - $ref: "#/components/schemas/TraefikIntegration"
         - $ref: "#/components/schemas/ShepherdIntegration"
         - $ref: "#/components/schemas/CronjobIntegration"
         - $ref: "#/components/schemas/DiunIntegration"
+        - $ref: "#/components/schemas/CaddyIntegration"
+        - $ref: "#/components/schemas/DocoCDIntegration"
+        - $ref: "#/components/schemas/GantryIntegration"
 
     TraefikIntegration:
       type: object
       description: Traefik reverse proxy integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
@@ -8940,6 +8946,11 @@ components:
         enabled:
           type: boolean
           description: Whether the Traefik integration is enabled
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         routers:
           type: array
           items:
@@ -8955,6 +8966,7 @@ components:
       example:
         name: traefik
         enabled: true
+        labels: [traefik.enable, traefik.http.routers.web.rule]
         routers:
           - name: webapp
             rule: "Host(`app.example.com`)"
@@ -9062,30 +9074,41 @@ components:
     ShepherdIntegration:
       type: object
       description: Shepherd auto-update integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [shepherd]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         authConfig:
           type: string
           description: Registry auth configuration ID
       example:
         name: shepherd
         enabled: true
+        labels: [shepherd.enable]
 
     CronjobIntegration:
       type: object
       description: Swarm Cronjob integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [swarm-cronjob]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         schedule:
           type: string
           description: Cron expression
@@ -9100,6 +9123,7 @@ components:
       example:
         name: swarm-cronjob
         enabled: true
+        labels: [swarm.cronjob.enable, swarm.cronjob.schedule]
         schedule: "0 3 * * *"
         skipRunning: true
         replicas: 1
@@ -9109,13 +9133,18 @@ components:
     DiunIntegration:
       type: object
       description: Diun image update notifier integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [diun]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         regopt:
           type: string
           description: Registry options name
@@ -9146,9 +9175,167 @@ components:
       example:
         name: diun
         enabled: true
+        labels: [diun.enable, diun.watch_repo]
         watchRepo: true
         notifyOn: new;update
         sortTags: semver
         maxTags: 5
         includeTags: '^\d+\.\d+\.\d+$'
         platform: linux/amd64
+
+    CaddyIntegration:
+      type: object
+      description: >
+        caddy-docker-proxy configuration detected from service labels, as the
+        Caddyfile it builds from them. Label values are Go templates, and are
+        kept as written rather than evaluated.
+      required: [name, enabled, caddyfile, labels]
+      properties:
+        name:
+          type: string
+          enum: [caddy]
+        enabled:
+          type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        caddyfile:
+          type: string
+      example:
+        name: caddy
+        enabled: true
+        labels: [caddy, caddy.reverse_proxy]
+        caddyfile: "example.com {\n\treverse_proxy {{upstreams 8080}}\n}\n"
+
+    DocoCDIntegration:
+      type: object
+      description: The deployment provenance doco-cd writes onto the services it deploys
+      required: [name, enabled, labels]
+      properties:
+        name:
+          type: string
+          enum: [doco-cd]
+        enabled:
+          type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        deployment:
+          type: string
+          description: The doco-cd deployment name
+        source:
+          type: string
+          description: Where the deployment came from
+          example: git
+        repository:
+          type: string
+          example: acme/shop
+        sourceUrl:
+          type: string
+          description: The source URL, without any credentials it carried
+        ref:
+          type: string
+          description: The branch or tag deployed
+        commit:
+          type: string
+          description: The commit deployed
+        commitUrl:
+          type: string
+          format: uri
+          description: >
+            The commit on its forge. Absent unless the source URL's host
+            names GitHub, GitLab, Gitea, Forgejo or Codeberg.
+        trigger:
+          type: string
+          description: "`poll`, or the commit or digest that triggered the deployment"
+        deployedAt:
+          type: string
+          format: date-time
+        version:
+          type: string
+          description: The doco-cd version that deployed the service
+        certExpiry:
+          type: string
+          format: date-time
+          description: The earliest expiry among the certificates doco-cd rotates for the service
+        job:
+          type: object
+          description: The service's doco-cd scheduled job
+          required: [enabled]
+          properties:
+            enabled:
+              type: boolean
+            schedule:
+              type: string
+            executionMode:
+              type: string
+              example: one_off
+            skipRunning:
+              type: boolean
+            lastRun:
+              type: string
+              format: date-time
+            nextRun:
+              type: string
+              format: date-time
+      example:
+        name: doco-cd
+        enabled: true
+        labels: [cd.doco.deployment.name, cd.doco.deployment.target.sha]
+        deployment: shop
+        source: git
+        repository: acme/shop
+        sourceUrl: https://github.com/acme/shop.git
+        ref: main
+        commit: 0123456789abcdef0123456789abcdef01234567
+        commitUrl: https://github.com/acme/shop/commit/0123456789abcdef0123456789abcdef01234567
+        trigger: poll
+        deployedAt: "2026-10-27T09:30:00Z"
+
+    GantryIntegration:
+      type: object
+      description: >
+        Gantry service update configuration detected from service labels. A
+        field that is absent leaves Gantry's own default in place.
+      required: [name, enabled, labels]
+      properties:
+        name:
+          type: string
+          enum: [gantry]
+        enabled:
+          type: boolean
+          description: False when `gantry.services.excluded` is `true`
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        authConfig:
+          type: string
+        manifestCmd:
+          type: string
+          description: "The label as written; Gantry accepts `buildx`, `manifest` and `none`"
+        manifestOptions:
+          type: string
+        rollbackOnFailure:
+          type: boolean
+        rollbackOptions:
+          type: string
+        updateJobs:
+          type: boolean
+        updateOptions:
+          type: string
+        updateTimeoutSeconds:
+          type: integer
+          description: 0 for no timeout
+      example:
+        name: gantry
+        enabled: true
+        labels: [gantry.manifest.cmd, gantry.update.timeout_seconds]
+        manifestCmd: manifest
+        rollbackOnFailure: true
+        updateTimeoutSeconds: 300

@@ -56,6 +56,7 @@ export function IntegrationSection({
   visualContent?: ReactNode | undefined;
 }) {
   const [view, setView] = useState<View>(visualContent ? "graph" : "structured");
+  const [viewBeforeEdit, setViewBeforeEdit] = useState<View>(view);
   const version = useEditVersion(`/services/${serviceId}/labels`);
   const {
     editing,
@@ -78,6 +79,25 @@ export function IntegrationSection({
   });
 
   const activeView: View = (editing || !visualContent) && view === "graph" ? "structured" : view;
+
+  // A panel without a form edits its labels in the raw view, and returns to
+  // the view it was on once the edit ends.
+  function edit() {
+    if (!editContent) {
+      setViewBeforeEdit(view);
+      setView("raw");
+    }
+
+    startEditing();
+  }
+
+  function finishRawEdit() {
+    cancel();
+
+    if (!editContent) {
+      setView(viewBeforeEdit);
+    }
+  }
 
   // Leaving the raw editor re-seeds the structured form from the labels the
   // user may have just rewritten there.
@@ -121,6 +141,7 @@ export function IntegrationSection({
               variant="outline"
               size="sm"
               onClick={() => changeView(view === "raw" ? "structured" : "raw")}
+              disabled={editing && !editContent}
             >
               {view === "raw" ? <Layers className="size-3" /> : <Code className="size-3" />}
               {view === "raw" ? "Structured" : "Labels"}
@@ -131,7 +152,7 @@ export function IntegrationSection({
             <Button
               variant="outline"
               size="sm"
-              onClick={startEditing}
+              onClick={edit}
             >
               <Pencil className="size-3" />
               Edit
@@ -149,15 +170,15 @@ export function IntegrationSection({
           defaultOpen
           editDisabled={!editing}
           defaultEditing={editing}
-          onCancel={cancel}
+          onCancel={finishRawEdit}
           onSave={async (ops) => {
             const updated = await api.patchServiceLabels(serviceId, ops, await version.ifMatch());
             onRawSave(updated);
-            cancel();
+            finishRawEdit();
             return updated;
           }}
         />
-      ) : editing ? (
+      ) : editing && editContent ? (
         <div className="rounded-lg border p-3">
           <div className="space-y-4">
             {editContent}
