@@ -22,13 +22,19 @@ liability — it is the only part of the previous version of this file that rott
 | `logs/` | Docker log-frame parsing shared by the REST and MCP transports |
 | `api/` | The REST transport: router, handlers, content negotiation, SSE, feeds, CSV, problem details |
 | `api/sse/` | The broadcaster behind every stream |
+| `api/sbom/` | The embedded CycloneDX SBOM, projected into the licenses document and notices |
 | `api/jgf/`, `api/dot/`, `api/graphml/`, `api/atom/`, `api/jsonfeed/`, `api/linkset/` | Pure serialization, no HTTP |
 | `cluster/` | The domain layer both transports share — see the boundary rule below |
 | `placement/` | Placement-constraint evaluation, a leaf so `cache/` and `cluster/` read constraints alike |
+| `quorum/`, `ipam/`, `versions/` | Raft quorum, overlay address-pool use, config/secret rotation versions — leaves so `cluster/` and `recommendations/` read them alike |
+| `compose/` | Live specs rendered back as a compose document that redeploys to the same state, not byte-identical to the original |
+| `imagecheck/` | Asks registries which digest a tag names now, so a stale deploy is told apart from a current one |
 | `mcp/` | The embedded MCP server: tools, resources, prompts, widgets, tracing |
 | `prometheus/`, `prom/` | Query client and proxy; `prom/` is the three result types alone |
 | `recommendations/` | The checkers and the engine that schedules them |
 | `filter/`, `integrations/`, `metrics/`, `version/` | expr-lang filtering, third-party label detection, our own instrumentation, build stamps |
+| `spec/` | The requirement registry: what each cited specification requires, the tests claiming it, the mutants they must kill |
+| `contract/` | Tests only: invariants every route, MCP tool and resource type must hold, looped over inventories derived from the router, MCP server and OpenAPI spec |
 
 ### Frontend (`frontend/src/`)
 
@@ -148,11 +154,11 @@ Each of these looks like a simplification and is not.
 ## Supply chain
 
 The SBOM and attribution files are committed and embedded in the binary. CI
-regenerates them on every pull request and commits the result back to the branch,
-then **dispatches the CI workflow explicitly** — a commit authored with
+regenerates them on every pull request and commits the result back to the branch
+**with a GitHub App token**, never `GITHUB_TOKEN`: a commit authored with
 `GITHUB_TOKEN` raises no event, so the run that would put the branch's required
 checks on the new head never starts, and the PR sits blocked on checks that
-passed one commit earlier and can never appear on this one.
+passed one commit earlier. The App's commit triggers CI like anyone else's.
 
 Two kinds of PR are reported on rather than written to. A fork's token is
 read-only. A Dependabot PR could be written to but must not: Dependabot stops

@@ -17,6 +17,7 @@ jobs:
   # No ruleset covers tags, so this is what keeps an unsigned one from shipping.
   # GitHub verifies the signature against the tagger's registered keys; a
   # lightweight tag has none, and a tag moved since the push names another commit.
+  # A commit off main never passed review or the required checks.
   verify-tag:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -44,6 +45,11 @@ jobs:
           fi
           if [ "$commit" != "$SHA" ]; then
             echo "::error::$TAG now points at $commit, not $SHA, which this run was started for."
+            exit 1
+          fi
+          status=$(gh api "repos/$REPO/compare/main...$SHA" --jq .status)
+          if [ "$status" != behind ] && [ "$status" != identical ]; then
+            echo "::error::$TAG points at $SHA, which is not on main (compare: $status). Tag a commit on main."
             exit 1
           fi
 
@@ -115,11 +121,14 @@ jobs:
           CGO_ENABLED: "0"
           VERSION: ${{ github.ref_name }}
           COMMIT: ${{ github.sha }}
+        # The date is the commit's, not the runner's clock, so a rebuild of the
+        # same tag produces the same binary.
         run: |
-          go build -ldflags "-s -w \
+          DATE=$(TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd)
+          go build -trimpath -ldflags "-s -w \
             -X github.com/radiergummi/cetacean/internal/version.Version=$VERSION \
             -X github.com/radiergummi/cetacean/internal/version.Commit=${COMMIT::8} \
-            -X github.com/radiergummi/cetacean/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -X github.com/radiergummi/cetacean/internal/version.Date=$DATE" \
             -o "cetacean-${{ matrix.os }}-${{ matrix.arch }}" .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
