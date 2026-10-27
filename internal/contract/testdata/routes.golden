@@ -70,6 +70,7 @@ GET /services  Atom CSV HTML JSON JSONFeed SSE
 GET /services/{id}  Atom HTML JSON JSONFeed SSE YAML
 GET /services/{id}/configs  HTML JSON
 GET /services/{id}/container-config  HTML JSON
+GET /services/{id}/dockerfile  HTML
 GET /services/{id}/endpoint-mode  HTML JSON
 GET /services/{id}/env  HTML JSON
 GET /services/{id}/healthcheck  HTML JSON
@@ -81,8 +82,10 @@ GET /services/{id}/mounts  HTML JSON
 GET /services/{id}/networks  HTML JSON
 GET /services/{id}/placement  HTML JSON
 GET /services/{id}/ports  HTML JSON
+GET /services/{id}/provenance
 GET /services/{id}/resources  HTML JSON
 GET /services/{id}/rollback-policy  HTML JSON
+GET /services/{id}/sbom  HTML
 GET /services/{id}/secrets  HTML JSON
 GET /services/{id}/tasks  CSV HTML JSON
 GET /services/{id}/update-policy  HTML JSON
@@ -94,7 +97,10 @@ GET /swarm/plugins  HTML JSON
 GET /swarm/unlock-key
 GET /tasks  Atom CSV HTML JSON JSONFeed SSE
 GET /tasks/{id}  Atom HTML JSON JSONFeed SSE
+GET /tasks/{id}/dockerfile  HTML
 GET /tasks/{id}/logs  HTML JSON SSE
+GET /tasks/{id}/provenance
+GET /tasks/{id}/sbom  HTML
 GET /topology  DOT GraphML HTML JGF JSON
 GET /topology/networks
 GET /topology/placement

@@ -369,7 +369,6 @@ func main() {
 	}
 	imageChecker := startImageCheck(ctx, cfg, stateCache.ListServices, watcher.Ready())
 	imageAttestations := startImageAttestations(cfg)
-	_ = imageAttestations
 
 	// Recommendations engine
 	var recEngine *recommendations.Engine
@@ -534,6 +533,10 @@ func main() {
 
 	if imageChecker != nil {
 		handlers.SetImageDigests(imageChecker)
+	}
+
+	if imageAttestations != nil {
+		handlers.SetAttestations(imageAttestations)
 	}
 
 	logReads := new(sse.Slots)

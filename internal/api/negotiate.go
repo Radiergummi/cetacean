@@ -31,6 +31,11 @@ const (
 	// compose export.
 	ContentTypeYAML
 
+	// ContentTypeSPDX and ContentTypePlain are an image's SBOM as stored and
+	// its Dockerfile as written.
+	ContentTypeSPDX
+	ContentTypePlain
+
 	// ContentTypeUnsupported means no supported media type matched. What to
 	// do about it is the endpoint's to decide.
 	ContentTypeUnsupported ContentType = -1
@@ -58,6 +63,10 @@ func (ct ContentType) String() string {
 		return "CSV"
 	case ContentTypeYAML:
 		return "YAML"
+	case ContentTypeSPDX:
+		return "SPDX"
+	case ContentTypePlain:
+		return "Plain"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -280,6 +289,8 @@ var supportedTypes = []struct {
 	{"application", "asyncapi+yaml", ContentTypeYAML},
 	{"text", "yaml", ContentTypeYAML},
 	{"text", "x-yaml", ContentTypeYAML},
+	{"application", "spdx+json", ContentTypeSPDX},
+	{"text", "plain", ContentTypePlain},
 }
 
 // contentTypeOrder is each ContentType once, in supportedTypes order.
@@ -307,6 +318,8 @@ var sentAs = map[ContentType]mediaType{
 	ContentTypeDOT:      mustMediaType("text/vnd.graphviz"),
 	ContentTypeCSV:      mustMediaType("text/csv;header=present"),
 	ContentTypeYAML:     mustMediaType("application/yaml"),
+	ContentTypeSPDX:     mustMediaType("application/spdx+json"),
+	ContentTypePlain:    mustMediaType("text/plain;charset=utf-8"),
 }
 
 // sending names what an endpoint sends for a type where that is not sentAs.
@@ -334,6 +347,9 @@ var extensionTypes = []struct {
 	// under, when set, limits the suffix to these routes and what lies
 	// below them. Elsewhere it is part of the identifier.
 	under []string
+
+	// last, when set, limits the suffix to a route whose final segment it is.
+	last string
 }{
 	{ext: ".json", ct: ContentTypeJSON},
 	{ext: ".html", ct: ContentTypeHTML},
@@ -345,6 +361,14 @@ var extensionTypes = []struct {
 	{ext: ".csv", ct: ContentTypeCSV},
 	{ext: ".yaml", ct: ContentTypeYAML, under: yamlPaths},
 	{ext: ".yml", ct: ContentTypeYAML, under: yamlPaths},
+	{ext: ".spdx", ct: ContentTypeSPDX, last: "sbom"},
+	{ext: ".txt", ct: ContentTypePlain, last: "dockerfile"},
+}
+
+// suffixApplies reports whether a suffix reads as a representation on path,
+// which is what it names with the suffix taken off.
+func suffixApplies(under []string, last, path string) bool {
+	return scopedTo(under, path) && (last == "" || strings.HasSuffix(path, "/"+last))
 }
 
 // scopedTo reports whether path is one of the routes a suffix is limited to,
@@ -377,7 +401,7 @@ var literalDocuments = map[string]bool{
 // reading as a representation.
 func hasMidPathExtension(path string) bool {
 	for _, ext := range extensionTypes {
-		if strings.Contains(path, ext.ext+"/") && scopedTo(ext.under, path) {
+		if ext.last == "" && strings.Contains(path, ext.ext+"/") && scopedTo(ext.under, path) {
 			return true
 		}
 	}
@@ -397,7 +421,7 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 
 	for _, ext := range extensionTypes {
 		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
-			if !scopedTo(ext.under, trimmed) {
+			if !suffixApplies(ext.under, ext.last, trimmed) {
 				continue
 			}
 			r.URL.Path = trimmed

@@ -43,6 +43,7 @@ var ErrorDomains = []ErrorDomain{
 	{Prefix: "NOD", Label: "Node operations"},
 	{Prefix: "SVC", Label: "Service operations"},
 	{Prefix: "TSK", Label: "Task operations"},
+	{Prefix: "ATT", Label: "Image attestations"},
 	{Prefix: "STK", Label: "Stack operations"},
 	{Prefix: "VOL", Label: "Volume operations"},
 	{Prefix: "NET", Label: "Network operations"},
@@ -597,6 +598,57 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusNotFound,
 		Description: "The specified stack does not exist. Stacks are derived from service labels and may disappear when all services in the stack are removed.",
 		Suggestion:  "Check the stack name and try again.",
+	},
+
+	// ── ATT: image attestations ───────────────────────────────────────
+	"ATT001": {
+		Code:        "ATT001",
+		Title:       "Registry Unavailable",
+		Status:      http.StatusBadGateway,
+		Description: "The image's registry could not be reached, or failed, while its attestations were being read.",
+		Suggestion:  "Try again after the time Retry-After names. The registry's own status page may say more.",
+	},
+	"ATT002": {
+		Code:        "ATT002",
+		Title:       "No SBOM",
+		Status:      http.StatusNotFound,
+		Description: "The image carries no SBOM for this platform. BuildKit attaches one only when the image is built with --sbom.",
+		Suggestion:  "Rebuild the image with `docker buildx build --sbom=true` to attach one.",
+	},
+	"ATT003": {
+		Code:        "ATT003",
+		Title:       "Platform Required",
+		Status:      http.StatusBadRequest,
+		Description: "The image has attestations for more than one platform, and the request did not name one.",
+		Suggestion:  "Name one of the platforms the detail lists in the platform query parameter, as os/architecture[/variant].",
+	},
+	"ATT004": {
+		Code:        "ATT004",
+		Title:       "Unknown Platform",
+		Status:      http.StatusNotFound,
+		Description: "The image has no platform by that name, or the task's node cannot run it.",
+		Suggestion:  "Use one of the platforms the provenance endpoint lists.",
+	},
+	"ATT005": {
+		Code:        "ATT005",
+		Title:       "SBOM Too Large",
+		Status:      http.StatusNotFound,
+		Description: "The image's SBOM is larger than the 32 MiB Cetacean reads, so it is not available here.",
+		Suggestion:  "Read the SBOM from the registry directly, for example with `docker buildx imagetools inspect --format '{{json .SBOM}}'`.",
+	},
+	"ATT006": {
+		Code:        "ATT006",
+		Title:       "No Dockerfile",
+		Status:      http.StatusNotFound,
+		Description: "The image's provenance does not embed the Dockerfile it was built from. Only provenance recorded with mode=max does.",
+		Suggestion:  "Rebuild the image with `docker buildx build --provenance=mode=max` to record it.",
+	},
+	"ATT007": {
+		Code:        "ATT007",
+		Title:       "No Attestations",
+		Status:      http.StatusNotFound,
+		Description: "Nothing can be read about how this image was built: it has no attestations, is not pinned by digest, is private, is gone from its registry, or the feature is switched off.",
+		Suggestion:  "The detail names which. The provenance endpoint reports the same as a status.",
 	},
 
 	// ── VOL: volume operations ────────────────────────────────────────

@@ -16,6 +16,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
@@ -34,6 +35,7 @@ type testHandlersConfig struct {
 	tokenOperationsLevel *config.OperationsLevel
 	aclEval              *acl.Evaluator
 	recEngine            *recommendations.Engine
+	attestations         cluster.AttestationSource
 }
 
 type testHandlersOption func(*testHandlersConfig)
@@ -117,6 +119,10 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		cfg.recEngine,
 		cfg.aclEval,
 	)
+
+	if cfg.attestations != nil {
+		handlers.SetAttestations(cfg.attestations)
+	}
 
 	if cfg.tokenOperationsLevel != nil {
 		handlers.SetTokenOperationsLevel(*cfg.tokenOperationsLevel)

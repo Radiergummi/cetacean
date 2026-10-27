@@ -70,6 +70,8 @@ var servedMediaTypes = map[ContentType]string{
 	ContentTypeJSONFeed: "application/feed+json",
 	ContentTypeCSV:      "text/csv",
 	ContentTypeYAML:     "application/yaml",
+	ContentTypeSPDX:     "application/spdx+json",
+	ContentTypePlain:    "text/plain",
 }
 
 // contentNegotiated wraps a JSON handler to dispatch based on content type.

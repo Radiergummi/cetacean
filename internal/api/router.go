@@ -788,6 +788,14 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		taskTier3.Append(h.precond(h.taskRepresentation)).
 			ThenFunc(h.HandleRemoveTask))
 
+	// Image attestations, read from the image's registry on demand.
+	mux.HandleFunc("GET /services/{id}/provenance", h.HandleServiceProvenance)
+	mux.HandleFunc("GET /services/{id}/sbom", h.HandleServiceSBOM(spa))
+	mux.HandleFunc("GET /services/{id}/dockerfile", h.HandleServiceDockerfile(spa))
+	mux.HandleFunc("GET /tasks/{id}/provenance", h.HandleTaskProvenance)
+	mux.HandleFunc("GET /tasks/{id}/sbom", h.HandleTaskSBOM(spa))
+	mux.HandleFunc("GET /tasks/{id}/dockerfile", h.HandleTaskDockerfile(spa))
+
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
 		atom:      h.feedHistoryHandler(renderAtom),

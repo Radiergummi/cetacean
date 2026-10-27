@@ -209,8 +209,8 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 
-	t.Run("text/plain alone resolves to Unsupported", func(t *testing.T) {
-		ct, _ := run("/services", "text/plain")
+	t.Run("an unknown type alone resolves to Unsupported", func(t *testing.T) {
+		ct, _ := run("/services", "application/pdf")
 		if ct != ContentTypeUnsupported {
 			t.Errorf("got %v, want Unsupported", ct)
 		}
