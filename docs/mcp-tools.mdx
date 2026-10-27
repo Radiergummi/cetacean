@@ -9,7 +9,7 @@ import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
-This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 27 tools, 6 prompts, and 5
+This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 28 tools, 6 prompts, and 5
 widgets. For enabling the server, authorization, and configuration, see [MCP server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] isn't
@@ -138,6 +138,14 @@ What the cluster is doing now, and what it did recently.
 
     Metrics need Prometheus, plus cAdvisor for service metrics and node-exporter for node metrics; without them the
     tool says metrics are unavailable rather than returning empty series.
+</McpTool>
+
+<McpTool name="get_published_ports" level={0}>
+    <Fragment slot="arguments">`port`</Fragment>
+
+    Every port the services publish, by port, with the service and stack behind it. An ingress port is bound on every
+    node; a host-mode port names the node IDs binding it. Answers which service owns a port, or whether one is free.
+    Only ports of services the caller may read are listed, as on [`GET /ports`][api].
 </McpTool>
 
 <McpTool name="get_recommendations" level={0}>

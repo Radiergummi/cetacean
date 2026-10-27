@@ -201,6 +201,7 @@ var excusedUncovered = map[string]string{
 	"GET /nodes/{id}/role":                sweepGap,
 	"GET /nodes/{id}/tasks":               sweepGap,
 	"GET /opensearch.xml":                 sweepGap,
+	"GET /ports":                          sweepGap,
 	"GET /profile":                        sweepGap,
 	"GET /recommendations":                sweepGap,
 	"GET /search":                         sweepGap,

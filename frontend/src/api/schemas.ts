@@ -119,6 +119,15 @@ export const stackDetailSchema = z.looseObject({
 });
 
 /** The list item, which is the summary a stack list shows, not the detail. */
+export const publishedPortSchema = z.looseObject({
+  publishedPort: z.number(),
+  targetPort: z.number(),
+  protocol: z.string(),
+  publishMode: z.string(),
+  serviceId: z.string(),
+  serviceName: z.string(),
+});
+
 export const stackListSchema = z.looseObject({
   name: z.string(),
   services: z.array(z.string()),

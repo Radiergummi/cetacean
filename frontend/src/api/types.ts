@@ -938,3 +938,14 @@ export interface LicensesResponse {
   generatedAt?: string | undefined;
   components: LicenseComponent[];
 }
+
+export interface PublishedPort {
+  publishedPort: number;
+  targetPort: number;
+  protocol: string;
+  publishMode: "ingress" | "host";
+  serviceId: string;
+  serviceName: string;
+  stack?: string | undefined;
+  nodes?: string[] | undefined;
+}

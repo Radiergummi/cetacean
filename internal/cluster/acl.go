@@ -3,6 +3,7 @@ package cluster
 import (
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
@@ -14,6 +15,12 @@ func NodeACLName(n swarm.Node) string {
 	}
 
 	return n.ID
+}
+
+// PortACLResource names the resource a published port is read as: the
+// service publishing it.
+func PortACLResource(p cache.PublishedPort) string {
+	return "service:" + p.ServiceName
 }
 
 // RecommendationACLResource maps a recommendation to the resource it is

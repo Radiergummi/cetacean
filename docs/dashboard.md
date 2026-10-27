@@ -45,6 +45,7 @@ Press `?` for the full list. Shortcuts are ignored while focus is in a text inpu
 | `g` `c`          | Configs                       |
 | `g` `x`          | Secrets                       |
 | `g` `w`          | Networks                      |
+| `g` `o`          | Published ports               |
 | `g` `v`          | Volumes                       |
 | `g` `p`          | Plugins                       |
 | `g` `i`          | Swarm info                    |
@@ -98,6 +99,11 @@ pasted in or read from a file. A secret's value can't be read back afterward.
 
 The API accepts expression filters through `?filter=` that the dashboard's search box doesn't build. See the
 [API guide][filter-fields-by-resource] for the fields available per resource type.
+
+The published ports page at `/ports` lists every port the services publish, one row per port: the published and
+target port, protocol, publish mode, and the service and stack behind it. An ingress port is bound on every node; a
+host-mode port shows how many nodes bind it. Search matches the service name. It has no entry in the navigation
+bar; open it with `g` `o` or from the command palette.
 
 ## Detail pages
 

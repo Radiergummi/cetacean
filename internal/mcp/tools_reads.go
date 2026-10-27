@@ -290,6 +290,25 @@ func (s *Server) readTools() []toolDef {
 		},
 		{
 			tool: mcplib.NewTool(
+				"get_published_ports",
+				mcplib.WithToolTitle("List published ports"),
+				mcplib.WithDescription(
+					"Return every port the cluster's services publish, by port: the published and target port, protocol, publish mode, and the service and stack publishing it. An ingress port is bound on every node; a host-mode port names the node IDs binding it. Use it to answer which service owns a port, or whether one is free. Only ports of services the caller may read are returned.",
+				),
+				mcplib.WithOutputSchema[portsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithNumber("port",
+					mcplib.Description("Return only this published port. Omit for all of them."),
+				),
+			),
+			tier:    config.OpsReadOnly,
+			handler: s.toolGetPublishedPorts,
+		},
+		{
+			tool: mcplib.NewTool(
 				"get_events",
 				mcplib.WithToolTitle("Read the cluster change timeline"),
 				mcplib.WithDescription(

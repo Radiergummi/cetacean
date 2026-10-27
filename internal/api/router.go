@@ -530,6 +530,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleNodeDrainImpact, feedHandlers{}, spa),
 	)
 
+	// Published ports
+	mux.HandleFunc("GET /ports", contentNegotiated(h.HandleListPorts, feedHandlers{csv: true}, spa))
+
 	// Recommendations
 	mux.HandleFunc(
 		"GET /recommendations",

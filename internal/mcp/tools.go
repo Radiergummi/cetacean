@@ -165,6 +165,7 @@ var toolIconCategory = map[string]string{
 	"get_topology":        "read",
 	"get_metrics":         "read",
 	"get_recommendations": "read",
+	"get_published_ports": "read",
 	"get_events":          "read",
 	"get_cluster_status":  "read",
 	"watch":               "read",

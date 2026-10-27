@@ -66,6 +66,8 @@ tags:
     description: Swarm tasks (enriched with ServiceName and NodeHostname)
   - name: Stacks
     description: Derived stacks (from com.docker.stack.namespace labels)
+  - name: Ports
+    description: The ports services publish, across the cluster
   - name: Configs
     description: Swarm configs
   - name: Secrets
@@ -5233,6 +5235,84 @@ paths:
 
   # ── Stacks ───────────────────────────────────────────────────────────
 
+  /ports:
+    get:
+      operationId: listPorts
+      tags: [Ports]
+      summary: List published ports
+      description: |
+        Every port a service publishes, by published port then protocol. An
+        ingress port is bound on every node; a host-mode port is read off the
+        running tasks, and names the nodes binding it. A port is listed with
+        the service publishing it, so a caller sees the ports of the services
+        they may read. `search` matches the service name.
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
+        - name: sort
+          in: query
+          description: Field to sort the result list by
+          schema:
+            type: string
+            enum: [published, target, protocol, mode, service, stack]
+          example: published
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated port list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedPortCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - "@id": /services/r8m2x5nk3p7q#port-8080-tcp
+                    "@type": PublishedPort
+                    publishedPort: 8080
+                    targetPort: 80
+                    protocol: tcp
+                    publishMode: ingress
+                    serviceId: r8m2x5nk3p7q
+                    serviceName: myapp_web
+                    stack: myapp
+                total: 1
+                limit: 50
+                offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedPortCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
+
   /stacks:
     get:
       operationId: listStacks
@@ -7605,6 +7685,45 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/EnrichedTask"
+
+    PublishedPortCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublishedPort"
+
+    PublishedPort:
+      type: object
+      description: One port a service publishes
+      required: [publishedPort, targetPort, protocol, publishMode, serviceId, serviceName]
+      properties:
+        publishedPort:
+          type: integer
+          description: The port bound on the nodes
+        targetPort:
+          type: integer
+          description: The port inside the container
+        protocol:
+          type: string
+          enum: [tcp, udp, sctp]
+        publishMode:
+          type: string
+          enum: [ingress, host]
+        serviceId:
+          type: string
+        serviceName:
+          type: string
+        stack:
+          type: string
+        nodes:
+          type: array
+          description: The IDs of the nodes binding a host-mode port; absent for an ingress port, which every node binds
+          items:
+            type: string
 
     StackCollection:
       allOf:
