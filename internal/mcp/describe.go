@@ -14,6 +14,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // describableResourceTypes maps the singular type name describe takes to the
@@ -152,16 +153,16 @@ func (s *Server) digestOf(
 		), nil
 
 	case swarm.Config:
-		return cluster.ConfigDigest(
-			resource,
-			s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID)),
-		), nil
+		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID))
+		grouped := versions.Configs(s.filterConfigs(ctx, s.cache.ListConfigs()))
+
+		return withVersion(cluster.ConfigDigest(resource, users), grouped, users), nil
 
 	case swarm.Secret:
-		return cluster.SecretDigest(
-			resource,
-			s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID)),
-		), nil
+		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID))
+		grouped := versions.Secrets(s.filterSecrets(ctx, s.cache.ListSecrets()))
+
+		return withVersion(cluster.SecretDigest(resource, users), grouped, users), nil
 
 	case network.Summary:
 		return cluster.NetworkDigest(
@@ -307,4 +308,20 @@ func digestibleResourceType(uri string) (string, bool) {
 	}
 
 	return parts[0], true
+}
+
+// withVersion adds to a config or secret digest its version group, found among
+// what the caller may read, and how many of the services it may read use it.
+func withVersion(
+	d cluster.Digest,
+	grouped map[string]versions.Membership,
+	users []cache.ServiceRef,
+) cluster.Digest {
+	d.Details["usedBy"] = len(users)
+	if m := grouped[d.ID]; m.Of != "" {
+		d.Details["versionOf"] = m.Of
+		d.Details["versionInferred"] = m.Inferred
+	}
+
+	return d
 }

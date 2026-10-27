@@ -60,6 +60,20 @@ func listNotModified[T any](
 // Use this for resources that need no post-pagination transformation.
 // Each item is wrapped with JSON-LD @id and @type fields.
 func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec listSpec[T]) {
+	handleListOf(h, w, r, spec, spec.idFunc, func(page []T) []T { return page })
+}
+
+// handleListOf is handleList for a list whose page renders into another shape.
+// What render adds must come from the cache and the caller's grants, or the
+// derived validator no longer covers it.
+func handleListOf[T, U any](
+	h *Handlers,
+	w http.ResponseWriter,
+	r *http.Request,
+	spec listSpec[T],
+	idFunc func(U) string,
+	render func(page []T) []U,
+) {
 	// A list is a pure function of the cache, the caller's grants and the
 	// request, so the validator is knowable before any of the work. Answering
 	// here skips the cache read, the filtering, the sort and the marshal that
@@ -87,9 +101,21 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 	}
 
 	writeLinkTemplate(w, r, spec.linkTemplate)
-	writeListPage(w, r, items, p, validator, spec.itemType, spec.idFunc, func(page []T) []T {
-		return page
-	})
+	writeListPage(w, r, items, p, validator, spec.itemType, idFunc, render)
+}
+
+// readable keeps the items the caller may read, for a value computed across a
+// whole list rather than one page of it.
+func readable[T any](
+	h *Handlers,
+	r *http.Request,
+	resourceType string,
+	items []T,
+	name func(T) string,
+) []T {
+	identity := auth.IdentityFromContext(r.Context())
+
+	return acl.FilterInPlaceNamed(h.acl, identity, "read", items, resourceType, name)
 }
 
 // writeListPage writes the page of items p names as the JSON collection, each

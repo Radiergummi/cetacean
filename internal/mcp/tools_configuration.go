@@ -85,7 +85,7 @@ func (s *Server) configurationTools() []toolDef {
 				"create_secret",
 				mcplib.WithToolTitle("Create a secret"),
 				mcplib.WithDescription(
-					"Create a Swarm secret. Swarm secrets cannot be changed once created, so rotating one is three calls in order: this tool for the replacement, update_service_secrets to repoint each service that uses the old one (describe the old secret first — its related array names them), then remove_secret once nothing references it. The value is write-only: no tool ever returns it, including this one. From a client supporting URL elicitation, omit data: the person is sent to Cetacean's dashboard to enter the value, so it never passes through the conversation, and the call is retried once they have. From any other client data is required, unless the server refuses inline values altogether. Pass encoding as base64 for binary content or anything JSON string escaping would mangle, such as a certificate or a key file; without it the value is stored exactly as given, since plenty of ordinary passwords are also valid base64 and guessing would silently store the wrong thing.",
+					"Create a Swarm secret. Swarm secrets cannot be changed once created, so rotating one is three calls in order: this tool for the replacement, update_service_secrets to repoint each service that uses the old one (describe the old secret first — its related array names them), then remove_secret once nothing references it. Label a replacement cetacean.version-of=<logical name> so it groups with the versions it replaces. The value is write-only: no tool ever returns it, including this one. From a client supporting URL elicitation, omit data: the person is sent to Cetacean's dashboard to enter the value, so it never passes through the conversation, and the call is retried once they have. From any other client data is required, unless the server refuses inline values altogether. Pass encoding as base64 for binary content or anything JSON string escaping would mangle, such as a certificate or a key file; without it the value is stored exactly as given, since plenty of ordinary passwords are also valid base64 and guessing would silently store the wrong thing.",
 				),
 				mcplib.WithOutputSchema[createResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
@@ -127,7 +127,7 @@ func (s *Server) configurationTools() []toolDef {
 				"create_config",
 				mcplib.WithToolTitle("Create a config"),
 				mcplib.WithDescription(
-					"Create a Swarm config. Like a secret, a config cannot be changed once created — replace it by creating a new one, repointing services with update_service_configs, and removing the old one. Unlike a secret, its content can be read back afterwards, so use a secret for anything sensitive. Pass encoding as base64 for a file whose content JSON string escaping would mangle.",
+					"Create a Swarm config. Like a secret, a config cannot be changed once created — replace it by creating a new one, repointing services with update_service_configs, and removing the old one. Label a replacement cetacean.version-of=<logical name> so it groups with the versions it replaces. Unlike a secret, its content can be read back afterwards, so use a secret for anything sensitive. Pass encoding as base64 for a file whose content JSON string escaping would mangle.",
 				),
 				mcplib.WithOutputSchema[createResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
@@ -167,7 +167,7 @@ func (s *Server) configurationTools() []toolDef {
 				"update_service_secrets",
 				mcplib.WithToolTitle("Change which secrets a service receives"),
 				mcplib.WithDescription(
-					"Replace the complete set of secrets a service's containers receive. Swarm secrets cannot be changed in place, so rotating one is: create_secret for the replacement, this tool to repoint each service that uses the old one, then remove_secret once nothing references it. Describe the old secret first — its related array names the services to repoint. The list replaces rather than merges: pass every secret the service should end up with, because one you leave out is detached and the container loses it. Each entry names a secret rather than giving its ID. Triggers a rolling deploy, and you must be permitted to read a secret in order to attach it.",
+					"Replace the complete set of secrets a service's containers receive. Swarm secrets cannot be changed in place, so rotating one is: create_secret for the replacement, labelled cetacean.version-of=<logical name>, this tool to repoint each service that uses the old one, then remove_secret once nothing references it. Describe the old secret first — its related array names the services to repoint. The list replaces rather than merges: pass every secret the service should end up with, because one you leave out is detached and the container loses it. Each entry names a secret rather than giving its ID. Triggers a rolling deploy, and you must be permitted to read a secret in order to attach it.",
 				),
 				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),
@@ -195,7 +195,7 @@ func (s *Server) configurationTools() []toolDef {
 				"update_service_configs",
 				mcplib.WithToolTitle("Change which configs a service receives"),
 				mcplib.WithDescription(
-					"Replace the complete set of configs a service's containers receive. Like secrets, Swarm configs cannot be changed in place: create the replacement with create_config, repoint the services here, then remove the old one. The list replaces rather than merges, so pass every config the service should end up with — one you leave out is detached. Each entry names a config rather than giving its ID. Triggers a rolling deploy, and you must be permitted to read a config in order to attach it.",
+					"Replace the complete set of configs a service's containers receive. Like secrets, Swarm configs cannot be changed in place: create the replacement with create_config, labelled cetacean.version-of=<logical name>, repoint the services here, then remove the old one. The list replaces rather than merges, so pass every config the service should end up with — one you leave out is detached. Each entry names a config rather than giving its ID. Triggers a rolling deploy, and you must be permitted to read a config in order to attach it.",
 				),
 				mcplib.WithOutputSchema[serviceUpdateResult](),
 				mcplib.WithReadOnlyHintAnnotation(false),

@@ -570,11 +570,33 @@ export const properties: Property[] = [
     usedOn: ["Service"],
   },
   {
+    name: "usedBy",
+    iri: "urn:cetacean:usedBy",
+    description: "Number of services the caller may read that use this config or secret.",
+    expectedType: "Integer",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "version",
     iri: "urn:cetacean:version",
     description: "Software version string.",
     expectedType: "String",
     usedOn: ["Health"],
+  },
+  {
+    name: "versionInferred",
+    iri: "urn:cetacean:versionInferred",
+    description:
+      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` label.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
+    name: "versionOf",
+    iri: "urn:cetacean:versionOf",
+    description: "The logical config or secret this one is a version of, when others are readable.",
+    expectedType: "String",
+    usedOn: ["Config", "Secret"],
   },
   {
     name: "volume",
@@ -673,13 +695,13 @@ export const types: ResourceType[] = [
     name: "Config",
     description: "A Docker Swarm config object.",
     endpoint: "/configs/{id}",
-    properties: ["config", "name", "services"],
+    properties: ["config", "name", "services", "usedBy", "versionOf", "versionInferred"],
   },
   {
     name: "Secret",
     description: "A Docker Swarm secret (data always redacted).",
     endpoint: "/secrets/{id}",
-    properties: ["secret", "name", "services"],
+    properties: ["secret", "name", "services", "usedBy", "versionOf", "versionInferred"],
   },
   {
     name: "PublishedPort",

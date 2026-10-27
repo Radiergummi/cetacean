@@ -5634,6 +5634,7 @@ paths:
                       Labels:
                         com.docker.stack.namespace: myapp
                       Data: YXBwX2tleT12YWx1ZQ==
+                    UsedBy: 1
                 total: 5
                 limit: 50
                 offset: 0
@@ -5755,6 +5756,19 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      versionOf:
+                        type: string
+                        description: >-
+                          The logical name this config is a version of, when other versions of
+                          it are readable. Absent when it has no other version.
+                      versionInferred:
+                        type: boolean
+                        description: >-
+                          True when the group was matched by name rather than declared by the
+                          cetacean.version-of label on every version. Absent when false.
+                      usedBy:
+                        type: integer
+                        description: Number of services the caller may read that use this config
               example:
                 "@context": /api/context.jsonld
                 "@id": /configs/cfg_abc123
@@ -5947,6 +5961,7 @@ paths:
                       Name: db_password
                       Labels:
                         com.docker.stack.namespace: myapp
+                    UsedBy: 1
                 total: 3
                 limit: 50
                 offset: 0
@@ -6130,6 +6145,19 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      versionOf:
+                        type: string
+                        description: >-
+                          The logical name this secret is a version of, when other versions of
+                          it are readable. Absent when it has no other version.
+                      versionInferred:
+                        type: boolean
+                        description: >-
+                          True when the group was matched by name rather than declared by the
+                          cetacean.version-of label on every version. Absent when false.
+                      usedBy:
+                        type: integer
+                        description: Number of services the caller may read that use this secret
               example:
                 "@context": /api/context.jsonld
                 "@id": /secrets/sec_def456
@@ -7759,6 +7787,20 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Config)
+                  VersionOf:
+                    type: string
+                    description: >-
+                      The logical name this config is a version of, when other versions of it
+                      are readable: its cetacean.version-of label, or its name without a version
+                      suffix. Absent when it has no other version.
+                  VersionInferred:
+                    type: boolean
+                    description: >-
+                      True when the group was matched by name rather than declared by the
+                      cetacean.version-of label on every version. Absent when false.
+                  UsedBy:
+                    type: integer
+                    description: Number of services the caller may read that use this config
 
     SecretCollection:
       allOf:
@@ -7777,6 +7819,20 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Secret)
+                  VersionOf:
+                    type: string
+                    description: >-
+                      The logical name this secret is a version of, when other versions of it
+                      are readable: its cetacean.version-of label, or its name without a version
+                      suffix. Absent when it has no other version.
+                  VersionInferred:
+                    type: boolean
+                    description: >-
+                      True when the group was matched by name rather than declared by the
+                      cetacean.version-of label on every version. Absent when false.
+                  UsedBy:
+                    type: integer
+                    description: Number of services the caller may read that use this secret
 
     NetworkCollection:
       allOf:
@@ -8101,6 +8157,7 @@ components:
             - no-healthcheck
             - no-restart-policy
             - newer-image
+            - unused-version
             - flaky-service
             - node-disk-full
             - node-memory-pressure
@@ -8119,6 +8176,7 @@ components:
             - Service has no healthcheck defined
             - Service has no restart policy defined
             - Service image tag names a newer image than the service runs
+            - An older version of a config or secret that no service uses
             - Service is restarting frequently or failing tasks
             - Node's disk is nearly full
             - Node is under sustained memory pressure
@@ -8137,11 +8195,13 @@ components:
             - Urgent, should be addressed immediately
         scope:
           type: string
-          enum: [service, node, cluster]
+          enum: [service, node, cluster, secret, config]
           x-enum-descriptions:
             - Recommendation targets a specific service
             - Recommendation targets a specific node
             - Recommendation applies to the cluster as a whole
+            - Recommendation targets a specific secret
+            - Recommendation targets a specific config
         targetId:
           type: string
         targetName:

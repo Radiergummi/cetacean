@@ -14,6 +14,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // listableResourceTypes are the resource types find can enumerate with a
@@ -217,10 +218,14 @@ func (s *Server) rowsFor(
 		return cluster.RowsForStacks(items), nil
 
 	case []swarm.Config:
-		return cluster.RowsForConfigs(items), nil
+		rows := cluster.RowsForConfigs(items)
+
+		return s.versionedRows(ctx, rows, versions.Configs(items), c.ServicesUsingConfig), nil
 
 	case []swarm.Secret:
-		return cluster.RowsForSecrets(items), nil
+		rows := cluster.RowsForSecrets(items)
+
+		return s.versionedRows(ctx, rows, versions.Secrets(items), c.ServicesUsingSecret), nil
 
 	case []network.Summary:
 		return cluster.RowsForNetworks(items), nil
@@ -236,6 +241,24 @@ func (s *Server) rowsFor(
 			"resource type %q has no row builder for %T", resourceType, listed,
 		)
 	}
+}
+
+// versionedRows places config or secret rows in the version groups found among
+// the readable listing they came from, and counts the readable services using
+// each.
+func (s *Server) versionedRows(
+	ctx context.Context,
+	rows []cluster.Row,
+	grouped map[string]versions.Membership,
+	users func(id string) []cache.ServiceRef,
+) []cluster.Row {
+	for i := range rows {
+		m := grouped[rows[i].ID]
+		rows[i].VersionOf, rows[i].VersionInferred = m.Of, m.Inferred
+		rows[i].UsedBy = new(len(s.filterServiceRefs(ctx, users(rows[i].ID))))
+	}
+
+	return rows
 }
 
 // rowFilters narrows a Row list after it is built. Only meaningful once `type`

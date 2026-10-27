@@ -7,6 +7,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
+	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // --- Configs ---
@@ -29,13 +30,38 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSON(w, r, rep)
 }
 
+// ConfigListItem is a config as GET /configs lists it; see SecretListItem.
+type ConfigListItem struct {
+	swarm.Config
+	VersionOf       string `json:"VersionOf,omitempty"`
+	VersionInferred bool   `json:"VersionInferred,omitempty"`
+	UsedBy          int    `json:"UsedBy"`
+}
+
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
-	handleList(h, w, r, listSpec[swarm.Config]{
+	render := func(page []swarm.Config) []ConfigListItem {
+		grouped := versions.Configs(readable(h, r, "config", h.cache.ListConfigs(), configName))
+		items := make([]ConfigListItem, len(page))
+		for i, cfg := range page {
+			m := grouped[cfg.ID]
+			items[i] = ConfigListItem{
+				Config:          cfg,
+				VersionOf:       m.Of,
+				VersionInferred: m.Inferred,
+				UsedBy:          len(h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID))),
+			}
+		}
+
+		return items
+	}
+
+	idFunc := func(c ConfigListItem) string { return "/configs/" + c.ID }
+	handleListOf(h, w, r, listSpec[swarm.Config]{
 		resourceType: "config",
 		linkTemplate: "/configs/{id}",
 		list:         h.cache.ListConfigs,
-		aclName:      func(c swarm.Config) string { return c.Spec.Name },
-		searchName:   func(c swarm.Config) string { return c.Spec.Name },
+		aclName:      configName,
+		searchName:   configName,
 		filterEnv:    filter.Configs,
 		sortKeys: map[string]func(swarm.Config) string{
 			"name":    func(c swarm.Config) string { return c.Spec.Name },
@@ -45,5 +71,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		itemType: "Config",
 		idFunc:   func(c swarm.Config) string { return "/configs/" + c.ID },
 		rows:     cluster.RowsForConfigs,
-	})
+	}, idFunc, render)
 }
+
+func configName(c swarm.Config) string { return c.Spec.Name }

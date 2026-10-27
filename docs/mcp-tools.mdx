@@ -306,7 +306,8 @@ than read as empty.
 ### Cluster resources
 
 Configs, secrets, networks, and volumes. Swarm secrets and configs are immutable, so rotating one is three
-calls in order: `create_secret` for the replacement, [`update_service_secrets`](#update_service_secrets) to
+calls in order: `create_secret` for the replacement, labeled `cetacean.version-of=<logical name>` so it
+[groups with the versions it replaces](dashboard#versions), [`update_service_secrets`](#update_service_secrets) to
 repoint each service that uses it (`describe` the secret first, its `related` array names them), then
 `remove_secret` once nothing references it. Configs follow the same sequence, and unlike a secret a config's
 content can be read back, so use a secret for anything sensitive.
@@ -442,6 +443,11 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 - services set both, the desired replica count and how many are running
 - stacks set `desired` alone, counting member services rather than replicas
 - nodes, tasks, configs, secrets, networks, and volumes set neither
+
+Config and secret rows also carry `usedBy`, the number of services using them, and, when they're one of
+several [versions](dashboard#versions), `versionOf` naming the group and `versionInferred` when
+it was matched by name. A config or secret digest carries the same three in `details`. All three count only
+what the caller may read.
 
 **Digest** is the detail view of one resource, returned by `describe` and by every templated
 `cetacean://<type>/{id}` read. Alongside `id`, `name`, `type`, and `state` it adds:

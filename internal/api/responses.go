@@ -63,14 +63,20 @@ type TaskNodeRef struct {
 
 // ConfigResponse is the extra payload for GET /configs/{id}.
 type ConfigResponse struct {
-	Config   swarm.Config       `json:"config"`
-	Services []cache.ServiceRef `json:"services"`
+	Config          swarm.Config       `json:"config"`
+	Services        []cache.ServiceRef `json:"services"`
+	VersionOf       string             `json:"versionOf,omitempty"`
+	VersionInferred bool               `json:"versionInferred,omitempty"`
+	UsedBy          int                `json:"usedBy"`
 }
 
 // SecretResponse is the extra payload for GET /secrets/{id}.
 type SecretResponse struct {
-	Secret   swarm.Secret       `json:"secret"`
-	Services []cache.ServiceRef `json:"services"`
+	Secret          swarm.Secret       `json:"secret"`
+	Services        []cache.ServiceRef `json:"services"`
+	VersionOf       string             `json:"versionOf,omitempty"`
+	VersionInferred bool               `json:"versionInferred,omitempty"`
+	UsedBy          int                `json:"usedBy"`
 }
 
 // NetworkResponse is the extra payload for GET /networks/{id}.
