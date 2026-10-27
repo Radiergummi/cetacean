@@ -77,9 +77,18 @@ the link reads as `<id>`. Links are sorted by `<id>`, and a title without a matc
 that is empty or only whitespace. The labels belong under `deploy.labels`, on the service rather than its containers.
 
 The service detail page shows the links under its title, and the stack detail page the links of all its services,
-with exact duplicates merged. Where two links on a stack share a title, each also names the services declaring it.
-A value that is an `http` or `https` URL becomes a link, opening in a new tab, with any character a URL can't hold
-percent-encoded. Any other value is shown as plain text, and so is a URL with a user name or password in it.
+with exact duplicates merged. Links that share a title also show their `<id>`, and on a stack, where the `<id>` is
+shared too, the services that declare them.
+
+A value that is an `http` or `https` URL becomes a link, opening in a new tab. Any character a URL can't hold is
+percent-encoded, and an internationalized host name is converted to its ASCII form. Any other value is shown as plain
+text, and so is a URL that has:
+
+- no host, or a host that isn't a valid host name or a bracketed IPv6 address, such as an IPv6 address without
+  brackets
+- a user name or password
+- a `%` in its host
+- a port above 65535
 
 ## API
 

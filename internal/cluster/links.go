@@ -6,8 +6,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/docker/docker/api/types/swarm"
+	"golang.org/x/net/idna"
 )
 
 const (
@@ -119,7 +121,8 @@ func normaliseHTTPURL(value string) (string, bool) {
 		authority, path = rest[:i], rest[i:]
 	}
 
-	if !validAuthority(authority) {
+	authority, ok = normaliseAuthority(authority)
+	if !ok {
 		return "", false
 	}
 
@@ -141,11 +144,12 @@ func normaliseHTTPURL(value string) (string, bool) {
 	return out.String(), true
 }
 
-// validAuthority checks host [":" port], where host is a bracketed IPv6
-// literal or a non-empty reg-name, and port is empty or at most 65535.
-func validAuthority(authority string) bool {
+// normaliseAuthority checks host [":" port], where host is a bracketed IPv6
+// literal or a reg-name without escapes, which a browser would decode into
+// another host, and port is empty or at most 65535. An IDN becomes punycode.
+func normaliseAuthority(authority string) (string, bool) {
 	if strings.Contains(authority, "@") {
-		return false
+		return "", false
 	}
 
 	var host, port string
@@ -155,56 +159,58 @@ func validAuthority(authority string) bool {
 
 		host, after, ok = strings.Cut(literal, "]")
 		if !ok {
-			return false
+			return "", false
 		}
 
 		addr, err := netip.ParseAddr(host)
 		if err != nil || !addr.Is6() || addr.Zone() != "" {
-			return false
+			return "", false
 		}
 
 		if after != "" {
 			if port, ok = strings.CutPrefix(after, ":"); !ok {
-				return false
+				return "", false
 			}
 		}
 	} else {
-		host, port, _ = strings.Cut(authority, ":")
-		if host == "" || !validRegName(host) {
-			return false
+		var hasPort bool
+
+		host, port, hasPort = strings.Cut(authority, ":")
+
+		if strings.ContainsFunc(host, func(r rune) bool { return r > unicode.MaxASCII }) {
+			ascii, err := idna.Lookup.ToASCII(host)
+			if err != nil {
+				return "", false
+			}
+
+			host = ascii
+			authority = host
+
+			if hasPort {
+				authority += ":" + port
+			}
+		}
+
+		if host == "" || strings.ContainsFunc(host, func(r rune) bool {
+			return r > unicode.MaxASCII || !isURIUnreservedOrSubDelim(byte(r))
+		}) {
+			return "", false
 		}
 	}
 
 	if port == "" {
-		return true
+		return authority, true
 	}
 
 	if strings.ContainsFunc(port, func(r rune) bool { return r < '0' || r > '9' }) {
-		return false
+		return "", false
 	}
 
-	n, err := strconv.Atoi(port)
-
-	return err == nil && n <= 65535
-}
-
-// validRegName reports whether host holds only unreserved characters,
-// sub-delims and well-formed percent-escapes.
-func validRegName(host string) bool {
-	for i := 0; i < len(host); i++ {
-		switch c := host[i]; {
-		case c == '%':
-			if !isEscape(host, i) {
-				return false
-			}
-
-			i += 2
-		case !isURIUnreservedOrSubDelim(c):
-			return false
-		}
+	if n, err := strconv.Atoi(port); err != nil || n > 65535 {
+		return "", false
 	}
 
-	return true
+	return authority, true
 }
 
 // percentEncode writes s with every byte the component does not allow

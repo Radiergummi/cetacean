@@ -9065,13 +9065,16 @@ components:
           format: uri
           description: >
             The label's value, when it is an http or https URL, with any
-            character a URI can't hold percent-encoded
+            character a URI can't hold percent-encoded and an internationalized
+            host converted to punycode
           example: https://grafana.example.com/d/web
         text:
           type: string
           description: >
             The label's value, when it is not an http or https URL, or is one
-            with a user name or password
+            without a valid host: none, one that is neither a host name nor a
+            bracketed IPv6 address, one with a `%` in it, a user name or
+            password, or a port above 65535
           example: pager:web-team
         services:
           type: array
