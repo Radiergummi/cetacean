@@ -18,6 +18,11 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
+    A request whose `Host` names neither `server.public_url`'s host, an IP
+    address nor `localhost`, and that did not come through a trusted proxy, is
+    answered `421 Misdirected Request` (`CSR002`) on every path but
+    `/-/health`, `/-/ready` and `/-/metrics`. It is not repeated under each operation.
+
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —

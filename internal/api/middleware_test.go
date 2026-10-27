@@ -322,6 +322,7 @@ func TestNewRouter_Smoke(t *testing.T) {
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(RouterConfig{
+		AllowedHosts:       []string{"example.com", "cetacean.example.com"},
 		Handlers:           h,
 		Broadcaster:        b,
 		MetricsProxy:       prom,
@@ -409,6 +410,7 @@ func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(RouterConfig{
+		AllowedHosts:       []string{"example.com", "cetacean.example.com"},
 		Handlers:           h,
 		Broadcaster:        b,
 		SPA:                spa,

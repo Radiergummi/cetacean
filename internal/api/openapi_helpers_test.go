@@ -110,6 +110,7 @@ func newTestRouter(
 	})
 
 	return NewRouter(RouterConfig{
+		AllowedHosts:       []string{"example.com", "cetacean.example.com"},
 		Handlers:           handlers,
 		Broadcaster:        broadcaster,
 		SPA:                noopSPA,

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -546,9 +545,10 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) hostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-		host := hostname(r.Host)
+		host := auth.HostName(r.Host)
 
-		if local == nil || !isLoopback(hostname(local.String())) || isLoopback(host) ||
+		if local == nil || !auth.IsLoopbackHost(auth.HostName(local.String())) ||
+			auth.IsLoopbackHost(host) ||
 			(s.publicHost != "" && strings.EqualFold(host, s.publicHost)) {
 			next.ServeHTTP(w, r)
 			return
@@ -556,25 +556,6 @@ func (s *Server) hostGuard(next http.Handler) http.Handler {
 
 		http.Error(w, "forbidden host", http.StatusForbidden)
 	})
-}
-
-// hostname strips the port, and an IPv6 literal's brackets, from host[:port].
-func hostname(hostport string) string {
-	if host, _, err := net.SplitHostPort(hostport); err == nil {
-		return host
-	}
-
-	return strings.Trim(hostport, "[]")
-}
-
-func isLoopback(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-
-	ip, err := netip.ParseAddr(host)
-
-	return err == nil && ip.IsLoopback()
 }
 
 // publicHostname is publicURL's hostname, or empty when there is none.

@@ -669,6 +669,11 @@ func main() {
 	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier, mcpResource)
 	defer closeMCP()
 
+	var tsnetDomains []string
+	if tsnetServer != nil {
+		tsnetDomains = tsnetServer.CertDomains()
+	}
+
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:           handlers,
 		Broadcaster:        broadcaster,
@@ -684,6 +689,7 @@ func main() {
 		AuthProvider:       authProvider,
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,
+		AllowedHosts:       allowedHosts(cfg.ListenAddr, tsnetDomains),
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled() || tsnetMode,
 		TrustedProxies:     cfg.TrustedProxies,
@@ -1205,4 +1211,17 @@ func mcpInClear(mcpEnabled bool, authMode string, tlsEnabled bool, publicURL str
 	u, err := url.Parse(publicURL)
 
 	return err != nil || u.Scheme != "https"
+}
+
+// allowedHosts are the names, beyond server.public_url's, the router answers
+// for: a listen host given by name, and the tailnet names a tsnet node serves.
+func allowedHosts(listenAddr string, tsnetDomains []string) []string {
+	hosts := slices.Clone(tsnetDomains)
+
+	if host, _, err := net.SplitHostPort(listenAddr); err == nil && host != "" &&
+		net.ParseIP(host) == nil {
+		hosts = append(hosts, host)
+	}
+
+	return hosts
 }

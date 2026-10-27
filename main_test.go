@@ -201,6 +201,27 @@ func TestTsnetMetaListenerServesSelfMetrics(t *testing.T) {
 	}
 }
 
+func TestAllowedHosts(t *testing.T) {
+	tests := []struct {
+		listen string
+		tsnet  []string
+		want   []string
+	}{
+		{":9000", nil, nil},
+		{"0.0.0.0:9000", nil, nil},
+		{"[::]:9000", nil, nil},
+		{"10.0.0.5:9000", nil, nil},
+		{"cetacean:9000", nil, []string{"cetacean"}},
+		{":9000", []string{"cetacean.tailnet.ts.net"}, []string{"cetacean.tailnet.ts.net"}},
+	}
+
+	for _, tt := range tests {
+		if got := allowedHosts(tt.listen, tt.tsnet); !slices.Equal(got, tt.want) {
+			t.Errorf("allowedHosts(%q, %v) = %v, want %v", tt.listen, tt.tsnet, got, tt.want)
+		}
+	}
+}
+
 func TestMCPInClear(t *testing.T) {
 	tests := []struct {
 		name      string

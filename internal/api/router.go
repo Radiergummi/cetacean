@@ -62,8 +62,13 @@ type RouterConfig struct {
 	AuthProvider       auth.Provider
 	BasePath           string
 	PublicURL          string
-	CORS               *CORSConfig
-	TLSEnabled         bool
+
+	// AllowedHosts are the names, besides PublicURL's host, loopback and any IP
+	// literal, a request's Host may carry.
+	AllowedHosts []string
+
+	CORS       *CORSConfig
+	TLSEnabled bool
 
 	// InlineScriptHashes are CSP `'sha256-…'` tokens for the SPA's inline
 	// scripts, from InlineScriptHashes. Empty means no inline script runs.
@@ -1084,6 +1089,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
 		recovery,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
+		hostGuard(cfg.PublicURL, cfg.AllowedHosts),
 		// Ahead of every middleware that decides by path: each spelling it
 		// canonicalises names the same resource, and a rule matching the path
 		// it came in on answers /-/resync.json differently from /-/resync.
