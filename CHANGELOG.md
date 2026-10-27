@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
+- `/tasks/{id}` and its sub-paths accept a task's `<service>.<slot>` name, redirecting to its ID as service and node names do
 
 ### Changed
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built

@@ -626,3 +626,106 @@ func TestPairChainParseRecognisesTheShapeItGuards(t *testing.T) {
 		}
 	}
 }
+
+// taskNameTestCache adds to canonicalTestCache a live task in slot 1 of
+// shop_web, so "shop_web.1" names it.
+func taskNameTestCache() *cache.Cache {
+	c := canonicalTestCache()
+	c.SetTask(swarm.Task{
+		ID:           "task1234567890",
+		ServiceID:    "svc1234567890",
+		Slot:         1,
+		DesiredState: swarm.TaskStateRunning,
+	})
+
+	return c
+}
+
+// A task's "<service>.<slot>" name is what MCP and the history accept, so the
+// task routes redirect it to the ID like any other name.
+func TestCanonicalIdentifierRedirectsTaskName(t *testing.T) {
+	router := newTestRouterWithCache(t, taskNameTestCache())
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/tasks/shop_web.1", "/tasks/task1234567890"},
+		{"/tasks/shop_web.1/logs?tail=5", "/tasks/task1234567890/logs?tail=5"},
+		{"/tasks/shop_web.1.json", "/tasks/task1234567890.json"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Header.Set("Accept", "application/json")
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusTemporaryRedirect {
+				t.Fatalf("status = %d, want 307; body: %s", w.Code, w.Body.String())
+			}
+
+			if got := w.Header().Get("Location"); got != tc.want {
+				t.Errorf("Location = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A task name is its service's, so it resolves only for a caller who may read
+// that service; anyone else gets the 404 an unknown ID gets.
+func TestCanonicalIdentifierTaskNameFollowsTheServiceGrant(t *testing.T) {
+	cases := []struct {
+		grant string
+		want  int
+	}{
+		{"service:shop_*", http.StatusTemporaryRedirect},
+		{"service:other_*", http.StatusNotFound},
+		{"task:*", http.StatusNotFound},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.grant, func(t *testing.T) {
+			c := taskNameTestCache()
+			evaluator := acl.NewEvaluator()
+			evaluator.SetResolver(c)
+			evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+				Resources:   []string{tc.grant},
+				Audience:    []string{"*"},
+				Permissions: []string{"read"},
+			}}})
+
+			router := newTestRouterWithCache(t, c, withACL(evaluator))
+
+			req := httptest.NewRequest(http.MethodGet, "/tasks/shop_web.1", nil)
+			req.Header.Set("Accept", "application/json")
+			req = req.WithContext(
+				auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "alice"}),
+			)
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tc.want {
+				t.Fatalf("status = %d, want %d; body: %s", w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
+}
+
+// A slot with no live task names nothing.
+func TestCanonicalIdentifierUnknownTaskNameStill404s(t *testing.T) {
+	router := newTestRouterWithCache(t, taskNameTestCache())
+
+	req := httptest.NewRequest(http.MethodGet, "/tasks/shop_web.9", nil)
+	req.Header.Set("Accept", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body: %s", w.Code, w.Body.String())
+	}
+}

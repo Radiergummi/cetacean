@@ -434,8 +434,9 @@ curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
 `307` preserves the method and the body, so writes may be addressed by name too: `PUT /services/shop_web/scale`
 reaches the scale endpoint with its payload intact. Most clients follow the redirect on request (`curl -L`).
 
-Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
-task's `<service>.<slot>` name is derived from its parent rather than stored on it.
+Volumes and stacks are keyed by name already, so their paths never redirect. A task's name is its service's name and
+slot, `shop_web.1`, or node ID for a global service; it names the live task in that slot, and resolves only for a
+caller who may read the service.
 
 A name matching more than one resource is answered `409 Conflict` with [`API015`](api/errors#API015), whose
 detail lists every ID the request could have meant.
