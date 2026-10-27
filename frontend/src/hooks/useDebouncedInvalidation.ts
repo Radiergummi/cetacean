@@ -4,10 +4,13 @@ import { useResourceStream } from "./useResourceStream";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
+/** The longest a burst of events defers its refetch, timed from its first event. */
+const maximumWait = 5000;
+
 /**
- * Subscribes to an SSE path and invalidates the given query keys once per
- * burst of events. The delay is timed from the burst's first event, so a
- * stream that never goes quiet (a crash loop, a rollout) still refetches.
+ * Subscribes to an SSE path and invalidates the given query keys once a burst
+ * of events goes quiet for `delay`, or `maximumWait` after its first event, so
+ * a stream that never goes quiet (a crash loop, a rollout) still refetches.
  */
 export function useDebouncedInvalidation(
   ssePath: string | undefined,
@@ -17,6 +20,7 @@ export function useDebouncedInvalidation(
 ) {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const burstStartRef = useRef<number | null>(null);
   const queryKeysRef = useLatestRef(queryKeys);
   const onEventRef = useLatestRef(onEvent);
 
@@ -28,13 +32,24 @@ export function useDebouncedInvalidation(
         // wants the events themselves would open a second EventSource.
         onEventRef.current?.(event);
 
-        debounceRef.current ??= setTimeout(() => {
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current);
+        }
+
+        const now = Date.now();
+
+        burstStartRef.current ??= now;
+
+        const wait = Math.min(delay, burstStartRef.current + maximumWait - now);
+
+        debounceRef.current = setTimeout(() => {
           debounceRef.current = null;
+          burstStartRef.current = null;
 
           for (const key of queryKeysRef.current) {
             void queryClient.invalidateQueries({ queryKey: [...key] });
           }
-        }, delay);
+        }, wait);
       },
       [queryClient, delay, queryKeysRef, onEventRef],
     ),

@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe("useDebouncedInvalidation", () => {
-  it("refetches during a stream of events that never goes quiet", () => {
+  it("refetches at most once per max-wait during a stream that never goes quiet", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
@@ -32,15 +32,15 @@ describe("useDebouncedInvalidation", () => {
       wrapper: createWrapper(client),
     });
 
-    for (let elapsed = 0; elapsed < 3000; elapsed += 200) {
+    for (let elapsed = 0; elapsed < 12_000; elapsed += 200) {
       listener?.(event);
       vi.advanceTimersByTime(200);
     }
 
-    expect(invalidate.mock.calls.length).toBeGreaterThanOrEqual(5);
+    expect(invalidate).toHaveBeenCalledTimes(2);
   });
 
-  it("coalesces a burst into one refetch", () => {
+  it("waits for a burst to go quiet before refetching once", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
@@ -49,9 +49,13 @@ describe("useDebouncedInvalidation", () => {
     });
 
     listener?.(event);
+    vi.advanceTimersByTime(300);
     listener?.(event);
-    listener?.(event);
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(300);
+
+    expect(invalidate).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(200);
 
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
