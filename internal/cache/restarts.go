@@ -136,19 +136,33 @@ func (rt *RestartTracker) Record(serviceID string, when time.Time) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	// The buckets cover only what happened since observing, which is what
-	// TrackingSince promises; Swarm's retained tasks are too few to say more.
-	if !when.Before(rt.observing) {
-		buckets := rt.services[serviceID]
-		if buckets == nil {
-			buckets = make(map[int64]uint32)
-			rt.services[serviceID] = buckets
-		}
-
-		buckets[rt.bucketKey(when)]++
-		rt.pruneLocked(buckets, time.Now())
+	buckets := rt.services[serviceID]
+	if buckets == nil {
+		buckets = make(map[int64]uint32)
+		rt.services[serviceID] = buckets
 	}
 
+	buckets[rt.bucketKey(when)]++
+	rt.pruneLocked(buckets, time.Now())
+
+	rt.recordRecentLocked(serviceID, when)
+}
+
+// Backfill takes a failure the tracker did not see happen, such as one Swarm
+// retained from before it began, into the flapping window but not the counts:
+// those cover only what TrackingSince promises.
+func (rt *RestartTracker) Backfill(serviceID string, when time.Time) {
+	if serviceID == "" || when.IsZero() {
+		return
+	}
+
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+
+	rt.recordRecentLocked(serviceID, when)
+}
+
+func (rt *RestartTracker) recordRecentLocked(serviceID string, when time.Time) {
 	recent := rt.recent[serviceID]
 	at, _ := slices.BinarySearchFunc(recent, when, time.Time.Compare)
 	recent = slices.Insert(recent, at, when)

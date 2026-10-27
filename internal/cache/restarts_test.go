@@ -1,22 +1,15 @@
 package cache
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// trackerBegun is a tracker that has been counting for as long as it retains.
-func trackerBegun(horizon, bucket time.Duration) *RestartTracker {
-	rt := NewRestartTracker(horizon, bucket)
-	rt.observing = time.Now().Add(-horizon)
-
-	return rt
-}
-
 func TestRestartTracker_RecordAndCount(t *testing.T) {
-	rt := trackerBegun(7*24*time.Hour, time.Hour)
+	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
 	now := time.Now()
 
 	rt.Record("svc1", now)
@@ -46,7 +39,6 @@ func TestRestartTracker_RecordAndCount(t *testing.T) {
 func TestRestartTracker_PruneBeyondHorizon(t *testing.T) {
 	rt := NewRestartTracker(24*time.Hour, time.Hour)
 	now := time.Now()
-	rt.observing = now.Add(-72 * time.Hour)
 
 	rt.Record("svc1", now.Add(-48*time.Hour))
 	rt.Record("svc1", now)
@@ -57,7 +49,7 @@ func TestRestartTracker_PruneBeyondHorizon(t *testing.T) {
 }
 
 func TestRestartTracker_LookbackCappedAtHorizon(t *testing.T) {
-	rt := trackerBegun(24*time.Hour, time.Hour)
+	rt := NewRestartTracker(24*time.Hour, time.Hour)
 	now := time.Now()
 
 	rt.Record("svc1", now.Add(-2*time.Hour))
@@ -78,7 +70,7 @@ func TestRestartTracker_Forget(t *testing.T) {
 }
 
 func TestRestartTracker_SnapshotRoundTrip(t *testing.T) {
-	src := trackerBegun(24*time.Hour, time.Hour)
+	src := NewRestartTracker(24*time.Hour, time.Hour)
 	now := time.Now()
 	src.Record("svc1", now)
 	src.Record("svc1", now.Add(-2*time.Hour))
@@ -397,25 +389,52 @@ func TestRestartTrackerFlappingKeepsNewest(t *testing.T) {
 	}
 }
 
-// Swarm keeps failed tasks for days, and a first sync replays them. Counting
-// those would report them as failures since the tracker began; a loop that
-// started just before it did must still read as flapping.
-func TestRestartTrackerCountsNothingFromBeforeItBegan(t *testing.T) {
-	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
+// Swarm keeps failed tasks for days, and the first sync replays them: those
+// are history the tracker did not see, not failures since it began. A loop
+// already running then must still read as flapping.
+func TestCacheFirstSyncBackfillsOnlyTheFlappingWindow(t *testing.T) {
+	c := New(nil)
 	now := time.Now()
 
-	rt.Record("old", now.Add(-72*time.Hour))
+	tasks := []swarm.Task{failedTask("old", "old", now.Add(-72*time.Hour))}
 	for i := range flappingRestarts {
-		rt.Record("loop", now.Add(-time.Duration(i+1)*5*time.Second))
+		id := fmt.Sprintf("loop-%d", i)
+		tasks = append(tasks, failedTask(id, "loop", now.Add(-time.Duration(i+1)*5*time.Second)))
 	}
+	c.ReplaceAll(FullSyncData{HasTasks: true, Tasks: tasks})
 
-	if got := rt.Count("old", 7*24*time.Hour); got != 0 {
-		t.Errorf("a failure from before the tracker began counted: got %d", got)
+	if got := c.RestartCount("old", 7*24*time.Hour); got != 0 {
+		t.Errorf("a failure the first sync found counted: got %d", got)
 	}
-	if got := rt.Count("loop", time.Hour); got != 0 {
-		t.Errorf("failures from before the tracker began counted: got %d", got)
+	if got := c.RestartCount("loop", time.Hour); got != 0 {
+		t.Errorf("failures the first sync found counted: got %d", got)
 	}
-	if !rt.Flapping()["loop"] {
-		t.Error("a loop that began before the tracker is not flapping")
+	if !c.IsFlapping("loop") {
+		t.Error("a loop the first sync found is not flapping")
+	}
+}
+
+// A failure that appears in a later sync happened while the tracker watched,
+// whatever the manager's clock stamped on it.
+func TestCacheLaterSyncCountsAFailureStampedInThePast(t *testing.T) {
+	c := New(nil)
+	c.ReplaceAll(FullSyncData{HasTasks: true})
+
+	skewed := time.Now().Add(-10 * time.Minute)
+	c.ReplaceAll(FullSyncData{
+		HasTasks: true,
+		Tasks:    []swarm.Task{failedTask("t1", "svc1", skewed)},
+	})
+
+	if got := c.RestartCount("svc1", time.Hour); got != 1 {
+		t.Errorf("a new failure behind our clock was dropped: got %d", got)
+	}
+}
+
+func failedTask(id, serviceID string, at time.Time) swarm.Task {
+	return swarm.Task{
+		ID:        id,
+		ServiceID: serviceID,
+		Status:    swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: at},
 	}
 }

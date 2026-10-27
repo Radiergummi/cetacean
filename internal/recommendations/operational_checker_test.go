@@ -39,8 +39,7 @@ func newOperationalCache(services []swarm.Service, nodes []swarm.Node) *cache.Ca
 }
 
 // recordRestarts plays n failure events for the given service through the
-// cache so the RestartTracker increments naturally. They follow the cache's
-// creation: the tracker counts nothing from before it began.
+// cache so the RestartTracker increments naturally.
 func recordRestarts(c *cache.Cache, serviceID string, n int) {
 	now := time.Now()
 	for i := range n {
@@ -50,7 +49,7 @@ func recordRestarts(c *cache.Cache, serviceID string, n int) {
 			ServiceID: serviceID,
 			Status: swarm.TaskStatus{
 				State:     swarm.TaskStateFailed,
-				Timestamp: now.Add(time.Duration(i) * time.Millisecond),
+				Timestamp: now.Add(-time.Duration(i) * time.Minute),
 			},
 		})
 	}

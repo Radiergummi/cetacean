@@ -160,6 +160,7 @@ type Cache struct {
 	volumes        ResourceMap[volume.Volume]
 	stacks         map[string]Stack
 	lastSync       time.Time
+	tasksSynced    bool // a task list has been synced, so later ones can be diffed
 	listenerMu     sync.RWMutex
 	listeners      []listenerEntry
 
@@ -1505,9 +1506,10 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	}
 
 	// Failures the live event stream missed: a task failed/rejected/orphaned
-	// here but not in the previous snapshot. The snapshot-load path overwrites
-	// these counts through Restore afterwards, so only the full sync is affected.
-	var newFailures []swarm.Task
+	// here but not in the previous snapshot. One the first sync finds that the
+	// cache never held is retained history, not a failure the tracker saw, so
+	// it only feeds the flapping window.
+	var newFailures, backfilled []swarm.Task
 	if data.HasTasks {
 		for id, listed := range tasks {
 			held, ok := c.tasks[id]
@@ -1525,11 +1527,16 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 				continue
 			}
 			old, existed := c.tasks[id]
-			if existed && IsFailureState(old.Status.State) {
-				continue
+			switch {
+			case existed && IsFailureState(old.Status.State):
+				// Counted when it failed.
+			case !existed && !c.tasksSynced:
+				backfilled = append(backfilled, t)
+			default:
+				newFailures = append(newFailures, t)
 			}
-			newFailures = append(newFailures, t)
 		}
+		c.tasksSynced = true
 		c.tasks = tasks
 		c.tasksByService = byService
 		c.tasksByNode = byNode
@@ -1555,10 +1562,11 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	c.mu.Unlock()
 
 	for _, t := range newFailures {
-		if t.ServiceID == "" {
-			continue
-		}
 		c.restarts.Record(t.ServiceID, t.Status.Timestamp)
+	}
+
+	for _, t := range backfilled {
+		c.restarts.Backfill(t.ServiceID, t.Status.Timestamp)
 	}
 
 	for _, typ := range [...]EventType{
