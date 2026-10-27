@@ -143,6 +143,10 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if err := config.RefuseWildcardCORS(cfg.CORSOrigins, authCfg.Mode); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
 	tsnetMode := authCfg.Mode == "tailscale" && authCfg.Tailscale.Mode == "tsnet"
 	if tsnetMode {
 		if err := cfg.ValidateTsnetMode(tlsCfg.Enabled()); err != nil {

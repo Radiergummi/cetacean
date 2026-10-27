@@ -108,6 +108,8 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Origins allowed to make cross-origin requests to the API, as a comma-separated list, for example `https://admin.example.com`, or `*` for any. When unset, no CORS headers are sent and browsers block cross-origin requests.
 
   The same origins are trusted for cross-origin writes; `*` can't be, so with a wildcard browsers may read the API from any origin while cross-origin writes are refused.
+
+  Under [`auth.mode`][auth.mode] `none` or `tailscale`, `*` refuses startup. Those modes know a visitor by their network address, so a wildcard would let any site that visitor opens read the API as them.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
@@ -493,6 +495,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [acl.policy_file]: #acl.policy_file
 [api]: api
 [auth.headers.secret_header]: #auth.headers.secret_header
+[auth.mode]: #auth.mode
 [auth.oidc.redirect_url]: #auth.oidc.redirect_url
 [authentication]: authentication
 [authorization]: authorization

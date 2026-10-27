@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -404,6 +405,21 @@ func (c *Config) ValidateTsnetMode(tlsEnabled bool) error {
 	}
 
 	return nil
+}
+
+// RefuseWildcardCORS refuses server.cors.origins "*" where identity is the
+// network address: any page a visitor opens would read the API as them.
+func RefuseWildcardCORS(origins []string, authMode string) error {
+	if !slices.Contains(origins, "*") || authMode != "none" && authMode != "tailscale" {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"server.cors.origins cannot be \"*\" with auth.mode %q: identity comes from the "+
+			"network, so every site a visitor opens could read the API as them; "+
+			"list the origins instead",
+		authMode,
+	)
 }
 
 // RequireTrustedProxies refuses a headers-mode deployment with no list. Headers

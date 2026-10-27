@@ -671,6 +671,36 @@ func TestRequireTrustedProxies(t *testing.T) {
 	}
 }
 
+func TestRefuseWildcardCORS(t *testing.T) {
+	tests := []struct {
+		origins []string
+		mode    string
+		wantErr bool
+	}{
+		{[]string{"*"}, "none", true},
+		{[]string{"*"}, "tailscale", true},
+		{[]string{"https://a.example", "*"}, "none", true},
+		{[]string{"*"}, "oidc", false},
+		{[]string{"*"}, "headers", false},
+		{[]string{"*"}, "cert", false},
+		{[]string{"https://a.example"}, "none", false},
+		{nil, "tailscale", false},
+	}
+
+	for _, tt := range tests {
+		err := RefuseWildcardCORS(tt.origins, tt.mode)
+		if (err != nil) != tt.wantErr {
+			t.Errorf(
+				"RefuseWildcardCORS(%v, %q) = %v, wantErr %v",
+				tt.origins, tt.mode, err, tt.wantErr,
+			)
+		}
+		if err != nil && !strings.Contains(err.Error(), "server.cors.origins") {
+			t.Errorf("error %q does not name server.cors.origins", err)
+		}
+	}
+}
+
 func TestRequireTrustedProxiesErrorNamesTheSetting(t *testing.T) {
 	err := RequireTrustedProxies(nil)
 	if err == nil {
