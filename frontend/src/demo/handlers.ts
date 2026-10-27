@@ -14,6 +14,7 @@ import type {
   LogDriver,
   MonitoringStatus,
   Network,
+  NetworkAddresses,
   NetworkDetail,
   Node,
   Placement,
@@ -228,6 +229,45 @@ function findServicesUsing(
   return dataset.services
     .filter(predicate)
     .map((service) => ({ id: service.ID, name: service.Spec.Name }));
+}
+
+/**
+ * A demo network's address figure, counted as the server does over the
+ * dataset: a VIP per service, an address per live task, and a load balancer
+ * per node with such a task, or per node in the swarm for ingress.
+ */
+function demoAddresses(dataset: Dataset, network: Network): NetworkAddresses | undefined {
+  if (network.Scope !== "swarm") {
+    return undefined;
+  }
+
+  const usable = (network.IPAM.Config ?? []).reduce((total, { Subnet }) => {
+    const bits = Number(Subnet?.split("/")[1]);
+
+    return Subnet?.includes(".") && bits <= 30 ? total + 2 ** (32 - bits) - 3 : total;
+  }, 0);
+  const services = dataset.services.filter((service) =>
+    network.Ingress
+      ? (service.Endpoint?.Ports ?? []).some(({ PublishMode }) => PublishMode === "ingress")
+      : (service.Spec.TaskTemplate?.Networks ?? []).some(({ Target }) => Target === network.Id),
+  );
+  const serviceIDs = new Set(services.map(({ ID }) => ID));
+  const tasks = dataset.tasks.filter(
+    ({ ServiceID, Status }) => serviceIDs.has(ServiceID) && Status.State === "running",
+  );
+  const vips = services.filter(({ Spec }) => Spec.EndpointSpec?.Mode !== "dnsrr").length;
+  const loadBalancers = network.Ingress
+    ? dataset.nodes.length
+    : new Set(tasks.map(({ NodeID }) => NodeID)).size;
+
+  return {
+    usable,
+    used: vips + tasks.length + loadBalancers,
+    vips,
+    tasks: tasks.length,
+    loadBalancers,
+    excludesAttachedContainers: network.Attachable,
+  };
 }
 
 function deriveStacks(dataset: Dataset) {
@@ -1314,13 +1354,22 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
               service.Spec.TaskTemplate!.Networks?.some(({ Target }) => Target === network.Id) ??
               false,
           ),
+          addresses: demoAddresses(dataset, network),
         } satisfies NetworkDetail),
       );
     }),
 
     get("*/networks", ({ request }) => {
       return jsonResponse(
-        paginateWrapped(dataset.networks, request, "Network", (n) => `/networks/${n.Id}`),
+        paginateWrapped(
+          dataset.networks.map((network) => ({
+            ...network,
+            Addresses: demoAddresses(dataset, network),
+          })),
+          request,
+          "Network",
+          (n) => `/networks/${n.Id}`,
+        ),
       );
     }),
 

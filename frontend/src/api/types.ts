@@ -251,6 +251,21 @@ export interface Network {
   };
   Options: Record<string, string> | null;
   Labels: Record<string, string> | null;
+  /** Present on list items only, for a network with an address figure. */
+  Addresses?: NetworkAddresses | undefined;
+}
+
+/**
+ * How much of a network's IPv4 address pool is in use. `used` is `vips`,
+ * `tasks` and `loadBalancers` together.
+ */
+export interface NetworkAddresses {
+  usable: number;
+  used: number;
+  vips: number;
+  tasks: number;
+  loadBalancers: number;
+  excludesAttachedContainers: boolean;
 }
 
 export interface Volume {
@@ -513,6 +528,7 @@ export interface SecretEntry {
 export interface NetworkDetail {
   network: Network;
   services: ServiceRef[] | null;
+  addresses?: NetworkAddresses | undefined;
 }
 
 export interface VolumeDetail {
@@ -857,10 +873,11 @@ export type RecommendationCategory =
   | "uneven-distribution"
   | "single-manager"
   | "even-managers"
-  | "quorum-at-risk";
+  | "quorum-at-risk"
+  | "network-addresses-low";
 
 export type RecommendationSeverity = "info" | "warning" | "critical";
-export type RecommendationScope = "service" | "node" | "cluster";
+export type RecommendationScope = "service" | "node" | "network" | "cluster";
 
 export interface Recommendation {
   category: RecommendationCategory;

@@ -1,11 +1,23 @@
 import { api } from "../api/client";
-import type { Network } from "../api/types";
+import type { Network, NetworkAddresses } from "../api/types";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import { buttonVariants } from "../components/ui/button";
+import { addressTone } from "../lib/networkAddresses";
 import { sortColumn } from "../lib/sortColumn";
+import { toneText } from "../lib/statusColor";
 import { Link } from "react-router-dom";
+
+function AddressUse({ addresses }: { addresses: NetworkAddresses }) {
+  const tone = addressTone(addresses);
+
+  return (
+    <span className={`tabular-nums ${tone ? toneText[tone] : ""}`}>
+      {addresses.used} / {addresses.usable}
+    </span>
+  );
+}
 
 export default function NetworkList() {
   return (
@@ -40,12 +52,26 @@ export default function NetworkList() {
           ...sortColumn("Scope", "scope", sortKey, sortDir, toggle),
           cell: ({ Scope }) => Scope,
         },
+        {
+          ...sortColumn("Addresses", "addresses", sortKey, sortDir, toggle),
+          cell: ({ Addresses }) => (Addresses ? <AddressUse addresses={Addresses} /> : "\u2014"),
+        },
       ]}
-      renderCard={({ Driver, Id, Name, Scope }) => (
+      renderCard={({ Addresses, Driver, Id, Name, Scope }) => (
         <ResourceCard
           title={<ResourceName name={Name} />}
           to={`/networks/${Id}`}
-          meta={[Driver, Scope]}
+          meta={[
+            Driver,
+            Scope,
+            ...(Addresses
+              ? [
+                  <span key="addresses">
+                    <AddressUse addresses={Addresses} /> addresses
+                  </span>,
+                ]
+              : []),
+          ]}
         />
       )}
       emptyMessage={(hasSearch) =>

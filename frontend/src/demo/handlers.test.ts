@@ -126,6 +126,16 @@ describe("detail response shapes", () => {
     expect(Array.isArray(data.services)).toBe(true);
   });
 
+  it("GET /networks/:id counts a swarm network's addresses", async () => {
+    const ingress = dataset.networks.find(({ Ingress }) => Ingress)!;
+    const data = await fetchJSON(`/networks/${ingress.Id}`);
+    const addresses = data.addresses as Record<string, number>;
+
+    expect(addresses.usable).toBe(253);
+    expect(addresses.loadBalancers).toBe(dataset.nodes.length);
+    expect(addresses.used).toBe(addresses.vips! + addresses.tasks! + addresses.loadBalancers!);
+  });
+
   it("GET /volumes/:name has volume and services", async () => {
     const data = await fetchJSON(`/volumes/${dataset.volumes[0]?.Name}`);
     expect(data).toHaveProperty("volume");

@@ -73,6 +73,36 @@ describe("NetworkList", () => {
     expect(screen.getByText("backend")).toBeInTheDocument();
   });
 
+  it("shows used against usable addresses, toned at the warning threshold", async () => {
+    mockNetworks.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ...fakeNetwork("n1", "backend"),
+            Addresses: {
+              usable: 253,
+              used: 210,
+              vips: 4,
+              tasks: 200,
+              loadBalancers: 6,
+              excludesAttachedContainers: false,
+            },
+          },
+          fakeNetwork("n2", "bridge"),
+        ],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set(),
+    });
+    render(<NetworkList />, { wrapper });
+
+    const use = await screen.findByText("210 / 253");
+    expect(use).toHaveClass("text-status-warning");
+    expect(screen.getByText("\u2014")).toBeInTheDocument();
+  });
+
   it("shows empty state", async () => {
     mockNetworks.mockResolvedValue({
       data: { items: [], total: 0, limit: 50, offset: 0 },

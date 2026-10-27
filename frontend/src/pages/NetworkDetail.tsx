@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Network } from "../api/types";
+import type { Network, NetworkAddresses } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
 import CollapsibleSection from "../components/CollapsibleSection";
 import {
@@ -18,8 +18,10 @@ import { RemoveResourceAction } from "../components/RemoveResourceAction";
 import ResourceName from "../components/ResourceName";
 import ServiceRefList from "../components/ServiceRefList";
 import { useDetailResource } from "../hooks/useDetailResource";
+import { addressTone } from "../lib/networkAddresses";
 import { parseStackLabels } from "../lib/parseStackLabels";
 import { resourceBreadcrumbs, resourceParentPath } from "../lib/resourceBreadcrumbs";
+import { toneText } from "../lib/statusColor";
 import { cardGridClass } from "../lib/styles";
 import { useParams } from "react-router-dom";
 
@@ -57,6 +59,44 @@ function NetworkFlags({ network }: { network: Network }) {
         </span>
       ))}
     </div>
+  );
+}
+
+function AddressesPanel({ addresses }: { addresses: NetworkAddresses }) {
+  const tone = addressTone(addresses);
+
+  return (
+    <CollapsibleSection title="Addresses">
+      <MetadataGrid>
+        <InfoCard
+          label="In use"
+          value={
+            <span className={`tabular-nums ${tone ? toneText[tone] : ""}`}>
+              {addresses.used} / {addresses.usable}
+            </span>
+          }
+        />
+        <InfoCard
+          label="Service VIPs"
+          value={String(addresses.vips)}
+        />
+        <InfoCard
+          label="Task addresses"
+          value={String(addresses.tasks)}
+        />
+        <InfoCard
+          label="Load balancers"
+          value={String(addresses.loadBalancers)}
+        />
+      </MetadataGrid>
+
+      {addresses.excludesAttachedContainers && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          This network is attachable. Containers attached with <code>docker run --network</code>{" "}
+          aren't counted, so more addresses may be in use.
+        </p>
+      )}
+    </CollapsibleSection>
   );
 }
 
@@ -193,6 +233,8 @@ export default function NetworkDetail() {
       </MetadataGrid>
 
       <NetworkFlags network={network} />
+
+      {data.addresses && <AddressesPanel addresses={data.addresses} />}
 
       <IPAMPanel network={network} />
 

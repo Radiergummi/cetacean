@@ -131,6 +131,16 @@ compose document, with buttons to copy it or download it as a `.yaml` file. It r
 is running now, so it isn't the file the stack was first deployed from, and it references secrets and configs
 rather than exporting their contents.
 
+## Network addresses
+
+An overlay network that runs out of addresses fails new tasks, and the default `/24` holds 253. The networks list
+shows each swarm network's **Addresses** as used against usable, amber from 80% and red from 95%; the detail page
+breaks the figure down into service virtual IPs, task addresses, and load balancers, one per node with a task on the
+network, or on every node for `ingress`. A [recommendation][recommendations] is raised at the same thresholds.
+
+The figure covers IPv4 on the default IPAM driver. It can't see containers attached to an attachable network with
+`docker run --network`, so on such a network the real count may be higher, and the page says so.
+
 ## Rotating a secret or config
 
 Swarm can't change a secret or a config once it exists, so rotating one means replacing it:
