@@ -130,7 +130,8 @@ export function useVersionExpansion<T extends Item>(
         ...(older.get(item.ID) ?? [])
           // A version the list heads elsewhere, or one that overtook a head
           // it has not caught up with, is no older version of this one.
-          .filter(({ ID, NewestVersion }) => !listed.has(ID) && !NewestVersion)
+          // An older version in use is always a row of its own, loaded yet or not.
+          .filter(({ ID, NewestVersion, InUse }) => !listed.has(ID) && !NewestVersion && !InUse)
           .map((version) => ({ ...version, olderVersion: true })),
       ]);
     },

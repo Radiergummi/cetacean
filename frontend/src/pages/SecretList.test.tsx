@@ -252,6 +252,28 @@ describe("SecretList", () => {
     expect(screen.getByRole("button", { name: "Hide older" })).toBeInTheDocument();
   });
 
+  // db-v2 is in use, so it is a row of its own, on a page not loaded yet here;
+  // expanding db-v3 must not put a second copy of it beneath the head.
+  it("leaves an older version in use out of an expansion", async () => {
+    const head = { ...version("db-v3", 0, true), NewestVersion: true, OlderVersions: 1 };
+
+    mockSecrets.mockResolvedValue({
+      data: { items: [head], total: 2, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    mockSecretVersions.mockResolvedValue([
+      head,
+      { ...version("db-v2", 1, true), InUse: true },
+      version("db-v1", 0, true),
+    ]);
+    render(<SecretList />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "+1 older" }));
+
+    expect(await screen.findByText("db-v1")).toBeInTheDocument();
+    expect(screen.queryByText("db-v2")).not.toBeInTheDocument();
+  });
+
   // Rotation midway: the old version still runs, so it is listed, not hidden.
   it("marks an older version a service still uses", async () => {
     mockSecrets.mockResolvedValue({

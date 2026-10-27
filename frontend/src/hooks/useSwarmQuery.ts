@@ -30,6 +30,7 @@ const enrichedFields = [
   "VersionOf",
   "VersionInferred",
   "NewestVersion",
+  "InUse",
   "OlderVersions",
 ] as const;
 
