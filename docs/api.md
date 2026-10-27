@@ -788,6 +788,11 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
 
+`GET /topology` as JSON Graph Format holds two graphs. `network` has a vertex per service and an edge between two
+services sharing an overlay network. `placement` has a vertex per node and per service, and a placement entry per
+service listing the nodes its tasks run on. A node vertex carries `address`, and a service vertex `networks`, the
+overlays it's attached to as `id` and `name`, limited to the networks you may read.
+
 `GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent

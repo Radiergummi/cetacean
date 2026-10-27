@@ -10,7 +10,7 @@ const sizes = {
   md: { size: 96, stroke: 8, text: "text-lg", label: "text-xs" },
 };
 
-function colorForValue(value: number): string {
+export function colorForValue(value: number): string {
   if (value >= 90) return "var(--chart-critical)";
   if (value >= 75) return "var(--chart-warning)";
 
