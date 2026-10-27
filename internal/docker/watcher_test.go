@@ -1356,58 +1356,57 @@ func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
 // Each manual resync sweeps the whole Docker API, and two racing ones let the
 // older fetch overwrite the newer, so concurrent calls share one sync.
 func TestResyncCoalescesConcurrentCalls(t *testing.T) {
-	mc := newMockClient()
-	mc.syncGate = make(chan struct{})
-	w := NewWatcher(mc, cache.New(nil), "")
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{})
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	var callers sync.WaitGroup
-	for range 5 {
-		callers.Go(func() {
-			if err := w.Resync(context.Background()); err != nil {
-				t.Errorf("Resync: %v", err)
-			}
-		})
-	}
+		var callers sync.WaitGroup
+		for range 5 {
+			callers.Go(func() {
+				if err := w.Resync(context.Background()); err != nil {
+					t.Errorf("Resync: %v", err)
+				}
+			})
+		}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	time.Sleep(50 * time.Millisecond) // let the other callers join the flight
-	close(mc.syncGate)
-	callers.Wait()
+		// Every caller is parked: one in the gated sync, the rest on its flight.
+		synctest.Wait()
+		close(mc.syncGate)
+		callers.Wait()
 
-	if got := mc.fullSyncs.Load(); got != 1 {
-		t.Errorf("FullSync ran %d times, want 1", got)
-	}
+		if got := mc.fullSyncs.Load(); got != 1 {
+			t.Errorf("FullSync ran %d times, want 1", got)
+		}
+	})
 }
 
 // A caller that gives up must not stay parked on the shared flight, which runs
 // detached from every caller and may outlast them all.
 func TestResyncReturnsWhenCallerCancels(t *testing.T) {
-	mc := newMockClient()
-	mc.syncGate = make(chan struct{})
-	defer close(mc.syncGate)
-	w := NewWatcher(mc, cache.New(nil), "")
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{})
+		defer close(mc.syncGate)
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	resynced := make(chan error, 1)
-	go func() { resynced <- w.Resync(ctx) }()
+		ctx, cancel := context.WithCancel(context.Background())
+		resynced := make(chan error, 1)
+		go func() { resynced <- w.Resync(ctx) }()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
 
-	select {
-	case err := <-resynced:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("Resync = %v, want context.Canceled", err)
+		select {
+		case err := <-resynced:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("Resync = %v, want context.Canceled", err)
+			}
+		default:
+			t.Fatal("Resync still blocked after its caller's context was cancelled")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Resync still blocked after its caller's context was cancelled")
-	}
+	})
 }
 
 // syncMu must serialize the periodic sync and a manual Resync that overlaps
@@ -1460,41 +1459,42 @@ func TestOlderSyncCannotOverwriteANewerOne(t *testing.T) {
 // manual Resync's syncMu would stall event processing for as long as that
 // resync takes. It must skip itself instead.
 func TestPeriodicSyncSkipsWhenAResyncIsRunning(t *testing.T) {
-	mc := newMockClient()
-	mc.syncGate = make(chan struct{})
-	w := NewWatcher(mc, cache.New(nil), "")
-	w.syncInterval = 5 * time.Millisecond
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{})
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	resynced := make(chan error, 1)
-	go func() { resynced <- w.Resync(context.Background()) }()
+		// Several ticks must fit inside the resync's own timeout.
+		w.syncInterval = fullSyncTimeout / 4
 
-	deadline := time.Now().Add(2 * time.Second)
-	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
+		resynced := make(chan error, 1)
+		go func() { resynced <- w.Resync(context.Background()) }()
+		synctest.Wait()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		w.watchEvents(ctx, time.Time{}, true)
-	}()
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.watchEvents(ctx, time.Time{}, true)
+		}()
 
-	// Several ticks' worth of time while the resync still holds syncMu.
-	time.Sleep(50 * time.Millisecond)
+		// Several ticks' worth of time while the resync still holds syncMu.
+		time.Sleep(3*w.syncInterval + time.Second)
+		synctest.Wait()
 
-	if got := mc.fullSyncs.Load(); got != 1 {
-		t.Errorf("FullSync called %d times while a resync was in flight, want 1", got)
-	}
+		if got := mc.fullSyncs.Load(); got != 1 {
+			t.Errorf("FullSync called %d times while a resync was in flight, want 1", got)
+		}
 
-	close(mc.syncGate)
+		close(mc.syncGate)
 
-	if err := <-resynced; err != nil {
-		t.Fatalf("Resync: %v", err)
-	}
+		if err := <-resynced; err != nil {
+			t.Fatalf("Resync: %v", err)
+		}
 
-	cancel()
-	<-done
+		cancel()
+		<-done
+	})
 }
 
 // hangingInspect answers only once its context ends, as a half-open TCP
