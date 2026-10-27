@@ -901,9 +901,19 @@ now asks for a different set—a tag republished after the review—with `409` (
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
-Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
+Three level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
 doesn't already have that is a bind, a named pipe, a volume with driver options, or a named volume the manager doesn't
-hold as a plain `local` volume; and `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`.
+hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`; and
+`PATCH /plugins/{name}/settings` a setting that names one of the plugin's mounts or devices, since it sets a host path.
+
+A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
+capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
+a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
+`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `ports`, `networks`, `secrets`,
+`configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change.
+`POST /services/{id}/rollback` needs it when either the current or the previous spec has host access. Below that they
+answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so host access that comes
+only through one isn't held to this rule.
 
 ### Preconditions
 
