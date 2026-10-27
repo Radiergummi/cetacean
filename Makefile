@@ -83,7 +83,9 @@ fmt-check:
 ## Build everything
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+# The commit's time rather than the clock's, so rebuilding a commit is reproducible.
+DATE    ?= $(shell TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd 2>/dev/null \
+             || date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION) \
            -X github.com/radiergummi/cetacean/internal/version.Commit=$(COMMIT) \
            -X github.com/radiergummi/cetacean/internal/version.Date=$(DATE)
@@ -91,7 +93,7 @@ LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION
 build: node_modules
 	pnpm --filter frontend build
 	pnpm --filter frontend build:widgets
-	go build -ldflags "$(LDFLAGS)" -o cetacean .
+	go build -trimpath -ldflags "$(LDFLAGS)" -o cetacean .
 
 ## Install the workspace the build embeds. Not phony: the stamp is the
 ## directory itself, so a second `make build` skips the install.
