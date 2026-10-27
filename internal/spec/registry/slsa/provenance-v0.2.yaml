@@ -1,0 +1,30 @@
+source: SLSA
+title: SLSA Provenance v0.2
+revision: v0.2
+reviewed: 2026-10-27
+url: https://slsa.dev/spec/v0.2/provenance
+
+inventory:
+  from: >-
+    The "Parsing rules" section in full, counted one sentence to a statement.
+    Image attestations read a handful of fields to display them and verify
+    nothing, so the field definitions' requirements bind the producer.
+  count: 3
+
+requirements:
+  - id: consumers-ignore-unrecognized-fields
+    level: MUST
+    text: >-
+      Consumers MUST ignore unrecognized fields.
+    url: https://slsa.dev/spec/v0.2/provenance#parsing-rules
+
+  - id: unset-and-null-equivalent
+    level: MAY
+    text: >-
+      Optional fields MAY be unset or null, and should be treated equivalently.
+    url: https://slsa.dev/spec/v0.2/provenance#parsing-rules
+
+dismissed:
+  producers-may-add-uri-extensions: >-
+    A MAY for the producer. BuildKit's own extension is read under its URI
+    key; any other is ignored.
