@@ -297,6 +297,7 @@ func TestCountServiceStatesFollowsTheStateRule(t *testing.T) {
 		RunningByService:       map[string]int{"global-up": 2, "web": 1, "flaky": 1, "rolling": 1},
 		CompletedJobsByService: map[string]int{"job-done": 1},
 		Flapping:               map[string]bool{"flaky": true},
+		GlobalEligible:         map[string]int{"global-down": 2, "global-up": 2},
 	}
 
 	converged, degraded := CountServiceStates(snap, services)

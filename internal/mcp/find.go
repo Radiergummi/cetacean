@@ -223,6 +223,7 @@ func (s *Server) rowsFor(
 			items,
 			c.RunningTaskCounts(),
 			c.CompletedJobTaskCounts(),
+			c.EligibleNodeCounts(items...),
 			c.FlappingServices(),
 		), nil
 

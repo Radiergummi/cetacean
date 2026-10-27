@@ -74,7 +74,13 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		flapping := h.cache.FlappingServices()
 
 		writeListCSV(w, r, "service", services, p, func(page []swarm.Service) []cluster.Row {
-			return cluster.RowsForServices(page, running, completed, flapping)
+			return cluster.RowsForServices(
+				page,
+				running,
+				completed,
+				h.cache.EligibleNodeCounts(page...),
+				flapping,
+			)
 		})
 
 		return

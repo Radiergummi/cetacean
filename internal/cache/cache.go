@@ -1042,6 +1042,23 @@ func (c *Cache) schedulableNodesLocked() []swarm.Node {
 	return schedulable
 }
 
+// EligibleNodeCounts is how many nodes each of the given global services can
+// run on, keyed by service ID; services of any other mode are absent.
+func (c *Cache) EligibleNodeCounts(services ...swarm.Service) map[string]int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	schedulable := c.schedulableNodesLocked()
+	out := make(map[string]int)
+	for _, svc := range services {
+		if svc.Spec.Mode.Global != nil {
+			out[svc.ID] = globalTaskCount(svc, schedulable)
+		}
+	}
+
+	return out
+}
+
 // globalTaskCount is how many of the given nodes a global service places a
 // task on. Platforms are not consulted: Swarm creates the task regardless and
 // leaves it pending, which is a shortfall the summary should show.

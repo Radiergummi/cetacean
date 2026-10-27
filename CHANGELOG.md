@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 
 ### Fixed
-- The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows; a global service no node can run isn't degraded there or in `get_cluster_status`
+- A global service no node can run reads as running rather than pending wherever a service state is shown
+- The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
 - Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting
 - A `sizing.thresholds.lookback` under an hour, or not a whole number of hours, is queried as set instead of being cut to whole hours; startup refuses one under `1m`
 - Placement constraints match values, built-in keys and label prefixes regardless of case, as Swarm does, in drain impact and the desired task count of global services

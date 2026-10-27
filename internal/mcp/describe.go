@@ -120,6 +120,7 @@ func (s *Server) digestOf(
 			s.readableAttachedNetworks(ctx, resource),
 			s.serviceRestarts(resource.ID),
 			s.cache.IsFlapping(resource.ID),
+			s.cache.EligibleNodeCounts(resource)[resource.ID],
 			cluster.ServiceImageUpdate(resource, s.images),
 		), nil
 
@@ -149,6 +150,7 @@ func (s *Server) digestOf(
 			resource,
 			s.filterRawTasks(ctx, tasks),
 			s.cache.FlappingServices(),
+			s.cache.EligibleNodeCounts(resource.Services...),
 		), nil
 
 	case swarm.Config:
