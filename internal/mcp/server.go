@@ -460,6 +460,10 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// state to keep: each request is served by its own ephemeral session.
 		// WithStateful(false) would not do: it leaves mcp-go minting IDs.
 		mcpserver.WithStateLess(true),
+		// mcp-go refuses a non-loopback Host on a loopback connection, which is
+		// every request through a reverse proxy on the same host. originGuard
+		// is the DNS-rebinding defense instead.
+		mcpserver.WithDisableLocalhostProtection(true),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			// The bearer-validating middleware (see Handler) stamps an
 			// auth.Identity on r.Context() before mcp-go sees the request.
@@ -518,7 +522,8 @@ func (s *Server) Handler() http.Handler {
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport
-// requires and mcp-go does not enforce. A request with no Origin passes
+// requires. It checks Origin rather than Host, so it holds behind a reverse
+// proxy. A request with no Origin passes
 // through. Origins match as RFC 6454 serialises them, so "*" admits nothing:
 // every call is a POST that may write, and a wildcard is not trusted for that.
 func (s *Server) originGuard(next http.Handler) http.Handler {

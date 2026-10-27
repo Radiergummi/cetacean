@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,6 +100,31 @@ func TestStandardRequestHeadersPassOriginGuard(t *testing.T) {
 	resp, env := sendMCP(t, srv.Handler(), req)
 	if resp.StatusCode == http.StatusForbidden {
 		t.Fatalf("origin guard rejected a well-formed 2026-07-28 request from an allowed origin")
+	}
+
+	if env.Error != nil {
+		t.Fatalf("tools/list error: %+v", env.Error)
+	}
+}
+
+// TestProxiedHostPassesOnLoopback covers a reverse proxy on the same host
+// (tailscale serve, a sidecar) that dials 127.0.0.1 and keeps the public Host.
+// mcp-go's own rebinding check refused that pairing for every request;
+// originGuard is the defense instead.
+func TestProxiedHostPassesOnLoopback(t *testing.T) {
+	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsReadOnly)
+
+	req := modernRequest(t, 1, "tools/list", `{}`)
+	req.Host = "swarm.example.ts.net"
+	req = req.WithContext(context.WithValue(
+		req.Context(),
+		http.LocalAddrContextKey,
+		&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9000},
+	))
+
+	resp, env := sendMCP(t, srv.Handler(), req)
+	if resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("a proxied request on loopback was refused for its Host header")
 	}
 
 	if env.Error != nil {
