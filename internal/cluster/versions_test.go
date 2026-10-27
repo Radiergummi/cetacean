@@ -129,8 +129,11 @@ func TestVersionIndex(t *testing.T) {
 			},
 		}},
 	})
-	if users := index.SecretUsers("db_v1"); len(users) != 1 || users[0].Name != "api" {
-		t.Errorf("SecretUsers(db_v1) = %v, want the service whose previous spec names it", users)
+	if users := c.ServicesUsingSecret("db_v1"); len(users) != 1 || !users[0].Rollback {
+		t.Errorf(
+			"ServicesUsingSecret(db_v1) = %v, want the service whose previous spec names it",
+			users,
+		)
 	}
 
 	event := cache.Event{Type: cache.EventSecret, Resource: versionedSecret("db_v4", 9)}
@@ -149,13 +152,16 @@ func TestVersionIndexFollowsARelabel(t *testing.T) {
 	}
 
 	index := NewVersionIndex(c)
-	index.SecretVersion(versionedSecret("db_v1", 1), func(string) bool { return true })
+
+	// The event the cache sends carries the record it replaced.
+	var event cache.Event
+	c.AddOnChangeListener(func(e cache.Event) { event = e })
 
 	moved := versionedSecret("db_v2", 2)
 	moved.Spec.Labels = map[string]string{"cetacean.version-of": "other"}
 	c.SetSecret(moved)
 
-	_, touched := index.DigestsTouchedBy(cache.Event{Type: cache.EventSecret, Resource: moved})
+	_, touched := index.DigestsTouchedBy(event)
 
 	var ids []string
 	for _, ref := range touched {

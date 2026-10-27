@@ -51,15 +51,18 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 		rows:     cluster.RowsForSecrets,
 	}
 
-	fields := versionedList(
-		h, r, &spec, secretID, cluster.SecretVersionGroups, h.versions.SecretUsers,
+	versions := versionedList(
+		h, r, &spec, secretID,
+		func(readable []swarm.Secret, canRead func(string) bool) cluster.VersionView {
+			return cluster.SecretVersionView(h.cache, readable, canRead)
+		},
 	)
 
 	handleListOf(h, w, r, spec, func(s SecretListItem) string { return "/secrets/" + s.ID },
 		func(page []swarm.Secret) []SecretListItem {
 			items := make([]SecretListItem, len(page))
 			for i, sec := range page {
-				items[i] = SecretListItem{Secret: sec, VersionFields: fields(sec.ID)}
+				items[i] = SecretListItem{Secret: sec, VersionFields: versions.Fields(sec.ID)}
 			}
 
 			return items

@@ -154,68 +154,108 @@ func ReadableUsers(refs []cache.ServiceRef, canRead func(resource string) bool) 
 	return n
 }
 
-// AnnotateVersionRows places config or secret rows among their versions in g
-// and counts the readable services users names for each.
-func AnnotateVersionRows(
-	rows []Row,
-	g VersionGroups,
-	users func(id string) []cache.ServiceRef,
+// VersionView is one caller's view of a config or secret listing: the groups
+// among what it may read, and the services it may read that use each item.
+type VersionView struct {
+	Groups  VersionGroups
+	users   func(id string) []cache.ServiceRef
+	canRead func(resource string) bool
+}
+
+// ConfigVersionView groups the readable configs for a caller.
+func ConfigVersionView(
+	c *cache.Cache,
+	readable []swarm.Config,
 	canRead func(resource string) bool,
-) {
+) VersionView {
+	return VersionView{ConfigVersionGroups(readable), c.ServicesUsingConfig, canRead}
+}
+
+// SecretVersionView groups the readable secrets for a caller.
+func SecretVersionView(
+	c *cache.Cache,
+	readable []swarm.Secret,
+	canRead func(resource string) bool,
+) VersionView {
+	return VersionView{SecretVersionGroups(readable), c.ServicesUsingSecret, canRead}
+}
+
+// Fields is what the item with id adds to a listing.
+func (v VersionView) Fields(id string) VersionFields {
+	return v.Groups.Version(id).Fields(ReadableUsers(v.users(id), v.canRead))
+}
+
+// VersionedConfigs is the listing sel selects from readable, with each
+// config's version fields.
+func VersionedConfigs(
+	v VersionView,
+	readable []swarm.Config,
+	sel VersionSelection,
+) []VersionedConfig {
+	shown := SelectVersions(readable, func(c swarm.Config) string { return c.ID }, v.Groups, sel)
+	out := make([]VersionedConfig, len(shown))
+	for i, cfg := range shown {
+		out[i] = VersionedConfig{Config: cfg, VersionFields: v.Fields(cfg.ID)}
+	}
+
+	return out
+}
+
+// VersionedSecrets is VersionedConfigs for secrets.
+func VersionedSecrets(
+	v VersionView,
+	readable []swarm.Secret,
+	sel VersionSelection,
+) []VersionedSecret {
+	shown := SelectVersions(readable, func(s swarm.Secret) string { return s.ID }, v.Groups, sel)
+	out := make([]VersionedSecret, len(shown))
+	for i, sec := range shown {
+		out[i] = VersionedSecret{Secret: sec, VersionFields: v.Fields(sec.ID)}
+	}
+
+	return out
+}
+
+// AnnotateVersionRows places config or secret rows among their versions.
+func AnnotateVersionRows(rows []Row, v VersionView) {
 	for i := range rows {
-		v := g.Version(rows[i].ID)
-		rows[i].VersionOf, rows[i].VersionInferred = v.Of, v.Inferred
-		rows[i].NewestVersion, rows[i].OlderVersions = v.Newest, v.OlderVersions
-		rows[i].UsedBy = new(ReadableUsers(users(rows[i].ID), canRead))
+		f := v.Fields(rows[i].ID)
+		rows[i].VersionOf, rows[i].VersionInferred = f.VersionOf, f.VersionInferred
+		rows[i].NewestVersion, rows[i].OlderVersions = f.NewestVersion, f.OlderVersions
+		rows[i].UsedBy = new(f.UsedBy)
 	}
 }
 
 // VersionRef names one config or secret in a VersionIndex.
 type VersionRef struct{ ID, Name string }
 
-// kindIndex is the index of one kind: each group's members, each member's
-// group, and the services each one is used by.
-type kindIndex struct {
-	groups map[versions.GroupKey][]VersionRef
-	keys   map[string]versions.GroupKey
-	users  versions.Users
-}
-
-func indexOf(items []versions.Item, users versions.Users) kindIndex {
-	index := kindIndex{
-		groups: map[versions.GroupKey][]VersionRef{},
-		keys:   make(map[string]versions.GroupKey, len(items)),
-		users:  users,
-	}
-
-	for _, it := range items {
-		key := versions.Key(it)
-		index.groups[key] = append(index.groups[key], VersionRef{it.ID, it.Name})
-		index.keys[it.ID] = key
-	}
-
-	return index
-}
-
-// VersionIndex holds every config's and secret's group key and users, rebuilt
-// once per cache generation, so one item's siblings are found without matching
-// every name in the cluster on each read. It keeps the keys of the build before
-// too, so a version that moved groups can be found in the one it left.
+// VersionIndex holds every config's and secret's group, rebuilt once per cache
+// generation, so one item's siblings are found without matching every name in
+// the cluster on each read.
 type VersionIndex struct {
 	cache *cache.Cache
 
 	mu         sync.Mutex
 	built      bool
 	generation uint64
-	configs    kindIndex
-	secrets    kindIndex
-	previous   struct{ configs, secrets map[string]versions.GroupKey }
+	configs    map[versions.GroupKey][]VersionRef
+	secrets    map[versions.GroupKey][]VersionRef
 }
 
 // NewVersionIndex indexes c's configs and secrets on first use.
 func NewVersionIndex(c *cache.Cache) *VersionIndex { return &VersionIndex{cache: c} }
 
-func (x *VersionIndex) current() (configs, secrets kindIndex) {
+func groupsOf(items []versions.Item) map[versions.GroupKey][]VersionRef {
+	groups := map[versions.GroupKey][]VersionRef{}
+	for _, it := range items {
+		key := versions.Key(it)
+		groups[key] = append(groups[key], VersionRef{it.ID, it.Name})
+	}
+
+	return groups
+}
+
+func (x *VersionIndex) current() (configs, secrets map[versions.GroupKey][]VersionRef) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 
@@ -233,27 +273,11 @@ func (x *VersionIndex) current() (configs, secrets kindIndex) {
 		secretItems = append(secretItems, versions.SecretItem(s))
 		return true
 	})
-	configUsers, secretUsers := versions.UsersOf(x.cache.EachService)
 
-	x.previous.configs, x.previous.secrets = x.configs.keys, x.secrets.keys
-	x.configs = indexOf(configItems, configUsers)
-	x.secrets = indexOf(secretItems, secretUsers)
+	x.configs, x.secrets = groupsOf(configItems), groupsOf(secretItems)
 	x.built, x.generation = true, generation
 
 	return x.configs, x.secrets
-}
-
-// ConfigUsers is the services that need a config: those whose spec or previous
-// spec references it, since a rollback needs the version it restores.
-func (x *VersionIndex) ConfigUsers(id string) []cache.ServiceRef {
-	configs, _ := x.current()
-	return configs.users[id]
-}
-
-// SecretUsers is ConfigUsers for a secret.
-func (x *VersionIndex) SecretUsers(id string) []cache.ServiceRef {
-	_, secrets := x.current()
-	return secrets.users[id]
 }
 
 // ConfigVersion is the Version of one config, grouped with only the readable
@@ -262,7 +286,7 @@ func (x *VersionIndex) ConfigVersion(cfg swarm.Config, canRead func(resource str
 	configs, _ := x.current()
 	siblings := []swarm.Config{cfg}
 
-	for _, ref := range configs.groups[versions.Key(versions.ConfigItem(cfg))] {
+	for _, ref := range configs[versions.Key(versions.ConfigItem(cfg))] {
 		if ref.ID == cfg.ID || !canRead("config:"+ref.Name) {
 			continue
 		}
@@ -279,7 +303,7 @@ func (x *VersionIndex) SecretVersion(sec swarm.Secret, canRead func(resource str
 	_, secrets := x.current()
 	siblings := []swarm.Secret{sec}
 
-	for _, ref := range secrets.groups[versions.Key(versions.SecretItem(sec))] {
+	for _, ref := range secrets[versions.Key(versions.SecretItem(sec))] {
 		if ref.ID == sec.ID || !canRead("secret:"+ref.Name) {
 			continue
 		}
@@ -293,50 +317,48 @@ func (x *VersionIndex) SecretVersion(sec swarm.Secret, canRead func(resource str
 
 // DigestsTouchedBy names the configs and secrets whose digest event changes
 // besides any it names itself: the other versions in a config's or secret's
-// group, and in the group a relabel took it out of. A service's references
+// group, and in the group an update took it out of. A service's references
 // need nothing here: the cache sends ref_changed for each one gained or lost.
 func (x *VersionIndex) DigestsTouchedBy(event cache.Event) (configs, secrets []VersionRef) {
 	switch resource := event.Resource.(type) {
 	case swarm.Config:
 		all, _ := x.current()
-		key := versions.Key(versions.ConfigItem(resource))
+		keys := []versions.GroupKey{versions.Key(versions.ConfigItem(resource))}
+		if previous, ok := event.Previous.(swarm.Config); ok {
+			keys = append(keys, versions.Key(versions.ConfigItem(previous)))
+		}
 
-		return x.touched(all, x.previous.configs, resource.ID, key), nil
+		return touched(all, resource.ID, keys), nil
 
 	case swarm.Secret:
 		_, all := x.current()
-		key := versions.Key(versions.SecretItem(resource))
+		keys := []versions.GroupKey{versions.Key(versions.SecretItem(resource))}
+		if previous, ok := event.Previous.(swarm.Secret); ok {
+			keys = append(keys, versions.Key(versions.SecretItem(previous)))
+		}
 
-		return nil, x.touched(all, x.previous.secrets, resource.ID, key)
+		return nil, touched(all, resource.ID, keys)
 
 	default:
 		return nil, nil
 	}
 }
 
-func (x *VersionIndex) touched(
-	index kindIndex,
-	previous map[string]versions.GroupKey,
+// touched is every member but id of the groups keys name, each group once.
+func touched(
+	groups map[versions.GroupKey][]VersionRef,
 	id string,
-	key versions.GroupKey,
+	keys []versions.GroupKey,
 ) []VersionRef {
-	x.mu.Lock()
-	left, moved := previous[id]
-	x.mu.Unlock()
-
-	refs := others(index.groups[key], id)
-	if moved && left != key {
-		refs = append(refs, others(index.groups[left], id)...)
-	}
-
-	return refs
-}
-
-func others(refs []VersionRef, id string) []VersionRef {
 	var out []VersionRef
-	for _, ref := range refs {
-		if ref.ID != id {
-			out = append(out, ref)
+	for i, key := range keys {
+		if slices.Contains(keys[:i], key) {
+			continue
+		}
+		for _, ref := range groups[key] {
+			if ref.ID != id {
+				out = append(out, ref)
+			}
 		}
 	}
 

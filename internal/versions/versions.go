@@ -5,7 +5,6 @@ package versions
 
 import (
 	"cmp"
-	"iter"
 	"regexp"
 	"slices"
 	"strings"
@@ -114,43 +113,6 @@ func SecretItem(s swarm.Secret) Item {
 // ConfigItem is what grouping reads of a config.
 func ConfigItem(c swarm.Config) Item {
 	return Item{c.ID, c.Spec.Name, c.Spec.Labels, c.CreatedAt}
-}
-
-// Users maps a config or secret ID to the services that need it: those whose
-// spec references it, and those whose previous spec does, since a rollback
-// restores that spec and so needs the version it names.
-type Users map[string][]cache.ServiceRef
-
-// UsersOf indexes services' config and secret references.
-func UsersOf(services iter.Seq[swarm.Service]) (configs, secrets Users) {
-	configs, secrets = Users{}, Users{}
-
-	for svc := range services {
-		ref := cache.ServiceRef{AtID: "/services/" + svc.ID, ID: svc.ID, Name: svc.Spec.Name}
-		seenConfigs, seenSecrets := map[string]bool{}, map[string]bool{}
-
-		for _, spec := range []*swarm.ServiceSpec{&svc.Spec, svc.PreviousSpec} {
-			if spec == nil || spec.TaskTemplate.ContainerSpec == nil {
-				continue
-			}
-
-			for _, c := range spec.TaskTemplate.ContainerSpec.Configs {
-				if !seenConfigs[c.ConfigID] {
-					seenConfigs[c.ConfigID] = true
-					configs[c.ConfigID] = append(configs[c.ConfigID], ref)
-				}
-			}
-
-			for _, s := range spec.TaskTemplate.ContainerSpec.Secrets {
-				if !seenSecrets[s.SecretID] {
-					seenSecrets[s.SecretID] = true
-					secrets[s.SecretID] = append(secrets[s.SecretID], ref)
-				}
-			}
-		}
-	}
-
-	return configs, secrets
 }
 
 // SecretItems is SecretItem over a slice.

@@ -2,25 +2,23 @@ package api
 
 import (
 	"net/http"
-	"sync"
 
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // versionedList narrows spec's readable items by ?versions and ?versionsOf,
 // gives its CSV rows their version columns, and returns what each item of the
-// JSON page gains. A CSV export holds every version.
+// JSON page gains once rendered. A CSV export holds every version.
 func versionedList[T any](
 	h *Handlers,
 	r *http.Request,
 	spec *listSpec[T],
 	id func(T) string,
-	group func(readable []T) cluster.VersionGroups,
-	users func(id string) []cache.ServiceRef,
-) func(id string) cluster.VersionFields {
-	var groups cluster.VersionGroups
+	view func(readable []T, canRead func(string) bool) cluster.VersionView,
+) *cluster.VersionView {
+	versions := new(cluster.VersionView)
 
+	// Runs only once a page is rendered, after a 304 would have answered.
 	spec.narrow = func(readable []T) ([]T, error) {
 		query := r.URL.Query()
 		searching := query.Get("search") != "" || query.Get("filter") != ""
@@ -36,23 +34,18 @@ func versionedList[T any](
 			sel.All = true
 		}
 
-		groups = group(readable)
+		*versions = view(readable, h.readChecker(r))
 
-		return cluster.SelectVersions(readable, id, groups, sel), nil
+		return cluster.SelectVersions(readable, id, versions.Groups, sel), nil
 	}
-
-	// Built on first use: a 304 answers before anything is rendered.
-	canRead := sync.OnceValue(func() func(string) bool { return h.readChecker(r) })
 
 	rows := spec.rows
 	spec.rows = func(page []T) []cluster.Row {
 		out := rows(page)
-		cluster.AnnotateVersionRows(out, groups, users, canRead())
+		cluster.AnnotateVersionRows(out, *versions)
 
 		return out
 	}
 
-	return func(itemID string) cluster.VersionFields {
-		return groups.Version(itemID).Fields(cluster.ReadableUsers(users(itemID), canRead()))
-	}
+	return versions
 }

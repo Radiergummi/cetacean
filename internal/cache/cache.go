@@ -40,6 +40,10 @@ type Event struct {
 	Resource  any       `json:"resource,omitempty"`
 	HistoryID uint64    `json:"-"`
 
+	// Previous is the record an update replaced, for a reader that must know
+	// what changed: a config or secret relabelled out of one version group.
+	Previous any `json:"-"`
+
 	// Service and Stack name what a removed resource belonged to, which the
 	// cache can no longer resolve once it is gone.
 	Service string `json:"-"`
@@ -414,6 +418,8 @@ func ExtractName(e Event) string {
 
 // --- Cross-reference event support ---
 
+// refSet is what a service references, each mapped to whether its current
+// spec does. A config or secret its previous spec alone names maps to false.
 type refSet struct {
 	configs  map[string]bool
 	secrets  map[string]bool
@@ -427,6 +433,14 @@ func serviceRefs(s swarm.Service) refSet {
 		secrets:  make(map[string]bool),
 		networks: make(map[string]bool),
 		volumes:  make(map[string]bool),
+	}
+	if prev := s.PreviousSpec; prev != nil && prev.TaskTemplate.ContainerSpec != nil {
+		for _, c := range prev.TaskTemplate.ContainerSpec.Configs {
+			r.configs[c.ConfigID] = false
+		}
+		for _, s := range prev.TaskTemplate.ContainerSpec.Secrets {
+			r.secrets[s.SecretID] = false
+		}
 	}
 	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
 		for _, c := range cs.Configs {
@@ -450,14 +464,16 @@ func serviceRefs(s swarm.Service) refSet {
 func (c *Cache) notifyRefChanges(old, new refSet) {
 	// Named after the referenced resource, which is what every scoped stream
 	// authorizes on; volumes are keyed by name already.
+	// A reference moving between the current and the previous spec changes
+	// it too: the service now holds it for a rollback only, or again for real.
 	diffNotify := func(typ EventType, oldSet, newSet map[string]bool, name func(string) string) {
-		for id := range oldSet {
-			if !newSet[id] {
+		for id, was := range oldSet {
+			if now, ok := newSet[id]; !ok || now != was {
 				c.notify(Event{Type: typ, Action: "ref_changed", ID: id, Name: name(id)})
 			}
 		}
 		for id := range newSet {
-			if !oldSet[id] {
+			if _, ok := oldSet[id]; !ok {
 				c.notify(Event{Type: typ, Action: "ref_changed", ID: id, Name: name(id)})
 			}
 		}
@@ -1175,14 +1191,15 @@ func (c *Cache) ListTasksByNode(nodeID string) []swarm.Task {
 
 // --- Cross-references ---
 
-// ServicesUsingConfig returns services that reference the given config ID.
+// ServicesUsingConfig returns services whose spec or previous spec references
+// the given config ID; Rollback marks the latter.
 func (c *Cache) ServicesUsingConfig(configID string) []ServiceRef {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.serviceRef.lookup(c.serviceRef.byConfig, configID, c.services)
 }
 
-// ServicesUsingSecret returns services that reference the given secret ID.
+// ServicesUsingSecret is ServicesUsingConfig for a secret.
 func (c *Cache) ServicesUsingSecret(secretID string) []ServiceRef {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

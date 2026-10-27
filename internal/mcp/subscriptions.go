@@ -136,9 +136,11 @@ func (s *Server) eventKeys(event cache.Event) []eventKey {
 			keys = append(keys, stackKey(stack))
 		}
 
-		configs, secrets := s.versions.DigestsTouchedBy(event)
-		keys = append(keys, refKeys(cache.EventConfig, configs)...)
-		keys = append(keys, refKeys(cache.EventSecret, secrets)...)
+		if s.notifications.watchesVersions() {
+			configs, secrets := s.versions.DigestsTouchedBy(event)
+			keys = append(keys, refKeys(cache.EventConfig, configs)...)
+			keys = append(keys, refKeys(cache.EventSecret, secrets)...)
+		}
 
 	case cache.EventNode, cache.EventStack, cache.EventSync:
 	}

@@ -208,7 +208,7 @@ func TestListVersions(t *testing.T) {
 				if lines[0] != "name,stack,version of,newest,used by,id" || len(lines) != 6 {
 					t.Fatalf("csv = %q, want a header and five versions", body)
 				}
-				if !slices.Contains(lines, "db_v2,,db,,1,db_v2") ||
+				if !slices.Contains(lines, "db_v2,,db,false,1,db_v2") ||
 					!slices.Contains(lines, "db_v3,,db,true,0,db_v3") {
 					t.Errorf("csv = %q, want each version's group, newest flag and users", body)
 				}

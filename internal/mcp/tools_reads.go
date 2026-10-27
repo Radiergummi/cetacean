@@ -79,7 +79,7 @@ func (s *Server) readTools() []toolDef {
 				"find",
 				mcplib.WithToolTitle("Find cluster resources"),
 				mcplib.WithDescription(
-					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type; there `limit` caps the matches per type and there is no paging, so `total` counts every match across the cluster and `counts` breaks it down per type — narrow with `type` to page through one of them. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type. Configs and secrets list only the newest version of each group rotation left behind unless `versions` is `all`.",
+					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type; there `limit` caps the matches per type and there is no paging, so `total` counts every match across the cluster and `counts` breaks it down per type — narrow with `type` to page through one of them. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type. Configs and secrets list only the newest version of each group rotation left behind, unless `versions` is `all` or a `query` or `label` is given.",
 				),
 				mcplib.WithOutputSchema[findResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -127,7 +127,7 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithString("versions",
 					mcplib.Enum("newest", "all"),
 					mcplib.Description(
-						"With `type: configs` or `secrets`: `newest` (the default) lists only the newest readable version of each group of versions, with `olderVersions` counting the rest; `all` lists every version.",
+						"With `type: configs` or `secrets`: `newest` lists only the newest readable version of each group of versions, with `olderVersions` counting the rest; `all` lists every version. The default is `newest`, or `all` when `query` or `label` is given, so an older version can be found by name; `stack`, `state`, `node` and `image` keep `newest`.",
 					),
 				),
 				mcplib.WithNumber("limit",

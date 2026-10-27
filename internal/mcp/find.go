@@ -95,16 +95,23 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		label: strings.TrimSpace(req.GetString("label", "")),
 	}
 
-	groups, users := s.versionGroups(listed)
-	if groups != nil {
-		sel, err := cluster.ParseVersionSelection(
-			req.GetString("versions", ""), "", !filters.empty(),
-		)
+	// A name or label can find an older version; narrowing by where something
+	// runs or which stack it is in still lists only the newest.
+	view, versioned := s.versionView(ctx, listed)
+	if versioned {
+		searching := filters.query != "" || filters.label != ""
+
+		sel, err := cluster.ParseVersionSelection(req.GetString("versions", ""), "", searching)
 		if err != nil {
 			return "", err
 		}
 
-		rows = cluster.SelectVersions(rows, func(r cluster.Row) string { return r.ID }, groups, sel)
+		rows = cluster.SelectVersions(
+			rows,
+			func(r cluster.Row) string { return r.ID },
+			view.Groups,
+			sel,
+		)
 	}
 
 	// Only the label filter reads the labels, and it is the rarest of the six;
@@ -120,8 +127,8 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 	total := len(rows)
 	rows = paginate(rows, req)
 
-	if groups != nil {
-		cluster.AnnotateVersionRows(rows, groups, users, s.readPredicate(ctx))
+	if versioned {
+		cluster.AnnotateVersionRows(rows, view)
 	}
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
@@ -254,18 +261,16 @@ func (s *Server) rowsFor(
 	}
 }
 
-// versionGroups groups a config or secret listing, which holds only what the
-// caller may read, and names who uses each; any other listing has no groups.
-func (s *Server) versionGroups(
-	listed any,
-) (cluster.VersionGroups, func(id string) []cache.ServiceRef) {
+// versionView groups a config or secret listing, which holds only what the
+// caller may read; any other listing has no versions.
+func (s *Server) versionView(ctx context.Context, listed any) (cluster.VersionView, bool) {
 	switch items := listed.(type) {
 	case []swarm.Config:
-		return cluster.ConfigVersionGroups(items), s.versions.ConfigUsers
+		return cluster.ConfigVersionView(s.cache, items, s.readPredicate(ctx)), true
 	case []swarm.Secret:
-		return cluster.SecretVersionGroups(items), s.versions.SecretUsers
+		return cluster.SecretVersionView(s.cache, items, s.readPredicate(ctx)), true
 	default:
-		return nil, nil
+		return cluster.VersionView{}, false
 	}
 }
 

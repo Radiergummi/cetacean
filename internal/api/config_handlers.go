@@ -49,15 +49,18 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		rows:     cluster.RowsForConfigs,
 	}
 
-	fields := versionedList(
-		h, r, &spec, configID, cluster.ConfigVersionGroups, h.versions.ConfigUsers,
+	versions := versionedList(
+		h, r, &spec, configID,
+		func(readable []swarm.Config, canRead func(string) bool) cluster.VersionView {
+			return cluster.ConfigVersionView(h.cache, readable, canRead)
+		},
 	)
 
 	handleListOf(h, w, r, spec, func(c ConfigListItem) string { return "/configs/" + c.ID },
 		func(page []swarm.Config) []ConfigListItem {
 			items := make([]ConfigListItem, len(page))
 			for i, cfg := range page {
-				items[i] = ConfigListItem{Config: cfg, VersionFields: fields(cfg.ID)}
+				items[i] = ConfigListItem{Config: cfg, VersionFields: versions.Fields(cfg.ID)}
 			}
 
 			return items

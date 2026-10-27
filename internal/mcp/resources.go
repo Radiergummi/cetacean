@@ -247,46 +247,21 @@ func (s *Server) readResourceContents(
 // what find lists by default, each group's newest readable version, with the
 // version fields its rows carry. Any other listing passes through.
 func (s *Server) versionedListing(ctx context.Context, listed any) any {
-	canRead := s.readPredicate(ctx)
 	newest := cluster.VersionSelection{}
 
 	switch items := listed.(type) {
 	case []swarm.Config:
-		groups := cluster.ConfigVersionGroups(items)
-		shown := cluster.SelectVersions(items, configID, groups, newest)
-		out := make([]cluster.VersionedConfig, len(shown))
-		for i, cfg := range shown {
-			usedBy := cluster.ReadableUsers(s.versions.ConfigUsers(cfg.ID), canRead)
-			out[i] = cluster.VersionedConfig{
-				Config:        cfg,
-				VersionFields: groups.Version(cfg.ID).Fields(usedBy),
-			}
-		}
-
-		return out
+		view := cluster.ConfigVersionView(s.cache, items, s.readPredicate(ctx))
+		return cluster.VersionedConfigs(view, items, newest)
 
 	case []swarm.Secret:
-		groups := cluster.SecretVersionGroups(items)
-		shown := cluster.SelectVersions(items, secretID, groups, newest)
-		out := make([]cluster.VersionedSecret, len(shown))
-		for i, sec := range shown {
-			usedBy := cluster.ReadableUsers(s.versions.SecretUsers(sec.ID), canRead)
-			out[i] = cluster.VersionedSecret{
-				Secret:        sec,
-				VersionFields: groups.Version(sec.ID).Fields(usedBy),
-			}
-		}
-
-		return out
+		view := cluster.SecretVersionView(s.cache, items, s.readPredicate(ctx))
+		return cluster.VersionedSecrets(view, items, newest)
 
 	default:
 		return listed
 	}
 }
-
-func configID(c swarm.Config) string { return c.ID }
-
-func secretID(s swarm.Secret) string { return s.ID }
 
 // composeDoc renders the document both compose resources return.
 func composeDoc(file compose.File, warnings []string) (composeDocument, error) {

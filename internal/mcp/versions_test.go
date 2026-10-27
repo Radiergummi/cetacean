@@ -27,7 +27,10 @@ func versionsServer(t *testing.T) (*Server, context.Context) {
 		c.SetSecret(swarm.Secret{
 			ID:        name,
 			CreatedAt: time.Date(2026, 1, 1+i%3, 0, 0, 0, 0, time.UTC),
-			Spec:      swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+			Spec: swarm.SecretSpec{Annotations: swarm.Annotations{
+				Name:   name,
+				Labels: map[string]string{"com.docker.stack.namespace": "shop"},
+			}},
 		})
 	}
 
@@ -129,6 +132,15 @@ func TestFindListsEverySecretVersion(t *testing.T) {
 	if want := []string{"app_v1", "app_v2", "db_v1", "db_v2", "db_v3"}; total != 5 ||
 		!slices.Equal(ids, want) {
 		t.Errorf("ids = %v (total %d), want %v", ids, total, want)
+	}
+}
+
+// Narrowing by where a version lives keeps the newest-only default.
+func TestFindByStackListsTheNewestVersions(t *testing.T) {
+	rows, total := findSecrets(t, map[string]any{"stack": "shop"})
+
+	if total != 2 || len(rows) != 2 {
+		t.Errorf("rows = %+v (total %d), want the two newest versions", rows, total)
 	}
 }
 

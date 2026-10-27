@@ -8001,6 +8001,11 @@ components:
           type: string
         name:
           type: string
+        rollback:
+          type: boolean
+          description: >-
+            For a config or secret, true when only the service's previous spec names it,
+            which a rollback would restore. Absent otherwise.
 
     ServiceListItem:
       type: object

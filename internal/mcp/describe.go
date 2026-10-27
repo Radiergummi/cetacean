@@ -153,19 +153,15 @@ func (s *Server) digestOf(
 
 	case swarm.Config:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID))
-		canRead := s.readPredicate(ctx)
-		version := s.versions.ConfigVersion(resource, canRead)
-		usedBy := cluster.ReadableUsers(s.versions.ConfigUsers(resource.ID), canRead)
+		version := s.versions.ConfigVersion(resource, s.readPredicate(ctx))
 
-		return withVersion(cluster.ConfigDigest(resource, users), version, usedBy), nil
+		return withVersion(cluster.ConfigDigest(resource, users), version, len(users)), nil
 
 	case swarm.Secret:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID))
-		canRead := s.readPredicate(ctx)
-		version := s.versions.SecretVersion(resource, canRead)
-		usedBy := cluster.ReadableUsers(s.versions.SecretUsers(resource.ID), canRead)
+		version := s.versions.SecretVersion(resource, s.readPredicate(ctx))
 
-		return withVersion(cluster.SecretDigest(resource, users), version, usedBy), nil
+		return withVersion(cluster.SecretDigest(resource, users), version, len(users)), nil
 
 	case network.Summary:
 		return cluster.NetworkDigest(

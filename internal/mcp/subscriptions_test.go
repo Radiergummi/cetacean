@@ -113,6 +113,29 @@ func TestSubscriptionSecretFollowsVersionsAndUsers(t *testing.T) {
 	assertUpdated(t, drainUpdated(t, name), "cetacean://secrets/sec-v1")
 }
 
+// The other versions of a config or secret are looked up only while someone
+// subscribes to one.
+func TestVersionSubscriptionsAreCounted(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+	name := t.Name()
+
+	srv.notifications.Subscribe(session(name), "cetacean://services/web", nil)
+	if srv.notifications.watchesVersions() {
+		t.Error("a service subscription counts as watching versions")
+	}
+
+	srv.notifications.Subscribe(session(name), "cetacean://configs/app", nil)
+	srv.notifications.Subscribe(session(name), "cetacean://configs/app", nil)
+	if !srv.notifications.watchesVersions() {
+		t.Error("a config subscription does not count")
+	}
+
+	srv.notifications.Unsubscribe(session(name), "cetacean://configs/app")
+	if srv.notifications.watchesVersions() {
+		t.Error("an unsubscribed config still counts")
+	}
+}
+
 func TestSubscriptionByNameResolvesToID(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-byname", "web_api", ""))
