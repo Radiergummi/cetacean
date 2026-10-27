@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed
+- Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
+- `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one
+- An MCP write the Docker engine refuses, or can't be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log
+- A history or `get_events` query naming a task as `<service>.<slot>` resolves only for callers who can read that service
 - A global service no node can run reads as running rather than pending wherever a service state is shown
 - The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
 - Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting

@@ -207,10 +207,12 @@ type Server struct {
 	iconBaseURL string
 
 	// registeredTools is the subset of toolCatalog() the server actually wired
-	// into mcp-go after applying the operations-level tier filter. The
-	// per-identity tools/list filter (filterToolsForIdentity) inspects this
-	// slice to know which tools may need further hiding from a given caller.
+	// into mcp-go after applying the operations-level tier filter.
 	registeredTools []toolDef
+
+	// toolGates holds every catalogued tool's gate by name, registered or
+	// not, for the per-identity tools/list and prompts/list filters.
+	toolGates map[string]toolGate
 
 	// registeredPrompts holds the prompts that passed the tier gate, so the
 	// per-identity prompts/list filter (filterPromptsForIdentity) can read
@@ -760,16 +762,12 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 
 	return toolVisibility{
 		allow: func(name string) bool {
-			spec, gated := toolACLSpecs[name]
-			if !gated {
+			gate := s.toolGates[name]
+			if gate == (toolGate{}) {
 				return true
 			}
-			if spec.resourceType == "*" {
-				// Tool acts across all types — visible if any grant exists.
-				return access.HasAnyGrant()
-			}
 
-			return access.Can(spec.permission, spec.resourceType)
+			return access.Can(gate.permission, gate.resourceType)
 		},
 		readable: func(resourceType string) bool {
 			return access.Can("read", resourceType)
@@ -787,7 +785,7 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 		return tools
 	}
 
-	return filterToolsByACLSpec(tools, visibility.allow)
+	return filterToolsByGate(tools, visibility.allow)
 }
 
 // filterPromptsForIdentity gates prompts/list, and prompts/get through the
@@ -853,45 +851,7 @@ func allTypesReadable(types []string, readable func(resourceType string) bool) b
 	return true
 }
 
-// toolACLSpec describes the resource type and permission required to call a
-// tool. Used by filterToolsForIdentity to decide whether to surface the tool
-// in tools/list. Tools not present in toolACLSpecs are always visible.
-type toolACLSpec struct {
-	resourceType string
-	permission   string
-}
-
-// toolACLSpecs maps tool names to the ACL key they evaluate at call time.
-// Keep aligned with the handlers in tools.go — adding a tool without an
-// entry here defaults to "always visible", which is safe (call-time ACL still
-// enforces) but means tools/list may advertise tools the caller cannot use.
-var toolACLSpecs = map[string]toolACLSpec{
-	"get_logs":               {"service", "read"},
-	"watch":                  {"service", "read"},
-	"scale_service":          {"service", "write"},
-	"update_service_image":   {"service", "write"},
-	"rollback_service":       {"service", "write"},
-	"restart_service":        {"service", "write"},
-	"remove_task":            {"service", "write"}, // task ACL delegates to parent service
-	"update_service":         {"service", "write"},
-	"update_node_labels":     {"node", "write"},
-	"update_node":            {"node", "write"},
-	"remove_service":         {"service", "write"},
-	"update_service_secrets": {"service", "write"},
-	"update_service_configs": {"service", "write"},
-	"update_service_mounts":  {"service", "write"},
-	"create_config":          {"config", "write"},
-	"create_secret":          {"secret", "write"},
-	"remove_config":          {"config", "write"},
-	"remove_secret":          {"secret", "write"},
-	"remove_network":         {"network", "write"},
-	"remove_volume":          {"volume", "write"},
-	// "find" is intentionally absent — it returns hits across many types,
-	// each individually ACL-filtered, so it should remain visible even to
-	// callers with grants on only a subset.
-}
-
-func filterToolsByACLSpec(tools []mcplib.Tool, allow func(name string) bool) []mcplib.Tool {
+func filterToolsByGate(tools []mcplib.Tool, allow func(name string) bool) []mcplib.Tool {
 	out := make([]mcplib.Tool, 0, len(tools))
 	for _, t := range tools {
 		if allow(t.Name) {

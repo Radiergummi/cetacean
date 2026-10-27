@@ -8,11 +8,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// removeSpec describes how to remove a resource. Used by handleRemove to
-// eliminate per-resource boilerplate for simple (non-force) removal handlers.
+// removeSpec describes how to remove a resource addressed by the "id" path
+// value. Used by handleRemove for the simple (non-force) removal handlers.
 type removeSpec[T any] struct {
 	resource     string // e.g. "task", "config"
-	pathKey      string // path value key: "id" or "name"
 	getter       func(string) (T, bool)
 	remove       func(ctx context.Context, key string) error
 	conflictCode string
@@ -23,7 +22,7 @@ func handleRemove[T any](
 	r *http.Request,
 	spec removeSpec[T],
 ) {
-	key := r.PathValue(spec.pathKey)
+	key := r.PathValue("id")
 
 	if _, ok := lookupOr404(w, r, spec.resource, key, spec.getter); !ok {
 		return

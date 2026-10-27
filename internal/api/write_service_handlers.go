@@ -99,6 +99,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
+	req.Image = cluster.ServiceImage(req.Image)
 	if req.Image == "" {
 		writeErrorCode(w, r, "SVC006", "image is required")
 		return
@@ -172,7 +173,6 @@ func (h *Handlers) checkHostAccessHeld(
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Service]{
 		resource:     "service",
-		pathKey:      "id",
 		getter:       h.cache.GetService,
 		remove:       h.serviceLifecycle.RemoveService,
 		conflictCode: "SVC002",
@@ -276,7 +276,6 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) serviceLabelsSpec() getLabelsSpec[swarm.Service] {
 	return getLabelsSpec[swarm.Service]{
 		resource:    "service",
-		pathKey:     "id",
 		typeName:    "ServiceLabels",
 		getter:      h.cache.GetService,
 		aclResource: func(s swarm.Service) string { return "service:" + s.Spec.Name },
@@ -916,20 +915,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		if !h.checkAttachable(w, r, svc, cluster.AttachConfig, ref.ConfigID, cfg.Spec.Name, found) {
 			return
 		}
-		fileName := ref.FileName
-		if fileName == "" {
-			fileName = "/" + cfg.Spec.Name
-		}
-		configs[i] = &swarm.ConfigReference{
-			ConfigID:   ref.ConfigID,
-			ConfigName: cfg.Spec.Name,
-			File: &swarm.ConfigReferenceFileTarget{
-				Name: fileName,
-				UID:  "0",
-				GID:  "0",
-				Mode: 0444,
-			},
-		}
+		configs[i] = cluster.ConfigReference(cfg, ref.FileName)
 	}
 
 	var currentConfigs []*swarm.ConfigReference
@@ -1037,20 +1023,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		if !h.checkAttachable(w, r, svc, cluster.AttachSecret, ref.SecretID, sec.Spec.Name, found) {
 			return
 		}
-		fileName := ref.FileName
-		if fileName == "" {
-			fileName = "/run/secrets/" + sec.Spec.Name
-		}
-		secrets[i] = &swarm.SecretReference{
-			SecretID:   ref.SecretID,
-			SecretName: sec.Spec.Name,
-			File: &swarm.SecretReferenceFileTarget{
-				Name: fileName,
-				UID:  "0",
-				GID:  "0",
-				Mode: 0444,
-			},
-		}
+		secrets[i] = cluster.SecretReference(sec, ref.FileName)
 	}
 
 	var currentSecrets []*swarm.SecretReference

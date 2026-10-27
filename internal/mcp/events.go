@@ -72,7 +72,9 @@ func (s *Server) toolGetEvents(
 		resourceType = string(types[0])
 	}
 
-	resource, err := cluster.ResolveIdentifier(s.cache, resourceType, req.GetString("resource", ""))
+	resource, err := cluster.ResolveIdentifier(
+		s.cache, resourceType, req.GetString("resource", ""), s.readPredicate(ctx),
+	)
 	if err = s.visibleAmbiguity(ctx, resourceType, err); err != nil {
 		return "", err
 	}

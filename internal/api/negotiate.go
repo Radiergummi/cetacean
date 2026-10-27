@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // ContentType represents the resolved content type for a request.
@@ -179,7 +180,7 @@ func addressesMember(escapedPath string) bool {
 		return false
 	}
 
-	_, resolvable := canonicalResolvers[collection]
+	_, resolvable := canonicalKinds[collection]
 
 	return resolvable || collection == "volumes" || collection == "stacks" ||
 		collection == "plugins" && identifier != "privileges"
@@ -191,11 +192,12 @@ func addressesMember(escapedPath string) bool {
 func (h *Handlers) namesReadableMember(r *http.Request, collection, identifier string) bool {
 	var resource string
 
-	switch resolve, resolvable := canonicalResolvers[collection]; {
+	switch kind, resolvable := canonicalKinds[collection]; {
 	case resolvable:
-		_, named, found, err := resolve(h.cache, identifier)
+		record, found, err := cluster.Lookup(h.cache, kind, identifier)
+		named := record.Resource()
 		if err != nil {
-			named, found = singularType[collection]+":"+identifier, true
+			named, found = kind+":"+identifier, true
 		}
 		if !found {
 			return false

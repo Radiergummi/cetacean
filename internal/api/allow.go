@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -43,6 +44,13 @@ func (h *Handlers) tiered(
 			return h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resource(r))
 		},
 	}
+}
+
+// operation is tiered at the level the shared table gives each operation.
+func (h *Handlers) operation(
+	resource func(*http.Request) string,
+) func(cluster.Operation) tieredChain {
+	return func(op cluster.Operation) tieredChain { return h.tiered(resource, op.Tier()) }
 }
 
 func (c tieredChain) Append(constructors ...Constructor) tieredChain {
