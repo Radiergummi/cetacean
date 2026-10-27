@@ -78,6 +78,33 @@ function matchQuery(
     );
   }
 
+  if (query.includes("container_label_com_docker_swarm_node_id")) {
+    const pairs = new Set(
+      dataset.tasks
+        .filter(({ DesiredState }) => DesiredState === "running")
+        .map(({ ServiceID, NodeID }) => `${ServiceID}/${NodeID ?? ""}`),
+    );
+
+    return [...pairs].map((pair) => {
+      const [serviceId = "", nodeId = ""] = pair.split("/");
+      const profile = profileFor(dataset.servicesByID.get(serviceId)?.Spec.Name ?? serviceId);
+      const memory = query.includes("container_memory");
+
+      return build(
+        {
+          base: memory ? profile.memBase : profile.cpuBase,
+          amplitude: memory ? profile.memDrift : profile.cpuSpike,
+          noise: profile.noiseScale,
+          period: profile.period,
+        },
+        {
+          container_label_com_docker_swarm_service_id: serviceId,
+          container_label_com_docker_swarm_node_id: nodeId,
+        },
+      );
+    });
+  }
+
   if (query.includes("container_cpu")) {
     return dataset.services.map((service) => {
       const profile = profileFor(service.Spec.Name);

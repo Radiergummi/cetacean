@@ -190,7 +190,10 @@ The topology page has two views.
 - Logical: one card per service, grouped into its stack, with an edge between any two services sharing an overlay
   network, listing the shared networks. Hovering a card dims everything it isn't connected to, and the legend maps
   colors to stacks.
-- Physical: one card per cluster node, listing the tasks placed on it.
+- Physical: one card per cluster node, listing the tasks placed on it. With cAdvisor in [monitoring][monitoring],
+  each service's box shows its CPU and memory on that node; with node-exporter, each node's header shows its CPU
+  and memory use. The **Network** selector emphasises the services attached to one overlay network and dims the
+  rest, and the choice stays in the URL.
 
 Both views pan, zoom and let you drag cards, and clicking a service opens its detail page.
 

@@ -16,14 +16,19 @@ import SegmentedControl from "../components/SegmentedControl";
 import GroupNode from "../components/topology/GroupNode";
 import { HighlightProvider } from "../components/topology/HighlightContext";
 import NetworkEdge from "../components/topology/NetworkEdge";
-import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
+import PhysicalNodeCard, { type PhysicalNodeData } from "../components/topology/PhysicalNodeCard";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
+import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import { useNodeMetrics } from "../hooks/useNodeMetrics";
+import { usePlacementMetrics } from "../hooks/usePlacementMetrics";
+import { useUrlParam } from "../hooks/useUrlParam";
 import { computeLayout } from "../lib/layoutElk";
 import {
   networkGraphToReactFlow,
   placementGraphToReactFlow,
+  placementNetworks,
   stackColors,
 } from "../lib/topologyTransform";
 import { getErrorMessage } from "../lib/utils";
@@ -188,8 +193,37 @@ function LogicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) 
   );
 }
 
-function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean }) {
-  const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
+function PhysicalView({
+  data,
+  isMobile,
+  network,
+}: {
+  data: JGFGraph;
+  isMobile: boolean;
+  network: string | null;
+}) {
+  const placement = useMemo(() => placementGraphToReactFlow(data), [data]);
+  const usage = usePlacementMetrics();
+  const hasNodeExporter = isNodeExporterReady(useMonitoringStatus());
+  const { getForNode } = useNodeMetrics();
+
+  const nodes = useMemo(
+    () =>
+      placement.nodes.map((node) => {
+        const nodeData = node.data as PhysicalNodeData;
+
+        return {
+          ...node,
+          data: {
+            ...nodeData,
+            network,
+            usage,
+            nodeMetrics: hasNodeExporter ? getForNode(nodeData.label, nodeData.addr) : undefined,
+          },
+        };
+      }),
+    [placement, network, usage, hasNodeExporter, getForNode],
+  );
 
   if (Object.values(data.nodes).every(({ metadata }) => metadata.kind !== "node")) {
     return (
@@ -229,6 +263,7 @@ function PhysicalView({ data, isMobile }: { data: JGFGraph; isMobile: boolean })
 export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
   const [view, setView] = useState<View>("logical");
+  const [network, setNetwork] = useUrlParam("network");
   const queryClient = useQueryClient();
 
   const {
@@ -243,13 +278,20 @@ export default function Topology() {
   const networkData = topologyData?.graphs.find((graph) => graph.id === "network") ?? null;
   const placementData = topologyData?.graphs.find((graph) => graph.id === "placement") ?? null;
   const error = queryError ? getErrorMessage(queryError, "Failed to load topology") : null;
+  const networks = useMemo(
+    () => (placementData ? placementNetworks(placementData) : []),
+    [placementData],
+  );
+
+  // A network that has since gone, or was never readable, selects nothing.
+  const selectedNetwork = networks.some(({ id }) => id === network) ? network : null;
 
   useDebouncedInvalidation("/events", [["topology"]], 2_000);
 
   return (
     <div>
       <PageHeader title="Topology" />
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <SegmentedControl
           segments={[
             { value: "logical" as const, label: "Logical" },
@@ -258,6 +300,25 @@ export default function Topology() {
           value={view}
           onChange={setView}
         />
+        {view === "physical" && networks.length > 0 && (
+          <select
+            value={selectedNetwork ?? ""}
+            onChange={({ target }) => setNetwork(target.value || null)}
+            title="Emphasise the services on a network"
+            aria-label="Network"
+            className="h-8 rounded-md border bg-background px-2 text-xs"
+          >
+            <option value="">All networks</option>
+            {networks.map(({ id, name }) => (
+              <option
+                key={id}
+                value={id}
+              >
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading && <LoadingPage />}
@@ -298,6 +359,7 @@ export default function Topology() {
               <PhysicalView
                 data={placementData}
                 isMobile={isMobile}
+                network={selectedNetwork}
               />
             </ReactFlowProvider>
           ) : (

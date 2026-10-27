@@ -1,5 +1,10 @@
 import ResourceName from "../ResourceName";
+import { colorForValue } from "@/components/metrics/ResourceGauge";
+import type { NodeMetrics } from "@/hooks/useNodeMetrics";
+import { placementUsageKey, type PlacementUsage } from "@/hooks/usePlacementMetrics";
+import { formatBytes, formatPercentage } from "@/lib/format";
 import { replicaHealthColor } from "@/lib/statusColor";
+import { dimmedByNetwork } from "@/lib/topologyTransform";
 import type { NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,15 +15,59 @@ type ServiceSummary = {
   running: number;
   total: number;
   states: string[];
+  networks: string[];
 };
 
 export type PhysicalNodeData = {
   label: string;
+  nodeId: string;
+  addr: string | undefined;
   role: string;
   state: string;
   availability: string;
   services: ServiceSummary[];
+  network?: string | null | undefined;
+  usage?: Record<string, PlacementUsage> | undefined;
+  nodeMetrics?: NodeMetrics | undefined;
 };
+
+function NodeUsage({ metrics }: { metrics: NodeMetrics }) {
+  const figures = [
+    ["CPU", metrics.cpu],
+    ["Mem", metrics.memory],
+  ] as const;
+
+  return (
+    <span className="ms-auto flex gap-2 text-[10px] tabular-nums">
+      {figures.map(([label, value]) => (
+        <span
+          key={label}
+          style={value != null ? { color: colorForValue(value) } : undefined}
+          className={value == null ? "text-muted-foreground" : undefined}
+        >
+          {label} {value != null ? formatPercentage(value, 0) : "—"}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ServiceUsage({ usage }: { usage: PlacementUsage }) {
+  const figures = [
+    usage.cpu != null ? formatPercentage(usage.cpu, 1) : null,
+    usage.memory != null ? formatBytes(usage.memory) : null,
+  ].filter((figure) => figure !== null);
+
+  if (figures.length === 0) {
+    return null;
+  }
+
+  return (
+    <span className="ms-auto text-[11px] text-muted-foreground tabular-nums">
+      {figures.join(" · ")}
+    </span>
+  );
+}
 
 export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalNodeData }) {
   const navigate = useNavigate();
@@ -44,42 +93,49 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
         {data.availability !== "active" && (
           <span className="text-[10px] text-muted-foreground">{data.availability}</span>
         )}
+        {data.nodeMetrics && <NodeUsage metrics={data.nodeMetrics} />}
       </div>
 
       {data.services.length === 0 ? (
         <div className="text-xs text-muted-foreground">No running tasks</div>
       ) : (
         <div className="grid grid-cols-3 gap-2">
-          {data.services.map((svc) => (
-            <button
-              key={svc.serviceId}
-              type="button"
-              aria-label={`Service ${svc.serviceName}`}
-              className="cursor-pointer rounded-lg border bg-card p-2.5 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-              onClick={() => navigate(`/services/${svc.serviceId}`)}
-            >
-              <div
-                className="mb-0.5 truncate text-xs font-medium"
-                title={svc.serviceName}
+          {data.services.map((svc) => {
+            const usage = data.usage?.[placementUsageKey(svc.serviceId, data.nodeId)];
+
+            return (
+              <button
+                key={svc.serviceId}
+                type="button"
+                aria-label={`Service ${svc.serviceName}`}
+                data-dimmed={dimmedByNetwork(svc.networks, data.network ?? null) || undefined}
+                className="cursor-pointer rounded-lg border bg-card p-2.5 text-left shadow-sm transition-[box-shadow,opacity] hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-dimmed:opacity-30"
+                onClick={() => navigate(`/services/${svc.serviceId}`)}
               >
-                <ResourceName name={svc.serviceName} />
-              </div>
-              <div
-                className="mb-1 truncate text-[11px] text-muted-foreground"
-                title={svc.image}
-              >
-                {svc.image}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span
-                  className={`inline-block size-2 rounded-full ${replicaHealthColor(svc.running, svc.total)}`}
-                />
-                <span>
-                  {svc.running}/{svc.total} tasks
-                </span>
-              </div>
-            </button>
-          ))}
+                <div
+                  className="mb-0.5 truncate text-xs font-medium"
+                  title={svc.serviceName}
+                >
+                  <ResourceName name={svc.serviceName} />
+                </div>
+                <div
+                  className="mb-1 truncate text-[11px] text-muted-foreground"
+                  title={svc.image}
+                >
+                  {svc.image}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span
+                    className={`inline-block size-2 rounded-full ${replicaHealthColor(svc.running, svc.total)}`}
+                  />
+                  <span>
+                    {svc.running}/{svc.total} tasks
+                  </span>
+                  {usage && <ServiceUsage usage={usage} />}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

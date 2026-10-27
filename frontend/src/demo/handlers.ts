@@ -791,6 +791,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             role: node.Spec.Role,
             state: node.Status.State,
             availability: node.Spec.Availability,
+            addr: node.Status.Addr,
           },
         };
 
@@ -835,6 +836,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             "@context": context,
             kind: "service",
             image: (service?.Spec.TaskTemplate?.ContainerSpec?.Image ?? "").split("@")[0],
+            networks: (serviceNetworks.get(serviceId) ?? [])
+              .map((id) => ({ id: urn("network", id), name: overlays.get(id)?.Name ?? id }))
+              .sort((a, b) => (a.name < b.name ? -1 : 1)),
           },
         };
 
