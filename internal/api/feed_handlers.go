@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -269,7 +270,7 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 		}
 
 		var href string
-		if path := resourcePath(e.Type, e.ResourceID); path != "" {
+		if path := sse.ResourcePath(e.Type, e.ResourceID); path != "" {
 			href = absURL(r, path)
 		}
 
@@ -389,30 +390,6 @@ func recommendationTargetPath(rec recommendations.Recommendation) string {
 		return "/networks/" + rec.TargetID
 	default:
 		return "/cluster"
-	}
-}
-
-// resourcePath maps an event type and resource ID to the URL path for that resource.
-func resourcePath(typ cache.EventType, id string) string {
-	switch typ {
-	case cache.EventNode:
-		return "/nodes/" + id
-	case cache.EventService:
-		return "/services/" + id
-	case cache.EventTask:
-		return "/tasks/" + id
-	case cache.EventConfig:
-		return "/configs/" + id
-	case cache.EventSecret:
-		return "/secrets/" + id
-	case cache.EventNetwork:
-		return "/networks/" + id
-	case cache.EventVolume:
-		return "/volumes/" + id
-	case cache.EventStack:
-		return "/stacks/" + id
-	default:
-		return ""
 	}
 }
 
