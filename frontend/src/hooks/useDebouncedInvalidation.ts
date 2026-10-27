@@ -5,9 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
 /**
- * Subscribes to an SSE path and invalidates the given query keys
- * after a Debounce period. Used by detail pages, cluster overview,
- * and topology to trigger background refetches on data changes.
+ * Subscribes to an SSE path and invalidates the given query keys once per
+ * burst of events. The delay is timed from the burst's first event, so a
+ * stream that never goes quiet (a crash loop, a rollout) still refetches.
  */
 export function useDebouncedInvalidation(
   ssePath: string | undefined,
@@ -28,11 +28,7 @@ export function useDebouncedInvalidation(
         // wants the events themselves would open a second EventSource.
         onEventRef.current?.(event);
 
-        if (debounceRef.current) {
-          clearTimeout(debounceRef.current);
-        }
-
-        debounceRef.current = setTimeout(() => {
+        debounceRef.current ??= setTimeout(() => {
           debounceRef.current = null;
 
           for (const key of queryKeysRef.current) {
