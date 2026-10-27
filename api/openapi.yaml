@@ -7385,7 +7385,7 @@ components:
                 detail: urn:ietf:rfc:9457#detail
                 instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: about:blank
-            title: Requested Range Not Satisfiable
+            title: Range Not Satisfiable
             status: 416
             detail: range start is beyond the total number of items
             instance: /tasks

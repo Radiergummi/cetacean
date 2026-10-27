@@ -70,6 +70,10 @@ requirements:
       recommended HTTP status phrase for that code (e.g., "Not Found" for 404,
       and so on), although it MAY be localized to suit client preferences.
     url: https://www.rfc-editor.org/rfc/rfc9457#section-4.2.1
+    mutants:
+      - file: internal/api/problem.go
+        replace: "\t\treturn \"Range Not Satisfiable\""
+        with: "\t\treturn http.StatusText(status)"
 
   - id: new-problem-types-are-documented
     level: MUST
