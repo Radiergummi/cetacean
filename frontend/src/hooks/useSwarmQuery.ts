@@ -57,16 +57,30 @@ const filteredRefetchDelay = 750;
 type PageData<T> = FetchResult<CollectionResponse<T>>;
 type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 
-export function useSwarmQuery<T>(
-  queryKey: readonly unknown[],
-  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
-  sseType: string,
-  getId: (item: T) => string,
+export interface SwarmQueryOptions<T> {
+  queryKey: readonly unknown[];
+  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>;
+  sseType: string;
+  getId: (item: T) => string;
+  /** The server selects the rows, so an event can only prompt a refetch. */
+  filtered?: boolean | undefined;
+  /** Events this rejects leave the list alone; a sync always refetches. */
+  relevant?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
+  /** The rows are derived from the streamed resources, so a held remove refetches too. */
+  derived?: boolean | undefined;
+  onEvent?: ((event: SSEEvent) => void) | undefined;
+}
+
+export function useSwarmQuery<T>({
+  queryKey,
+  fetchFn,
+  sseType,
+  getId,
   filtered = false,
-  relevant?: (event: SSEEvent, loaded: readonly T[]) => boolean,
+  relevant,
   derived = false,
-  onEvent?: (event: SSEEvent) => void,
-) {
+  onEvent,
+}: SwarmQueryOptions<T>) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
