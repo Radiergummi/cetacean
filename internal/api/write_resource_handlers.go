@@ -13,7 +13,6 @@ import (
 func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Task]{
 		resource:     "task",
-		pathKey:      "id",
 		getter:       h.cache.GetTask,
 		remove:       h.resourceRemover.RemoveTask,
 		conflictCode: "TSK001",
@@ -23,7 +22,6 @@ func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[network.Summary]{
 		resource:     "network",
-		pathKey:      "id",
 		getter:       h.cache.GetNetwork,
 		remove:       h.resourceRemover.RemoveNetwork,
 		conflictCode: "NET001",

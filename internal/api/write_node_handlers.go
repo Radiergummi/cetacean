@@ -131,7 +131,6 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) nodeLabelsSpec() getLabelsSpec[swarm.Node] {
 	return getLabelsSpec[swarm.Node]{
 		resource:    "node",
-		pathKey:     "id",
 		typeName:    "NodeLabels",
 		getter:      h.cache.GetNode,
 		aclResource: nodeResource,

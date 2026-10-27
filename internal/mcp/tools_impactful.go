@@ -68,7 +68,6 @@ func (s *Server) impactfulTools() []toolDef {
 			gate:    toolGate{"service", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
-				"id",
 				"service",
 				s.resolveWrite("service"),
 				s.serviceRemoval,
@@ -96,7 +95,7 @@ func (s *Server) impactfulTools() []toolDef {
 			op:      cluster.OpRemoveTask,
 			gate:    toolGate{"task", "write"},
 			elicits: true,
-			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite, s.taskRemoval,
+			handler: s.removeResolvedHandler("task", s.resolveTaskWrite, s.taskRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveTask(ctx, id)
 				}),
@@ -121,7 +120,6 @@ func (s *Server) impactfulTools() []toolDef {
 			gate:    toolGate{"config", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
-				"id",
 				"config",
 				s.resolveWrite("config"),
 				s.configRemoval,
@@ -150,7 +148,6 @@ func (s *Server) impactfulTools() []toolDef {
 			gate:    toolGate{"secret", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
-				"id",
 				"secret",
 				s.resolveWrite("secret"),
 				s.secretRemoval,
@@ -179,7 +176,6 @@ func (s *Server) impactfulTools() []toolDef {
 			gate:    toolGate{"network", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
-				"id",
 				"network",
 				s.resolveWrite("network"),
 				s.networkRemoval,

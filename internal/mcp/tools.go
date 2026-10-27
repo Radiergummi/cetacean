@@ -557,17 +557,16 @@ func (s *Server) toolRestartService(
 }
 
 // removeResolvedHandler builds a handler for the `{ id } → {"removed":true}`
-// shape the remove_* tools share. idKey is the schema property name (`name`
-// for volumes); resolve checks the ACL and returns what remove is passed;
-// impact, when set, builds the question put to a person.
+// shape the remove_* tools share. resolve checks the ACL and returns what
+// remove is passed; impact builds the question put to a person.
 func (s *Server) removeResolvedHandler(
-	idKey, resource string,
+	resource string,
 	resolve func(ctx context.Context, id string) (string, error),
 	impact func(ctx context.Context, id string) (confirmation, error),
 	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-		arg, err := req.RequireString(idKey)
+		arg, err := req.RequireString("id")
 		if err != nil {
 			return "", err
 		}
@@ -576,14 +575,11 @@ func (s *Server) removeResolvedHandler(
 			return "", err
 		}
 
-		confirmed := false
-		if impact != nil {
-			confirmed, err = s.confirm(ctx, req, func() (confirmation, error) {
-				return impact(ctx, id)
-			})
-			if err != nil {
-				return "", err
-			}
+		confirmed, err := s.confirm(ctx, req, func() (confirmation, error) {
+			return impact(ctx, id)
+		})
+		if err != nil {
+			return "", err
 		}
 
 		wc, err := s.requireWriteClient()
@@ -593,9 +589,7 @@ func (s *Server) removeResolvedHandler(
 		if err := remove(wc, ctx, id); err != nil {
 			return "", removalError(err, resource, id)
 		}
-		if impact != nil {
-			logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
-		}
+		logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
 		return marshalResult(removalResult{Removed: true})
 	}
 }

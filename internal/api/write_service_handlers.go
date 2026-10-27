@@ -135,7 +135,6 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Service]{
 		resource:     "service",
-		pathKey:      "id",
 		getter:       h.cache.GetService,
 		remove:       h.serviceLifecycle.RemoveService,
 		conflictCode: "SVC002",
@@ -217,7 +216,6 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) serviceLabelsSpec() getLabelsSpec[swarm.Service] {
 	return getLabelsSpec[swarm.Service]{
 		resource:    "service",
-		pathKey:     "id",
 		typeName:    "ServiceLabels",
 		getter:      h.cache.GetService,
 		aclResource: func(s swarm.Service) string { return "service:" + s.Spec.Name },

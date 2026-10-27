@@ -19,7 +19,7 @@ import (
 // checkRead enforces the "read" permission on resourceType:resourceName for
 // the identity in ctx. Returns nil if ACL is disabled or no identity is on the
 // context (the bearer middleware would have rejected the request earlier in
-// that case). Mirrors checkWrite in tools.go.
+// that case). Mirrors checkWrite.
 func (s *Server) checkRead(ctx context.Context, resourceType, resourceName string) error {
 	if s.acl == nil {
 		return nil
@@ -376,7 +376,7 @@ func (s *Server) checkServiceRead(ctx context.Context, id string) error {
 }
 
 // checkTaskRead enforces the read permission on a task, keyed as `task:<id>`.
-// It does not walk to the parent the way checkTaskWrite does, because
+// It does not walk to the parent the way resolveTaskWrite does, because
 // acl.grantMatchesResource already resolves a task through its service and
 // stack — and every other task read passes this same key.
 func (s *Server) checkTaskRead(ctx context.Context, id string) error {
