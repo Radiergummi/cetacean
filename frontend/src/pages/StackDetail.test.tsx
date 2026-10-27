@@ -162,6 +162,19 @@ describe("StackDetail", () => {
     expect(api.serviceTasks).not.toHaveBeenCalled();
   });
 
+  it("says why the task counts failed to load and offers a retry", async () => {
+    vi.mocked(api.allServices).mockRejectedValue(new Error("services are not visible to you"));
+
+    renderStackDetail();
+
+    expect(await screen.findByText("services are not visible to you")).toBeInTheDocument();
+
+    vi.mocked(api.allServices).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(api.allServices).toHaveBeenCalled());
+  });
+
   // More members than one page of a list holds still each get their count.
   it("counts the tasks of every service in a large stack", async () => {
     const members = Array.from({ length: 60 }, (_, index) => ({

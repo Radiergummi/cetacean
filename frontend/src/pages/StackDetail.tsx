@@ -44,13 +44,14 @@ export default function StackDetail() {
   const stack = response?.stack;
   const links = response?.links;
 
-  const { data: members } = useQuery({
+  const membersQuery = useQuery({
     queryKey: servicesKey,
     queryFn: ({ signal }) =>
       api.allServices({ filter: `stack == ${JSON.stringify(name)}` }, signal),
     enabled: !!stack?.services?.length,
   });
 
+  const members = membersQuery.data;
   const taskCounts = useMemo(() => {
     const counts: Record<string, TaskCount> = {};
 
@@ -112,6 +113,14 @@ export default function StackDetail() {
         }
         extra={links?.length ? <ServiceLinks links={links} /> : undefined}
       />
+
+      {membersQuery.error && (
+        <DetailError
+          error={membersQuery.error}
+          fallback="Failed to load the services' task counts"
+          onRetry={() => membersQuery.refetch()}
+        />
+      )}
 
       {stack.services?.length > 0 && (
         <CollapsibleSection
