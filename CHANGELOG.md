@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 
 ### Fixed
+- The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 

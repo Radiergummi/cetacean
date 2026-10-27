@@ -136,6 +136,32 @@ func BuildClusterStatus(
 	return status
 }
 
+// CountServiceStates splits services by DeriveServiceState: running, and a job
+// whose run completed, are converged; failed, pending and flapping are the
+// degraded BuildClusterStatus names. A service mid-update is in neither.
+func CountServiceStates(
+	snap cache.ClusterSnapshot,
+	services []swarm.Service,
+) (converged, degraded int) {
+	for _, svc := range services {
+		state := DeriveServiceState(
+			svc,
+			snap.RunningByService[svc.ID],
+			snap.CompletedJobsByService[svc.ID],
+			snap.Flapping[svc.ID],
+		)
+
+		switch state {
+		case "running", stateCompleted:
+			converged++
+		case "failed", "pending", "flapping":
+			degraded++
+		}
+	}
+
+	return converged, degraded
+}
+
 // rolloutStalled reports whether a spec change stopped short rather than
 // merely being in progress: Swarm pauses an update whose tasks keep failing.
 // It reads the Docker record, not the derived state, where a paused update

@@ -1348,7 +1348,7 @@ func TestCache_SetService_NoRefChange_NoExtraEvents(t *testing.T) {
 	}
 }
 
-func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
+func TestSnapshot_Reservations(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{
 		ID:     "n1",
@@ -1421,21 +1421,32 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 		},
 	)
 
+	// Reserved once per eligible node: n1 is drained, so only n2 carries it.
+	c.SetService(swarm.Service{
+		ID: "agent",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "agent"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+			TaskTemplate: swarm.TaskSpec{
+				Resources: &swarm.ResourceRequirements{
+					Reservations: &swarm.Resources{
+						NanoCPUs:    100_000_000,
+						MemoryBytes: 64 * 1024 * 1024,
+					},
+				},
+			},
+		},
+	})
+
 	snap := c.Snapshot()
-	if snap.ServicesConverged != 1 {
-		t.Errorf("ServicesConverged=%d, want 1", snap.ServicesConverged)
-	}
-	if snap.ServicesDegraded != 1 {
-		t.Errorf("ServicesDegraded=%d, want 1", snap.ServicesDegraded)
-	}
 	if snap.NodesDraining != 1 {
 		t.Errorf("NodesDraining=%d, want 1", snap.NodesDraining)
 	}
-	if snap.ReservedCPU != 1_000_000_000 {
-		t.Errorf("ReservedCPU=%d, want 1000000000", snap.ReservedCPU)
+	if snap.ReservedCPU != 1_100_000_000 {
+		t.Errorf("ReservedCPU=%d, want 1100000000", snap.ReservedCPU)
 	}
-	if snap.ReservedMemory != 512*1024*1024 {
-		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 512*1024*1024)
+	if snap.ReservedMemory != 576*1024*1024 {
+		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 576*1024*1024)
 	}
 }
 
@@ -1456,8 +1467,8 @@ func TestTaskHistoryIsFiledUnderItsService(t *testing.T) {
 }
 
 // A crash-looping service has its replica up a good part of the time; caught
-// then, it must still count as degraded, or the overview reads "all healthy".
-func TestSnapshotCountsFlappingServiceDegraded(t *testing.T) {
+// then, the snapshot must still name it, or the overview reads "all healthy".
+func TestSnapshotNamesFlappingService(t *testing.T) {
 	c := New(nil)
 	c.SetService(swarm.Service{
 		ID: "svc",
@@ -1487,13 +1498,6 @@ func TestSnapshotCountsFlappingServiceDegraded(t *testing.T) {
 	})
 
 	snap := c.Snapshot()
-	if snap.ServicesDegraded != 1 || snap.ServicesConverged != 0 {
-		t.Errorf(
-			"converged=%d degraded=%d, want 0 and 1",
-			snap.ServicesConverged,
-			snap.ServicesDegraded,
-		)
-	}
 	if !snap.Flapping["svc"] {
 		t.Error("Snapshot.Flapping does not name the crash-looping service")
 	}

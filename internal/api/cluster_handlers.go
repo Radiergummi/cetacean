@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -48,6 +49,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := h.cache.Snapshot()
+	converged, degraded := cluster.CountServiceStates(snap, h.cache.ListServices())
 	overview := ClusterOverviewResponse{
 		NodeCount:            snap.NodeCount,
 		ServiceCount:         snap.ServiceCount,
@@ -57,8 +59,8 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		NodesReady:           snap.NodesReady,
 		NodesDown:            snap.NodesDown,
 		NodesDraining:        snap.NodesDraining,
-		ServicesConverged:    snap.ServicesConverged,
-		ServicesDegraded:     snap.ServicesDegraded,
+		ServicesConverged:    converged,
+		ServicesDegraded:     degraded,
 		ReservedCPU:          snap.ReservedCPU,
 		ReservedMemory:       snap.ReservedMemory,
 		TotalCPU:             snap.TotalCPU,

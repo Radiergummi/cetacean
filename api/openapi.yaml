@@ -8439,8 +8439,12 @@ components:
           format: int64
         servicesConverged:
           type: integer
+          description: >-
+            Services whose state is running, or a job whose run completed. A
+            service mid-update counts in neither this nor servicesDegraded.
         servicesDegraded:
           type: integer
+          description: Services whose state is failed, pending or flapping.
         reservedCPU:
           type: integer
           format: int64

@@ -3,6 +3,8 @@ package mcp
 import (
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/quorum"
@@ -38,7 +40,9 @@ type clusterOverview struct {
 
 // newClusterOverview converts a snapshot into the served shape. The per-node
 // maxima the snapshot has already divided down, so they are only widened.
-func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
+func newClusterOverview(snap cache.ClusterSnapshot, services []swarm.Service) clusterOverview {
+	converged, degraded := cluster.CountServiceStates(snap, services)
+
 	return clusterOverview{
 		NodeCount:    snap.NodeCount,
 		ServiceCount: snap.ServiceCount,
@@ -50,8 +54,8 @@ func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
 		NodesDown:     snap.NodesDown,
 		NodesDraining: snap.NodesDraining,
 
-		ServicesConverged: snap.ServicesConverged,
-		ServicesDegraded:  snap.ServicesDegraded,
+		ServicesConverged: converged,
+		ServicesDegraded:  degraded,
 
 		ClusterCapacity: cluster.CapacityOf(snap),
 

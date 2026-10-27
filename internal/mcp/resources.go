@@ -299,7 +299,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err := s.requireAnyGrant(ctx); err != nil {
 			return nil, err
 		}
-		return newClusterOverview(s.cache.Snapshot()), nil
+		return newClusterOverview(s.cache.Snapshot(), s.cache.ListServices()), nil
 
 	case "recommendations":
 		if s.recEngine == nil {

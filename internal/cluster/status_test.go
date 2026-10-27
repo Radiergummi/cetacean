@@ -262,3 +262,46 @@ func TestBuildClusterStatusUnhealthyWithAnUnreachableManager(t *testing.T) {
 		t.Error("healthy = true with a manager unreachable")
 	}
 }
+
+// The overview's two counts follow DeriveServiceState, so a service the
+// status call names as unhealthy is never counted converged.
+func TestCountServiceStatesFollowsTheStateRule(t *testing.T) {
+	one := uint64(1)
+	replicated := swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &one}}
+	services := []swarm.Service{
+		{
+			ID:   "global-down",
+			Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
+		},
+		{
+			ID:   "global-up",
+			Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
+		},
+		{ID: "web", Spec: swarm.ServiceSpec{Mode: replicated}},
+		{ID: "flaky", Spec: swarm.ServiceSpec{Mode: replicated}},
+		{
+			ID:   "job-done",
+			Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{ReplicatedJob: &swarm.ReplicatedJob{}}},
+		},
+		{
+			ID:   "job-failed",
+			Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{ReplicatedJob: &swarm.ReplicatedJob{}}},
+		},
+		{
+			ID:           "rolling",
+			Spec:         swarm.ServiceSpec{Mode: replicated},
+			UpdateStatus: &swarm.UpdateStatus{State: swarm.UpdateStateUpdating},
+		},
+	}
+	snap := cache.ClusterSnapshot{
+		RunningByService:       map[string]int{"global-up": 2, "web": 1, "flaky": 1, "rolling": 1},
+		CompletedJobsByService: map[string]int{"job-done": 1},
+		Flapping:               map[string]bool{"flaky": true},
+	}
+
+	converged, degraded := CountServiceStates(snap, services)
+
+	if converged != 3 || degraded != 3 {
+		t.Errorf("converged=%d degraded=%d, want 3 and 3", converged, degraded)
+	}
+}
