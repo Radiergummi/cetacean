@@ -145,21 +145,24 @@ func (c *Client) fetchDigested(
 		return nil, nil, ErrTooLarge
 	}
 
-	newHash := sha256.New
-	if strings.HasPrefix(digest, "sha512:") {
-		newHash = sha512.New
-	}
-
-	h := newHash()
+	algorithm, h := hasherFor(digest)
 	h.Write(body)
 
-	algorithm, _, _ := strings.Cut(digest, ":")
 	if got := algorithm + ":" + hex.EncodeToString(h.Sum(nil)); got != digest {
 		return nil, nil, fmt.Errorf("requested %s, but the registry sent content hashing to %s",
 			digest, got)
 	}
 
 	return body, resp.Header, nil
+}
+
+// hasherFor is the hash a digest names, sha256 for anything but sha512.
+func hasherFor(digest string) (string, hash.Hash) {
+	if strings.HasPrefix(digest, "sha512:") {
+		return "sha512", sha512.New()
+	}
+
+	return "sha256", sha256.New()
 }
 
 // Resolve returns the digest of the manifest ref's tag names now.
@@ -203,15 +206,7 @@ func (c *Client) digestOfBody(
 	}
 
 	stated := resp.Header.Get("Docker-Content-Digest")
-
-	var h hash.Hash
-
-	algorithm := "sha256"
-	if strings.HasPrefix(stated, "sha512:") {
-		algorithm, h = "sha512", sha512.New()
-	} else {
-		h = sha256.New()
-	}
+	algorithm, h := hasherFor(stated)
 
 	n, err := io.Copy(h, io.LimitReader(resp.Body, maxManifestSize+1))
 	if err != nil {

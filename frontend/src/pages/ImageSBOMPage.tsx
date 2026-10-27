@@ -15,9 +15,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiPath } from "@/lib/basePath";
+import { attestationBreadcrumbs } from "@/lib/resourceBreadcrumbs";
 import { getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 const selectClassName =
@@ -64,18 +65,18 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
   );
   const ecosystems = useMemo(() => Object.keys(data?.summary.ecosystems ?? {}).sort(), [data]);
 
-  const needle = query.trim().toLowerCase();
+  const deferredQuery = useDeferredValue(query);
+  const needle = deferredQuery.trim().toLowerCase();
   const filtered = useMemo(
     () => packages.filter((entry) => matches(entry, needle, ecosystem, license)),
     [packages, needle, ecosystem, license],
   );
 
-  const back = `/${kind}s/${id}`;
-
   if (platformMissing) {
     return (
       <Page
-        back={back}
+        kind={kind}
+        id={id}
         subtitle="This image has more than one platform; pick one."
       >
         <PlatformPicker
@@ -88,7 +89,10 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
 
   if (error) {
     return (
-      <Page back={back}>
+      <Page
+        kind={kind}
+        id={id}
+      >
         <FetchError
           message={getErrorMessage(error, "Failed to load the SBOM")}
           onRetry={() => refetch()}
@@ -99,7 +103,10 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
 
   if (isLoading || !data) {
     return (
-      <Page back={back}>
+      <Page
+        kind={kind}
+        id={id}
+      >
         <LoadingDetail />
       </Page>
     );
@@ -109,7 +116,8 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
 
   return (
     <Page
-      back={back}
+      kind={kind}
+      id={id}
       subtitle={`${data.summary.total} packages on ${data.platform}, ${data.summary.licensed} with a license, as the image's SBOM lists them.`}
       actions={
         <div className="flex gap-2">
@@ -209,29 +217,28 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
 }
 
 function Page({
-  back,
+  kind,
+  id,
   subtitle,
   actions,
   children,
 }: {
-  back: string;
+  kind: AttestedKind;
+  id: string;
   subtitle?: string | undefined;
   actions?: React.ReactNode | undefined;
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <>
       <PageHeader
         title="SBOM"
         subtitle={subtitle}
         actions={actions}
-        breadcrumbs={[
-          { label: back.startsWith("/services") ? "Service" : "Task", to: back },
-          { label: "SBOM" },
-        ]}
+        breadcrumbs={attestationBreadcrumbs(kind, id, "SBOM")}
       />
       {children}
-    </div>
+    </>
   );
 }
 

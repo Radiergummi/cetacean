@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -319,6 +320,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		return nil, fmt.Errorf("invalid resource URI: %s", uri)
 	}
 
+	path, rawQuery, _ := strings.Cut(path, "?")
+	query, _ := url.ParseQuery(rawQuery)
+
 	parts := strings.SplitN(path, "/", 3)
 	resourceType := parts[0]
 	resourceID := ""
@@ -389,8 +393,8 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 				compose.FromService(svc, s.filterNetworks(ctx, s.cache.ListNetworks())),
 			)
 		}
-		if name, platform, ok := attestationResource(subResource); ok {
-			return s.readServiceAttestation(ctx, svc, name, platform)
+		if isAttestationResource(subResource) {
+			return s.readServiceAttestation(ctx, svc, subResource, query.Get("platform"))
 		}
 		return svc, nil
 
@@ -405,8 +409,8 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err := s.checkReadable(ctx, uri, "task", task.ID); err != nil {
 			return nil, err
 		}
-		if name, platform, ok := attestationResource(subResource); ok {
-			return s.readTaskAttestation(ctx, task, name, platform)
+		if isAttestationResource(subResource) {
+			return s.readTaskAttestation(ctx, task, subResource, query.Get("platform"))
 		}
 		return s.readableEnrichedTask(ctx, task), nil
 

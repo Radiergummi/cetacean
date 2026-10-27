@@ -2,30 +2,20 @@ package mcp
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// attestationResource splits a sub-resource such as `sbom?platform=linux/arm64`
-// into its name and the platform it asks for, and reports whether it is one of
-// the attestation resources.
-func attestationResource(subResource string) (name, platform string, ok bool) {
-	name, query, _ := strings.Cut(subResource, "?")
-
-	switch name {
+// isAttestationResource reports whether a sub-resource is one of the image
+// attestation views.
+func isAttestationResource(subResource string) bool {
+	switch subResource {
 	case "provenance", "sbom", "dockerfile":
-		values, _ := url.ParseQuery(query)
-
-		return name, values.Get("platform"), true
+		return true
 	default:
-		return "", "", false
+		return false
 	}
 }
 
@@ -49,17 +39,14 @@ func (s *Server) readTaskAttestation(
 	task swarm.Task,
 	name, platform string,
 ) (any, error) {
-	var node *swarm.Node
-	if n, ok := s.cache.GetNode(task.NodeID); ok {
-		node = &n
-	}
-
 	if name == "provenance" {
-		return cluster.TaskProvenance(ctx, task, node, s.attestations), nil
+		return cluster.TaskProvenance(ctx, task, s.cache.GetNode, s.attestations), nil
 	}
 
-	return s.readAttestation(ctx, cluster.TaskAttestationTarget(ctx, task, node, s.attestations),
-		name, platform)
+	return s.readAttestation(
+		ctx, cluster.TaskAttestationTarget(ctx, task, s.cache.GetNode, s.attestations),
+		name, platform,
+	)
 }
 
 // readAttestation reads one platform's SBOM, as its package table rather than
@@ -69,29 +56,9 @@ func (s *Server) readAttestation(
 	target cluster.AttestationTarget,
 	name, requested string,
 ) (any, error) {
-	if status := target.Attested.Status; status != attestations.StatusAvailable {
-		return nil, fmt.Errorf("the image's attestations are %s", status)
-	}
-
-	platform, err := cluster.SelectPlatform(target.Candidates, requested)
+	platform, err := target.Platform(requested)
 	if err != nil {
-		names := make([]string, len(target.Candidates))
-		for i, p := range target.Candidates {
-			names[i] = p.String()
-		}
-
-		if errors.Is(err, cluster.ErrPlatformRequired) {
-			return nil, fmt.Errorf(
-				"name one platform of %s as ?platform=",
-				strings.Join(names, ", "),
-			)
-		}
-
-		return nil, fmt.Errorf(
-			"no platform %q; this image has %s",
-			requested,
-			strings.Join(names, ", "),
-		)
+		return nil, err
 	}
 
 	if name == "sbom" {

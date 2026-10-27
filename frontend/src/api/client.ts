@@ -1168,7 +1168,7 @@ export const api = {
     ).then(({ data }) => data.healthcheck),
   provenance: (kind: AttestedKind, id: string, signal?: AbortSignal) =>
     fetchJSON<ImageProvenance>(
-      `/${kind}s/${id}/provenance`,
+      `/${kind}s/${encodeURIComponent(id)}/provenance`,
       signal,
       schema.imageProvenanceSchema,
     ).then(({ data }) => data),

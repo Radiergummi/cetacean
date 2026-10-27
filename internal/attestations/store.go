@@ -149,7 +149,8 @@ func (s *Store) SBOM(ctx context.Context, image string, p Platform) (*SBOM, []by
 			return cached{}, err
 		}
 
-		return cached{value: sbomEntry{sbom, raw}, cost: int64(len(body))}, nil
+		// The table and the document are each about the size of the body.
+		return cached{value: sbomEntry{sbom, raw}, cost: 2 * int64(len(body))}, nil
 	})
 	if err != nil {
 		return nil, nil, s.fetchError(err)
@@ -180,9 +181,11 @@ func (s *Store) Dockerfile(ctx context.Context, image string, p Platform) (*Dock
 
 	digest := platform.ManifestDigest
 
+	// Both inputs are immutable under the digest, so the join is cached whole
+	// rather than the provenance being parsed again on every request.
 	value, err := s.cachedOrFetch(
 		ctx,
-		"manifest:"+digest,
+		"dockerfile:"+digest,
 		func(ctx context.Context) (cached, error) {
 			body, _, err := s.fetch.Manifest(ctx, ref, digest)
 			if err != nil {
@@ -194,14 +197,19 @@ func (s *Store) Dockerfile(ctx context.Context, image string, p Platform) (*Dock
 				return cached{}, err
 			}
 
-			return cached{value: m.Layers, cost: int64(len(body))}, nil
+			d, err := JoinDockerfile(statement, m.Layers)
+			if err != nil {
+				return cached{}, err
+			}
+
+			return cached{value: d, cost: int64(len(body) + len(statement))}, nil
 		},
 	)
 	if err != nil {
 		return nil, s.fetchError(err)
 	}
 
-	return JoinDockerfile(statement, value.([]Descriptor))
+	return value.(*Dockerfile), nil
 }
 
 func (s *Store) available(
@@ -304,11 +312,14 @@ func (s *Store) fetchImage(ctx context.Context, ref imagecheck.Reference, digest
 				return s.failure(err)
 			}
 
-			cost += int64(len(statement))
-
+			// Only a statement embedding a Dockerfile is kept, for the join.
 			if p, err := ParseProvenance(statement); err == nil {
 				platform.Provenance = p
-				entry.provenance[a.ManifestDigest] = statement
+
+				if p.HasSource {
+					entry.provenance[a.ManifestDigest] = statement
+					cost += int64(len(statement))
+				}
 			} else {
 				slog.Warn("unreadable provenance", "digest", a.Provenance.Digest, "error", err)
 			}

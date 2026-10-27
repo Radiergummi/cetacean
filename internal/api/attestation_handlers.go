@@ -28,9 +28,10 @@ type imageTarget struct {
 	cluster.AttestationTarget
 }
 
+// Provenance is a section of the detail page, not a page of its own, so it
+// is served as JSON only.
 func (h *Handlers) HandleServiceProvenance(w http.ResponseWriter, r *http.Request) {
-	r, ct := choose(r, nil, ContentTypeJSON)
-	if ct != ContentTypeJSON {
+	if !acceptable(r, ContentTypeJSON) {
 		notAcceptable(w, r, servedMediaTypes[ContentTypeJSON])
 		return
 	}
@@ -40,19 +41,13 @@ func (h *Handlers) HandleServiceProvenance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeAllow(w, readOnly)
-
-	body := cluster.ServiceProvenance(
+	h.writeProvenance(w, r, "/services/"+svc.ID, cluster.ServiceProvenance(
 		r.Context(), svc, h.cache.ListTasksByService(svc.ID), h.cache.GetNode, h.attestations,
-	)
-	writeCachedJSON(w, r, NewDetailResponse(
-		r.Context(), "/services/"+svc.ID+"/provenance", "ImageProvenance", body,
 	))
 }
 
 func (h *Handlers) HandleTaskProvenance(w http.ResponseWriter, r *http.Request) {
-	r, ct := choose(r, nil, ContentTypeJSON)
-	if ct != ContentTypeJSON {
+	if !acceptable(r, ContentTypeJSON) {
 		notAcceptable(w, r, servedMediaTypes[ContentTypeJSON])
 		return
 	}
@@ -62,12 +57,22 @@ func (h *Handlers) HandleTaskProvenance(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeAllow(w, readOnly)
+	h.writeProvenance(w, r, "/tasks/"+task.ID,
+		cluster.TaskProvenance(r.Context(), task, h.cache.GetNode, h.attestations))
+}
 
-	body := cluster.TaskProvenance(r.Context(), task, h.taskNode(task), h.attestations)
-	writeCachedJSON(w, r, NewDetailResponse(
-		r.Context(), "/tasks/"+task.ID+"/provenance", "ImageProvenance", body,
-	))
+func (h *Handlers) writeProvenance(
+	w http.ResponseWriter,
+	r *http.Request,
+	resource string,
+	body cluster.ImageProvenance,
+) {
+	writeAllow(w, readOnly)
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(r.Context(), resource+"/provenance", "ImageProvenance", body),
+	)
 }
 
 // HandleServiceSBOM and its siblings dispatch to the SPA for HTML, which loads
@@ -126,18 +131,9 @@ func (h *Handlers) attestationEndpoint(
 
 		writeAllow(w, readOnly)
 
-		if !h.imageAvailable(w, r, target.Attested) {
-			return
-		}
-
-		platform, err := cluster.SelectPlatform(target.Candidates, r.URL.Query().Get("platform"))
-		switch {
-		case errors.Is(err, cluster.ErrPlatformRequired):
-			writeErrorCode(w, r, "ATT003", "this image has attestations for "+
-				platformList(target.Candidates)+"; name one in the platform query parameter")
-			return
-		case err != nil:
-			writeErrorCode(w, r, "ATT004", "name one of "+platformList(target.Candidates))
+		platform, err := target.Platform(r.URL.Query().Get("platform"))
+		if err != nil {
+			writeAttestationError(w, r, err)
 			return
 		}
 
@@ -175,7 +171,7 @@ func (h *Handlers) taskImage(
 		path:      "/tasks/" + task.ID + suffix,
 		immutable: true,
 		AttestationTarget: cluster.TaskAttestationTarget(
-			r.Context(), task, h.taskNode(task), h.attestations,
+			r.Context(), task, h.cache.GetNode, h.attestations,
 		),
 	}, true
 }
@@ -185,41 +181,14 @@ func (h *Handlers) lookupTaskACL(w http.ResponseWriter, r *http.Request) (swarm.
 		func(t swarm.Task) string { return "task:" + t.ID })
 }
 
-func (h *Handlers) taskNode(task swarm.Task) *swarm.Node {
-	if node, ok := h.cache.GetNode(task.NodeID); ok {
-		return &node
-	}
-
-	return nil
-}
-
-// imageAvailable answers for an image whose attestations cannot be read at
-// all, and reports whether the request may go on.
-func (h *Handlers) imageAvailable(
-	w http.ResponseWriter,
-	r *http.Request,
-	img attestations.Image,
-) bool {
-	switch img.Status {
-	case attestations.StatusAvailable:
-		return true
-	case attestations.StatusUnavailable:
-		writeUnavailable(w, r, img.RetryAfter)
-	default:
-		writeErrorCode(w, r, "ATT007", "the image's attestations are "+string(img.Status))
-	}
-
-	return false
-}
-
 func writeUnavailable(w http.ResponseWriter, r *http.Request, retryAfter time.Time) {
 	seconds := max(int(math.Ceil(time.Until(retryAfter).Seconds())), 1)
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	writeErrorCode(w, r, "ATT001", "the image's registry could not be read")
 }
 
-// writeAttestationError answers for a failure reading one platform's SBOM or
-// Dockerfile.
+// writeAttestationError answers for a request whose platform or whose SBOM or
+// Dockerfile could not be read.
 func writeAttestationError(w http.ResponseWriter, r *http.Request, err error) {
 	var unavailable *attestations.UnavailableError
 
@@ -236,8 +205,10 @@ func writeAttestationError(w http.ResponseWriter, r *http.Request, err error) {
 		writeErrorCode(w, r, "ATT005", "the SBOM is larger than 32 MiB")
 	case errors.Is(err, attestations.ErrNoSource):
 		writeErrorCode(w, r, "ATT006", "the provenance embeds no Dockerfile")
+	case errors.Is(err, cluster.ErrPlatformRequired):
+		writeErrorCode(w, r, "ATT003", err.Error())
 	case errors.Is(err, attestations.ErrUnknownPlatform):
-		writeErrorCode(w, r, "ATT004", "the image has no such platform")
+		writeErrorCode(w, r, "ATT004", err.Error())
 	default:
 		writeErrorCode(w, r, "ATT001", err.Error())
 	}
@@ -307,17 +278,4 @@ func (h *Handlers) writeDockerfile(
 
 	writeCachedJSON(w, r, NewDetailResponse(r.Context(), target.path, "ImageDockerfile",
 		cluster.DockerfileView{Platform: platform.String(), Dockerfile: d}))
-}
-
-func platformList(platforms []attestations.Platform) string {
-	names := make([]string, len(platforms))
-	for i, p := range platforms {
-		names[i] = p.String()
-	}
-
-	if len(names) == 0 {
-		return "no platform"
-	}
-
-	return strings.Join(names, ", ")
 }

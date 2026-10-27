@@ -3,7 +3,9 @@ package cluster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,10 +30,9 @@ type AttestationSource interface {
 	) (*attestations.Dockerfile, error)
 }
 
-var (
-	ErrPlatformRequired = errors.New("several platforms; name one")
-	ErrPlatformUnknown  = errors.New("platform not among the candidates")
-)
+// ErrPlatformRequired is a request naming no platform of an image with
+// several; one naming an unknown platform is attestations.ErrUnknownPlatform.
+var ErrPlatformRequired = errors.New("several platforms; name one")
 
 // ImageProvenance is what a service or task shows about its image's build.
 type ImageProvenance struct {
@@ -115,30 +116,33 @@ func containerImage(spec *swarm.ContainerSpec) string {
 	return spec.Image
 }
 
+// NodeLookup finds a node by ID; the cache's GetNode is one.
+type NodeLookup func(id string) (swarm.Node, bool)
+
 // ServiceProvenance projects the attestations of the image svc's spec names,
 // counting its running tasks per platform.
 func ServiceProvenance(
 	ctx context.Context,
 	svc swarm.Service,
 	tasks []swarm.Task,
-	nodes func(id string) (swarm.Node, bool),
+	nodes NodeLookup,
 	src AttestationSource,
 ) ImageProvenance {
-	image := containerImage(svc.Spec.TaskTemplate.ContainerSpec)
-	if src == nil {
-		return ImageProvenance{Image: image, Status: attestations.StatusDisabled}
-	}
+	t := ServiceAttestationTarget(ctx, svc, src)
+	out := project(t.Image, t.Attested, t.Attested.Platforms)
 
-	img := src.Image(ctx, image)
-	out := project(image, img, img.Platforms)
+	for _, task := range tasks {
+		if task.Status.State != swarm.TaskStateRunning || nodes == nil {
+			continue
+		}
 
-	for i, p := range img.Platforms {
-		for _, task := range tasks {
-			if task.Status.State != swarm.TaskStateRunning || nodes == nil {
-				continue
-			}
+		node, ok := nodes(task.NodeID)
+		if !ok {
+			continue
+		}
 
-			if node, ok := nodes(task.NodeID); ok && nodeRuns(node, p.Platform) {
+		for i, p := range t.Attested.Platforms {
+			if nodeRuns(node, p.Platform) {
 				out.Platforms[i].RunningTasks++
 			}
 		}
@@ -152,27 +156,20 @@ func ServiceProvenance(
 func TaskProvenance(
 	ctx context.Context,
 	task swarm.Task,
-	node *swarm.Node,
+	nodes NodeLookup,
 	src AttestationSource,
 ) ImageProvenance {
-	image := containerImage(task.Spec.ContainerSpec)
-	if src == nil {
-		return ImageProvenance{Image: image, Status: attestations.StatusDisabled}
-	}
-
-	img := src.Image(ctx, image)
+	t := TaskAttestationTarget(ctx, task, nodes, src)
 
 	var platforms []attestations.ImagePlatform
 
-	for _, candidate := range TaskPlatforms(task, node, img) {
-		for _, p := range img.Platforms {
-			if p.Platform == candidate {
-				platforms = append(platforms, p)
-			}
+	for _, p := range t.Attested.Platforms {
+		if slices.Contains(t.Candidates, p.Platform) {
+			platforms = append(platforms, p)
 		}
 	}
 
-	return project(image, img, platforms)
+	return project(t.Image, t.Attested, platforms)
 }
 
 // TaskPlatforms are the platforms of img a task's node can be running. The
@@ -195,7 +192,7 @@ func TaskPlatforms(
 }
 
 // SelectPlatform picks the requested platform among candidates, or the only
-// one when none is requested.
+// one when none is requested. Its errors name the candidates.
 func SelectPlatform(
 	candidates []attestations.Platform,
 	requested string,
@@ -205,7 +202,8 @@ func SelectPlatform(
 			return candidates[0], nil
 		}
 
-		return attestations.Platform{}, ErrPlatformRequired
+		return attestations.Platform{}, fmt.Errorf("%w: this image has %s",
+			ErrPlatformRequired, PlatformNames(candidates))
 	}
 
 	for _, c := range candidates {
@@ -214,7 +212,22 @@ func SelectPlatform(
 		}
 	}
 
-	return attestations.Platform{}, ErrPlatformUnknown
+	return attestations.Platform{}, fmt.Errorf("%w: %q; this image has %s",
+		attestations.ErrUnknownPlatform, requested, PlatformNames(candidates))
+}
+
+// PlatformNames lists platforms for a message.
+func PlatformNames(platforms []attestations.Platform) string {
+	if len(platforms) == 0 {
+		return "no platform"
+	}
+
+	names := make([]string, len(platforms))
+	for i, p := range platforms {
+		names[i] = p.String()
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // AttestationTarget is the image a service or task runs, what its registry
@@ -224,6 +237,21 @@ type AttestationTarget struct {
 	Image      string
 	Attested   attestations.Image
 	Candidates []attestations.Platform
+}
+
+// Platform answers a request naming requested: the image's own status as an
+// error when its attestations cannot be read, otherwise a candidate.
+func (t AttestationTarget) Platform(requested string) (attestations.Platform, error) {
+	switch t.Attested.Status {
+	case attestations.StatusAvailable:
+		return SelectPlatform(t.Candidates, requested)
+	case attestations.StatusUnavailable:
+		return attestations.Platform{}, &attestations.UnavailableError{
+			RetryAfter: t.Attested.RetryAfter,
+		}
+	default:
+		return attestations.Platform{}, &attestations.ImageStatusError{Status: t.Attested.Status}
+	}
 }
 
 // ServiceAttestationTarget offers every platform of the image svc's spec names.
@@ -247,9 +275,16 @@ func ServiceAttestationTarget(
 func TaskAttestationTarget(
 	ctx context.Context,
 	task swarm.Task,
-	node *swarm.Node,
+	nodes NodeLookup,
 	src AttestationSource,
 ) AttestationTarget {
+	var node *swarm.Node
+	if nodes != nil {
+		if n, ok := nodes(task.NodeID); ok {
+			node = &n
+		}
+	}
+
 	t := AttestationTarget{Image: containerImage(task.Spec.ContainerSpec)}
 	t.Attested = imageOf(ctx, src, t.Image)
 	t.Candidates = TaskPlatforms(task, node, t.Attested)

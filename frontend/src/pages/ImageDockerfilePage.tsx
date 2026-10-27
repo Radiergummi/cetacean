@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { apiPath } from "@/lib/basePath";
 import { formatBytes } from "@/lib/format";
+import { attestationBreadcrumbs } from "@/lib/resourceBreadcrumbs";
 import { getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -46,15 +47,11 @@ export default function ImageDockerfilePage({ kind }: { kind: AttestedKind }) {
 
   const sizes = useMemo(() => (data ? sizesByLine(data) : new Map<number, number>()), [data]);
   const heaviest = Math.max(1, ...sizes.values());
-  const back = `/${kind}s/${id}`;
-  const breadcrumbs = [
-    { label: kind === "service" ? "Service" : "Task", to: back },
-    { label: "Dockerfile" },
-  ];
+  const breadcrumbs = attestationBreadcrumbs(kind, id, "Dockerfile");
 
   if (error) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <>
         <PageHeader
           title="Dockerfile"
           breadcrumbs={breadcrumbs}
@@ -63,22 +60,18 @@ export default function ImageDockerfilePage({ kind }: { kind: AttestedKind }) {
           message={getErrorMessage(error, "Failed to load the Dockerfile")}
           onRetry={() => refetch()}
         />
-      </div>
+      </>
     );
   }
 
   if (isLoading || !data) {
-    return (
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <LoadingDetail />
-      </div>
-    );
+    return <LoadingDetail />;
   }
 
   const unattributed = data.unattributed ?? [];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <>
       <PageHeader
         title={data.path || "Dockerfile"}
         subtitle={`${formatBytes(data.totalSize)} on ${data.platform}, ${formatBytes(data.baseSize)} from the base image, as the image's provenance records it.`}
@@ -148,6 +141,6 @@ export default function ImageDockerfilePage({ kind }: { kind: AttestedKind }) {
           </ul>
         </div>
       )}
-    </div>
+    </>
   );
 }

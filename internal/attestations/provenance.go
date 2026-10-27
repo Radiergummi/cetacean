@@ -150,6 +150,8 @@ func parseStatement(body []byte) (parsed, error) {
 		st.Predicate = json.RawMessage("{}")
 	}
 
+	var out parsed
+
 	switch st.PredicateType {
 	case predicateSLSAv02:
 		var p predicateV02
@@ -157,17 +159,21 @@ func parseStatement(body []byte) (parsed, error) {
 			return parsed{}, fmt.Errorf("provenance v0.2: %w", err)
 		}
 
-		return fromV02(p), nil
+		out = fromV02(p)
 	case predicateSLSAv1:
 		var p predicateV1
 		if err := json.Unmarshal(st.Predicate, &p); err != nil {
 			return parsed{}, fmt.Errorf("provenance v1: %w", err)
 		}
 
-		return fromV1(p), nil
+		out = fromV1(p)
 	default:
 		return parsed{}, fmt.Errorf("predicate %q is not SLSA provenance", st.PredicateType)
 	}
+
+	out.provenance.HasSource = out.buildkit != nil && out.buildkit.Source.dockerfileIndex() >= 0
+
+	return out, nil
 }
 
 // ParseProvenance reads a SLSA v0.2 or v1 provenance statement.
@@ -194,7 +200,6 @@ func fromV02(p predicateV02) parsed {
 			Frontend:       p.Invocation.Parameters.Frontend,
 			Reproducible:   p.Metadata.Reproducible,
 			Inputs:         inputsOf(p.Materials),
-			HasSource:      bk != nil && bk.Source.dockerfileIndex() >= 0,
 		},
 		buildkit:    bk,
 		buildConfig: p.BuildConfig,
@@ -224,7 +229,6 @@ func fromV1(p predicateV1) parsed {
 			Frontend:       p.BuildDefinition.ExternalParameters.Request.Frontend,
 			Inputs:         inputsOf(p.BuildDefinition.ResolvedDependencies),
 			CI:             githubContext(internal),
-			HasSource:      bk != nil && bk.Source.dockerfileIndex() >= 0,
 		},
 		buildkit:    bk,
 		buildConfig: config,

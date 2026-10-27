@@ -8,7 +8,8 @@ import type {
 } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { Button } from "@/components/ui/button";
-import { formatBytes, formatDuration } from "@/lib/format";
+import { useInView } from "@/hooks/useInView";
+import { formatBytes, formatDateTime, formatDuration } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -65,28 +66,6 @@ export default function BuildSection({ kind, id }: { kind: AttestedKind; id: str
       )}
     </div>
   );
-}
-
-function useInView(anchor: React.RefObject<Element | null>) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (visible || !anchor.current) {
-      return;
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some(({ isIntersecting }) => isIntersecting)) {
-        setVisible(true);
-      }
-    });
-
-    observer.observe(anchor.current);
-
-    return () => observer.disconnect();
-  }, [anchor, visible]);
-
-  return visible;
 }
 
 function StatusLine({
@@ -231,7 +210,7 @@ function Platforms({
 function Summary({ provenance }: { provenance: ProvenanceSummary }) {
   const { source, builder, ci, dockerfilePath, startedOn, finishedOn, inputs } = provenance;
   const images = (inputs ?? []).filter(({ image }) => image);
-  const built = finishedOn ? new Date(finishedOn).toLocaleString() : undefined;
+  const built = finishedOn ? formatDateTime(finishedOn) : undefined;
   const took =
     startedOn && finishedOn
       ? formatDuration((Date.parse(finishedOn) - Date.parse(startedOn)) * 1_000_000)

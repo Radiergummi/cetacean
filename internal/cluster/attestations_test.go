@@ -121,7 +121,7 @@ func TestSelectPlatform(t *testing.T) {
 	}
 
 	if _, err := SelectPlatform([]attestations.Platform{amd64}, "linux/s390x"); !errors.Is(
-		err, ErrPlatformUnknown) {
+		err, attestations.ErrUnknownPlatform) {
 		t.Errorf("unknown: %v", err)
 	}
 }
@@ -158,7 +158,12 @@ func TestTaskProvenanceShowsItsOwnPlatform(t *testing.T) {
 	node := nodeOn("n1", "aarch64")
 	src := &fakeAttestations{image: imageWith(amd64, arm64)}
 
-	got := TaskProvenance(context.Background(), taskOn("n1", swarm.TaskStateRunning), &node, src)
+	got := TaskProvenance(
+		context.Background(),
+		taskOn("n1", swarm.TaskStateRunning),
+		lookupOf(node),
+		src,
+	)
 	if len(got.Platforms) != 1 || got.Platforms[0].Platform != "linux/arm64" {
 		t.Errorf("platforms = %+v", got.Platforms)
 	}
@@ -295,8 +300,12 @@ func TestServiceAttestationTargetOffersEveryPlatform(t *testing.T) {
 func TestTaskAttestationTargetOffersItsNodesPlatforms(t *testing.T) {
 	node := nodeOn("n1", "aarch64")
 
-	got := TaskAttestationTarget(context.Background(), taskOn("n1", swarm.TaskStateRunning), &node,
-		&fakeAttestations{image: imageWith(amd64, arm64)})
+	got := TaskAttestationTarget(
+		context.Background(),
+		taskOn("n1", swarm.TaskStateRunning),
+		lookupOf(node),
+		&fakeAttestations{image: imageWith(amd64, arm64)},
+	)
 	if !slices.Equal(got.Candidates, []attestations.Platform{arm64}) {
 		t.Errorf("candidates = %v", got.Candidates)
 	}
@@ -326,4 +335,9 @@ func TestProvenanceDisabled(t *testing.T) {
 	if got.Status != attestations.StatusDisabled || len(got.Platforms) != 0 {
 		t.Errorf("got %+v", got)
 	}
+}
+
+// lookupOf finds exactly one node.
+func lookupOf(node swarm.Node) NodeLookup {
+	return func(id string) (swarm.Node, bool) { return node, id == node.ID }
 }
