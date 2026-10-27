@@ -321,11 +321,6 @@ export interface Stack {
   volumes: string[];
 }
 
-export interface PagedResponse<T> {
-  items: T[];
-  total: number;
-}
-
 export interface CollectionResponse<T> {
   items: T[];
   total: number;
