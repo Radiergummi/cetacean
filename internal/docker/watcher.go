@@ -937,6 +937,17 @@ var fullSyncTimeout = 2 * time.Minute
 // taskListTimeout bounds one task re-list, which holds the event loop.
 var taskListTimeout = 30 * time.Second
 
+// inspectTimeout bounds one inspect attempt, which holds the event loop too.
+var inspectTimeout = 30 * time.Second
+
+// inspect reads one resource under inspectTimeout.
+func (w *Watcher) inspect(ctx context.Context, kind events.Type, id string) (any, error) {
+	ctx, cancel := context.WithTimeout(ctx, inspectTimeout)
+	defer cancel()
+
+	return w.client.Inspect(ctx, kind, id)
+}
+
 // refreshHandoffTimeout bounds how long Refresh waits for the event loop to
 // take its request. Long enough that a loop busy with a burst of events still
 // gets there, short enough that a caller learns the engine is unreachable
@@ -999,12 +1010,17 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 // inspect failure is returned rather than logged: the caller asked because it
 // cannot tolerate a stale answer.
 func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
-	resource, err := w.client.Inspect(ctx, events.Type(kind), id)
+	resource, err := w.inspect(ctx, events.Type(kind), id)
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			w.applyRemove(eventKey{resourceType: events.Type(kind), id: id})
 
 			return nil
+		}
+
+		// Our own deadline, not the caller's: the engine is out of reach.
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			return fmt.Errorf("%w: %w", cerrdefs.ErrUnavailable, err)
 		}
 
 		return err
@@ -1029,7 +1045,7 @@ func (w *Watcher) inspectWithRetry(
 
 	var lastErr error
 	for range maxAttempts {
-		resource, err := w.client.Inspect(ctx, key.resourceType, key.id)
+		resource, err := w.inspect(ctx, key.resourceType, key.id)
 		if err == nil {
 			return resource, nil
 		}

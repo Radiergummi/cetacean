@@ -1473,3 +1473,48 @@ func TestPeriodicSyncSkipsWhenAResyncIsRunning(t *testing.T) {
 	cancel()
 	<-done
 }
+
+// hangingInspect answers only once its context ends, as a half-open TCP
+// connection to the engine or a hung volume plugin does.
+func hangingInspect(ctx context.Context, _ events.Type, _ string) (any, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// An inspect on the event loop holds every event behind it, so one that never
+// answers must give up on its own rather than wedge the loop for good.
+func TestEventInspectGivesUpOnAHungEngine(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.inspectFn = hangingInspect
+
+		c := cache.New(nil)
+		c.SetNode(swarm.Node{ID: "n1"})
+		w := NewWatcher(mc, c, "")
+
+		deliver(t.Context(), w, events.Message{
+			Type:  events.NodeEventType,
+			Actor: events.Actor{ID: "n1"},
+		})
+
+		if _, ok := c.GetNode("n1"); !ok {
+			t.Error("a timed-out inspect dropped the cached node")
+		}
+	})
+}
+
+// Refresh carries a request context with no deadline of its own, and runs on
+// the event loop, so its inspect is bounded the same way, and answers as the
+// engine being unreachable does.
+func TestRefreshGivesUpOnAHungEngine(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.inspectFn = hangingInspect
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		err := w.Refresh(t.Context(), string(events.ServiceEventType), "svc1")
+		if !cerrdefs.IsUnavailable(err) {
+			t.Errorf("Refresh = %v, want unavailable", err)
+		}
+	})
+}
