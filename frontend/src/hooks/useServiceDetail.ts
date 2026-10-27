@@ -34,7 +34,7 @@ import {
 import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 // Stable empties, so an absent list does not remount every consumer.
 const emptyChanges: SpecChange[] = [];
@@ -84,6 +84,10 @@ export function useServiceDetail(id: string | undefined) {
   });
   const tasks = tasksQuery.data ?? emptyTasks;
 
+  // The index a labels save was written back under, until the stream echoes
+  // the save: the echo then matches the cache, but the integrations do not.
+  const savedLabelsIndex = useRef<number | null>(null);
+
   // The per-service stream also delivers task events for this service's tasks,
   // so only treat `resource` as a Service when the event is a service event —
   // otherwise the page's own resource would be replaced with a Task.
@@ -95,6 +99,14 @@ export function useServiceDetail(id: string | undefined) {
 
         setData((previous) => {
           labelsChanged = !sameLabels(previous.service.Spec.Labels, service.Spec.Labels);
+
+          if (
+            savedLabelsIndex.current !== null &&
+            service.Version.Index > savedLabelsIndex.current
+          ) {
+            labelsChanged = true;
+            savedLabelsIndex.current = null;
+          }
 
           return { ...previous, service };
         });
@@ -168,14 +180,15 @@ export function useServiceDetail(id: string | undefined) {
     [updateService],
   );
 
-  // Integrations and links are read from the labels on the server, and the
-  // stream's copy will no longer differ from this one to prompt the refetch.
   const onLabelsSaved = useCallback(
     (labels: Record<string, string>) => {
-      updateService((current) => ({ ...current, Spec: { ...current.Spec, Labels: labels } }));
-      refetchService();
+      updateService((current) => {
+        savedLabelsIndex.current = current.Version.Index;
+
+        return { ...current, Spec: { ...current.Spec, Labels: labels } };
+      });
     },
-    [updateService, refetchService],
+    [updateService],
   );
 
   const onHealthcheckSaved = useCallback(

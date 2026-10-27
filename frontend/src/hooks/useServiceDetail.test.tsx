@@ -265,7 +265,9 @@ describe("useServiceDetail", () => {
     );
   });
 
-  it("refetches the detail after a labels save, for the integrations read from them", async () => {
+  // The server's cache trails the save, so asking it at once would hand back
+  // the old labels; the stream's echo of the save is the earliest safe moment.
+  it("refetches the detail on the stream's echo of a labels save, not before", async () => {
     const { result } = renderHook(() => useServiceDetail("svc1"), {
       wrapper: createWrapper(createTestQueryClient()),
     });
@@ -273,21 +275,28 @@ describe("useServiceDetail", () => {
     await waitFor(() => expect(result.current.service).not.toBeNull());
     const fetches = vi.mocked(api.service).mock.calls.length;
     const labels = { "caddy.encode": "gzip" };
-
-    vi.mocked(api.service).mockResolvedValue({
-      data: {
-        service: { ...service, Spec: { ...service.Spec, Labels: labels } },
-        integrations: [{ kind: "caddy" }],
-      },
-      allowedMethods: new Set<string>(),
-      canonicalPath: "/services/svc1",
-    } as never);
+    const saved = { ...service, Version: { Index: 2 }, Spec: { ...service.Spec, Labels: labels } };
 
     act(() => {
       result.current.onLabelsSaved(labels);
     });
 
-    await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1));
+    await waitFor(() => expect(result.current.serviceLabels).toEqual(labels));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(api.service).toHaveBeenCalledTimes(fetches);
+
+    vi.mocked(api.service).mockResolvedValue({
+      data: { service: saved, integrations: [{ kind: "caddy" }] },
+      allowedMethods: new Set<string>(),
+      canonicalPath: "/services/svc1",
+    } as never);
+
+    act(() => {
+      emit({ type: "service", action: "update", id: "svc1", resource: saved });
+    });
+
+    // Sooner than the stream's debounced invalidation would ask.
+    await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1), { timeout: 300 });
     await waitFor(() =>
       expect(result.current.integrations).toEqual([expect.objectContaining({ kind: "caddy" })]),
     );
