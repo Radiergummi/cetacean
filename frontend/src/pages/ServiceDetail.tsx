@@ -14,7 +14,7 @@ import ResourceName from "../components/ResourceName";
 import {
   CapabilitiesEditor,
   CommandEditor,
-  ConfigsEditor,
+  DataRefsEditor,
   DeploymentChanges,
   DnsEditor,
   EnvEditor,
@@ -25,7 +25,6 @@ import {
   PortsEditor,
   ReplicaCard,
   RuntimeEditor,
-  SecretsEditor,
   ServiceActions,
 } from "../components/service-detail";
 import { DeployConfigSection } from "../components/service-detail/DeployConfigSection";
@@ -298,24 +297,26 @@ export default function ServiceDetail() {
       />
 
       {/* Configs */}
-      <ConfigsEditor
+      <DataRefsEditor
+        kind="config"
         serviceId={id!}
-        configs={(containerSpec?.Configs ?? []).map((cfg) => ({
-          configID: cfg.ConfigID,
-          configName: cfg.ConfigName,
-          fileName: cfg.File?.Name ?? "",
+        refs={(containerSpec?.Configs ?? []).map(({ ConfigID, ConfigName, File }) => ({
+          id: ConfigID,
+          name: ConfigName,
+          fileName: File?.Name ?? "",
         }))}
         onSaved={detail.refetchService}
         canEdit={detail.editable.has("configs")}
       />
 
       {/* Secrets */}
-      <SecretsEditor
+      <DataRefsEditor
+        kind="secret"
         serviceId={id!}
-        secrets={(containerSpec?.Secrets ?? []).map((sec) => ({
-          secretID: sec.SecretID,
-          secretName: sec.SecretName,
-          fileName: sec.File?.Name ?? "",
+        refs={(containerSpec?.Secrets ?? []).map(({ SecretID, SecretName, File }) => ({
+          id: SecretID,
+          name: SecretName,
+          fileName: File?.Name ?? "",
         }))}
         onSaved={detail.refetchService}
         canEdit={detail.editable.has("secrets")}

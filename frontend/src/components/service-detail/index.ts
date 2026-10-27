@@ -1,6 +1,6 @@
 export { CapabilitiesEditor } from "./CapabilitiesEditor";
 export { CommandEditor } from "./CommandEditor";
-export { ConfigsEditor } from "./ConfigsEditor";
+export { DataRefsEditor } from "./DataRefsEditor";
 export { DeploymentChanges } from "./DeploymentChanges";
 export { DnsEditor } from "./DnsEditor";
 export { EndpointModeEditor } from "./EndpointModeEditor";
@@ -17,5 +17,4 @@ export { ReplicaCard } from "./ReplicaCard";
 export { ResourcesEditor } from "./ResourcesEditor";
 export type { AllocationData, ServiceResourceShape } from "./ResourcesEditor";
 export { RuntimeEditor } from "./RuntimeEditor";
-export { SecretsEditor } from "./SecretsEditor";
 export { ServiceActions } from "./ServiceActions";
