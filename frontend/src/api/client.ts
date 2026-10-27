@@ -873,7 +873,11 @@ export const api = {
       schema.collectionOf(schema.stackSummarySchema),
     ).then(({ data }) => data.items),
   stack: (name: string, signal?: AbortSignal) =>
-    fetchJSON<StackResponse>(`/stacks/${name}`, signal, schema.stackDetailResponseSchema),
+    fetchJSON<StackResponse>(
+      `/stacks/${encodeURIComponent(name)}`,
+      signal,
+      schema.stackDetailResponseSchema,
+    ),
   stackCompose: (name: string, signal?: AbortSignal) =>
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>

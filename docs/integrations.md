@@ -84,11 +84,12 @@ A value that is an `http` or `https` URL becomes a link, opening in a new tab. A
 percent-encoded, and an internationalized host name is converted to its ASCII form. Any other value is shown as plain
 text, and so is a URL that has:
 
+- no `://` after the scheme
 - no host, or a host that isn't a valid host name or a bracketed IPv6 address, such as an IPv6 address without
-  brackets
+  brackets, or an internationalized name with an underscore or a leading hyphen
 - a user name or password
 - a `%` in its host
-- a port above 65535
+- a port that isn't a number, or is above 65535
 
 ## API
 

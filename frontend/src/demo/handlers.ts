@@ -83,9 +83,9 @@ function stackLinks(services: Service[]): ServiceLink[] {
   }
 
   const compare = (a = "", b = "") => (a < b ? -1 : a > b ? 1 : 0);
-  const links: ServiceLink[] = [...merged.values()].map((link) => ({
+  const links: ServiceLink[] = [...merged.values()].map(({ services: names, ...link }) => ({
     ...link,
-    services: [...link.services].sort(compare),
+    services: names.sort(compare),
   }));
 
   return links.sort(

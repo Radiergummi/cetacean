@@ -9071,10 +9071,11 @@ components:
         text:
           type: string
           description: >
-            The label's value, when it is not an http or https URL, or is one
-            without a valid host: none, one that is neither a host name nor a
-            bracketed IPv6 address, one with a `%` in it, a user name or
-            password, or a port above 65535
+            The label's value, when it is not an http or https URL followed by
+            `://`, or is one without a valid host: none, one that is neither a
+            host name nor a bracketed IPv6 address, an internationalized name
+            IDNA rejects, one with a `%` in it, a user name or password, or a
+            port that is not a number up to 65535
           example: pager:web-team
         services:
           type: array
