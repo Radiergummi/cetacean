@@ -174,18 +174,19 @@ Tracing stays off until the endpoint is set. A malformed endpoint stops startup 
 
 ## Troubleshooting
 
-| Symptom                                          | Cause                                                                                                                                      |
-|--------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| Client reports `unsupported protocol version`    | The client is older than MCP revision `2025-11-25`. Upgrade it; see [Protocol revisions](#protocol-revisions).                             |
-| Every agent must sign in again after a redeploy  | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                                                  |
-| Sign-in fails or redirects somewhere unreachable | [`server.public_url`][server.public_url] isn't the URL clients reach from outside.                                                         |
-| A revoked agent still works for a while          | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].                                      |
-| A subscription is refused with `429`             | 64 subscription streams are already open. The client retries after `Retry-After`.                                                          |
-| A subscription is refused with `Invalid params`  | It names more than 256 resource URIs, the most one stream watches. See [MCP tools and resources][mcp-tools].                               |
-| `get_logs` fails with "too many log reads"       | 32 log reads are in flight across MCP and the REST API, or 8 from this caller. Retry shortly.                                              |
-| A call is refused with `413`                     | Its request body is over 1 MiB.                                                                                                            |
-| An agent reports a change it made as gone        | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.                                           |
-| `cert` auth mode: client can't connect           | mTLS can't drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off. |
+| Symptom                                                      | Cause                                                                                                                                                                  |
+|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Client reports `unsupported protocol version`                | The client is older than MCP revision `2025-11-25`. Upgrade it; see [Protocol revisions](#protocol-revisions).                                                         |
+| Every agent must sign in again after a redeploy              | [`oauth.signing_key`][oauth.signing_key] is unset, so a new key was generated at startup.                                                                              |
+| Sign-in fails or redirects somewhere unreachable             | [`server.public_url`][server.public_url] isn't the URL clients reach from outside.                                                                                     |
+| Every request to `/mcp` is refused with `403 forbidden host` | A proxy on the same host keeps the public `Host`, and [`server.public_url`][server.public_url] doesn't name it. See [Behind a reverse proxy](#behind-a-reverse-proxy). |
+| A revoked agent still works for a while                      | Access tokens stay valid until they expire. Lower [`oauth.access_token_ttl`][oauth.access_token_ttl].                                                                  |
+| A subscription is refused with `429`                         | 64 subscription streams are already open. The client retries after `Retry-After`.                                                                                      |
+| A subscription is refused with `Invalid params`              | It names more than 256 resource URIs, the most one stream watches. See [MCP tools and resources][mcp-tools].                                                           |
+| `get_logs` fails with "too many log reads"                   | 32 log reads are in flight across MCP and the REST API, or 8 from this caller. Retry shortly.                                                                          |
+| A call is refused with `413`                                 | Its request body is over 1 MiB.                                                                                                                                        |
+| An agent reports a change it made as gone                    | Its result was discarded after [`mcp.task_ttl`][mcp.task_ttl]. The change itself still happened.                                                                       |
+| `cert` auth mode: client can't connect                       | mTLS can't drive a browser consent screen. Set [`mcp.auth_bypass`][mcp.auth_bypass] to `cert`; the authorization server can then stay off.                             |
 
 ## Behind a reverse proxy
 
@@ -206,6 +207,11 @@ as from under the prefix. RFC 9728 §3.1 has a client build the metadata URL by 
 `https://host/.well-known/oauth-protected-resource/prefix/mcp`—a path that never reaches Cetacean
 if the proxy only forwards `https://host/prefix/*`. Both spellings are served; only the first is the
 one a conformant client derives on its own.
+
+A proxy on the same host as Cetacean (`tailscale serve`, for one) connects over loopback and usually keeps the
+public `Host`. `/mcp` refuses a loopback request whose `Host` isn't a loopback name, to guard against DNS
+rebinding, and admits only the host of [`server.public_url`][server.public_url] as the exception. Set it to the
+URL the proxy serves, or have the proxy rewrite `Host` to `localhost`.
 
 ## How it works
 

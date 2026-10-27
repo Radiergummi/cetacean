@@ -5482,6 +5482,14 @@ paths:
                     properties:
                       stack:
                         $ref: "#/components/schemas/StackDetail"
+                      links:
+                        type: array
+                        description: >
+                          The custom links of every member service, with exact
+                          duplicates merged into one link naming each service
+                          that declares it. Absent when no member declares one.
+                        items:
+                          $ref: "#/components/schemas/ServiceLink"
               example:
                 "@context": /api/context.jsonld
                 "@id": /stacks/myapp
@@ -9088,8 +9096,57 @@ components:
               description: Detected third-party integrations (e.g. Traefik)
               items:
                 $ref: "#/components/schemas/Integration"
+            links:
+              type: array
+              description: >
+                Custom links from the service's `cetacean.link.*` labels, sorted
+                by id. Absent when the service declares none.
+              items:
+                $ref: "#/components/schemas/ServiceLink"
             imageUpdate:
               $ref: "#/components/schemas/ImageUpdate"
+
+    ServiceLink:
+      type: object
+      description: >
+        One custom link declared by a `cetacean.link.<id>` service label.
+        Exactly one of `href` and `text` is present: `href` for an http(s) URL,
+        `text` for any other value, which is not safe to render as a link.
+      required: [id, title]
+      properties:
+        id:
+          type: string
+          description: The `<id>` segment of the label
+          example: grafana
+        title:
+          type: string
+          description: The `cetacean.link.<id>.title` label, or the id when unset
+          example: Dashboard
+        href:
+          type: string
+          format: uri
+          description: >
+            The label's value, when it is an http or https URL, with any
+            character a URI can't hold percent-encoded and an internationalized
+            host converted to punycode
+          example: https://grafana.example.com/d/web
+        text:
+          type: string
+          description: >
+            The label's value, when it is not an http or https URL followed by
+            `://`, or is one without a valid host: none, one that is neither a
+            host name nor a bracketed IPv6 address, an internationalized name
+            IDNA rejects, one with a `%` in it, a user name or password, or a
+            port that is not a number up to 65535
+          example: pager:web-team
+        services:
+          type: array
+          description: >
+            The member services declaring the link, sorted. Present on a
+            stack's links only.
+          items:
+            type: string
+          example: [myapp_api, myapp_worker]
 
     ImageUpdate:
       type: object

@@ -1,6 +1,6 @@
 ---
 title: Integrations
-description: Structured panels for Traefik, Caddy, Shepherd, Gantry, swarm-cronjob, Diun, and doco-cd on the service detail page.
+description: Structured panels for Traefik, Caddy, Shepherd, Gantry, swarm-cronjob, Diun, and doco-cd on the service detail page, and custom links from labels.
 category: guide
 tags: [integrations, traefik, caddy, shepherd, gantry, swarm-cronjob, diun, doco-cd]
 ---
@@ -57,11 +57,47 @@ configuration language of their own. Editing either opens the raw label view.
 The structured Traefik editor changes only the labels its fields show. Labels it doesn't model, such as TCP
 routers or `tls.options`, are kept when you save it.
 
+## Custom links
+
+A service can link to its dashboard, runbook, or repository through its own labels, so the links live in the stack
+file next to the service:
+
+```yaml
+services:
+  web:
+    deploy:
+      labels:
+        cetacean.link.grafana: https://grafana.example.com/d/web
+        cetacean.link.grafana.title: Dashboard
+        cetacean.link.runbook: https://wiki.example.com/runbooks/web
+```
+
+Each `cetacean.link.<id>` label adds one link, and the optional `cetacean.link.<id>.title` names it; without one,
+the link reads as `<id>`. Links are sorted by `<id>`, and a title without a matching link is ignored, as is a value
+that is empty or only whitespace. The labels belong under `deploy.labels`, on the service rather than its containers.
+
+The service detail page shows the links under its title, and the stack detail page the links of all its services,
+with exact duplicates merged. Links that share a title also show their `<id>`, and on a stack, where the `<id>` is
+shared too, the services that declare them.
+
+A value that is an `http` or `https` URL becomes a link, opening in a new tab. Any character a URL can't hold is
+percent-encoded, and an internationalized host name is converted to its ASCII form. Any other value is shown as plain
+text, and so is a URL that has:
+
+- no `://` after the scheme
+- no host, or a host that isn't a valid host name or a bracketed IPv6 address, such as an IPv6 address without
+  brackets, or an internationalized name with an underscore or a leading hyphen
+- a user name or password
+- a `%` in its host
+- a port that isn't a number, or is above 65535
+
 ## API
 
 Detected integrations appear as an `integrations` array on `GET /services/{id}`, omitted when nothing was detected.
 Each one names the service `labels` it was read from, which the dashboard leaves out of the generic labels section.
-See the [API reference][api] for the full schema.
+Custom links appear as a `links` array on `GET /services/{id}` and `GET /stacks/{name}`, each with an `id`, a
+`title`, and either an `href` for an `http` or `https` URL or a `text` for anything else. A stack's links also name
+the `services` declaring each one. See the [API reference][api] for the full schema.
 
 [api]: api
 [detail-pages]: dashboard#detail-pages

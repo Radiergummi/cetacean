@@ -466,6 +466,9 @@ digest the service runs, with the same fields as the [API][api] reports. `sugges
 the newer digest, is what to pass to `update_service_image`. It's absent with
 [`server.image_check`][server.image_check] off.
 
+A service's `details` carries `links` when it declares [custom links][custom-links], and a stack's `details` the
+links of all its services, each naming the `services` that declare it, in the same shape as the API reports.
+
 Every numeric field in `details` names its unit, such as `cpuLimitCores` (a float, in cores) and
 `memoryLimitBytes`, or is reported as a duration string like `"10s"` (`healthcheckInterval`, an update
 policy's `delay` and `monitor`). Docker's own types express these as unlabeled NanoCPU or nanosecond
@@ -548,6 +551,7 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 [api.compatibility]:  api#compatibility
 [api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
+[custom-links]:  integrations#custom-links
 [dashboard]:  dashboard
 [mcp]:  mcp
 [mcp.operations_level]:  configuration#mcp.operations_level

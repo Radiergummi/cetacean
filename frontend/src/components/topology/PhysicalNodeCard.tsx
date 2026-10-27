@@ -1,5 +1,11 @@
 import ResourceName from "../ResourceName";
+import { usePhysicalView } from "./PhysicalViewContext";
+import { colorForValue } from "@/components/metrics/ResourceGauge";
+import type { NodeMetrics } from "@/hooks/useNodeMetrics";
+import { placementUsageKey, type PlacementUsage } from "@/hooks/usePlacementMetrics";
+import { formatBytes, formatCores, formatNumber, formatPercentage } from "@/lib/format";
 import { replicaHealthColor } from "@/lib/statusColor";
+import { dimmedByNetwork, urnToId } from "@/lib/topologyTransform";
 import type { NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,18 +16,80 @@ type ServiceSummary = {
   running: number;
   total: number;
   states: string[];
+  networks: string[];
 };
 
 export type PhysicalNodeData = {
   label: string;
+  address: string | undefined;
   role: string;
   state: string;
   availability: string;
   services: ServiceSummary[];
 };
 
-export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalNodeData }) {
+function NodeUsage({ metrics }: { metrics: NodeMetrics }) {
+  const figures = [
+    ["CPU", metrics.cpu],
+    ["Mem", metrics.memory],
+  ] as const;
+
+  if (figures.every(([, value]) => value == null)) {
+    return null;
+  }
+
+  return (
+    <span className="ms-auto flex shrink-0 gap-2 text-[10px] whitespace-nowrap tabular-nums">
+      {figures.map(([label, value]) => (
+        <span
+          key={label}
+          style={value != null ? { color: colorForValue(value) } : undefined}
+          className={value == null ? "text-muted-foreground" : undefined}
+        >
+          {label} {value != null ? formatPercentage(value, 0) : "—"}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Cores, with a busy service below the formatter's precision kept apart from an idle one.
+ */
+function formatServiceCores(cores: number): string {
+  if (cores > 0 && cores < 0.005) {
+    return `<${formatNumber(0.01, 2)} cores`;
+  }
+
+  return formatCores(cores);
+}
+
+function ServiceUsage({ usage }: { usage: PlacementUsage }) {
+  const figures = [
+    usage.cpu != null ? formatServiceCores(usage.cpu / 100) : null,
+    usage.memory != null ? formatBytes(usage.memory) : null,
+  ].filter((figure) => figure !== null);
+
+  if (figures.length === 0) {
+    return null;
+  }
+
+  const text = figures.join(" · ");
+
+  return (
+    <span
+      className="ms-auto min-w-0 truncate text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+      title={text}
+    >
+      {text}
+    </span>
+  );
+}
+
+export default function PhysicalNodeCard({ id, data }: NodeProps & { data: PhysicalNodeData }) {
   const navigate = useNavigate();
+  const { network, usage, nodeMetrics } = usePhysicalView();
+  const nodeId = urnToId(id);
 
   return (
     <div
@@ -44,42 +112,49 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
         {data.availability !== "active" && (
           <span className="text-[10px] text-muted-foreground">{data.availability}</span>
         )}
+        {nodeMetrics && <NodeUsage metrics={nodeMetrics(data.label, data.address)} />}
       </div>
 
       {data.services.length === 0 ? (
         <div className="text-xs text-muted-foreground">No running tasks</div>
       ) : (
         <div className="grid grid-cols-3 gap-2">
-          {data.services.map((svc) => (
-            <button
-              key={svc.serviceId}
-              type="button"
-              aria-label={`Service ${svc.serviceName}`}
-              className="cursor-pointer rounded-lg border bg-card p-2.5 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-              onClick={() => navigate(`/services/${svc.serviceId}`)}
-            >
-              <div
-                className="mb-0.5 truncate text-xs font-medium"
-                title={svc.serviceName}
+          {data.services.map((svc) => {
+            const serviceUsage = usage[placementUsageKey(svc.serviceId, nodeId)];
+
+            return (
+              <button
+                key={svc.serviceId}
+                type="button"
+                aria-label={`Service ${svc.serviceName}`}
+                data-dimmed={dimmedByNetwork(svc.networks, network) || undefined}
+                className="cursor-pointer rounded-lg border bg-card p-2.5 text-left shadow-sm transition-[box-shadow,opacity] hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-dimmed:opacity-30"
+                onClick={() => navigate(`/services/${svc.serviceId}`)}
               >
-                <ResourceName name={svc.serviceName} />
-              </div>
-              <div
-                className="mb-1 truncate text-[11px] text-muted-foreground"
-                title={svc.image}
-              >
-                {svc.image}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span
-                  className={`inline-block size-2 rounded-full ${replicaHealthColor(svc.running, svc.total)}`}
-                />
-                <span>
-                  {svc.running}/{svc.total} tasks
-                </span>
-              </div>
-            </button>
-          ))}
+                <div
+                  className="mb-0.5 truncate text-xs font-medium"
+                  title={svc.serviceName}
+                >
+                  <ResourceName name={svc.serviceName} />
+                </div>
+                <div
+                  className="mb-1 truncate text-[11px] text-muted-foreground"
+                  title={svc.image}
+                >
+                  {svc.image}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span
+                    className={`inline-block size-2 rounded-full ${replicaHealthColor(svc.running, svc.total)}`}
+                  />
+                  <span className="shrink-0 whitespace-nowrap">
+                    {svc.running}/{svc.total} tasks
+                  </span>
+                  {serviceUsage && <ServiceUsage usage={serviceUsage} />}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

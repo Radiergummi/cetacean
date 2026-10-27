@@ -16,6 +16,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func TestBuildNetworkJGF(t *testing.T) {
@@ -68,7 +69,7 @@ func TestBuildNetworkJGF(t *testing.T) {
 		{ID: "net1", Name: "mystack_default", Driver: "overlay", Scope: "swarm"},
 	}
 
-	g := buildNetworkJGF(services, networks, nil, "/api/context.jsonld")
+	g := buildNetworkJGF(services, cluster.OverlayNetworks(networks), nil, "/api/context.jsonld")
 
 	// 2 service nodes
 	if len(g.Nodes) != 2 {
@@ -192,16 +193,13 @@ func TestBuildPlacementJGF(t *testing.T) {
 		},
 	}
 
-	svcNames := map[string]string{"svc1": "nginx"}
-	svcImages := map[string]string{"svc1": "nginx:1.25"}
-	readableServiceIDs := map[string]bool{"svc1": true}
+	svc, _ := c.GetService("svc1")
 
 	g := buildPlacementJGF(
 		clusterNodes,
 		c,
-		svcNames,
-		svcImages,
-		readableServiceIDs,
+		map[string]swarm.Service{"svc1": svc},
+		nil,
 		"/api/context.jsonld",
 	)
 
@@ -389,7 +387,7 @@ func TestBuildNetworkJGF_EmptyInput(t *testing.T) {
 
 func TestBuildPlacementJGF_EmptyInput(t *testing.T) {
 	c := cache.New(nil)
-	g := buildPlacementJGF(nil, c, nil, nil, nil, "/api/context.jsonld")
+	g := buildPlacementJGF(nil, c, nil, nil, "/api/context.jsonld")
 
 	if g.ID != "placement" {
 		t.Errorf("id=%q, want placement", g.ID)
@@ -473,7 +471,12 @@ func TestBuildNetworkJGF_IsolatedService(t *testing.T) {
 		// No VIPs.
 	})
 
-	g := buildNetworkJGF(c.ListServices(), c.ListNetworks(), c.RunningTaskCounts(), jsonLDContext)
+	g := buildNetworkJGF(
+		c.ListServices(),
+		cluster.OverlayNetworks(c.ListNetworks()),
+		c.RunningTaskCounts(),
+		jsonLDContext,
+	)
 
 	if len(g.Nodes) != 1 {
 		t.Fatalf("nodes=%d, want 1", len(g.Nodes))
@@ -514,11 +517,15 @@ func TestBuildPlacementJGF_TaskImageFallback(t *testing.T) {
 		Spec:      swarm.TaskSpec{}, // No ContainerSpec.
 	})
 
-	svcNames := map[string]string{"svc1": "webapp"}
-	svcImages := map[string]string{"svc1": "webapp:v2"}
-	readable := map[string]bool{"svc1": true}
+	svc, _ := c.GetService("svc1")
 
-	g := buildPlacementJGF(c.ListNodes(), c, svcNames, svcImages, readable, jsonLDContext)
+	g := buildPlacementJGF(
+		c.ListNodes(),
+		c,
+		map[string]swarm.Service{"svc1": svc},
+		nil,
+		jsonLDContext,
+	)
 
 	if len(g.Hyperedges) != 1 {
 		t.Fatalf("hyperedges=%d, want 1", len(g.Hyperedges))
@@ -769,7 +776,7 @@ func TestBuildNetworkJGFSeesDNSRRAttachments(t *testing.T) {
 	}
 	networks := []network.Summary{{ID: "net1", Name: "app_default", Driver: "overlay"}}
 
-	g := buildNetworkJGF(services, networks, nil, "/api/context.jsonld")
+	g := buildNetworkJGF(services, cluster.OverlayNetworks(networks), nil, "/api/context.jsonld")
 
 	if len(g.Edges) != 1 {
 		t.Fatalf("edges=%d, want 1 — the dnsrr service must still share net1", len(g.Edges))
@@ -811,9 +818,8 @@ func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
 	g := buildPlacementJGF(
 		clusterNodes,
 		c,
-		map[string]string{"svc1": "web"},
-		map[string]string{"svc1": "nginx"},
-		map[string]bool{"svc1": true},
+		map[string]swarm.Service{"svc1": {ID: "svc1"}},
+		nil,
 		"/api/context.jsonld",
 	)
 
@@ -867,7 +873,12 @@ func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
 	}
 
 	names := func() []string {
-		g := buildNetworkJGF(services, networks, nil, "/api/context.jsonld")
+		g := buildNetworkJGF(
+			services,
+			cluster.OverlayNetworks(networks),
+			nil,
+			"/api/context.jsonld",
+		)
 		if len(g.Edges) != 1 {
 			t.Fatalf("edges=%d, want 1", len(g.Edges))
 		}

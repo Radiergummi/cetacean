@@ -356,6 +356,7 @@ func (h *Handlers) serviceRepresentation(r *http.Request) (any, error) {
 	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
 		detail.Integrations = detected
 	}
+	detail.Links = cluster.ServiceLinks(svc.Spec.Labels)
 	detail.ImageUpdate = h.imageUpdate(svc)
 
 	return NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), nil
@@ -475,6 +476,7 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 
 	return NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,
+		Links: cluster.StackLinks(detail.Services),
 	}), nil
 }
 

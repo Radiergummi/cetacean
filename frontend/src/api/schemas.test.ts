@@ -79,6 +79,29 @@ describe("response validation", () => {
     expect(issuesOf(0).join(" ")).toContain("node.ID");
   });
 
+  it("checks the custom links a stack carries", async () => {
+    const stack = {
+      name: "web",
+      services: [],
+      configs: [],
+      secrets: [],
+      networks: [],
+      volumes: [],
+    };
+
+    mockFetch.mockReturnValue(
+      jsonResponse({ stack, links: [{ id: "repo", title: "repo", services: ["web_api"] }] }),
+    );
+    await api.stack("web");
+
+    expect(consoleError).not.toHaveBeenCalled();
+
+    mockFetch.mockReturnValue(jsonResponse({ stack, links: [{ id: "repo", title: 42 }] }));
+    await api.stack("other");
+
+    expect(issuesOf(0).join(" ")).toContain("links.0.title");
+  });
+
   it("accepts a field the server added that the dashboard does not know", async () => {
     mockFetch.mockReturnValue(jsonResponse({ node: node({ SomethingNew: true }) }));
 

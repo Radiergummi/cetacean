@@ -358,6 +358,11 @@ export interface StackDetail {
   volumes: Volume[];
 }
 
+export interface StackResponse {
+  stack: StackDetail;
+  links?: ServiceLink[] | undefined;
+}
+
 export interface SpecChange {
   field: string;
   old?: string | undefined;
@@ -500,10 +505,27 @@ export type Integration =
   | DocoCDIntegration
   | GantryIntegration;
 
+/**
+ * A custom link from a `cetacean.link.<id>` service label. Exactly one of
+ * `href` and `text` is set: `href` only for an http(s) URL.
+ */
+export interface ServiceLink {
+  id: string;
+  title: string;
+  href?: string | undefined;
+  text?: string | undefined;
+
+  /**
+   * The member services declaring the link, on a stack's links only.
+   */
+  services?: string[] | undefined;
+}
+
 export interface ServiceDetail {
   service: Service;
   changes?: SpecChange[] | undefined;
   integrations?: Integration[] | undefined;
+  links?: ServiceLink[] | undefined;
   imageUpdate?: ImageUpdate | undefined;
 }
 

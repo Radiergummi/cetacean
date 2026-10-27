@@ -790,6 +790,11 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
 
+`GET /topology` as JSON Graph Format holds two graphs. `network` has a vertex per service and an edge between two
+services sharing an overlay network. `placement` has a vertex per node and per service, and a placement entry per
+service listing the nodes its tasks run on. A node vertex carries `address`, and a service vertex `networks`, the
+overlays it's attached to as `id` and `name`, limited to the networks you may read.
+
 `GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
@@ -800,6 +805,11 @@ default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`
 `excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't counted. Sorting
 by `addresses` orders by the share in use. The counts cover every service and task on the network, including ones the
 caller can't read. [Network addresses](dashboard#network-addresses) explains the figure.
+
+`GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
+`GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either
+an `href`, for an `http` or `https` URL, or a `text`, for any other value. A stack's links also name the `services`
+declaring each one.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

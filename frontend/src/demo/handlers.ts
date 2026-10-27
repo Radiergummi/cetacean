@@ -30,11 +30,12 @@ import type {
   Service,
   ServiceConfigRef,
   ServiceDetail,
+  ServiceLink,
   ServiceMount,
   ServiceNetworkRef,
   ServiceRef,
   ServiceSecretRef,
-  StackDetail,
+  StackResponse,
   StackSummary,
   SwarmInfo,
   Task,
@@ -48,6 +49,54 @@ import type {
 import { http, HttpResponse, type JsonBodyType, type PathParams } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
+
+/**
+ * What the server would read from the dataset's `cetacean.link.*` labels,
+ * written out rather than parsed.
+ */
+const demoServiceLinks: Record<string, ServiceLink[]> = {
+  webshop_api: [
+    { id: "grafana", title: "Dashboard", href: "https://grafana.example.com/d/webshop-api" },
+    { id: "oncall", title: "On call", text: "pager:webshop-team" },
+  ],
+};
+
+/**
+ * The server's merge: exact duplicates become one link naming every service
+ * that declares it, ordered by id, then value, then title.
+ */
+function stackLinks(services: Service[]): ServiceLink[] {
+  const merged = new Map<string, ServiceLink & { services: string[] }>();
+
+  for (const {
+    Spec: { Name },
+  } of services) {
+    for (const link of demoServiceLinks[Name] ?? []) {
+      const key = JSON.stringify([link.id, link.title, link.href, link.text]);
+      const existing = merged.get(key);
+
+      if (existing) {
+        existing.services.push(Name);
+      } else {
+        merged.set(key, { ...link, services: [Name] });
+      }
+    }
+  }
+
+  const compare = (a = "", b = "") => (a < b ? -1 : a > b ? 1 : 0);
+  const links: ServiceLink[] = [...merged.values()].map(({ services: names, ...link }) => ({
+    ...link,
+    services: names.sort(compare),
+  }));
+
+  return links.sort(
+    (a, b) =>
+      compare(a.id, b.id) ||
+      compare(a.href, b.href) ||
+      compare(a.text, b.text) ||
+      compare(a.title, b.title),
+  );
+}
 
 function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   return HttpResponse.json(data, { status });
@@ -177,6 +226,17 @@ function createTask(service: Service, slot: number, node: Node): Task {
     ServiceName: service.Spec.Name,
     NodeHostname: node.Description.Hostname,
   };
+}
+
+/**
+ * Plain string comparison, the order the Go handler sorts in.
+ */
+function compareStrings(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+
+  return a < b ? -1 : 1;
 }
 
 /**
@@ -872,6 +932,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             role: node.Spec.Role,
             state: node.Status.State,
             availability: node.Spec.Availability,
+            address: node.Status.Addr,
           },
         };
 
@@ -916,6 +977,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             "@context": context,
             kind: "service",
             image: (service?.Spec.TaskTemplate?.ContainerSpec?.Image ?? "").split("@")[0],
+            networks: (serviceNetworks.get(serviceId) ?? [])
+              .map((id) => ({ id: urn("network", id), name: overlays.get(id)?.Name ?? id }))
+              .sort((a, b) => compareStrings(a.name, b.name) || compareStrings(a.id, b.id)),
           },
         };
 
@@ -1234,6 +1298,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           service,
           changes: [],
           integrations: [],
+          ...(demoServiceLinks[service.Spec.Name] && {
+            links: demoServiceLinks[service.Spec.Name],
+          }),
         } satisfies ServiceDetail),
       );
     }),
@@ -1285,13 +1352,16 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = stack.services
+        .map((id) => dataset.servicesByID.get(id))
+        .filter(Boolean) as Service[];
+      const links = stackLinks(services);
+
       return jsonResponse(
         detailEnvelope(`/stacks/${stackName}`, "Stack", {
           stack: {
             name: stackName,
-            services: stack.services
-              .map((id) => dataset.servicesByID.get(id))
-              .filter(Boolean) as Service[],
+            services,
             configs: stack.configs
               .map((id) => dataset.configsByID.get(id))
               .filter(Boolean) as Config[],
@@ -1305,7 +1375,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
               .map((name) => dataset.volumesByName.get(name))
               .filter(Boolean) as Volume[],
           },
-        } satisfies { stack: StackDetail }),
+          ...(links.length > 0 && { links }),
+        } satisfies StackResponse),
       );
     }),
 
