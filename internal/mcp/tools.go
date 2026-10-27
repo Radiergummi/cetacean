@@ -705,6 +705,7 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 			svc,
 			running,
 			s.cache.CompletedJobTaskCount(svc.ID),
+			s.cache.EligibleNodeCounts(svc)[svc.ID],
 			s.cache.IsFlapping(svc.ID),
 		),
 		Version: svc.Version.Index,

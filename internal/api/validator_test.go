@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -125,6 +126,19 @@ func TestDerivedETagVaries(t *testing.T) {
 		c.SetNode(swarm.Node{ID: "fresh"})
 		if got := listOnce(t, h, base, nil, "").Header().Get("ETag"); got == baseline {
 			t.Error("adding a node did not change the validator")
+		}
+	})
+
+	// A service stops flapping when its failures age out of the window, with
+	// no cache mutation behind it; recording straight into the tracker is that.
+	t.Run("flapping", func(t *testing.T) {
+		before := listOnce(t, h, base, nil, "").Header().Get("ETag")
+
+		for range 3 {
+			c.Restarts().Record("svc", time.Now())
+		}
+		if got := listOnce(t, h, base, nil, "").Header().Get("ETag"); got == before {
+			t.Error("a service starting to flap did not change the validator")
 		}
 	})
 

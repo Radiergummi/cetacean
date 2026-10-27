@@ -103,6 +103,10 @@ func LoadSizing(fc *fileConfig) (*SizingConfig, error) {
 		return nil, err
 	}
 
+	if lookback < time.Minute {
+		return nil, fmt.Errorf("sizing.thresholds.lookback %s: want at least 1m", lookback)
+	}
+
 	return &SizingConfig{
 		HeadroomMultiplier: headroom,
 		OverProvisioned:    overProv,

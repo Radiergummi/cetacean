@@ -165,6 +165,7 @@ func PlacementGraph(
 	tasks []swarm.Task,
 	services []swarm.Service,
 	flapping map[string]bool,
+	eligible map[string]int,
 ) TopologyGraph {
 	visibleNodes := make(map[string]struct{}, len(clusterNodes))
 	for _, n := range clusterNodes {
@@ -233,6 +234,7 @@ func PlacementGraph(
 			svc,
 			runningPerService[svc.ID],
 			completedPerService[svc.ID],
+			eligible[svc.ID],
 			flapping[svc.ID],
 		)
 		nodes = append(nodes, serviceNode(svc, state))
