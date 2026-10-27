@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
 
+### Fixed
+- The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+
 ## [0.18.0] - 2026-10-24
 
 ### Added

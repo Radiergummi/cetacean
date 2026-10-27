@@ -47,7 +47,7 @@ export default function ResourceCard({
     return (
       <Link
         to={to}
-        className="rounded-lg border bg-card p-4 transition-all hover:border-foreground/20 hover:shadow-sm"
+        className="block rounded-lg border bg-card p-4 transition-all hover:border-foreground/20 hover:shadow-sm"
       >
         {content}
       </Link>
