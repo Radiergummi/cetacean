@@ -32,6 +32,7 @@ const ConfigDetail = lazy(() => import("./pages/ConfigDetail"));
 const ConfigList = lazy(() => import("./pages/ConfigList"));
 const NetworkDetail = lazy(() => import("./pages/NetworkDetail"));
 const NetworkList = lazy(() => import("./pages/NetworkList"));
+const PortList = lazy(() => import("./pages/PortList"));
 const NodeDetail = lazy(() => import("./pages/NodeDetail"));
 const NodeList = lazy(() => import("./pages/NodeList"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -362,6 +363,10 @@ export default function App() {
                   <Route
                     path="/networks"
                     element={<NetworkList />}
+                  />
+                  <Route
+                    path="/ports"
+                    element={<PortList />}
                   />
                   <Route
                     path="/networks/:id"

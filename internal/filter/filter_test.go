@@ -510,3 +510,40 @@ func TestExitCodeOrdersAcrossStates(t *testing.T) {
 		}
 	}
 }
+
+func TestPortEnv(t *testing.T) {
+	port := cache.PublishedPort{
+		PublishedPort: 8080,
+		TargetPort:    80,
+		Protocol:      swarm.PortConfigProtocolTCP,
+		PublishMode:   swarm.PortConfigPublishModeIngress,
+		ServiceName:   "shop_web",
+		Stack:         "shop",
+	}
+
+	for expression, want := range map[string]bool{
+		`published == 8080`:                        true,
+		`published > 1024 && protocol == "tcp"`:    true,
+		`mode == "host"`:                           false,
+		`service == "shop_web" && stack == "shop"`: true,
+		`nodes == 0`:                               true,
+	} {
+		prog, err := Compile(expression, Ports)
+		if err != nil {
+			t.Fatalf("Compile(%q): %v", expression, err)
+		}
+
+		got, err := Evaluate(prog, PortEnv(port, nil))
+		if err != nil {
+			t.Fatalf("Evaluate(%q): %v", expression, err)
+		}
+
+		if got != want {
+			t.Errorf("%s = %v, want %v", expression, got, want)
+		}
+	}
+
+	if _, err := Compile(`published == "8080"`, Ports); err == nil {
+		t.Error("comparing the port to a string should be refused")
+	}
+}

@@ -45,6 +45,7 @@ var (
 	Networks = newEnv(NetworkEnv)
 	Volumes  = newEnv(VolumeEnv)
 	Stacks   = newEnv(StackEnv)
+	Ports    = newEnv(PortEnv)
 )
 
 // Compile parses and type-checks a filter expression against env. It returns
@@ -358,6 +359,21 @@ func StackEnv(s cache.Stack, m map[string]any) map[string]any {
 	m["secrets"] = len(s.Secrets)
 	m["networks"] = len(s.Networks)
 	m["volumes"] = len(s.Volumes)
+	return m
+}
+
+// PortEnv builds an expression environment from a published port.
+func PortEnv(p cache.PublishedPort, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 7)
+	}
+	m["published"] = int(p.PublishedPort)
+	m["target"] = int(p.TargetPort)
+	m["protocol"] = string(p.Protocol)
+	m["mode"] = string(p.PublishMode)
+	m["service"] = p.ServiceName
+	m["stack"] = p.Stack
+	m["nodes"] = len(p.Nodes)
 	return m
 }
 

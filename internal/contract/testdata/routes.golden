@@ -58,6 +58,7 @@ GET /nodes/{id}/tasks  CSV HTML JSON
 GET /opensearch.xml
 GET /plugins  HTML JSON
 GET /plugins/{name}  HTML JSON
+GET /ports  CSV HTML JSON
 GET /profile  HTML JSON
 GET /recommendations  Atom CSV HTML JSON JSONFeed
 GET /search  Atom HTML JSON JSONFeed

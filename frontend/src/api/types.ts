@@ -194,6 +194,9 @@ export interface Task {
       ContainerID: string;
       ExitCode: number;
     };
+    PortStatus?: {
+      Ports?: { PublishMode?: string | undefined }[] | undefined;
+    };
   };
   DesiredState: string;
   Spec: {
@@ -940,4 +943,16 @@ export interface LicenseComponent {
 export interface LicensesResponse {
   generatedAt?: string | undefined;
   components: LicenseComponent[];
+}
+
+export interface PublishedPort {
+  Name?: string | undefined;
+  Protocol: "tcp" | "udp" | "sctp";
+  TargetPort: number;
+  PublishedPort: number;
+  PublishMode: "ingress" | "host";
+  ServiceID: string;
+  ServiceName: string;
+  Stack?: string | undefined;
+  Nodes?: string[] | undefined;
 }

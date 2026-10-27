@@ -1,5 +1,6 @@
 import * as schema from "./schemas";
 import type {
+  PublishedPort,
   ClusterCapacity,
   CollectionResponse,
   Config,
@@ -861,6 +862,8 @@ export const api = {
     fetchText(`/services/${encodeURIComponent(id)}`, signal, "application/yaml"),
   tasks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
+  ports: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<PublishedPort>("/ports", params, signal, schema.publishedPortSchema),
   stacks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Stack>("/stacks", params, signal, schema.stackListSchema),
   stacksSummary: () =>

@@ -13,17 +13,18 @@ import (
 // and prepareList use it to drive the standard filter → search → expr-filter →
 // sort → paginate → respond pipeline.
 type listSpec[T any] struct {
-	resourceType string                    // for setAllowList / Allow header
-	linkTemplate string                    // for Link-Template header (e.g. "/services/{id}")
-	list         func() []T                // cache list method
-	aclName      func(T) string            // maps item → its ACL name; resourceType supplies the type
-	searchName   func(T) string            // nil = no search support
-	filterEnv    filter.Env[T]             // filter.Nodes, filter.Tasks, …
-	sortKeys     map[string]func(T) string // sort field accessors
-	prepare      func([]T) []T             // optional pre-filter transform (e.g. strip secret data)
-	itemType     string                    // JSON-LD @type for each item (e.g. "Node")
-	idFunc       func(T) string            // extracts JSON-LD @id path for each item
-	rows         func([]T) []cluster.Row   // builds the CSV rendering; required
+	resourceType string                                        // for setAllowList / Allow header
+	linkTemplate string                                        // for Link-Template header (e.g. "/services/{id}")
+	list         func() []T                                    // cache list method
+	aclName      func(T) string                                // maps item → its ACL name; resourceType supplies the type
+	searchName   func(T) string                                // nil = no search support
+	filterEnv    filter.Env[T]                                 // filter.Nodes, filter.Tasks, …
+	sortKeys     map[string]func(T) string                     // sort field accessors
+	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
+	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
+	idFunc       func(T) string                                // extracts JSON-LD @id path for each item
+	rows         func([]T) []cluster.Row                       // builds the CSV rendering; required unless csv is set
+	csv          func(http.ResponseWriter, *http.Request, []T) // writes a CSV whose columns a Row can't carry
 }
 
 // listNotModified answers a matching conditional request with 304, and reports
@@ -76,7 +77,12 @@ func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		writeListCSV(w, r, spec.resourceType, items, p, spec.rows)
+		if spec.csv != nil {
+			spec.csv(w, r, csvPage(items, p))
+		} else {
+			writeListCSV(w, r, spec.resourceType, items, p, spec.rows)
+		}
+
 		return
 	}
 
