@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -43,59 +44,53 @@ func LookupAs(
 	kind, ident string,
 	canRead func(resource string) bool,
 ) (Record, bool, error) {
+	var (
+		record Record
+		found  bool
+		err    error
+	)
+
 	switch kind {
 	case "service":
-		svc, found, err := c.ResolveService(ident)
-
-		return Record{Kind: kind, ID: svc.ID, Name: svc.Spec.Name, Version: svc.Version.Index},
-			found, err
+		var svc swarm.Service
+		svc, found, err = c.ResolveService(ident)
+		record = Record{Kind: kind, ID: svc.ID, Name: svc.Spec.Name, Version: svc.Version.Index}
 	case "node":
-		node, found, err := c.ResolveNode(ident)
-		if !found {
-			return Record{}, false, err
-		}
-
-		return NodeRecord(node), true, nil
+		var node swarm.Node
+		node, found, err = c.ResolveNode(ident)
+		record = NodeRecord(node)
 	case "task":
-		task, found, err := ResolveTaskAs(c, ident, canRead)
-		if !found {
-			return Record{}, false, err
+		var task swarm.Task
+		task, found, err = ResolveTaskAs(c, ident, canRead)
+		if found {
+			record = TaskRecord(c, task)
 		}
-
-		return TaskRecord(c, task), true, nil
 	case "config":
-		cfg, found, err := c.ResolveConfig(ident)
-
-		return Record{Kind: kind, ID: cfg.ID, Name: cfg.Spec.Name, Version: cfg.Version.Index},
-			found, err
+		var cfg swarm.Config
+		cfg, found, err = c.ResolveConfig(ident)
+		record = Record{Kind: kind, ID: cfg.ID, Name: cfg.Spec.Name, Version: cfg.Version.Index}
 	case "secret":
-		sec, found, err := c.ResolveSecret(ident)
-
-		return Record{Kind: kind, ID: sec.ID, Name: sec.Spec.Name, Version: sec.Version.Index},
-			found, err
+		var sec swarm.Secret
+		sec, found, err = c.ResolveSecret(ident)
+		record = Record{Kind: kind, ID: sec.ID, Name: sec.Spec.Name, Version: sec.Version.Index}
 	case "network":
-		net, found, err := c.ResolveNetwork(ident)
-
-		return Record{Kind: kind, ID: net.ID, Name: net.Name}, found, err
+		var net network.Summary
+		net, found, err = c.ResolveNetwork(ident)
+		record = Record{Kind: kind, ID: net.ID, Name: net.Name}
 	case "stack":
-		_, found := c.GetStack(ident)
-
-		return keyedByName(kind, ident, found), found, nil
+		_, found = c.GetStack(ident)
+		record = Record{Kind: kind, ID: ident, Name: ident}
 	case "volume":
-		_, found := c.GetVolume(ident)
-
-		return keyedByName(kind, ident, found), found, nil
-	default:
-		return Record{}, false, nil
+		_, found = c.GetVolume(ident)
+		record = Record{Kind: kind, ID: ident, Name: ident}
 	}
-}
 
-func keyedByName(kind, name string, found bool) Record {
+	// One shape for a miss whatever the kind, so no caller reads a key off it.
 	if !found {
-		return Record{}
+		return Record{}, false, err
 	}
 
-	return Record{Kind: kind, ID: name, Name: name}
+	return record, true, nil
 }
 
 // NodeRecord is the record of a node already in hand.

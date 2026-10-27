@@ -107,3 +107,22 @@ func TestResolveIdentifierResolvesATaskNameOnlyThroughAReadableService(t *testin
 		t.Errorf("ResolveIdentifier(task, t1) = %q, want the ID to stand", id)
 	}
 }
+
+func TestLookupMissesAlikeForEveryKind(t *testing.T) {
+	c := newTestCache()
+
+	for _, kind := range []string{
+		"service", "node", "task", "config", "secret", "network", "stack", "volume", "nonsense",
+	} {
+		record, found, err := cluster.Lookup(c, kind, "gone")
+		if found || err != nil || record != (cluster.Record{}) {
+			t.Errorf(
+				"Lookup(%s, gone) = (%+v, %t, %v), want the zero record",
+				kind,
+				record,
+				found,
+				err,
+			)
+		}
+	}
+}
