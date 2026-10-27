@@ -75,6 +75,8 @@ answers `404`.
 | `application/graphml+xml` | `.graphml` | GraphML, `/topology` only |
 | `text/vnd.graphviz` | `.dot` | Graphviz DOT, `/topology` only |
 | `application/yaml` | `.yaml`, `.yml` | [Compose file](#compose-export) on a stack or a service; the API descriptions |
+| `application/spdx+json` | `.spdx` | An image's SPDX SBOM as stored, on [`sbom`](#image-attestations) only |
+| `text/plain` | `.txt` | An image's Dockerfile, on [`dockerfile`](#image-attestations) only |
 
 All negotiated responses include `Vary: Accept`. Requesting a type an endpoint can't produce returns
 `406 Not Acceptable` with code [`API003`](api/errors#API003); asking for SSE on an endpoint without a stream
@@ -211,6 +213,8 @@ label someone set to a formula instead of running it. A number such as `-1` is l
 - `/nodes`, `/services`, `/tasks`, `/stacks`, `/configs`, `/secrets`, `/networks`, `/volumes`
 - `/nodes/{id}/tasks`, `/services/{id}/tasks`
 - `/history`, `/recommendations`
+- `/services/{id}/sbom`, `/tasks/{id}/sbom`, with the columns `name`, `version`, `ecosystem`, `license`, `purl`,
+  `found_in`
 
 Detail endpoints serve no CSV: one resource isn't a table. `/search` serves none either—its results are of mixed
 type, and one header row can't describe them.
@@ -282,6 +286,36 @@ declares everything external, because a service creates none of what it referenc
 
 Anything the projection couldn't carry—a custom seccomp profile, a mount option Compose has no field for—is
 listed in the header comment rather than dropped silently.
+
+## Image attestations
+
+When BuildKit pushes an image, it can attach provenance and an SBOM to it. Minimal provenance is on by default, and
+the Docker Official Images carry both. Three endpoints read them from the image's registry, anonymously, when asked,
+and cache the answers by digest. Nothing is verified: what they return is what the image says about itself.
+
+| Endpoint | Returns |
+|---|---|
+| `/services/{id}/provenance`, `/tasks/{id}/provenance` | Per platform: the source repository and commit, the builder, build times, the inputs, the GitHub Actions job, and whether an SBOM and a Dockerfile exist. JSON only. |
+| `/services/{id}/sbom`, `/tasks/{id}/sbom` | The packages of one platform's SPDX SBOM, as JSON or CSV, or the SPDX document itself |
+| `/services/{id}/dockerfile`, `/tasks/{id}/dockerfile` | The Dockerfile that `mode=max` provenance embeds, with the layers each instruction produced, or the Dockerfile alone |
+
+A service's endpoints describe the image its spec names; a task's describe the image it runs, which differs from the
+service's mid-update. A task only offers the platforms its node can run.
+
+The `provenance` endpoint always answers `200` for a resource the caller can read, with a `status`:
+
+| `status` | Meaning |
+|---|---|
+| `available` | The `platforms` array is set |
+| `none` | The image carries no attestations |
+| `unpinned` | The image reference has no digest to look them up by |
+| `private` | The registry refused anonymous access |
+| `missing` | The registry no longer has the digest |
+| `unavailable` | The registry couldn't be reached; `retryAfter` says when to ask again |
+| `disabled` | `server.image_attestations` is off |
+
+`sbom` and `dockerfile` take a `platform` parameter, such as `linux/arm64`, needed when there is more than one
+platform to choose from. Their errors are [`ATT001`](api/errors#ATT001) to [`ATT007`](api/errors#ATT007).
 
 ## Pagination
 
@@ -765,6 +799,7 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Services | `/services`, `/services/{id}`, `/services/{id}/tasks`, `/services/{id}/logs` |
 | Service spec sections | `/services/{id}/` + `env`, `labels`, `resources`, `healthcheck`, `placement`, `ports`, `update-policy`, `rollback-policy`, `log-driver`, `configs`, `secrets`, `networks`, `mounts`, `container-config`, `mode`, `endpoint-mode` |
 | Tasks | `/tasks`, `/tasks/{id}`, `/tasks/{id}/logs` |
+| [Image attestations](#image-attestations) | `/services/{id}/` and `/tasks/{id}/` + `provenance`, `sbom`, `dockerfile` |
 | Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
 | Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels`, `/secret-entries/{id}` |
 | Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |

@@ -32,6 +32,10 @@ const jsonLDContextDoc = `{
     "driver": "urn:cetacean:driver",
     "scope": "urn:cetacean:scope",
     "networks": {"@container": "@list"},
+    "platforms": {"@container": "@list"},
+    "packages": {"@container": "@list"},
+    "lines": {"@container": "@list"},
+    "steps": {"@container": "@list"},
     "actor": "urn:cetacean:actor",
     "transport": "urn:cetacean:transport"
   }

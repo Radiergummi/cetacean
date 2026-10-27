@@ -98,15 +98,23 @@ var excusedUncovered = map[string]string{
 	// POST /-/resync, a Resyncer it never sets — so router.go does not even
 	// register that route here. The /plugins* handlers call their nil client
 	// with no nil check, so driving them would panic the test binary.
-	"DELETE /plugins/{name}":         "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /disk-usage":                "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /plugins":                   "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /plugins/{name}":            "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /services/{id}/logs":        "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /swarm":                     "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /swarm/plugins":             "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /swarm/unlock-key":          "reads the Docker daemon directly; covered by the e2e harness",
-	"GET /tasks/{id}/logs":           "reads the Docker daemon directly; covered by the e2e harness",
+	"DELETE /plugins/{name}":  "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /disk-usage":         "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /plugins":            "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /plugins/{name}":     "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /services/{id}/logs": "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /swarm":              "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /swarm/plugins":      "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /swarm/unlock-key":   "reads the Docker daemon directly; covered by the e2e harness",
+	"GET /tasks/{id}/logs":    "reads the Docker daemon directly; covered by the e2e harness",
+
+	// The sweeps run offline; these read the image's registry.
+	"GET /services/{id}/dockerfile":  "reads the image's registry; covered by internal/api with a fake source",
+	"GET /services/{id}/provenance":  "reads the image's registry; covered by internal/api with a fake source",
+	"GET /services/{id}/sbom":        "reads the image's registry; covered by internal/api with a fake source",
+	"GET /tasks/{id}/dockerfile":     "reads the image's registry; covered by internal/api with a fake source",
+	"GET /tasks/{id}/provenance":     "reads the image's registry; covered by internal/api with a fake source",
+	"GET /tasks/{id}/sbom":           "reads the image's registry; covered by internal/api with a fake source",
 	"PATCH /plugins/{name}/settings": "reads the Docker daemon directly; covered by the e2e harness",
 	"POST /-/resync":                 "reads the Docker daemon directly; covered by the e2e harness",
 	"POST /plugins":                  "reads the Docker daemon directly; covered by the e2e harness",
