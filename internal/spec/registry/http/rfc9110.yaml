@@ -107,8 +107,11 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tifMatch := r.Header.Get(\"If-Match\")\n\t\t\tif ifMatch == \"\" {"
-        with: "\t\t\tifMatch := r.Header.Get(\"If-Match\")\n\t\t\tif true {"
+        replace: "\t\t\tif ifMatch == \"\" && ifNoneMatch == \"\" && r.Header.Get(\"If-Unmodified-Since\") == \"\" {"
+        with: "\t\t\tif true {"
+      - file: internal/api/list.go
+        replace: "\tif r.Header.Get(\"If-Match\") != \"\" {\n\t\treturn false\n\t}"
+        with: "\tif false {\n\t\treturn false\n\t}"
 
   - id: a-false-if-match-stops-the-method
     level: MUST
@@ -117,9 +120,9 @@ requirements:
       the requested method if the condition evaluates to false.
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
     mutants:
-      - file: internal/api/precondition.go
-        replace: "\t\t\tif !etagMatchStrong(ifMatch, computeETag(body)) {"
-        with: "\t\t\tif false && !etagMatchStrong(ifMatch, computeETag(body)) {"
+      - file: internal/api/etag.go
+        replace: "\t\tif !etagMatchStrong(ifMatch, etag) {"
+        with: "\t\tif false && !etagMatchStrong(ifMatch, etag) {"
       - file: internal/api/precondition.go
         replace: "return docker.WithPinnedVersion(ctx, subject.kind, id, version)"
         with: "return docker.WithPinnedVersion(ctx, subject.kind, id, swarm.Version{Index: version.Index + 1})"
@@ -232,6 +235,43 @@ requirements:
       response.
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.3
 
+  - id: if-unmodified-since-yields-to-if-match
+    level: MUST
+    text: >-
+      A recipient MUST ignore If-Unmodified-Since if the request contains an
+      If-Match header field; the condition in If-Match is considered to be a
+      more accurate replacement for the condition in If-Unmodified-Since, and
+      the two are only combined for the sake of interoperating with older
+      intermediaries that might not implement If-Match.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\t\treturn \"\"\n\t}\n\n\tif modifiedAfter("
+        with: "\t}\n\n\tif modifiedAfter("
+
+  - id: a-malformed-if-unmodified-since-is-ignored
+    level: MUST
+    text: >-
+      A recipient MUST ignore the If-Unmodified-Since header field if the
+      received field value is not a valid HTTP-date (including when the field
+      value appears to be a list of dates).
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\treturn err == nil && lastModified.Truncate(time.Second).After(t.Truncate(time.Second))"
+        with: "\treturn err != nil || lastModified.Truncate(time.Second).After(t.Truncate(time.Second))"
+
+  - id: if-unmodified-since-needs-a-modification-date
+    level: MUST
+    text: >-
+      A recipient MUST ignore the If-Unmodified-Since header field if the
+      resource does not have a modification date available.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
+    mutants:
+      - file: internal/api/precondition.go
+        replace: "\t\t\tvar modified time.Time\n"
+        with: "\t\t\tmodified := time.Now()\n"
+
   - id: if-unmodified-since-is-evaluated
     level: MUST
     text: >-
@@ -241,13 +281,27 @@ requirements:
       If-Unmodified-Since condition per Section 13.2 prior to performing the
       method.
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
-    deferred: >-
-      The field is never read, so a write carrying it alone goes through
-      unconditionally. The validator this API offers is the ETag, which
-      If-Match evaluates and which is exact where a second-resolution
-      timestamp is not; supporting the date form as well means deciding what a
-      modification date means for a resource assembled out of several engine
-      records, which the ETag sidesteps by hashing the assembled answer.
+    mutants:
+      - file: internal/api/etag.go
+        replace: "\tif modifiedAfter(r.Header.Get(\"If-Unmodified-Since\"), lastModified) {"
+        with: "\tif false && modifiedAfter(r.Header.Get(\"If-Unmodified-Since\"), lastModified) {"
+      - file: internal/api/router.go
+        replace: "h.precondTimed(h.serviceRepresentation, h.serviceModified)"
+        with: "h.precond(h.serviceRepresentation)"
+
+  - id: a-false-if-unmodified-since-stops-the-method
+    level: MUST
+    text: >-
+      An origin server that evaluates an If-Unmodified-Since condition MUST
+      NOT perform the requested method if the condition evaluates to false.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
+
+  - id: a-failed-if-unmodified-since-may-answer-412
+    level: MAY
+    text: >-
+      Instead, the origin server MAY indicate that the conditional request
+      failed by responding with a 412 (Precondition Failed) status code.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
 
   - id: if-range-is-evaluated
     level: MUST
@@ -293,8 +347,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tif ifMatch == \"\" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
-        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif ifMatch == \"\" {\n\t\t\t\treturn\n\t\t\t}"
+        replace: "\t\t\tif ifMatch == \"\" && ifNoneMatch == \"\" && r.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
+        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif ifMatch == \"\" && ifNoneMatch == \"\" && r.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\treturn\n\t\t\t}"
 
   - id: preconditions-are-ignored-when-the-answer-is-not-2xx
     level: MUST
@@ -308,6 +362,23 @@ requirements:
       - file: internal/api/precondition.go
         replace: "\t\t\tcase errors.Is(err, errNoRepresentation):"
         with: "\t\t\tcase errors.Is(err, errNoRepresentation) && false:"
+
+  - id: preconditions-are-evaluated-in-order
+    level: MUST
+    text: >-
+      A recipient cache or origin server MUST evaluate the request
+      preconditions defined by this specification in the following order:
+      If-Match, If-Unmodified-Since when If-Match is absent, If-None-Match,
+      If-Modified-Since when If-None-Match is absent and the method is GET or
+      HEAD, and If-Range last.
+    url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.2
+    mutants:
+      - file: internal/api/list.go
+        replace: "\tif r.Header.Get(\"If-Match\") != \"\" {\n\t\treturn false\n\t}"
+        with: "\tif false {\n\t\treturn false\n\t}"
+      - file: internal/api/precondition.go
+        replace: "\t\t\tif ifNoneMatch != \"\" && etagMatch(ifNoneMatch, etag) {"
+        with: "\t\t\tif false && etagMatch(ifNoneMatch, etag) {"
 
   - id: range-is-an-optional-feature
     level: MAY
@@ -461,8 +532,8 @@ dismissed:
     already applied. This deployment refuses instead, which is the plainer of
     the two answers and the one a client can act on.
   a-client-may-send-if-match-on-a-get: >-
-    Binds the client. This API evaluates If-Match on writes, where it gates
-    the method; a GET carrying one is not routed through the middleware.
+    Binds the client. A GET carrying one is evaluated where the response's
+    validator is known, and answered 412 when it does not match.
   a-cache-may-ignore-if-match: >-
     Binds a cache or intermediary.
   clients-send-if-none-match-to-revalidate: >-
@@ -470,20 +541,9 @@ dismissed:
   if-modified-since-is-read-on-the-server-clock: >-
     The comparison is against the timestamp this server holds for the
     resource, so both sides of it are already the server's.
-  if-unmodified-since-yields-to-if-match: >-
-    Requires If-Unmodified-Since to be ignored when If-Match is present. It is
-    ignored whether or not If-Match is present, which the deferral above
-    records.
-  a-malformed-if-unmodified-since-is-ignored: >-
-    The same field, never read.
-  if-unmodified-since-needs-a-modification-date: >-
-    The same field, never read.
   if-unmodified-since-is-read-on-the-server-clock: >-
-    The same field, never read.
-  a-false-if-unmodified-since-stops-the-method: >-
-    The consequence of evaluating a field this deployment does not read.
-  a-failed-if-unmodified-since-may-answer-412: >-
-    A permission conditional on evaluating that field.
+    The comparison is against the timestamp this server holds for the
+    resource, so both sides of it are already the server's.
   an-already-applied-change-may-answer-2xx-for-if-unmodified-since: >-
     The same permission, restated for the date form.
   a-client-may-send-if-unmodified-since-on-a-get: >-
@@ -507,10 +567,6 @@ dismissed:
     Requires conditionals to be ignored on methods that select no
     representation. The precondition middleware is mounted on the resource
     routes, which answer none of those three; OPTIONS is handled before it.
-  preconditions-are-evaluated-in-order: >-
-    Fixes the order of the five preconditions. The two evaluated here never
-    meet: If-Match gates a write and If-None-Match answers a read, so there is
-    no pair to order.
   a-server-may-ignore-range: >-
     A permission this deployment declines for its collections, which is what
     the 206 and 416 answers registered above record.

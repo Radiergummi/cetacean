@@ -525,6 +525,11 @@ A service's and a node's detail also set `Last-Modified` from the resource's upd
 when a newer image was found if that is later, and honor `If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
 volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
 
+A read honors `If-Match`, and `If-Unmodified-Since` where it sends `Last-Modified`, as well: when one doesn't hold, the
+answer is `412` ([`API013`](api/errors#API013)). They are evaluated in the order
+[RFC 9110 §13.2.2](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.2) gives: `If-Match`, or `If-Unmodified-Since`
+without it, then `If-None-Match`, or `If-Modified-Since` without it, and `If-Range` last.
+
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
 SSE and streaming endpoints set no caching headers.
 
@@ -928,6 +933,12 @@ header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
 is always optional—omit it and the write proceeds exactly as it did before this existed.
 
+The same endpoints evaluate `If-None-Match` and `If-Unmodified-Since`, in the RFC 9110 §13.2.2 order. `If-None-Match:
+*` refuses the write while the resource exists, and a tag refuses it while that tag is current, both with `412`.
+`If-Unmodified-Since` is compared with the `Last-Modified` a `GET` sends, so only `DELETE /services/{id}` and
+`DELETE /nodes/{id}` have a date to compare it with; elsewhere it's ignored, as is a value that isn't a single valid
+date, and it's ignored whenever `If-Match` is present.
+
 A `412` always means the resource moved. A resource that is gone answers `404`, the same as it
 would without the header—[RFC 9110 §13.2.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1)
 keeps the precondition out of the way of an answer that was never going to be a success. Where the
@@ -954,7 +965,7 @@ change in that instant goes unnoticed.
 `DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
 
 19 refuse every `If-Match`, `*` included, with `412`: they are action-style endpoints with no `GET` at that exact
-path, so there is no `ETag` the header could match. They are `PUT /services/{id}/scale`,
+path, so there is no `ETag` the header could match, and `If-None-Match` finds none to refuse. They are `PUT /services/{id}/scale`,
 `PUT /services/{id}/image`, `POST /services/{id}/restart`, `POST /services/{id}/rollback`,
 `PUT /nodes/{id}/availability`, `POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`,
 `POST /plugins/{name}/upgrade`, `PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,

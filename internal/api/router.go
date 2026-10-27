@@ -621,7 +621,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		nodeTier3.Append(h.precond(h.nodeRoleRepresentation)).
 			ThenFunc(h.HandleUpdateNodeRole))
 	mux.Handle("DELETE /nodes/{id}",
-		nodeTier3.Append(h.precond(h.nodeRepresentation)).AnswersNoContent().
+		nodeTier3.Append(h.precondTimed(h.nodeRepresentation, h.nodeModified)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
@@ -777,7 +777,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			ThenFunc(h.HandleUpdateServiceEndpointMode),
 	)
 	mux.Handle("DELETE /services/{id}",
-		svcTier3.Append(h.precond(h.serviceRepresentation)).AnswersNoContent().
+		svcTier3.Append(h.precondTimed(h.serviceRepresentation, h.serviceModified)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveService))
 
 	// Tasks

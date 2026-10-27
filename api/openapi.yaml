@@ -6926,7 +6926,8 @@ components:
       description: >
         Optional RFC 9110 precondition. Supply the ETag from a GET on this
         same path; the write is refused with 412 if the resource has
-        changed since. Omitting the header skips the check.
+        changed since. Omitting the header skips the check. If-None-Match
+        and If-Unmodified-Since are evaluated too, in RFC 9110 §13.2.2 order.
       example: '"a1b2c3d4e5f6a1b2"'
 
     IfMatchUnrepresented:
@@ -7350,7 +7351,9 @@ components:
             requestId: req_a1b2c3d4e5f6
 
     PreconditionFailed:
-      description: The If-Match precondition failed — the resource has changed since the supplied ETag was read
+      description: >-
+        A precondition failed — If-Match or If-Unmodified-Since, or on a write
+        If-None-Match — so the resource has changed since the supplied validator was read
       content:
         application/problem+json:
           schema:

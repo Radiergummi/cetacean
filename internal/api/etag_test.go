@@ -679,22 +679,25 @@ func TestAMalformedIfModifiedSinceIsIgnored(t *testing.T) {
 	}
 }
 
-// RFC 9110 §13.1.4 wants If-Unmodified-Since evaluated when it arrives without
-// an If-Match. It is not read, so this pins that a write carrying one alone
-// goes through.
-func TestIfUnmodifiedSinceIsNotEvaluated(t *testing.T) {
+// RFC 9110 §13.1.4: If-Unmodified-Since, absent an If-Match, is evaluated
+// against the representation's date, and a date before it is a 412.
+func TestIfUnmodifiedSinceIsEvaluated(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/if-unmodified-since-is-evaluated")
 
-	r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
-	r.Header.Set("If-Unmodified-Since", "Sun, 15 Jun 2020 10:30:00 GMT")
-	w := httptest.NewRecorder()
-	writeCachedJSONTimed(
-		w, r, map[string]string{"status": "ok"},
-		time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC),
-	)
+	modified := time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
+	for since, want := range map[string]int{
+		"Sun, 15 Jun 2020 10:30:00 GMT": http.StatusPreconditionFailed,
+		"Sun, 15 Jun 2025 10:30:00 GMT": http.StatusOK,
+		"Mon, 15 Jun 2026 10:30:00 GMT": http.StatusOK,
+	} {
+		r := httptest.NewRequestWithContext(t.Context(), "GET", "/test", nil)
+		r.Header.Set("If-Unmodified-Since", since)
+		w := httptest.NewRecorder()
+		writeCachedJSONTimed(w, r, map[string]string{"status": "ok"}, modified)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200; the deferral is stale", w.Code)
+		if w.Code != want {
+			t.Errorf("If-Unmodified-Since %s: status = %d, want %d", since, w.Code, want)
+		}
 	}
 }
 

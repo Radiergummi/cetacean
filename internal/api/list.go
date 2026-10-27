@@ -46,6 +46,11 @@ func listNotModified[T any](
 	spec listSpec[T],
 	validator string,
 ) bool {
+	// If-Match comes first (RFC 9110 §13.2.2), and only the writer can say
+	// whether it holds.
+	if r.Header.Get("If-Match") != "" {
+		return false
+	}
 
 	tagged := matchedValidator(r, validator)
 	if tagged == "" {

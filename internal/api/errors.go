@@ -116,7 +116,7 @@ var errorRegistry = map[string]ErrorDef{
 		Code:        "API013",
 		Title:       "Precondition Failed",
 		Status:      http.StatusPreconditionFailed,
-		Description: "The If-Match header did not match the current state of the resource.",
+		Description: "A precondition, such as If-Match, did not hold for the current state of the resource.",
 		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
 	},
 	"API014": {
