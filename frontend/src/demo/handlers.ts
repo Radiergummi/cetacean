@@ -361,10 +361,11 @@ function annotateVersions<T extends Versionable>(
       groupKey: grouped ? key : item.ID,
       rank,
       UsedBy: usedBy(item.ID),
+      // An ungrouped item is its own newest version, as on the server.
+      NewestVersion: rank === 0,
       ...(grouped && {
         VersionOf: name,
         VersionInferred: members.some(({ Spec: { Labels } }) => !Labels?.[versionLabel]),
-        NewestVersion: rank === 0,
         ...(rank === 0 && { OlderVersions: members.length - 1 }),
       }),
     };

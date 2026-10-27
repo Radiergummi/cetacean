@@ -142,8 +142,9 @@ Swarm can't change a secret or a config once it exists, so rotating one means re
 3. Open the old secret. Its page lists every service that mounts it. On each service, edit **Secrets**: add the
    replacement with the same **Target** the old one had, so the container reads the same file, and remove the old
    one. Saving rolls the service out once. This also needs level 2.
-4. Once the old secret's page lists no services, remove it. This needs level 3, and Docker refuses while any service
-   still mounts it.
+4. Once the old secret's page lists no services but those marked **for a rollback**, remove it. This needs level 3,
+   and Docker refuses while any service still mounts it. The confirmation names the services that lose their
+   rollback target.
 
 Configs follow the same steps from the **Configs** list and each service's **Configs** editor. A service deployed
 from a Compose file gets the old reference back on the next `docker stack deploy`, so change the file as well.

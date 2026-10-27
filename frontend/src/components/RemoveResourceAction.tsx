@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { getErrorInfo } from "@/lib/errors";
 import { Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface RemoveResourceActionProps {
@@ -26,6 +27,10 @@ interface RemoveResourceActionProps {
   canDelete?: boolean | undefined;
   disabled?: boolean | undefined;
   disabledTitle?: string | undefined;
+  /**
+   * What removing it costs beyond the resource itself, shown in the confirmation.
+   */
+  warning?: ReactNode | undefined;
 }
 
 export function RemoveResourceAction({
@@ -36,6 +41,7 @@ export function RemoveResourceAction({
   canDelete = false,
   disabled,
   disabledTitle,
+  warning,
 }: RemoveResourceActionProps) {
   const navigate = useNavigate();
   const remove = useAsyncAction({ toast: true });
@@ -81,6 +87,7 @@ export function RemoveResourceAction({
               <strong className="text-foreground">{resourceName}</strong>. This action cannot be
               undone.
             </AlertDialogDescription>
+            {warning && <p className="text-sm text-status-warning">{warning}</p>}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
