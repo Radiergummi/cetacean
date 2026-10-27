@@ -44,6 +44,9 @@ type mockClient struct {
 	// syncGate, when set, holds every FullSync until it is closed.
 	syncGate chan struct{}
 
+	// fullSyncDelay is how long every FullSync takes, unless its context ends.
+	fullSyncDelay time.Duration
+
 	// listTasksFn, when set, replaces ListTasksIn's default behaviour.
 	listTasksFn func(ctx context.Context, scope TaskScope) ([]swarm.Task, error)
 
@@ -71,6 +74,13 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	call := m.fullSyncs.Add(1)
+	if m.fullSyncDelay > 0 {
+		select {
+		case <-time.After(m.fullSyncDelay):
+		case <-ctx.Done():
+			return cache.FullSyncData{}, ctx.Err()
+		}
+	}
 	if m.syncGate != nil {
 		select {
 		case <-m.syncGate:
@@ -684,37 +694,85 @@ func TestRetriedSyncGivesTheLoopBackSoon(t *testing.T) {
 	})
 }
 
-// Work already queued for the loop goes first: a retry that finds any waits
-// for its next turn rather than holding that work behind a sync.
-func TestRetriedSyncWaitsForQueuedWork(t *testing.T) {
+// runLoop runs w's event loop after a failed sync until the test ends.
+func runLoop(t *testing.T, w *Watcher) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.watchEvents(ctx, time.Time{}, false)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+}
+
+// A Refresh waiting to be handed to the loop goes first: a retry that finds
+// one waits for its next turn rather than letting the hand-off time out.
+func TestRetriedSyncWaitsForAWaitingRefresh(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		mc := newMockClient()
 		w := NewWatcher(mc, cache.New(nil), "")
+		runLoop(t, w)
 
-		ctx, cancel := context.WithCancel(t.Context())
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			w.watchEvents(ctx, time.Time{}, false)
-		}()
-
-		// An event still inside its debounce window when the first retry is due.
-		time.Sleep(time.Second - debounceWindow/2)
-		mc.eventsCh <- events.Message{Type: events.NodeEventType, Actor: events.Actor{ID: "n1"}}
-		time.Sleep(debounceWindow)
+		w.refreshWaiting.Add(1)
+		time.Sleep(time.Second + time.Millisecond)
 		synctest.Wait()
 		if got := mc.fullSyncs.Load(); got != 0 {
-			t.Errorf("a retry ran with an event queued (FullSync ran %d times)", got)
+			t.Errorf("a retry ran with a Refresh waiting (FullSync ran %d times)", got)
 		}
 
+		w.refreshWaiting.Add(-1)
 		time.Sleep(maxBackoff)
 		synctest.Wait()
 		if got := mc.fullSyncs.Load(); got != 1 {
-			t.Errorf("FullSync ran %d times once the loop was idle, want 1", got)
+			t.Errorf("FullSync ran %d times once nothing waited, want 1", got)
 		}
+	})
+}
 
-		cancel()
-		<-done
+// Steady events keep a batch pending almost all the time; the retry flushes
+// it and goes ahead rather than waiting for a quiet moment that never comes.
+func TestRetriedSyncIsNotStarvedBySteadyEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		w := NewWatcher(mc, cache.New(nil), "")
+		runLoop(t, w)
+
+		for range int(5*time.Second/(debounceWindow/7)) + 1 {
+			mc.eventsCh <- events.Message{Type: events.NodeEventType, Actor: events.Actor{ID: "n1"}}
+			time.Sleep(debounceWindow / 7)
+		}
+		synctest.Wait()
+
+		select {
+		case <-w.Ready():
+		default:
+			t.Errorf("no retried sync succeeded under steady events (%d ran)", mc.fullSyncs.Load())
+		}
+	})
+}
+
+// A cluster whose full sync takes longer than a retry's first bound still
+// recovers: each failed retry is given longer than the last.
+func TestRetriedSyncTimeoutGrowsWithTheBackoff(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.fullSyncDelay = retrySyncTimeout + retrySyncTimeout/2
+		w := NewWatcher(mc, cache.New(nil), "")
+		runLoop(t, w)
+
+		time.Sleep(2 * time.Minute)
+		synctest.Wait()
+
+		select {
+		case <-w.Ready():
+		default:
+			t.Errorf("a slow sync never succeeded as a retry (%d ran)", mc.fullSyncs.Load())
+		}
 	})
 }
 
@@ -1619,11 +1677,17 @@ func TestEventInspectGivesUpOnAHungEngine(t *testing.T) {
 		c.SetNode(swarm.Node{ID: "n1"})
 		w := NewWatcher(mc, c, "")
 
+		start := time.Now()
 		deliver(t.Context(), w, events.Message{
 			Type:  events.NodeEventType,
 			Actor: events.Actor{ID: "n1"},
 		})
 
+		// One budget across every attempt, not one per attempt.
+		if elapsed := time.Since(start); elapsed > inspectTimeout {
+			t.Errorf("a key against a hung engine held the loop for %v, want at most %v",
+				elapsed, inspectTimeout)
+		}
 		if _, ok := c.GetNode("n1"); !ok {
 			t.Error("a timed-out inspect dropped the cached node")
 		}

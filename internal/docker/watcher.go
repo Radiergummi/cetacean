@@ -510,7 +510,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 	// the periodic tick.
 	var retry *time.Timer
 	var retryC <-chan time.Time
-	retryDelay := time.Second
+	retryDelay, retryTimeout := time.Second, retrySyncTimeout
 	if !synced {
 		retry = time.NewTimer(retryDelay)
 		defer retry.Stop()
@@ -596,9 +596,11 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 				retryC = nil
 			}
 		case <-retryC:
-			// Queued work goes first; the backoff brings the retry round again.
-			if len(pending) == 0 && len(msgCh) == 0 && w.refreshWaiting.Load() == 0 {
-				retryCtx, cancel := context.WithTimeout(ctx, retrySyncTimeout)
+			// A Refresh waiting for the loop goes first, or its hand-off times
+			// out; the backoff brings the retry round again. Each failed retry
+			// is given longer, for a cluster whose sync outgrows the first bound.
+			if w.refreshWaiting.Load() == 0 {
+				retryCtx, cancel := context.WithTimeout(ctx, retryTimeout)
 				ok := loopSync(retryCtx, "retried")
 				cancel()
 
@@ -606,6 +608,8 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 					retryC = nil
 					continue
 				}
+
+				retryTimeout = min(retryTimeout*2, fullSyncTimeout)
 			}
 
 			retryDelay = min(retryDelay*2, maxBackoff)
@@ -985,19 +989,25 @@ func (w *Watcher) apply(resource any) {
 // fullSyncTimeout bounds one full sync, however it was started.
 var fullSyncTimeout = 2 * time.Minute
 
-// retrySyncTimeout bounds a sync retried after a failed one. It holds the
-// event loop beside a cache already serving reads, so it gives up sooner.
+// retrySyncTimeout bounds the first sync retried after a failed one. It holds
+// the event loop beside a cache already serving reads, so it gives up sooner.
 var retrySyncTimeout = 10 * time.Second
 
 // taskListTimeout bounds one task re-list, which holds the event loop.
 var taskListTimeout = 30 * time.Second
 
-// inspectTimeout bounds one inspect attempt, which holds the event loop too.
+// inspectTimeout bounds reading one resource, every attempt included, since
+// it holds the event loop too; one attempt gets half, so a retry fits.
 var inspectTimeout = 10 * time.Second
 
-// inspect reads one resource under inspectTimeout.
-func (w *Watcher) inspect(ctx context.Context, kind events.Type, id string) (any, error) {
-	ctx, cancel := context.WithTimeout(ctx, inspectTimeout)
+// inspect makes one inspect attempt, bounded by timeout.
+func (w *Watcher) inspect(
+	ctx context.Context,
+	timeout time.Duration,
+	kind events.Type,
+	id string,
+) (any, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	return w.client.Inspect(ctx, kind, id)
@@ -1068,7 +1078,7 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 // inspect failure is returned rather than logged: the caller asked because it
 // cannot tolerate a stale answer.
 func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
-	resource, err := w.inspect(ctx, events.Type(kind), id)
+	resource, err := w.inspect(ctx, inspectTimeout, events.Type(kind), id)
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			w.applyRemove(eventKey{resourceType: events.Type(kind), id: id})
@@ -1101,14 +1111,17 @@ func (w *Watcher) inspectWithRetry(
 	const maxAttempts = 4
 	backoff := 100 * time.Millisecond
 
+	ctx, cancel := context.WithTimeout(ctx, inspectTimeout)
+	defer cancel()
+
 	var lastErr error
 	for range maxAttempts {
-		resource, err := w.inspect(ctx, key.resourceType, key.id)
+		resource, err := w.inspect(ctx, inspectTimeout/2, key.resourceType, key.id)
 		if err == nil {
 			return resource, nil
 		}
 		lastErr = err
-		// An attempt's own timeout is retried; the caller's context is not.
+		// An attempt's own timeout is retried while the budget lasts.
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
