@@ -514,9 +514,9 @@ func (s *Server) toolRollbackService(
 }
 
 // guardHostAccess runs cluster.CheckHostAccessHeld on the change a write to the
-// service id names makes. Below level 3 the service must resolve, and the write
-// is addressed by its full ID and pinned to the cached version the change was
-// judged against, so neither a prefix nor a stale cache reaches one unchecked.
+// service id names makes. Below level 3 the service must resolve and the write is
+// addressed by its full ID; if it holds host access, the write is also pinned to
+// the cached version judged, so a stale cache can't pass for "unchanged".
 func (s *Server) guardHostAccess(
 	ctx context.Context,
 	cond condition,
@@ -536,7 +536,12 @@ func (s *Server) guardHostAccess(
 		return ctx, id, fmt.Errorf("service %q not found", id)
 	}
 
-	if err := cluster.CheckHostAccessHeld(svc, change(svc), s.cache.GetVolume, level); err != nil {
+	what := change(svc)
+	if cluster.HeldHostAccess(svc, what == cluster.RollingBack, s.cache.GetVolume) == "" {
+		return ctx, svc.ID, nil
+	}
+
+	if err := cluster.CheckHostAccessHeld(svc, what, s.cache.GetVolume, level); err != nil {
 		return ctx, id, err
 	}
 

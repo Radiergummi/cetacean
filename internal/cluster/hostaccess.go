@@ -75,6 +75,20 @@ func CheckHostAccessHeld(
 		return nil
 	}
 
+	if what := HeldHostAccess(svc, change == RollingBack, lookup); what != "" {
+		return &HostAccessError{What: change + " a service with " + what}
+	}
+
+	return nil
+}
+
+// HeldHostAccess names how svc reaches the host, or returns "" if it doesn't:
+// by its current spec, or by either spec for a rollback.
+func HeldHostAccess(
+	svc swarm.Service,
+	rollback bool,
+	lookup func(name string) (volume.Volume, bool),
+) string {
 	// A volume the manager doesn't hold most likely lives on a worker; unlike
 	// CheckMounts, a held mount of one is not presumed to reach the host.
 	known := func(name string) (volume.Volume, bool) {
@@ -86,17 +100,17 @@ func CheckHostAccessHeld(
 	}
 
 	specs := []*swarm.ServiceSpec{&svc.Spec}
-	if change == RollingBack {
+	if rollback {
 		specs = append(specs, svc.PreviousSpec)
 	}
 
 	for _, spec := range specs {
 		if what := specHostAccess(spec, known); what != "" {
-			return &HostAccessError{What: change + " a service with " + what}
+			return what
 		}
 	}
 
-	return nil
+	return ""
 }
 
 // specHostAccess names the first way a spec's container reaches the host.

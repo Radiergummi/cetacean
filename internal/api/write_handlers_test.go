@@ -5149,14 +5149,24 @@ func socketBoundSpec() swarm.ServiceSpec {
 	}}
 }
 
+// holdsHostAccess is the rule's reading of the fixtures, which reach the host
+// only by mounts: the current spec, or either spec for a rollback.
+func holdsHostAccess(svc swarm.Service, rollback bool) bool {
+	mounted := func(spec *swarm.ServiceSpec) bool {
+		return spec != nil && spec.TaskTemplate.ContainerSpec != nil &&
+			len(spec.TaskTemplate.ContainerSpec.Mounts) > 0
+	}
+
+	return mounted(&svc.Spec) || rollback && mounted(svc.PreviousSpec)
+}
+
 // pinRule is when a host-access write is expected to name the version checked.
 type pinRule int
 
 const (
-	pinWhenChecked pinRule = iota // below level 3, when the write changes something
-	pinNever                      // the check reads the spec inside the write itself
-	pinAlways                     // the attachment checks pin regardless
-	pinCacheJudged                // below level 3: "unchanged" was judged against the cache
+	pinWhenHeld pinRule = iota // below level 3, when the service holds host access
+	pinNever                   // the check reads the spec inside the write itself
+	pinAlways                  // the attachment checks pin regardless
 )
 
 // Host access a service already holds is exempt from the mount and capability
@@ -5202,7 +5212,6 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		handler func(*Handlers) http.HandlerFunc
 		below   config.OperationsLevel
 		refused bool
-		changes bool
 		pin     pinRule
 	}{
 		{
@@ -5214,143 +5223,142 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			image,
 			tier1,
 			true,
-			true,
-			pinWhenChecked,
+			pinWhenHeld,
 		},
 		{
 			"image with a bind only in the previous spec",
 			previous, "PUT", "/image", `{"image":"nginx:2"}`,
-			image, tier1, false, true, pinWhenChecked,
+			image, tier1, false, pinWhenHeld,
 		},
 		{
 			"rollback restoring a bind",
 			previous, "POST", "/rollback", "",
-			rollback, tier1, true, true, pinWhenChecked,
+			rollback, tier1, true, pinWhenHeld,
 		},
 		{
 			"rollback from a bind",
 			current, "POST", "/rollback", "",
-			rollback, tier1, true, true, pinWhenChecked,
+			rollback, tier1, true, pinWhenHeld,
 		},
 		{
 			"command",
 			current, "PATCH", "/container-config", `{"command":["sh"]}`,
-			containerConfig, tier2, true, true, pinNever,
+			containerConfig, tier2, true, pinNever,
 		},
 		{
 			"user",
 			current, "PATCH", "/container-config", `{"user":"root"}`,
-			containerConfig, tier2, true, true, pinNever,
+			containerConfig, tier2, true, pinNever,
 		},
 		{
 			"working directory",
 			current, "PATCH", "/container-config", `{"dir":"/tmp"}`,
-			containerConfig, tier2, true, true, pinNever,
+			containerConfig, tier2, true, pinNever,
 		},
 		{
 			"hostname only",
 			current, "PATCH", "/container-config", `{"hostname":"web"}`,
-			containerConfig, tier2, false, false, pinNever,
+			containerConfig, tier2, false, pinNever,
 		},
 		{
 			"placement",
 			current, "PUT", "/placement", `{"Constraints":["node.role==manager"]}`,
-			placement, tier2, true, true, pinWhenChecked,
+			placement, tier2, true, pinWhenHeld,
 		},
 		{
 			"healthcheck test",
 			current, "PUT", "/healthcheck", `{"Test":["CMD","sh"]}`,
-			putHealthcheck, tier2, true, true, pinWhenChecked,
+			putHealthcheck, tier2, true, pinWhenHeld,
 		},
 		{
 			"healthcheck interval only",
 			current, "PUT", "/healthcheck", `{"Interval":1000000000}`,
-			putHealthcheck, tier2, false, false, pinCacheJudged,
+			putHealthcheck, tier2, false, pinWhenHeld,
 		},
 		{
 			"patched healthcheck test",
 			current, "PATCH", "/healthcheck", `{"Test":["CMD","sh"]}`,
-			patchHealthcheck, tier2, true, true, pinNever,
+			patchHealthcheck, tier2, true, pinNever,
 		},
 		{
 			"patched healthcheck interval only",
 			current, "PATCH", "/healthcheck", `{"Interval":1000000000}`,
-			patchHealthcheck, tier2, false, false, pinNever,
+			patchHealthcheck, tier2, false, pinNever,
 		},
 		{
 			"secret added",
 			current, "PATCH", "/secrets",
 			`{"secrets":[{"secretID":"sec1","secretName":"s","fileName":"/docker-entrypoint.sh"}]}`,
-			secrets, tier2, true, true, pinAlways,
+			secrets, tier2, true, pinAlways,
 		},
 		{
 			"config added",
 			current, "PATCH", "/configs",
 			`{"configs":[{"configID":"cfg1","configName":"c","fileName":"/docker-entrypoint.sh"}]}`,
-			configs, tier2, true, true, pinAlways,
+			configs, tier2, true, pinAlways,
 		},
 		{
 			"mount added beside the bind",
 			current, "PATCH", "/mounts",
 			`{"mounts":[` + socketMount + `,{"Type":"tmpfs","Target":"/docker-entrypoint.sh"}]}`,
-			mounts, tier2, true, true, pinAlways,
+			mounts, tier2, true, pinAlways,
 		},
 		{
 			"mounts unchanged",
 			current, "PATCH", "/mounts", `{"mounts":[` + socketMount + `]}`,
-			mounts, tier2, false, false, pinAlways,
+			mounts, tier2, false, pinAlways,
 		},
 		{
 			"secret added without host access",
 			unbound, "PATCH", "/secrets",
 			`{"secrets":[{"secretID":"sec1","secretName":"s"}]}`,
-			secrets, tier2, false, true, pinAlways,
+			secrets, tier2, false, pinAlways,
 		},
 		{
 			"image without host access",
 			unbound, "PUT", "/image", `{"image":"nginx:2"}`,
-			image, tier1, false, true, pinWhenChecked,
+			image, tier1, false, pinWhenHeld,
 		},
 		{
 			"rollback without host access",
 			unbound, "POST", "/rollback", "",
-			rollback, tier1, false, true, pinWhenChecked,
+			rollback, tier1, false, pinWhenHeld,
 		},
 		{
 			"environment",
 			current, "PATCH", "/env", `{"DOCKER_HOST":"tcp://0.0.0.0:2375"}`,
-			env, tier2, true, true, pinCacheJudged,
+			env, tier2, true, pinWhenHeld,
 		},
 		{
 			"environment unchanged",
 			current, "PATCH", "/env", `{}`,
-			env, tier2, false, false, pinCacheJudged,
+			env, tier2, false, pinWhenHeld,
 		},
 		{
 			"environment without host access",
 			unbound, "PATCH", "/env", `{"FOO":"bar"}`,
-			env, tier2, false, true, pinCacheJudged,
+			env, tier2, false, pinWhenHeld,
 		},
 		{
 			"published port",
 			current, "PATCH", "/ports",
 			`{"ports":[{"Protocol":"tcp","TargetPort":2375,"PublishedPort":2375}]}`,
-			ports, tier2, true, true, pinCacheJudged,
+			ports, tier2, true, pinWhenHeld,
 		},
 		{
 			"ports unchanged",
 			current, "PATCH", "/ports", `{"ports":[]}`,
-			ports, tier2, false, false, pinCacheJudged,
+			ports, tier2, false, pinWhenHeld,
 		},
 		{
 			"network attached",
 			current, "PATCH", "/networks", `{"networks":[{"target":"net1"}]}`,
-			networks, tier2, true, true, pinAlways,
+			networks, tier2, true, pinAlways,
 		},
 		{
 			"networks unchanged",
 			current, "PATCH", "/networks", `{"networks":[]}`,
-			networks, tier2, false, false, pinAlways,
+			networks, tier2, false, pinAlways,
 		},
 	}
 
@@ -5449,8 +5457,8 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 
 					below := level < config.OpsImpactful
 					wantPin := tc.pin == pinAlways ||
-						tc.pin == pinWhenChecked && tc.changes && below ||
-						tc.pin == pinCacheJudged && below
+						tc.pin == pinWhenHeld && below &&
+							holdsHostAccess(tc.svc, tc.path == "/rollback")
 					if wantPin && pinned.Index != 7 {
 						t.Errorf("write pinned to %v, want the checked version 7", pinned)
 					}

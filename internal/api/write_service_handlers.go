@@ -146,8 +146,9 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 }
 
 // checkHostAccessHeld answers OPS001 for a change cluster.CheckHostAccessHeld
-// refuses. Below level 3 the write is pinned to the cached version the change
-// was judged against, found or not, so a stale cache cannot pass for "unchanged".
+// refuses. Below level 3, a write to a service holding host access is pinned to
+// the cached version it was judged against, so a stale cache can't pass for
+// "unchanged"; one holding none has nothing to let through and stays unpinned.
 func (h *Handlers) checkHostAccessHeld(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -155,7 +156,8 @@ func (h *Handlers) checkHostAccessHeld(
 	change string,
 ) (context.Context, bool) {
 	level := h.levelFor(r)
-	if level >= config.OpsImpactful {
+	if level >= config.OpsImpactful ||
+		cluster.HeldHostAccess(svc, change == cluster.RollingBack, h.cache.GetVolume) == "" {
 		return r.Context(), true
 	}
 
