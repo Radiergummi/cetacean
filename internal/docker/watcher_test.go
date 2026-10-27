@@ -194,6 +194,16 @@ func (m *mockClient) Logs(
 
 func (m *mockClient) Close() error { return nil }
 
+// deliver applies one event the way the event loop does: as a batch of one.
+func deliver(ctx context.Context, w *Watcher, msg events.Message) {
+	key, action := w.eventKeyFromMsg(msg)
+	if key.id == "" {
+		return
+	}
+
+	w.processBatch(ctx, map[eventKey]coalesced{key: {action: action}})
+}
+
 // --- Tests ---
 
 func TestHandleEvent_NodeUpdate(t *testing.T) {
@@ -206,7 +216,7 @@ func TestHandleEvent_NodeUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.NodeEventType,
 		Actor: events.Actor{ID: "n1"},
 	})
@@ -226,7 +236,7 @@ func TestHandleEvent_NodeRemove(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "n1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.NodeEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "n1"},
@@ -247,7 +257,7 @@ func TestHandleEvent_ServiceUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.ServiceEventType,
 		Actor: events.Actor{ID: "s1"},
 	})
@@ -267,7 +277,7 @@ func TestHandleEvent_ServiceRemove(t *testing.T) {
 	c.SetService(swarm.Service{ID: "s1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ServiceEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "s1"},
@@ -283,7 +293,7 @@ func TestHandleEvent_ConfigUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.ConfigEventType,
 		Actor: events.Actor{ID: "cfg1"},
 	})
@@ -299,7 +309,7 @@ func TestHandleEvent_ConfigRemove(t *testing.T) {
 	c.SetConfig(swarm.Config{ID: "cfg1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ConfigEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "cfg1"},
@@ -315,7 +325,7 @@ func TestHandleEvent_SecretUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.SecretEventType,
 		Actor: events.Actor{ID: "sec1"},
 	})
@@ -331,7 +341,7 @@ func TestHandleEvent_SecretRemove(t *testing.T) {
 	c.SetSecret(swarm.Secret{ID: "sec1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.SecretEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "sec1"},
@@ -347,7 +357,7 @@ func TestHandleEvent_NetworkUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.NetworkEventType,
 		Actor: events.Actor{ID: "net1"},
 	})
@@ -363,7 +373,7 @@ func TestHandleEvent_NetworkRemove(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.NetworkEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "net1"},
@@ -380,7 +390,7 @@ func TestHandleEvent_NetworkDestroy(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.NetworkEventType,
 		Action: "destroy",
 		Actor:  events.Actor{ID: "net1"},
@@ -399,7 +409,7 @@ func TestHandleEvent_VolumeUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.VolumeEventType,
 		Actor: events.Actor{ID: "vol1"},
 	})
@@ -419,7 +429,7 @@ func TestHandleEvent_VolumeDestroy(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "vol1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.VolumeEventType,
 		Action: "destroy",
 		Actor:  events.Actor{ID: "vol1"},
@@ -438,7 +448,7 @@ func TestHandleEvent_ContainerToTask(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type: events.ContainerEventType,
 		Actor: events.Actor{
 			ID: "container1",
@@ -468,7 +478,7 @@ func TestHandleEvent_ContainerWithoutTaskID(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.ContainerEventType,
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{}},
 	})
@@ -487,7 +497,7 @@ func TestHandleEvent_InspectError(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 
 	// Should not panic, should not add to cache
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.NodeEventType,
 		Actor: events.Actor{ID: "n1"},
 	})
@@ -776,7 +786,7 @@ func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 	})
 
 	w := NewWatcher(mc, c, "")
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  "task",
 		Actor: events.Actor{ID: "t1"},
 	})
@@ -800,7 +810,7 @@ func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc"})
 
 	w := NewWatcher(mc, c, "")
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  "task",
 		Actor: events.Actor{ID: "t1"},
 	})
@@ -839,7 +849,7 @@ func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 10 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "die",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -885,7 +895,7 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 10 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "start",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -930,7 +940,7 @@ func TestContainerStartReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 10 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "start",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -984,7 +994,7 @@ func TestContainerStartStopsReinspectingOnceRunning(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "start",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -1029,7 +1039,7 @@ func TestContainerDeathKeepsReinspectingWhileSwarmLags(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 5 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "die",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -1068,7 +1078,7 @@ func TestSettleRetriesAreBounded(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "die",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{

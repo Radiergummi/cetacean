@@ -874,26 +874,6 @@ func (w *Watcher) applyRemove(key eventKey) {
 	}
 }
 
-// handleEvent processes a single Docker event synchronously (inspect + apply).
-// Used by tests; the production path uses watchEvents with debouncing.
-func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
-	key, action := w.eventKeyFromMsg(msg)
-	if key.id == "" {
-		return
-	}
-	if action == "remove" {
-		w.applyRemove(key)
-
-		return
-	}
-
-	w.inspectAndApply(ctx, key)
-
-	if action == actionSettle || action == actionStarted {
-		w.scheduleSettle(ctx, key, action)
-	}
-}
-
 func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 	resource, err := w.inspectWithRetry(ctx, key)
 	if err != nil {
