@@ -293,7 +293,29 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 		update:        h.serviceSpec.UpdateServiceLabels,
 		conflictCode:  "SVC001",
 		stackMember:   true,
+		hold:          h.holdServiceLabels,
 	})
+}
+
+// holdServiceLabels refuses a label change to a service holding host access
+// below level 3, judged inside the write against Docker's labels.
+func (h *Handlers) holdServiceLabels(
+	w http.ResponseWriter,
+	r *http.Request,
+	svc swarm.Service,
+) (context.Context, func(before, after map[string]string) error, bool) {
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, "")
+	if !ok {
+		return nil, nil, false
+	}
+
+	level := h.levelFor(r)
+	check := func(before, after map[string]string) error {
+		change := cluster.LabelsChange(before, after)
+		return cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level)
+	}
+
+	return ctx, check, true
 }
 
 func (h *Handlers) HandleGetServiceResources(w http.ResponseWriter, r *http.Request) {

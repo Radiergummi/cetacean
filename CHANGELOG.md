@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
-- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
 - `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 

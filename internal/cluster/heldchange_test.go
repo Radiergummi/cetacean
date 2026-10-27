@@ -59,12 +59,18 @@ func TestHealthcheckChange(t *testing.T) {
 	}
 }
 
-func TestEnvPortsAndNetworksChanges(t *testing.T) {
+func TestEnvLabelsPortsAndNetworksChanges(t *testing.T) {
 	if EnvChange(map[string]string{"A": "1"}, map[string]string{"A": "1"}) != "" {
 		t.Error("an unchanged environment counted as a change")
 	}
 	if EnvChange(map[string]string{"A": "1"}, map[string]string{"A": "2"}) == "" {
 		t.Error("a changed variable went unnoticed")
+	}
+	if LabelsChange(nil, map[string]string{}) != "" {
+		t.Error("an empty label set counted as a change")
+	}
+	if LabelsChange(nil, map[string]string{"traefik.enable": "true"}) == "" {
+		t.Error("an added label went unnoticed")
 	}
 
 	web := swarm.PortConfig{Protocol: "tcp", TargetPort: 80, PublishedPort: 8080}
