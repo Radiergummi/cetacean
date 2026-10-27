@@ -26,12 +26,6 @@ describe("ServiceLinks", () => {
     expect(screen.getByText(/javascript:alert\(1\)/)).toBeInTheDocument();
   });
 
-  it("renders nothing without links", () => {
-    const { container } = render(<ServiceLinks links={[]} />);
-
-    expect(container).toBeEmptyDOMElement();
-  });
-
   // A stack merges only exact duplicates, so one id and URL can arrive under two titles.
   it("keys each entry by every field", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -45,7 +39,8 @@ describe("ServiceLinks", () => {
       />,
     );
 
-    expect(screen.getAllByRole("link")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Code" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "repo" })).toBeInTheDocument();
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
@@ -59,7 +54,47 @@ describe("ServiceLinks", () => {
     expect(entry).toHaveAttribute("title", `Note: ${"x".repeat(300)}`);
   });
 
-  it("names the declaring services only where titles collide", () => {
+  it("tells same-titled links apart by id, as on a service page", () => {
+    render(
+      <ServiceLinks
+        links={[
+          { id: "grafana", title: "Dashboard", href: "https://grafana.example.com" },
+          { id: "kibana", title: "Dashboard", href: "https://kibana.example.com" },
+          { id: "oncall", title: "Dashboard", text: "pager:web" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Dashboard · grafana" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard · kibana" })).toBeInTheDocument();
+    expect(screen.getByText("Dashboard · oncall: pager:web")).toBeInTheDocument();
+  });
+
+  it("prefers the id to the services where only titles collide on a stack", () => {
+    render(
+      <ServiceLinks
+        links={[
+          {
+            id: "grafana",
+            title: "Dashboard",
+            href: "https://grafana.example.com",
+            services: ["app_api"],
+          },
+          {
+            id: "kibana",
+            title: "Dashboard",
+            href: "https://kibana.example.com",
+            services: ["app_api"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Dashboard · grafana" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard · kibana" })).toBeInTheDocument();
+  });
+
+  it("names the declaring services where titles and ids collide", () => {
     render(
       <ServiceLinks
         links={[

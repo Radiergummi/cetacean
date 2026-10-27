@@ -77,4 +77,16 @@ describe("PageHeader", () => {
 
     expect(screen.getByText("extra content").closest(".truncate")).toBeNull();
   });
+
+  // The header clips horizontal overflow, which would cut off a focus ring.
+  it("pads the extra row so a focus ring inside it is not clipped", () => {
+    renderWithRouter(
+      <PageHeader
+        title="web"
+        extra={<span>extra content</span>}
+      />,
+    );
+
+    expect(screen.getByText("extra content").parentElement).toHaveClass("p-1");
+  });
 });

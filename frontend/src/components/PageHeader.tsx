@@ -104,7 +104,8 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions, extr
           </div>
         )}
       </div>
-      {extra && <div className="-mt-3 max-w-full min-w-0">{extra}</div>}
+      {/* The padding keeps a focus ring clear of the header's overflow clip. */}
+      {extra && <div className="-mt-4 max-w-full min-w-0 p-1">{extra}</div>}
     </header>
   );
 }

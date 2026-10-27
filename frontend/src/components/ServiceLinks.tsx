@@ -5,30 +5,18 @@ import { ExternalLink } from "lucide-react";
 
 /**
  * Custom links declared through `cetacean.link.*` service labels. Only an
- * entry the server gave an `href` is rendered as a link. Where titles collide,
- * a stack's links name the services declaring them.
+ * entry the server gave an `href` is rendered as a link. The caller renders
+ * nothing at all when there are no links.
  */
 export default function ServiceLinks({ links }: { links: ServiceLink[] }) {
-  if (links.length === 0) {
-    return null;
-  }
-
-  const titleCounts = new Map<string, number>();
-
-  for (const { title } of links) {
-    titleCounts.set(title, (titleCounts.get(title) ?? 0) + 1);
-  }
-
   return (
     <ul
       aria-label="Links"
       className="flex max-w-full min-w-0 flex-wrap items-center gap-2"
     >
-      {links.map(({ id, title, href, text, services }) => {
-        const label =
-          (titleCounts.get(title) ?? 0) > 1 && services?.length
-            ? `${title} · ${services.join(", ")}`
-            : title;
+      {links.map((link) => {
+        const { id, title, href, text } = link;
+        const label = disambiguatedLabel(link, links);
 
         return (
           <li
@@ -59,4 +47,24 @@ export default function ServiceLinks({ links }: { links: ServiceLink[] }) {
       })}
     </ul>
   );
+}
+
+/**
+ * A title shared with another link gains its id; where the ids collide too,
+ * as on a stack whose services declare the same link, the declaring services.
+ */
+function disambiguatedLabel({ id, title, services }: ServiceLink, links: ServiceLink[]) {
+  const sameTitle = links.filter((link) => link.title === title);
+
+  if (sameTitle.length < 2) {
+    return title;
+  }
+
+  const idsCollide = sameTitle.filter((link) => link.id === id).length > 1;
+
+  if (idsCollide && services?.length) {
+    return `${title} · ${services.join(", ")}`;
+  }
+
+  return `${title} · ${id}`;
 }

@@ -92,7 +92,20 @@ export const pluginSchema = z.looseObject({
 
 const serviceRefs = z.array(z.looseObject({ id: z.string(), name: z.string() })).nullable();
 
-export const serviceDetailSchema = z.looseObject({ service: serviceSchema });
+/** Exactly one of `href` and `text` is set; `services` only on a stack's links. */
+const serviceLinks = z
+  .array(
+    z.looseObject({
+      id: z.string(),
+      title: z.string(),
+      href: z.string().optional(),
+      text: z.string().optional(),
+      services: z.array(z.string()).optional(),
+    }),
+  )
+  .optional();
+
+export const serviceDetailSchema = z.looseObject({ service: serviceSchema, links: serviceLinks });
 export const configDetailSchema = z.looseObject({ config: configSchema, services: serviceRefs });
 export const secretDetailSchema = z.looseObject({ secret: secretSchema, services: serviceRefs });
 
@@ -140,7 +153,10 @@ export const stackListSchema = z.looseObject({
 /** A service row carries the running count the list column shows. */
 export const serviceListSchema = serviceSchema.extend({ RunningTasks: z.number() });
 
-export const stackDetailResponseSchema = z.looseObject({ stack: stackDetailSchema });
+export const stackDetailResponseSchema = z.looseObject({
+  stack: stackDetailSchema,
+  links: serviceLinks,
+});
 
 export const stackSummarySchema = z.looseObject({
   name: z.string(),
