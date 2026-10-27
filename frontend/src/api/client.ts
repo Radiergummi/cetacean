@@ -897,12 +897,16 @@ export const api = {
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<ConfigListItem>("/configs", params, signal, schema.configListSchema),
+  configVersions: (id: string, signal?: AbortSignal) =>
+    fetchAll<ConfigListItem>("/configs", signal, schema.configListSchema, { versionsOf: id }),
   allConfigs: (signal?: AbortSignal) =>
     fetchAll<Config>("/configs", signal, schema.configSchema, { versions: "all" }),
   config: (id: string, signal?: AbortSignal) =>
     fetchJSON<ConfigDetail>(`/configs/${id}`, signal, schema.configDetailSchema),
   secrets: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<SecretListItem>("/secrets", params, signal, schema.secretListSchema),
+  secretVersions: (id: string, signal?: AbortSignal) =>
+    fetchAll<SecretListItem>("/secrets", signal, schema.secretListSchema, { versionsOf: id }),
   allSecrets: (signal?: AbortSignal) =>
     fetchAll<Secret>("/secrets", signal, schema.secretSchema, { versions: "all" }),
   secret: (id: string, signal?: AbortSignal) =>

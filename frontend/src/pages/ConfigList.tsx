@@ -16,6 +16,11 @@ import { useCallback } from "react";
 
 type Row = VersionRow<ConfigListItem>;
 
+/**
+ * A service event changes who uses a config, so the list follows both.
+ */
+const sseType = "config,service";
+
 export default function ConfigList() {
   const {
     expanded,
@@ -23,18 +28,15 @@ export default function ConfigList() {
     arrange,
   } = useVersionExpansion(
     "/configs",
-    useCallback(
-      async (id: string, signal: AbortSignal) =>
-        (await api.configs({ versionsOf: id }, signal)).data.items,
-      [],
-    ),
+    `/events?types=${sseType}`,
+    useCallback((id: string, signal: AbortSignal) => api.configVersions(id, signal), []),
   );
 
   return (
     <ResourceListPage<Row>
       title="Configs"
       path="/configs"
-      sseType="config,service"
+      sseType={sseType}
       derived
       defaultSort="name"
       searchPlaceholder="Search configs…"

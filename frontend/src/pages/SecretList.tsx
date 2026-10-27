@@ -16,6 +16,11 @@ import { useCallback } from "react";
 
 type Row = VersionRow<SecretListItem>;
 
+/**
+ * A service event changes who uses a secret, so the list follows both.
+ */
+const sseType = "secret,service";
+
 export default function SecretList() {
   const {
     expanded,
@@ -23,18 +28,15 @@ export default function SecretList() {
     arrange,
   } = useVersionExpansion(
     "/secrets",
-    useCallback(
-      async (id: string, signal: AbortSignal) =>
-        (await api.secrets({ versionsOf: id }, signal)).data.items,
-      [],
-    ),
+    `/events?types=${sseType}`,
+    useCallback((id: string, signal: AbortSignal) => api.secretVersions(id, signal), []),
   );
 
   return (
     <ResourceListPage<Row>
       title="Secrets"
       path="/secrets"
-      sseType="secret,service"
+      sseType={sseType}
       derived
       defaultSort="name"
       searchPlaceholder="Search secrets…"

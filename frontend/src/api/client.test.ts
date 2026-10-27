@@ -106,6 +106,26 @@ describe("api client", () => {
     );
   });
 
+  it("pages through every version of one secret group", async () => {
+    const versions = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `s${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `db_v${from + index}` },
+        UsedBy: 0,
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: versions(0, 200), total: 230, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: versions(200, 30), total: 230, limit: 200, offset: 200 }),
+      );
+
+    expect(await api.secretVersions("s0")).toHaveLength(230);
+    expect(mockFetch).toHaveBeenLastCalledWith("/secrets?versionsOf=s0", expect.anything());
+  });
+
   it("pages through every secret for a picker", async () => {
     const secrets = (from: number, count: number) =>
       Array.from({ length: count }, (_, index) => ({

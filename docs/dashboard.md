@@ -155,12 +155,12 @@ Over the API, the same sequence is `POST /secrets`, then `PATCH /services/{id}/s
 
 Rotation leaves a trail of versions behind, so the config and secret lists show only the newest version of each
 group; **+N older** loads the others beneath it. The **Used by** column counts the services using each one, and an
-older version no service uses reads as unused.
+older version none of the services you can see uses says so.
 
 Versions group only within one stack, by their `com.docker.stack.namespace` label, so a replacement must carry the
 same stack label as the version it replaces. Within a stack, a config or secret labeled `cetacean.version-of=<name>`
-is a version of `<name>`. Without that label, Cetacean matches names instead: the name less its `<stack>_` or
-`<stack>-` prefix and less a version suffix, which is `_` or `-` followed by either eight or more hex digits
+is a version of `<name>`. Without that label, Cetacean matches names instead. Either way it drops a `<stack>_` or
+`<stack>-` prefix and a version suffix, which is `_` or `-` followed by either eight or more hex digits
 (`app_env_0a1b2c3d4e5f`, as `docker-stack-deploy` and SwarmCD write) or `v` and a number (`db_password_v3`). A suffix
 like `_1` isn't one. So `myapp_db_password` groups with `myapp_db_password_v2`, and with a replacement labeled
 `db_password` in the same stack. A group matched by name says **inferred from names**, because a name can match by

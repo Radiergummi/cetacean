@@ -16,11 +16,13 @@ vi.mock("../api/client", () => ({
   setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
     secrets: vi.fn<() => void>(),
+    secretVersions: vi.fn<() => void>(),
   },
 }));
 
 import { api } from "../api/client";
 const mockSecrets = vi.mocked(api.secrets);
+const mockSecretVersions = vi.mocked(api.secretVersions);
 
 const fakeSecret = (id: string, name: string): SecretListItem => ({
   ID: id,
@@ -45,6 +47,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", localStorageStub);
   mockSecrets.mockReset();
+  mockSecretVersions.mockReset();
 });
 
 afterEach(() => {
@@ -77,18 +80,15 @@ describe("SecretList", () => {
   it("loads a group's older versions beneath its newest on request", async () => {
     const head = { ...version("db-v3", 2, true), NewestVersion: true, OlderVersions: 2 };
 
-    mockSecrets.mockImplementation(async (params) => ({
-      data:
-        params?.versionsOf === "db-v3"
-          ? {
-              items: [head, version("db-v2", 1, true), version("db-v1", 0, true)],
-              total: 3,
-              limit: 50,
-              offset: 0,
-            }
-          : { items: [head, fakeSecret("s9", "api-key")], total: 2, limit: 50, offset: 0 },
+    mockSecrets.mockResolvedValue({
+      data: { items: [head, fakeSecret("s9", "api-key")], total: 2, limit: 50, offset: 0 },
       allowedMethods: new Set(),
-    }));
+    });
+    mockSecretVersions.mockResolvedValue([
+      head,
+      version("db-v2", 1, true),
+      version("db-v1", 0, true),
+    ]);
     render(<SecretList />, { wrapper });
 
     const toggle = await screen.findByRole("button", { name: "+2 older" });
@@ -100,7 +100,7 @@ describe("SecretList", () => {
     fireEvent.click(toggle);
 
     expect(await screen.findByText("db-v1")).toBeInTheDocument();
-    expect(mockSecrets).toHaveBeenCalledWith({ versionsOf: "db-v3" }, expect.anything());
+    expect(mockSecretVersions).toHaveBeenCalledWith("db-v3", expect.anything());
 
     const rows = screen.getAllByRole("row").map(({ textContent }) => textContent ?? "");
     const position = (name: string) => rows.findIndex((text) => text.includes(name));
@@ -108,8 +108,24 @@ describe("SecretList", () => {
     expect(position("db-v3")).toBeLessThan(position("db-v2"));
     expect(position("db-v2")).toBeLessThan(position("db-v1"));
     expect(position("db-v1")).toBeLessThan(position("api-key"));
-    expect(rows[position("db-v1")]).toContain("Unused");
-    expect(rows[position("db-v2")]).not.toContain("Unused");
+    expect(rows[position("db-v1")]).toContain("No services you can see");
+    expect(rows[position("db-v2")]).not.toContain("No services you can see");
+
+    // An expanded group follows the same events the list does.
+    const calls = mockSecretVersions.mock.calls.length;
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("secret", {
+        type: "secret",
+        action: "create",
+        id: "db-v4",
+        resource: { ID: "db-v4" },
+      }),
+    );
+
+    await waitFor(() => expect(mockSecretVersions.mock.calls.length).toBeGreaterThan(calls), {
+      timeout: 2000,
+    });
   });
 
   it("refetches when a service changes, since that changes who uses a secret", async () => {

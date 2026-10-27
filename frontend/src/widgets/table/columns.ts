@@ -20,6 +20,9 @@ export interface ResourceRecord {
   detail?: string;
   desired?: number;
   running?: number;
+  versionOf?: string;
+  newestVersion?: boolean;
+  usedBy?: number;
 }
 
 export interface WidgetColumn {
@@ -81,8 +84,22 @@ const columnsByType: Record<string, WidgetColumn[]> = {
     column("id", "ID"),
   ],
   stacks: [column("name", "Name"), column("desired", "Services"), column("id", "ID")],
-  configs: [column("name", "Name"), column("stack", "Stack"), column("id", "ID")],
-  secrets: [column("name", "Name"), column("stack", "Stack"), column("id", "ID")],
+  configs: [
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("versionOf", "Version of"),
+    column("newestVersion", "Newest"),
+    column("usedBy", "Used by"),
+    column("id", "ID"),
+  ],
+  secrets: [
+    column("name", "Name"),
+    column("stack", "Stack"),
+    column("versionOf", "Version of"),
+    column("newestVersion", "Newest"),
+    column("usedBy", "Used by"),
+    column("id", "ID"),
+  ],
   networks: [
     column("name", "Name"),
     column("stack", "Stack"),

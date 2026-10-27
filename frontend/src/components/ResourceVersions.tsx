@@ -1,8 +1,15 @@
 import type { VersionedListItem } from "@/api/types";
 import ResourceName from "@/components/ResourceName";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useQueries, type UseQueryResult } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useResourceStream } from "@/hooks/useResourceStream";
+import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+/**
+ * How long expanded groups gather stream events before refetching, as a
+ * filtered list does.
+ */
+const refetchDelay = 750;
 
 /**
  * A config or secret list row; `olderVersion` marks one shown beneath the
@@ -18,12 +25,28 @@ type Item = VersionedListItem & {
 /**
  * Which groups are expanded, the older versions the server lists for each,
  * and `arrange`, which places those beneath the newest version they belong to.
+ * The groups refetch on the events the list itself refetches on.
  */
 export function useVersionExpansion<T extends Item>(
   path: string,
+  streamPath: string,
   fetchGroup: (id: string, signal: AbortSignal) => Promise<T[]>,
 ) {
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<readonly string[]>([]);
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => clearTimeout(refetchTimer.current), []);
+
+  useResourceStream(
+    expanded.length > 0 ? streamPath : undefined,
+    useCallback(() => {
+      refetchTimer.current ??= setTimeout(() => {
+        refetchTimer.current = undefined;
+        void queryClient.invalidateQueries({ queryKey: [path, "versionsOf"] });
+      }, refetchDelay);
+    }, [queryClient, path]),
+  );
 
   const toggle = useCallback((id: string) => {
     setExpanded((current) =>
@@ -45,14 +68,18 @@ export function useVersionExpansion<T extends Item>(
     combine,
   });
 
+  // A search lists matching older versions itself, so those stay where it put them.
   const arrange = useCallback(
-    (items: T[]): VersionRow<T>[] =>
-      items.flatMap((item) => [
+    (items: T[]): VersionRow<T>[] => {
+      const listed = new Set(items.map(({ ID }) => ID));
+
+      return items.flatMap((item) => [
         item,
         ...(older.get(item.ID) ?? [])
-          .filter(({ ID }) => ID !== item.ID)
+          .filter(({ ID }) => !listed.has(ID))
           .map((version) => ({ ...version, olderVersion: true })),
-      ]),
+      ]);
+    },
     [older],
   );
 
@@ -130,12 +157,27 @@ export function VersionedName({
 }
 
 /**
- * How many services use a config or secret; an older version nothing uses
- * reads as unused.
+ * How many services use a config or secret. The count covers only services
+ * the person may read, so an older version none of those use says exactly that.
  */
-export function UsedBy({ item: { UsedBy, olderVersion } }: { item: VersionRow<Item> }) {
-  if (olderVersion && UsedBy === 0) {
-    return <span className="text-muted-foreground">Unused</span>;
+export function UsedBy({
+  item: { UsedBy, olderVersion, VersionOf, NewestVersion },
+}: {
+  item: VersionRow<Item>;
+}) {
+  const older = olderVersion || (VersionOf !== undefined && !NewestVersion);
+
+  if (older && UsedBy === 0) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={<span className="text-muted-foreground">No services you can see</span>}
+        />
+        <TooltipContent>
+          Counts only the services you may read; one you cannot see may still use it.
+        </TooltipContent>
+      </Tooltip>
+    );
   }
 
   return <span className="tabular-nums">{UsedBy}</span>;
