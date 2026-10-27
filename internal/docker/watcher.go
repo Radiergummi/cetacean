@@ -396,8 +396,16 @@ type eventKey struct {
 }
 
 // coalesced holds the latest action for a given resource.
+// created survives coalescing: a create's not-found retry must not be lost
+// to whatever event followed it within the same window.
 type coalesced struct {
-	action string
+	action  string
+	created bool
+}
+
+// then is c with a later action for the same resource coalesced onto it.
+func (c coalesced) then(action string) coalesced {
+	return coalesced{action: action, created: c.created || action == "create"}
 }
 
 // actionSettle marks a task update triggered by its container ending,
@@ -538,10 +546,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 			if key.id == "" {
 				continue // unrecognized event, skip
 			}
-			// An update coalesced onto a create keeps the create's retry.
-			if prev, ok := pending[key]; !ok || prev.action != "create" || action != "update" {
-				pending[key] = coalesced{action: action}
-			}
+			pending[key] = pending[key].then(action)
 			if timerC == nil {
 				if timer == nil {
 					timer = time.NewTimer(debounceWindow)
@@ -665,7 +670,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	for range workers {
 		wg.Go(func() {
 			for key := range work {
-				w.inspectAndApply(ctx, key, batch[key].action == "create")
+				w.inspectAndApply(ctx, key, batch[key].created)
 			}
 		})
 	}
@@ -1086,8 +1091,9 @@ func (w *Watcher) inspectWithRetry(
 			return resource, nil
 		}
 		lastErr = err
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil, err
+		// An attempt's own timeout is retried; the caller's context is not.
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
 		if cerrdefs.IsNotFound(err) && !created {
 			return nil, err

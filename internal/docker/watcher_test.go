@@ -202,7 +202,7 @@ func deliver(ctx context.Context, w *Watcher, msg events.Message) {
 		return
 	}
 
-	w.processBatch(ctx, map[eventKey]coalesced{key: {action: action}})
+	w.processBatch(ctx, map[eventKey]coalesced{key: coalesced{}.then(action)})
 }
 
 // --- Tests ---
@@ -885,44 +885,82 @@ func TestUpdateEventTakesNotFoundAsFinal(t *testing.T) {
 	}
 }
 
-// An update coalesced onto a create in the same window must keep the create's
+// Any event coalesced onto a create in the same window must keep the create's
 // retry, or the object the deploy just made is dropped.
 func TestCoalescedCreateKeepsItsRetry(t *testing.T) {
+	for _, test := range []struct {
+		kind    events.Type
+		actions []events.Action
+	}{
+		{events.ServiceEventType, []events.Action{"create", "update"}},
+		{events.NetworkEventType, []events.Action{"create", "connect"}},
+		{events.VolumeEventType, []events.Action{"create", "mount", "unmount"}},
+	} {
+		t.Run(string(test.kind), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var calls atomic.Int32
+
+				mc := newMockClient()
+				mc.inspectFn = func(ctx context.Context, kind events.Type, id string) (any, error) {
+					if calls.Add(1) == 1 {
+						return nil, cerrdefs.ErrNotFound
+					}
+					return newMockClient().Inspect(ctx, kind, id)
+				}
+
+				c := cache.New(nil)
+				w := NewWatcher(mc, c, "")
+				for _, action := range test.actions {
+					mc.eventsCh <- events.Message{
+						Type:   test.kind,
+						Action: action,
+						Actor:  events.Actor{ID: "x1"},
+					}
+				}
+
+				ctx, cancel := context.WithCancel(t.Context())
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					w.watchEvents(ctx, time.Time{}, true)
+				}()
+
+				time.Sleep(time.Second)
+				synctest.Wait()
+				cancel()
+				<-done
+
+				if got := calls.Load(); got != 2 {
+					t.Errorf("inspected %d times, want a retry after the not-found", got)
+				}
+			})
+		})
+	}
+}
+
+// One attempt timing out is a slow engine, not a verdict: the next attempt
+// runs, and only the caller's own context ending stops the retries.
+func TestInspectRetriesAnAttemptThatTimedOut(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var calls atomic.Int32
 
 		mc := newMockClient()
-		mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		mc.inspectFn = func(ctx context.Context, _ events.Type, id string) (any, error) {
 			if calls.Add(1) == 1 {
-				return nil, cerrdefs.ErrNotFound
+				return hangingInspect(ctx, "", id)
 			}
-			return swarm.Service{ID: id}, nil
+			return swarm.Node{ID: id}, nil
 		}
 
 		c := cache.New(nil)
 		w := NewWatcher(mc, c, "")
-		for _, action := range []events.Action{"create", "update"} {
-			mc.eventsCh <- events.Message{
-				Type:   events.ServiceEventType,
-				Action: action,
-				Actor:  events.Actor{ID: "svc1"},
-			}
-		}
+		deliver(t.Context(), w, events.Message{
+			Type:  events.NodeEventType,
+			Actor: events.Actor{ID: "n1"},
+		})
 
-		ctx, cancel := context.WithCancel(t.Context())
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			w.watchEvents(ctx, time.Time{}, true)
-		}()
-
-		time.Sleep(time.Second)
-		synctest.Wait()
-		cancel()
-		<-done
-
-		if _, ok := c.GetService("svc1"); !ok {
-			t.Error("a create coalesced with an update lost its retry")
+		if _, ok := c.GetNode("n1"); !ok {
+			t.Error("an inspect whose first attempt timed out was not retried")
 		}
 	})
 }
