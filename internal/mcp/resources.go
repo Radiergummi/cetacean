@@ -134,7 +134,7 @@ var (
 			uri:         "cetacean://networks/{id}",
 			name:        "network",
 			title:       "Network detail",
-			description: "Compact digest of one network by ID: driver, scope, subnets, the internal/attachable/ingress/IPv6 flags that decide whether a service could attach at all, stack, labels, and the services currently attached. Same shape the describe tool returns; subscribe for updates.",
+			description: "Compact digest of one network by ID: driver, scope, subnets, the internal/attachable/ingress/IPv6 flags that decide whether a service could attach at all, stack, labels, the services currently attached, and for a swarm overlay how many of its IPv4 addresses are usable and in use. Same shape the describe tool returns; subscribe for updates.",
 		},
 		{
 			uri:         "cetacean://volumes/{name}",

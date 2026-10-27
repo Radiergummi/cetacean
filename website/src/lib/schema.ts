@@ -23,6 +23,14 @@ export const properties: Property[] = [
     usedOn: ["HistoryEntry"],
   },
   {
+    name: "addresses",
+    iri: "urn:cetacean:addresses",
+    description:
+      "How much of a network's IPv4 address pool is in use: usable, used, and the virtual IPs, tasks and load balancers holding them.",
+    expectedType: "Object",
+    usedOn: ["Network"],
+  },
+  {
     name: "aliases",
     iri: "urn:cetacean:aliases",
     description: "DNS aliases for a service on a given network.",
@@ -692,7 +700,7 @@ export const types: ResourceType[] = [
     name: "Network",
     description: "A Docker network.",
     endpoint: "/networks/{id}",
-    properties: ["network", "name", "driver", "scope", "services"],
+    properties: ["network", "name", "driver", "scope", "services", "addresses"],
   },
   {
     name: "Volume",

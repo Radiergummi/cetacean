@@ -368,7 +368,7 @@ Swarm settings and plugin changes have no history entries, so they carry no acto
 | Stacks   | `name`                                       |
 | Configs  | `name`, `created`, `updated`                 |
 | Secrets  | `name`, `created`, `updated`                 |
-| Networks | `name`, `driver`, `scope`                    |
+| Networks | `name`, `driver`, `scope`, `addresses`       |
 | Volumes  | `name`, `driver`, `scope`                    |
 
 ### Filter fields by resource
@@ -792,6 +792,12 @@ It's the same assessment as the MCP `get_topology` drain-impact view, and the da
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
+
+`GET /networks/{id}` carries `addresses`, and each `GET /networks` item `Addresses`, for a swarm network on the
+default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `tasks` and `loadBalancers`.
+`excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't counted. Sorting
+by `addresses` orders by the share in use. The counts cover every service and task on the network, including ones the
+caller can't read. [Network addresses](dashboard#network-addresses) explains the figure.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

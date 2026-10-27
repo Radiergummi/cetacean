@@ -400,7 +400,7 @@ Templated resources return the same compact digest the `describe` tool builds. T
 | `cetacean://stacks/{name}/compose` | The stack as a Compose file; secrets and configs are referenced, never exported |
 | `cetacean://configs/{id}`          | Config digest; the payload's size in bytes, never the payload                   |
 | `cetacean://secrets/{id}`          | Secret digest; the payload is never read, not even its length                   |
-| `cetacean://networks/{id}`         | Network digest, with the attached services                                      |
+| `cetacean://networks/{id}`         | Network digest, with the attached services and how many addresses are in use    |
 | `cetacean://volumes/{name}`        | Volume digest, keyed by name                                                    |
 
 ### Subscriptions

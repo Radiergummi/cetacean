@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -421,10 +422,15 @@ func (h *Handlers) networkRepresentation(r *http.Request) (any, error) {
 		return nil, errNoRepresentation
 	}
 
-	return NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
+	response := NetworkResponse{
 		Network:  net,
 		Services: h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
-	}), nil
+	}
+	if a, ok := cluster.NetworkAddresses(h.cache, []network.Summary{net})[id]; ok {
+		response.Addresses = &a
+	}
+
+	return NewDetailResponse(r.Context(), "/networks/"+id, "Network", response), nil
 }
 
 func (h *Handlers) volumeRepresentation(r *http.Request) (any, error) {

@@ -6290,7 +6290,7 @@ paths:
           description: Field to sort the result list by
           schema:
             type: string
-            enum: [name, driver, scope]
+            enum: [name, driver, scope, addresses]
           example: name
         - $ref: "#/components/parameters/dir"
       responses:
@@ -6322,6 +6322,13 @@ paths:
                         - Subnet: 10.0.1.0/24
                     Labels:
                       com.docker.stack.namespace: myapp
+                    Addresses:
+                      usable: 253
+                      used: 9
+                      vips: 2
+                      tasks: 4
+                      loadBalancers: 3
+                      excludesAttachedContainers: false
                 total: 6
                 limit: 50
                 offset: 0
@@ -6386,6 +6393,8 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      addresses:
+                        $ref: "#/components/schemas/NetworkAddresses"
               example:
                 "@context": /api/context.jsonld
                 "@id": /networks/net_ghi789
@@ -6405,6 +6414,13 @@ paths:
                   - "@id": /services/r8m2x5nk3p7q
                     id: r8m2x5nk3p7q
                     name: webapp
+                addresses:
+                  usable: 253
+                  used: 9
+                  vips: 2
+                  tasks: 4
+                  loadBalancers: 3
+                  excludesAttachedContainers: false
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -7795,6 +7811,49 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Network)
+                  Addresses:
+                    $ref: "#/components/schemas/NetworkAddresses"
+
+    NetworkAddresses:
+      type: object
+      description: >
+        How much of a network's IPv4 address pool is in use. Present only for
+        swarm-scoped networks on the default IPAM driver with an IPv4 subnet.
+        Counted over every service and task on the network, including those
+        the caller may not read.
+      required: [usable, used, vips, tasks, loadBalancers, excludesAttachedContainers]
+      properties:
+        usable:
+          type: integer
+          description: >
+            Addresses the subnets (or their IP ranges) can hand out, less the
+            network, broadcast, gateway and auxiliary addresses
+        used:
+          type: integer
+          description: The sum of `vips`, `tasks` and `loadBalancers`
+        vips:
+          type: integer
+          description: Service virtual IPs on the network
+        tasks:
+          type: integer
+          description: Addresses held by tasks that have not stopped
+        loadBalancers:
+          type: integer
+          description: >
+            One per node with such a task on the network; on the ingress
+            network, one per node in the swarm
+        excludesAttachedContainers:
+          type: boolean
+          description: >
+            Whether the network is attachable, so containers attached outside
+            a service may hold addresses not counted here
+      example:
+        usable: 253
+        used: 9
+        vips: 2
+        tasks: 4
+        loadBalancers: 3
+        excludesAttachedContainers: false
 
     VolumeCollection:
       allOf:
