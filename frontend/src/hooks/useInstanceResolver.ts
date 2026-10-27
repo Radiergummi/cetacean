@@ -60,9 +60,9 @@ export function useInstanceResolver(enabled = true) {
         return byHostname[short];
       }
 
-      // Reverse: check if any key is a prefix of the hostname
+      // Reverse: a key that is a leading run of the hostname's labels
       for (const [name, instance] of Object.entries(byHostname)) {
-        if (hostname.startsWith(name)) {
+        if (hostname.startsWith(`${name}.`)) {
           return instance;
         }
       }
