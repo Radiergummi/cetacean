@@ -77,7 +77,7 @@ func RowsForServices(
 				svc,
 				running[svc.ID],
 				completed[svc.ID],
-				eligible[svc.ID],
+				EligibleIn(eligible, svc.ID),
 				flapping[svc.ID],
 			),
 			Detail:  image,
@@ -348,7 +348,7 @@ func ServiceDigest(
 	networks []network.Summary,
 	restarts *ServiceRestarts,
 	flapping bool,
-	eligibleNodes int,
+	eligible Eligible,
 	imageUpdate *ImageUpdate,
 ) Digest {
 	var (
@@ -423,7 +423,7 @@ func ServiceDigest(
 		failures = failures[:maxRecentFailures]
 	}
 
-	state := DeriveServiceState(svc, running, completed, eligibleNodes, flapping)
+	state := DeriveServiceState(svc, running, completed, eligible, flapping)
 
 	digest := Digest{
 		ID:             svc.ID,

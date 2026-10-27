@@ -158,7 +158,7 @@ func CountServiceStates(
 			svc,
 			snap.RunningByService[svc.ID],
 			snap.CompletedJobsByService[svc.ID],
-			eligible[svc.ID],
+			EligibleIn(eligible, svc.ID),
 			snap.Flapping[svc.ID],
 		)
 
