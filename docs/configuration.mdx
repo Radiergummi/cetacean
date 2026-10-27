@@ -117,7 +117,7 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, for example `10.0.0.0/8,172.16.0.0/12`. The real client IP is read from the header family [`server.forwarded_headers`][server.forwarded_headers] names. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, for example `10.0.0.0/8,172.16.0.0/12`. The real client IP is read from the header family [`server.forwarded_headers`][server.forwarded_headers] names. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection. Never list the address range of the ingress or routing mesh: every client reaches Cetacean through it, so each would count as a trusted proxy and could name its own address, identity, and host.
 </ConfigParam>
 
 <ConfigParam name="server.forwarded_headers" flag="-forwarded-headers" env="CETACEAN_FORWARDED_HEADERS" default="x-forwarded">

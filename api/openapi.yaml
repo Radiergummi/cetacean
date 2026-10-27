@@ -18,10 +18,9 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
-    A request whose `Host` names neither `server.public_url`'s host, a name in
-    `server.allowed_hosts`, an IP address nor `localhost`, and that did not come through a trusted proxy, is
-    answered `421 Misdirected Request` (`CSR002`) on every path but
-    `/-/health`, `/-/ready` and `/-/metrics`. It is not repeated under each operation.
+    A request whose `Host` is not one of the
+    [names Cetacean answers for](/configuration#server.public_url) is answered
+    `421 Misdirected Request` (`CSR002`). It is not repeated under each operation.
 
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec

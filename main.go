@@ -678,6 +678,12 @@ func main() {
 		tsnetDomains = tsnetServer.CertDomains()
 	}
 
+	if warning := hostGuardWarning(
+		cfg.ListenAddr, cfg.PublicURL, cfg.AllowedHosts, tsnetDomains,
+	); warning != "" {
+		slog.Warn(warning)
+	}
+
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:           handlers,
 		Broadcaster:        broadcaster,
@@ -1174,6 +1180,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		ImageDigests:    imageDigests,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
+		AllowedHosts:    d.cfg.AllowedHosts,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 		Streams:         d.streams,
@@ -1215,6 +1222,25 @@ func mcpInClear(mcpEnabled bool, authMode string, tlsEnabled bool, publicURL str
 	u, err := url.Parse(publicURL)
 
 	return err != nil || u.Scheme != "https"
+}
+
+// hostGuardWarning describes what Host the router admits when it listens
+// beyond loopback and nothing names it, or is empty when either is not so.
+func hostGuardWarning(listenAddr, publicURL string, allowed, tsnetDomains []string) string {
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil || publicURL != "" || len(allowed) > 0 || len(tsnetDomains) > 0 ||
+		host != "" && auth.IsLoopbackHost(host) {
+		return ""
+	}
+
+	admitted := "an IP address or localhost"
+	if names := allowedHosts(listenAddr, nil); len(names) > 0 {
+		admitted = "an IP address, localhost or " + strings.Join(names, ", ")
+	}
+
+	return "neither server.public_url nor server.allowed_hosts is set, so only requests whose " +
+		"Host is " + admitted + " are answered; any other name gets 421. " +
+		"Set them to every name Cetacean is reached by."
 }
 
 // allowedHosts are the names, beyond server.public_url's, the router answers

@@ -196,9 +196,9 @@ type Server struct {
 	// 403 (DNS-rebinding defense).
 	allowedOrigins []string
 
-	// publicHost is server.public_url's hostname, the one non-loopback Host
-	// hostGuard admits on a loopback connection. Empty admits none.
-	publicHost string
+	// knownHosts are server.public_url's hostname and server.allowed_hosts,
+	// lowercased: the non-loopback Hosts hostGuard admits on a loopback connection.
+	knownHosts []string
 
 	// iconBaseURL is the canonical external base (issuer + base path) that tool
 	// icon `src` values are built from, e.g. "https://cetacean.example.com".
@@ -280,6 +280,10 @@ type Options struct {
 	// PublicURL is server.public_url. Its origin is admitted beside
 	// AllowedOrigins, as the API's cross-origin guard admits it.
 	PublicURL string
+
+	// AllowedHosts is server.allowed_hosts, admitted by hostGuard as
+	// PublicURL's host is.
+	AllowedHosts []string
 
 	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
 	// is unset, and the tool then says metrics are unavailable rather than
@@ -365,7 +369,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		prom:           opts.Prometheus,
 		images:         opts.ImageDigests,
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
-		publicHost:     publicHostname(opts.PublicURL),
+		knownHosts:     knownHosts(opts.PublicURL, opts.AllowedHosts),
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 		versions:       opts.Versions,
@@ -540,8 +544,9 @@ func (s *Server) Handler() http.Handler {
 }
 
 // hostGuard refuses a non-loopback Host on a loopback connection, as mcp-go's
-// own DNS-rebinding check does, unless it is server.public_url's host: a
-// same-host reverse proxy dials loopback and may keep the public Host.
+// own DNS-rebinding check does, unless it is server.public_url's host or in
+// server.allowed_hosts: a same-host reverse proxy dials loopback and may keep
+// the public Host.
 func (s *Server) hostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
@@ -549,7 +554,7 @@ func (s *Server) hostGuard(next http.Handler) http.Handler {
 
 		if local == nil || !auth.IsLoopbackHost(auth.HostName(local.String())) ||
 			auth.IsLoopbackHost(host) ||
-			(s.publicHost != "" && strings.EqualFold(host, s.publicHost)) {
+			slices.Contains(s.knownHosts, strings.ToLower(host)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -558,14 +563,19 @@ func (s *Server) hostGuard(next http.Handler) http.Handler {
 	})
 }
 
-// publicHostname is publicURL's hostname, or empty when there is none.
-func publicHostname(publicURL string) string {
-	u, err := url.Parse(publicURL)
-	if publicURL == "" || err != nil {
-		return ""
+// knownHosts lowercases publicURL's hostname, when there is one, and allowed.
+func knownHosts(publicURL string, allowed []string) []string {
+	var hosts []string
+
+	if u, err := url.Parse(publicURL); publicURL != "" && err == nil {
+		hosts = append(hosts, strings.ToLower(u.Hostname()))
 	}
 
-	return u.Hostname()
+	for _, host := range allowed {
+		hosts = append(hosts, strings.ToLower(auth.HostName(host)))
+	}
+
+	return hosts
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport

@@ -117,7 +117,10 @@ func TestHostGuard(t *testing.T) {
 			cache.New(nil),
 			&fakeWriteClient{},
 			config.OpsReadOnly,
-			func(o *Options) { o.PublicURL = publicURL },
+			func(o *Options) {
+				o.PublicURL = publicURL
+				o.AllowedHosts = []string{"swarm.lan"}
+			},
 		)
 
 		req := modernRequest(t, 1, "tools/list", `{}`)
@@ -141,6 +144,7 @@ func TestHostGuard(t *testing.T) {
 		{"public host passes", "https://swarm.example.ts.net", "swarm.example.ts.net", http.StatusOK},
 		{"public host with a port passes", "https://Swarm.Example.ts.net", "swarm.example.ts.net:443", http.StatusOK},
 		{"loopback host passes", "", "localhost:9000", http.StatusOK},
+		{"an allowed host passes", "", "Swarm.lan:9000", http.StatusOK},
 		{"foreign host is refused", "https://swarm.example.ts.net", "rebind.evil.example", http.StatusForbidden},
 		{"no public URL refuses a foreign host", "", "swarm.example.ts.net", http.StatusForbidden},
 	} {

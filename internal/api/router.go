@@ -1089,11 +1089,11 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
 		recovery,
 		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
-		hostGuard(cfg.PublicURL, cfg.AllowedHosts),
 		// Ahead of every middleware that decides by path: each spelling it
 		// canonicalises names the same resource, and a rule matching the path
 		// it came in on answers /-/resync.json differently from /-/resync.
 		cleanPaths,
+		hostGuard(cfg.PublicURL, cfg.AllowedHosts),
 		negotiate,
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),

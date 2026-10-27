@@ -42,9 +42,8 @@ OAuth `token`, `revoke`, and `register` endpoints, which authenticate from the r
 ## Host names
 
 A page can point its own name at Cetacean's address and then read the API as if it came from the same origin. To
-stop that, every request must name Cetacean in `Host`: the host of [`server.public_url`][server.public_url], a name
-in [`server.allowed_hosts`][server.allowed_hosts], an IP address, or `localhost`. Anything else is refused with `421` and code [`CSR002`](api/errors#CSR002). Requests from a
-[trusted proxy][server.trusted_proxies] pass, as do `/-/health`, `/-/ready`, and `/-/metrics`.
+stop that, a request whose `Host` isn't one of the [names Cetacean answers for][server.public_url] is refused with
+`421` and code [`CSR002`](api/errors#CSR002).
 
 ## Content negotiation
 

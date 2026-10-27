@@ -76,7 +76,9 @@ func TestHostGuard_AdmitsOurOwnNames(t *testing.T) {
 func TestHostGuard_ProbesAnswerAnyHost(t *testing.T) {
 	router := hostGuardRouter(t)
 
-	for _, path := range []string{"/-/health", "/-/ready", "/-/metrics"} {
+	for _, path := range []string{
+		"/-/health", "/-/ready", "/-/metrics", "/-/health/", "/-/./ready", "//-/metrics",
+	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Host = "cetacean_cetacean:9000"
 		rec := httptest.NewRecorder()

@@ -58,7 +58,7 @@ func isProbe(r *http.Request) bool {
 		return false
 	}
 
-	switch r.URL.Path {
+	switch strings.TrimSuffix(r.URL.Path, "/") {
 	case "/-/health", "/-/ready", "/-/metrics":
 		return true
 	default:
