@@ -41,8 +41,12 @@ type clusterOverview struct {
 // newClusterOverview converts a snapshot into the served shape. The per-node
 // maxima the snapshot has already divided down, so they are only widened. The
 // service counts all come from services, so the parts never exceed the total.
-func newClusterOverview(snap cache.ClusterSnapshot, services []swarm.Service) clusterOverview {
-	converged, degraded := cluster.CountServiceStates(snap, services)
+func newClusterOverview(
+	snap cache.ClusterSnapshot,
+	services []swarm.Service,
+	eligible map[string]int,
+) clusterOverview {
+	converged, degraded := cluster.CountServiceStates(snap, services, eligible)
 
 	return clusterOverview{
 		NodeCount:    snap.NodeCount,

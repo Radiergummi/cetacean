@@ -62,13 +62,14 @@ func CapacityOf(snap cache.ClusterSnapshot) ClusterCapacity {
 }
 
 // BuildClusterStatus assembles the landing view. services and nodes are the
-// caller's already-ACL-filtered slices and running the per-service task count,
-// so a caller granted one stack is told about their cluster, not everyone's.
+// caller's already-ACL-filtered slices, running the per-service task count and
+// eligible cache.EligibleNodeCounts of those services, so a caller granted one
+// stack is told about their cluster, not everyone's.
 func BuildClusterStatus(
 	snap cache.ClusterSnapshot,
 	services []swarm.Service,
 	nodes []swarm.Node,
-	running map[string]int,
+	running, eligible map[string]int,
 ) ClusterStatus {
 	status := ClusterStatus{
 		NodeCount:         snap.NodeCount,
@@ -97,7 +98,7 @@ func BuildClusterStatus(
 		services,
 		running,
 		snap.CompletedJobsByService,
-		snap.GlobalEligible,
+		eligible,
 		snap.Flapping,
 	)
 	for _, row := range rows {
@@ -146,16 +147,18 @@ func BuildClusterStatus(
 // CountServiceStates splits services by DeriveServiceState: running, and a job
 // whose run completed, are converged; failed, pending and flapping are the
 // degraded BuildClusterStatus names. A service mid-update is in neither.
+// eligible must be cache.EligibleNodeCounts of these same services.
 func CountServiceStates(
 	snap cache.ClusterSnapshot,
 	services []swarm.Service,
+	eligible map[string]int,
 ) (converged, degraded int) {
 	for _, svc := range services {
 		state := DeriveServiceState(
 			svc,
 			snap.RunningByService[svc.ID],
 			snap.CompletedJobsByService[svc.ID],
-			snap.GlobalEligible[svc.ID],
+			eligible[svc.ID],
 			snap.Flapping[svc.ID],
 		)
 

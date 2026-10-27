@@ -34,6 +34,7 @@ func TestBuildClusterStatusNamesUnhealthyServices(t *testing.T) {
 		[]swarm.Service{broken, healthy},
 		nil,
 		map[string]int{"svc2": 1},
+		nil,
 	)
 
 	if len(got.UnhealthyServices) != 1 {
@@ -64,6 +65,7 @@ func TestBuildClusterStatusNamesAFlappingService(t *testing.T) {
 		[]swarm.Service{svc},
 		nil,
 		map[string]int{"svc1": 1},
+		nil,
 	)
 
 	if got.Healthy {
@@ -89,6 +91,7 @@ func TestBuildClusterStatusReportsHealthyWhenNothingIsWrong(t *testing.T) {
 		[]swarm.Service{svc},
 		nil,
 		map[string]int{"svc1": 1},
+		nil,
 	)
 
 	if !got.Healthy {
@@ -113,7 +116,7 @@ func TestBuildClusterStatusNamesUnhealthyNodes(t *testing.T) {
 		Spec:        swarm.NodeSpec{Availability: swarm.NodeAvailabilityActive},
 	}
 
-	got := BuildClusterStatus(cache.ClusterSnapshot{}, nil, []swarm.Node{down, ready}, nil)
+	got := BuildClusterStatus(cache.ClusterSnapshot{}, nil, []swarm.Node{down, ready}, nil, nil)
 
 	if len(got.UnhealthyNodes) != 1 {
 		t.Fatalf("unhealthy nodes = %d, want 1", len(got.UnhealthyNodes))
@@ -131,7 +134,7 @@ func TestBuildClusterStatusReportsCapacityInCores(t *testing.T) {
 		ReservedCPU:    2_350_000_000,
 		TotalMemory:    16 << 30,
 		ReservedMemory: 2 << 30,
-	}, nil, nil, nil)
+	}, nil, nil, nil, nil)
 
 	if got.Capacity.ReservedCPUCores != 2.35 {
 		t.Errorf("ReservedCPUCores = %v, want 2.35", got.Capacity.ReservedCPUCores)
@@ -152,7 +155,7 @@ func TestClusterStatusTreatsADeliberateDrainAsHealthy(t *testing.T) {
 		statusNode("n3", "worker-3", swarm.NodeStateReady, swarm.NodeAvailabilityPause),
 	}
 
-	got := BuildClusterStatus(cache.ClusterSnapshot{NodeCount: 3}, nil, nodes, nil)
+	got := BuildClusterStatus(cache.ClusterSnapshot{NodeCount: 3}, nil, nodes, nil, nil)
 
 	if !got.Healthy {
 		t.Errorf("healthy = false; a node doing what it was told is not a fault")
@@ -175,7 +178,7 @@ func TestClusterStatusReportsUnreachableNodes(t *testing.T) {
 		statusNode("n2", "worker-2", swarm.NodeStateDown, swarm.NodeAvailabilityActive),
 	}
 
-	got := BuildClusterStatus(cache.ClusterSnapshot{NodeCount: 2}, nil, nodes, nil)
+	got := BuildClusterStatus(cache.ClusterSnapshot{NodeCount: 2}, nil, nodes, nil, nil)
 
 	if got.Healthy {
 		t.Error("healthy = true with a node down")
@@ -200,6 +203,7 @@ func TestClusterStatusCountsOnlyStalledRollouts(t *testing.T) {
 		[]swarm.Service{rolling},
 		nil,
 		map[string]int{"svc1": 1},
+		nil,
 	)
 	if !inFlight.Healthy {
 		t.Error("healthy = false for an update that is still rolling")
@@ -213,6 +217,7 @@ func TestClusterStatusCountsOnlyStalledRollouts(t *testing.T) {
 		[]swarm.Service{paused},
 		nil,
 		map[string]int{"svc2": 1},
+		nil,
 	)
 	if stalled.Healthy {
 		t.Error("healthy = true with a rollout Swarm has paused")
@@ -258,7 +263,7 @@ func TestBuildClusterStatusUnhealthyWithAnUnreachableManager(t *testing.T) {
 		Quorum: quorum.Quorum{Managers: 3, Reachable: 2, Size: 2, Held: true},
 	}
 
-	if BuildClusterStatus(snap, nil, nil, nil).Healthy {
+	if BuildClusterStatus(snap, nil, nil, nil, nil).Healthy {
 		t.Error("healthy = true with a manager unreachable")
 	}
 }
@@ -297,40 +302,31 @@ func TestCountServiceStatesFollowsTheStateRule(t *testing.T) {
 		RunningByService:       map[string]int{"global-up": 2, "web": 1, "flaky": 1, "rolling": 1},
 		CompletedJobsByService: map[string]int{"job-done": 1},
 		Flapping:               map[string]bool{"flaky": true},
-		GlobalEligible:         map[string]int{"global-down": 2, "global-up": 2},
 	}
+	eligible := map[string]int{"global-down": 2, "global-up": 2}
 
-	converged, degraded := CountServiceStates(snap, services)
+	converged, degraded := CountServiceStates(snap, services, eligible)
 
 	if converged != 3 || degraded != 3 {
 		t.Errorf("converged=%d degraded=%d, want 3 and 3", converged, degraded)
 	}
 }
 
-// A global service no node can take, with every node drained or a constraint
-// none meets, has nothing outstanding, like a service scaled to zero.
-func TestAGlobalServiceWithNowhereToRunIsNotDegraded(t *testing.T) {
+// Eligibility comes with the list the counts are taken over, not the earlier
+// snapshot: a global service created between the two is not in the snapshot,
+// and reading that as nowhere to run would call it converged.
+func TestCountServiceStatesTakesEligibilityWithTheList(t *testing.T) {
 	svc := swarm.Service{
-		ID: "agent",
-		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: "agent"},
-			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
-		},
-	}
-	snap := cache.ClusterSnapshot{GlobalEligible: map[string]int{"agent": 0}}
-
-	converged, degraded := CountServiceStates(snap, []swarm.Service{svc})
-	if converged != 1 || degraded != 0 {
-		t.Errorf("converged=%d degraded=%d, want 1 and 0", converged, degraded)
+		ID:   "agent",
+		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
 	}
 
-	status := BuildClusterStatus(snap, []swarm.Service{svc}, nil, nil)
-	if len(status.UnhealthyServices) != 0 {
-		t.Errorf("unhealthy = %+v, want none", status.UnhealthyServices)
-	}
-
-	snap.GlobalEligible["agent"] = 2
-	if _, degraded := CountServiceStates(snap, []swarm.Service{svc}); degraded != 1 {
-		t.Errorf("degraded=%d, want 1 with two eligible nodes and none running", degraded)
+	converged, degraded := CountServiceStates(
+		cache.ClusterSnapshot{},
+		[]swarm.Service{svc},
+		map[string]int{"agent": 2},
+	)
+	if converged != 0 || degraded != 1 {
+		t.Errorf("converged=%d degraded=%d, want 0 and 1", converged, degraded)
 	}
 }

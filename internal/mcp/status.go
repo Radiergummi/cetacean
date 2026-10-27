@@ -32,5 +32,6 @@ func (s *Server) toolGetClusterStatus(
 		services,
 		nodes,
 		snap.RunningByService,
+		s.cache.EligibleNodeCounts(services...),
 	))
 }

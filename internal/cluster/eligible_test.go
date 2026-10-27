@@ -63,13 +63,15 @@ func TestAGlobalServiceReadsTheSameStateEverywhere(t *testing.T) {
 				}
 			}
 
-			converged, degraded := CountServiceStates(snap, services)
+			converged, degraded := CountServiceStates(snap, services, eligible)
 			if (tc.want == "running") != (converged == 1 && degraded == 0) {
 				t.Errorf("converged=%d degraded=%d for a service reading %q",
 					converged, degraded, tc.want)
 			}
 
-			unhealthy := len(BuildClusterStatus(snap, services, nil, nil).UnhealthyServices)
+			unhealthy := len(
+				BuildClusterStatus(snap, services, nil, nil, eligible).UnhealthyServices,
+			)
 			if (tc.want == "pending") != (unhealthy == 1) {
 				t.Errorf("unhealthy services = %d for a service reading %q", unhealthy, tc.want)
 			}

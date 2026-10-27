@@ -51,7 +51,11 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 	snap := h.cache.Snapshot()
 	// Counted from one list, so the two counts never exceed the total.
 	services := h.cache.ListServices()
-	converged, degraded := cluster.CountServiceStates(snap, services)
+	converged, degraded := cluster.CountServiceStates(
+		snap,
+		services,
+		h.cache.EligibleNodeCounts(services...),
+	)
 	overview := ClusterOverviewResponse{
 		NodeCount:            snap.NodeCount,
 		ServiceCount:         len(services),
