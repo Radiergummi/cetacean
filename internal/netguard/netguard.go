@@ -47,9 +47,45 @@ type Policy struct {
 	AllowPrivate bool
 }
 
+// localNAT64Block is RFC 8215's local-use NAT64 prefix, whose translator and
+// mapping are the network's own, so the IPv4 it reaches cannot be read off.
+var localNAT64Block = func() *net.IPNet {
+	_, n, _ := net.ParseCIDR("64:ff9b:1::/48")
+	return n
+}()
+
+// embeddedIPv4 returns the IPv4 address a NAT64 (64:ff9b::/96), 6to4
+// (2002::/16) or IPv4-compatible (::/96, bar :: and ::1) address reaches.
+func embeddedIPv4(ip net.IP) (net.IP, bool) {
+	ip16 := ip.To16()
+	if ip16 == nil || ip.To4() != nil {
+		return nil, false
+	}
+
+	nat64 := []byte{0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0}
+	switch {
+	case string(ip16[:12]) == string(nat64):
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15]), true
+	case ip16[0] == 0x20 && ip16[1] == 0x02:
+		return net.IPv4(ip16[2], ip16[3], ip16[4], ip16[5]), true
+	case string(ip16[:12]) == string(make([]byte, 12)) && !ip.IsUnspecified() && !ip.IsLoopback():
+		return net.IPv4(ip16[12], ip16[13], ip16[14], ip16[15]), true
+	}
+
+	return nil, false
+}
+
 // Check returns an error wrapping ErrBlocked, naming the category, when the
 // policy refuses ip.
 func (p Policy) Check(ip net.IP) error {
+	if localNAT64Block.Contains(ip) {
+		return fmt.Errorf("%w: resolved to local-use NAT64 address %s", ErrBlocked, ip)
+	}
+	if v4, ok := embeddedIPv4(ip); ok {
+		if err := p.Check(v4); err != nil {
+			return fmt.Errorf("%w (embedded in %s)", err, ip)
+		}
+	}
 	if ip.IsLoopback() && !p.AllowLoopback {
 		return fmt.Errorf("%w: resolved to loopback address %s", ErrBlocked, ip)
 	}
