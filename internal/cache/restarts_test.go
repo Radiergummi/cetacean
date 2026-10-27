@@ -41,15 +41,18 @@ func TestRestartTracker_RecordAndCount(t *testing.T) {
 	}
 }
 
+// Count already ignores what lies past the horizon, so only the stored
+// buckets show whether it was dropped rather than kept forever.
 func TestRestartTracker_PruneBeyondHorizon(t *testing.T) {
 	rt := NewRestartTracker(24*time.Hour, time.Hour)
 	now := time.Now()
+	rt.observing = now.Add(-72 * time.Hour)
 
 	rt.Record("svc1", now.Add(-48*time.Hour))
 	rt.Record("svc1", now)
 
-	if got := rt.Count("svc1", 7*24*time.Hour); got != 1 {
-		t.Errorf("pruned tracker: want 1 remaining, got %d", got)
+	if got := len(rt.Snapshot().Services["svc1"]); got != 1 {
+		t.Errorf("buckets held = %d, want 1: the one past the horizon was kept", got)
 	}
 }
 
@@ -96,15 +99,19 @@ func TestRestartTracker_SnapshotRoundTrip(t *testing.T) {
 }
 
 func TestRestartTracker_RestorePrunesStale(t *testing.T) {
-	src := trackerBegun(24*time.Hour, time.Hour)
-	src.Record("svc1", time.Now().Add(-48*time.Hour))
-	snap := src.Snapshot()
-
+	now := time.Now()
 	dst := NewRestartTracker(24*time.Hour, time.Hour)
-	dst.Restore(snap)
+	dst.Restore(RestartTrackerSnapshot{
+		Horizon: 24 * time.Hour,
+		Bucket:  time.Hour,
+		Services: map[string]map[int64]uint32{"svc1": {
+			dst.bucketKey(now.Add(-48 * time.Hour)): 1,
+			dst.bucketKey(now):                      1,
+		}},
+	})
 
-	if got := dst.Count("svc1", 24*time.Hour); got != 0 {
-		t.Errorf("stale entries should be pruned on restore, got %d", got)
+	if got := len(dst.Snapshot().Services["svc1"]); got != 1 {
+		t.Errorf("buckets held = %d, want 1: a stale one survived the restore", got)
 	}
 }
 
