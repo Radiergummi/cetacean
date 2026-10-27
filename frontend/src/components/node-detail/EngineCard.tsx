@@ -28,6 +28,8 @@ export function EngineCard({ version }: { version: string }) {
   const { data: latest } = useQuery({
     queryKey: ["docker-latest-version"],
     queryFn: () => api.dockerLatestVersion(),
+    // Offline installs answer 503 every time, and each retry is an outbound check.
+    retry: false,
   });
 
   const updateAvailable = latest && isNewer(latest.version, version);
