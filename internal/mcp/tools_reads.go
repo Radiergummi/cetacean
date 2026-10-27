@@ -4,7 +4,6 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // readTools returns the tier 0 tools: parameterized reads, ungated by operations
@@ -70,7 +69,7 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
+			gate:    toolGate{"service", "read"},
 			handler: s.toolGetLogs,
 			widget:  "logs",
 		},
@@ -146,7 +145,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolFind,
 			widget:  "table",
 		},
@@ -181,7 +179,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolDescribe,
 		},
 		{
@@ -214,7 +211,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			elicits: true,
 			handler: s.toolGetTopology,
 			widget:  "topology",
@@ -267,7 +263,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			elicits: true,
 			handler: s.toolGetMetrics,
 			widget:  "metrics",
@@ -290,7 +285,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetRecommendations,
 			widget:  "recommendations",
 		},
@@ -310,7 +304,6 @@ func (s *Server) readTools() []toolDef {
 					mcplib.Description("Return only this published port. Omit for all of them."),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetPublishedPorts,
 		},
 		{
@@ -355,7 +348,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetEvents,
 		},
 		{
@@ -371,7 +363,6 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetClusterStatus,
 		},
 		{
@@ -396,7 +387,7 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
+			gate:    toolGate{"service", "read"},
 			handler: s.toolWatch,
 		},
 	}

@@ -184,7 +184,7 @@ func (s *Server) resolveNodeWrite(
 	}
 
 	if err := s.checkResolvedWrite(
-		ctx, "node", identifier, cluster.NodeACLName(node), found, err,
+		ctx, "node", identifier, cluster.NodeRecord(node), found, err,
 	); err != nil {
 		return "", err
 	}

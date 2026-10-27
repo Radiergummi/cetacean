@@ -133,8 +133,8 @@ func (h *Handlers) HandleGetTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// The grant DELETE is gated on, which is the parent service's.
-	h.setAllowSubResource(w, r, h.taskServiceResource(r))
+	// The grant DELETE is gated on.
+	h.setAllowSubResource(w, r, h.writeResource("task")(r))
 
 	rep, ok := representationOr404(w, r, "task", id, h.taskRepresentation)
 	if !ok {

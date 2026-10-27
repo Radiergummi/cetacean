@@ -9,9 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/swarm"
-
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -254,56 +251,33 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
 	// ACL wrappers for write endpoints.
-	svcACL := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
-	)
-	nodeACL := h.requireWriteACL(resolveResource("node", h.cache.GetNode, cluster.NodeACLName))
-	taskACL := h.requireWriteACL(h.taskServiceResource)
+	svcACL := h.requireWriteACL(h.writeResource("service"))
+	nodeACL := h.requireWriteACL(h.writeResource("node"))
+	taskACL := h.requireWriteACL(h.writeResource("task"))
 	stackACL := h.requireWriteACL(pathResource("stack", "name"))
-	cfgACL := h.requireWriteACL(
-		resolveResource(
-			"config",
-			h.cache.GetConfig,
-			func(c swarm.Config) string { return c.Spec.Name },
-		),
-	)
-	secACL := h.requireWriteACL(
-		resolveResource(
-			"secret",
-			h.cache.GetSecret,
-			func(s swarm.Secret) string { return s.Spec.Name },
-		),
-	)
-	netACL := h.requireWriteACL(
-		resolveResource(
-			"network",
-			h.cache.GetNetwork,
-			func(n network.Summary) string { return n.Name },
-		),
-	)
+	cfgACL := h.requireWriteACL(h.writeResource("config"))
+	secACL := h.requireWriteACL(h.writeResource("secret"))
+	netACL := h.requireWriteACL(h.writeResource("network"))
 	volACL := h.requireWriteACL(pathResource("volume", "name"))
 	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
 	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))
 	swarmACL := h.requireWriteACL(swarmResource)
 
 	// Derived (ACL, tier) chains for the gated route registrations below.
-	svcTier1 := h.tiered(svcACL, config.OpsOperational)
 	svcTier2 := h.tiered(svcACL, config.OpsConfiguration)
 	svcTier3 := h.tiered(svcACL, config.OpsImpactful)
-	nodeTier2 := h.tiered(nodeACL, config.OpsConfiguration)
 	nodeTier3 := h.tiered(nodeACL, config.OpsImpactful)
-	taskTier3 := h.tiered(taskACL, config.OpsImpactful)
 	stackTier3 := h.tiered(stackACL, config.OpsImpactful)
 	cfgTier2 := h.tiered(cfgACL, config.OpsConfiguration)
-	cfgTier3 := h.tiered(cfgACL, config.OpsImpactful)
 	secTier2 := h.tiered(secACL, config.OpsConfiguration)
-	secTier3 := h.tiered(secACL, config.OpsImpactful)
-	netTier3 := h.tiered(netACL, config.OpsImpactful)
-	volTier3 := h.tiered(volACL, config.OpsImpactful)
+	// A write MCP exposes as well takes its tier from the shared table.
+	svcOp := h.operation(svcACL)
+	nodeOp := h.operation(nodeACL)
+	taskOp := h.operation(taskACL)
+	cfgOp := h.operation(cfgACL)
+	secOp := h.operation(secACL)
+	netOp := h.operation(netACL)
+	volOp := h.operation(volACL)
 	pluginTier2 := h.tiered(pluginACL, config.OpsConfiguration)
 	pluginTier3 := h.tiered(pluginACL, config.OpsImpactful)
 	pluginWildTier3 := h.tiered(pluginWildACL, config.OpsImpactful)
@@ -315,9 +289,11 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	pluginExists := h.unrepresented(h.pluginRepresentation)
 	clusterExists := h.unrepresented(subjectExists)
 	// A create checks the write grant on the name it creates, in the handler.
-	createTier2 := tieredChain{
-		chain: NewChain(h.requireLevel(config.OpsConfiguration), attributeWrite),
-		level: config.OpsConfiguration,
+	createOp := func(op cluster.Operation) tieredChain {
+		return tieredChain{
+			chain: NewChain(h.requireLevel(op.Tier()), attributeWrite),
+			level: op.Tier(),
+		}
 	}
 
 	authProvider.RegisterRoutes(mux.mux)
@@ -583,21 +559,27 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	// Node write operations
 	mux.Handle(
 		"PUT /nodes/{id}/availability",
-		nodeTier3.Append(nodeExists).ThenFunc(h.HandleUpdateNodeAvailability),
+		nodeOp(cluster.OpUpdateNode).Append(nodeExists).
+			ThenFunc(h.HandleUpdateNodeAvailability),
 	)
 	mux.HandleFunc(
 		"GET /nodes/{id}/labels",
 		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /nodes/{id}/labels",
-		nodeTier2.Append(h.precond(h.nodeLabelsSpec().representation)).TakesJSONPatch().
-			ThenFunc(h.HandlePatchNodeLabels))
+	mux.Handle(
+		"PATCH /nodes/{id}/labels",
+		nodeOp(
+			cluster.OpUpdateNodeLabels,
+		).Append(h.precond(h.nodeLabelsSpec().representation)).
+			TakesJSONPatch().
+			ThenFunc(h.HandlePatchNodeLabels),
+	)
 	mux.HandleFunc(
 		"GET /nodes/{id}/role",
 		contentNegotiated(h.HandleGetNodeRole, feedHandlers{}, spa),
 	)
 	mux.Handle("PUT /nodes/{id}/role",
-		nodeTier3.Append(h.precond(h.nodeRoleRepresentation)).
+		nodeOp(cluster.OpUpdateNode).Append(h.precond(h.nodeRoleRepresentation)).
 			ThenFunc(h.HandleUpdateNodeRole))
 	mux.Handle("DELETE /nodes/{id}",
 		nodeTier3.Append(h.precond(h.nodeRepresentation)).
@@ -606,19 +588,22 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	// Service write operations — tier 1 (operational)
 	mux.Handle(
 		"PUT /services/{id}/scale",
-		svcTier1.Append(serviceExists).ThenFunc(h.HandleScaleService),
+		svcOp(cluster.OpScaleService).Append(serviceExists).ThenFunc(h.HandleScaleService),
 	)
 	mux.Handle(
 		"PUT /services/{id}/image",
-		svcTier1.Append(serviceExists).ThenFunc(h.HandleUpdateServiceImage),
+		svcOp(cluster.OpUpdateServiceImage).Append(serviceExists).
+			ThenFunc(h.HandleUpdateServiceImage),
 	)
 	mux.Handle(
 		"POST /services/{id}/rollback",
-		svcTier1.Append(serviceExists).ThenFunc(h.HandleRollbackService),
+		svcOp(cluster.OpRollbackService).Append(serviceExists).
+			ThenFunc(h.HandleRollbackService),
 	)
 	mux.Handle(
 		"POST /services/{id}/restart",
-		svcTier1.Append(serviceExists).ThenFunc(h.HandleRestartService),
+		svcOp(cluster.OpRestartService).Append(serviceExists).
+			ThenFunc(h.HandleRestartService),
 	)
 
 	// Service write operations — tier 2 (configuration)
@@ -626,22 +611,32 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"GET /services/{id}/env",
 		contentNegotiated(h.HandleGetServiceEnv, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/env",
-		svcTier2.Append(h.precond(h.serviceEnvRepresentation)).TakesJSONPatch().
-			ThenFunc(h.HandlePatchServiceEnv))
+	mux.Handle(
+		"PATCH /services/{id}/env",
+		svcOp(
+			cluster.OpUpdateService,
+		).Append(h.precond(h.serviceEnvRepresentation)).
+			TakesJSONPatch().
+			ThenFunc(h.HandlePatchServiceEnv),
+	)
 	mux.HandleFunc(
 		"GET /services/{id}/labels",
 		contentNegotiated(h.HandleGetServiceLabels, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /services/{id}/labels",
-		svcTier2.Append(h.precond(h.serviceLabelsSpec().representation)).TakesJSONPatch().
-			ThenFunc(h.HandlePatchServiceLabels))
+	mux.Handle(
+		"PATCH /services/{id}/labels",
+		svcOp(
+			cluster.OpUpdateService,
+		).Append(h.precond(h.serviceLabelsSpec().representation)).
+			TakesJSONPatch().
+			ThenFunc(h.HandlePatchServiceLabels),
+	)
 	mux.HandleFunc(
 		"GET /services/{id}/resources",
 		contentNegotiated(h.HandleGetServiceResources, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/resources",
-		svcTier2.Append(h.precond(h.serviceResourcesRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceResourcesRepresentation)).
 			ThenFunc(h.HandlePatchServiceResources))
 	mux.HandleFunc(
 		"GET /services/{id}/healthcheck",
@@ -649,28 +644,29 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	// One representation, two methods: PUT replaces the healthcheck and PATCH
 	// merges into it, but both are conditioned on the same current state.
-	svcHealthcheckTier2 := svcTier2.Append(h.precond(h.serviceHealthcheckRepresentation))
+	svcHealthcheck := svcOp(cluster.OpUpdateService).
+		Append(h.precond(h.serviceHealthcheckRepresentation))
 	mux.Handle(
 		"PUT /services/{id}/healthcheck",
-		svcHealthcheckTier2.ThenFunc(h.HandlePutServiceHealthcheck),
+		svcHealthcheck.ThenFunc(h.HandlePutServiceHealthcheck),
 	)
 	mux.Handle(
 		"PATCH /services/{id}/healthcheck",
-		svcHealthcheckTier2.ThenFunc(h.HandlePatchServiceHealthcheck),
+		svcHealthcheck.ThenFunc(h.HandlePatchServiceHealthcheck),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/placement",
 		contentNegotiated(h.HandleGetServicePlacement, feedHandlers{}, spa),
 	)
 	mux.Handle("PUT /services/{id}/placement",
-		svcTier2.Append(h.precond(h.servicePlacementRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.servicePlacementRepresentation)).
 			ThenFunc(h.HandlePutServicePlacement))
 	mux.HandleFunc(
 		"GET /services/{id}/ports",
 		contentNegotiated(h.HandleGetServicePorts, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/ports",
-		svcTier2.Append(h.precond(h.servicePortsRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.servicePortsRepresentation)).
 			ThenFunc(h.HandlePatchServicePorts))
 	mux.HandleFunc(
 		"GET /services/{id}/update-policy",
@@ -678,7 +674,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"PATCH /services/{id}/update-policy",
-		svcTier2.Append(h.precond(h.serviceUpdatePolicyRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceUpdatePolicyRepresentation)).
 			ThenFunc(h.HandlePatchServiceUpdatePolicy),
 	)
 	mux.HandleFunc(
@@ -687,7 +683,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"PATCH /services/{id}/rollback-policy",
-		svcTier2.Append(h.precond(h.serviceRollbackPolicyRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceRollbackPolicyRepresentation)).
 			ThenFunc(h.HandlePatchServiceRollbackPolicy),
 	)
 	mux.HandleFunc(
@@ -695,21 +691,21 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleGetServiceLogDriver, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/log-driver",
-		svcTier2.Append(h.precond(h.serviceLogDriverRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceLogDriverRepresentation)).
 			ThenFunc(h.HandlePatchServiceLogDriver))
 	mux.HandleFunc(
 		"GET /services/{id}/configs",
 		contentNegotiated(h.HandleGetServiceConfigs, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/configs",
-		svcTier2.Append(h.precond(h.serviceConfigsRepresentation)).
+		svcOp(cluster.OpUpdateServiceConfigs).Append(h.precond(h.serviceConfigsRepresentation)).
 			ThenFunc(h.HandlePatchServiceConfigs))
 	mux.HandleFunc(
 		"GET /services/{id}/secrets",
 		contentNegotiated(h.HandleGetServiceSecrets, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/secrets",
-		svcTier2.Append(h.precond(h.serviceSecretsRepresentation)).
+		svcOp(cluster.OpUpdateServiceSecrets).Append(h.precond(h.serviceSecretsRepresentation)).
 			ThenFunc(h.HandlePatchServiceSecrets))
 	mux.HandleFunc(
 		"GET /services/{id}/networks",
@@ -723,7 +719,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleGetServiceMounts, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/mounts",
-		svcTier2.Append(h.precond(h.serviceMountsRepresentation)).
+		svcOp(cluster.OpUpdateServiceMounts).Append(h.precond(h.serviceMountsRepresentation)).
 			ThenFunc(h.HandlePatchServiceMounts))
 
 	mux.HandleFunc(
@@ -732,7 +728,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"PATCH /services/{id}/container-config",
-		svcTier2.Append(h.precond(h.serviceContainerConfigRepresentation)).
+		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceContainerConfigRepresentation)).
 			ThenFunc(h.HandlePatchServiceContainerConfig),
 	)
 
@@ -756,7 +752,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			ThenFunc(h.HandleUpdateServiceEndpointMode),
 	)
 	mux.Handle("DELETE /services/{id}",
-		svcTier3.Append(h.precond(h.serviceRepresentation)).
+		svcOp(cluster.OpRemoveService).Append(h.precond(h.serviceRepresentation)).
 			ThenFunc(h.HandleRemoveService))
 
 	// Tasks
@@ -785,7 +781,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, feedHandlers{}, spa),
 	)
 	mux.Handle("DELETE /tasks/{id}",
-		taskTier3.Append(h.precond(h.taskRepresentation)).
+		taskOp(cluster.OpRemoveTask).Append(h.precond(h.taskRepresentation)).
 			ThenFunc(h.HandleRemoveTask))
 
 	// History
@@ -852,10 +848,10 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /configs/{id}",
-		cfgTier3.Append(h.precond(h.configRepresentation)).
+		cfgOp(cluster.OpRemoveConfig).Append(h.precond(h.configRepresentation)).
 			ThenFunc(h.HandleRemoveConfig))
 	// The name is in the body, so the handler checks the write grant on it.
-	mux.Handle("POST /configs", createTier2.ThenFunc(h.HandleCreateConfig))
+	mux.Handle("POST /configs", createOp(cluster.OpCreateConfig).ThenFunc(h.HandleCreateConfig))
 	mux.HandleFunc(
 		"GET /configs/{id}/labels",
 		contentNegotiated(h.HandleGetConfigLabels, feedHandlers{}, spa),
@@ -891,9 +887,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /secrets/{id}",
-		secTier3.Append(h.precond(h.secretRepresentation)).
+		secOp(cluster.OpRemoveSecret).Append(h.precond(h.secretRepresentation)).
 			ThenFunc(h.HandleRemoveSecret))
-	mux.Handle("POST /secrets", createTier2.ThenFunc(h.HandleCreateSecret))
+	mux.Handle("POST /secrets", createOp(cluster.OpCreateSecret).ThenFunc(h.HandleCreateSecret))
 	mux.HandleFunc(
 		"GET /secret-entries/{id}",
 		contentNegotiated(h.HandleGetSecretEntry, feedHandlers{}, spa),
@@ -935,7 +931,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /networks/{id}",
-		netTier3.Append(h.precond(h.networkRepresentation)).
+		netOp(cluster.OpRemoveNetwork).Append(h.precond(h.networkRepresentation)).
 			ThenFunc(h.HandleRemoveNetwork))
 
 	// Volumes
@@ -962,7 +958,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /volumes/{name}",
-		volTier3.Append(h.precond(h.volumeRepresentation)).
+		volOp(cluster.OpRemoveVolume).Append(h.precond(h.volumeRepresentation)).
 			ThenFunc(h.HandleRemoveVolume))
 
 	// Search

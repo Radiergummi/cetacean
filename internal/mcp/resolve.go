@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/docker/docker/api/types/swarm"
-
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // visibleAmbiguity withholds an ambiguous name from a caller who cannot read
@@ -21,12 +18,6 @@ func (s *Server) visibleAmbiguity(ctx context.Context, resourceType string, err 
 	}
 
 	return err
-}
-
-// resolveTask returns the task with this ID or rendered name. The rule lives
-// in internal/cluster so REST cannot disagree about what a task name denotes.
-func (s *Server) resolveTask(identifier string) (swarm.Task, bool, error) {
-	return cluster.ResolveTask(s.cache, identifier)
 }
 
 // resolved turns a resolver's (value, found, error) into the (value, error)

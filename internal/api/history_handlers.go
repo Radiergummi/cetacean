@@ -34,7 +34,11 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	// reaches it and a caller holding a name would read an empty timeline.
 	resourceType := q.Get("type")
 
-	resourceID, err := cluster.ResolveIdentifier(h.cache, resourceType, q.Get("resourceId"))
+	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+
+	resourceID, err := cluster.ResolveIdentifier(
+		h.cache, resourceType, q.Get("resourceId"), canRead,
+	)
 	if h.reportAmbiguousName(w, r, resourceType, err) {
 		return
 	}
@@ -63,11 +67,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		entries = []cache.HistoryEntry{}
 	}
 
-	entries = cluster.NameHistoryTasks(
-		h.cache,
-		entries,
-		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
-	)
+	entries = cluster.NameHistoryTasks(h.cache, entries, canRead)
 
 	if wantCSV {
 		writeCSV(w, r, "history", csvTableForHistory(entries))

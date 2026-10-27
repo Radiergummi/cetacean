@@ -9,59 +9,19 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// canonicalResolver resolves one type's identifier — an ID or a name — to the
-// canonical ID it is keyed by, with the ACL expression naming what it found.
-// found=false means nothing matched; a name matching several yields an
-// *cache.AmbiguousNameError.
-type canonicalResolver func(
-	c *cache.Cache,
-	identifier string,
-) (id string, aclResource string, found bool, err error)
-
-// singularType maps a collection segment to the ACL resource type its members
-// carry, for the coarse "could this identity read anything of this type?"
-// question an ambiguity report has to answer before it names candidates.
-var singularType = map[string]string{
+// canonicalKinds maps the collections whose detail paths accept a name as well
+// as an ID to the kind cluster.Lookup resolves their members as. Volumes and
+// stacks are absent because both are keyed by name already; tasks because
+// their routes address them by ID alone.
+var canonicalKinds = map[string]string{
 	"services": "service",
 	"nodes":    "node",
 	"configs":  "config",
 	"secrets":  "secret",
 	"networks": "network",
-}
-
-// canonicalResolvers lists the collections whose detail paths accept a name as
-// well as an ID. Volumes and stacks are absent because both are keyed by name
-// already; tasks because their names are scoped to a service rather than
-// unique, so they are addressed by traversal rather than here — the resolver
-// they need is cluster.ResolveTask.
-var canonicalResolvers = map[string]canonicalResolver{
-	"services": func(c *cache.Cache, identifier string) (string, string, bool, error) {
-		svc, found, err := c.ResolveService(identifier)
-
-		return svc.ID, "service:" + svc.Spec.Name, found, err
-	},
-	"nodes": func(c *cache.Cache, identifier string) (string, string, bool, error) {
-		node, found, err := c.ResolveNode(identifier)
-
-		return node.ID, nodeResource(node), found, err
-	},
-	"configs": func(c *cache.Cache, identifier string) (string, string, bool, error) {
-		cfg, found, err := c.ResolveConfig(identifier)
-
-		return cfg.ID, "config:" + cfg.Spec.Name, found, err
-	},
-	"secrets": func(c *cache.Cache, identifier string) (string, string, bool, error) {
-		sec, found, err := c.ResolveSecret(identifier)
-
-		return sec.ID, "secret:" + sec.Spec.Name, found, err
-	},
-	"networks": func(c *cache.Cache, identifier string) (string, string, bool, error) {
-		net, found, err := c.ResolveNetwork(identifier)
-
-		return net.ID, "network:" + net.Name, found, err
-	},
 }
 
 // splitResourcePath splits a request path into its collection segment, the
@@ -101,17 +61,17 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		collection, identifier, rest := splitResourcePath(r.URL.Path)
 
-		resolve, ok := canonicalResolvers[collection]
+		kind, ok := canonicalKinds[collection]
 		if !ok || identifier == "" {
 			next.ServeHTTP(w, r)
 
 			return
 		}
 
-		id, resource, found, err := resolve(h.cache, identifier)
+		record, found, err := cluster.Lookup(h.cache, kind, identifier)
 
 		if _, ok := errors.AsType[*cache.AmbiguousNameError](err); ok {
-			if !h.reportAmbiguousName(w, r, singularType[collection], err) {
+			if !h.reportAmbiguousName(w, r, kind, err) {
 				next.ServeHTTP(w, r)
 			}
 
@@ -122,7 +82,7 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 		// and the one that must stay cheap — or it names nothing, in which
 		// case the handler's own 404 says so with the wording its callers
 		// already expect.
-		if !found || id == identifier {
+		if !found || record.ID == identifier {
 			next.ServeHTTP(w, r)
 
 			return
@@ -130,7 +90,7 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 
 		// A redirect states the named resource exists and hands over its ID,
 		// so without a read grant the request falls through to the handler.
-		if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", resource) {
+		if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", record.Resource()) {
 			next.ServeHTTP(w, r)
 
 			return
@@ -140,7 +100,7 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 		// request naming its representation in the path has no reason to
 		// repeat it in Accept — so dropping it answers the redirect from
 		// whatever Accept does say, which for a browser is the SPA.
-		target := absPath(r.Context(), "/"+collection+"/"+url.PathEscape(id)+rest) +
+		target := absPath(r.Context(), "/"+collection+"/"+url.PathEscape(record.ID)+rest) +
 			extensionFromContext(r.Context())
 		if r.URL.RawQuery != "" {
 			target += "?" + r.URL.RawQuery

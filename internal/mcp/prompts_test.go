@@ -32,9 +32,14 @@ func TestPromptCatalogDrivesOnlyRealTools(t *testing.T) {
 
 // Keeps the two declarations from drifting. reads is the wider one by
 // construction: a type a driven tool is gated on is a type the sequence reads,
-// so every toolACLSpec type must appear there. The reverse does not hold, which
+// so every gated tool's type must appear there. The reverse does not hold, which
 // is exactly why reads exists.
 func TestPromptReadsCoverItsDrivenTools(t *testing.T) {
+	gates := make(map[string]toolGate)
+	for _, td := range newResourceTestServer(t, cache.New(nil)).toolCatalog() {
+		gates[td.tool.Name] = td.gate
+	}
+
 	for _, def := range promptCatalog() {
 		if len(def.reads) == 0 {
 			t.Errorf("prompt %q declares no reads; it would be filtered out for every "+
@@ -44,14 +49,14 @@ func TestPromptReadsCoverItsDrivenTools(t *testing.T) {
 		}
 
 		for _, tool := range def.drives {
-			spec, gated := toolACLSpecs[tool]
-			if !gated || spec.resourceType == "*" {
+			gate := gates[tool]
+			if gate == (toolGate{}) {
 				continue
 			}
 
-			if !slices.Contains(def.reads, spec.resourceType) {
+			if !slices.Contains(def.reads, gate.resourceType) {
 				t.Errorf("prompt %q drives %q, gated on %q, but does not declare that "+
-					"type in reads", def.prompt.Name, tool, spec.resourceType)
+					"type in reads", def.prompt.Name, tool, gate.resourceType)
 			}
 		}
 	}

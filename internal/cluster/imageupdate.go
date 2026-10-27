@@ -9,6 +9,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/imagecheck"
 )
 
+// ServiceImage is the reference an image update names, without the whitespace
+// Docker would otherwise keep in it; empty means none was named.
+func ServiceImage(raw string) string { return strings.TrimSpace(raw) }
+
 // ImageDigests answers what a registry last said an image's tag names.
 type ImageDigests interface {
 	LatestDigest(image string) (imagecheck.Result, bool)
