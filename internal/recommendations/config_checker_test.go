@@ -262,4 +262,30 @@ func TestConfigChecker_UnusedVersion(t *testing.T) {
 	if cfg.Scope != ScopeConfig || cfg.TargetName != "app_0a1b2c3d" {
 		t.Errorf("unexpected config finding %+v", cfg)
 	}
+
+	// A version a service's previous spec names is what a rollback restores.
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: "s2"}},
+				},
+			},
+		},
+		PreviousSpec: &swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: "s1"}},
+				},
+			},
+		},
+	})
+
+	for _, r := range NewConfigChecker(c).Check(context.Background()) {
+		if r.Category == CategoryUnusedVersion && r.TargetID == "s1" {
+			t.Errorf("flagged the rollback target db_v1: %+v", r)
+		}
+	}
 }

@@ -60,8 +60,11 @@ func (cc *ConfigChecker) Check(_ context.Context) []Recommendation {
 	secrets := versions.SecretItems(cc.cache.ListSecrets())
 	configs := versions.ConfigItems(cc.cache.ListConfigs())
 
-	recs = append(recs, unusedVersions(ScopeSecret, secrets, cc.cache.ServicesUsingSecret)...)
-	recs = append(recs, unusedVersions(ScopeConfig, configs, cc.cache.ServicesUsingConfig)...)
+	// A version a previous spec names is what a rollback needs, so it counts as used.
+	configUsers, secretUsers := versions.UsersOf(cc.cache.EachService)
+
+	recs = append(recs, unusedVersions(ScopeSecret, secrets, secretUsers)...)
+	recs = append(recs, unusedVersions(ScopeConfig, configs, configUsers)...)
 
 	return recs
 }
@@ -72,7 +75,7 @@ func (cc *ConfigChecker) Check(_ context.Context) []Recommendation {
 func unusedVersions(
 	scope Scope,
 	items []versions.Item,
-	users func(id string) []cache.ServiceRef,
+	users versions.Users,
 ) []Recommendation {
 	grouped := versions.Group(items)
 
@@ -86,7 +89,7 @@ func unusedVersions(
 	var recs []Recommendation
 	for _, it := range items {
 		m, ok := grouped[it.ID]
-		if !ok || m.Rank == 0 || len(users(it.ID)) > 0 {
+		if !ok || m.Rank == 0 || len(users[it.ID]) > 0 {
 			continue
 		}
 

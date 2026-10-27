@@ -119,9 +119,51 @@ func TestVersionIndex(t *testing.T) {
 		t.Errorf("SecretVersion(db_v2) = %+v after db_v4 arrived, want an older version", v)
 	}
 
+	// A previous spec names what a rollback restores, so it counts as a use.
+	c.SetService(swarm.Service{
+		ID:   "svc",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "api"}},
+		PreviousSpec: &swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{
+				Secrets: []*swarm.SecretReference{{SecretID: "db_v1"}},
+			},
+		}},
+	})
+	if users := index.SecretUsers("db_v1"); len(users) != 1 || users[0].Name != "api" {
+		t.Errorf("SecretUsers(db_v1) = %v, want the service whose previous spec names it", users)
+	}
+
 	event := cache.Event{Type: cache.EventSecret, Resource: versionedSecret("db_v4", 9)}
 	_, touched := index.DigestsTouchedBy(event)
 	if len(touched) != 3 {
 		t.Errorf("DigestsTouchedBy(db_v4) = %v, want the three other db versions", touched)
+	}
+}
+
+// A version relabelled into another group leaves its old one, whose members
+// must hear of it as well as those of the group it joins.
+func TestVersionIndexFollowsARelabel(t *testing.T) {
+	c := cache.New(nil)
+	for i, name := range []string{"db_v1", "db_v2", "other_v1"} {
+		c.SetSecret(versionedSecret(name, i+1))
+	}
+
+	index := NewVersionIndex(c)
+	index.SecretVersion(versionedSecret("db_v1", 1), func(string) bool { return true })
+
+	moved := versionedSecret("db_v2", 2)
+	moved.Spec.Labels = map[string]string{"cetacean.version-of": "other"}
+	c.SetSecret(moved)
+
+	_, touched := index.DigestsTouchedBy(cache.Event{Type: cache.EventSecret, Resource: moved})
+
+	var ids []string
+	for _, ref := range touched {
+		ids = append(ids, ref.ID)
+	}
+	slices.Sort(ids)
+
+	if !slices.Equal(ids, []string{"db_v1", "other_v1"}) {
+		t.Errorf("DigestsTouchedBy(relabel) = %v, want the group left and the group joined", ids)
 	}
 }

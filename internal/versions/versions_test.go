@@ -129,16 +129,16 @@ func TestGroup(t *testing.T) {
 			map[string]placed{},
 		},
 		{
-			"a label is normalised like a name",
+			"a label loses its stack prefix but keeps what looks like a version",
 			[]Item{
 				item("a", "myapp_db_password", 1, labels("myapp", "")),
 				item("b", "rotated", 2, labels("myapp", "myapp_db_password")),
-				item("c", "again", 3, labels("myapp", "db_password_v3")),
+				item("c", "api-one", 3, labels("myapp", "api-v1")),
+				item("d", "api-two", 4, labels("myapp", "api-v2")),
 			},
 			map[string]placed{
-				"a": {"db_password", true, 2},
-				"b": {"db_password", true, 1},
-				"c": {"db_password", true, 0},
+				"a": {"db_password", true, 1},
+				"b": {"db_password", true, 0},
 			},
 		},
 		{
@@ -186,12 +186,12 @@ func TestSecretsAndConfigs(t *testing.T) {
 		}
 	}
 
-	secrets := Secrets([]swarm.Secret{secret("a", "k_v1", 2), secret("b", "k_v2", 1)})
+	secrets := Group(SecretItems([]swarm.Secret{secret("a", "k_v1", 2), secret("b", "k_v2", 1)}))
 	if secrets["a"].Rank != 0 || secrets["b"].Rank != 1 {
 		t.Errorf("Secrets() = %v, want a newest", secrets)
 	}
 
-	configs := Configs([]swarm.Config{config("a", "c_v1", 1), config("b", "c_v2", 2)})
+	configs := Group(ConfigItems([]swarm.Config{config("a", "c_v1", 1), config("b", "c_v2", 2)}))
 	if configs["a"].Rank != 1 || configs["b"].Rank != 0 {
 		t.Errorf("Configs() = %v, want b newest", configs)
 	}

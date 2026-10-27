@@ -29,7 +29,8 @@ func PortACLName(p cache.PublishedPort) string { return p.ServiceName }
 func PortACLResource(p cache.PublishedPort) string { return "service:" + PortACLName(p) }
 
 // ReadableRecommendations keeps the recommendations whose target and every
-// resource they reveal id may read, by acl.Filter's rules.
+// resource they reveal id may read, by acl.Filter's rules. It may reuse recs,
+// which every caller has copied from the engine.
 func ReadableRecommendations(
 	e *acl.Evaluator,
 	id *auth.Identity,
@@ -38,25 +39,10 @@ func ReadableRecommendations(
 	readable := acl.Filter(e, id, "read", recs, RecommendationACLResource)
 
 	canRead := e.Checker(id, "read")
-	hidden := func(rec recommendations.Recommendation) bool {
+
+	return slices.DeleteFunc(readable, func(rec recommendations.Recommendation) bool {
 		return slices.ContainsFunc(rec.Reveals, func(r string) bool { return !canRead(r) })
-	}
-
-	// Copied only once a finding must go, since an allow-all Filter hands back
-	// the engine's own slice.
-	first := slices.IndexFunc(readable, hidden)
-	if first < 0 {
-		return readable
-	}
-
-	out := slices.Clone(readable[:first])
-	for _, rec := range readable[first+1:] {
-		if !hidden(rec) {
-			out = append(out, rec)
-		}
-	}
-
-	return out
+	})
 }
 
 // RecommendationACLResource maps a recommendation to the resource it is

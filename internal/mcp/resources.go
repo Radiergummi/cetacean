@@ -256,7 +256,7 @@ func (s *Server) versionedListing(ctx context.Context, listed any) any {
 		shown := cluster.SelectVersions(items, configID, groups, newest)
 		out := make([]cluster.VersionedConfig, len(shown))
 		for i, cfg := range shown {
-			usedBy := cluster.ReadableUsers(s.cache.ServicesUsingConfig(cfg.ID), canRead)
+			usedBy := cluster.ReadableUsers(s.versions.ConfigUsers(cfg.ID), canRead)
 			out[i] = cluster.VersionedConfig{
 				Config:        cfg,
 				VersionFields: groups.Version(cfg.ID).Fields(usedBy),
@@ -270,7 +270,7 @@ func (s *Server) versionedListing(ctx context.Context, listed any) any {
 		shown := cluster.SelectVersions(items, secretID, groups, newest)
 		out := make([]cluster.VersionedSecret, len(shown))
 		for i, sec := range shown {
-			usedBy := cluster.ReadableUsers(s.cache.ServicesUsingSecret(sec.ID), canRead)
+			usedBy := cluster.ReadableUsers(s.versions.SecretUsers(sec.ID), canRead)
 			out[i] = cluster.VersionedSecret{
 				Secret:        sec,
 				VersionFields: groups.Version(sec.ID).Fields(usedBy),

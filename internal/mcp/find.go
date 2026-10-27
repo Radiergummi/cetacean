@@ -261,9 +261,9 @@ func (s *Server) versionGroups(
 ) (cluster.VersionGroups, func(id string) []cache.ServiceRef) {
 	switch items := listed.(type) {
 	case []swarm.Config:
-		return cluster.ConfigVersionGroups(items), s.cache.ServicesUsingConfig
+		return cluster.ConfigVersionGroups(items), s.versions.ConfigUsers
 	case []swarm.Secret:
-		return cluster.SecretVersionGroups(items), s.cache.ServicesUsingSecret
+		return cluster.SecretVersionGroups(items), s.versions.SecretUsers
 	default:
 		return nil, nil
 	}

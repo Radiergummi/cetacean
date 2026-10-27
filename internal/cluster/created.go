@@ -2,17 +2,16 @@ package cluster
 
 import (
 	"context"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// SeedCreatedConfig puts a config just created into the cache, which the
-// watcher fills only later, so the next call can attach it. It is Docker's own
-// record, so the creation time is the manager's and the newest version is the
-// newest at once; a stand-in names it when Docker cannot be asked. The payload
-// is left to the watcher.
+// SeedCreatedConfig puts a just-created config into the cache, so the next call
+// can attach it before the watcher catches up: Docker's own record, or else a
+// stand-in created now. A record the watcher already stored is never replaced.
 func SeedCreatedConfig(
 	ctx context.Context,
 	c *cache.Cache,
@@ -22,11 +21,15 @@ func SeedCreatedConfig(
 ) {
 	cfg, err := inspect(ctx, id)
 	if err != nil {
-		cfg = swarm.Config{ID: id, Spec: swarm.ConfigSpec{Name: name, Labels: labels}}
+		now := time.Now()
+		cfg = swarm.Config{
+			ID:        id,
+			CreatedAt: now, UpdatedAt: now,
+			Spec: swarm.ConfigSpec{Name: name, Labels: labels},
+		}
 	}
 
-	cfg.Spec.Data = nil
-	c.SetConfig(cfg)
+	c.AddConfig(cfg)
 }
 
 // SeedCreatedSecret is SeedCreatedConfig for a secret, whose value is never
@@ -40,8 +43,13 @@ func SeedCreatedSecret(
 ) {
 	sec, err := inspect(ctx, id)
 	if err != nil {
-		sec = swarm.Secret{ID: id, Spec: swarm.SecretSpec{Name: name, Labels: labels}}
+		now := time.Now()
+		sec = swarm.Secret{
+			ID:        id,
+			CreatedAt: now, UpdatedAt: now,
+			Spec: swarm.SecretSpec{Name: name, Labels: labels},
+		}
 	}
 
-	c.SetSecret(RedactSecret(sec))
+	c.AddSecret(RedactSecret(sec))
 }

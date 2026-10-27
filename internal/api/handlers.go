@@ -338,6 +338,11 @@ func (h *Handlers) SetLogReads(slots *sse.Slots) {
 	h.logReads = slots
 }
 
+// SetVersionIndex shares MCP's config and secret version index.
+func (h *Handlers) SetVersionIndex(x *cluster.VersionIndex) {
+	h.versions = x
+}
+
 // SetStreamLifetime ends the metrics stream and log follows when l ends.
 func (h *Handlers) SetStreamLifetime(l *sse.Lifetime) {
 	h.streams = l

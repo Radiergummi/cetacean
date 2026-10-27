@@ -52,7 +52,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fields := versionedList(
-		h, r, &spec, secretID, cluster.SecretVersionGroups, h.cache.ServicesUsingSecret,
+		h, r, &spec, secretID, cluster.SecretVersionGroups, h.versions.SecretUsers,
 	)
 
 	handleListOf(h, w, r, spec, func(s SecretListItem) string { return "/secrets/" + s.ID },

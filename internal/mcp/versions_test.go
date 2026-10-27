@@ -264,7 +264,7 @@ func TestCreatedVersionsAreSeededFromDocker(t *testing.T) {
 		}
 	}
 
-	if cfg.Spec.Labels["com.docker.stack.namespace"] != "app" || len(cfg.Spec.Data) != 0 {
-		t.Errorf("seeded config spec = %+v, want Docker's labels and no payload", cfg.Spec)
+	if cfg.Spec.Labels["com.docker.stack.namespace"] != "app" {
+		t.Errorf("seeded config spec = %+v, want Docker's labels", cfg.Spec)
 	}
 }

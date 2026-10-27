@@ -446,7 +446,7 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 
 A config or secret listing, from `find` or a read of `cetacean://configs` or `cetacean://secrets`, shows only the
 newest version of each group of [versions](dashboard#versions) unless `versions` is `all`; a `find` narrowed by
-`query` or another filter matches every version. Config and secret rows carry `usedBy`, the number of services using them, and, when
+`query` or another filter matches every version. Config and secret rows carry `usedBy`, the number of services whose spec or previous spec uses them, and, when
 they're one of several versions, `versionOf` naming the group, `versionInferred` when it was matched by name, and
 on the newest `newestVersion` and `olderVersions`, the number of older ones. A config or secret digest carries the
 same in `details`, and a subscription to one hears when another version in its group comes or goes. All of them

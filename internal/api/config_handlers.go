@@ -50,7 +50,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fields := versionedList(
-		h, r, &spec, configID, cluster.ConfigVersionGroups, h.cache.ServicesUsingConfig,
+		h, r, &spec, configID, cluster.ConfigVersionGroups, h.versions.ConfigUsers,
 	)
 
 	handleListOf(h, w, r, spec, func(c ConfigListItem) string { return "/configs/" + c.ID },

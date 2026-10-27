@@ -299,6 +299,10 @@ type Options struct {
 	// REST's log reads. Nil gives this server a pool of its own.
 	LogReads *sse.Slots
 
+	// Versions groups configs and secrets, shared with REST so the index is
+	// rebuilt once per cache generation. Nil gives this server one of its own.
+	Versions *cluster.VersionIndex
+
 	// SecretEntries is where create_secret leaves a secret for a person to
 	// enter in the dashboard, shared with the API that completes it, and
 	// DashboardURL is the dashboard's external base. Either unset turns that off.
@@ -354,7 +358,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
-		versions:       cluster.NewVersionIndex(c),
+		versions:       opts.Versions,
 		watches:        make(chan struct{}, maxConcurrentWatches),
 		listens:        make(chan struct{}, maxListenStreams),
 		streams:        opts.Streams,
@@ -362,6 +366,9 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 	}
 	if srv.logReads == nil {
 		srv.logReads = new(sse.Slots)
+	}
+	if srv.versions == nil {
+		srv.versions = cluster.NewVersionIndex(c)
 	}
 	srv.notifications.resolve = srv.subscriptionFor
 	srv.notifications.keys = srv.eventKeys

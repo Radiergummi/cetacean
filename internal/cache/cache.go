@@ -774,6 +774,13 @@ func (c *Cache) SetConfig(cfg swarm.Config) {
 	}
 }
 
+// AddConfig stores cfg unless the cache already holds a config with its ID.
+func (c *Cache) AddConfig(cfg swarm.Config) {
+	if event, ok := c.configs.Add(cfg.ID, cfg, EventConfig); ok {
+		c.notify(event)
+	}
+}
+
 func (c *Cache) GetConfig(id string) (swarm.Config, bool) { return c.configs.Get(id) }
 
 func (c *Cache) DeleteConfig(id string) {
@@ -786,6 +793,13 @@ func (c *Cache) ListConfigs() []swarm.Config { return c.configs.List() }
 
 func (c *Cache) SetSecret(s swarm.Secret) {
 	if event, ok := c.secrets.Set(s.ID, s, EventSecret); ok {
+		c.notify(event)
+	}
+}
+
+// AddSecret stores s unless the cache already holds a secret with its ID.
+func (c *Cache) AddSecret(s swarm.Secret) {
+	if event, ok := c.secrets.Add(s.ID, s, EventSecret); ok {
 		c.notify(event)
 	}
 }

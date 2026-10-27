@@ -5778,7 +5778,7 @@ paths:
                           On the newest version, how many older readable versions its group has.
                       usedBy:
                         type: integer
-                        description: Number of services the caller may read that use this config
+                        description: Number of services the caller may read whose spec or previous spec uses this config
               example:
                 "@context": /api/context.jsonld
                 "@id": /configs/cfg_abc123
@@ -6177,7 +6177,7 @@ paths:
                           On the newest version, how many older readable versions its group has.
                       usedBy:
                         type: integer
-                        description: Number of services the caller may read that use this secret
+                        description: Number of services the caller may read whose spec or previous spec uses this secret
               example:
                 "@context": /api/context.jsonld
                 "@id": /secrets/sec_def456
@@ -7851,7 +7851,7 @@ components:
                       may read. Absent otherwise.
                   UsedBy:
                     type: integer
-                    description: Number of services the caller may read that use this config
+                    description: Number of services the caller may read whose spec or previous spec uses this config
 
     SecretCollection:
       allOf:
@@ -7893,7 +7893,7 @@ components:
                       may read. Absent otherwise.
                   UsedBy:
                     type: integer
-                    description: Number of services the caller may read that use this secret
+                    description: Number of services the caller may read whose spec or previous spec uses this secret
 
     NetworkCollection:
       allOf:

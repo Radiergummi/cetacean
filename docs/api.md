@@ -799,7 +799,7 @@ first. A `search` or `filter` matches every version unless `?versions=newest` sa
 holds every version, with `version of`, `newest` and `used by` columns. Any other `versions` value answers `400`
 ([`API016`](api/errors#API016)). The total, the pagination links and the ETag follow what is listed.
 
-`GET /configs/{id}` and `GET /secrets/{id}` carry `usedBy`, the number of services using it, and each list item
+`GET /configs/{id}` and `GET /secrets/{id}` carry `usedBy`, the number of services whose spec or previous spec uses it, and each list item
 `UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and `versionInferred` when
 it was matched by name rather than declared with the `cetacean.version-of` label; the newest carries
 `newestVersion` and `olderVersions`, the number of older ones. A list item spells them `VersionOf`,
