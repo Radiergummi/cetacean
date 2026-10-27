@@ -87,10 +87,17 @@ channels:
   services:
     address: /services
     title: Service list stream
-    description: Every service event in the cluster.
+    description: |
+      Every service event in the cluster, plus every task and node event: the
+      list's rows carry task counts and a global service's eligible nodes,
+      which those move. Task and node events replay like service events.
     messages:
       service:
         $ref: "#/components/messages/service"
+      task:
+        $ref: "#/components/messages/task"
+      node:
+        $ref: "#/components/messages/node"
       batch:
         $ref: "#/components/messages/batch"
       sync:

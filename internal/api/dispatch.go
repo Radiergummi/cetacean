@@ -155,6 +155,12 @@ func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, typMatch), typ)
 }
 
+// streamServices is streamList for services, whose stream replays every type
+// its matcher admits.
+func (h *Handlers) streamServices(w http.ResponseWriter, r *http.Request) {
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, sse.ServiceListMatcher), sse.ReplayAll)
+}
+
 func (h *Handlers) streamResource(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
