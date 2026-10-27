@@ -54,14 +54,12 @@ type authCodeEntry struct {
 type AuthCodeStore struct {
 	mu    sync.Mutex
 	codes map[string]authCodeEntry // hash → entry
-	now   func() time.Time
 }
 
 // NewAuthCodeStore returns a ready-to-use AuthCodeStore.
 func NewAuthCodeStore() *AuthCodeStore {
 	return &AuthCodeStore{
 		codes: make(map[string]authCodeEntry),
-		now:   time.Now,
 	}
 }
 
@@ -71,7 +69,7 @@ func NewAuthCodeStore() *AuthCodeStore {
 func (s *AuthCodeStore) Issue(data AuthCodeData, ttl time.Duration) string {
 	raw := generateOpaqueToken()
 	h := hashToken(raw)
-	now := s.now()
+	now := time.Now()
 
 	s.mu.Lock()
 	for hash, entry := range s.codes {
@@ -103,7 +101,7 @@ func (s *AuthCodeStore) Redeem(code string) (AuthCodeData, bool) {
 	if !exists {
 		return AuthCodeData{}, false
 	}
-	if s.now().After(entry.expiresAt) {
+	if time.Now().After(entry.expiresAt) {
 		return AuthCodeData{}, false
 	}
 
