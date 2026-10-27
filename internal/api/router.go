@@ -779,9 +779,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		svcTier3.Append(h.precond(h.serviceEndpointModeRepresentation)).
 			ThenFunc(h.HandleUpdateServiceEndpointMode),
 	)
-	mux.Handle("DELETE /services/{id}",
-		svcTier3.Append(h.precondTimed(h.serviceRepresentation, h.serviceModified)).AnswersNoContent().
-			ThenFunc(h.HandleRemoveService))
+	mux.Handle(
+		"DELETE /services/{id}",
+		svcTier3.Append(h.precondTimed(h.serviceRepresentation, h.serviceModified)).
+			AnswersNoContent().
+			ThenFunc(h.HandleRemoveService),
+	)
 
 	// Tasks
 	mux.HandleFunc(

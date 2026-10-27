@@ -86,7 +86,10 @@ func (p *Proxy) proxyTo(
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		var body []byte
 		if resp.ContentLength > maxResponseBytes {
-			err = &redactedError{message: "prometheus response too large", cause: ErrResponseTooLarge}
+			err = &redactedError{
+				message: "prometheus response too large",
+				cause:   ErrResponseTooLarge,
+			}
 		} else {
 			body, err = readLimited(resp.Body)
 		}

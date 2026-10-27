@@ -96,7 +96,8 @@ func TestReadOnAWriteOnlyPathIsNotAllowed(t *testing.T) {
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "PUT, OPTIONS" {
+			if rec.Code != http.StatusMethodNotAllowed ||
+				rec.Header().Get("Allow") != "PUT, OPTIONS" {
 				t.Errorf("%s (Accept %q) = %d with Allow %q, want 405 with PUT, OPTIONS",
 					method, accept, rec.Code, rec.Header().Get("Allow"))
 			}

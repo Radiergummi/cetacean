@@ -171,7 +171,10 @@ func readLimited(r io.Reader) ([]byte, error) {
 		return nil, unreachable(err)
 	}
 	if len(body) > maxResponseBytes {
-		return nil, &redactedError{message: "prometheus response too large", cause: ErrResponseTooLarge}
+		return nil, &redactedError{
+			message: "prometheus response too large",
+			cause:   ErrResponseTooLarge,
+		}
 	}
 
 	return body, nil

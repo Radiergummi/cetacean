@@ -323,7 +323,7 @@ Every list response sets `Accept-Ranges: items`. An offset past the end returns 
 */142`. Query parameters take precedence when both are present, and a malformed `Range` or one naming several
 ranges is ignored. `Range: items 0-24`, without the `=`, is still accepted but deprecated.
 
-The `ETag` is the collection's, the same on every page and on the full answer. With `If-Range` naming it, any
+Every page of a list carries the collection's `ETag`, as does the full answer. With `If-Range` naming it, any
 page is served as long as the list is unchanged; otherwise you get the first page with a `200`.
 
 ### History pagination

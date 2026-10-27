@@ -301,7 +301,11 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status))
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status),
+	)
 }
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {

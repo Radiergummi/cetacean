@@ -60,7 +60,11 @@ func (h *Handlers) feedListHandler(
 			return
 		}
 
-		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{Type: eventType})
+		entries, beforeID, limit, ok := h.queryHistoryFeed(
+			w,
+			r,
+			cache.HistoryQuery{Type: eventType},
+		)
 		if !ok {
 			return
 		}

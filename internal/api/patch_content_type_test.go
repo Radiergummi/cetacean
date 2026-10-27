@@ -27,7 +27,11 @@ func TestAnUnsupportedPatchNamesTheFormatsTaken(t *testing.T) {
 		"labels": {h.HandlePatchServiceLabels, AcceptPatch},
 		"ports":  {h.HandlePatchServicePorts, AcceptMergePatch},
 	} {
-		req := httptest.NewRequest(http.MethodPatch, "/services/svc1/"+name, strings.NewReader(`{}`))
+		req := httptest.NewRequest(
+			http.MethodPatch,
+			"/services/svc1/"+name,
+			strings.NewReader(`{}`),
+		)
 		req.Header.Set("Content-Type", "text/plain")
 		req.SetPathValue("id", "svc1")
 		w := httptest.NewRecorder()

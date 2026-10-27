@@ -28,11 +28,13 @@ func datedServiceRouter(t *testing.T) (http.Handler, *int, *int) {
 	replicas := uint64(1)
 	c := cache.New(nil)
 	c.SetService(swarm.Service{
-		ID:   "svc1",
-		Meta: swarm.Meta{UpdatedAt: serviceUpdated},
+		ID:        "svc1",
+		UpdatedAt: serviceUpdated,
 		Spec: swarm.ServiceSpec{
 			Annotations: swarm.Annotations{Name: "web"},
-			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+			Mode: swarm.ServiceMode{
+				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
+			},
 			TaskTemplate: swarm.TaskSpec{
 				ContainerSpec: &swarm.ContainerSpec{Env: []string{"A=1"}},
 			},
@@ -60,7 +62,11 @@ func datedServiceRouter(t *testing.T) (http.Handler, *int, *int) {
 	return router, &removed, &written
 }
 
-func serve(router http.Handler, method, target, body string, headers map[string]string) *httptest.ResponseRecorder {
+func serve(
+	router http.Handler,
+	method, target, body string,
+	headers map[string]string,
+) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Accept", "application/json")
 	for name, value := range headers {
@@ -193,7 +199,13 @@ func TestReadPreconditionsAreEvaluatedInOrder(t *testing.T) {
 		{"If-Unmodified-Since before the update", map[string]string{"If-Unmodified-Since": beforeUpdate}, 412},
 		{"If-Unmodified-Since after the update", map[string]string{"If-Unmodified-Since": afterUpdate}, 200},
 	} {
-		if rec := serve(router, http.MethodGet, "/services/svc1", "", tc.headers); rec.Code != tc.want {
+		if rec := serve(
+			router,
+			http.MethodGet,
+			"/services/svc1",
+			"",
+			tc.headers,
+		); rec.Code != tc.want {
 			t.Errorf("GET with %s = %d, want %d", tc.name, rec.Code, tc.want)
 		}
 	}
