@@ -92,7 +92,9 @@ export const pluginSchema = z.looseObject({
 
 const serviceRefs = z.array(z.looseObject({ id: z.string(), name: z.string() })).nullable();
 
-/** Exactly one of `href` and `text` is set; `services` only on a stack's links. */
+/**
+ * Exactly one of `href` and `text` is set; `services` only on a stack's links.
+ */
 const serviceLinks = z
   .array(
     z.looseObject({

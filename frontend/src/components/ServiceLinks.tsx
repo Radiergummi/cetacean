@@ -54,13 +54,13 @@ export default function ServiceLinks({ links }: { links: ServiceLink[] }) {
  * as on a stack whose services declare the same link, the declaring services.
  */
 function disambiguatedLabel({ id, title, services }: ServiceLink, links: ServiceLink[]) {
-  const sameTitle = links.filter((link) => link.title === title);
+  const sameTitle = links.filter(({ title: otherTitle }) => otherTitle === title);
 
   if (sameTitle.length < 2) {
     return title;
   }
 
-  const idsCollide = sameTitle.filter((link) => link.id === id).length > 1;
+  const idsCollide = sameTitle.filter(({ id: otherId }) => otherId === id).length > 1;
 
   if (idsCollide && services?.length) {
     return `${title} · ${services.join(", ")}`;
