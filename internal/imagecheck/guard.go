@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/http/httpproxy"
@@ -19,24 +20,46 @@ const maxRedirects = 10
 
 type registryKey struct{}
 
-// registry is the host a service names, and whether it sits on the LAN.
+// registry is the host a service names, and whether the first connection to
+// it reached the LAN. A lookup of its own could be answered differently from
+// the dial, so only the address the connection reached counts.
 type registry struct {
 	host string
-	lan  bool
+	seen atomic.Bool
+	lan  atomic.Bool
 }
 
-// lookupIP resolves a name for isLAN; a variable so tests need no DNS.
+// connected records the address of the first connection, the registry's.
+func (r *registry) connected(addr net.Addr) {
+	if r == nil || !r.seen.CompareAndSwap(false, true) {
+		return
+	}
+
+	if tcp, ok := addr.(*net.TCPAddr); ok {
+		r.lan.Store(lanAddress(tcp.IP))
+	}
+}
+
+func (r *registry) onLAN() bool {
+	return r != nil && r.lan.Load()
+}
+
+// lookupIP resolves a realm's name for isLAN; a variable so tests need no DNS.
 var lookupIP = net.DefaultResolver.LookupIP
 
 // withRegistry records the registry a service names, which screen and the
 // realm rule measure every other host against.
 func withRegistry(ctx context.Context, host string) context.Context {
-	return context.WithValue(ctx, registryKey{}, registry{host: host, lan: isLAN(ctx, host)})
+	return context.WithValue(ctx, registryKey{}, &registry{host: host})
 }
 
-func registryOf(ctx context.Context) registry {
-	r, _ := ctx.Value(registryKey{}).(registry)
+func registryOf(ctx context.Context) *registry {
+	r, _ := ctx.Value(registryKey{}).(*registry)
 	return r
+}
+
+func lanAddress(ip net.IP) bool {
+	return netguard.Private(ip) || ip.IsLoopback()
 }
 
 // isLAN reports whether host, or every address it resolves to, is private or
@@ -53,7 +76,7 @@ func isLAN(ctx context.Context, host string) bool {
 	}
 
 	for _, ip := range ips {
-		if !netguard.Private(ip) && !ip.IsLoopback() {
+		if !lanAddress(ip) {
 			return false
 		}
 	}
@@ -66,7 +89,7 @@ func isLAN(ctx context.Context, host string) bool {
 // A public registry's hops elsewhere get the full screen; link-local never passes.
 func screen(ctx context.Context, address string, ip net.IP) error {
 	r := registryOf(ctx)
-	own := r.host != "" && (r.lan || sameSite(address, r.host))
+	own := r != nil && (r.onLAN() || sameSite(address, r.host))
 
 	return netguard.Policy{AllowLoopback: own, AllowPrivate: own}.Check(ip)
 }
@@ -75,7 +98,7 @@ func screen(ctx context.Context, address string, ip net.IP) error {
 // or anywhere on the LAN when the registry is on it too: Harbor by address
 // with its realm at harbor.lan, or registry.lan with auth.lan.
 func realmAllowed(ctx context.Context, realm, challenger string) bool {
-	return sameSite(realm, challenger) || registryOf(ctx).lan && isLAN(ctx, realm)
+	return sameSite(realm, challenger) || registryOf(ctx).onLAN() && isLAN(ctx, realm)
 }
 
 // sameSite reports whether a and b, host or host:port, are one host or share a
@@ -108,12 +131,9 @@ func hostOnly(hostport string) string {
 // redirectPolicy follows only https and screens an address literal the way
 // the dialer would. Through a proxy no address can be screened, so a redirect
 // must also stay on the registry's site.
-func redirectPolicy(transport http.RoundTripper) func(*http.Request, []*http.Request) error {
-	var proxy func(*http.Request) (*url.URL, error)
-	if t, ok := transport.(*http.Transport); ok {
-		proxy = t.Proxy
-	}
-
+func redirectPolicy(
+	proxy func(*http.Request) (*url.URL, error),
+) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)
@@ -123,15 +143,12 @@ func redirectPolicy(transport http.RoundTripper) func(*http.Request, []*http.Req
 			return fmt.Errorf("registry redirected to %s, not https", req.URL.Scheme)
 		}
 
-		if proxy != nil {
-			if through, err := proxy(req); err != nil || through != nil {
-				if r := registryOf(req.Context()); !sameSite(req.URL.Host, r.host) {
-					return fmt.Errorf(
-						"%w: redirect to %s leaves %s through a proxy",
-						netguard.ErrBlocked, req.URL.Host, r.host,
-					)
-				}
-			}
+		r := registryOf(req.Context())
+		if proxied(proxy, req.URL.String()) && (r == nil || !sameSite(req.URL.Host, r.host)) {
+			return fmt.Errorf(
+				"%w: redirect to %s leaves the registry's site through a proxy",
+				netguard.ErrBlocked, req.URL.Host,
+			)
 		}
 
 		if ip := net.ParseIP(req.URL.Hostname()); ip != nil {
@@ -140,6 +157,32 @@ func redirectPolicy(transport http.RoundTripper) func(*http.Request, []*http.Req
 
 		return nil
 	}
+}
+
+// proxyOf is the proxy choice transport makes, or nil when it makes none.
+func proxyOf(transport http.RoundTripper) func(*http.Request) (*url.URL, error) {
+	if t, ok := transport.(*http.Transport); ok {
+		return t.Proxy
+	}
+
+	return nil
+}
+
+// proxied reports whether proxy sends a request for target through a proxy.
+// An unreadable answer counts as yes, which only ever narrows what passes.
+func proxied(proxy func(*http.Request) (*url.URL, error), target string) bool {
+	if proxy == nil {
+		return false
+	}
+
+	u, err := url.Parse(target)
+	if err != nil {
+		return true
+	}
+
+	through, err := proxy(&http.Request{URL: u})
+
+	return err != nil || through != nil
 }
 
 // guardedTransport dials only screened addresses. The proxy env names is the

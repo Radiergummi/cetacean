@@ -76,7 +76,7 @@ func TestResolveRefusesARedirectToLinkLocal(t *testing.T) {
 func TestRedirectPolicyScreensAPublicRegistrysHops(t *testing.T) {
 	stubLookup(t, map[string]string{"registry.example.com": "93.184.216.34"})
 	ctx := withRegistry(context.Background(), "registry.example.com")
-	policy := redirectPolicy(&http.Transport{})
+	policy := redirectPolicy(nil)
 
 	for target, ok := range map[string]bool{
 		"https://10.0.0.1/v2/a/manifests/1":         false,
@@ -99,7 +99,7 @@ func TestRedirectPolicyKeepsAProxiedRedirectOnTheRegistrysSite(t *testing.T) {
 	ctx := withRegistry(context.Background(), "registry-1.docker.io")
 
 	proxy, _ := url.Parse("http://proxy.corp:3128")
-	policy := redirectPolicy(&http.Transport{Proxy: http.ProxyURL(proxy)})
+	policy := redirectPolicy(proxyOf(&http.Transport{Proxy: http.ProxyURL(proxy)}))
 
 	for target, ok := range map[string]bool{
 		"https://auth.docker.io/token":           true,
@@ -138,27 +138,75 @@ func TestResolveRefusesARealmOnAnotherSite(t *testing.T) {
 // on one LAN name may keep its token service on another.
 func TestRealmAllowedOnTheLANWhenTheRegistryIsOnIt(t *testing.T) {
 	stubLookup(t, map[string]string{
-		"harbor.lan":   "10.0.0.5",
-		"registry.lan": "192.168.1.10",
-		"auth.lan":     "192.168.1.11",
-		"public.test":  "93.184.216.34",
+		"harbor.lan":  "10.0.0.5",
+		"auth.lan":    "192.168.1.11",
+		"public.test": "93.184.216.34",
 	})
 
 	for _, tc := range []struct {
-		registry, realm string
-		want            bool
+		registry, dialled, realm string
+		want                     bool
 	}{
-		{"10.0.0.5", "harbor.lan", true},
-		{"registry.lan:5000", "auth.lan", true},
-		{"registry.lan", "public.test", false},
-		{"public.test", "harbor.lan", false},
-		{"public.test", "10.0.0.5", false},
-		{"registry.lan", "unresolvable.lan", false},
+		{"10.0.0.5", "10.0.0.5", "harbor.lan", true},
+		{"registry.lan:5000", "192.168.1.10", "auth.lan", true},
+		{"registry.lan", "192.168.1.10", "public.test", false},
+		{"public.test", "93.184.216.34", "harbor.lan", false},
+		{"public.test", "93.184.216.34", "10.0.0.5", false},
+		{"registry.lan", "192.168.1.10", "unresolvable.lan", false},
 	} {
-		ctx := withRegistry(context.Background(), tc.registry)
+		ctx := dialledRegistry(tc.registry, tc.dialled)
 		if got := realmAllowed(ctx, tc.realm, tc.registry); got != tc.want {
 			t.Errorf("realm %s for %s: allowed=%v, want %v", tc.realm, tc.registry, got, tc.want)
 		}
+	}
+}
+
+// dialledRegistry is a check of registry whose first connection reached ip.
+func dialledRegistry(registry, ip string) context.Context {
+	ctx := withRegistry(context.Background(), registry)
+	registryOf(ctx).connected(&net.TCPAddr{IP: net.ParseIP(ip), Port: 443})
+
+	return ctx
+}
+
+// A registry name that resolves to the LAN when looked up but reached a public
+// address when dialled is rebinding: only the address it reached decides.
+func TestARebindingRegistryIsNotOnTheLAN(t *testing.T) {
+	stubLookup(t, map[string]string{"rebind.test": "10.0.0.5", "auth.lan": "10.0.0.6"})
+	ctx := dialledRegistry("rebind.test", "93.184.216.34")
+
+	if realmAllowed(ctx, "auth.lan", "rebind.test") {
+		t.Error("a LAN realm was admitted for a registry that dialled a public address")
+	}
+	if err := screen(ctx, "auth.lan:443", net.ParseIP("10.0.0.6")); err == nil {
+		t.Error("a LAN hop was admitted for a registry that dialled a public address")
+	}
+
+	// Nothing dialled yet admits nothing either.
+	if realmAllowed(withRegistry(context.Background(), "rebind.test"), "auth.lan", "rebind.test") {
+		t.Error("a LAN realm was admitted before the registry was dialled")
+	}
+}
+
+// The fake registry listens on loopback, which is the LAN, and names its realm
+// by a LAN name on another site: admitted only because the connection the
+// registry answered on was recorded.
+func TestResolveAdmitsALANRealmFromTheAddressDialled(t *testing.T) {
+	stubLookup(t, map[string]string{"example.com": "127.0.0.1"})
+
+	registry := newFakeRegistry(t, nil)
+	_, port, _ := net.SplitHostPort(registry.Listener.Addr().String())
+	registry.realm = "https://example.com:" + port + "/token"
+
+	// Every dial reaches the fake registry, whose certificate names example.com.
+	transport := registry.Client().Transport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, registry.Listener.Addr().String())
+	}
+
+	client := NewClient(&http.Client{Transport: transport})
+	if _, err := client.Resolve(context.Background(), registry.ref("1")); err != nil {
+		t.Fatalf("Resolve: %v", err)
 	}
 }
 

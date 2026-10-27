@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"sync"
@@ -48,7 +49,8 @@ var (
 
 // Client resolves tags against registries over HTTPS, anonymously.
 type Client struct {
-	http *http.Client
+	http  *http.Client
+	proxy func(*http.Request) (*url.URL, error)
 
 	mu     sync.Mutex
 	tokens map[string]bearerToken
@@ -69,16 +71,26 @@ func NewClient(httpClient *http.Client) *Client {
 		transport = http.DefaultTransport
 	}
 
-	guarded.CheckRedirect = redirectPolicy(transport)
+	proxy := proxyOf(transport)
+	guarded.CheckRedirect = redirectPolicy(proxy)
 
-	return &Client{http: &guarded, tokens: map[string]bearerToken{}}
+	return &Client{http: &guarded, proxy: proxy, tokens: map[string]bearerToken{}}
 }
 
 // Resolve returns the digest of the manifest ref's tag names now.
 func (c *Client) Resolve(ctx context.Context, ref Reference) (string, error) {
-	ctx = withRegistry(ctx, ref.Host)
 	manifestURL := "https://" + ref.Host + "/v2/" + ref.Repository + "/manifests/" +
 		url.PathEscape(ref.Tag)
+
+	// Through a proxy the connection reaches the proxy, which says nothing
+	// about where the registry is, so it stays off the LAN.
+	ctx = withRegistry(ctx, ref.Host)
+	if !proxied(c.proxy, manifestURL) {
+		registry := registryOf(ctx)
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) { registry.connected(info.Conn.RemoteAddr()) },
+		})
+	}
 
 	resp, err := c.send(ctx, http.MethodHead, manifestURL, ref)
 	if err != nil {

@@ -93,7 +93,7 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
 </ConfigParam>
 
 <ConfigParam name="server.image_check" flag="-image-check" env="CETACEAN_IMAGE_CHECK" default="true">
-  Ask each service image's registry, hourly, which image its tag names now, so the service pages and the recommendations can point out a newer one. Only the manifest is requested, anonymously; a private image Cetacean holds no credentials for is skipped. Redirects must stay on HTTPS. A registry on a private network may send Cetacean to other private hosts; a public one's redirects and token service must be on its own domain or publicly reachable, and through a proxy its redirects must stay on its domain. Turn it off where Cetacean must not reach the internet; services then show no update hint.
+  Ask each service image's registry, hourly, which image its tag names now, so the service pages and the recommendations can point out a newer one. Only the manifest is requested, anonymously; a private image Cetacean holds no credentials for is skipped. Redirects must stay on HTTPS. A registry on a private network may send Cetacean to other private hosts; a public one's redirects and token service must be on its own domain or publicly reachable, and through a proxy its redirects must stay on its domain. Cetacean can't see the addresses a proxy reaches, so with `HTTPS_PROXY` set the proxy is the egress control. Turn it off where Cetacean must not reach the internet; services then show no update hint.
 </ConfigParam>
 
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
