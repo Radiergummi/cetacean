@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -59,7 +60,15 @@ func (h *Handlers) feedListHandler(
 			return
 		}
 
-		entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{Type: eventType})
+		entries, beforeID, limit, ok := h.queryHistoryFeed(
+			w,
+			r,
+			cache.HistoryQuery{Type: eventType},
+		)
+		if !ok {
+			return
+		}
+
 		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
 	}
 }
@@ -79,10 +88,13 @@ func (h *Handlers) feedDetailHandler(
 
 		resourceID := r.PathValue(idParam)
 
-		entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{
+		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{
 			Type:       eventType,
 			ResourceID: resourceID,
 		})
+		if !ok {
+			return
+		}
 
 		// The title must not name what the caller cannot read. A task is keyed
 		// by its ID, which is what its parent service's grant resolves from.
@@ -110,24 +122,34 @@ func (h *Handlers) handleFeedHistory(
 		return
 	}
 
-	entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{})
+	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{})
+	if !ok {
+		return
+	}
+
 	render(w, r, historyFeedData(r, "History", entries, beforeID, limit))
 }
 
 // queryHistoryFeed runs query for a feed page: the request's pagination, only
-// what the caller may read, and tasks named.
+// what the caller may read, and tasks named. It answers a malformed page itself.
 func (h *Handlers) queryHistoryFeed(
+	w http.ResponseWriter,
 	r *http.Request,
 	query cache.HistoryQuery,
-) ([]cache.HistoryEntry, uint64, int) {
-	beforeID, limit := parseFeedPagination(r)
+) ([]cache.HistoryEntry, uint64, int, bool) {
+	beforeID, limit, err := parseFeedPagination(r)
+	if err != nil {
+		writeErrorCode(w, r, "API016", err.Error())
+		return nil, 0, 0, false
+	}
+
 	query.BeforeID = beforeID
 	query.Limit = limit
 	query.Visible = h.readableHistory(r)
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
 	entries := cluster.NameHistoryTasks(h.cache, h.cache.History().List(query), canRead)
 
-	return entries, beforeID, limit
+	return entries, beforeID, limit, true
 }
 
 // handleFeedSearch validates the search query, queries matching history entries,
@@ -146,7 +168,10 @@ func (h *Handlers) handleFeedSearch(
 		return
 	}
 
-	entries, beforeID, limit := h.queryHistoryFeed(r, cache.HistoryQuery{NameContains: q})
+	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{NameContains: q})
+	if !ok {
+		return
+	}
 
 	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
 	// the same BREACH shape HandleSearch opts out of, so it opts out too.
@@ -269,7 +294,7 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 		}
 
 		var href string
-		if path := resourcePath(e.Type, e.ResourceID); path != "" {
+		if path := sse.ResourcePath(e.Type, e.ResourceID); path != "" {
 			href = absURL(r, path)
 		}
 
@@ -392,30 +417,6 @@ func recommendationTargetPath(rec recommendations.Recommendation) string {
 	}
 }
 
-// resourcePath maps an event type and resource ID to the URL path for that resource.
-func resourcePath(typ cache.EventType, id string) string {
-	switch typ {
-	case cache.EventNode:
-		return "/nodes/" + id
-	case cache.EventService:
-		return "/services/" + id
-	case cache.EventTask:
-		return "/tasks/" + id
-	case cache.EventConfig:
-		return "/configs/" + id
-	case cache.EventSecret:
-		return "/secrets/" + id
-	case cache.EventNetwork:
-		return "/networks/" + id
-	case cache.EventVolume:
-		return "/volumes/" + id
-	case cache.EventStack:
-		return "/stacks/" + id
-	default:
-		return ""
-	}
-}
-
 // readableHistory admits the history entries the caller of r may read.
 func (h *Handlers) readableHistory(r *http.Request) func(cache.HistoryEntry) bool {
 	return cluster.HistoryReadable(
@@ -460,26 +461,22 @@ func tagAuthority(host string) (authority, port string) {
 
 // parseFeedPagination reads ?before= and ?limit= from the query string.
 // Default limit is 50, max is 200.
-func parseFeedPagination(r *http.Request) (beforeID uint64, limit int) {
+func parseFeedPagination(r *http.Request) (beforeID uint64, limit int, err error) {
 	limit = 50
 
 	if v := r.URL.Query().Get("before"); v != "" {
-		if parsed, err := strconv.ParseUint(v, 10, 64); err == nil {
-			beforeID = parsed
+		if beforeID, err = strconv.ParseUint(v, 10, 64); err != nil {
+			return 0, 0, errInvalidBefore
 		}
 	}
 
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
-			limit = parsed
+		if limit, err = strconv.Atoi(v); err != nil || limit <= 0 {
+			return 0, 0, errInvalidLimit
 		}
 	}
 
-	if limit > 200 {
-		limit = 200
-	}
-
-	return beforeID, limit
+	return beforeID, min(limit, 200), nil
 }
 
 // feedPaginationParams names the query parameters every feed reads: the

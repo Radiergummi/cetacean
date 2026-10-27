@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 - A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, ports, networks, placement, health check, secrets, configs or mounts, or roll back
 - `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
+- List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
+- A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed
@@ -50,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
 - When reading the cluster fails at startup or after reconnecting, such as during a manager election, the dashboard and `/-/ready` recover within seconds instead of minutes
 - A browser tab whose event stream reconnects after Cetacean re-read the whole cluster now refetches, instead of keeping data that re-read replaced
+- Writes honor `If-None-Match` and `If-Unmodified-Since`, and reads `If-Match` and `If-Unmodified-Since`, evaluated in RFC 9110 order and refused with `412`
+- A write whose `Accept` rules out JSON is refused with `406` before it changes anything, unless it sends `Prefer: return=minimal`
+- `OPTIONS` answers with `Allow` and `Accept-Patch`, and a `GET` on a write-only path such as `/services/{id}/scale` answers `405` to clients not asking for HTML
+- `HEAD` on an event stream, log tail or metrics stream returns at once instead of holding the connection open
+- Read-only endpoints report `Allow`, `/metrics/status` sends an `ETag`, and `/metrics/labels` refuses a non-JSON `Accept`
+- A Prometheus answer over 10 MiB returns `502 MTR008` instead of a truncated body that blanked the charts
+- Problem details for `413`, `416` and `422` carry RFC 9110's titles, such as `Range Not Satisfiable`
 - A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
 - Detail pages, the cluster overview, topology and history keep refreshing during a rollout or crash loop instead of waiting for the events to stop
 - A node without its own node-exporter no longer shows the metrics of another node whose name starts the same, like `worker-1` for `worker-12`

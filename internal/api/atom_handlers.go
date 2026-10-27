@@ -84,6 +84,10 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 	w.Header().Set("Cache-Control", "no-cache")
 	varyByIdentity(w)
 
+	if refusedByPrecondition(w, r, etag, time.Time{}) {
+		return
+	}
+
 	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return

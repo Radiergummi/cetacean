@@ -51,9 +51,13 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	limit := 3
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			limit = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			writeErrorCode(w, r, "API016",
+				`invalid "limit" parameter: must be a non-negative integer`)
+			return
 		}
+		limit = n
 	}
 
 	raw := cluster.Search(

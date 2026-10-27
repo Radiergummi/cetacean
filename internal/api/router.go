@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -171,7 +173,7 @@ func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
 	r.patterns = append(r.patterns, pattern)
 	if gated, ok := handler.(tieredHandler); ok {
 		method, path, _ := strings.Cut(pattern, " ")
-		route := tieredRoute{method, path, gated.level, ""}
+		route := tieredRoute{method, path, gated.level, "", gated.permits}
 		if method == http.MethodPatch {
 			route.acceptPatch = cmp.Or(gated.acceptPatch, AcceptMergePatch)
 		}
@@ -209,7 +211,8 @@ func (r *routeRecorder) serves(req *http.Request) bool {
 	return pattern != "" && pattern != "/"
 }
 
-// allows lists the methods a route of its own answers at req's path.
+// allows lists the methods a route of its own answers at req's path, and
+// OPTIONS, which the catch-all answers for every such path.
 func (r *routeRecorder) allows(req *http.Request) []string {
 	var methods []string
 
@@ -222,7 +225,65 @@ func (r *routeRecorder) allows(req *http.Request) []string {
 		}
 	}
 
-	return methods
+	if len(methods) == 0 {
+		return nil
+	}
+
+	return append(methods, http.MethodOptions)
+}
+
+// open is allows less the writes level or the caller's write grant closes, as
+// a GET's Allow leaves them out, with the Accept-Patch of a PATCH among them.
+func (r *routeRecorder) open(
+	req *http.Request,
+	level config.OperationsLevel,
+) (methods []string, acceptPatch string) {
+	for _, method := range r.allows(req) {
+		probe := req.Clone(req.Context())
+		probe.Method = method
+		pattern := r.route(probe)
+		_, path, _ := strings.Cut(pattern, " ")
+
+		idx := slices.IndexFunc(r.tiered, func(route tieredRoute) bool {
+			return route.method == method && route.path == path
+		})
+		if idx >= 0 {
+			route := r.tiered[idx]
+			if level < route.level || !route.permits(withPathValues(probe, path)) {
+				continue
+			}
+			if method == http.MethodPatch {
+				acceptPatch = route.acceptPatch
+			}
+		}
+
+		methods = append(methods, method)
+	}
+
+	return methods, acceptPatch
+}
+
+// withPathValues sets on req the values the wildcards of path name, which
+// ServeMux.Handler matches without setting.
+func withPathValues(req *http.Request, path string) *http.Request {
+	segments := strings.Split(strings.Trim(req.URL.EscapedPath(), "/"), "/")
+	for i, part := range strings.Split(strings.Trim(path, "/"), "/") {
+		name, ok := strings.CutPrefix(part, "{")
+		if !ok || i >= len(segments) {
+			continue
+		}
+		name = strings.TrimSuffix(name, "}")
+
+		value := segments[i]
+		if rest, wild := strings.CutSuffix(name, "..."); wild {
+			name, value = rest, strings.Join(segments[i:], "/")
+		}
+		if unescaped, err := url.PathUnescape(value); err == nil {
+			req.SetPathValue(name, unescaped)
+		}
+	}
+
+	return req
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -250,18 +311,18 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
 
-	// ACL wrappers for write endpoints.
-	svcACL := h.requireWriteACL(h.writeResource("service"))
-	nodeACL := h.requireWriteACL(h.writeResource("node"))
-	taskACL := h.requireWriteACL(h.writeResource("task"))
-	stackACL := h.requireWriteACL(pathResource("stack", "name"))
-	cfgACL := h.requireWriteACL(h.writeResource("config"))
-	secACL := h.requireWriteACL(h.writeResource("secret"))
-	netACL := h.requireWriteACL(h.writeResource("network"))
-	volACL := h.requireWriteACL(pathResource("volume", "name"))
-	pluginACL := h.requireWriteACL(pathResource("plugin", "name"))
-	pluginWildACL := h.requireWriteACL(wildcardResource("plugin"))
-	swarmACL := h.requireWriteACL(swarmResource)
+	// The ACL resource each write endpoint checks the write grant on.
+	svcACL := h.writeResource("service")
+	nodeACL := h.writeResource("node")
+	taskACL := h.writeResource("task")
+	stackACL := pathResource("stack", "name")
+	cfgACL := h.writeResource("config")
+	secACL := h.writeResource("secret")
+	netACL := h.writeResource("network")
+	volACL := pathResource("volume", "name")
+	pluginACL := pathResource("plugin", "name")
+	pluginWildACL := wildcardResource("plugin")
+	swarmACL := swarmResource
 
 	// Derived (ACL, tier) chains for the gated route registrations below.
 	svcTier2 := h.tiered(svcACL, config.OpsConfiguration)
@@ -291,8 +352,9 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	// A create checks the write grant on the name it creates, in the handler.
 	createOp := func(op cluster.Operation) tieredChain {
 		return tieredChain{
-			chain: NewChain(h.requireLevel(op.Tier()), attributeWrite),
-			level: op.Tier(),
+			gates:   NewChain(h.requireLevel(op.Tier()), attributeWrite),
+			level:   op.Tier(),
+			permits: h.mayCreate,
 		}
 	}
 
@@ -330,10 +392,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	}
 	// Metrics (content-negotiated: JSON → proxy, SSE → stream, HTML → SPA)
 	mux.HandleFunc("GET /metrics/status", h.HandleMonitoringStatus)
-	mux.HandleFunc("GET /metrics/labels", h.withReadEverything(metricsProxy.HandleMetricsLabels))
+	mux.HandleFunc(
+		"GET /metrics/labels",
+		jsonOnly(h.withReadEverything(metricsProxy.HandleMetricsLabels)),
+	)
 	mux.HandleFunc(
 		"GET /metrics/labels/{name}",
-		h.withReadEverything(metricsProxy.HandleMetricsLabelValues),
+		jsonOnly(h.withReadEverything(metricsProxy.HandleMetricsLabelValues)),
 	)
 	mux.HandleFunc("GET /metrics", contentNegotiatedWithSSE(
 		h.withReadEverything(metricsProxy.HandleMetrics),
@@ -421,23 +486,24 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"POST /swarm/rotate-token",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostRotateToken),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostRotateToken),
 	)
 	mux.Handle(
 		"POST /swarm/rotate-unlock-key",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostRotateUnlockKey),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostRotateUnlockKey),
 	)
 	mux.Handle(
 		"POST /swarm/force-rotate-ca",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostForceRotateCA),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostForceRotateCA),
 	)
 	mux.Handle("GET /swarm/unlock-key", swarmTier3.ThenFunc(h.HandleGetUnlockKey))
 	mux.Handle(
 		"POST /swarm/unlock",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostUnlockSwarm),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostUnlockSwarm),
 	)
 	mux.Handle("DELETE /tokens/{subject}",
-		swarmTier3.Append(clusterExists).ThenFunc(HandleRevokeSubject(cfg.TokenRevoker)))
+		swarmTier3.Append(clusterExists).AnswersNoContent().
+			ThenFunc(HandleRevokeSubject(cfg.TokenRevoker)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, feedHandlers{}, spa))
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa))
@@ -448,19 +514,19 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"POST /plugins/privileges",
-		pluginWildTier3.Append(clusterExists).ThenFunc(h.HandlePluginPrivileges),
+		pluginWildTier3.Append(clusterExists).AnswersWithABody().ThenFunc(h.HandlePluginPrivileges),
 	)
-	mux.Handle("POST /plugins", pluginWildTier3.ThenFunc(h.HandleInstallPlugin))
+	mux.Handle("POST /plugins", pluginWildTier3.AnswersWithABody().ThenFunc(h.HandleInstallPlugin))
 	mux.Handle(
 		"POST /plugins/{name}/enable",
-		pluginTier2.Append(pluginExists).ThenFunc(h.HandleEnablePlugin),
+		pluginTier2.Append(pluginExists).AnswersNoContent().ThenFunc(h.HandleEnablePlugin),
 	)
 	mux.Handle(
 		"POST /plugins/{name}/disable",
-		pluginTier2.Append(pluginExists).ThenFunc(h.HandleDisablePlugin),
+		pluginTier2.Append(pluginExists).AnswersNoContent().ThenFunc(h.HandleDisablePlugin),
 	)
 	mux.Handle("DELETE /plugins/{name}",
-		pluginTier3.Append(h.precond(h.pluginRepresentation)).
+		pluginTier3.Append(h.precond(h.pluginRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemovePlugin))
 	mux.Handle(
 		"POST /plugins/{name}/upgrade",
@@ -582,7 +648,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		nodeOp(cluster.OpUpdateNode).Append(h.precond(h.nodeRoleRepresentation)).
 			ThenFunc(h.HandleUpdateNodeRole))
 	mux.Handle("DELETE /nodes/{id}",
-		nodeTier3.Append(h.precond(h.nodeRepresentation)).
+		nodeTier3.Append(h.precondTimed(h.nodeRepresentation, h.nodeModified)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
@@ -751,9 +817,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		svcTier3.Append(h.precond(h.serviceEndpointModeRepresentation)).
 			ThenFunc(h.HandleUpdateServiceEndpointMode),
 	)
-	mux.Handle("DELETE /services/{id}",
-		svcOp(cluster.OpRemoveService).Append(h.precond(h.serviceRepresentation)).
-			ThenFunc(h.HandleRemoveService))
+	mux.Handle(
+		"DELETE /services/{id}",
+		svcOp(cluster.OpRemoveService).
+			Append(h.precondTimed(h.serviceRepresentation, h.serviceModified)).
+			AnswersNoContent().
+			ThenFunc(h.HandleRemoveService),
+	)
 
 	// Tasks
 	mux.HandleFunc(
@@ -781,7 +851,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, feedHandlers{}, spa),
 	)
 	mux.Handle("DELETE /tasks/{id}",
-		taskOp(cluster.OpRemoveTask).Append(h.precond(h.taskRepresentation)).
+		taskOp(cluster.OpRemoveTask).Append(h.precond(h.taskRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveTask))
 
 	// History
@@ -848,7 +918,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /configs/{id}",
-		cfgOp(cluster.OpRemoveConfig).Append(h.precond(h.configRepresentation)).
+		cfgOp(cluster.OpRemoveConfig).Append(h.precond(h.configRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveConfig))
 	// The name is in the body, so the handler checks the write grant on it.
 	mux.Handle("POST /configs", createOp(cluster.OpCreateConfig).ThenFunc(h.HandleCreateConfig))
@@ -887,7 +957,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /secrets/{id}",
-		secOp(cluster.OpRemoveSecret).Append(h.precond(h.secretRepresentation)).
+		secOp(cluster.OpRemoveSecret).Append(h.precond(h.secretRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveSecret))
 	mux.Handle("POST /secrets", createOp(cluster.OpCreateSecret).ThenFunc(h.HandleCreateSecret))
 	mux.HandleFunc(
@@ -930,9 +1000,14 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			spa,
 		),
 	)
-	mux.Handle("DELETE /networks/{id}",
-		netOp(cluster.OpRemoveNetwork).Append(h.precond(h.networkRepresentation)).
-			ThenFunc(h.HandleRemoveNetwork))
+	mux.Handle(
+		"DELETE /networks/{id}",
+		netOp(
+			cluster.OpRemoveNetwork,
+		).Append(h.precond(h.networkRepresentation)).
+			AnswersNoContent().
+			ThenFunc(h.HandleRemoveNetwork),
+	)
 
 	// Volumes
 	mux.HandleFunc(
@@ -958,7 +1033,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /volumes/{name}",
-		volOp(cluster.OpRemoveVolume).Append(h.precond(h.volumeRepresentation)).
+		volOp(cluster.OpRemoveVolume).Append(h.precond(h.volumeRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveVolume))
 
 	// Search
@@ -979,10 +1054,13 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		case ContentTypeHTML:
 			spa.ServeHTTP(w, r)
 		case ContentTypeJGF, ContentTypeJSON:
+			allowReads(w)
 			h.HandleTopology(w, r)
 		case ContentTypeGraphML:
+			allowReads(w)
 			h.HandleTopologyGraphML(w, r)
 		case ContentTypeDOT:
+			allowReads(w)
 			h.HandleTopologyDOT(w, r)
 		default:
 			notAcceptable(
@@ -1058,11 +1136,20 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 		// The SPA has no route under /-/ and answers only GET and HEAD, so a
 		// method some route serves at this path is a wrong one, not the
-		// dashboard; under /-/, so is a disabled or unknown endpoint.
+		// dashboard; under /-/, or for a client that rules out HTML, so is a read.
 		meta := strings.HasPrefix(r.URL.Path, "/-/")
-		if meta || r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if allow := mux.allows(r); len(allow) > 0 {
+		if meta || !isSafeMethod(r.Method) || htmlUnacceptable(r.Context()) {
+			if len(mux.allows(r)) > 0 {
+				allow, patch := mux.open(r, h.levelFor(r))
 				w.Header().Set("Allow", strings.Join(allow, ", "))
+				varyByIdentity(w)
+				if r.Method == http.MethodOptions {
+					if patch != "" {
+						w.Header().Set("Accept-Patch", patch)
+					}
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
 				writeProblem(w, r, http.StatusMethodNotAllowed, r.Method+" is not allowed here")
 				return
 			}
@@ -1192,5 +1279,6 @@ func writeIdentityJSONLD(w http.ResponseWriter, r *http.Request, id *auth.Identi
 		return
 	}
 
+	allowReads(w)
 	writeJSON(w, NewDetailResponse(r.Context(), "/auth/whoami", "Identity", id))
 }

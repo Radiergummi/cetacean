@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -177,6 +178,40 @@ func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
 	}
 	if !strings.Contains(body, "parse error: unexpected end of input") {
 		t.Errorf("the error drops Prometheus's reason: %s", body)
+	}
+}
+
+// oversizedProm answers every query with a body one byte over the limit, with
+// or without announcing its length.
+func oversizedProm(announce bool) *httptest.Server {
+	body := bytes.Repeat([]byte("x"), maxResponseBytes+1)
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if !announce {
+			w.(http.Flusher).Flush()
+		}
+		w.Write(body)
+	}))
+}
+
+// A body past the limit is refused whole, before any status is sent, rather
+// than cut short under a 200 the client would read as invalid JSON.
+func TestMetricsProxyHandler_RefusesAnOversizedBody(t *testing.T) {
+	for _, announce := range []bool{true, false} {
+		prom := oversizedProm(announce)
+
+		var code string
+		w := httptest.NewRecorder()
+		NewProxy(prom.URL, func(w http.ResponseWriter, _ *http.Request, c, detail string) {
+			code = c
+			http.Error(w, detail, http.StatusBadGateway)
+		}).HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		prom.Close()
+
+		if w.Code != http.StatusBadGateway || code != "MTR008" {
+			t.Errorf("Content-Length announced = %v: status %d, code %q; want 502 MTR008",
+				announce, w.Code, code)
+		}
 	}
 }
 

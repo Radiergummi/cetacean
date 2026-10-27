@@ -48,7 +48,13 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !tryAcquire(&h.metricsStreamCount, maxMetricsStreamClients) {
+	full := h.metricsStreamCount.Load() >= maxMetricsStreamClients
+	if r.Method == http.MethodHead && !full {
+		sse.ServeHead(w, r)
+		return
+	}
+
+	if full || !tryAcquire(&h.metricsStreamCount, maxMetricsStreamClients) {
 		w.Header().Set("Retry-After", sse.RetryAfter())
 		writeErrorCode(w, r, "MTR005", "too many metrics stream connections")
 		return

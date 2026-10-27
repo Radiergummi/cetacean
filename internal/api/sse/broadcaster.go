@@ -268,6 +268,21 @@ func TypesFilter(r *http.Request) func(cache.Event) bool {
 	return func(e cache.Event) bool { return e.Type == cache.EventSync || types[string(e.Type)] }
 }
 
+// ServeHead answers a HEAD on a stream with the headers a GET opens it with,
+// and reports whether it did. net/http discards a HEAD's body, so a stream
+// served to one never ends; the caller checks its cap first and takes no slot.
+func ServeHead(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodHead {
+		return false
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+
+	return true
+}
+
 func (b *Broadcaster) ServeSSE(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -301,6 +316,11 @@ func (b *Broadcaster) ServeSSE(
 		b.mu.Unlock()
 		w.Header().Set("Retry-After", RetryAfter())
 		b.writeError(w, r, "SSE001", "too many SSE connections from this client")
+		return
+	}
+	if r.Method == http.MethodHead {
+		b.mu.Unlock()
+		ServeHead(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

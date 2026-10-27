@@ -385,6 +385,10 @@ paths:
                 description: Prometheus labels response (proxied as-is)
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -424,6 +428,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -609,6 +617,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -5234,6 +5244,8 @@ paths:
                 $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   # ── Stacks ───────────────────────────────────────────────────────────
 
@@ -6928,7 +6940,8 @@ components:
       description: >
         Optional RFC 9110 precondition. Supply the ETag from a GET on this
         same path; the write is refused with 412 if the resource has
-        changed since. Omitting the header skips the check.
+        changed since. Omitting the header skips the check. If-None-Match
+        and If-Unmodified-Since are evaluated too, in RFC 9110 §13.2.2 order.
       example: '"a1b2c3d4e5f6a1b2"'
 
     IfMatchUnrepresented:
@@ -6985,7 +6998,7 @@ components:
     limit:
       name: limit
       in: query
-      description: Page size
+      description: Page size; a larger value is clamped to 200, and one that is not a positive integer is refused with `API016`
       schema:
         type: integer
         minimum: 1
@@ -6995,7 +7008,7 @@ components:
     offset:
       name: offset
       in: query
-      description: Starting offset for pagination
+      description: Starting offset for pagination; one that is not a non-negative integer is refused with `API016`
       schema:
         type: integer
         minimum: 0
@@ -7006,15 +7019,18 @@ components:
       in: header
       required: false
       description: >
-        Pagination by item range, an alternative to `limit` and `offset`:
-        `items <first>-<last>`, both zero-based and inclusive, with the same
-        200-item cap. Ignored when either query parameter is present. A range
-        that is less than the whole list answers 206 with `Content-Range`; one
-        that starts past the end, or names several ranges, answers 416. JSON
+        Pagination by item range (RFC 9110 §14.2), an alternative to `limit`
+        and `offset`: `items=<first>-<last>`, both zero-based and inclusive,
+        with the same 200-item cap. `items <first>-<last>` is accepted as a
+        deprecated spelling. Ignored when either query parameter is present, and
+        when it is malformed or names several ranges. A range that is less than
+        the whole list answers 206 with `Content-Range`; one that starts past
+        the end answers 416. The 200 and 206 answers carry the collection's
+        ETag, so `If-Range` holds across pages until the list changes. JSON
         only: a CSV download answers 200 with every row.
       schema:
         type: string
-      example: items 0-49
+      example: items=0-49
 
     versions:
       name: versions
@@ -7040,7 +7056,7 @@ components:
     dir:
       name: dir
       in: query
-      description: Sort direction
+      description: Sort direction, in any case; any other value is refused with `API016`, as is a `sort` the list does not name
       schema:
         type: string
         enum: [asc, desc]
@@ -7349,7 +7365,9 @@ components:
             requestId: req_a1b2c3d4e5f6
 
     PreconditionFailed:
-      description: The If-Match precondition failed — the resource has changed since the supplied ETag was read
+      description: >-
+        A precondition failed — If-Match or If-Unmodified-Since, or on a write
+        If-None-Match — so the resource has changed since the supplied validator was read
       content:
         application/problem+json:
           schema:
@@ -7371,8 +7389,7 @@ components:
 
     RangeNotSatisfiable:
       description: >
-        The `Range` starts past the last item, with `Content-Range: items */<total>`,
-        or names more than one range, with no `Content-Range`
+        The `Range` starts past the last item, with `Content-Range: items */<total>`
       headers:
         Content-Range:
           $ref: "#/components/headers/Content-Range"
@@ -7389,7 +7406,7 @@ components:
                 detail: urn:ietf:rfc:9457#detail
                 instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: about:blank
-            title: Requested Range Not Satisfiable
+            title: Range Not Satisfiable
             status: 416
             detail: range start is beyond the total number of items
             instance: /tasks

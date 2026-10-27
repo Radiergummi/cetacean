@@ -129,6 +129,10 @@ func writeRawNegotiated(
 		w.Header().Set("Cache-Control", "no-cache")
 	}
 
+	if refusedByPrecondition(w, r, etag, time.Time{}) {
+		return
+	}
+
 	if etagMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -219,15 +223,12 @@ func writeRenderedJSON(
 	}
 
 	if !lastModified.IsZero() {
-		// RFC 9110 §8.8.2.1: a value later than the response's own origination
-		// date is replaced by it. The engine stamps these, and a manager whose
-		// clock runs ahead of this one would otherwise hand a cache a
-		// representation that never goes stale.
-		if now := time.Now(); lastModified.After(now) {
-			lastModified = now
-		}
-
+		lastModified = notAfterNow(lastModified)
 		w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+	}
+
+	if refusedByPrecondition(w, r, etag, lastModified) {
+		return
 	}
 
 	if notModified(r, etag, lastModified) {
@@ -236,6 +237,68 @@ func writeRenderedJSON(
 	}
 
 	writeEncodedJSON(w, status, doc.body, coding)
+}
+
+// preconditionFailed evaluates the first steps of RFC 9110 §13.2.2, If-Match
+// or else If-Unmodified-Since, and returns why the request must be refused, or
+// "" when it may go on to If-None-Match. A zero lastModified is no date at all.
+func preconditionFailed(r *http.Request, etag string, lastModified time.Time) string {
+	if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
+		if !etagMatchStrong(ifMatch, etag) {
+			return "If-Match did not match the current state of the resource"
+		}
+
+		return ""
+	}
+
+	if modifiedAfter(r.Header.Get("If-Unmodified-Since"), lastModified) {
+		return "the resource was modified after the If-Unmodified-Since date"
+	}
+
+	return ""
+}
+
+// modifiedAfter reports whether lastModified is later than the HTTP-date in
+// field. A field that is not exactly one valid date never is.
+func modifiedAfter(field string, lastModified time.Time) bool {
+	if field == "" {
+		return false
+	}
+
+	t, err := http.ParseTime(field)
+
+	return err == nil &&
+		notAfterNow(lastModified).Truncate(time.Second).After(t.Truncate(time.Second))
+}
+
+// notAfterNow is t, or now when t is later (RFC 9110 §8.8.2.1). The engine
+// stamps these, and a manager whose clock runs ahead would otherwise hand a
+// cache a date that never goes stale, and refuse the same date echoed back.
+func notAfterNow(t time.Time) time.Time {
+	if now := time.Now(); t.After(now) {
+		return now
+	}
+
+	return t
+}
+
+// refusedByPrecondition answers 412 when preconditionFailed says so, and
+// reports whether it did. The body is a problem, so no coding applies to it.
+func refusedByPrecondition(
+	w http.ResponseWriter,
+	r *http.Request,
+	etag string,
+	lastModified time.Time,
+) bool {
+	reason := preconditionFailed(r, etag, lastModified)
+	if reason == "" {
+		return false
+	}
+
+	w.Header().Del("Content-Encoding")
+	writeErrorCode(w, r, "API013", reason)
+
+	return true
 }
 
 // notModified evaluates If-None-Match, or If-Modified-Since when that is absent
