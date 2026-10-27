@@ -7,8 +7,16 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 )
 
+// trackerBegun is a tracker that has been counting for as long as it retains.
+func trackerBegun(horizon, bucket time.Duration) *RestartTracker {
+	rt := NewRestartTracker(horizon, bucket)
+	rt.observing = time.Now().Add(-horizon)
+
+	return rt
+}
+
 func TestRestartTracker_RecordAndCount(t *testing.T) {
-	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
+	rt := trackerBegun(7*24*time.Hour, time.Hour)
 	now := time.Now()
 
 	rt.Record("svc1", now)
@@ -46,7 +54,7 @@ func TestRestartTracker_PruneBeyondHorizon(t *testing.T) {
 }
 
 func TestRestartTracker_LookbackCappedAtHorizon(t *testing.T) {
-	rt := NewRestartTracker(24*time.Hour, time.Hour)
+	rt := trackerBegun(24*time.Hour, time.Hour)
 	now := time.Now()
 
 	rt.Record("svc1", now.Add(-2*time.Hour))
@@ -67,7 +75,7 @@ func TestRestartTracker_Forget(t *testing.T) {
 }
 
 func TestRestartTracker_SnapshotRoundTrip(t *testing.T) {
-	src := NewRestartTracker(24*time.Hour, time.Hour)
+	src := trackerBegun(24*time.Hour, time.Hour)
 	now := time.Now()
 	src.Record("svc1", now)
 	src.Record("svc1", now.Add(-2*time.Hour))
@@ -88,7 +96,7 @@ func TestRestartTracker_SnapshotRoundTrip(t *testing.T) {
 }
 
 func TestRestartTracker_RestorePrunesStale(t *testing.T) {
-	src := NewRestartTracker(24*time.Hour, time.Hour)
+	src := trackerBegun(24*time.Hour, time.Hour)
 	src.Record("svc1", time.Now().Add(-48*time.Hour))
 	snap := src.Snapshot()
 
@@ -379,5 +387,28 @@ func TestRestartTrackerFlappingKeepsNewest(t *testing.T) {
 
 	if !rt.Flapping()["loop"] {
 		t.Error("a late, older failure pushed the recent ones out")
+	}
+}
+
+// Swarm keeps failed tasks for days, and a first sync replays them. Counting
+// those would report them as failures since the tracker began; a loop that
+// started just before it did must still read as flapping.
+func TestRestartTrackerCountsNothingFromBeforeItBegan(t *testing.T) {
+	rt := NewRestartTracker(7*24*time.Hour, time.Hour)
+	now := time.Now()
+
+	rt.Record("old", now.Add(-72*time.Hour))
+	for i := range flappingRestarts {
+		rt.Record("loop", now.Add(-time.Duration(i+1)*5*time.Second))
+	}
+
+	if got := rt.Count("old", 7*24*time.Hour); got != 0 {
+		t.Errorf("a failure from before the tracker began counted: got %d", got)
+	}
+	if got := rt.Count("loop", time.Hour); got != 0 {
+		t.Errorf("failures from before the tracker began counted: got %d", got)
+	}
+	if !rt.Flapping()["loop"] {
+		t.Error("a loop that began before the tracker is not flapping")
 	}
 }

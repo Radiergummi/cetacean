@@ -136,16 +136,18 @@ func (rt *RestartTracker) Record(serviceID string, when time.Time) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	buckets := rt.services[serviceID]
-	if buckets == nil {
-		buckets = make(map[int64]uint32)
-		rt.services[serviceID] = buckets
+	// The buckets cover only what happened since observing, which is what
+	// TrackingSince promises; Swarm's retained tasks are too few to say more.
+	if !when.Before(rt.observing) {
+		buckets := rt.services[serviceID]
+		if buckets == nil {
+			buckets = make(map[int64]uint32)
+			rt.services[serviceID] = buckets
+		}
+
+		buckets[rt.bucketKey(when)]++
+		rt.pruneLocked(buckets, time.Now())
 	}
-
-	key := rt.bucketKey(when)
-	buckets[key]++
-
-	rt.pruneLocked(buckets, time.Now())
 
 	recent := rt.recent[serviceID]
 	at, _ := slices.BinarySearchFunc(recent, when, time.Time.Compare)

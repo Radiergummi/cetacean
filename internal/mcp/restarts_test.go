@@ -32,7 +32,7 @@ func TestDescribeServiceReportsRestartsFromTheTracker(t *testing.T) {
 			Slot:      1,
 			Status: swarm.TaskStatus{
 				State:     swarm.TaskStateFailed,
-				Timestamp: now.Add(-time.Duration(i) * time.Minute),
+				Timestamp: now.Add(time.Duration(i) * time.Millisecond),
 			},
 		})
 	}
