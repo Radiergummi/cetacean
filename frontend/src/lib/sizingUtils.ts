@@ -2,6 +2,7 @@ import type { Recommendation, RecommendationSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
 import { toneBanner, toneText } from "@/lib/statusColor";
 import {
+  Archive,
   ArrowUp,
   CloudDownload,
   Copy,
@@ -58,6 +59,10 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
 
   if (category === "newer-image") {
     return CloudDownload;
+  }
+
+  if (category === "unused-version") {
+    return Archive;
   }
 
   if (category === "flaky-service") {
@@ -144,6 +149,14 @@ export function recommendationLink(hint: Recommendation): string | null {
 
   if (hint.scope === "node") {
     return `/nodes/${hint.targetId}`;
+  }
+
+  if (hint.scope === "secret") {
+    return `/secrets/${hint.targetId}`;
+  }
+
+  if (hint.scope === "config") {
+    return `/configs/${hint.targetId}`;
   }
 
   return null;

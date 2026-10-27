@@ -9,6 +9,7 @@ const categoryLabels: Partial<Record<Recommendation["category"], string>> = {
   "no-healthcheck": "No healthcheck",
   "no-restart-policy": "No restart policy",
   "newer-image": "Newer image",
+  "unused-version": "Unused version",
   "single-replica": "Single replica",
   "manager-has-workloads": "Manager active",
   "uneven-distribution": "Uneven distribution",

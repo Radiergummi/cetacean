@@ -230,6 +230,22 @@ function findServicesUsing(
     .map((service) => ({ id: service.ID, name: service.Spec.Name }));
 }
 
+function servicesUsingConfig(dataset: Dataset, id: string): ServiceRef[] {
+  return findServicesUsing(
+    dataset,
+    ({ Spec }) =>
+      Spec.TaskTemplate?.ContainerSpec?.Configs?.some(({ ConfigID }) => ConfigID === id) ?? false,
+  );
+}
+
+function servicesUsingSecret(dataset: Dataset, id: string): ServiceRef[] {
+  return findServicesUsing(
+    dataset,
+    ({ Spec }) =>
+      Spec.TaskTemplate?.ContainerSpec?.Secrets?.some(({ SecretID }) => SecretID === id) ?? false,
+  );
+}
+
 function deriveStacks(dataset: Dataset) {
   const stacks = new Map<
     string,
@@ -1249,24 +1265,24 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = servicesUsingConfig(dataset, config.ID);
+
       return jsonResponse(
         detailEnvelope(`/configs/${config.ID}`, "Config", {
           config,
-          services: findServicesUsing(
-            dataset,
-            (service) =>
-              service.Spec.TaskTemplate!.ContainerSpec?.Configs?.some(
-                ({ ConfigID }) => ConfigID === config.ID,
-              ) ?? false,
-          ),
+          services,
+          usedBy: services.length,
         } satisfies ConfigDetail),
       );
     }),
 
     get("*/configs", ({ request }) => {
-      return jsonResponse(
-        paginateWrapped(dataset.configs, request, "Config", (c) => `/configs/${c.ID}`),
-      );
+      const items = dataset.configs.map((config) => ({
+        ...config,
+        UsedBy: servicesUsingConfig(dataset, config.ID).length,
+      }));
+
+      return jsonResponse(paginateWrapped(items, request, "Config", (c) => `/configs/${c.ID}`));
     }),
 
     // ---- Secrets ----
@@ -1277,24 +1293,24 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = servicesUsingSecret(dataset, secret.ID);
+
       return jsonResponse(
         detailEnvelope(`/secrets/${secret.ID}`, "Secret", {
           secret,
-          services: findServicesUsing(
-            dataset,
-            (service) =>
-              service.Spec.TaskTemplate!.ContainerSpec?.Secrets?.some(
-                ({ SecretID }) => SecretID === secret.ID,
-              ) ?? false,
-          ),
+          services,
+          usedBy: services.length,
         } satisfies SecretDetail),
       );
     }),
 
     get("*/secrets", ({ request }) => {
-      return jsonResponse(
-        paginateWrapped(dataset.secrets, request, "Secret", (s) => `/secrets/${s.ID}`),
-      );
+      const items = dataset.secrets.map((secret) => ({
+        ...secret,
+        UsedBy: servicesUsingSecret(dataset, secret.ID).length,
+      }));
+
+      return jsonResponse(paginateWrapped(items, request, "Secret", (s) => `/secrets/${s.ID}`));
     }),
 
     // ---- Networks ----

@@ -66,6 +66,9 @@ export const secretSchema = z.looseObject({
   Spec: z.looseObject({ Name: z.string() }),
 });
 
+export const configListSchema = configSchema.extend({ UsedBy: z.number() });
+export const secretListSchema = secretSchema.extend({ UsedBy: z.number() });
+
 /** Docker's network summary keys the id as `Id`, not `ID`. */
 export const networkSchema = z.looseObject({
   Id: z.string(),

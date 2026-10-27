@@ -233,6 +233,19 @@ export interface Secret {
   };
 }
 
+/**
+ * What a config or secret list item adds: the logical resource it is one
+ * version of, when other versions are readable, and how many services use it.
+ */
+export interface VersionedListItem {
+  VersionOf?: string | undefined;
+  VersionInferred?: boolean | undefined;
+  UsedBy: number;
+}
+
+export type ConfigListItem = Config & VersionedListItem;
+export type SecretListItem = Secret & VersionedListItem;
+
 export interface Network {
   "@id"?: string;
   "@type"?: string;
@@ -492,11 +505,17 @@ export interface ServiceDetail {
 export interface ConfigDetail {
   config: Config;
   services: ServiceRef[] | null;
+  versionOf?: string | undefined;
+  versionInferred?: boolean | undefined;
+  usedBy: number;
 }
 
 export interface SecretDetail {
   secret: Secret;
   services: ServiceRef[] | null;
+  versionOf?: string | undefined;
+  versionInferred?: boolean | undefined;
+  usedBy: number;
 }
 
 /**
@@ -849,6 +868,7 @@ export type RecommendationCategory =
   | "no-healthcheck"
   | "no-restart-policy"
   | "newer-image"
+  | "unused-version"
   | "flaky-service"
   | "node-disk-full"
   | "node-memory-pressure"
@@ -860,7 +880,7 @@ export type RecommendationCategory =
   | "quorum-at-risk";
 
 export type RecommendationSeverity = "info" | "warning" | "critical";
-export type RecommendationScope = "service" | "node" | "cluster";
+export type RecommendationScope = "service" | "node" | "cluster" | "secret" | "config";
 
 export interface Recommendation {
   category: RecommendationCategory;

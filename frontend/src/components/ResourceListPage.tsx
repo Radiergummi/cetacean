@@ -25,6 +25,10 @@ interface ResourceListConfig<T> extends UseListPageConfig<T> {
   headerContent?: ReactNode | undefined;
   actions?: ((allowedMethods: Set<string>) => ReactNode) | undefined;
   skeletonColumns?: number | undefined;
+  /**
+   * Reorders or collapses the loaded items before both views render them.
+   */
+  arrange?: ((items: T[]) => T[]) | undefined;
 }
 
 export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
@@ -32,7 +36,7 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
   const { columns: columnsFn } = config;
 
   const {
-    data,
+    data: loaded,
     loading,
     error,
     retry,
@@ -52,6 +56,8 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
     () => columnsFn(sortKey, sortDir, toggle),
     [sortKey, sortDir, toggle, columnsFn],
   );
+
+  const data = config.arrange ? config.arrange(loaded) : loaded;
 
   if (loading) {
     return (

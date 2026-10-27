@@ -1,15 +1,20 @@
 import { api } from "../api/client";
-import type { Secret } from "../api/types";
+import type { SecretListItem } from "../api/types";
 import CreateDataResourceForm from "../components/CreateDataResourceForm";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
-import ResourceName from "../components/ResourceName";
+import { UsedBy, VersionedName, useExpandedVersions } from "../components/ResourceVersions";
 import TimeAgo from "../components/TimeAgo";
 import { sortColumn } from "../lib/sortColumn";
+import { arrangeVersions, type VersionPlacement } from "../lib/versionGroups";
+
+type Row = SecretListItem & VersionPlacement;
 
 export default function SecretList() {
+  const { expanded, toggle: toggleVersions } = useExpandedVersions();
+
   return (
-    <ResourceListPage<Secret>
+    <ResourceListPage<Row>
       title="Secrets"
       path="/secrets"
       sseType="secret"
@@ -17,12 +22,23 @@ export default function SecretList() {
       searchPlaceholder="Search secrets…"
       viewModeKey="secrets"
       fetchFn={(params, signal) => api.secrets(params, signal)}
+      arrange={(items) => arrangeVersions(items, expanded)}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/secrets/${ID}`}
       columns={(sortKey, sortDir, toggle) => [
         {
           ...sortColumn("Name", "name", sortKey, sortDir, toggle),
-          cell: ({ ID, Spec: { Name } }) => <ResourceName name={Name || ID} />,
+          cell: (item) => (
+            <VersionedName
+              item={item}
+              expanded={expanded}
+              onToggle={toggleVersions}
+            />
+          ),
+        },
+        {
+          header: "Used by",
+          cell: (item) => <UsedBy item={item} />,
         },
         {
           ...sortColumn("Created", "created", sortKey, sortDir, toggle),
@@ -33,14 +49,23 @@ export default function SecretList() {
           cell: ({ UpdatedAt }) => (UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"),
         },
       ]}
-      renderCard={({ CreatedAt, ID, Spec: { Name }, UpdatedAt }) => (
+      renderCard={(item) => (
         <ResourceCard
-          title={<ResourceName name={Name || ID} />}
-          to={`/secrets/${ID}`}
+          title={
+            <VersionedName
+              item={item}
+              expanded={expanded}
+              onToggle={toggleVersions}
+            />
+          }
+          to={`/secrets/${item.ID}`}
         >
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-            <span>Created: {CreatedAt ? <TimeAgo date={CreatedAt} /> : "\u2014"}</span>
-            <span>Updated: {UpdatedAt ? <TimeAgo date={UpdatedAt} /> : "\u2014"}</span>
+            <span>
+              Used by: <UsedBy item={item} />
+            </span>
+            <span>Created: {item.CreatedAt ? <TimeAgo date={item.CreatedAt} /> : "\u2014"}</span>
+            <span>Updated: {item.UpdatedAt ? <TimeAgo date={item.UpdatedAt} /> : "\u2014"}</span>
           </div>
         </ResourceCard>
       )}

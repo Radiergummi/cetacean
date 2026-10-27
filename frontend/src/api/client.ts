@@ -5,6 +5,7 @@ import type {
   CollectionResponse,
   Config,
   ConfigDetail,
+  ConfigListItem,
   ContainerConfig,
   DiskUsageSummary,
   DrainImpact,
@@ -27,6 +28,7 @@ import type {
   RecommendationsResponse,
   SearchResponse,
   Secret,
+  SecretListItem,
   SecretDetail,
   SecretEntry,
   ServiceConfigRef,
@@ -881,12 +883,12 @@ export const api = {
   stackCompose: (name: string, signal?: AbortSignal) =>
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Config>("/configs", params, signal, schema.configSchema),
+    fetchRange<ConfigListItem>("/configs", params, signal, schema.configListSchema),
   allConfigs: (signal?: AbortSignal) => fetchAll<Config>("/configs", signal, schema.configSchema),
   config: (id: string, signal?: AbortSignal) =>
     fetchJSON<ConfigDetail>(`/configs/${id}`, signal, schema.configDetailSchema),
   secrets: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Secret>("/secrets", params, signal, schema.secretSchema),
+    fetchRange<SecretListItem>("/secrets", params, signal, schema.secretListSchema),
   allSecrets: (signal?: AbortSignal) => fetchAll<Secret>("/secrets", signal, schema.secretSchema),
   secret: (id: string, signal?: AbortSignal) =>
     fetchJSON<SecretDetail>(`/secrets/${id}`, signal, schema.secretDetailSchema),

@@ -60,6 +60,7 @@ describe("SecretEntryPage", () => {
     vi.mocked(api.completeSecretEntry).mockResolvedValue({
       secret: { ID: "sec1" } as SecretDetail["secret"],
       services: [],
+      usedBy: 0,
     });
 
     renderAt("/secrets/new?elicitation=ENTRY1");
@@ -78,6 +79,7 @@ describe("SecretEntryPage", () => {
     vi.mocked(api.completeSecretEntry).mockResolvedValue({
       secret: { ID: "sec1" } as SecretDetail["secret"],
       services: [],
+      usedBy: 0,
     });
 
     renderAt("/secrets/new?elicitation=ENTRY1");

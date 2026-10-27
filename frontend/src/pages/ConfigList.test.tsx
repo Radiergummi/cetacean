@@ -1,4 +1,4 @@
-import type { Config } from "../api/types";
+import type { ConfigListItem } from "../api/types";
 import {
   MockEventSource,
   createTestQueryClient,
@@ -22,12 +22,13 @@ vi.mock("../api/client", () => ({
 import { api } from "../api/client";
 const mockConfigs = vi.mocked(api.configs);
 
-const fakeConfig = (id: string, name: string): Config => ({
+const fakeConfig = (id: string, name: string): ConfigListItem => ({
   ID: id,
   Version: { Index: 1 },
   CreatedAt: "2024-01-01T00:00:00Z",
   UpdatedAt: "2024-01-02T00:00:00Z",
   Spec: { Name: name, Labels: {} },
+  UsedBy: 0,
 });
 
 let testQueryClient: QueryClient;
