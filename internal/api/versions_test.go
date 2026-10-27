@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -327,7 +328,7 @@ func TestGetVersions(t *testing.T) {
 func TestSecretStreamHearsItsVersions(t *testing.T) {
 	c := versionedCache()
 	h := newTestHandlers(t, withCache(c))
-	match := h.resourceMatcher(cache.EventSecret, "db_v2")
+	match := sse.VersionMatcher(h.versions, cache.EventSecret, "db_v2")
 
 	var events []cache.Event
 	c.AddOnChangeListener(func(e cache.Event) { events = append(events, e) })

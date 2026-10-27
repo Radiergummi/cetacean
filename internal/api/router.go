@@ -840,7 +840,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiatedWithSSE(
 			h.HandleGetConfig,
 			func(w http.ResponseWriter, r *http.Request) {
-				h.streamResource(w, r, cache.EventConfig, r.PathValue("id"))
+				h.streamVersioned(w, r, cache.EventConfig, r.PathValue("id"))
 			},
 			h.detailFeeds(cache.EventConfig, "id", func(id string) string {
 				if c, ok := h.cache.GetConfig(id); ok {
@@ -879,7 +879,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiatedWithSSE(
 			h.HandleGetSecret,
 			func(w http.ResponseWriter, r *http.Request) {
-				h.streamResource(w, r, cache.EventSecret, r.PathValue("id"))
+				h.streamVersioned(w, r, cache.EventSecret, r.PathValue("id"))
 			},
 			h.detailFeeds(cache.EventSecret, "id", func(id string) string {
 				if s, ok := h.cache.GetSecret(id); ok {

@@ -576,6 +576,21 @@ func NetworkMatcher(c *cache.Cache, id string) func(cache.Event) bool {
 	}
 }
 
+// VersionMatcher returns a match function for a config's or secret's SSE
+// stream: its own events, and those that change its versions, by the rule
+// cluster.VersionIndex.TouchesDigest gives MCP subscribers too.
+func VersionMatcher(
+	versions *cluster.VersionIndex,
+	typ cache.EventType,
+	id string,
+) func(cache.Event) bool {
+	own := ResourceMatcher(typ, id)
+
+	return func(e cache.Event) bool {
+		return own(e) || versions.TouchesDigest(e, typ, id)
+	}
+}
+
 // StackMatcher returns a match function for stack SSE streams.
 // Looks up the current stack membership from the cache on every event so that
 // newly added or removed services are immediately reflected in the stream.

@@ -160,20 +160,17 @@ func (h *Handlers) streamResource(
 ) {
 	// No replay for per-resource streams: cross-resource matchers can't be
 	// reconstructed from history, so reconnects fall back to a sync event.
-	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, h.resourceMatcher(typ, id)), "")
+	resMatch := sse.ResourceMatcher(typ, id)
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
 }
 
-// resourceMatcher is what a resource's stream hears: events naming it, and for
-// a config or secret those that change its versions, as MCP subscribers do.
-func (h *Handlers) resourceMatcher(typ cache.EventType, id string) func(cache.Event) bool {
-	named := sse.ResourceMatcher(typ, id)
-	if typ != cache.EventConfig && typ != cache.EventSecret {
-		return named
-	}
-
-	return func(ev cache.Event) bool {
-		return named(ev) || h.versions.TouchesDigest(ev, typ, id)
-	}
+// streamVersioned is streamResource for a config or secret, whose stream also
+// hears its other versions come, go or move.
+func (h *Handlers) streamVersioned(
+	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
+) {
+	match := sse.VersionMatcher(h.versions, typ, id)
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, match), "")
 }
 
 // aclMatchWrap wraps an SSE match function with an ACL authorization check.
