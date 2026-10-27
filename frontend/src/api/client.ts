@@ -36,7 +36,7 @@ import type {
   ServiceNetworkRef,
   ServiceSecretRef,
   Stack,
-  StackDetail,
+  StackResponse,
   StackSummary,
   SwarmInfo,
   Task,
@@ -873,11 +873,11 @@ export const api = {
       schema.collectionOf(schema.stackSummarySchema),
     ).then(({ data }) => data.items),
   stack: (name: string, signal?: AbortSignal) =>
-    fetchJSON<{ stack: StackDetail }>(
-      `/stacks/${name}`,
+    fetchJSON<StackResponse>(
+      `/stacks/${encodeURIComponent(name)}`,
       signal,
       schema.stackDetailResponseSchema,
-    ).then(({ data, ...rest }) => ({ data: data.stack, ...rest })),
+    ),
   stackCompose: (name: string, signal?: AbortSignal) =>
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>

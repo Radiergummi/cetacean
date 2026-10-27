@@ -3,7 +3,7 @@ import StackDetail from "./StackDetail";
 import { api } from "@/api/client";
 import { createTestQueryClient } from "@/test/mocks";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,7 +46,7 @@ const stack = {
 beforeEach(() => {
   subscriber = undefined;
   vi.mocked(api.stack).mockResolvedValue({
-    data: stack,
+    data: { stack },
     allowedMethods: new Set<string>(),
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
@@ -85,4 +85,54 @@ describe("StackDetail", () => {
       });
     });
   });
+
+  it("shows the stack's links under the title", async () => {
+    vi.mocked(api.stack).mockResolvedValue({
+      data: {
+        stack,
+        links: [
+          {
+            id: "grafana",
+            title: "Dashboard",
+            href: "https://grafana.example.com",
+            services: ["web_api"],
+          },
+        ],
+      },
+      allowedMethods: new Set<string>(),
+    } as never);
+
+    renderStackDetail();
+
+    const link = await screen.findByRole("link", { name: "Dashboard" });
+
+    expect(link).toHaveAttribute("href", "https://grafana.example.com");
+  });
+
+  // An always-present row would add an empty gap under every stack's header.
+  it("renders no links row when the stack has no links", async () => {
+    const { container } = renderStackDetail();
+
+    await screen.findByRole("heading", { name: "web" });
+
+    const header = container.querySelector("header");
+
+    expect(screen.queryByRole("list", { name: "Links" })).not.toBeInTheDocument();
+    expect(Array.from(header?.children ?? []).every((child) => child.hasChildNodes())).toBe(true);
+  });
 });
+
+function renderStackDetail() {
+  return render(
+    <QueryClientProvider client={createTestQueryClient()}>
+      <MemoryRouter initialEntries={["/stacks/web"]}>
+        <Routes>
+          <Route
+            path="/stacks/:name"
+            element={<StackDetail />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}

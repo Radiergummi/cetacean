@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
 - A published ports page at `/ports` (`g` `o`, or from the networks list) lists every port the services publish, with the service, stack and publish mode; `GET /ports` and the MCP tool `get_published_ports` serve the same list
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable

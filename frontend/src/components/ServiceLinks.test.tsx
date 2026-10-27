@@ -1,0 +1,124 @@
+import ServiceLinks from "./ServiceLinks";
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+
+describe("ServiceLinks", () => {
+  it("renders an href as a link opening in a new tab", () => {
+    render(
+      <ServiceLinks
+        links={[{ id: "grafana", title: "Dashboard", href: "https://grafana.example.com" }]}
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: /Dashboard/ });
+
+    expect(link).toHaveAttribute("href", "https://grafana.example.com");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("renders a text value as plain text, never a link", () => {
+    render(
+      <ServiceLinks links={[{ id: "oncall", title: "On call", text: "javascript:alert(1)" }]} />,
+    );
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText(/javascript:alert\(1\)/)).toBeInTheDocument();
+  });
+
+  // A stack merges only exact duplicates, so one id and URL can arrive under two titles.
+  it("keys each entry by every field", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <ServiceLinks
+        links={[
+          { id: "repo", title: "Code", href: "https://git.example.com" },
+          { id: "repo", title: "repo", href: "https://git.example.com" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Code" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "repo" })).toBeInTheDocument();
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it("truncates a long text entry and keeps its full value in a tooltip", () => {
+    render(<ServiceLinks links={[{ id: "note", title: "Note", text: "x".repeat(300) }]} />);
+
+    const entry = screen.getByText(/^Note: x+$/);
+
+    expect(entry).toHaveClass("truncate");
+    expect(entry).toHaveAttribute("title", `Note: ${"x".repeat(300)}`);
+  });
+
+  it("tells same-titled links apart by id, as on a service page", () => {
+    render(
+      <ServiceLinks
+        links={[
+          { id: "grafana", title: "Dashboard", href: "https://grafana.example.com" },
+          { id: "kibana", title: "Dashboard", href: "https://kibana.example.com" },
+          { id: "oncall", title: "Dashboard", text: "pager:web" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Dashboard · grafana" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard · kibana" })).toBeInTheDocument();
+    expect(screen.getByText("Dashboard · oncall: pager:web")).toBeInTheDocument();
+  });
+
+  it("prefers the id to the services where only titles collide on a stack", () => {
+    render(
+      <ServiceLinks
+        links={[
+          {
+            id: "grafana",
+            title: "Dashboard",
+            href: "https://grafana.example.com",
+            services: ["app_api"],
+          },
+          {
+            id: "kibana",
+            title: "Dashboard",
+            href: "https://kibana.example.com",
+            services: ["app_api"],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Dashboard · grafana" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard · kibana" })).toBeInTheDocument();
+  });
+
+  it("names the declaring services where titles and ids collide", () => {
+    render(
+      <ServiceLinks
+        links={[
+          {
+            id: "grafana",
+            title: "grafana",
+            href: "https://grafana.example.com/api",
+            services: ["app_api"],
+          },
+          {
+            id: "grafana",
+            title: "grafana",
+            href: "https://grafana.example.com/worker",
+            services: ["app_worker", "app_cron"],
+          },
+          { id: "repo", title: "repo", href: "https://git.example.com", services: ["app_api"] },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "grafana · app_api" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "grafana · app_worker, app_cron" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "repo" })).toBeInTheDocument();
+  });
+});

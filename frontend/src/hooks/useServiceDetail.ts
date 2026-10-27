@@ -6,6 +6,7 @@ import type {
   PortConfig,
   Service,
   ServiceDetail,
+  ServiceLink,
   ServiceMount,
   SpecChange,
   Task,
@@ -32,6 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 // Stable empties, so an absent list does not remount every consumer.
 const emptyChanges: SpecChange[] = [];
 const emptyIntegrations: Integration[] = [];
+const emptyLinks: ServiceLink[] = [];
 const emptyTasks: Task[] = [];
 
 /**
@@ -118,7 +120,7 @@ export function useServiceDetail(id: string | undefined) {
           return { ...previous, service };
         });
 
-        // The integrations are read from the labels on the server.
+        // The integrations and links are read from the labels on the server.
         if (labelsChanged) {
           refetch();
         }
@@ -153,6 +155,7 @@ export function useServiceDetail(id: string | undefined) {
   const service = detail?.service ?? null;
   const changes = detail?.changes ?? emptyChanges;
   const integrations = detail?.integrations ?? emptyIntegrations;
+  const links = detail?.links ?? emptyLinks;
   const imageUpdate = detail?.imageUpdate;
 
   // A recommendation names its target by ID, so a name-addressed page matches
@@ -283,6 +286,7 @@ export function useServiceDetail(id: string | undefined) {
     containerConfig,
     onContainerConfigSaved: setContainerConfig,
     integrations,
+    links,
     imageUpdate,
     allowedMethods,
     editable,
