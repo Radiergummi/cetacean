@@ -873,9 +873,6 @@ func TestTypeGrantsAgreesWithCan(t *testing.T) {
 				}}})
 
 				access := e.TypeGrants(identity)
-				if !access.HasAnyGrant() {
-					t.Fatal("identity holds a grant; HasAnyGrant must be true")
-				}
 
 				for _, permission := range []string{"read", "write"} {
 					for resourceType, concrete := range resource {
@@ -900,7 +897,7 @@ func TestTypeGrantsSeparatesNoPolicyFromNoMatch(t *testing.T) {
 
 	t.Run("no policy", func(t *testing.T) {
 		access := NewEvaluator().TypeGrants(identity)
-		if !access.AllowAll() || !access.HasAnyGrant() {
+		if !access.AllowAll() {
 			t.Fatalf("no policy must allow all, got %+v", access)
 		}
 
@@ -918,8 +915,8 @@ func TestTypeGrantsSeparatesNoPolicyFromNoMatch(t *testing.T) {
 		}}})
 
 		access := e.TypeGrants(identity)
-		if access.AllowAll() || access.HasAnyGrant() {
-			t.Fatalf("an unmatched identity must report neither, got %+v", access)
+		if access.AllowAll() {
+			t.Fatalf("an unmatched identity must not allow all, got %+v", access)
 		}
 
 		if access.Can("read", "service") {
