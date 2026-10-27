@@ -19,8 +19,22 @@ import (
 const Label = "cetacean.version-of"
 
 // suffix is a version stamp: a hash of eight or more hex digits, or a v-number.
-// A bare short number is not one; `worker_1` and `worker_2` are siblings.
-var suffix = regexp.MustCompile(`(?i)[_-](?:[0-9a-f]{8,}|v[0-9]+)$`)
+// A number alone is not one, short or long: `worker_1` and `backup_20240101`
+// are siblings, so stripSuffix also wants a hash to hold a letter.
+var suffix = regexp.MustCompile(`(?i)[_-](?:([0-9a-f]{8,})|v[0-9]+)$`)
+
+func stripSuffix(name string) string {
+	m := suffix.FindStringSubmatchIndex(name)
+	if m == nil {
+		return name
+	}
+
+	if hash := m[2]; hash >= 0 && !strings.ContainsAny(strings.ToLower(name[hash:m[3]]), "abcdef") {
+		return name
+	}
+
+	return name[:m[0]]
+}
 
 // Item is what grouping reads of a config or secret.
 type Item struct {
@@ -53,7 +67,7 @@ func Key(it Item) GroupKey {
 
 	name := it.Labels[Label]
 	if name == "" {
-		name = suffix.ReplaceAllString(it.Name, "")
+		name = stripSuffix(it.Name)
 	}
 
 	if stack != "" {

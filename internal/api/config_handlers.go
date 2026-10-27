@@ -58,12 +58,7 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 
 	handleListOf(h, w, r, spec, func(c ConfigListItem) string { return "/configs/" + c.ID },
 		func(page []swarm.Config) []ConfigListItem {
-			items := make([]ConfigListItem, len(page))
-			for i, cfg := range page {
-				items[i] = ConfigListItem{Config: cfg, VersionFields: versions.Fields(cfg.ID)}
-			}
-
-			return items
+			return cluster.VersionedConfigs(*versions, page, cluster.VersionSelection{All: true})
 		},
 	)
 }

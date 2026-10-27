@@ -425,9 +425,6 @@ func TestConfigDigestReportsSizeBytes(t *testing.T) {
 	}
 }
 
-// A secret's digest must never leak its data, not even accidentally through
-// some other field's formatting — the same style as ServiceDetails' env-leak
-// test.
 // A service only a previous spec ties to a secret is told apart from one using
 // it now, so a rotation repoints only the latter.
 func TestSecretDigestMarksRollbackUsers(t *testing.T) {
@@ -446,6 +443,9 @@ func TestSecretDigestMarksRollbackUsers(t *testing.T) {
 	}
 }
 
+// A secret's digest must never leak its data, not even accidentally through
+// some other field's formatting — the same style as ServiceDetails' env-leak
+// test.
 func TestSecretDigestNeverLeaksData(t *testing.T) {
 	sec := swarm.Secret{
 		ID: "s1",

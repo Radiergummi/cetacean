@@ -80,6 +80,21 @@ func TestGroup(t *testing.T) {
 			map[string]placed{},
 		},
 		{
+			"an all-digit suffix is not a hash",
+			[]Item{
+				item("a", "backup_20240101", 1, nil),
+				item("b", "backup_20240102", 2, nil),
+				item("c", "tenant-10000001", 3, nil),
+				item("d", "tenant-10000002", 4, nil),
+			},
+			map[string]placed{},
+		},
+		{
+			"a hash with a letter is one, digits around it or not",
+			[]Item{item("a", "app_1234567a", 1, nil), item("b", "app_b2345678", 2, nil)},
+			map[string]placed{"a": {"app", true, 1}, "b": {"app", true, 0}},
+		},
+		{
 			"short hex suffixes are not versions",
 			[]Item{item("a", "app_abc123", 1, nil), item("b", "app_def456", 2, nil)},
 			map[string]placed{},

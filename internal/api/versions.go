@@ -19,14 +19,25 @@ func versionedList[T any](
 ) *cluster.VersionView {
 	versions := new(cluster.VersionView)
 
-	// Runs only once a page is rendered, after a 304 would have answered.
-	spec.narrow = func(readable []T) ([]T, error) {
+	selection := func(r *http.Request) (cluster.VersionSelection, error) {
 		query := r.URL.Query()
 		searching := query.Get("search") != "" || query.Get("filter") != ""
 
-		sel, err := cluster.ParseVersionSelection(
+		return cluster.ParseVersionSelection(
 			query.Get("versions"), query.Get("versionsOf"), searching,
 		)
+	}
+
+	spec.validate = func(r *http.Request) error {
+		_, err := selection(r)
+		return err
+	}
+
+	// Runs only once a page is rendered, after a 304 would have answered.
+	spec.narrow = func(readable []T) ([]T, error) {
+		query := r.URL.Query()
+
+		sel, err := selection(r)
 		if err != nil {
 			return nil, err
 		}

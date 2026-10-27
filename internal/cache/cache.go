@@ -187,6 +187,10 @@ type Cache struct {
 	// report a wholly replaced cache as unchanged.
 	generation atomic.Uint64
 
+	// versionGeneration advances only on a config, secret or service change, or
+	// a resync, which is all that config and secret versions are derived from.
+	versionGeneration atomic.Uint64
+
 	addresses     atomic.Pointer[addressMemo]
 	addressCounts singleflight.Group
 }
@@ -197,6 +201,10 @@ type Cache struct {
 // already be stale by the time a caller uses it — the same window a response
 // has between being rendered and being written.
 func (c *Cache) Generation() uint64 { return c.generation.Load() }
+
+// VersionGeneration is Generation counted over configs, secrets and services
+// alone, the inputs of config and secret version groups.
+func (c *Cache) VersionGeneration() uint64 { return c.versionGeneration.Load() }
 
 func New(onChange OnChangeFunc) *Cache {
 	c := &Cache{
@@ -352,6 +360,12 @@ func (c *Cache) notify(e Event) {
 	// Every event means the contents changed, a resync included.
 	c.generation.Add(1)
 
+	switch e.Type {
+	case EventConfig, EventSecret, EventService, EventSync:
+		c.versionGeneration.Add(1)
+	default:
+	}
+
 	if e.Action == "remove" && e.Service == "" && e.Stack == "" {
 		e.Service, e.Stack = c.removedFrom(e.Resource)
 	}
@@ -442,16 +456,16 @@ func serviceRefs(s swarm.Service) refSet {
 		for _, c := range prev.TaskTemplate.ContainerSpec.Configs {
 			r.configs[c.ConfigID] = false
 		}
-		for _, s := range prev.TaskTemplate.ContainerSpec.Secrets {
-			r.secrets[s.SecretID] = false
+		for _, sec := range prev.TaskTemplate.ContainerSpec.Secrets {
+			r.secrets[sec.SecretID] = false
 		}
 	}
 	if cs := s.Spec.TaskTemplate.ContainerSpec; cs != nil {
 		for _, c := range cs.Configs {
 			r.configs[c.ConfigID] = true
 		}
-		for _, s := range cs.Secrets {
-			r.secrets[s.SecretID] = true
+		for _, sec := range cs.Secrets {
+			r.secrets[sec.SecretID] = true
 		}
 		for _, m := range cs.Mounts {
 			if m.Type == "volume" && m.Source != "" {

@@ -60,12 +60,7 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 
 	handleListOf(h, w, r, spec, func(s SecretListItem) string { return "/secrets/" + s.ID },
 		func(page []swarm.Secret) []SecretListItem {
-			items := make([]SecretListItem, len(page))
-			for i, sec := range page {
-				items[i] = SecretListItem{Secret: sec, VersionFields: versions.Fields(sec.ID)}
-			}
-
-			return items
+			return cluster.VersionedSecrets(*versions, page, cluster.VersionSelection{All: true})
 		},
 	)
 }

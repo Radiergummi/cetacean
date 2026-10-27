@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -40,6 +41,38 @@ func (v Version) Fields(usedBy int) VersionFields {
 		OlderVersions:   v.OlderVersions,
 		UsedBy:          usedBy,
 	}
+}
+
+// VersionDetail is VersionFields as a config's or secret's detail spells it.
+type VersionDetail struct {
+	VersionOf       string `json:"versionOf,omitempty"`
+	VersionInferred bool   `json:"versionInferred,omitempty"`
+	NewestVersion   bool   `json:"newestVersion,omitempty"`
+	OlderVersions   int    `json:"olderVersions,omitempty"`
+	UsedBy          int    `json:"usedBy"`
+}
+
+// Detail spells v for a detail, with usedBy readable services using it.
+func (v Version) Detail(usedBy int) VersionDetail { return VersionDetail(v.Fields(usedBy)) }
+
+// Map is d as a map, holding exactly the keys its JSON does, for a detail
+// that is a map rather than a struct.
+func (d VersionDetail) Map() map[string]any {
+	out := map[string]any{"usedBy": d.UsedBy}
+	if d.VersionOf != "" {
+		out["versionOf"] = d.VersionOf
+	}
+	if d.VersionInferred {
+		out["versionInferred"] = true
+	}
+	if d.NewestVersion {
+		out["newestVersion"] = true
+	}
+	if d.OlderVersions != 0 {
+		out["olderVersions"] = d.OlderVersions
+	}
+
+	return out
 }
 
 // VersionedConfig is a config as a listing shows it.
@@ -229,9 +262,9 @@ func AnnotateVersionRows(rows []Row, v VersionView) {
 // VersionRef names one config or secret in a VersionIndex.
 type VersionRef struct{ ID, Name string }
 
-// VersionIndex holds every config's and secret's group, rebuilt once per cache
-// generation, so one item's siblings are found without matching every name in
-// the cluster on each read.
+// VersionIndex holds every config's and secret's group, rebuilt only once a
+// config, secret or service changes (cache.VersionGeneration), so one item's
+// siblings are found without matching every name in the cluster on each read.
 type VersionIndex struct {
 	cache *cache.Cache
 
@@ -240,6 +273,19 @@ type VersionIndex struct {
 	generation uint64
 	configs    map[versions.GroupKey][]VersionRef
 	secrets    map[versions.GroupKey][]VersionRef
+
+	// touched is the last event's answer: every stream and subscription asks
+	// about the same event in turn, so it is worked out once.
+	touched atomic.Pointer[touchedMemo]
+}
+
+// touchedMemo keys on more than the history ID, which a resync shares with
+// the change that follows it.
+type touchedMemo struct {
+	historyID        uint64
+	typ              cache.EventType
+	id, action       string
+	configs, secrets []VersionRef
 }
 
 // NewVersionIndex indexes c's configs and secrets on first use.
@@ -259,7 +305,7 @@ func (x *VersionIndex) current() (configs, secrets map[versions.GroupKey][]Versi
 	x.mu.Lock()
 	defer x.mu.Unlock()
 
-	generation := x.cache.Generation()
+	generation := x.cache.VersionGeneration()
 	if x.built && x.generation == generation {
 		return x.configs, x.secrets
 	}
@@ -320,6 +366,29 @@ func (x *VersionIndex) SecretVersion(sec swarm.Secret, canRead func(resource str
 // group, and in the group an update took it out of. A service's references
 // need nothing here: the cache sends ref_changed for each one gained or lost.
 func (x *VersionIndex) DigestsTouchedBy(event cache.Event) (configs, secrets []VersionRef) {
+	if event.HistoryID == 0 {
+		return x.digestsTouchedBy(event)
+	}
+
+	if memo := x.touched.Load(); memo != nil && memo.historyID == event.HistoryID &&
+		memo.typ == event.Type && memo.id == event.ID && memo.action == event.Action {
+		return memo.configs, memo.secrets
+	}
+
+	configs, secrets = x.digestsTouchedBy(event)
+	x.touched.Store(&touchedMemo{
+		historyID: event.HistoryID,
+		typ:       event.Type,
+		id:        event.ID,
+		action:    event.Action,
+		configs:   configs,
+		secrets:   secrets,
+	})
+
+	return configs, secrets
+}
+
+func (x *VersionIndex) digestsTouchedBy(event cache.Event) (configs, secrets []VersionRef) {
 	switch resource := event.Resource.(type) {
 	case swarm.Config:
 		all, _ := x.current()

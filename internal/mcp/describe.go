@@ -313,13 +313,7 @@ func digestibleResourceType(uri string) (string, bool) {
 // withVersion adds to a config or secret digest its version group, found among
 // what the caller may read, and how many of the services it may read use it.
 func withVersion(d cluster.Digest, v cluster.Version, usedBy int) cluster.Digest {
-	d.Details["usedBy"] = usedBy
-	if v.Of != "" {
-		d.Details["versionOf"] = v.Of
-		d.Details["versionInferred"] = v.Inferred
-		d.Details["newestVersion"] = v.Newest
-		d.Details["olderVersions"] = v.OlderVersions
-	}
+	maps.Copy(d.Details, v.Detail(usedBy).Map())
 
 	return d
 }

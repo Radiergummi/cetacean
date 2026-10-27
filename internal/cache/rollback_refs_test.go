@@ -83,3 +83,20 @@ func TestRemovingAServiceDropsItsPreviousSpecReferences(t *testing.T) {
 		t.Errorf("ref_changed for %v, want v1 among them", changed)
 	}
 }
+
+// Config and secret versions are derived from configs, secrets and services
+// alone, so a task changing leaves their counter where it was.
+func TestVersionGenerationIgnoresTasks(t *testing.T) {
+	c := New(nil)
+	before := c.VersionGeneration()
+
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc"})
+	if c.VersionGeneration() != before {
+		t.Error("a task event advanced the version generation")
+	}
+
+	c.SetSecret(swarm.Secret{ID: "s1"})
+	if c.VersionGeneration() == before {
+		t.Error("a secret event left the version generation where it was")
+	}
+}

@@ -78,7 +78,6 @@ func (idx *serviceRefIndex) remove(s swarm.Service, refs refSet) {
 // rebuild clears and repopulates all indexes from the given service map.
 func (idx *serviceRefIndex) rebuild(services map[string]swarm.Service) {
 	*idx = newServiceRefIndex()
-	idx.byName = make(map[string]string, len(services))
 	for _, svc := range services {
 		idx.add(svc, serviceRefs(svc))
 	}

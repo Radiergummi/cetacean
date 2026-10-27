@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"encoding/json"
+	"maps"
 	"slices"
 	"testing"
 	"time"
@@ -145,6 +147,59 @@ func TestVersionIndex(t *testing.T) {
 
 // A version relabelled into another group leaves its old one, whose members
 // must hear of it as well as those of the group it joins.
+// The REST detail marshals VersionDetail and MCP's digest copies Map; both
+// must carry the same keys, an ungrouped item's newestVersion included.
+func TestVersionDetailMapMatchesItsJSON(t *testing.T) {
+	for _, v := range []Version{
+		{Newest: true},
+		{Of: "db", Inferred: true, Newest: true, OlderVersions: 2},
+		{Of: "db"},
+	} {
+		body, err := json.Marshal(v.Detail(1))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var fromJSON map[string]any
+		if err := json.Unmarshal(body, &fromJSON); err != nil {
+			t.Fatal(err)
+		}
+
+		if got, want := slices.Sorted(
+			maps.Keys(v.Detail(1).Map()),
+		), slices.Sorted(
+			maps.Keys(fromJSON),
+		); !slices.Equal(
+			got,
+			want,
+		) {
+			t.Errorf("%+v: Map keys %v, JSON keys %v", v, got, want)
+		}
+	}
+}
+
+// Every stream asks about one event in turn; the answer is worked out for the
+// first and handed to the rest, even once the cache has moved on.
+func TestVersionIndexAnswersEachEventOnce(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(versionedSecret("db_v1", 1))
+
+	var event cache.Event
+	c.AddOnChangeListener(func(e cache.Event) { event = e })
+	c.SetSecret(versionedSecret("db_v2", 2))
+
+	created := event
+	index := NewVersionIndex(c)
+	_, first := index.DigestsTouchedBy(created)
+
+	c.SetSecret(versionedSecret("db_v3", 3))
+	_, again := index.DigestsTouchedBy(created)
+
+	if len(first) != 1 || len(again) != 1 {
+		t.Errorf("touched %v, then %v for the same event, want db_v1 both times", first, again)
+	}
+}
+
 func TestVersionIndexFollowsARelabel(t *testing.T) {
 	c := cache.New(nil)
 	for i, name := range []string{"db_v1", "db_v2", "other_v1"} {

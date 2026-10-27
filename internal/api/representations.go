@@ -392,9 +392,9 @@ func (h *Handlers) configBody(r *http.Request, cfg swarm.Config) ConfigResponse 
 	version := h.versions.ConfigVersion(cfg, h.readChecker(r))
 
 	return ConfigResponse{
-		Config:              cfg,
-		Services:            users,
-		DetailVersionFields: DetailVersionFields(version.Fields(len(users))),
+		Config:        cfg,
+		Services:      users,
+		VersionDetail: version.Detail(len(users)),
 	}
 }
 
@@ -416,9 +416,9 @@ func (h *Handlers) secretBody(r *http.Request, sec swarm.Secret) SecretResponse 
 	version := h.versions.SecretVersion(sec, h.readChecker(r))
 
 	return SecretResponse{
-		Secret:              cluster.RedactSecret(sec),
-		Services:            users,
-		DetailVersionFields: DetailVersionFields(version.Fields(len(users))),
+		Secret:        cluster.RedactSecret(sec),
+		Services:      users,
+		VersionDetail: version.Detail(len(users)),
 	}
 }
 

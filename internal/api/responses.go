@@ -63,27 +63,18 @@ type TaskNodeRef struct {
 	Hostname string `json:"hostname"`
 }
 
-// DetailVersionFields is cluster.VersionFields as a detail spells it.
-type DetailVersionFields struct {
-	VersionOf       string `json:"versionOf,omitempty"`
-	VersionInferred bool   `json:"versionInferred,omitempty"`
-	NewestVersion   bool   `json:"newestVersion,omitempty"`
-	OlderVersions   int    `json:"olderVersions,omitempty"`
-	UsedBy          int    `json:"usedBy"`
-}
-
 // ConfigResponse is the extra payload for GET /configs/{id}.
 type ConfigResponse struct {
 	Config   swarm.Config       `json:"config"`
 	Services []cache.ServiceRef `json:"services"`
-	DetailVersionFields
+	cluster.VersionDetail
 }
 
 // SecretResponse is the extra payload for GET /secrets/{id}.
 type SecretResponse struct {
 	Secret   swarm.Secret       `json:"secret"`
 	Services []cache.ServiceRef `json:"services"`
-	DetailVersionFields
+	cluster.VersionDetail
 }
 
 // NetworkResponse is the extra payload for GET /networks/{id}.

@@ -22,6 +22,7 @@ type listSpec[T any] struct {
 	sortKeys     map[string]func(T) string                     // sort field accessors
 	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
 	narrow       func(readable []T) ([]T, error)               // optional: sees every readable item, before search; an error is a 400
+	validate     func(*http.Request) error                     // optional: checks the query before any 304; an error is a 400
 	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
 	idFunc       func(T) string                                // extracts JSON-LD @id path for each item
 	rows         func([]T) []cluster.Row                       // builds the CSV rendering; required unless csv is set
@@ -78,7 +79,15 @@ func handleListOf[T, U any](
 	// A list is a pure function of the cache, the caller's grants and the
 	// request, so the validator is knowable before any of the work. Answering
 	// here skips the cache read, the filtering, the sort and the marshal that
-	// a 304 would otherwise pay for in full.
+	// a 304 would otherwise pay for in full. A query the list refuses is
+	// refused first: no validator vouches for a request that has no answer.
+	if spec.validate != nil {
+		if err := spec.validate(r); err != nil {
+			writeErrorCode(w, r, "API016", err.Error())
+			return
+		}
+	}
+
 	validator := h.derivedETag(r)
 	if listNotModified(h, w, r, spec, validator) {
 		return

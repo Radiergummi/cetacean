@@ -222,6 +222,19 @@ func TestListVersions(t *testing.T) {
 				}
 				assertACLErrorCode(t, w, "API016")
 			})
+
+			// RFC 9110 §13.2.2: preconditions are evaluated only for a request
+			// that would otherwise succeed.
+			t.Run("an unknown value is refused under If-None-Match", func(t *testing.T) {
+				req := httptest.NewRequest("GET", base+"?versions=some", nil)
+				req.Header.Set("If-None-Match", "*")
+				w := serveVersions(t, req)
+
+				if w.Code != http.StatusBadRequest {
+					t.Fatalf("status = %d, want 400", w.Code)
+				}
+				assertACLErrorCode(t, w, "API016")
+			})
 		})
 	}
 }
