@@ -26,6 +26,7 @@ export default function ConfigList() {
     expanded,
     toggle: toggleVersions,
     arrange,
+    follow,
   } = useVersionExpansion(
     "/configs",
     `/events?types=${sseType}`,
@@ -43,6 +44,7 @@ export default function ConfigList() {
       viewModeKey="configs"
       fetchFn={(params, signal) => api.configs(params, signal)}
       arrange={arrange}
+      onItems={follow}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/configs/${ID}`}
       columns={(sortKey, sortDir, toggle) => [

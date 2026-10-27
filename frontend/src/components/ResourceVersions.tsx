@@ -2,8 +2,9 @@ import type { VersionedListItem } from "@/api/types";
 import ResourceName from "@/components/ResourceName";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useResourceStream } from "@/hooks/useResourceStream";
+import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * How long expanded groups gather stream events before refetching, as a
@@ -19,8 +20,21 @@ export type VersionRow<T> = T & { olderVersion?: boolean | undefined };
 
 type Item = VersionedListItem & {
   ID: string;
-  Spec: { Name: string };
+  Spec: { Name: string; Labels: Record<string, string> | null };
 };
+
+/**
+ * An expanded group: the newest version it was opened under, and the group
+ * itself, which outlives that version when a newer one arrives.
+ */
+interface Expansion {
+  id: string;
+  group: string;
+}
+
+function groupOf({ VersionOf, Spec: { Labels } }: Item): string {
+  return `${Labels?.[stackNamespaceLabel] ?? ""}\u0000${VersionOf ?? ""}`;
+}
 
 /**
  * Which groups are expanded, the older versions the server lists for each,
@@ -33,7 +47,8 @@ export function useVersionExpansion<T extends Item>(
   fetchGroup: (id: string, signal: AbortSignal) => Promise<T[]>,
 ) {
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState<readonly string[]>([]);
+  const [expansions, setExpansions] = useState<readonly Expansion[]>([]);
+  const expanded = useMemo(() => expansions.map(({ id }) => id), [expansions]);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
@@ -48,10 +63,33 @@ export function useVersionExpansion<T extends Item>(
     }, [queryClient, path]),
   );
 
-  const toggle = useCallback((id: string) => {
-    setExpanded((current) =>
-      current.includes(id) ? current.filter((each) => each !== id) : [...current, id],
+  const toggle = useCallback((item: Item) => {
+    setExpansions((current) =>
+      current.some(({ id }) => id === item.ID)
+        ? current.filter(({ id }) => id !== item.ID)
+        : [...current, { id: item.ID, group: groupOf(item) }],
     );
+  }, []);
+
+  // A group stays open under whichever version now heads it, and closes once
+  // nothing loaded heads it, so no query or stream outlives what it showed.
+  const follow = useCallback((items: T[]) => {
+    const heads = new Map(
+      items.filter(({ NewestVersion }) => NewestVersion).map((item) => [groupOf(item), item.ID]),
+    );
+
+    setExpansions((current) => {
+      const next = current.flatMap(({ group }) => {
+        const id = heads.get(group);
+
+        return id === undefined ? [] : [{ id, group }];
+      });
+
+      return next.length === current.length &&
+        next.every(({ id }, index) => id === current[index]?.id)
+        ? current
+        : next;
+    });
   }, []);
 
   const combine = useCallback(
@@ -83,7 +121,7 @@ export function useVersionExpansion<T extends Item>(
     [older],
   );
 
-  return { expanded, toggle, arrange };
+  return { expanded, toggle, arrange, follow };
 }
 
 /**
@@ -91,14 +129,16 @@ export function useVersionExpansion<T extends Item>(
  * card it belongs to is one.
  */
 export function OlderVersionsToggle({
-  item: { ID, OlderVersions },
+  item,
   expanded,
   onToggle,
 }: {
   item: Item;
   expanded: readonly string[];
-  onToggle: (id: string) => void;
+  onToggle: (item: Item) => void;
 }) {
+  const { ID, OlderVersions } = item;
+
   if (!OlderVersions) {
     return null;
   }
@@ -112,7 +152,7 @@ export function OlderVersionsToggle({
       onClick={(event) => {
         // The table row navigates on click.
         event.stopPropagation();
-        onToggle(ID);
+        onToggle(item);
       }}
       className="rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-muted"
     >

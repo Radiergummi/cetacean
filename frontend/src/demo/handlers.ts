@@ -258,18 +258,12 @@ interface Versionable {
 
 /**
  * The server's grouping of config and secret versions, as much of it as the
- * demo's data needs: a label names the group, else the name less its stack
- * prefix and version suffix, within one stack.
+ * demo's data needs: a label as written, else the name less its version
+ * suffix, either way less its stack prefix, within one stack.
  */
 function versionKey({ Spec: { Name, Labels } }: Versionable): { stack: string; name: string } {
   const stack = Labels?.[stackLabel] ?? "";
-  const declared = Labels?.[versionLabel];
-
-  if (declared) {
-    return { stack, name: declared };
-  }
-
-  const name = Name.replace(versionSuffix, "");
+  const name = Labels?.[versionLabel] || Name.replace(versionSuffix, "");
   const prefix = [`${stack}_`, `${stack}-`].find(
     (candidate) => stack && name.startsWith(candidate) && name.length > candidate.length,
   );

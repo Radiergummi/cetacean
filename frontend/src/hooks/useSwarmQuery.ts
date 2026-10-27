@@ -62,11 +62,13 @@ export function useSwarmQuery<T>(
   getId: (item: T) => string,
   filtered = false,
   relevant?: (event: SSEEvent) => boolean,
+  derived = false,
 ) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
   const filteredRef = useLatestRef(filtered);
+  const derivedRef = useLatestRef(derived);
   const relevantRef = useLatestRef(relevant);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -128,7 +130,9 @@ export function useSwarmQuery<T>(
         // Only the server can say whether a change moves a resource into or
         // out of a filtered collection, so ask it again — once per burst, and
         // for whole pages, keeping the total and the loaded rows in step.
-        if (filteredRef.current && !(held && event.action === "remove")) {
+        // A derived list must ask even when it holds the row a remove names:
+        // what the server lists in its place may be a row it does not hold yet.
+        if (filteredRef.current && !(held && event.action === "remove" && !derivedRef.current)) {
           refetchTimer.current ??= setTimeout(() => {
             refetchTimer.current = undefined;
             void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
@@ -247,7 +251,7 @@ export function useSwarmQuery<T>(
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      [queryClient, queryKeyRef, getIdRef, filteredRef],
+      [queryClient, queryKeyRef, getIdRef, filteredRef, derivedRef],
     ),
   );
 

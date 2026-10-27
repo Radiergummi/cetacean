@@ -567,9 +567,13 @@ export interface ListParams {
   dir?: "asc" | "desc" | undefined;
   search?: string | undefined;
   filter?: string | undefined;
-  /** Configs and secrets: `all` lists every version, not only each group's newest. */
+  /**
+   * Configs and secrets: `all` lists every version, not only each group's newest.
+   */
   versions?: "newest" | "all" | undefined;
-  /** Configs and secrets: only the versions grouped with this ID, newest first. */
+  /**
+   * Configs and secrets: only the versions grouped with this ID, newest first.
+   */
   versionsOf?: string | undefined;
 }
 

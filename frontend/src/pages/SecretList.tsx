@@ -26,6 +26,7 @@ export default function SecretList() {
     expanded,
     toggle: toggleVersions,
     arrange,
+    follow,
   } = useVersionExpansion(
     "/secrets",
     `/events?types=${sseType}`,
@@ -43,6 +44,7 @@ export default function SecretList() {
       viewModeKey="secrets"
       fetchFn={(params, signal) => api.secrets(params, signal)}
       arrange={arrange}
+      onItems={follow}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/secrets/${ID}`}
       columns={(sortKey, sortDir, toggle) => [

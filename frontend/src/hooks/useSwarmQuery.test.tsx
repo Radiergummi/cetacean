@@ -451,6 +451,36 @@ describe("useSwarmQuery", () => {
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
+  it("SSE refetches a derived list when a row it holds is removed", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "v3", Name: "db_v3" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery(["secrets"], fetchFn, "secret", ({ ID }: Item) => ID, true, undefined, true),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Removing the newest version puts the one before it at the head.
+    fetchFn.mockResolvedValue(makeFetchResult([{ ID: "v2", Name: "db_v2" }], 1));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("secret", {
+        type: "secret",
+        action: "remove",
+        id: "v3",
+        resource: { ID: "v3", Name: "db_v3" },
+      }),
+    );
+
+    await waitFor(() => expect(result.current.data).toEqual([{ ID: "v2", Name: "db_v2" }]), {
+      timeout: 3000,
+    });
+  });
+
   it("SSE removes item", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

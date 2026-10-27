@@ -8,7 +8,7 @@ import ListToolbar from "./ListToolbar";
 import { SkeletonTable } from "./LoadingSkeleton";
 import LoadMoreSentinel from "./LoadMoreSentinel";
 import PageHeader from "./PageHeader";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface ResourceListConfig<T> extends UseListPageConfig<T> {
@@ -30,6 +30,10 @@ interface ResourceListConfig<T> extends UseListPageConfig<T> {
    * group's older versions beneath its newest. Keep it stable between renders.
    */
   arrange?: ((items: T[]) => T[]) | undefined;
+  /**
+   * Told each time the loaded items change. Keep it stable between renders.
+   */
+  onItems?: ((items: T[]) => void) | undefined;
 }
 
 export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
@@ -58,8 +62,12 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
     [sortKey, sortDir, toggle, columnsFn],
   );
 
-  const { arrange } = config;
+  const { arrange, onItems } = config;
   const data = useMemo(() => (arrange ? arrange(loaded) : loaded), [arrange, loaded]);
+
+  useEffect(() => {
+    onItems?.(loaded);
+  }, [onItems, loaded]);
 
   if (loading) {
     return (

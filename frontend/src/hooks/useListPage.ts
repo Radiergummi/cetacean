@@ -72,6 +72,7 @@ export function useListPage<T>({
     keyFn,
     debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
     relevantEvent,
+    Boolean(derived),
   );
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 

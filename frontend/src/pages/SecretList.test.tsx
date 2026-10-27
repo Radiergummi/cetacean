@@ -54,6 +54,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * Sends an event down every open stream: the list and an expanded group each
+ * hold one when no shared stream is mounted.
+ */
+function broadcast(event: Record<string, unknown>) {
+  for (const stream of MockEventSource.instances) {
+    stream.simulateEvent("secret", event);
+  }
+}
+
 function wrapper({ children }: { children: React.ReactNode }) {
   return createWrapper(testQueryClient)({ children });
 }
@@ -150,6 +160,58 @@ describe("SecretList", () => {
     await waitFor(() => expect(mockSecrets.mock.calls.length).toBeGreaterThan(calls), {
       timeout: 2000,
     });
+  });
+
+  it("keeps a group open under its new newest version, and closes it once gone", async () => {
+    const head = (id: string) => ({
+      ...version(id, 0, true),
+      NewestVersion: true,
+      OlderVersions: 1,
+    });
+    const page = (items: SecretListItem[]) => ({
+      data: { items, total: items.length, limit: 50, offset: 0 },
+      allowedMethods: new Set<string>(),
+    });
+
+    mockSecrets.mockResolvedValue(page([head("db-v2")]));
+    mockSecretVersions.mockResolvedValue([version("db-v1", 0, true)]);
+    render(<SecretList />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "+1 older" }));
+    await screen.findByText("db-v1");
+
+    // db-v3 arrives and heads the group.
+    mockSecrets.mockResolvedValue(page([head("db-v3")]));
+    act(() =>
+      broadcast({
+        type: "secret",
+        action: "create",
+        id: "db-v3",
+        resource: { ID: "db-v3" },
+      }),
+    );
+
+    await waitFor(
+      () => expect(mockSecretVersions).toHaveBeenCalledWith("db-v3", expect.anything()),
+      {
+        timeout: 2000,
+      },
+    );
+    expect(screen.getByRole("button", { name: "Hide older" })).toBeInTheDocument();
+
+    // The group is gone from the list, so nothing keeps asking for it.
+    mockSecrets.mockResolvedValue(page([fakeSecret("s9", "api-key")]));
+    act(() =>
+      broadcast({
+        type: "secret",
+        action: "remove",
+        id: "db-v3",
+        resource: { ID: "db-v3" },
+      }),
+    );
+
+    await screen.findByText("api-key", undefined, { timeout: 2000 });
+    expect(screen.queryByText("db-v1")).not.toBeInTheDocument();
   });
 
   it("keeps the toggle outside the card link in grid view", async () => {
