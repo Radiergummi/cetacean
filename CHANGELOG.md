@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
+- When reading the cluster fails at startup or after reconnecting, such as during a manager election, the dashboard and `/-/ready` recover within seconds instead of minutes
+- A browser tab whose event stream reconnects after Cetacean re-read the whole cluster now refetches, instead of keeping data that re-read replaced
 - A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
 
 ## [0.18.0] - 2026-10-24
