@@ -1,6 +1,7 @@
-import { api } from "../api/client";
+import { api, pageSize } from "../api/client";
 import type { Task } from "../api/types";
 import type { Column } from "../components/DataTable";
+import FetchError from "../components/FetchError";
 import { TaskSparkline } from "../components/metrics";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
@@ -9,10 +10,11 @@ import TaskStateFilter, { taskStateExpression } from "../components/TaskStateFil
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import type { SortDir } from "../hooks/useSort";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { useTaskMetricsResult } from "../hooks/useTaskMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { sortColumn } from "../lib/sortColumn";
-import { useCallback, useMemo } from "react";
+import { stableBatches } from "../lib/stableBatches";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function TaskList() {
@@ -20,7 +22,24 @@ export default function TaskList() {
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
-  const taskMetrics = useTaskMetrics(`container_label_com_docker_swarm_task_id!=""`, hasCadvisor);
+  const [loaded, setLoaded] = useState<Task[]>([]);
+
+  // Scoped to the services of the running tasks loaded so far, in batches of
+  // about a page of rows: every query is a GET whose URL must stay inside what
+  // a proxy in front of Prometheus accepts. A batch is its own cached query.
+  const metricsFilters = useMemo(() => {
+    const serviceIds = new Set(
+      loaded.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
+    );
+
+    return stableBatches([...serviceIds], pageSize).map(
+      (batch) => `container_label_com_docker_swarm_service_id=~"${batch.join("|")}"`,
+    );
+  }, [loaded]);
+  const { metrics: taskMetrics, error: metricsError } = useTaskMetricsResult(
+    metricsFilters,
+    hasCadvisor,
+  );
 
   const columns = useCallback(
     (
@@ -120,15 +139,23 @@ export default function TaskList() {
       itemPath={({ ID }) => `/tasks/${ID}`}
       filter={taskStateExpression(stateFilter)}
       columns={columns}
+      onItems={setLoaded}
       belowToolbar={(tasks, total) => (
-        <div className="mb-4 flex justify-end">
-          <TaskStateFilter
-            tasks={tasks}
-            total={total}
-            active={stateFilter}
-            onChange={setStateFilter}
-          />
-        </div>
+        <>
+          {hasCadvisor && metricsError && (
+            <div className="mb-4">
+              <FetchError message={`Task metrics could not be loaded: ${metricsError.message}`} />
+            </div>
+          )}
+          <div className="mb-4 flex justify-end">
+            <TaskStateFilter
+              tasks={tasks}
+              total={total}
+              active={stateFilter}
+              onChange={setStateFilter}
+            />
+          </div>
+        </>
       )}
       emptyMessage={(hasSearch) =>
         hasSearch || stateFilter ? "No tasks match your filters" : "No tasks found"

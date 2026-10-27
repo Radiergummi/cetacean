@@ -2,7 +2,7 @@ import { api } from "../api/client";
 import CodeBlock from "../components/CodeBlock";
 import CollapsibleSection from "../components/CollapsibleSection";
 import DataResourceDetail from "../components/DataResourceDetail";
-import FetchError from "../components/FetchError";
+import DetailError from "../components/DetailError";
 import { IconButton } from "../components/IconButton";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { useDetailResource } from "../hooks/useDetailResource";
@@ -20,8 +20,9 @@ export default function ConfigDetail() {
 
   if (error) {
     return (
-      <FetchError
-        message={error.message || "Failed to load config"}
+      <DetailError
+        error={error}
+        fallback="Failed to load config"
         onRetry={retry}
       />
     );

@@ -18,6 +18,7 @@ vi.mock("../api/client", () => ({
   api: {
     tasks: vi.fn<() => void>(),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
+    metricsQueryRange: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
   },
 }));
 
@@ -163,4 +164,65 @@ describe("TaskList", () => {
     expect(await screen.findByText("Slot 1")).toBeInTheDocument();
     expect(requestedFilter()).toBeUndefined();
   });
+
+  // The page holds a page of tasks; the series of every task in the cluster
+  // would be most of the response and none of the rows.
+  // Every row keeps its sparklines, but each query names about a page of
+  // services at most, so the URL stays well inside proxy limits.
+  it("asks for the metrics of the shown services in bounded batches", async () => {
+    enableCadvisor();
+    vi.mocked(api.metricsQueryRange).mockResolvedValue(null as never);
+    mockTasks.mockResolvedValue({
+      data: {
+        items: Array.from({ length: 120 }, (_, index) => ({
+          ...fakeTask(index),
+          ServiceID: `svc${index % 60}`,
+        })),
+        total: 120,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set(),
+    });
+
+    render(<TaskList />, { wrapper });
+
+    await waitFor(() => expect(api.metricsQueryRange).toHaveBeenCalled());
+
+    const queries = vi.mocked(api.metricsQueryRange).mock.calls.map(([query]) => query as string);
+    const named = new Set<string>();
+
+    for (const query of queries) {
+      const ids = /service_id=~"([^"]*)"/.exec(query)?.[1]?.split("|") ?? [];
+
+      expect(ids.length).toBeGreaterThan(0);
+      expect(ids.length).toBeLessThanOrEqual(50);
+      ids.forEach((id) => named.add(id));
+    }
+
+    expect(named.size).toBe(60);
+  });
+
+  it("says when the task metrics could not be loaded", async () => {
+    enableCadvisor();
+    vi.mocked(api.metricsQueryRange).mockRejectedValue(new Error("Request-URI Too Long"));
+    mockTasks.mockResolvedValue({
+      data: { items: [fakeTask(0)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<TaskList />, { wrapper });
+
+    expect(await screen.findByText(/Request-URI Too Long/)).toBeInTheDocument();
+  });
 });
+
+function enableCadvisor() {
+  vi.mocked(api.monitoringStatus).mockResolvedValue({
+    prometheusConfigured: true,
+    prometheusReachable: true,
+    queryable: true,
+    nodeExporter: null,
+    cadvisor: { targets: 1, nodes: 1 },
+  });
+}

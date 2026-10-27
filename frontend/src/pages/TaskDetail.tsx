@@ -1,8 +1,8 @@
 import { api } from "../api/client";
 import type { Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import DetailError from "../components/DetailError";
 import ErrorBoundary from "../components/ErrorBoundary";
-import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
@@ -49,6 +49,7 @@ export default function TaskDetail() {
   const {
     data: task,
     error,
+    retry,
     allowedMethods,
   } = useDetailResource<Task>(id, api.task, "/tasks", { history: false });
 
@@ -94,7 +95,13 @@ export default function TaskDetail() {
   const myMetrics = id ? taskMetrics[id] : undefined;
 
   if (error) {
-    return <FetchError message="Failed to load task" />;
+    return (
+      <DetailError
+        error={error}
+        fallback="Failed to load task"
+        onRetry={retry}
+      />
+    );
   }
   if (!task) {
     return <LoadingDetail />;
