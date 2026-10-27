@@ -5139,6 +5139,174 @@ func TestHostAccessWritesRequireImpactfulLevel(t *testing.T) {
 	}
 }
 
+func socketBoundSpec() swarm.ServiceSpec {
+	return swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{Mounts: []mount.Mount{{
+			Type:   mount.TypeBind,
+			Source: "/var/run/docker.sock",
+			Target: "/var/run/docker.sock",
+		}}},
+	}}
+}
+
+// Host access a service already holds is exempt from the mount and capability
+// checks, so changing what runs with it needs the impactful tier instead.
+func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
+	plain := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{Image: "nginx"},
+	}}
+	bound := socketBoundSpec()
+	current := swarm.Service{ID: "svc1", Spec: bound, PreviousSpec: &plain}
+	previous := swarm.Service{ID: "svc1", Spec: plain, PreviousSpec: &bound}
+	unbound := swarm.Service{ID: "svc1", Spec: plain, PreviousSpec: &plain}
+
+	image := func(h *Handlers) http.HandlerFunc { return h.HandleUpdateServiceImage }
+	rollback := func(h *Handlers) http.HandlerFunc { return h.HandleRollbackService }
+	containerConfig := func(h *Handlers) http.HandlerFunc {
+		return h.HandlePatchServiceContainerConfig
+	}
+	placement := func(h *Handlers) http.HandlerFunc { return h.HandlePutServicePlacement }
+
+	cases := []struct {
+		name    string
+		svc     swarm.Service
+		method  string
+		path    string
+		body    string
+		handler func(*Handlers) http.HandlerFunc
+		below   config.OperationsLevel
+		refused bool
+	}{
+		{"image", current, "PUT", "/image", `{"image":"evil"}`, image, config.OpsOperational, true},
+		{
+			"rollback restoring a bind",
+			previous,
+			"POST",
+			"/rollback",
+			"",
+			rollback,
+			config.OpsOperational,
+			true,
+		},
+		{
+			"rollback from a bind",
+			current,
+			"POST",
+			"/rollback",
+			"",
+			rollback,
+			config.OpsOperational,
+			true,
+		},
+		{
+			"command",
+			current, "PATCH", "/container-config", `{"command":["sh"]}`,
+			containerConfig, config.OpsConfiguration, true,
+		},
+		{
+			"user",
+			current, "PATCH", "/container-config", `{"user":"root"}`,
+			containerConfig, config.OpsConfiguration, true,
+		},
+		{
+			"hostname only",
+			current, "PATCH", "/container-config", `{"hostname":"web"}`,
+			containerConfig, config.OpsConfiguration, false,
+		},
+		{
+			"placement",
+			current, "PUT", "/placement", `{"Constraints":["node.role==manager"]}`,
+			placement, config.OpsConfiguration, true,
+		},
+		{
+			"image without host access",
+			unbound,
+			"PUT",
+			"/image",
+			`{"image":"nginx:2"}`,
+			image,
+			config.OpsOperational,
+			false,
+		},
+		{
+			"rollback without host access",
+			unbound,
+			"POST",
+			"/rollback",
+			"",
+			rollback,
+			config.OpsOperational,
+			false,
+		},
+	}
+
+	for _, tc := range cases {
+		for _, level := range []config.OperationsLevel{tc.below, config.OpsImpactful} {
+			t.Run(fmt.Sprintf("%s at level %d", tc.name, level), func(t *testing.T) {
+				c := cache.New(nil)
+				tc.svc.Version = swarm.Version{Index: 7}
+				c.SetService(tc.svc)
+
+				written := false
+				var pinned swarm.Version
+				write := func(ctx context.Context) (swarm.Service, error) {
+					written = true
+					pinned, _ = docker.PinnedVersion(ctx, "service", "svc1")
+					return swarm.Service{ID: "svc1", Spec: plain}, nil
+				}
+				mock := &mockWriteClient{}
+				mock.updateServiceImageFn = func(ctx context.Context, _, _ string) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.rollbackServiceFn = func(ctx context.Context, _ string) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServicePlacementFn = func(ctx context.Context, _ string, _ *swarm.Placement) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceSpecFn = func(ctx context.Context, _ string, _ swarm.ServiceSpec) (swarm.Service, error) {
+					return write(ctx)
+				}
+
+				h := newTestHandlers(t, withCache(c), withWriteClient(mock), withOpsLevel(level))
+				req := httptest.NewRequest(
+					tc.method,
+					"/services/svc1"+tc.path,
+					strings.NewReader(tc.body),
+				)
+				if tc.method == "PATCH" {
+					req.Header.Set("Content-Type", "application/merge-patch+json")
+				} else {
+					req.Header.Set("Content-Type", "application/json")
+				}
+				req.SetPathValue("id", "svc1")
+				w := httptest.NewRecorder()
+				tc.handler(h)(w, req)
+
+				if !tc.refused || level >= config.OpsImpactful {
+					if w.Code != http.StatusOK || !written {
+						t.Fatalf("status=%d written=%v, want 200 and a write; body: %s",
+							w.Code, written, w.Body.String())
+					}
+					if pinned.Index != 7 {
+						t.Errorf("write pinned to %v, want the checked version 7", pinned)
+					}
+
+					return
+				}
+
+				if w.Code != http.StatusForbidden || written {
+					t.Fatalf("status=%d written=%v, want 403 and no write; body: %s",
+						w.Code, written, w.Body.String())
+				}
+				if !strings.Contains(w.Body.String(), "OPS001") {
+					t.Errorf("body does not name OPS001: %s", w.Body.String())
+				}
+			})
+		}
+	}
+}
+
 // A create sends one status, 201, as JSON.
 func TestCreateSecretWritesOneJSONStatus(t *testing.T) {
 	mock := &mockWriteClient{}

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
+- Changing the image, command, user or placement of a service with a bind mount or added capability, in its current or previous spec, or rolling it back, needs operations level 3, in the API and MCP alike
 
 ### Fixed
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves

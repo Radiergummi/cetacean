@@ -216,6 +216,13 @@ var serviceSectionWriters = map[string]sectionWriter{
 	},
 }
 
+// hostAccessSections are the sections that change what runs in the container,
+// each with how a refusal names the change.
+var hostAccessSections = map[string]string{
+	sectionCommand:   "changing the command of",
+	sectionPlacement: "changing the placement of",
+}
+
 // updateServiceSections is the advertised enum and the error message's list:
 // the table's own keys, sorted so tools/list is byte-stable across runs.
 var updateServiceSections = slices.Sorted(maps.Keys(serviceSectionWriters))
@@ -349,6 +356,13 @@ func (s *Server) toolUpdateService(
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
+	}
+
+	if change, held := hostAccessSections[section]; held {
+		ctx, err = s.checkHostAccessHeld(ctx, cond, id, change)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	writeClient, err := s.requireWriteClient()

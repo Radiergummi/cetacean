@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -102,14 +104,20 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
+		return
+	}
+
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, "changing the image of")
+	if !ok {
 		return
 	}
 
 	slog.Info("updating service image", "service", id, "image", req.Image)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
-		return h.serviceLifecycle.UpdateServiceImage(r.Context(), id, req.Image)
+		return h.serviceLifecycle.UpdateServiceImage(ctx, id, req.Image)
 	})
 }
 
@@ -125,11 +133,33 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, "rolling back")
+	if !ok {
+		return
+	}
+
 	slog.Info("rolling back service", "service", id)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
-		return h.serviceLifecycle.RollbackService(r.Context(), id)
+		return h.serviceLifecycle.RollbackService(ctx, id)
 	})
+}
+
+// checkHostAccessHeld answers OPS001 for a change cluster.CheckHostAccessHeld
+// refuses, and otherwise pins the write to the version it checked.
+func (h *Handlers) checkHostAccessHeld(
+	w http.ResponseWriter,
+	r *http.Request,
+	svc swarm.Service,
+	change string,
+) (context.Context, bool) {
+	err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, h.levelFor(r))
+	if err != nil {
+		writeErrorCode(w, r, "OPS001", err.Error())
+		return nil, false
+	}
+
+	return docker.PinChecked(r.Context(), "service", svc.ID, svc.Version), true
 }
 
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
@@ -446,7 +476,8 @@ func (h *Handlers) HandleGetServicePlacement(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -455,9 +486,14 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, "changing the placement of")
+	if !ok {
+		return
+	}
+
 	slog.Info("updating service placement", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServicePlacement(r.Context(), id, &placement)
+	updated, err := h.serviceSpec.UpdateServicePlacement(ctx, id, &placement)
 	if err != nil {
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
@@ -624,7 +660,8 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -637,7 +674,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
-		r.Context(),
+		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
 		id,
 		func(spec *swarm.ServiceSpec) error {
 			cs := spec.TaskTemplate.ContainerSpec
@@ -653,6 +690,19 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 			current := swarm.Service{Spec: *spec}
 			if err := cluster.CheckCapabilities(current, merged.CapabilityAdd, level); err != nil {
 				return &specPatchError{"OPS001", err.Error()}
+			}
+
+			if !slices.Equal(cs.Command, merged.Command) || !slices.Equal(cs.Args, merged.Args) ||
+				cs.User != merged.User || !slices.Equal(cs.Groups, merged.Groups) {
+				err := cluster.CheckHostAccessHeld(
+					svc,
+					"changing the command or user of",
+					h.cache.GetVolume,
+					level,
+				)
+				if err != nil {
+					return &specPatchError{"OPS001", err.Error()}
+				}
 			}
 
 			cs.Command = merged.Command

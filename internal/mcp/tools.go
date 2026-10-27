@@ -462,6 +462,10 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
+	ctx, err = s.checkHostAccessHeld(ctx, cond, id, "changing the image of")
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -491,6 +495,10 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
+	ctx, err = s.checkHostAccessHeld(ctx, cond, id, "rolling back")
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -503,6 +511,22 @@ func (s *Server) toolRollbackService(
 		return "", err
 	}
 	return marshalResult(s.serviceMutation(svc))
+}
+
+// checkHostAccessHeld is cluster.CheckHostAccessHeld for the service id names,
+// pinning the write to the version it checked.
+func (s *Server) checkHostAccessHeld(
+	ctx context.Context,
+	cond condition,
+	id, change string,
+) (context.Context, error) {
+	svc, _, _ := s.cache.ResolveService(id)
+	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+	if err := cluster.CheckHostAccessHeld(svc, change, s.cache.GetVolume, level); err != nil {
+		return ctx, err
+	}
+
+	return s.pinChecked(ctx, cond, svc)
 }
 
 func (s *Server) toolRestartService(

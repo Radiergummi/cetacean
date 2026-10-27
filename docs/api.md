@@ -905,6 +905,11 @@ Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{
 doesn't already have that is a bind, a named pipe, a volume with driver options, or a named volume the manager doesn't
 hold as a plain `local` volume; and `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`.
 
+A service whose current or previous spec has host access—one of those mounts, or an added capability—needs level 3
+for any change to what runs with it: `PUT /services/{id}/image`, `POST /services/{id}/rollback`,
+`PUT /services/{id}/placement`, and a `PATCH /services/{id}/container-config` that changes `command`, `args`, `user`,
+or `groups`. Below that they answer `403` (`OPS001`).
+
 ### Preconditions
 
 Every write endpoint whose exact path also serves a `GET` accepts an optional `If-Match` request

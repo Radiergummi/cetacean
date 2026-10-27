@@ -57,6 +57,49 @@ func CheckMounts(
 	return nil
 }
 
+// CheckHostAccessHeld refuses, below the impactful tier, a change to what runs in
+// a service whose current or previous spec reaches the host: the exemptions in
+// CheckMounts and CheckCapabilities would otherwise hand that access to new code.
+// The previous spec counts because a rollback, or the next one, restores it.
+func CheckHostAccessHeld(
+	svc swarm.Service,
+	change string,
+	lookup func(name string) (volume.Volume, bool),
+	level config.OperationsLevel,
+) error {
+	if level >= config.OpsImpactful {
+		return nil
+	}
+
+	for _, spec := range []*swarm.ServiceSpec{&svc.Spec, svc.PreviousSpec} {
+		if what := specHostAccess(spec, lookup); what != "" {
+			return &HostAccessError{What: change + " a service with " + what}
+		}
+	}
+
+	return nil
+}
+
+// specHostAccess names the first way a spec's container reaches the host.
+func specHostAccess(spec *swarm.ServiceSpec, lookup func(string) (volume.Volume, bool)) string {
+	if spec == nil || spec.TaskTemplate.ContainerSpec == nil {
+		return ""
+	}
+
+	cs := spec.TaskTemplate.ContainerSpec
+	for _, m := range cs.Mounts {
+		if what := hostAccess(m, lookup); what != "" {
+			return what
+		}
+	}
+
+	if len(cs.CapabilityAdd) > 0 {
+		return "the added capability " + cs.CapabilityAdd[0]
+	}
+
+	return ""
+}
+
 // hostAccess names how a mount reaches the host, or returns "" if it does not.
 // It reads the type as Docker does: case-insensitively, empty meaning a bind.
 func hostAccess(m mount.Mount, lookup func(string) (volume.Volume, bool)) string {
