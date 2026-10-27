@@ -206,6 +206,35 @@ describe("StackDetail", () => {
     );
   });
 
+  // Swarm keeps the tasks of earlier runs; a re-run that fails must not read
+  // healthy on the strength of the run before it.
+  it("judges a job by its current run only", async () => {
+    const job = {
+      ID: "job1",
+      Spec: { Name: "web_migrate", Mode: { ReplicatedJob: {} } },
+      JobStatus: { JobIteration: { Index: 9 } },
+    };
+
+    vi.mocked(api.stack).mockResolvedValue({
+      data: { stack: { ...stack, services: [job] } },
+      allowedMethods: new Set<string>(),
+    } as never);
+    vi.mocked(api.allServices).mockResolvedValue([{ ...job, RunningTasks: 0 }] as never);
+    vi.mocked(api.allTasks).mockResolvedValue([
+      { ID: "t1", ServiceID: "job1", JobIteration: { Index: 4 }, Status: { State: "complete" } },
+      { ID: "t2", ServiceID: "job1", JobIteration: { Index: 9 }, Status: { State: "failed" } },
+    ] as never);
+
+    const { container } = renderStackDetail();
+
+    await waitFor(() => {
+      expect(container.querySelector("td [data-health]")).toHaveAttribute(
+        "data-health",
+        "critical",
+      );
+    });
+  });
+
   // More members than one page of a list holds still each get their count.
   it("counts the tasks of every service in a large stack", async () => {
     const members = Array.from({ length: 60 }, (_, index) => ({

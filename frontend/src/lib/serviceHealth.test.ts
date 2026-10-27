@@ -45,11 +45,15 @@ describe("serviceHealth", () => {
     expect(serviceHealth(0, 0, { completed: 0, failed: 3 })).toBe("critical");
   });
 
-  it("is healthy for a job that completed despite earlier failures", () => {
-    expect(serviceHealth(0, 0, { completed: 1, failed: 3 })).toBe("healthy");
+  it("is healthy for a job whose run completed without a failure", () => {
+    expect(serviceHealth(0, 0, { completed: 2, failed: 0 })).toBe("healthy");
   });
 
-  it("is healthy for a job still running after a failure", () => {
-    expect(serviceHealth(1, 0, { completed: 0, failed: 1 })).toBe("healthy");
+  it("warns for a job whose run both completed and failed tasks", () => {
+    expect(serviceHealth(0, 0, { completed: 1, failed: 3 })).toBe("warning");
+  });
+
+  it("warns for a job still running after a failure", () => {
+    expect(serviceHealth(1, 0, { completed: 0, failed: 1 })).toBe("warning");
   });
 });

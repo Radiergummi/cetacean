@@ -154,6 +154,13 @@ export interface Service {
     CompletedAt?: string | undefined;
     Message?: string | undefined;
   };
+  /** A job's run counter: bumped each time the job is executed again. */
+  JobStatus?:
+    | {
+        JobIteration: { Index?: number | undefined };
+        LastExecution?: string | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -185,6 +192,8 @@ export interface Task {
   ServiceName?: string | undefined;
   NodeHostname?: string | undefined;
   Slot?: number | undefined;
+  /** The service's JobStatus.JobIteration when this task was created; jobs only. */
+  JobIteration?: { Index?: number | undefined } | undefined;
   Status: {
     Timestamp: string;
     State: string;
