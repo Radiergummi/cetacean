@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -106,5 +107,37 @@ func TestSSE_ReplayKnowsAClientSawTheResync(t *testing.T) {
 	b.Broadcast(syncEvent(h.Count()))
 	if !strings.Contains(reconnect(t, b, cursor), "event: sync") {
 		t.Error("a client that missed the second resync at the same position was not sent it")
+	}
+}
+
+// racingSource records a resync the first time replay reads its position, as
+// one landing while a reconnect is being answered would.
+type racingSource struct {
+	*cache.History
+	b    *Broadcaster
+	once sync.Once
+}
+
+func (s *racingSource) Count() uint64 {
+	count := s.History.Count()
+	s.once.Do(func() { s.b.Broadcast(syncEvent(count)) })
+
+	return count
+}
+
+// A resync landing while a reconnect is answered with a sync is covered by
+// that frame, so its own live frame must not follow it as a second refetch.
+func TestSSE_ReplaySyncCoversAResyncThatRacesIt(t *testing.T) {
+	h := cache.NewHistory(100)
+	appendEntries(h, 3)
+
+	source := &racingSource{History: h}
+	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, source)
+	defer b.Close()
+	source.b = b
+
+	body := reconnect(t, b, "foreign-1")
+	if got := strings.Count(body, `"type":"sync"`); got != 1 {
+		t.Errorf("sent %d sync frames, want 1:\n%s", got, body)
 	}
 }

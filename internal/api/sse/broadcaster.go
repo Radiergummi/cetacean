@@ -168,9 +168,11 @@ func (b *Broadcaster) recordSync(pos uint64) uint64 {
 	}
 }
 
-// syncFrame is a sync at history position pos, covering every sync so far.
-func (b *Broadcaster) syncFrame(pos uint64) frameEvent {
-	e := frameEvent{Event: syncEvent(pos)}
+// syncFrame is a sync at the current history position, covering every sync
+// recorded so far. The position is read first, so no sync it covers can be
+// recorded after its number is read and then arrive live as a second frame.
+func (b *Broadcaster) syncFrame() frameEvent {
+	e := frameEvent{Event: syncEvent(b.replayPosition())}
 	if mark := b.lastSync.Load(); mark != nil {
 		e.sync = mark.seq
 	}
@@ -194,18 +196,29 @@ func (b *Broadcaster) needsSync(afterID, seen uint64) bool {
 }
 
 // fanOut is the dedicated goroutine that delivers events to SSE clients.
+// A client's events channel is never closed, so a send to one that has
+// just left, outside the lock, lands in a buffer nobody reads.
 func (b *Broadcaster) fanOut() {
+	var recipients []*sseClient
+
 	for {
 		select {
 		case e := <-b.inbox:
+			recipients = recipients[:0]
 			b.mu.RLock()
 			for c := range b.clients {
-				if !c.accepts(e.Event) {
-					continue
+				if c.accepts(e.Event) {
+					recipients = append(recipients, c)
 				}
-				if e.data == nil {
-					e.data = encodeEvent(e.Event, b.basePath)
-				}
+			}
+			b.mu.RUnlock()
+
+			if len(recipients) == 0 {
+				continue
+			}
+
+			e.data = encodeEvent(e.Event, b.basePath)
+			for _, c := range recipients {
 				select {
 				case c.events <- e:
 				default:
@@ -215,7 +228,6 @@ func (b *Broadcaster) fanOut() {
 					c.lagged.Store(true)
 				}
 			}
-			b.mu.RUnlock()
 		case <-b.stop:
 			return
 		}
@@ -322,10 +334,13 @@ func (b *Broadcaster) ServeSSE(
 		return
 	}
 
-	var skipBelow uint64
+	// syncedThrough is the newest sync a frame written here covered; a live
+	// one it covered is skipped rather than sent as a second refetch.
+	var skipBelow, syncedThrough uint64
 	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" && b.replay != nil {
 		var err error
-		if skipBelow, err = b.replayEvents(stream, lastID, replayType, client.match); err != nil {
+		skipBelow, syncedThrough, err = b.replayEvents(stream, lastID, replayType, client.match)
+		if err != nil {
 			return
 		}
 	}
@@ -361,13 +376,17 @@ func (b *Broadcaster) ServeSSE(
 				}
 				skipBelow = 0
 			}
+			if e.Type == cache.EventSync && e.sync <= syncedThrough {
+				continue
+			}
 			batch = append(batch, e)
 		case <-batchTicker.C:
 			// The sync covers the events queued behind it, which are skipped.
 			if client.lagged.Swap(false) {
 				batch = batch[:0]
-				skipBelow = b.replayPosition()
-				if b.writeFrame(stream, []frameEvent{b.syncFrame(skipBelow)}) != nil {
+				frame := b.syncFrame()
+				skipBelow, syncedThrough = frame.HistoryID, max(syncedThrough, frame.sync)
+				if b.writeFrame(stream, []frameEvent{frame}) != nil {
 					return
 				}
 				keepalive.Reset(b.keepaliveInterval)
@@ -404,10 +423,10 @@ func (b *Broadcaster) replayEvents(
 	lastID string,
 	replayType cache.EventType,
 	match func(cache.Event) bool,
-) (uint64, error) {
-	writeSync := func() (uint64, error) {
-		count := b.replay.Count()
-		return count, b.writeFrame(stream, []frameEvent{b.syncFrame(count)})
+) (position, synced uint64, err error) {
+	writeSync := func() (uint64, uint64, error) {
+		frame := b.syncFrame()
+		return frame.HistoryID, frame.sync, b.writeFrame(stream, []frameEvent{frame})
 	}
 
 	// Detail/stack streams are ineligible for replay — send sync.
@@ -426,7 +445,7 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	if len(entries) == 0 {
-		return afterID, nil
+		return afterID, 0, nil
 	}
 
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
@@ -454,10 +473,10 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	if len(replay) == 0 {
-		return afterID, nil
+		return afterID, 0, nil
 	}
 
-	return replay[len(replay)-1].HistoryID, b.writeFrame(stream, replay)
+	return replay[len(replay)-1].HistoryID, 0, b.writeFrame(stream, replay)
 }
 
 // writeFrame writes events as one frame under the stream's write deadline.
@@ -542,14 +561,14 @@ func (b *Broadcaster) cursor(lastID string) (id, seen uint64, ok bool) {
 		return 0, 0, false
 	}
 
-	n, sync, synced := strings.Cut(n, ".")
+	n, seq, synced := strings.Cut(n, ".")
 	id, err := strconv.ParseUint(n, 10, 64)
 	if err != nil {
 		return 0, 0, false
 	}
 
 	if synced {
-		if seen, err = strconv.ParseUint(sync, 10, 64); err != nil || seen == 0 {
+		if seen, err = strconv.ParseUint(seq, 10, 64); err != nil || seen == 0 {
 			return 0, 0, false
 		}
 	}
@@ -783,7 +802,8 @@ func ResourceType(typ cache.EventType) string {
 	}
 }
 
-// WriteBatch writes events as one frame.
+// WriteBatch writes events as one frame, encoding each. It is the seam the
+// serialization benchmarks in internal/api measure; streams use writeFrame.
 func WriteBatch(
 	w io.Writer,
 	flusher http.Flusher,
