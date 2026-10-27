@@ -302,7 +302,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	b.mu.Lock()
 	for range MaxClients {
 		c := &sseClient{
-			events: make(chan cache.Event, 1),
+			events: make(chan frameEvent, 1),
 			done:   make(chan struct{}),
 		}
 		b.clients[c] = struct{}{}

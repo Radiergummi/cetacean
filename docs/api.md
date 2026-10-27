@@ -694,8 +694,9 @@ EventSource clients ignore it.
 
 Each event carries an `id:`. Treat it as opaque: it names a position in the change history of one Cetacean process.
 EventSource clients send `Last-Event-ID` on reconnect and the server replays what they missed from the change history.
-Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer or one written
-before Cetacean restarted; all three send a `sync` event telling the client to refetch.
+Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer, one written
+before Cetacean restarted, or one from before Cetacean last re-read the whole cluster; all four send a `sync` event
+telling the client to refetch.
 A client that reads too slowly to take every event gets a `sync` event in place of the ones it missed. One that stops
 reading altogether is disconnected once a write to it has been blocked for 30 seconds, and reconnects from its last
 cursor. Network buffers absorb writes first, so that can be well after the client stopped reading.

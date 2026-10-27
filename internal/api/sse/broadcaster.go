@@ -31,8 +31,20 @@ type ReplaySource interface {
 	Count() uint64
 }
 
+// frameEvent is an event on its way to a client. sync numbers a sync event
+// among every one broadcast, so a cursor can say which it has seen.
+type frameEvent struct {
+	cache.Event
+	sync uint64
+}
+
+// syncMark is the newest sync broadcast: its history position and number.
+type syncMark struct {
+	pos, seq uint64
+}
+
 type sseClient struct {
-	events chan cache.Event
+	events chan frameEvent
 	match  func(cache.Event) bool // nil means accept all
 	done   chan struct{}
 	owner  string
@@ -69,7 +81,7 @@ type Broadcaster struct {
 	clients           map[*sseClient]struct{}
 	owners            map[string]int
 	closed            bool
-	inbox             chan cache.Event
+	inbox             chan frameEvent
 	stop              chan struct{}
 	batchInterval     time.Duration
 	keepaliveInterval time.Duration
@@ -85,6 +97,10 @@ type Broadcaster struct {
 	// epoch prefixes every event id, so a cursor from another process, whose
 	// history counter restarted, reads as foreign rather than as a position.
 	epoch string
+
+	// lastSync is the newest sync broadcast, nil before the first. A resync is
+	// not in the history, so replay checks a cursor against it; see needsSync.
+	lastSync atomic.Pointer[syncMark]
 }
 
 func NewBroadcaster(
@@ -98,7 +114,7 @@ func NewBroadcaster(
 	b := &Broadcaster{
 		clients:           make(map[*sseClient]struct{}),
 		owners:            make(map[string]int),
-		inbox:             make(chan cache.Event, 256),
+		inbox:             make(chan frameEvent, 256),
 		stop:              make(chan struct{}),
 		batchInterval:     batchInterval,
 		keepaliveInterval: 15 * time.Second,
@@ -113,8 +129,13 @@ func NewBroadcaster(
 // Broadcast enqueues an event for delivery to SSE clients.
 // Non-blocking: drops the event if the internal buffer is full.
 func (b *Broadcaster) Broadcast(e cache.Event) {
+	queued := frameEvent{Event: e}
+	if e.Type == cache.EventSync {
+		queued.sync = b.recordSync(e.HistoryID)
+	}
+
 	select {
-	case b.inbox <- e:
+	case b.inbox <- queued:
 		metrics.RecordSSEBroadcast()
 	default:
 		metrics.RecordSSEDrop()
@@ -130,6 +151,46 @@ func (b *Broadcaster) Broadcast(e cache.Event) {
 	}
 }
 
+// recordSync marks a sync at history position pos and returns its number. It
+// runs before the sync is queued, so a reconnect cannot miss one dropped there.
+func (b *Broadcaster) recordSync(pos uint64) uint64 {
+	for {
+		prev := b.lastSync.Load()
+		next := &syncMark{pos: pos, seq: 1}
+		if prev != nil {
+			next.seq = prev.seq + 1
+		}
+		if b.lastSync.CompareAndSwap(prev, next) {
+			return next.seq
+		}
+	}
+}
+
+// syncFrame is a sync at history position pos, covering every sync so far.
+func (b *Broadcaster) syncFrame(pos uint64) frameEvent {
+	e := frameEvent{Event: syncEvent(pos)}
+	if mark := b.lastSync.Load(); mark != nil {
+		e.sync = mark.seq
+	}
+
+	return e
+}
+
+// needsSync reports whether a sync landed after a cursor. One that names a sync
+// has seen that one; one that does not has seen none at or after its position,
+// since a frame ending in a sync carries its number.
+func (b *Broadcaster) needsSync(afterID, seen uint64) bool {
+	mark := b.lastSync.Load()
+	switch {
+	case mark == nil:
+		return false
+	case seen > 0:
+		return seen != mark.seq
+	default:
+		return mark.pos >= afterID
+	}
+}
+
 // fanOut is the dedicated goroutine that delivers events to SSE clients.
 func (b *Broadcaster) fanOut() {
 	for {
@@ -137,7 +198,7 @@ func (b *Broadcaster) fanOut() {
 		case e := <-b.inbox:
 			b.mu.RLock()
 			for c := range b.clients {
-				if !c.accepts(e) {
+				if !c.accepts(e.Event) {
 					continue
 				}
 				select {
@@ -201,7 +262,7 @@ func (b *Broadcaster) ServeSSE(
 	}
 
 	client := &sseClient{
-		events: make(chan cache.Event, 64),
+		events: make(chan frameEvent, 64),
 		match:  match,
 		done:   make(chan struct{}),
 		owner:  ownerOf(r),
@@ -266,7 +327,7 @@ func (b *Broadcaster) ServeSSE(
 
 	// A lagged client's pending batch has a gap, so it is not written on the
 	// way out: the client reconnects from its last whole cursor instead.
-	finish := func(batch []cache.Event) {
+	finish := func(batch []frameEvent) {
 		if len(batch) > 0 && !client.lagged.Load() {
 			_ = b.writeFrame(stream, batch)
 		}
@@ -276,7 +337,7 @@ func (b *Broadcaster) ServeSSE(
 	defer batchTicker.Stop()
 	keepalive := time.NewTicker(b.keepaliveInterval)
 	defer keepalive.Stop()
-	var batch []cache.Event
+	var batch []frameEvent
 
 	for {
 		select {
@@ -301,7 +362,7 @@ func (b *Broadcaster) ServeSSE(
 			if client.lagged.Swap(false) {
 				batch = batch[:0]
 				skipBelow = b.replayPosition()
-				if b.writeFrame(stream, []cache.Event{syncEvent(skipBelow)}) != nil {
+				if b.writeFrame(stream, []frameEvent{b.syncFrame(skipBelow)}) != nil {
 					return
 				}
 				keepalive.Reset(b.keepaliveInterval)
@@ -341,7 +402,7 @@ func (b *Broadcaster) replayEvents(
 ) (uint64, error) {
 	writeSync := func() (uint64, error) {
 		count := b.replay.Count()
-		return count, b.writeFrame(stream, []cache.Event{syncEvent(count)})
+		return count, b.writeFrame(stream, []frameEvent{b.syncFrame(count)})
 	}
 
 	// Detail/stack streams are ineligible for replay — send sync.
@@ -349,8 +410,8 @@ func (b *Broadcaster) replayEvents(
 		return writeSync()
 	}
 
-	afterID, ok := b.cursor(lastID)
-	if !ok {
+	afterID, seen, ok := b.cursor(lastID)
+	if !ok || b.needsSync(afterID, seen) {
 		return writeSync()
 	}
 
@@ -364,7 +425,7 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
-	var replay []cache.Event
+	var replay []frameEvent
 	for _, e := range entries {
 		if replayType != ReplayAll && e.Type != replayType {
 			continue
@@ -384,7 +445,7 @@ func (b *Broadcaster) replayEvents(
 			continue
 		}
 
-		replay = append(replay, ev)
+		replay = append(replay, frameEvent{Event: ev})
 	}
 
 	if len(replay) == 0 {
@@ -395,7 +456,7 @@ func (b *Broadcaster) replayEvents(
 }
 
 // writeFrame writes events as one frame under the stream's write deadline.
-func (b *Broadcaster) writeFrame(stream *streamWriter, events []cache.Event) error {
+func (b *Broadcaster) writeFrame(stream *streamWriter, events []frameEvent) error {
 	return stream.send(func() error {
 		return writeBatch(stream, stream, events, b.basePath, b.epoch)
 	})
@@ -468,16 +529,27 @@ func (b *Broadcaster) EventID(historyID uint64) string {
 	return b.epoch + "-" + strconv.FormatUint(historyID, 10)
 }
 
-// cursor reads the history id out of a Last-Event-ID this process wrote.
-func (b *Broadcaster) cursor(lastID string) (uint64, bool) {
+// cursor reads a Last-Event-ID this process wrote: the history id, and the
+// number of the sync the frame ended in, zero if it did not.
+func (b *Broadcaster) cursor(lastID string) (id, seen uint64, ok bool) {
 	n, ok := strings.CutPrefix(lastID, b.epoch+"-")
 	if !ok {
-		return 0, false
+		return 0, 0, false
 	}
 
+	n, sync, synced := strings.Cut(n, ".")
 	id, err := strconv.ParseUint(n, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
 
-	return id, err == nil
+	if synced {
+		if seen, err = strconv.ParseUint(sync, 10, 64); err != nil || seen == 0 {
+			return 0, 0, false
+		}
+	}
+
+	return id, seen, true
 }
 
 func newEpoch() string {
@@ -707,27 +779,41 @@ func WriteBatch(
 	events []cache.Event,
 	basePath, epoch string,
 ) {
-	_ = writeBatch(w, flusher, events, basePath, epoch)
+	frame := make([]frameEvent, len(events))
+	for i, e := range events {
+		frame[i] = frameEvent{Event: e}
+	}
+
+	_ = writeBatch(w, flusher, frame, basePath, epoch)
 }
 
 // writeBatch is WriteBatch, returning the first write error.
 func writeBatch(
 	w io.Writer,
 	flusher http.Flusher,
-	events []cache.Event,
+	events []frameEvent,
 	basePath, epoch string,
 ) error {
-	var maxID uint64
+	var maxID, synced uint64
 	for _, e := range events {
 		if e.HistoryID > maxID {
-			maxID = e.HistoryID
+			maxID, synced = e.HistoryID, 0
+		}
+		if e.Type == cache.EventSync && e.HistoryID == maxID {
+			synced = e.sync
 		}
 	}
 
+	// A frame no change follows a sync in says which sync, for needsSync.
+	id := epoch + "-" + strconv.FormatUint(maxID, 10)
+	if synced > 0 {
+		id += "." + strconv.FormatUint(synced, 10)
+	}
+
 	if len(events) == 1 {
-		data, _ := json.Marshal(ToSSEEvent(events[0], basePath))
+		data, _ := json.Marshal(ToSSEEvent(events[0].Event, basePath))
 		_, err := fmt.Fprintf(
-			w, "id: %s-%d\nevent: %s\ndata: %s\n\n", epoch, maxID, events[0].Type, data,
+			w, "id: %s\nevent: %s\ndata: %s\n\n", id, events[0].Type, data,
 		)
 		if err != nil {
 			return err
@@ -735,10 +821,10 @@ func writeBatch(
 	} else {
 		enriched := make([]Event, len(events))
 		for i, e := range events {
-			enriched[i] = ToSSEEvent(e, basePath)
+			enriched[i] = ToSSEEvent(e.Event, basePath)
 		}
 		data, _ := json.Marshal(enriched)
-		_, err := fmt.Fprintf(w, "id: %s-%d\nevent: batch\ndata: %s\n\n", epoch, maxID, data)
+		_, err := fmt.Fprintf(w, "id: %s\nevent: batch\ndata: %s\n\n", id, data)
 		if err != nil {
 			return err
 		}

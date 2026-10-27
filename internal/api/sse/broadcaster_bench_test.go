@@ -34,7 +34,7 @@ func setupClients(br *Broadcaster, n int, matchFn func(int) func(cache.Event) bo
 			match = matchFn(i)
 		}
 		client := &sseClient{
-			events: make(chan cache.Event, 64),
+			events: make(chan frameEvent, 64),
 			match:  match,
 			done:   make(chan struct{}),
 		}
@@ -132,7 +132,7 @@ func BenchmarkClientRegistration(b *testing.B) {
 	defer br.Close()
 
 	steady := &sseClient{
-		events: make(chan cache.Event, 64),
+		events: make(chan frameEvent, 64),
 		done:   make(chan struct{}),
 	}
 	br.mu.Lock()
@@ -158,7 +158,7 @@ func BenchmarkClientRegistration(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		client := &sseClient{
-			events: make(chan cache.Event, 64),
+			events: make(chan frameEvent, 64),
 			match:  TypeMatcher("service"),
 			done:   make(chan struct{}),
 		}

@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 - Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
 - When reading the cluster fails at startup or after reconnecting, such as during a manager election, the dashboard and `/-/ready` recover within seconds instead of minutes
+- A browser tab whose event stream reconnects after Cetacean re-read the whole cluster now refetches, instead of keeping data that re-read replaced
 
 ## [0.18.0] - 2026-10-24
 
