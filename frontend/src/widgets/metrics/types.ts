@@ -27,5 +27,3 @@ export interface MetricPoint {
 
 /** The windows get_metrics accepts, in the order they are offered. */
 export const metricRanges = ["1h", "6h", "24h", "7d"] as const;
-
-export type MetricRange = (typeof metricRanges)[number];

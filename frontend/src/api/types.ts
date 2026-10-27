@@ -50,21 +50,25 @@ export interface Service {
         TTY?: boolean | undefined;
         Groups?: string[] | null | undefined;
         Hosts?: string[] | null | undefined;
-        DNSConfig?: {
-          Nameservers?: string[] | null | undefined;
-          Search?: string[] | null | undefined;
-          Options?: string[] | null | undefined;
-        };
+        DNSConfig?:
+          | {
+              Nameservers?: string[] | null | undefined;
+              Search?: string[] | null | undefined;
+              Options?: string[] | null | undefined;
+            }
+          | undefined;
         CapabilityAdd?: string[] | null | undefined;
         CapabilityDrop?: string[] | null | undefined;
-        Healthcheck?: {
-          Test?: string[] | null | undefined;
-          Interval?: number | undefined;
-          Timeout?: number | undefined;
-          Retries?: number | undefined;
-          StartPeriod?: number | undefined;
-          StartInterval?: number | undefined;
-        };
+        Healthcheck?:
+          | {
+              Test?: string[] | null | undefined;
+              Interval?: number | undefined;
+              Timeout?: number | undefined;
+              Retries?: number | undefined;
+              StartPeriod?: number | undefined;
+              StartInterval?: number | undefined;
+            }
+          | undefined;
         Configs?: Array<{
           ConfigID: string;
           ConfigName: string;
@@ -326,11 +330,6 @@ export interface Stack {
   volumes: string[];
 }
 
-export interface PagedResponse<T> {
-  items: T[];
-  total: number;
-}
-
 export interface CollectionResponse<T> {
   items: T[];
   total: number;
@@ -532,6 +531,23 @@ export interface GantryIntegration {
   updateTimeoutSeconds?: number | undefined;
 }
 
+export interface DeploymentActionIntegration {
+  name: "docker-swarm-deployment-action";
+  enabled: boolean;
+  labels: string[];
+  version?: string | undefined;
+  repository?: string | undefined;
+  repositoryUrl?: string | undefined;
+  ref?: string | undefined;
+  commit?: string | undefined;
+  commitUrl?: string | undefined;
+  runUrl?: string | undefined;
+  actor?: string | undefined;
+  monitor?: boolean | undefined;
+  monitorTimeoutSeconds?: number | undefined;
+  healthCheckWarnings?: boolean | undefined;
+}
+
 export type Integration =
   | TraefikIntegration
   | ShepherdIntegration
@@ -539,7 +555,8 @@ export type Integration =
   | DiunIntegration
   | CaddyIntegration
   | DocoCDIntegration
-  | GantryIntegration;
+  | GantryIntegration
+  | DeploymentActionIntegration;
 
 /**
  * A custom link from a `cetacean.link.<id>` service label. Exactly one of

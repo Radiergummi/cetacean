@@ -23,6 +23,7 @@ lint: lint-docs
 	actionlint
 	zizmor --config .github/zizmor.yml .github/workflows/
 	pnpm --filter frontend exec oxlint
+	pnpm --filter frontend exec knip
 	pnpm --filter website exec oxlint
 
 ## Lint the prose of the published docs

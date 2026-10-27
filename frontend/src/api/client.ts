@@ -437,20 +437,6 @@ export function del(path: string): Promise<void> {
 
 export const emptyMethods: Set<string> = new Set();
 
-export function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) {
-    return false;
-  }
-
-  for (const item of a) {
-    if (!b.has(item)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 export interface Capabilities {
   /** The resource's own methods, from `Allow`. */
   methods: Set<string>;

@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -126,7 +127,7 @@ func decodeClientCert(value string) ([]byte, error) {
 	// the trim, which counts one as whitespace, and checked at all because
 	// encoding/base64 strips CR and LF before decoding regardless.
 	if strings.ContainsAny(value, "\r\n") {
-		return nil, fmt.Errorf("Client-Cert contains a line break")
+		return nil, errors.New("Client-Cert contains a line break")
 	}
 
 	value = strings.TrimSpace(value)

@@ -291,7 +291,6 @@ export default function ServiceDetail() {
         networks={(taskTemplate?.Networks ?? []).flatMap(({ Target, Aliases }) =>
           Target ? [{ target: Target, aliases: Aliases ?? undefined }] : [],
         )}
-        networkNames={detail.networkNames}
         onSaved={detail.refetchService}
         canEdit={detail.editable.has("networks")}
       />

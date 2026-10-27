@@ -1,94 +1,52 @@
 import { api, pageSize } from "../api/client";
 import type { Task } from "../api/types";
-import DataTable, { type Column } from "../components/DataTable";
-import EmptyState from "../components/EmptyState";
+import type { Column } from "../components/DataTable";
 import FetchError from "../components/FetchError";
-import ListToolbar from "../components/ListToolbar";
-import { SkeletonTable } from "../components/LoadingSkeleton";
-import LoadMoreSentinel from "../components/LoadMoreSentinel";
 import { TaskSparkline } from "../components/metrics";
-import PageHeader from "../components/PageHeader";
 import ResourceCard from "../components/ResourceCard";
+import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import TaskStateFilter, { taskStateExpression } from "../components/TaskStateFilter";
 import TaskStatusBadge from "../components/TaskStatusBadge";
-import { useListPage } from "../hooks/useListPage";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
+import type { SortDir } from "../hooks/useSort";
 import { useTaskMetricsResult } from "../hooks/useTaskMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { sortColumn } from "../lib/sortColumn";
 import { stableBatches } from "../lib/stableBatches";
-import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function TaskList() {
-  const navigate = useNavigate();
   const [stateFilter, setStateFilter] = useUrlParam("state");
-
-  const {
-    data: tasks,
-    total,
-    loading,
-    error,
-    retry,
-    hasMore,
-    loadMore,
-    search,
-    setSearch,
-    sortKey,
-    sortDir,
-    toggle,
-    viewMode,
-    setViewMode,
-  } = useListPage({
-    path: "/tasks",
-    sseType: "task",
-    defaultSort: "state",
-    viewModeKey: "tasks",
-    fetchFn: (params, signal) => api.tasks(params, signal),
-    keyFn: ({ ID }: Task) => ID,
-    filter: taskStateExpression(stateFilter),
-  });
-
-  const groupedByService = useMemo(() => {
-    const groups = new Map<string, { name: string; id: string; tasks: Task[] }>();
-
-    for (const task of tasks) {
-      const key = task.ServiceID;
-      let group = groups.get(key);
-
-      if (!group) {
-        group = { name: task.ServiceName || key.slice(0, 12), id: key, tasks: [] };
-        groups.set(key, group);
-      }
-
-      group.tasks.push(task);
-    }
-
-    return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [tasks]);
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
+  const [loaded, setLoaded] = useState<Task[]>([]);
+
   // Scoped to the services of the running tasks loaded so far, in batches of
   // about a page of rows: every query is a GET whose URL must stay inside what
   // a proxy in front of Prometheus accepts. A batch is its own cached query.
   const metricsFilters = useMemo(() => {
     const serviceIds = new Set(
-      tasks.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
+      loaded.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
     );
 
     return stableBatches([...serviceIds], pageSize).map(
       (batch) => `container_label_com_docker_swarm_service_id=~"${batch.join("|")}"`,
     );
-  }, [tasks]);
+  }, [loaded]);
   const { metrics: taskMetrics, error: metricsError } = useTaskMetricsResult(
     metricsFilters,
     hasCadvisor,
   );
 
-  const columns: Column<Task>[] = useMemo(
-    () => [
+  const columns = useCallback(
+    (
+      sortKey: string | undefined,
+      sortDir: SortDir,
+      toggle: (key: string) => void,
+    ): Column<Task>[] => [
       {
         header: "Service",
         cell: ({ ServiceID, ServiceName }) => (
@@ -165,102 +123,99 @@ export default function TaskList() {
         ),
       },
     ],
-    [sortKey, sortDir, toggle, hasCadvisor, taskMetrics],
+    [hasCadvisor, taskMetrics],
   );
-
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Tasks" />
-        <SkeletonTable columns={hasCadvisor ? 8 : 6} />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <FetchError
-        message={error.message}
-        onRetry={retry}
-      />
-    );
-  }
 
   return (
-    <div>
-      <PageHeader title="Tasks" />
-      <ListToolbar
-        search={search}
-        onSearchChange={setSearch}
-        placeholder="Search tasks…"
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
-      {hasCadvisor && metricsError && (
-        <div className="mb-4">
-          <FetchError message={`Task metrics could not be loaded: ${metricsError.message}`} />
-        </div>
-      )}
-      <div className="mb-4 flex justify-end">
-        <TaskStateFilter
-          tasks={tasks}
-          total={total}
-          active={stateFilter}
-          onChange={setStateFilter}
-        />
-      </div>
-      {tasks.length === 0 ? (
-        <EmptyState
-          message={search || stateFilter ? "No tasks match your filters" : "No tasks found"}
-        />
-      ) : viewMode === "table" ? (
-        <DataTable
-          label="Tasks"
-          columns={columns}
-          data={tasks}
-          keyFn={({ ID }) => ID}
-          onRowClick={({ ID }) => navigate(`/tasks/${ID}`)}
-          hasMore={hasMore}
-          onLoadMore={loadMore}
-        />
-      ) : (
-        <div className="space-y-6">
-          {groupedByService.map((group) => (
-            <section key={group.id}>
-              <h2 className="mb-2 flex items-center gap-2 text-base font-medium">
-                <Link
-                  to={`/services/${group.id}`}
-                  className="text-link hover:underline"
-                >
-                  <ResourceName name={group.name} />
-                </Link>
-                <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground tabular-nums">
-                  {group.tasks.length}
-                </span>
-              </h2>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {group.tasks.map((task) => (
-                  <ResourceCard
-                    key={task.ID}
-                    title={task.Slot ? `Slot ${task.Slot}` : task.ID.slice(0, 12)}
-                    to={`/tasks/${task.ID}`}
-                    badge={<TaskStatusBadge state={task.Status.State} />}
-                    subtitle={task.NodeHostname}
-                    meta={[<span key="desired">{task.DesiredState}</span>]}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-          {hasMore && (
-            <LoadMoreSentinel
-              key={tasks.length}
-              onLoadMore={loadMore}
-            />
+    <ResourceListPage<Task>
+      title="Tasks"
+      path="/tasks"
+      sseType="task"
+      defaultSort="state"
+      searchPlaceholder="Search tasks…"
+      viewModeKey="tasks"
+      fetchFn={(params, signal) => api.tasks(params, signal)}
+      keyFn={({ ID }) => ID}
+      itemPath={({ ID }) => `/tasks/${ID}`}
+      filter={taskStateExpression(stateFilter)}
+      columns={columns}
+      onItems={setLoaded}
+      belowToolbar={(tasks, total) => (
+        <>
+          {hasCadvisor && metricsError && (
+            <div className="mb-4">
+              <FetchError message={`Task metrics could not be loaded: ${metricsError.message}`} />
+            </div>
           )}
-        </div>
+          <div className="mb-4 flex justify-end">
+            <TaskStateFilter
+              tasks={tasks}
+              total={total}
+              active={stateFilter}
+              onChange={setStateFilter}
+            />
+          </div>
+        </>
       )}
+      emptyMessage={(hasSearch) =>
+        hasSearch || stateFilter ? "No tasks match your filters" : "No tasks found"
+      }
+      renderGrid={(tasks) => <TaskGrid tasks={tasks} />}
+    />
+  );
+}
+
+function TaskGrid({ tasks }: { tasks: Task[] }) {
+  const groups = useMemo(() => groupByService(tasks), [tasks]);
+
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => (
+        <section key={group.id}>
+          <h2 className="mb-2 flex items-center gap-2 text-base font-medium">
+            <Link
+              to={`/services/${group.id}`}
+              className="text-link hover:underline"
+            >
+              <ResourceName name={group.name} />
+            </Link>
+            <span className="inline-flex size-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground tabular-nums">
+              {group.tasks.length}
+            </span>
+          </h2>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {group.tasks.map((task) => (
+              <ResourceCard
+                key={task.ID}
+                title={task.Slot ? `Slot ${task.Slot}` : task.ID.slice(0, 12)}
+                to={`/tasks/${task.ID}`}
+                badge={<TaskStatusBadge state={task.Status.State} />}
+                subtitle={task.NodeHostname}
+                meta={[<span key="desired">{task.DesiredState}</span>]}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
+}
+
+function groupByService(tasks: Task[]) {
+  const groups = new Map<string, { name: string; id: string; tasks: Task[] }>();
+
+  for (const task of tasks) {
+    const key = task.ServiceID;
+    let group = groups.get(key);
+
+    if (!group) {
+      group = { name: task.ServiceName || key.slice(0, 12), id: key, tasks: [] };
+      groups.set(key, group);
+    }
+
+    group.tasks.push(task);
+  }
+
+  return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
 }

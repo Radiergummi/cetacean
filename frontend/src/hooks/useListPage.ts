@@ -74,20 +74,20 @@ export function useListPage<T>({
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(defaultSort);
   const { data, total, loading, error, retry, hasMore, loadMore, allowedMethods, fetches } =
-    useSwarmQuery(
-      [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
-      useCallback(
+    useSwarmQuery({
+      queryKey: [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
+      fetchFn: useCallback(
         (offset: number, signal: AbortSignal) =>
           fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, filter, offset }, signal),
         [debouncedSearch, sortKey, sortDir, filter, fetchFn],
       ),
       sseType,
-      keyFn,
-      debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
-      relevantEvent,
-      Boolean(derived),
+      getId: keyFn,
+      filtered: debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
+      relevant: relevantEvent,
+      derived: Boolean(derived),
       onEvent,
-    );
+    });
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 
   return {
