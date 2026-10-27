@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 const data: PhysicalNodeData = {
   label: "worker-01",
-  addr: "10.0.0.5",
+  address: "10.0.0.5",
   role: "worker",
   state: "ready",
   availability: "active",
@@ -44,7 +44,7 @@ function renderCard(state: Partial<PhysicalViewState>) {
   return render(
     <MemoryRouter>
       <PhysicalViewContext.Provider
-        value={{ network: null, usage: undefined, nodeMetrics: undefined, ...state }}
+        value={{ network: null, usage: {}, nodeMetrics: undefined, ...state }}
       >
         <PhysicalNodeCard {...props} />
       </PhysicalViewContext.Provider>
@@ -57,6 +57,7 @@ describe("PhysicalNodeCard", () => {
     renderCard({ usage: { "svc1/n1": { cpu: 12.5, memory: null } } });
 
     expect(screen.getByRole("button", { name: "Service web" }).textContent).toContain("12.5%");
+    expect(screen.getByTitle("12.5%").className).toContain("truncate");
   });
 
   it("shows no node figures when the node has none", () => {

@@ -78,7 +78,11 @@ function matchQuery(
     );
   }
 
-  if (query.includes("container_label_com_docker_swarm_node_id")) {
+  if (
+    query.includes(
+      "sum by (container_label_com_docker_swarm_service_id, container_label_com_docker_swarm_node_id)",
+    )
+  ) {
     // Each node gets the share of its service's usage that its tasks make up,
     // so the per-node figures add up to the service totals shown elsewhere.
     const running = dataset.tasks.filter(({ DesiredState }) => DesiredState === "running");

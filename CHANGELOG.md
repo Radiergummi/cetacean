@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- The physical topology shows each service's CPU and memory per node and each node's usage when Prometheus has them, and a **Network** selector emphasises one network's services
+- The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
 - A published ports page at `/ports` (`g` `o`, or from the networks list) lists every port the services publish, with the service, stack and publish mode; `GET /ports` and the MCP tool `get_published_ports` serve the same list
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)

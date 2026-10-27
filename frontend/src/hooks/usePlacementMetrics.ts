@@ -38,11 +38,10 @@ export function placementUsageKey(serviceId: string, nodeId: string): string {
 }
 
 /**
- * Each service's CPU and memory on each node, or undefined without cAdvisor.
+ * Each service's CPU and memory on each node; empty without cAdvisor.
  */
-export function usePlacementMetrics(): Record<string, PlacementUsage> | undefined {
+export function usePlacementMetrics(): Record<string, PlacementUsage> {
   const hasCadvisor = isCadvisorReady(useMonitoringStatus());
-  const usage = useMetricsMap("placement-metrics", placementUsageSpec, hasCadvisor);
 
-  return hasCadvisor ? usage : undefined;
+  return useMetricsMap("placement-metrics", placementUsageSpec, hasCadvisor);
 }

@@ -68,27 +68,19 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	)
 
 	contextURL := absPath(r.Context(), jsonLDContext)
-	networkGraph := buildNetworkJGF(services, networks, h.cache.RunningTaskCounts(), contextURL)
+	overlays := cluster.OverlayNetworks(networks)
+	networkGraph := buildNetworkJGF(services, overlays, h.cache.RunningTaskCounts(), contextURL)
 
-	// Build service name/image lookup and readable set from ACL-filtered services.
-	svcNames := make(map[string]string, len(services))
-	svcImages := make(map[string]string, len(services))
-	readableServiceIDs := make(map[string]bool, len(services))
+	readableServices := make(map[string]swarm.Service, len(services))
 	for _, svc := range services {
-		svcNames[svc.ID] = svc.Spec.Name
-		if svc.Spec.TaskTemplate.ContainerSpec != nil {
-			svcImages[svc.ID] = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
-		}
-		readableServiceIDs[svc.ID] = true
+		readableServices[svc.ID] = svc
 	}
 
 	placementGraph := buildPlacementJGF(
 		clusterNodes,
 		h.cache,
-		svcNames,
-		svcImages,
-		cluster.OverlayNetworks(networks),
-		readableServiceIDs,
+		readableServices,
+		overlays,
 		contextURL,
 	)
 
@@ -123,7 +115,12 @@ func (h *Handlers) buildACLFilteredNetworkGraph(r *http.Request) jgf.Graph {
 	)
 	networks := h.readableNetworks(r)
 	contextURL := absPath(r.Context(), jsonLDContext)
-	return buildNetworkJGF(services, networks, h.cache.RunningTaskCounts(), contextURL)
+	return buildNetworkJGF(
+		services,
+		cluster.OverlayNetworks(networks),
+		h.cache.RunningTaskCounts(),
+		contextURL,
+	)
 }
 
 // topologySends is the topology's JSON, which is the JGF document.
@@ -165,12 +162,10 @@ func (h *Handlers) HandleTopologyDOT(w http.ResponseWriter, r *http.Request) {
 // consumer given only "replicas" has no way to tell.
 func buildNetworkJGF(
 	services []swarm.Service,
-	networks []network.Summary,
+	overlays map[string]network.Summary,
 	running map[string]int,
 	contextURL string,
 ) jgf.Graph {
-	overlays := cluster.OverlayNetworks(networks)
-
 	nodes := make(map[string]jgf.Node, len(services))
 	netServices := make(map[string][]string)
 
@@ -371,14 +366,21 @@ func placementNetworks(svc swarm.Service, overlays map[string]network.Summary) [
 	return entries
 }
 
+func serviceImage(svc swarm.Service) string {
+	if svc.Spec.TaskTemplate.ContainerSpec == nil {
+		return ""
+	}
+
+	return cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
+}
+
 // buildPlacementJGF produces a JGF hypergraph of the placement topology.
-// overlays must already be limited to the networks the caller may read.
+// services and overlays must already be limited to what the caller may read.
 func buildPlacementJGF(
 	clusterNodes []swarm.Node,
 	c *cache.Cache,
-	svcNames, svcImages map[string]string,
+	services map[string]swarm.Service,
 	overlays map[string]network.Summary,
-	readableServiceIDs map[string]bool,
 	contextURL string,
 ) jgf.Graph {
 	nodes := make(map[string]jgf.Node)
@@ -404,14 +406,15 @@ func buildPlacementJGF(
 				"role":         string(n.Spec.Role),
 				"state":        string(n.Status.State),
 				"availability": string(n.Spec.Availability),
-				"addr":         n.Status.Addr,
+				"address":      n.Status.Addr,
 			},
 		}
 
 		tasks := c.ListTasksByNode(n.ID)
 		for _, t := range tasks {
 			// A replaced task still sits on its node — see cluster.TaskIsLive.
-			if !readableServiceIDs[t.ServiceID] || !cluster.TaskIsLive(t) {
+			svc, readable := services[t.ServiceID]
+			if !readable || !cluster.TaskIsLive(t) {
 				continue
 			}
 
@@ -421,7 +424,7 @@ func buildPlacementJGF(
 			}
 
 			if taskImage == "" {
-				taskImage = svcImages[t.ServiceID]
+				taskImage = serviceImage(svc)
 			}
 
 			sp := placements[t.ServiceID]
@@ -444,13 +447,13 @@ func buildPlacementJGF(
 	// Add service nodes and build hyperedges.
 	for svcID, sp := range placements {
 		svcURN := jgf.URN("service", svcID)
-		svc, _ := c.GetService(svcID)
+		svc := services[svcID]
 		nodes[svcURN] = jgf.Node{
-			Label: svcNames[svcID],
+			Label: svc.Spec.Name,
 			Metadata: jgf.Metadata{
 				"@context": contextURL,
 				"kind":     "service",
-				"image":    svcImages[svcID],
+				"image":    serviceImage(svc),
 				"networks": placementNetworks(svc, overlays),
 			},
 		}

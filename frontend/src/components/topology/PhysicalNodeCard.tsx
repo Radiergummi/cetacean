@@ -21,7 +21,7 @@ type ServiceSummary = {
 
 export type PhysicalNodeData = {
   label: string;
-  addr: string | undefined;
+  address: string | undefined;
   role: string;
   state: string;
   availability: string;
@@ -39,7 +39,7 @@ function NodeUsage({ metrics }: { metrics: NodeMetrics }) {
   }
 
   return (
-    <span className="ms-auto flex gap-2 text-[10px] tabular-nums">
+    <span className="ms-auto flex shrink-0 gap-2 text-[10px] whitespace-nowrap tabular-nums">
       {figures.map(([label, value]) => (
         <span
           key={label}
@@ -63,9 +63,14 @@ function ServiceUsage({ usage }: { usage: PlacementUsage }) {
     return null;
   }
 
+  const text = figures.join(" · ");
+
   return (
-    <span className="ms-auto text-[11px] text-muted-foreground tabular-nums">
-      {figures.join(" · ")}
+    <span
+      className="ms-auto min-w-0 truncate text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
+      title={text}
+    >
+      {text}
     </span>
   );
 }
@@ -96,7 +101,7 @@ export default function PhysicalNodeCard({ id, data }: NodeProps & { data: Physi
         {data.availability !== "active" && (
           <span className="text-[10px] text-muted-foreground">{data.availability}</span>
         )}
-        {nodeMetrics && <NodeUsage metrics={nodeMetrics(data.label, data.addr)} />}
+        {nodeMetrics && <NodeUsage metrics={nodeMetrics(data.label, data.address)} />}
       </div>
 
       {data.services.length === 0 ? (
@@ -104,7 +109,7 @@ export default function PhysicalNodeCard({ id, data }: NodeProps & { data: Physi
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {data.services.map((svc) => {
-            const serviceUsage = usage?.[placementUsageKey(svc.serviceId, nodeId)];
+            const serviceUsage = usage[placementUsageKey(svc.serviceId, nodeId)];
 
             return (
               <button
@@ -131,7 +136,7 @@ export default function PhysicalNodeCard({ id, data }: NodeProps & { data: Physi
                   <span
                     className={`inline-block size-2 rounded-full ${replicaHealthColor(svc.running, svc.total)}`}
                   />
-                  <span>
+                  <span className="shrink-0 whitespace-nowrap">
                     {svc.running}/{svc.total} tasks
                   </span>
                   {serviceUsage && <ServiceUsage usage={serviceUsage} />}

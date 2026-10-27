@@ -21,8 +21,7 @@ import { PhysicalViewContext } from "../components/topology/PhysicalViewContext"
 import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
-import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useNodeMetrics } from "../hooks/useNodeMetrics";
+import { nodeCpu, nodeMemory, useNodeMetrics } from "../hooks/useNodeMetrics";
 import { usePlacementMetrics } from "../hooks/usePlacementMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { computeLayout } from "../lib/layoutElk";
@@ -45,6 +44,7 @@ const logicalNodeTypes = {
 };
 const logicalEdgeTypes = { networkEdge: NetworkEdge };
 const physicalNodeTypes = { physicalNode: PhysicalNodeCard };
+const nodeUsage = { instant: [nodeCpu, nodeMemory], range: [] };
 
 type View = "logical" | "physical";
 
@@ -205,12 +205,11 @@ function PhysicalView({
 }) {
   const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
   const usage = usePlacementMetrics();
-  const hasNodeExporter = isNodeExporterReady(useMonitoringStatus());
-  const { getForNode } = useNodeMetrics({ usageOnly: true });
+  const { getForNode } = useNodeMetrics(nodeUsage);
 
   const overlay = useMemo(
-    () => ({ network, usage, nodeMetrics: hasNodeExporter ? getForNode : undefined }),
-    [network, usage, hasNodeExporter, getForNode],
+    () => ({ network, usage, nodeMetrics: getForNode }),
+    [network, usage, getForNode],
   );
 
   if (Object.values(data.nodes).every(({ metadata }) => metadata.kind !== "node")) {

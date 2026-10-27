@@ -273,7 +273,7 @@ describe("networks on the physical view", () => {
     nodes: {
       "urn:cetacean:node:n1": {
         label: "worker-01",
-        metadata: { ...baseMetadata, kind: "node", addr: "10.0.0.5" },
+        metadata: { ...baseMetadata, kind: "node", address: "10.0.0.5" },
       },
       "urn:cetacean:service:svc1": {
         label: "web",
@@ -312,11 +312,11 @@ describe("networks on the physical view", () => {
   it("passes each service's networks and the node's address through to its box", () => {
     const { nodes } = placementGraphToReactFlow(graph);
     const data = nodes[0]?.data as {
-      addr: string | undefined;
+      address: string | undefined;
       services: { serviceId: string; networks: string[] }[];
     };
 
-    expect(data.addr).toBe("10.0.0.5");
+    expect(data.address).toBe("10.0.0.5");
     expect(data.services.map(({ serviceId, networks }) => [serviceId, networks])).toEqual([
       ["svc1", ["net2", "net1"]],
       ["svc2", ["net1"]],

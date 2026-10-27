@@ -1882,8 +1882,8 @@ func TestHandleTopology_PlacementServiceNetworksACLFiltered(t *testing.T) {
 		t.Errorf("networks=%v, want only the readable overlay %v", networks, want)
 	}
 
-	if addr := placement.Nodes[jgf.URN("node", "node1")].Metadata["addr"]; addr != "10.0.0.5" {
-		t.Errorf("addr=%v, want 10.0.0.5", addr)
+	if addr := placement.Nodes[jgf.URN("node", "node1")].Metadata["address"]; addr != "10.0.0.5" {
+		t.Errorf("address=%v, want 10.0.0.5", addr)
 	}
 }
 

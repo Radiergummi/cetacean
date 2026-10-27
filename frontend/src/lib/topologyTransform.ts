@@ -223,7 +223,9 @@ export function placementNetworks(graph: JGFGraph): (PlacementNetwork & { label:
   const networks = [...byId.values()];
   const shared = new Set(
     networks
-      .filter(({ name }, index) => networks.findIndex((other) => other.name === name) !== index)
+      .filter(
+        ({ name }, index) => networks.findIndex(({ name: other }) => other === name) !== index,
+      )
       .map(({ name }) => name),
   );
 
@@ -380,7 +382,7 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
       position: { x: 0, y },
       data: {
         label,
-        addr: metadata.addr as string | undefined,
+        address: metadata.address as string | undefined,
         role: metadata.role as string,
         state: metadata.state as string,
         availability: metadata.availability as string,

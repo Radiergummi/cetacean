@@ -791,7 +791,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             role: node.Spec.Role,
             state: node.Status.State,
             availability: node.Spec.Availability,
-            addr: node.Status.Addr,
+            address: node.Status.Addr,
           },
         };
 

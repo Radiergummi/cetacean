@@ -1,6 +1,6 @@
 import { useInstanceResolver } from "./useInstanceResolver";
-import { useMetricsMap } from "./useMetricsMap";
-import { isNodeExporterReady, isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
+import { useMetricsMap, type MetricsMapSpec } from "./useMetricsMap";
+import { isNodeExporterReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useCallback, useMemo } from "react";
 
 export interface NodeMetrics {
@@ -21,51 +21,61 @@ const cpuQuery = `100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="id
 const memQuery = `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`;
 const diskQuery = `max by (instance) ((1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs|squashfs"}) * 100)`;
 
-const spec = {
-  labelKey: "instance",
-  empty: (): NodeMetrics => ({ ...emptyMetrics, cpuHistory: [] }),
-  instant: [
-    {
-      query: cpuQuery,
-      assign: (m: NodeMetrics, v: number) => {
-        m.cpu = v;
-      },
-    },
-    {
-      query: memQuery,
-      assign: (m: NodeMetrics, v: number) => {
-        m.memory = v;
-      },
-    },
-    {
-      query: diskQuery,
-      assign: (m: NodeMetrics, v: number) => {
-        m.disk = v;
-      },
-    },
-  ],
-  range: [
-    {
-      query: cpuQuery,
-      assign: (m: NodeMetrics, v: number[]) => {
-        m.cpuHistory = v;
-      },
-    },
-  ],
-} as const;
+type InstantField = NonNullable<MetricsMapSpec<NodeMetrics>["instant"]>[number];
+type RangeField = NonNullable<MetricsMapSpec<NodeMetrics>["range"]>[number];
 
-const usageSpec = { ...spec, instant: spec.instant.slice(0, 2), range: [] };
+export const nodeCpu: InstantField = {
+  query: cpuQuery,
+  assign: (m, v) => {
+    m.cpu = v;
+  },
+};
 
-// Fetches per-instance metrics from Prometheus and maps them by instance label.
-// Nodes are matched to instances via useInstanceResolver (hostname-based).
-// usageOnly fetches just the CPU and memory instants, and only with node-exporter.
-export function useNodeMetrics({ usageOnly = false }: { usageOnly?: boolean | undefined } = {}) {
-  const monitoring = useMonitoringStatus();
-  const enabled = usageOnly ? isNodeExporterReady(monitoring) : isPrometheusReady(monitoring);
+export const nodeMemory: InstantField = {
+  query: memQuery,
+  assign: (m, v) => {
+    m.memory = v;
+  },
+};
+
+export const nodeDisk: InstantField = {
+  query: diskQuery,
+  assign: (m, v) => {
+    m.disk = v;
+  },
+};
+
+export const nodeCpuHistory: RangeField = {
+  query: cpuQuery,
+  assign: (m, v) => {
+    m.cpuHistory = v;
+  },
+};
+
+const everyInstant = [nodeCpu, nodeMemory, nodeDisk];
+const everyRange = [nodeCpuHistory];
+
+// Fetches per-instance node-exporter metrics, by default every field, and maps
+// them by instance label. Nodes are matched to instances via
+// useInstanceResolver (hostname-based).
+export function useNodeMetrics({
+  instant = everyInstant,
+  range = everyRange,
+}: {
+  instant?: readonly InstantField[] | undefined;
+  range?: readonly RangeField[] | undefined;
+} = {}) {
+  const enabled = isNodeExporterReady(useMonitoringStatus());
   const { resolve } = useInstanceResolver(enabled);
+  const queries = [...instant, ...range].map(({ query }) => query).join("|");
   const byInstance = useMetricsMap(
-    usageOnly ? "node-usage" : "node-metrics",
-    usageOnly ? usageSpec : spec,
+    `node-metrics:${queries}`,
+    {
+      labelKey: "instance",
+      empty: (): NodeMetrics => ({ ...emptyMetrics, cpuHistory: [] }),
+      instant,
+      range,
+    },
     enabled,
   );
 

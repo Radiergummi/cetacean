@@ -8,13 +8,13 @@ import { createContext, useContext } from "react";
  */
 export interface PhysicalViewState {
   network: string | null;
-  usage: Record<string, PlacementUsage> | undefined;
+  usage: Record<string, PlacementUsage>;
   nodeMetrics: ((hostname: string, address: string | undefined) => NodeMetrics) | undefined;
 }
 
 export const PhysicalViewContext = createContext<PhysicalViewState>({
   network: null,
-  usage: undefined,
+  usage: {},
   nodeMetrics: undefined,
 });
 
