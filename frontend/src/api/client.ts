@@ -496,8 +496,17 @@ export interface ClusterSnapshot {
   reservedMemory: number;
   totalCPU: number;
   totalMemory: number;
+  quorum: ManagerQuorum;
   prometheusConfigured: boolean;
   localNodeID?: string | undefined;
+}
+
+export interface ManagerQuorum {
+  managers: number;
+  reachable: number;
+  size: number;
+  held: boolean;
+  canLose: number;
 }
 
 export interface ClusterMetrics {

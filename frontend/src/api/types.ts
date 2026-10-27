@@ -854,7 +854,10 @@ export type RecommendationCategory =
   | "node-memory-pressure"
   | "single-replica"
   | "manager-has-workloads"
-  | "uneven-distribution";
+  | "uneven-distribution"
+  | "single-manager"
+  | "even-managers"
+  | "quorum-at-risk";
 
 export type RecommendationSeverity = "info" | "warning" | "critical";
 export type RecommendationScope = "service" | "node" | "cluster";

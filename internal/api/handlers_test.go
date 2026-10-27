@@ -182,7 +182,11 @@ func TestHandleReady_Ready(t *testing.T) {
 
 func TestHandleCluster(t *testing.T) {
 	c := cache.New(nil)
-	c.SetNode(swarm.Node{ID: "n1"})
+	c.SetNode(swarm.Node{
+		ID:            "n1",
+		Spec:          swarm.NodeSpec{Role: swarm.NodeRoleManager},
+		ManagerStatus: &swarm.ManagerStatus{Reachability: swarm.ReachabilityReachable},
+	})
 	c.SetService(swarm.Service{ID: "s1"})
 	h := newTestHandlers(t, withCache(c))
 
@@ -210,6 +214,11 @@ func TestHandleCluster(t *testing.T) {
 			body["nodeCount"],
 			body["serviceCount"],
 		)
+	}
+
+	quorum, _ := body["quorum"].(map[string]any)
+	if quorum["managers"] != 1.0 || quorum["reachable"] != 1.0 || quorum["size"] != 1.0 {
+		t.Errorf("quorum = %v, want one reachable manager of quorum 1", body["quorum"])
 	}
 }
 

@@ -1,7 +1,7 @@
 import { randomHex, type Dataset } from "./dataset";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
-import type { ClusterSnapshot, HealthInfo, LogResponse } from "@/api/client";
+import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
 import type {
   ClusterCapacity,
   CollectionResponse,
@@ -307,8 +307,18 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let nodesReady = 0;
   let nodesDown = 0;
   let nodesDraining = 0;
+  let managers = 0;
+  let reachableManagers = 0;
 
   for (const node of dataset.nodes) {
+    if (node.ManagerStatus) {
+      managers++;
+
+      if (node.ManagerStatus.Reachability !== "unreachable") {
+        reachableManagers++;
+      }
+    }
+
     totalCPU += node.Description.Resources.NanoCPUs ?? 0;
     totalMemory += node.Description.Resources.MemoryBytes ?? 0;
 
@@ -383,7 +393,24 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     reservedMemory,
     totalCPU,
     totalMemory,
+    quorum: quorumOf(managers, reachableManagers),
     prometheusConfigured: true,
+  };
+}
+
+function quorumOf(managers: number, reachable: number): ManagerQuorum {
+  if (managers === 0) {
+    return { managers, reachable, size: 0, held: false, canLose: 0 };
+  }
+
+  const size = Math.floor(managers / 2) + 1;
+
+  return {
+    managers,
+    reachable,
+    size,
+    held: reachable >= size,
+    canLose: Math.max(reachable - size, 0),
   };
 }
 

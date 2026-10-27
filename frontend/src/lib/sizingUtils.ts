@@ -72,7 +72,12 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
     return Copy;
   }
 
-  if (category === "manager-has-workloads") {
+  if (
+    category === "manager-has-workloads" ||
+    category === "single-manager" ||
+    category === "even-managers" ||
+    category === "quorum-at-risk"
+  ) {
     return Shield;
   }
 

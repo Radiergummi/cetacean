@@ -5,6 +5,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // clusterOverview is the shape cetacean://cluster serves. cache.ClusterSnapshot
@@ -30,6 +31,8 @@ type clusterOverview struct {
 	MaxNodeCPUCores    float64 `json:"maxNodeCPUCores"`
 	MaxNodeMemoryBytes int64   `json:"maxNodeMemoryBytes"`
 
+	Quorum quorum.Quorum `json:"quorum"`
+
 	LastSync time.Time `json:"lastSync"`
 }
 
@@ -54,6 +57,8 @@ func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
 
 		MaxNodeCPUCores:    float64(snap.MaxNodeCPU),
 		MaxNodeMemoryBytes: snap.MaxNodeMemory,
+
+		Quorum: snap.Quorum,
 
 		LastSync: snap.LastSync,
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/quorum"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 )
@@ -118,6 +119,7 @@ type ClusterOverviewResponse struct {
 	ReservedMemory       int64          `json:"reservedMemory"`
 	TotalCPU             int            `json:"totalCPU"`
 	TotalMemory          int64          `json:"totalMemory"`
+	Quorum               quorum.Quorum  `json:"quorum"`
 	PrometheusConfigured bool           `json:"prometheusConfigured"`
 	LocalNodeID          string         `json:"localNodeID,omitempty"`
 }

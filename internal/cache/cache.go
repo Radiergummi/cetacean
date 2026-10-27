@@ -2,6 +2,7 @@ package cache
 
 import (
 	"cmp"
+	"maps"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/metrics"
 	"github.com/radiergummi/cetacean/internal/placement"
+	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // EventType identifies the kind of resource an event relates to.
@@ -109,6 +111,7 @@ type ClusterSnapshot struct {
 	MaxNodeCPU        int            `json:"maxNodeCPU"`
 	MaxNodeMemory     int64          `json:"maxNodeMemory"`
 	LastSync          time.Time      `json:"lastSync"`
+	Quorum            quorum.Quorum  `json:"quorum"`
 
 	// RunningByService is the per-service running-task count Snapshot builds
 	// anyway to decide converged versus degraded, handed back so a caller
@@ -1255,6 +1258,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		MaxNodeCPU:        nodes.MaxNodeCPU,
 		MaxNodeMemory:     nodes.MaxNodeMemory,
 		LastSync:          c.lastSync,
+		Quorum:            quorum.Of(maps.Values(c.nodes.items)),
 		RunningByService:  runningByService,
 		Flapping:          flapping,
 

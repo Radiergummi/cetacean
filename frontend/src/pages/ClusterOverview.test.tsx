@@ -1,5 +1,5 @@
 import { MockEventSource, createTestQueryClient, createWrapper } from "../test/mocks";
-import ClusterOverview from "./ClusterOverview";
+import ClusterOverview, { describeQuorum } from "./ClusterOverview";
 import { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -82,6 +82,7 @@ describe("ClusterOverview", () => {
       reservedMemory: 0,
       totalCPU: 8,
       totalMemory: 17179869184,
+      quorum: { managers: 3, reachable: 3, size: 2, held: true, canLose: 1 },
       prometheusConfigured: true,
     });
 
@@ -98,5 +99,49 @@ describe("ClusterOverview", () => {
     expect(screen.getByText("12/12 converged")).toBeInTheDocument();
     expect(screen.getByText("39 running")).toBeInTheDocument();
     expect(screen.getByText("47 total · 8 stacks")).toBeInTheDocument();
+    expect(screen.getByText("3/3 reachable")).toBeInTheDocument();
+    expect(screen.getByText("tolerates 1 manager failure")).toBeInTheDocument();
+  });
+});
+
+describe("describeQuorum", () => {
+  it("is red once quorum is lost", () => {
+    expect(describeQuorum({ managers: 3, reachable: 1, size: 2, held: false, canLose: 0 })).toEqual(
+      { primary: "1/3 reachable", secondary: "quorum lost, 2 needed", status: "red" },
+    );
+  });
+
+  it("is red when an unreachable manager leaves no failure to spare", () => {
+    expect(
+      describeQuorum({ managers: 3, reachable: 2, size: 2, held: true, canLose: 0 }).status,
+    ).toBe("red");
+  });
+
+  it("is amber for an unreachable manager with tolerance left", () => {
+    expect(describeQuorum({ managers: 5, reachable: 4, size: 3, held: true, canLose: 1 })).toEqual({
+      primary: "4/5 reachable",
+      secondary: "tolerates 1 manager failure more",
+      status: "amber",
+    });
+  });
+
+  it("is neutral for a manager set with no tolerance by design", () => {
+    expect(describeQuorum({ managers: 1, reachable: 1, size: 1, held: true, canLose: 0 })).toEqual({
+      primary: "1/1 reachable",
+      secondary: "tolerates no manager failure",
+      status: "neutral",
+    });
+  });
+
+  it("is neutral before any manager is known", () => {
+    expect(
+      describeQuorum({ managers: 0, reachable: 0, size: 0, held: false, canLose: 0 }).status,
+    ).toBe("neutral");
+  });
+
+  it("counts the failures it tolerates", () => {
+    expect(
+      describeQuorum({ managers: 5, reachable: 5, size: 3, held: true, canLose: 2 }).secondary,
+    ).toBe("tolerates 2 manager failures");
   });
 });

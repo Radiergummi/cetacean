@@ -6,6 +6,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // The point of the landing call: it names what is wrong. A count forces the
@@ -247,5 +248,17 @@ func statusUpdatingService(id, name string, state swarm.UpdateState) swarm.Servi
 			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &one}},
 		},
 		UpdateStatus: &swarm.UpdateStatus{State: state},
+	}
+}
+
+// A manager its peers can't reach is a fault even while its node reads ready,
+// as in a partition between the managers.
+func TestBuildClusterStatusUnhealthyWithAnUnreachableManager(t *testing.T) {
+	snap := cache.ClusterSnapshot{
+		Quorum: quorum.Quorum{Managers: 3, Reachable: 2, Size: 2, Held: true},
+	}
+
+	if BuildClusterStatus(snap, nil, nil, nil).Healthy {
+		t.Error("healthy = true with a manager unreachable")
 	}
 }

@@ -122,6 +122,16 @@ func TestRoleImpact(t *testing.T) {
 				"it then tolerates 1 manager failure.",
 			},
 		},
+		"promote a fourth beside an unreachable manager": {
+			nodes: []swarm.Node{
+				manager("m1", true), manager("m2", true), manager("m3", false), worker("w1"),
+			},
+			node: 3,
+			role: swarm.NodeRoleManager,
+			want: []string{
+				"Quorum survives: 3 of 4 managers reachable, 3 needed; it then tolerates 0 manager failures.",
+			},
+		},
 		"no change": {
 			nodes: []swarm.Node{manager("m1", true)},
 			node:  0,

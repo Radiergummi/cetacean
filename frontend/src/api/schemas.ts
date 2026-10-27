@@ -271,6 +271,13 @@ export const clusterSchema = z.looseObject({
   taskCount: z.number(),
   stackCount: z.number(),
   tasksByState: z.record(z.string(), z.number()),
+  quorum: z.looseObject({
+    managers: z.number(),
+    reachable: z.number(),
+    size: z.number(),
+    held: z.boolean(),
+    canLose: z.number(),
+  }),
 });
 
 export const clusterCapacitySchema = z.looseObject({
