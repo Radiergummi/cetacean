@@ -16,6 +16,20 @@ interface ConfigsEditorProps {
   onSaved: (configs: ServiceConfigRef[]) => void;
 }
 
+/**
+ * The target a newly attached config defaults to: the path a removed config
+ * vacated in this edit, so a rotation keeps the file the app reads.
+ */
+export function defaultConfigTarget(
+  configName: string,
+  saved: ServiceConfigRef[],
+  draft: ServiceConfigRef[],
+): string {
+  const vacated = saved.find(({ fileName }) => !draft.some((item) => item.fileName === fileName));
+
+  return vacated?.fileName ?? `/${splitStackPrefix(configName).name}`;
+}
+
 export function ConfigsEditor({
   serviceId,
   configs,
@@ -42,13 +56,13 @@ export function ConfigsEditor({
       .catch(console.warn);
   }, []);
 
-  function handleConfigSelected(configId: string) {
+  function handleConfigSelected(configId: string, draft: ServiceConfigRef[]) {
     setNewConfigId(configId);
 
     const match = availableConfigs.find((option) => option.value === configId);
 
     if (match) {
-      setNewTargetPath(`/${splitStackPrefix(match.label).name}`);
+      setNewTargetPath(defaultConfigTarget(match.label, configs, draft));
     }
   }
 
@@ -98,10 +112,10 @@ export function ConfigsEditor({
           className="font-mono text-xs"
         />
       )}
-      renderAddKeyCell={() => (
+      renderAddKeyCell={(draft) => (
         <Combobox
           value={newConfigId}
-          onChange={handleConfigSelected}
+          onChange={(configId) => handleConfigSelected(configId, draft)}
           options={availableConfigs}
           placeholder="Select config..."
           allowCustom={false}
