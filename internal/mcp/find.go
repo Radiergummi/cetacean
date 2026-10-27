@@ -73,6 +73,15 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		)
 	}
 
+	// Checked for every type, so a bad value is refused whatever it is given with.
+	label := strings.TrimSpace(req.GetString("label", ""))
+	sel, err := cluster.ParseVersionSelection(
+		req.GetString("versions", ""), "", cluster.Narrowing{Search: query, Label: label},
+	)
+	if err != nil {
+		return "", err
+	}
+
 	// Reuse the resource dispatch rather than the cache directly: it is where
 	// ACL filtering and redaction live, and duplicating it here would be a
 	// second path to keep in step.
@@ -92,20 +101,11 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		stack: strings.TrimSpace(req.GetString("stack", "")),
 		node:  strings.TrimSpace(req.GetString("node", "")),
 		image: strings.TrimSpace(req.GetString("image", "")),
-		label: strings.TrimSpace(req.GetString("label", "")),
+		label: label,
 	}
 
-	// A name or label can find an older version; narrowing by where something
-	// runs or which stack it is in still lists only the newest.
 	view, versioned := s.versionView(ctx, listed)
 	if versioned {
-		searching := filters.query != "" || filters.label != ""
-
-		sel, err := cluster.ParseVersionSelection(req.GetString("versions", ""), "", searching)
-		if err != nil {
-			return "", err
-		}
-
 		rows = cluster.SelectVersions(
 			rows,
 			func(r cluster.Row) string { return r.ID },

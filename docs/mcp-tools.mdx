@@ -448,11 +448,13 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 - stacks set `desired` alone, counting member services rather than replicas
 - nodes, tasks, configs, secrets, networks, and volumes set neither
 
-A config or secret listing, from `find` or a read of `cetacean://configs` or `cetacean://secrets`, shows only the
-newest version of each group of [versions](dashboard#versions) unless `versions` is `all`; a `find` given `query` or
-`label` matches every version, while `stack`, `state`, `node` and `image` keep the newest. Config and secret rows carry `usedBy`, the number of services whose spec or previous spec uses them, and, when
-they're one of several versions, `versionOf` naming the group, `versionInferred` when it was matched by name, and
-on the newest `newestVersion` and `olderVersions`, the number of older ones. A config or secret digest carries the
+A config or secret listing, from `find` or a read of `cetacean://configs` or `cetacean://secrets`, shows the newest
+version of each group of [versions](dashboard#versions) and every older one a service's current spec uses, unless
+`versions` is `all`; a `find` given `query` or `label` matches every version, while `stack`, `state`, `node` and
+`image` keep the default. Config and secret rows carry `usedBy`, the number of services whose spec or previous spec
+uses them, and, when they're one of several versions, `versionOf` naming the group, `versionInferred` when it was
+matched by name, `inUse` on an older one still in use, and on the newest `newestVersion` and `olderVersions`, the
+number of older ones the listing hides. A config or secret digest carries the
 same in `details`, and a subscription to one hears when another version in its group comes or goes. All of them
 count only what the caller may read.
 

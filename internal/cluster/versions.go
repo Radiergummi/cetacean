@@ -14,11 +14,13 @@ import (
 
 // Version is a config's or secret's place among its versions, as one caller
 // sees them: grouped only with versions it may read, so its newest readable
-// version is the one it calls newest.
+// version is the one it calls newest. InUse marks an older version a service's
+// current spec uses; OlderVersions counts, on the newest, the older ones not in use.
 type Version struct {
 	Of            string
 	Inferred      bool
 	Newest        bool
+	InUse         bool
 	OlderVersions int
 }
 
@@ -28,6 +30,7 @@ type VersionFields struct {
 	VersionOf       string `json:"VersionOf,omitempty"`
 	VersionInferred bool   `json:"VersionInferred,omitempty"`
 	NewestVersion   bool   `json:"NewestVersion,omitempty"`
+	InUse           bool   `json:"InUse,omitempty"`
 	OlderVersions   int    `json:"OlderVersions,omitempty"`
 	UsedBy          int    `json:"UsedBy"`
 }
@@ -38,6 +41,7 @@ func (v Version) Fields(usedBy int) VersionFields {
 		VersionOf:       v.Of,
 		VersionInferred: v.Inferred,
 		NewestVersion:   v.Newest,
+		InUse:           v.InUse,
 		OlderVersions:   v.OlderVersions,
 		UsedBy:          usedBy,
 	}
@@ -48,6 +52,7 @@ type VersionDetail struct {
 	VersionOf       string `json:"versionOf,omitempty"`
 	VersionInferred bool   `json:"versionInferred,omitempty"`
 	NewestVersion   bool   `json:"newestVersion,omitempty"`
+	InUse           bool   `json:"inUse,omitempty"`
 	OlderVersions   int    `json:"olderVersions,omitempty"`
 	UsedBy          int    `json:"usedBy"`
 }
@@ -68,6 +73,9 @@ func (d VersionDetail) Map() map[string]any {
 	if d.NewestVersion {
 		out["newestVersion"] = true
 	}
+	if d.InUse {
+		out["inUse"] = true
+	}
 	if d.OlderVersions != 0 {
 		out["olderVersions"] = d.OlderVersions
 	}
@@ -87,52 +95,96 @@ type VersionedSecret struct {
 	VersionFields
 }
 
-// VersionGroups is the grouping of the configs or secrets one caller may read.
-type VersionGroups map[string]versions.Membership
-
-// ConfigVersionGroups groups the configs a caller may read.
-func ConfigVersionGroups(readable []swarm.Config) VersionGroups {
-	return versions.Group(versions.ConfigItems(readable))
+// VersionGroups is the grouping of the configs or secrets one caller may read,
+// with which older versions a current spec keeps in use.
+type VersionGroups struct {
+	members map[string]versions.Membership
+	inUse   map[string]bool
+	hidden  map[versions.GroupKey]int
 }
 
-// SecretVersionGroups groups the secrets a caller may read.
-func SecretVersionGroups(readable []swarm.Secret) VersionGroups {
-	return versions.Group(versions.SecretItems(readable))
+func groupVersions(items []versions.Item, inUse func(id string) bool) VersionGroups {
+	g := VersionGroups{
+		members: versions.Group(items),
+		inUse:   map[string]bool{},
+		hidden:  map[versions.GroupKey]int{},
+	}
+
+	for id, m := range g.members {
+		if m.Rank == 0 {
+			continue
+		}
+		if inUse(id) {
+			g.inUse[id] = true
+		} else {
+			g.hidden[versions.GroupKey{Stack: m.Stack, Name: m.Of}]++
+		}
+	}
+
+	return g
+}
+
+// ConfigVersionGroups groups the configs a caller may read; inUse says which a
+// service's current spec uses.
+func ConfigVersionGroups(readable []swarm.Config, inUse func(id string) bool) VersionGroups {
+	return groupVersions(versions.ConfigItems(readable), inUse)
+}
+
+// SecretVersionGroups is ConfigVersionGroups for secrets.
+func SecretVersionGroups(readable []swarm.Secret, inUse func(id string) bool) VersionGroups {
+	return groupVersions(versions.SecretItems(readable), inUse)
 }
 
 // Version reports where id sits in g. An ungrouped item is its own newest.
 func (g VersionGroups) Version(id string) Version {
-	m, ok := g[id]
+	m, ok := g.members[id]
 	if !ok {
 		return Version{Newest: true}
 	}
 
-	v := Version{Of: m.Of, Inferred: m.Inferred, Newest: m.Rank == 0}
+	v := Version{Of: m.Of, Inferred: m.Inferred, Newest: m.Rank == 0, InUse: g.inUse[id]}
 	if v.Newest {
-		v.OlderVersions = m.Count - 1
+		v.OlderVersions = g.hidden[versions.GroupKey{Stack: m.Stack, Name: m.Of}]
 	}
 
 	return v
 }
 
-// VersionSelection is which versions a listing shows: by default only each
-// group's newest, every one with All, and with Of only the group holding the
-// item with that ID, newest first.
+// shown reports whether a listing shows id by default: the newest of its group,
+// an older version still in use, or an item with no other version.
+func (g VersionGroups) shown(id string) bool {
+	return g.members[id].Rank == 0 || g.inUse[id]
+}
+
+// VersionSelection is which versions a listing shows: by default each group's
+// newest and the older ones still in use, every one with All, and with Of only
+// the group holding the item with that ID, newest first.
 type VersionSelection struct {
 	All bool
 	Of  string
 }
 
+// Narrowing is how a request narrows a config or secret listing. A free-text
+// search, a filter expression or a label filter can find an older version by
+// name, so it lists every version it matches; a stack, state, node or image
+// narrowing does not.
+type Narrowing struct {
+	Search, Filter, Label string
+}
+
+func (n Narrowing) findsOlderVersions() bool {
+	return n.Search != "" || n.Filter != "" || n.Label != ""
+}
+
 // ErrUnknownVersions is a versions value that is neither "newest" nor "all".
 var ErrUnknownVersions = errors.New(`versions must be "newest" or "all"`)
 
-// ParseVersionSelection reads the versions and versionsOf arguments. A search
-// or filter shows every version it matches unless versions says otherwise, so
-// an older version can still be found by name.
-func ParseVersionSelection(versionsArg, of string, searching bool) (VersionSelection, error) {
+// ParseVersionSelection reads the versions and versionsOf arguments for a
+// listing narrowed by n.
+func ParseVersionSelection(versionsArg, of string, n Narrowing) (VersionSelection, error) {
 	switch versionsArg {
 	case "":
-		return VersionSelection{All: searching, Of: of}, nil
+		return VersionSelection{All: n.findsOlderVersions(), Of: of}, nil
 	case "newest":
 		return VersionSelection{Of: of}, nil
 	case "all":
@@ -143,7 +195,7 @@ func ParseVersionSelection(versionsArg, of string, searching bool) (VersionSelec
 }
 
 // SelectVersions keeps the items sel shows out of the readable items g was
-// grouped from, as a new slice. An ungrouped item is its own newest version.
+// grouped from, as a new slice.
 func SelectVersions[T any](
 	items []T,
 	id func(T) string,
@@ -153,21 +205,23 @@ func SelectVersions[T any](
 	var out []T
 
 	if sel.Of != "" {
-		target, grouped := g[sel.Of]
+		target, grouped := g.members[sel.Of]
 		for _, item := range items {
-			m, ok := g[id(item)]
+			m, ok := g.members[id(item)]
 			if id(item) == sel.Of || grouped && ok && m.Of == target.Of && m.Stack == target.Stack {
 				out = append(out, item)
 			}
 		}
 
-		slices.SortStableFunc(out, func(a, b T) int { return g[id(a)].Rank - g[id(b)].Rank })
+		slices.SortStableFunc(out, func(a, b T) int {
+			return g.members[id(a)].Rank - g.members[id(b)].Rank
+		})
 
 		return out
 	}
 
 	for _, item := range items {
-		if sel.All || g[id(item)].Rank == 0 {
+		if sel.All || g.shown(id(item)) {
 			out = append(out, item)
 		}
 	}
@@ -187,6 +241,19 @@ func ReadableUsers(refs []cache.ServiceRef, canRead func(resource string) bool) 
 	return n
 }
 
+// inCurrentUse says whether any readable service among users holds an item in
+// its current spec; one a previous spec alone names keeps no version shown.
+func inCurrentUse(
+	users func(id string) []cache.ServiceRef,
+	canRead func(resource string) bool,
+) func(id string) bool {
+	return func(id string) bool {
+		return slices.ContainsFunc(users(id), func(ref cache.ServiceRef) bool {
+			return !ref.Rollback && canRead(ServiceRefACLResource(ref))
+		})
+	}
+}
+
 // VersionView is one caller's view of a config or secret listing: the groups
 // among what it may read, and the services it may read that use each item.
 type VersionView struct {
@@ -201,7 +268,9 @@ func ConfigVersionView(
 	readable []swarm.Config,
 	canRead func(resource string) bool,
 ) VersionView {
-	return VersionView{ConfigVersionGroups(readable), c.ServicesUsingConfig, canRead}
+	groups := ConfigVersionGroups(readable, inCurrentUse(c.ServicesUsingConfig, canRead))
+
+	return VersionView{groups, c.ServicesUsingConfig, canRead}
 }
 
 // SecretVersionView groups the readable secrets for a caller.
@@ -210,7 +279,9 @@ func SecretVersionView(
 	readable []swarm.Secret,
 	canRead func(resource string) bool,
 ) VersionView {
-	return VersionView{SecretVersionGroups(readable), c.ServicesUsingSecret, canRead}
+	groups := SecretVersionGroups(readable, inCurrentUse(c.ServicesUsingSecret, canRead))
+
+	return VersionView{groups, c.ServicesUsingSecret, canRead}
 }
 
 // Fields is what the item with id adds to a listing.
@@ -218,20 +289,35 @@ func (v VersionView) Fields(id string) VersionFields {
 	return v.Groups.Version(id).Fields(ReadableUsers(v.users(id), v.canRead))
 }
 
-// VersionedConfigs is the listing sel selects from readable, with each
-// config's version fields.
+// Configs is items with each config's version fields.
+func (v VersionView) Configs(items []swarm.Config) []VersionedConfig {
+	out := make([]VersionedConfig, len(items))
+	for i, cfg := range items {
+		out[i] = VersionedConfig{Config: cfg, VersionFields: v.Fields(cfg.ID)}
+	}
+
+	return out
+}
+
+// Secrets is items with each secret's version fields.
+func (v VersionView) Secrets(items []swarm.Secret) []VersionedSecret {
+	out := make([]VersionedSecret, len(items))
+	for i, sec := range items {
+		out[i] = VersionedSecret{Secret: sec, VersionFields: v.Fields(sec.ID)}
+	}
+
+	return out
+}
+
+// VersionedConfigs is the listing sel selects from readable.
 func VersionedConfigs(
 	v VersionView,
 	readable []swarm.Config,
 	sel VersionSelection,
 ) []VersionedConfig {
-	shown := SelectVersions(readable, func(c swarm.Config) string { return c.ID }, v.Groups, sel)
-	out := make([]VersionedConfig, len(shown))
-	for i, cfg := range shown {
-		out[i] = VersionedConfig{Config: cfg, VersionFields: v.Fields(cfg.ID)}
-	}
-
-	return out
+	return v.Configs(
+		SelectVersions(readable, func(c swarm.Config) string { return c.ID }, v.Groups, sel),
+	)
 }
 
 // VersionedSecrets is VersionedConfigs for secrets.
@@ -240,13 +326,9 @@ func VersionedSecrets(
 	readable []swarm.Secret,
 	sel VersionSelection,
 ) []VersionedSecret {
-	shown := SelectVersions(readable, func(s swarm.Secret) string { return s.ID }, v.Groups, sel)
-	out := make([]VersionedSecret, len(shown))
-	for i, sec := range shown {
-		out[i] = VersionedSecret{Secret: sec, VersionFields: v.Fields(sec.ID)}
-	}
-
-	return out
+	return v.Secrets(
+		SelectVersions(readable, func(s swarm.Secret) string { return s.ID }, v.Groups, sel),
+	)
 }
 
 // AnnotateVersionRows places config or secret rows among their versions.
@@ -254,7 +336,8 @@ func AnnotateVersionRows(rows []Row, v VersionView) {
 	for i := range rows {
 		f := v.Fields(rows[i].ID)
 		rows[i].VersionOf, rows[i].VersionInferred = f.VersionOf, f.VersionInferred
-		rows[i].NewestVersion, rows[i].OlderVersions = f.NewestVersion, f.OlderVersions
+		rows[i].NewestVersion, rows[i].InUse = f.NewestVersion, f.InUse
+		rows[i].OlderVersions = f.OlderVersions
 		rows[i].UsedBy = new(f.UsedBy)
 	}
 }
@@ -263,7 +346,7 @@ func AnnotateVersionRows(rows []Row, v VersionView) {
 type VersionRef struct{ ID, Name string }
 
 // VersionIndex holds every config's and secret's group, rebuilt only once a
-// config, secret or service changes (cache.VersionGeneration), so one item's
+// config or secret is set or removed (cache.VersionGeneration), so one item's
 // siblings are found without matching every name in the cluster on each read.
 type VersionIndex struct {
 	cache *cache.Cache
@@ -341,7 +424,9 @@ func (x *VersionIndex) ConfigVersion(cfg swarm.Config, canRead func(resource str
 		}
 	}
 
-	return ConfigVersionGroups(siblings).Version(cfg.ID)
+	inUse := inCurrentUse(x.cache.ServicesUsingConfig, canRead)
+
+	return ConfigVersionGroups(siblings, inUse).Version(cfg.ID)
 }
 
 // SecretVersion is ConfigVersion for a secret.
@@ -358,7 +443,9 @@ func (x *VersionIndex) SecretVersion(sec swarm.Secret, canRead func(resource str
 		}
 	}
 
-	return SecretVersionGroups(siblings).Version(sec.ID)
+	inUse := inCurrentUse(x.cache.ServicesUsingSecret, canRead)
+
+	return SecretVersionGroups(siblings, inUse).Version(sec.ID)
 }
 
 // DigestsTouchedBy names the configs and secrets whose digest event changes

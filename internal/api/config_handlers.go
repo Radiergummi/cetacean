@@ -47,18 +47,17 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 		},
 		itemType: "Config",
 		rows:     cluster.RowsForConfigs,
+		versions: &versionedSpec[swarm.Config]{
+			id: configID,
+			view: func(readable []swarm.Config, canRead func(string) bool) cluster.VersionView {
+				return cluster.ConfigVersionView(h.cache, readable, canRead)
+			},
+		},
 	}
 
-	versions := versionedList(
-		h, r, &spec, configID,
-		func(readable []swarm.Config, canRead func(string) bool) cluster.VersionView {
-			return cluster.ConfigVersionView(h.cache, readable, canRead)
-		},
-	)
-
-	handleListOf(h, w, r, spec, func(c ConfigListItem) string { return "/configs/" + c.ID },
-		func(page []swarm.Config) []ConfigListItem {
-			return cluster.VersionedConfigs(*versions, page, cluster.VersionSelection{All: true})
+	handleListOf(h, w, r, spec, func(item ConfigListItem) string { return "/configs/" + item.ID },
+		func(page []swarm.Config, versions cluster.VersionView) []ConfigListItem {
+			return versions.Configs(page)
 		},
 	)
 }

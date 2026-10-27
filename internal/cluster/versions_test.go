@@ -27,27 +27,50 @@ func TestSelectVersions(t *testing.T) {
 		versionedSecret("db_v3", 3),
 		versionedSecret("db_v2", 2),
 	}
-	groups := SecretVersionGroups(secrets)
 	id := func(s swarm.Secret) string { return s.ID }
+	unused := func(string) bool { return false }
 
 	tests := []struct {
-		name string
-		sel  VersionSelection
-		want []string
+		name  string
+		inUse func(string) bool
+		sel   VersionSelection
+		want  []string
 	}{
-		{"newest", VersionSelection{}, []string{"api", "db_v3"}},
-		{"all", VersionSelection{All: true}, []string{"db_v1", "api", "db_v3", "db_v2"}},
+		{"an unused older version is hidden", unused, VersionSelection{}, []string{"api", "db_v3"}},
+		{
+			// Rotation midway: a service still runs the old version.
+			"an older version in use stays",
+			func(id string) bool { return id == "db_v2" },
+			VersionSelection{},
+			[]string{"api", "db_v3", "db_v2"},
+		},
+		{
+			// Two keys live side by side: every version a service runs stays.
+			"every older version in use stays",
+			func(id string) bool { return id == "db_v1" || id == "db_v2" },
+			VersionSelection{},
+			[]string{"db_v1", "api", "db_v3", "db_v2"},
+		},
+		{"all", unused, VersionSelection{All: true}, []string{"db_v1", "api", "db_v3", "db_v2"}},
 		{
 			"one group, newest first",
+			unused,
 			VersionSelection{Of: "db_v1"},
 			[]string{"db_v3", "db_v2", "db_v1"},
 		},
-		{"an ungrouped item is its own group", VersionSelection{Of: "api"}, []string{"api"}},
-		{"an unknown ID names nothing", VersionSelection{Of: "gone"}, nil},
+		{
+			"an ungrouped item is its own group",
+			unused,
+			VersionSelection{Of: "api"},
+			[]string{"api"},
+		},
+		{"an unknown ID names nothing", unused, VersionSelection{Of: "gone"}, nil},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			groups := SecretVersionGroups(secrets, test.inUse)
+
 			var got []string
 			for _, s := range SelectVersions(secrets, id, groups, test.sel) {
 				got = append(got, s.ID)
@@ -59,42 +82,86 @@ func TestSelectVersions(t *testing.T) {
 		})
 	}
 
-	if v := groups.Version("db_v3"); !v.Newest || v.OlderVersions != 2 || v.Of != "db" {
-		t.Errorf("Version(db_v3) = %+v", v)
+	// db_v2 in use is shown, so the newest counts only db_v1 as hidden.
+	groups := SecretVersionGroups(secrets, func(id string) bool { return id == "db_v2" })
+	if v := groups.Version("db_v3"); !v.Newest || v.OlderVersions != 1 || v.Of != "db" {
+		t.Errorf("Version(db_v3) = %+v, want one hidden older version", v)
+	}
+	if v := groups.Version("db_v2"); v.Newest || !v.InUse {
+		t.Errorf("Version(db_v2) = %+v, want an older version in use", v)
 	}
 	if v := groups.Version("api"); v != (Version{Newest: true}) {
 		t.Errorf("Version(api) = %+v, want its own newest version", v)
 	}
 }
 
+// A previous spec alone keeps no older version shown: only a rollback needs it.
+func TestSecretVersionViewShowsOnlyCurrentUse(t *testing.T) {
+	c := cache.New(nil)
+	secrets := []swarm.Secret{
+		versionedSecret("db_v1", 1), versionedSecret("db_v2", 2), versionedSecret("db_v3", 3),
+	}
+	for _, sec := range secrets {
+		c.SetSecret(sec)
+	}
+
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+				Secrets: []*swarm.SecretReference{{SecretID: "db_v2"}},
+			}},
+		},
+		PreviousSpec: &swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{
+				Secrets: []*swarm.SecretReference{{SecretID: "db_v1"}},
+			},
+		}},
+	})
+
+	view := SecretVersionView(c, secrets, func(string) bool { return true })
+
+	var shown []string
+	for _, sec := range VersionedSecrets(view, secrets, VersionSelection{}) {
+		shown = append(shown, sec.ID)
+	}
+
+	if !slices.Equal(shown, []string{"db_v2", "db_v3"}) {
+		t.Errorf("shown = %v, want db_v2 in use and the newest", shown)
+	}
+}
+
 func TestParseVersionSelection(t *testing.T) {
 	tests := []struct {
 		value     string
-		searching bool
+		narrowing Narrowing
 		all       bool
 	}{
-		{"", false, false},
-		{"newest", false, false},
-		{"all", false, true},
-		// A search finds an older version by name unless asked not to.
-		{"", true, true},
-		{"newest", true, false},
+		{"", Narrowing{}, false},
+		{"newest", Narrowing{}, false},
+		{"all", Narrowing{}, true},
+		// A search, filter or label finds an older version unless asked not to.
+		{"", Narrowing{Search: "db"}, true},
+		{"", Narrowing{Filter: `name == "db"`}, true},
+		{"", Narrowing{Label: "team"}, true},
+		{"newest", Narrowing{Search: "db"}, false},
 	}
 
 	for _, test := range tests {
-		sel, err := ParseVersionSelection(test.value, "", test.searching)
+		sel, err := ParseVersionSelection(test.value, "", test.narrowing)
 		if err != nil || sel.All != test.all {
 			t.Errorf(
-				"ParseVersionSelection(%q, %v) = %+v, %v",
+				"ParseVersionSelection(%q, %+v) = %+v, %v",
 				test.value,
-				test.searching,
+				test.narrowing,
 				sel,
 				err,
 			)
 		}
 	}
 
-	if _, err := ParseVersionSelection("latest", "", false); err == nil {
+	if _, err := ParseVersionSelection("latest", "", Narrowing{}); err == nil {
 		t.Error("ParseVersionSelection(latest) accepted an unknown value")
 	}
 }

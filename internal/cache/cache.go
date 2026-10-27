@@ -187,8 +187,8 @@ type Cache struct {
 	// report a wholly replaced cache as unchanged.
 	generation atomic.Uint64
 
-	// versionGeneration advances only on a config, secret or service change, or
-	// a resync, which is all that config and secret versions are derived from.
+	// versionGeneration advances only when a config or secret is set or removed,
+	// or on a resync: all that config and secret version groups are made of.
 	versionGeneration atomic.Uint64
 
 	addresses     atomic.Pointer[addressMemo]
@@ -202,8 +202,8 @@ type Cache struct {
 // has between being rendered and being written.
 func (c *Cache) Generation() uint64 { return c.generation.Load() }
 
-// VersionGeneration is Generation counted over configs, secrets and services
-// alone, the inputs of config and secret version groups.
+// VersionGeneration is Generation counted over config and secret sets and
+// removals alone, the inputs of config and secret version groups.
 func (c *Cache) VersionGeneration() uint64 { return c.versionGeneration.Load() }
 
 func New(onChange OnChangeFunc) *Cache {
@@ -360,8 +360,13 @@ func (c *Cache) notify(e Event) {
 	// Every event means the contents changed, a resync included.
 	c.generation.Add(1)
 
+	// A ref_changed moves who uses a config or secret, not its group.
 	switch e.Type {
-	case EventConfig, EventSecret, EventService, EventSync:
+	case EventConfig, EventSecret:
+		if e.Action != "ref_changed" {
+			c.versionGeneration.Add(1)
+		}
+	case EventSync:
 		c.versionGeneration.Add(1)
 	default:
 	}

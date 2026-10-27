@@ -46,6 +46,7 @@ type Row struct {
 	VersionOf       string `json:"versionOf,omitempty"`
 	VersionInferred bool   `json:"versionInferred,omitempty"`
 	NewestVersion   bool   `json:"newestVersion,omitempty"`
+	InUse           bool   `json:"inUse,omitempty"`
 	OlderVersions   int    `json:"olderVersions,omitempty"`
 	UsedBy          *int   `json:"usedBy,omitempty"`
 }

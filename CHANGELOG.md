@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
 - A published ports page at `/ports` (`g` `o`, or from the networks list) lists every port the services publish, with the service, stack and publish mode; `GET /ports` and the MCP tool `get_published_ports` serve the same list
-- The config and secret lists show only the newest of each set of rotated versions, with older ones a click away, and count each one's services; `cetacean.version-of` names a set, and `unused-version` flags old versions nothing uses
+- The config and secret lists show the newest of each set of rotated versions and any older one in use, the rest a click away, with their services counted; `cetacean.version-of` names a set, `unused-version` flags old ones nothing uses
 - The networks list and network pages show how many of an overlay network's addresses are in use, as do `GET /networks` and MCP network reads; `network-addresses-low` flags one running out
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
 
 ### Changed
-- `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list only the newest version of each group by default; `versions=all` lists every one
+- `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 
 ### Fixed

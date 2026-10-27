@@ -161,6 +161,14 @@ export const properties: Property[] = [
     container: "@set",
   },
   {
+    name: "inUse",
+    iri: "urn:cetacean:inUse",
+    description:
+      "Whether a service's current spec uses this older config or secret version, which a listing shows by default.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "kind",
     iri: "urn:cetacean:kind",
     description: "The resource kind for history and SSE events (e.g., `service`, `node`).",
@@ -726,6 +734,7 @@ export const types: ResourceType[] = [
       "versionOf",
       "versionInferred",
       "newestVersion",
+      "inUse",
       "olderVersions",
     ],
   },
@@ -741,6 +750,7 @@ export const types: ResourceType[] = [
       "versionOf",
       "versionInferred",
       "newestVersion",
+      "inUse",
       "olderVersions",
     ],
   },

@@ -6,7 +6,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -53,13 +52,10 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 			return id, err
 		},
 		buildFallback: func(id string, name string) any {
-			return SecretResponse{
-				Secret: swarm.Secret{
-					ID:   id,
-					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
-				},
-				Services: []cache.ServiceRef{},
-			}
+			return h.secretBody(r, swarm.Secret{
+				ID:   id,
+				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+			})
 		},
 		buildResponse: func(id string) (any, bool) {
 			sec, ok := h.cache.GetSecret(id)

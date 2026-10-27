@@ -69,6 +69,7 @@ type versionRow struct {
 	VersionOf       string `json:"versionOf"`
 	VersionInferred bool   `json:"versionInferred"`
 	NewestVersion   bool   `json:"newestVersion"`
+	InUse           bool   `json:"inUse"`
 	OlderVersions   int    `json:"olderVersions"`
 	UsedBy          *int   `json:"usedBy"`
 }
@@ -108,10 +109,12 @@ func TestFindListsTheNewestSecretVersions(t *testing.T) {
 		got[r.ID] = r
 	}
 
-	// app_v3 is unreadable, so app_v2 heads its group.
-	if total != 2 || got["db_v3"].OlderVersions != 2 || !got["db_v3"].NewestVersion ||
-		got["app_v2"].OlderVersions != 1 || got["db_v3"].VersionOf != "db" {
-		t.Errorf("rows = %+v (total %d), want db_v3 and app_v2 heading their groups", rows, total)
+	// app_v3 is unreadable, so app_v2 heads its group; a service runs the
+	// older db_v2, so it stays beside db_v3, and only db_v1 is hidden.
+	if total != 3 || got["db_v3"].OlderVersions != 1 || !got["db_v3"].NewestVersion ||
+		got["app_v2"].OlderVersions != 1 || got["db_v3"].VersionOf != "db" ||
+		!got["db_v2"].InUse {
+		t.Errorf("rows = %+v (total %d), want db_v3, db_v2 in use and app_v2", rows, total)
 	}
 }
 
@@ -139,8 +142,8 @@ func TestFindListsEverySecretVersion(t *testing.T) {
 func TestFindByStackListsTheNewestVersions(t *testing.T) {
 	rows, total := findSecrets(t, map[string]any{"stack": "shop"})
 
-	if total != 2 || len(rows) != 2 {
-		t.Errorf("rows = %+v (total %d), want the two newest versions", rows, total)
+	if total != 3 || len(rows) != 3 {
+		t.Errorf("rows = %+v (total %d), want the newest versions and the one in use", rows, total)
 	}
 }
 
@@ -175,21 +178,24 @@ func TestSecretsResourceListsTheNewestVersions(t *testing.T) {
 	for _, item := range items {
 		got[item.ID] = item.OlderVersions
 	}
-	if len(got) != 2 || got["db_v3"] != 2 || got["app_v2"] != 1 {
-		t.Errorf("items = %+v, want db_v3 and app_v2 heading their groups", items)
+	if len(got) != 3 || got["db_v3"] != 1 || got["app_v2"] != 1 {
+		t.Errorf("items = %+v, want db_v3, db_v2 in use and app_v2", items)
 	}
 }
 
 func TestFindRefusesAnUnknownVersionsValue(t *testing.T) {
 	srv, ctx := versionsServer(t)
 
-	_, err := srv.toolFind(ctx, mcplib.CallToolRequest{
-		Params: mcplib.CallToolParams{
-			Arguments: map[string]any{"type": "secrets", "versions": "some"},
-		},
-	})
-	if err == nil {
-		t.Error("find accepted versions=some")
+	// Refused whatever the type, versioned or not.
+	for _, typ := range []string{"secrets", "services"} {
+		_, err := srv.toolFind(ctx, mcplib.CallToolRequest{
+			Params: mcplib.CallToolParams{
+				Arguments: map[string]any{"type": typ, "versions": "some"},
+			},
+		})
+		if err == nil {
+			t.Errorf("find type %s accepted versions=some", typ)
+		}
 	}
 }
 

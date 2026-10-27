@@ -79,6 +79,7 @@ type versionedItem struct {
 	VersionOf       string
 	VersionInferred bool
 	NewestVersion   bool
+	InUse           bool
 	OlderVersions   int
 	UsedBy          int
 }
@@ -131,23 +132,25 @@ func ids(page versionedPage) []string {
 func TestListVersions(t *testing.T) {
 	for _, base := range []string{"/secrets", "/configs"} {
 		t.Run(base, func(t *testing.T) {
-			t.Run("newest only by default", func(t *testing.T) {
+			t.Run("the newest and those in use by default", func(t *testing.T) {
 				_, page := listVersions(t, base+"?sort=name")
 
 				// app_v3 is unreadable, so app_v2 is the newest the caller sees.
+				// db_v2 is older but a service runs it, so it stays; db_v1 hides.
 				want := []versionedItem{
-					{"app_v2", "app", true, true, 1, 0},
-					{"db_v3", "db", true, true, 2, 0},
+					{"app_v2", "app", true, true, false, 1, 0},
+					{"db_v2", "db", true, false, true, 0, 1},
+					{"db_v3", "db", true, true, false, 1, 0},
 				}
-				if !slices.Equal(page.Items, want) || page.Total != 2 {
+				if !slices.Equal(page.Items, want) || page.Total != 3 {
 					t.Errorf("items = %+v (total %d), want %+v", page.Items, page.Total, want)
 				}
 			})
 
 			t.Run("the total follows the selection", func(t *testing.T) {
 				_, page := listVersions(t, base+"?sort=name&limit=1")
-				if page.Total != 2 || len(page.Items) != 1 {
-					t.Errorf("total = %d with %d items, want 2 with 1", page.Total, len(page.Items))
+				if page.Total != 3 || len(page.Items) != 1 {
+					t.Errorf("total = %d with %d items, want 3 with 1", page.Total, len(page.Items))
 				}
 			})
 
@@ -184,7 +187,7 @@ func TestListVersions(t *testing.T) {
 			t.Run("a search finds an older version", func(t *testing.T) {
 				_, page := listVersions(t, base+"?search=db_v1")
 
-				want := []versionedItem{{"db_v1", "db", true, false, 0, 0}}
+				want := []versionedItem{{"db_v1", "db", true, false, false, 0, 0}}
 				if !slices.Equal(page.Items, want) {
 					t.Errorf("items = %+v, want %+v", page.Items, want)
 				}

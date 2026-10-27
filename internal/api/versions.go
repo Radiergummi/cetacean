@@ -6,58 +6,27 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// versionedList narrows spec's readable items by ?versions and ?versionsOf,
-// gives its CSV rows their version columns, and returns what each item of the
-// JSON page gains once rendered. A CSV export holds every version unless
-// ?versions says otherwise.
-func versionedList[T any](
-	h *Handlers,
-	r *http.Request,
-	spec *listSpec[T],
-	id func(T) string,
-	view func(readable []T, canRead func(string) bool) cluster.VersionView,
-) *cluster.VersionView {
-	versions := new(cluster.VersionView)
+// versionedSpec groups a config or secret list into versions: id names an
+// item, and view groups the items one caller may read.
+type versionedSpec[T any] struct {
+	id   func(T) string
+	view func(readable []T, canRead func(string) bool) cluster.VersionView
+}
 
-	selection := func(r *http.Request) (cluster.VersionSelection, error) {
-		query := r.URL.Query()
-		searching := query.Get("search") != "" || query.Get("filter") != ""
+// versionSelection reads ?versions and ?versionsOf. A CSV export holds every
+// version unless ?versions says otherwise.
+func versionSelection(r *http.Request) (cluster.VersionSelection, error) {
+	query := r.URL.Query()
 
-		return cluster.ParseVersionSelection(
-			query.Get("versions"), query.Get("versionsOf"), searching,
-		)
+	sel, err := cluster.ParseVersionSelection(
+		query.Get("versions"),
+		query.Get("versionsOf"),
+		cluster.Narrowing{Search: query.Get("search"), Filter: query.Get("filter")},
+	)
+	if err == nil && ContentTypeFromContext(r.Context()) == ContentTypeCSV &&
+		query.Get("versions") == "" {
+		sel.All = true
 	}
 
-	spec.validate = func(r *http.Request) error {
-		_, err := selection(r)
-		return err
-	}
-
-	// Runs only once a page is rendered, after a 304 would have answered.
-	spec.narrow = func(readable []T) ([]T, error) {
-		query := r.URL.Query()
-
-		sel, err := selection(r)
-		if err != nil {
-			return nil, err
-		}
-
-		if ContentTypeFromContext(r.Context()) == ContentTypeCSV && query.Get("versions") == "" {
-			sel.All = true
-		}
-
-		*versions = view(readable, h.readChecker(r))
-
-		return cluster.SelectVersions(readable, id, versions.Groups, sel), nil
-	}
-
-	rows := spec.rows
-	spec.rows = func(page []T) []cluster.Row {
-		out := rows(page)
-		cluster.AnnotateVersionRows(out, *versions)
-
-		return out
-	}
-
-	return versions
+	return sel, err
 }

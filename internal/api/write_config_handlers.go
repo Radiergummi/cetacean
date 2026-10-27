@@ -6,7 +6,6 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -40,13 +39,10 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 			return id, err
 		},
 		buildFallback: func(id string, name string) any {
-			return ConfigResponse{
-				Config: swarm.Config{
-					ID:   id,
-					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
-				},
-				Services: []cache.ServiceRef{},
-			}
+			return h.configBody(r, swarm.Config{
+				ID:   id,
+				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+			})
 		},
 		buildResponse: func(id string) (any, bool) {
 			cfg, ok := h.cache.GetConfig(id)

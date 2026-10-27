@@ -5780,10 +5780,15 @@ paths:
                         type: boolean
                         description: >-
                           True for the newest version of its group that the caller may read, and for one with no other.
+                      inUse:
+                        type: boolean
+                        description: >-
+                          True for an older version a readable service's current spec uses.
                       olderVersions:
                         type: integer
                         description: >-
-                          On the newest version, how many older readable versions its group has.
+                          On the newest version, how many older readable versions its group has
+                          that no current spec uses.
                       usedBy:
                         type: integer
                         description: Number of services the caller may read whose spec or previous spec uses this config
@@ -6179,10 +6184,15 @@ paths:
                         type: boolean
                         description: >-
                           True for the newest version of its group that the caller may read, and for one with no other.
+                      inUse:
+                        type: boolean
+                        description: >-
+                          True for an older version a readable service's current spec uses.
                       olderVersions:
                         type: integer
                         description: >-
-                          On the newest version, how many older readable versions its group has.
+                          On the newest version, how many older readable versions its group has
+                          that no current spec uses.
                       usedBy:
                         type: integer
                         description: Number of services the caller may read whose spec or previous spec uses this secret
@@ -7006,11 +7016,11 @@ components:
       name: versions
       in: query
       description: >-
-        Which versions of a config or secret to list. `newest`, the default, lists only the
-        newest readable version of each group of versions, which counts the rest in
-        `OlderVersions`; `all` lists every version. Without it, a `search` or `filter` matches
-        every version, and a CSV export always holds every version. Any other value is refused
-        with `API016`.
+        Which versions of a config or secret to list. `newest`, the default, lists the newest
+        readable version of each group of versions and every older one a service's current
+        spec uses, counting the rest in `OlderVersions`; `all` lists every version. When it is
+        absent, a `search` or `filter` matches every version and a CSV export holds every
+        version; `newest` narrows both. Any other value is refused with `API016`.
       schema:
         type: string
         enum: [newest, all]
@@ -7868,11 +7878,17 @@ components:
                     description: >-
                       True for the newest version of its group that the caller may read.
                       Also true for a config with no other version; absent for older versions.
+                  InUse:
+                    type: boolean
+                    description: >-
+                      True for an older version a service the caller may read uses in its
+                      current spec, which a listing shows by default. Absent otherwise.
                   OlderVersions:
                     type: integer
                     description: >-
                       On the newest version, how many older versions of its group the caller
-                      may read. Absent otherwise.
+                      may read that no current spec uses: those a default listing hides.
+                      Absent otherwise.
                   UsedBy:
                     type: integer
                     description: Number of services the caller may read whose spec or previous spec uses this config
@@ -7910,11 +7926,17 @@ components:
                     description: >-
                       True for the newest version of its group that the caller may read.
                       Also true for a secret with no other version; absent for older versions.
+                  InUse:
+                    type: boolean
+                    description: >-
+                      True for an older version a service the caller may read uses in its
+                      current spec, which a listing shows by default. Absent otherwise.
                   OlderVersions:
                     type: integer
                     description: >-
                       On the newest version, how many older versions of its group the caller
-                      may read. Absent otherwise.
+                      may read that no current spec uses: those a default listing hides.
+                      Absent otherwise.
                   UsedBy:
                     type: integer
                     description: Number of services the caller may read whose spec or previous spec uses this secret

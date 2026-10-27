@@ -800,19 +800,21 @@ names a newer image in its registry than the digest the service runs: `image`, `
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
-`GET /configs` and `GET /secrets` list only the newest version of each group of [versions](dashboard#versions)
-by default; `?versions=all` lists every version, and `?versionsOf={id}` only those grouped with that ID, newest
-first unless `sort` orders them otherwise. A `search` or `filter` matches every version, and a CSV export holds
-every version with `version of`, `newest` and `used by` columns, both unless `?versions=newest` says otherwise; a
-config or secret with no other version is its own newest. Any other `versions` value answers `400`
+`GET /configs` and `GET /secrets` list, by default, the newest version of each group of
+[versions](dashboard#versions) and every older one a service's current spec still uses; `?versions=all` lists
+every version, and `?versionsOf={id}` only those grouped with that ID, newest first unless `sort` orders them
+otherwise. A `search` or `filter` matches every version, and a CSV export holds every version with `version of`,
+`newest` and `used by` columns, both unless `?versions=newest` says otherwise; a config or secret with no other
+version is its own newest. Any other `versions` value answers `400`
 ([`API016`](api/errors#API016)). The total, the pagination links and the ETag follow what is listed.
 
 `GET /configs/{id}` and `GET /secrets/{id}` list in `services` every service whose spec or previous spec uses it,
 marking with `rollback` one that only a rollback would need, and count them in `usedBy`; each list item counts them
 in `UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and
 `versionInferred` when it was matched by name rather than declared with the `cetacean.version-of` label; the newest
-carries `newestVersion` and `olderVersions`, the number of older ones. A list item spells them `VersionOf`,
-`VersionInferred`, `NewestVersion` and `OlderVersions`. All of them count only the configs, secrets, and services
+carries `newestVersion` and `olderVersions`, the number of older ones no current spec uses, which a default
+listing hides; an older one still in use carries `inUse`. A list item spells them `VersionOf`, `VersionInferred`,
+`NewestVersion`, `OlderVersions` and `InUse`. All of them count only the configs, secrets, and services
 the caller may read, so the newest version a caller can read is the newest it is shown.
 
 `GET /networks/{id}` carries `addresses`, and each `GET /networks` item `Addresses`, for a swarm network on the
