@@ -1,6 +1,6 @@
 import { useInstanceResolver } from "./useInstanceResolver";
 import { useMetricsMap } from "./useMetricsMap";
-import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
+import { isNodeExporterReady, isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useCallback, useMemo } from "react";
 
 export interface NodeMetrics {
@@ -54,13 +54,20 @@ const spec = {
   ],
 } as const;
 
+const usageSpec = { ...spec, instant: spec.instant.slice(0, 2), range: [] };
+
 // Fetches per-instance metrics from Prometheus and maps them by instance label.
 // Nodes are matched to instances via useInstanceResolver (hostname-based).
-export function useNodeMetrics() {
+// usageOnly fetches just the CPU and memory instants, and only with node-exporter.
+export function useNodeMetrics({ usageOnly = false }: { usageOnly?: boolean | undefined } = {}) {
   const monitoring = useMonitoringStatus();
-  const hasPrometheus = isPrometheusReady(monitoring);
-  const { resolve } = useInstanceResolver();
-  const byInstance = useMetricsMap("node-metrics", spec, hasPrometheus);
+  const enabled = usageOnly ? isNodeExporterReady(monitoring) : isPrometheusReady(monitoring);
+  const { resolve } = useInstanceResolver(enabled);
+  const byInstance = useMetricsMap(
+    usageOnly ? "node-usage" : "node-metrics",
+    usageOnly ? usageSpec : spec,
+    enabled,
+  );
 
   const instanceEntries = useMemo(() => Object.entries(byInstance), [byInstance]);
 

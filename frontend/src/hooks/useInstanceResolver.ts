@@ -3,6 +3,8 @@ import { isPrometheusReady, useMonitoringStatus } from "./useMonitoringStatus";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+const noInstances: Record<string, string> = {};
+
 /**
  * Resolves Docker Swarm node hostnames to Prometheus instance labels.
  *
@@ -13,11 +15,11 @@ import { useCallback } from "react";
  * Requires node-exporter to run with `hostname: "{{.Node.Hostname}}"` so
  * that `node_uname_info.nodename` reports the Docker Swarm node hostname.
  */
-export function useInstanceResolver() {
+export function useInstanceResolver(enabled = true) {
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);
 
-  const { data: byHostname = {} } = useQuery({
+  const { data: byHostname = noInstances } = useQuery({
     queryKey: ["instance-resolver"],
     queryFn: async () => {
       const response = await api.metricsQuery("node_uname_info");
@@ -34,7 +36,7 @@ export function useInstanceResolver() {
 
       return map;
     },
-    enabled: hasPrometheus,
+    enabled: hasPrometheus && enabled,
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
     staleTime: 60_000,

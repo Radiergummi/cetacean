@@ -33,7 +33,7 @@ export function stackColors(graph: JGFGraph): Map<string, string> {
 }
 
 /** Extract the bare resource ID from a URN like `urn:cetacean:service:abc123`. */
-function urnToId(urn: string): string {
+export function urnToId(urn: string): string {
   const lastColon = urn.lastIndexOf(":");
 
   return lastColon >= 0 ? urn.slice(lastColon + 1) : urn;
@@ -204,9 +204,10 @@ function serviceNetworks(graph: JGFGraph, serviceUrn: string): PlacementNetwork[
 }
 
 /**
- * Every network a placed service is attached to, once each, sorted by name.
+ * Every network a placed service is attached to, once each, sorted by name. Two
+ * overlays may share a name, so a shared name is labelled with its short ID.
  */
-export function placementNetworks(graph: JGFGraph): PlacementNetwork[] {
+export function placementNetworks(graph: JGFGraph): (PlacementNetwork & { label: string })[] {
   const byId = new Map<string, PlacementNetwork>();
 
   for (const [urn, { metadata }] of Object.entries(graph.nodes)) {
@@ -219,7 +220,21 @@ export function placementNetworks(graph: JGFGraph): PlacementNetwork[] {
     }
   }
 
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
+  const networks = [...byId.values()];
+  const shared = new Set(
+    networks
+      .filter(({ name }, index) => networks.findIndex((other) => other.name === name) !== index)
+      .map(({ name }) => name),
+  );
+
+  return networks
+    .sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1))
+    .map((network) => ({
+      ...network,
+      label: shared.has(network.name)
+        ? `${network.name} (${network.id.slice(0, 12)})`
+        : network.name,
+    }));
 }
 
 /**
@@ -365,7 +380,6 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
       position: { x: 0, y },
       data: {
         label,
-        nodeId: urnToId(urn),
         addr: metadata.addr as string | undefined,
         role: metadata.role as string,
         state: metadata.state as string,

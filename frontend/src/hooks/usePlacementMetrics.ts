@@ -1,3 +1,4 @@
+import { joinLabelValues } from "../lib/prometheusParser";
 import { useMetricsMap, type MetricsMapSpec } from "./useMetricsMap";
 import { isCadvisorReady, useMonitoringStatus } from "./useMonitoringStatus";
 
@@ -33,7 +34,7 @@ export const placementUsageSpec: MetricsMapSpec<PlacementUsage> = {
  * The key one service's usage on one node is filed under.
  */
 export function placementUsageKey(serviceId: string, nodeId: string): string {
-  return `${serviceId}/${nodeId}`;
+  return joinLabelValues([serviceId, nodeId]);
 }
 
 /**

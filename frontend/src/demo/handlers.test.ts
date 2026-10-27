@@ -270,9 +270,12 @@ describe("topology endpoint shapes", () => {
     const data = await fetchJSON("/topology");
     const placement = (data.graphs as Record<string, unknown>[]).find(
       ({ id }) => id === "placement",
-    )!;
+    );
+
+    expect(placement).toBeDefined();
+
     const nodes = Object.values(
-      placement.nodes as Record<string, { metadata: Record<string, unknown> }>,
+      placement?.nodes as Record<string, { metadata: Record<string, unknown> }>,
     );
     const networks = nodes
       .filter(({ metadata }) => metadata.kind === "service")

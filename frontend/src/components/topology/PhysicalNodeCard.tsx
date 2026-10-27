@@ -1,10 +1,11 @@
 import ResourceName from "../ResourceName";
+import { usePhysicalView } from "./PhysicalViewContext";
 import { colorForValue } from "@/components/metrics/ResourceGauge";
 import type { NodeMetrics } from "@/hooks/useNodeMetrics";
 import { placementUsageKey, type PlacementUsage } from "@/hooks/usePlacementMetrics";
 import { formatBytes, formatPercentage } from "@/lib/format";
 import { replicaHealthColor } from "@/lib/statusColor";
-import { dimmedByNetwork } from "@/lib/topologyTransform";
+import { dimmedByNetwork, urnToId } from "@/lib/topologyTransform";
 import type { NodeProps } from "@xyflow/react";
 import { useNavigate } from "react-router-dom";
 
@@ -20,15 +21,11 @@ type ServiceSummary = {
 
 export type PhysicalNodeData = {
   label: string;
-  nodeId: string;
   addr: string | undefined;
   role: string;
   state: string;
   availability: string;
   services: ServiceSummary[];
-  network?: string | null | undefined;
-  usage?: Record<string, PlacementUsage> | undefined;
-  nodeMetrics?: NodeMetrics | undefined;
 };
 
 function NodeUsage({ metrics }: { metrics: NodeMetrics }) {
@@ -36,6 +33,10 @@ function NodeUsage({ metrics }: { metrics: NodeMetrics }) {
     ["CPU", metrics.cpu],
     ["Mem", metrics.memory],
   ] as const;
+
+  if (figures.every(([, value]) => value == null)) {
+    return null;
+  }
 
   return (
     <span className="ms-auto flex gap-2 text-[10px] tabular-nums">
@@ -69,8 +70,10 @@ function ServiceUsage({ usage }: { usage: PlacementUsage }) {
   );
 }
 
-export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalNodeData }) {
+export default function PhysicalNodeCard({ id, data }: NodeProps & { data: PhysicalNodeData }) {
   const navigate = useNavigate();
+  const { network, usage, nodeMetrics } = usePhysicalView();
+  const nodeId = urnToId(id);
 
   return (
     <div
@@ -93,7 +96,7 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
         {data.availability !== "active" && (
           <span className="text-[10px] text-muted-foreground">{data.availability}</span>
         )}
-        {data.nodeMetrics && <NodeUsage metrics={data.nodeMetrics} />}
+        {nodeMetrics && <NodeUsage metrics={nodeMetrics(data.label, data.addr)} />}
       </div>
 
       {data.services.length === 0 ? (
@@ -101,14 +104,14 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {data.services.map((svc) => {
-            const usage = data.usage?.[placementUsageKey(svc.serviceId, data.nodeId)];
+            const serviceUsage = usage?.[placementUsageKey(svc.serviceId, nodeId)];
 
             return (
               <button
                 key={svc.serviceId}
                 type="button"
                 aria-label={`Service ${svc.serviceName}`}
-                data-dimmed={dimmedByNetwork(svc.networks, data.network ?? null) || undefined}
+                data-dimmed={dimmedByNetwork(svc.networks, network) || undefined}
                 className="cursor-pointer rounded-lg border bg-card p-2.5 text-left shadow-sm transition-[box-shadow,opacity] hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-dimmed:opacity-30"
                 onClick={() => navigate(`/services/${svc.serviceId}`)}
               >
@@ -131,7 +134,7 @@ export default function PhysicalNodeCard({ data }: NodeProps & { data: PhysicalN
                   <span>
                     {svc.running}/{svc.total} tasks
                   </span>
-                  {usage && <ServiceUsage usage={usage} />}
+                  {serviceUsage && <ServiceUsage usage={serviceUsage} />}
                 </div>
               </button>
             );

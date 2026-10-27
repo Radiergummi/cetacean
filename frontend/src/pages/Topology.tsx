@@ -16,7 +16,8 @@ import SegmentedControl from "../components/SegmentedControl";
 import GroupNode from "../components/topology/GroupNode";
 import { HighlightProvider } from "../components/topology/HighlightContext";
 import NetworkEdge from "../components/topology/NetworkEdge";
-import PhysicalNodeCard, { type PhysicalNodeData } from "../components/topology/PhysicalNodeCard";
+import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
+import { PhysicalViewContext } from "../components/topology/PhysicalViewContext";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
@@ -202,27 +203,14 @@ function PhysicalView({
   isMobile: boolean;
   network: string | null;
 }) {
-  const placement = useMemo(() => placementGraphToReactFlow(data), [data]);
+  const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
   const usage = usePlacementMetrics();
   const hasNodeExporter = isNodeExporterReady(useMonitoringStatus());
-  const { getForNode } = useNodeMetrics();
+  const { getForNode } = useNodeMetrics({ usageOnly: true });
 
-  const nodes = useMemo(
-    () =>
-      placement.nodes.map((node) => {
-        const nodeData = node.data as PhysicalNodeData;
-
-        return {
-          ...node,
-          data: {
-            ...nodeData,
-            network,
-            usage,
-            nodeMetrics: hasNodeExporter ? getForNode(nodeData.label, nodeData.addr) : undefined,
-          },
-        };
-      }),
-    [placement, network, usage, hasNodeExporter, getForNode],
+  const overlay = useMemo(
+    () => ({ network, usage, nodeMetrics: hasNodeExporter ? getForNode : undefined }),
+    [network, usage, hasNodeExporter, getForNode],
   );
 
   if (Object.values(data.nodes).every(({ metadata }) => metadata.kind !== "node")) {
@@ -235,34 +223,37 @@ function PhysicalView({
   }
 
   return (
-    <div
-      style={{
-        height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
-      }}
-    >
-      <ReactFlow
-        aria-label="Task placement across cluster nodes"
-        className="bg-background"
-        nodes={nodes}
-        edges={[]}
-        nodeTypes={physicalNodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        proOptions={{ hideAttribution: true }}
-        nodesDraggable
-        {...readOnlyKeyboard}
+    <PhysicalViewContext.Provider value={overlay}>
+      <div
+        style={{
+          height: isMobile ? "calc(100dvh - 3rem)" : "calc(100vh - 12rem)",
+        }}
       >
-        <Background />
-        <GraphControls />
-        <FitOnResize />
-      </ReactFlow>
-    </div>
+        <ReactFlow
+          aria-label="Task placement across cluster nodes"
+          className="bg-background"
+          nodes={nodes}
+          edges={[]}
+          nodeTypes={physicalNodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          proOptions={{ hideAttribution: true }}
+          nodesDraggable
+          {...readOnlyKeyboard}
+        >
+          <Background />
+          <GraphControls />
+          <FitOnResize />
+        </ReactFlow>
+      </div>
+    </PhysicalViewContext.Provider>
   );
 }
 
 export default function Topology() {
   const isMobile = useMatchesBreakpoint("md", "below");
-  const [view, setView] = useState<View>("logical");
+  const [viewParam, setView] = useUrlParam("view", "logical");
+  const view: View = viewParam === "physical" ? "physical" : "logical";
   const [network, setNetwork] = useUrlParam("network");
   const queryClient = useQueryClient();
 
@@ -309,12 +300,12 @@ export default function Topology() {
             className="h-8 rounded-md border bg-background px-2 text-xs"
           >
             <option value="">All networks</option>
-            {networks.map(({ id, name }) => (
+            {networks.map(({ id, label }) => (
               <option
                 key={id}
                 value={id}
               >
-                {name}
+                {label}
               </option>
             ))}
           </select>

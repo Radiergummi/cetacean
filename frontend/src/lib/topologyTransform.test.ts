@@ -309,15 +309,13 @@ describe("networks on the physical view", () => {
     })),
   });
 
-  it("passes each service's networks and the node's identity through to its box", () => {
+  it("passes each service's networks and the node's address through to its box", () => {
     const { nodes } = placementGraphToReactFlow(graph);
     const data = nodes[0]?.data as {
-      nodeId: string;
       addr: string | undefined;
       services: { serviceId: string; networks: string[] }[];
     };
 
-    expect(data.nodeId).toBe("n1");
     expect(data.addr).toBe("10.0.0.5");
     expect(data.services.map(({ serviceId, networks }) => [serviceId, networks])).toEqual([
       ["svc1", ["net2", "net1"]],
@@ -328,8 +326,33 @@ describe("networks on the physical view", () => {
 
   it("offers each network once, by name", () => {
     expect(placementNetworks(graph)).toEqual([
-      { id: "net1", name: "backend" },
-      { id: "net2", name: "frontend" },
+      { id: "net1", name: "backend", label: "backend" },
+      { id: "net2", name: "frontend", label: "frontend" },
+    ]);
+  });
+
+  it("tells overlays sharing a name apart by their short ID", () => {
+    const shared = makePlacementGraph({
+      nodes: {
+        "urn:cetacean:service:svc1": {
+          label: "web",
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            networks: [
+              { id: "urn:cetacean:network:aaaaaaaaaaaa1111", name: "default" },
+              { id: "urn:cetacean:network:bbbbbbbbbbbb2222", name: "default" },
+              { id: "urn:cetacean:network:cccc", name: "edge" },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(placementNetworks(shared).map(({ label }) => label)).toEqual([
+      "default (aaaaaaaaaaaa)",
+      "default (bbbbbbbbbbbb)",
+      "edge",
     ]);
   });
 

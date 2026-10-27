@@ -2,7 +2,14 @@ import type { PrometheusResponse } from "../api/types";
 import { escapePromQL } from "./utils";
 
 /**
- * The key a series is filed under: one label's value, or several joined by `/`.
+ * The key a series keyed by several labels is filed under.
+ */
+export function joinLabelValues(values: readonly string[]): string {
+  return values.join("/");
+}
+
+/**
+ * The key a series is filed under: one label's value, or several joined.
  */
 function seriesKey(
   metric: Record<string, string> | undefined,
@@ -12,7 +19,7 @@ function seriesKey(
     return metric?.[labelKey] || "";
   }
 
-  return labelKey.map((label) => metric?.[label] ?? "").join("/");
+  return joinLabelValues(labelKey.map((label) => metric?.[label] ?? ""));
 }
 
 /**

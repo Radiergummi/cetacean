@@ -79,21 +79,28 @@ function matchQuery(
   }
 
   if (query.includes("container_label_com_docker_swarm_node_id")) {
-    const pairs = new Set(
-      dataset.tasks
-        .filter(({ DesiredState }) => DesiredState === "running")
-        .map(({ ServiceID, NodeID }) => `${ServiceID}/${NodeID ?? ""}`),
-    );
+    // Each node gets the share of its service's usage that its tasks make up,
+    // so the per-node figures add up to the service totals shown elsewhere.
+    const running = dataset.tasks.filter(({ DesiredState }) => DesiredState === "running");
+    const tasksPerPair = new Map<string, number>();
+    const tasksPerService = new Map<string, number>();
 
-    return [...pairs].map((pair) => {
+    for (const { ServiceID, NodeID } of running) {
+      const pair = `${ServiceID}/${NodeID ?? ""}`;
+      tasksPerPair.set(pair, (tasksPerPair.get(pair) ?? 0) + 1);
+      tasksPerService.set(ServiceID, (tasksPerService.get(ServiceID) ?? 0) + 1);
+    }
+
+    return [...tasksPerPair].map(([pair, count]) => {
       const [serviceId = "", nodeId = ""] = pair.split("/");
       const profile = profileFor(dataset.servicesByID.get(serviceId)?.Spec.Name ?? serviceId);
       const memory = query.includes("container_memory");
+      const share = count / (tasksPerService.get(serviceId) ?? count);
 
       return build(
         {
-          base: memory ? profile.memBase : profile.cpuBase,
-          amplitude: memory ? profile.memDrift : profile.cpuSpike,
+          base: (memory ? profile.memBase : profile.cpuBase) * share,
+          amplitude: (memory ? profile.memDrift : profile.cpuSpike) * share,
           noise: profile.noiseScale,
           period: profile.period,
         },
