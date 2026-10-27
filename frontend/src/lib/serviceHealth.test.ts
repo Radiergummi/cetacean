@@ -1,18 +1,37 @@
-import { desiredTasks, serviceHealth } from "./serviceHealth";
+import type { ServiceListItem } from "../api/types";
+import { serviceHealth, serviceTaskCount } from "./serviceHealth";
 import { describe, expect, it } from "vitest";
 
-describe("desiredTasks", () => {
-  it("is the replica count of a replicated service", () => {
-    expect(desiredTasks({ Replicated: { Replicas: 3 } })).toBe(3);
+describe("serviceTaskCount", () => {
+  const service = (Mode: ServiceListItem["Spec"]["Mode"], counts: Partial<ServiceListItem>) =>
+    ({ ID: "s1", Version: { Index: 1 }, Spec: { Name: "s", Mode }, ...counts }) as ServiceListItem;
+
+  it("counts a replicated service against its replicas", () => {
+    expect(
+      serviceTaskCount(
+        service({ Replicated: { Replicas: 3 } }, { RunningTasks: 2, DesiredTasks: 3 }),
+      ),
+    ).toEqual({ running: 2, desired: 3 });
   });
 
-  it("is zero for a job, whose tasks run to completion", () => {
-    expect(desiredTasks({ ReplicatedJob: {} })).toBe(0);
-    expect(desiredTasks({ GlobalJob: {} })).toBe(0);
+  it("counts a global service against its eligible nodes", () => {
+    expect(serviceTaskCount(service({ Global: {} }, { RunningTasks: 4, DesiredTasks: 5 }))).toEqual(
+      {
+        running: 4,
+        desired: 5,
+      },
+    );
   });
 
-  it("is unknown for a global service", () => {
-    expect(desiredTasks({ Global: {} })).toBeUndefined();
+  it("judges a job on its current run, with nothing to keep running", () => {
+    expect(
+      serviceTaskCount(
+        service(
+          { ReplicatedJob: {} },
+          { RunningTasks: 0, DesiredTasks: 2, CompletedTasks: 1, FailedTasks: 1 },
+        ),
+      ),
+    ).toEqual({ running: 0, desired: 0, outcome: { completed: 1, failed: 1 } });
   });
 });
 
@@ -31,14 +50,6 @@ describe("serviceHealth", () => {
 
   it("is critical when nothing runs that should", () => {
     expect(serviceHealth(0, 3)).toBe("critical");
-  });
-
-  it("is critical for a global service with nothing running", () => {
-    expect(serviceHealth(0, undefined)).toBe("critical");
-  });
-
-  it("does not call a running global service healthy without knowing its target", () => {
-    expect(serviceHealth(2, undefined)).toBe("unknown");
   });
 
   it("is critical for a job whose tasks failed and none completed", () => {

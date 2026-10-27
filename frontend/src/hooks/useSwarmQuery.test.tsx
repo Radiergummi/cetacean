@@ -576,6 +576,77 @@ describe("useSwarmQuery", () => {
     });
   });
 
+  it("SSE refetches on another type's event rather than adding it as a row", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "s1", Name: "web" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    fetchFn.mockResolvedValue(makeFetchResult([{ ID: "s1", Name: "web, refetched" }], 1));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("task", {
+        type: "task",
+        action: "create",
+        id: "t1",
+        resource: { ID: "t1", Name: "web.1" },
+      }),
+    );
+
+    expect(result.current.data).toEqual([{ ID: "s1", Name: "web" }]);
+    expect(result.current.total).toBe(1);
+    await waitFor(
+      () => expect(result.current.data).toEqual([{ ID: "s1", Name: "web, refetched" }]),
+      {
+        timeout: 3000,
+      },
+    );
+  });
+
+  it("SSE updates keep the task counts the list computed for a service", async () => {
+    const counted = { ID: "s1", Name: "web", RunningTasks: 2, DesiredTasks: 3 };
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([counted], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "service",
+        action: "update",
+        id: "s1",
+        resource: { ID: "s1", Name: "web, renamed" },
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ ...counted, Name: "web, renamed" }]),
+    );
+  });
+
   it("SSE removes item", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

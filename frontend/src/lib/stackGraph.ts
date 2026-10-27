@@ -1,6 +1,6 @@
 import type { Service, StackDetail } from "../api/types";
 import { stripStackPrefix } from "./parseStackLabels";
-import type { JobOutcome } from "./serviceHealth";
+import type { TaskCount } from "./serviceHealth";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 
 export type NetworkNodeData = {
@@ -20,13 +20,6 @@ export type ServiceNodeData = {
   mode: string;
   replicas?: number | undefined;
   tasks?: TaskCount | undefined;
-};
-
-/** The count each service reports; `desired` is absent for a global service, `outcome` set for a job. */
-export type TaskCount = {
-  running: number;
-  desired?: number | undefined;
-  outcome?: JobOutcome | undefined;
 };
 
 export type MountNodeData = {

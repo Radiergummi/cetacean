@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed
+- The services page and stack pages judge a global service against the nodes it can run on, rather than showing it grey
+- The services page's running counts and job health update as tasks start, stop, and finish
 - Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
 - `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one
 - An MCP write the Docker engine refuses, or can't be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log

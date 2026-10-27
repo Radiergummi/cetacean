@@ -52,12 +52,22 @@ describe("collection response shapes", () => {
     expect(data.total).toBe(3);
   });
 
-  it("GET /services returns 11 services with RunningTasks", async () => {
+  it("GET /services returns 11 services with their task counts", async () => {
     const data = await fetchJSON("/services");
     expect(data.total).toBe(11);
     for (const item of data.items) {
       expect(item).toHaveProperty("RunningTasks");
+      expect(typeof item.DesiredTasks).toBe("number");
     }
+  });
+
+  it("GET /services counts a global service against its eligible nodes", async () => {
+    const data = await fetchJSON("/services");
+    const global = data.items.find(
+      ({ Spec }: { Spec: { Mode: { Global?: object } } }) => Spec.Mode.Global,
+    );
+
+    expect(global?.DesiredTasks).toBeGreaterThan(0);
   });
 
   it("GET /tasks returns items array", async () => {
