@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -549,6 +550,33 @@ func ResourceMatcher(typ cache.EventType, id string) func(cache.Event) bool {
 	case cache.EventTask:
 		return func(e cache.Event) bool {
 			return e.Type == cache.EventSync || (e.Type == cache.EventTask && e.ID == id)
+		}
+	case cache.EventNetwork:
+		// A network's address figure moves with the tasks attached to it, the
+		// VIPs services hold on it, and, for ingress, the nodes in the swarm.
+		return func(e cache.Event) bool {
+			switch e.Type {
+			case cache.EventSync, cache.EventNode:
+				return true
+			case cache.EventNetwork:
+				return e.ID == id
+			case cache.EventTask:
+				t, ok := e.Resource.(swarm.Task)
+
+				return ok && slices.ContainsFunc(
+					t.NetworksAttachments,
+					func(a swarm.NetworkAttachment) bool { return a.Network.ID == id },
+				)
+			case cache.EventService:
+				s, ok := e.Resource.(swarm.Service)
+
+				return ok && slices.ContainsFunc(
+					s.Endpoint.VirtualIPs,
+					func(v swarm.EndpointVirtualIP) bool { return v.NetworkID == id },
+				)
+			default:
+				return false
+			}
 		}
 	default:
 		// config, secret, network, volume — match by type+ID.

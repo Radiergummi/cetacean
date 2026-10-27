@@ -969,6 +969,54 @@ func TestResourceMatcherSeesTaskRemoves(t *testing.T) {
 	}
 }
 
+func TestResourceMatcherNetworkSeesWhatMovesItsAddresses(t *testing.T) {
+	match := ResourceMatcher(cache.EventNetwork, "net1")
+	attached := []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net1"}}}
+	elsewhere := []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net2"}}}
+	vip := swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}}
+
+	tests := []struct {
+		name  string
+		event cache.Event
+		want  bool
+	}{
+		{"itself", cache.Event{Type: cache.EventNetwork, ID: "net1"}, true},
+		{"another network", cache.Event{Type: cache.EventNetwork, ID: "net2"}, false},
+		{
+			"an attached task",
+			cache.Event{Type: cache.EventTask, Resource: swarm.Task{NetworksAttachments: attached}},
+			true,
+		},
+		{
+			"a task elsewhere",
+			cache.Event{
+				Type:     cache.EventTask,
+				Resource: swarm.Task{NetworksAttachments: elsewhere},
+			},
+			false,
+		},
+		{
+			"a service with a VIP on it",
+			cache.Event{Type: cache.EventService, Resource: swarm.Service{Endpoint: vip}},
+			true,
+		},
+		{
+			"a service without one",
+			cache.Event{Type: cache.EventService, Resource: swarm.Service{}},
+			false,
+		},
+		{"a node", cache.Event{Type: cache.EventNode, ID: "n1"}, true},
+		{"a config", cache.Event{Type: cache.EventConfig, ID: "net1"}, false},
+		{"a sync", cache.Event{Type: cache.EventSync}, true},
+	}
+
+	for _, tt := range tests {
+		if got := match(tt.event); got != tt.want {
+			t.Errorf("%s: matched = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
 // The removed task rides on its event only for matching; a remove names what
 // is gone and carries no resource, as every other type's remove does.
 func TestToSSEEvent_RemoveCarriesNoResource(t *testing.T) {

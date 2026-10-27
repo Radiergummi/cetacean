@@ -272,13 +272,21 @@ channels:
   networkDetail:
     address: /networks/{id}
     title: Network detail stream
-    description: One network.
+    description: >
+      One network, plus what moves its address count: the tasks attached to
+      it, the services holding a virtual IP on it, and every node.
     parameters:
       id:
         description: Network ID.
     messages:
       network:
         $ref: "#/components/messages/network"
+      task:
+        $ref: "#/components/messages/task"
+      service:
+        $ref: "#/components/messages/service"
+      node:
+        $ref: "#/components/messages/node"
       batch:
         $ref: "#/components/messages/batch"
       sync:

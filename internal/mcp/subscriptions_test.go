@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
@@ -207,6 +208,25 @@ func TestSubscriptionServiceAndNodeFollowTheirTasks(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("updated = %v, want the service and the node", got)
 	}
+}
+
+func TestSubscriptionNetworkFollowsAttachedTasks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net-follow", Name: "backend", Scope: "swarm"})
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://networks/backend", nil)
+
+	c.SetTask(swarm.Task{ID: "task-elsewhere"})
+	c.SetTask(swarm.Task{
+		ID: "task-attached",
+		NetworksAttachments: []swarm.NetworkAttachment{{
+			Network: swarm.Network{ID: "net-follow"},
+		}},
+	})
+
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/backend")
 }
 
 func TestSubscriptionLogsFollowServiceTasks(t *testing.T) {

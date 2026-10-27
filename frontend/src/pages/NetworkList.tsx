@@ -1,9 +1,10 @@
 import { api } from "../api/client";
-import type { Network, NetworkAddresses } from "../api/types";
+import type { Network, NetworkAddresses, Task } from "../api/types";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import { buttonVariants } from "../components/ui/button";
+import type { SSEEvent } from "../hooks/useResourceStream";
 import { addressTone } from "../lib/networkAddresses";
 import { sortColumn } from "../lib/sortColumn";
 import { toneText } from "../lib/statusColor";
@@ -19,12 +20,28 @@ function AddressUse({ addresses }: { addresses: NetworkAddresses }) {
   );
 }
 
+/**
+ * A network's address figure moves with its own changes, the VIPs services
+ * hold, the nodes in the swarm, and the tasks attached to it; any other task
+ * event, which a busy cluster sends constantly, would refetch for nothing. A
+ * task removed without a payload might have been attached.
+ */
+export function movesAddresses({ type, resource }: SSEEvent): boolean {
+  if (type !== "task" || !resource) {
+    return true;
+  }
+
+  return ((resource as Task).NetworksAttachments ?? []).length > 0;
+}
+
 export default function NetworkList() {
   return (
     <ResourceListPage<Network>
       title="Networks"
       path="/networks"
-      sseType="network"
+      sseType="network,task,service,node"
+      derived
+      relevantEvent={movesAddresses}
       defaultSort="name"
       searchPlaceholder="Search networks…"
       viewModeKey="networks"

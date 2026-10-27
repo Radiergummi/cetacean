@@ -603,8 +603,9 @@ Send `Accept: text/event-stream` to any resource list or detail URL to open a st
 ### Per-resource streams
 
 A list stream carries events for one resource type. A detail stream carries events for one resource plus the resources
-that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, and a stack
-stream includes its member services, tasks, configs, secrets, networks, and volumes.
+that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, a network
+stream includes the tasks attached to it, the services with a virtual IP on it, and every node, and a stack stream
+includes its member services, tasks, configs, secrets, networks, and volumes.
 
 ```http tab
 GET /nodes HTTP/1.1

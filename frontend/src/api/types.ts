@@ -204,6 +204,7 @@ export interface Task {
       Image?: string | undefined;
     } | null;
   };
+  NetworksAttachments?: { Network: { ID?: string | undefined } }[] | undefined;
 }
 
 export interface Config {

@@ -181,6 +181,8 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 		}
 	}
 
+	keys = append(keys, s.taskNetworkKeys(task)...)
+
 	if task.NodeID == "" {
 		return keys
 	}
@@ -197,6 +199,32 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 		}
 	} else {
 		keys = append(keys, eventKey{target: node(task.NodeID)})
+	}
+
+	return keys
+}
+
+// taskNetworkKeys reaches the networks a task attaches to, whose address
+// counts it moves. A network gone from the cache has nothing left to notify
+// about, so only cached ones are named.
+func (s *Server) taskNetworkKeys(task swarm.Task) []eventKey {
+	var keys []eventKey
+
+	network := func(id string) subscriptionTarget {
+		return subscriptionTarget{typ: cache.EventNetwork, id: id}
+	}
+
+	for _, attachment := range task.NetworksAttachments {
+		net, ok := s.cache.GetNetwork(attachment.Network.ID)
+		if !ok {
+			continue
+		}
+
+		via := "network:" + net.Name
+		keys = append(keys,
+			eventKey{target: network(net.ID), via: via},
+			eventKey{target: network(net.Name), via: via},
+		)
 	}
 
 	return keys

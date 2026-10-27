@@ -5,9 +5,9 @@ import {
   createWrapper,
   localStorageStub,
 } from "../test/mocks";
-import NetworkList from "./NetworkList";
+import NetworkList, { movesAddresses } from "./NetworkList";
 import { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../api/client", () => ({
@@ -103,6 +103,50 @@ describe("NetworkList", () => {
     expect(screen.getByText("\u2014")).toBeInTheDocument();
   });
 
+  it("refetches the figures when a task attached to a network changes", async () => {
+    const withUse = (used: number) => ({
+      data: {
+        items: [
+          {
+            ...fakeNetwork("n1", "backend"),
+            Addresses: {
+              usable: 253,
+              used,
+              vips: 1,
+              tasks: used - 2,
+              loadBalancers: 1,
+              excludesAttachedContainers: false,
+            },
+          },
+        ],
+        total: 1,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set<string>(),
+    });
+
+    mockNetworks.mockResolvedValue(withUse(3));
+    render(<NetworkList />, { wrapper });
+    expect(await screen.findByText("3 / 253")).toBeInTheDocument();
+
+    const stream = [...MockEventSource.instances]
+      .reverse()
+      .find(({ listeners }) => listeners.has("task"));
+
+    mockNetworks.mockResolvedValue(withUse(4));
+    act(() =>
+      stream?.simulateEvent("task", {
+        type: "task",
+        action: "create",
+        id: "t1",
+        resource: { ID: "t1", NetworksAttachments: [{ Network: { ID: "n1" } }] },
+      }),
+    );
+
+    expect(await screen.findByText("4 / 253", {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
   it("shows empty state", async () => {
     mockNetworks.mockResolvedValue({
       data: { items: [], total: 0, limit: 50, offset: 0 },
@@ -122,5 +166,30 @@ describe("NetworkList", () => {
     await waitFor(() => {
       expect(screen.getByText("Connection refused")).toBeInTheDocument();
     });
+  });
+});
+
+describe("movesAddresses", () => {
+  it("lets a task attached to a network through", () => {
+    expect(
+      movesAddresses({
+        type: "task",
+        action: "update",
+        id: "t1",
+        resource: { NetworksAttachments: [{ Network: { ID: "n1" } }] },
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores a task attached to none", () => {
+    expect(movesAddresses({ type: "task", action: "update", id: "t2", resource: {} })).toBe(false);
+  });
+
+  it("lets every other event and a bare task removal through", () => {
+    expect(movesAddresses({ type: "service", action: "update", id: "s1", resource: {} })).toBe(
+      true,
+    );
+    expect(movesAddresses({ type: "node", action: "create", id: "n1", resource: {} })).toBe(true);
+    expect(movesAddresses({ type: "task", action: "remove", id: "t3" })).toBe(true);
   });
 });
