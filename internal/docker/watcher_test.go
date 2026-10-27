@@ -652,6 +652,72 @@ func TestRun_SignalsReady(t *testing.T) {
 	}
 }
 
+// A retried sync runs on the event loop beside a cache that already serves
+// reads, so a hung one must give the loop back well before a full sync's own
+// timeout would, or every event and Refresh waits behind it.
+func TestRetriedSyncGivesTheLoopBackSoon(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{}) // never opens: every sync hangs
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.watchEvents(ctx, time.Time{}, false)
+		}()
+
+		// Past the first retry and its bound, before the second retry.
+		time.Sleep(time.Second + retrySyncTimeout + time.Second/2)
+		synctest.Wait()
+		if mc.fullSyncs.Load() != 1 {
+			t.Fatalf("FullSync ran %d times, want the one retry", mc.fullSyncs.Load())
+		}
+
+		if err := w.Refresh(ctx, string(events.NodeEventType), "n1"); err != nil {
+			t.Errorf("Refresh behind a retried sync = %v", err)
+		}
+
+		cancel()
+		<-done
+	})
+}
+
+// Work already queued for the loop goes first: a retry that finds any waits
+// for its next turn rather than holding that work behind a sync.
+func TestRetriedSyncWaitsForQueuedWork(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.watchEvents(ctx, time.Time{}, false)
+		}()
+
+		// An event still inside its debounce window when the first retry is due.
+		time.Sleep(time.Second - debounceWindow/2)
+		mc.eventsCh <- events.Message{Type: events.NodeEventType, Actor: events.Actor{ID: "n1"}}
+		time.Sleep(debounceWindow)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got != 0 {
+			t.Errorf("a retry ran with an event queued (FullSync ran %d times)", got)
+		}
+
+		time.Sleep(maxBackoff)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got != 1 {
+			t.Errorf("FullSync ran %d times once the loop was idle, want 1", got)
+		}
+
+		cancel()
+		<-done
+	})
+}
+
 // A manager started before its swarm elects a leader refuses every swarm list
 // while its event stream stays up, so no reconnect follows. The sync is retried
 // on a short backoff, so the instance is ready within seconds of a leader

@@ -129,6 +129,9 @@ type Watcher struct {
 	// loopRunning reports whether the event loop is reading refreshes.
 	loopRunning atomic.Bool
 
+	// refreshWaiting counts Refresh calls waiting for the loop to take them.
+	refreshWaiting atomic.Int32
+
 	// Whether the watcher is still tracking the cluster. See Liveness.
 	connected atomic.Bool
 	lastSync  atomic.Int64 // UnixNano; zero until the first sync
@@ -473,7 +476,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 	}
 
 	// loopSync re-reads the cluster from the loop and reports whether it did.
-	loopSync := func(kind string) bool {
+	loopSync := func(syncCtx context.Context, kind string) bool {
 		flushPending()
 
 		// TryLock, not sync: a Resync that started before this loop did
@@ -489,7 +492,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 		// Beside a live stream a failure is not a disconnection, but a
 		// success is the stream's verdict restored. lastSync stopping is
 		// what reports a cache gone stale.
-		err := w.syncLocked(ctx)
+		err := w.syncLocked(syncCtx)
 		w.syncMu.Unlock()
 
 		if err != nil {
@@ -588,14 +591,21 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 				slog.Debug("task poll failed", "error", err)
 			}
 		case <-syncTicker.C:
-			if loopSync("periodic") && retryC != nil {
+			if loopSync(ctx, "periodic") && retryC != nil {
 				retry.Stop()
 				retryC = nil
 			}
 		case <-retryC:
-			if loopSync("retried") {
-				retryC = nil
-				continue
+			// Queued work goes first; the backoff brings the retry round again.
+			if len(pending) == 0 && len(msgCh) == 0 && w.refreshWaiting.Load() == 0 {
+				retryCtx, cancel := context.WithTimeout(ctx, retrySyncTimeout)
+				ok := loopSync(retryCtx, "retried")
+				cancel()
+
+				if ok {
+					retryC = nil
+					continue
+				}
 			}
 
 			retryDelay = min(retryDelay*2, maxBackoff)
@@ -975,6 +985,10 @@ func (w *Watcher) apply(resource any) {
 // fullSyncTimeout bounds one full sync, however it was started.
 var fullSyncTimeout = 2 * time.Minute
 
+// retrySyncTimeout bounds a sync retried after a failed one. It holds the
+// event loop beside a cache already serving reads, so it gives up sooner.
+var retrySyncTimeout = 10 * time.Second
+
 // taskListTimeout bounds one task re-list, which holds the event loop.
 var taskListTimeout = 30 * time.Second
 
@@ -1030,6 +1044,9 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 	// engine being out of reach already answers with.
 	handoff := time.NewTimer(refreshHandoffTimeout)
 	defer handoff.Stop()
+
+	w.refreshWaiting.Add(1)
+	defer w.refreshWaiting.Add(-1)
 
 	select {
 	case w.refreshes <- refreshRequest{run: refresh, done: done}:
