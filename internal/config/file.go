@@ -129,6 +129,7 @@ type fileServer struct {
 	OperationsLevel  *int      `toml:"operations_level"`
 	BasePath         *string   `toml:"base_path"`
 	PublicURL        *string   `toml:"public_url"`
+	AllowedHosts     []string  `toml:"allowed_hosts"`
 	TrustedProxies   *string   `toml:"trusted_proxies"`
 	ForwardedHeaders *string   `toml:"forwarded_headers"`
 }

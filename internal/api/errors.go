@@ -205,6 +205,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "The request changes state and arrived from another origin, which cross-site request forgery protection refuses.",
 		Suggestion:  "Call the API from an allowed origin, or add yours to the server.cors.origins setting.",
 	},
+	"CSR002": {
+		Code:        "CSR002",
+		Title:       "Misdirected Request",
+		Status:      http.StatusMisdirectedRequest,
+		Description: "The request's Host names none of this server's names, an IP address or loopback, so it may come from a page that rebound its own name to this server.",
+		Suggestion:  "Add the host to the server.allowed_hosts setting, or set server.public_url to the URL the server is reached at.",
+	},
 
 	// ── FLT: filter expressions ───────────────────────────────────────
 	"FLT001": {Code: "FLT001", Title: "Filter Expression Too Long", Status: http.StatusBadRequest,

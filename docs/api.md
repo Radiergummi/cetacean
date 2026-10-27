@@ -39,6 +39,12 @@ writes, so name every origin that should be allowed to make them.
 Requests that carry no browser headers, such as `curl` or a script, aren't affected. Neither are `/mcp` and the
 OAuth `token`, `revoke`, and `register` endpoints, which authenticate from the request itself.
 
+## Host names
+
+A page can point its own name at Cetacean's address and then read the API as if it came from the same origin. To
+stop that, a request whose `Host` isn't one of the [names Cetacean answers for][server.public_url] is refused with
+`421` and code [`CSR002`](api/errors#CSR002).
+
 ## Content negotiation
 
 Every resource URL serves JSON, HTML (the embedded [dashboard][dashboard]), SSE, or a feed format depending on what
@@ -505,6 +511,7 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [Grants][authorization] deny read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
 | Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
+| `Host` names none of Cetacean's names | 421 | [`CSR002`](api/errors#CSR002) | Add the name to [`server.allowed_hosts`][server.allowed_hosts] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 | Name in the path identifies more than one resource | 409 | [`API015`](api/errors#API015) | Address the resource by ID; the detail lists the candidates |
@@ -1141,6 +1148,7 @@ it.
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [requirements]: getting-started#requirements
+[server.allowed_hosts]: configuration#server.allowed_hosts
 [server.cors.origins]: configuration#server.cors.origins
 [server.public_url]: configuration#server.public_url
 [server.sse.batch_interval]: configuration#server.sse.batch_interval

@@ -44,6 +44,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 
 	specBytes, _ := os.ReadFile("../../api/openapi.yaml")
 	return NewRouter(RouterConfig{
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           h,
 		Broadcaster:        b,
 		SPA:                spa,

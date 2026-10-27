@@ -36,6 +36,7 @@ func newProxyRouter(t *testing.T, provider auth.Provider, trusted []netip.Prefix
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 
 	return NewRouter(RouterConfig{
+		Hosts:          auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:       h,
 		Broadcaster:    b,
 		SPA:            NewSPAHandler(fs.FS(fsys), ""),

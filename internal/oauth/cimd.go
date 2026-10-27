@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/netguard"
 )
 
 // cimdDialer is the shared net.Dialer used by the default CIMD transport for
@@ -44,29 +46,6 @@ const cimdMaxBodyBytes = 5 * 1024
 
 // cimdFetchTimeout bounds the total per-fetch budget end-to-end.
 const cimdFetchTimeout = 5 * time.Second
-
-// cgnatBlock is RFC 6598 (100.64.0.0/10) — carrier-grade NAT and Tailscale's
-// default address pool. net.IP.IsPrivate covers RFC 1918 and ULA but not
-// CGNAT, so we add it explicitly.
-var cgnatBlock = func() *net.IPNet {
-	_, n, _ := net.ParseCIDR("100.64.0.0/10")
-	return n
-}()
-
-// specialUseBlocks are the RFC 6890 blocks not globally reachable that the
-// net.IP predicates in checkIP do not already name.
-var specialUseBlocks = func() []*net.IPNet {
-	var blocks []*net.IPNet
-	for _, cidr := range []string{
-		"0.0.0.0/8", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
-		"198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4",
-		"100::/64", "2001::/23", "2001:db8::/32",
-	} {
-		_, n, _ := net.ParseCIDR(cidr)
-		blocks = append(blocks, n)
-	}
-	return blocks
-}()
 
 // Sentinel errors for CIMD fetch failures. All are wrapped with %w so callers
 // can use errors.Is for fine-grained handling.
@@ -199,50 +178,10 @@ func (f *CIMDFetcher) ssrfTransport(base http.RoundTripper) http.RoundTripper {
 		// Such callers are responsible for their own SSRF protections.
 		return base
 	}
-	t.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(address)
-		if err != nil {
-			return nil, fmt.Errorf("CIMD dial: invalid address %q: %w", address, err)
-		}
-		// If the host is already an IP literal, validate it directly.
-		if ip := net.ParseIP(host); ip != nil {
-			if err := f.checkIP(ip); err != nil {
-				return nil, err
-			}
-			return cimdDialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-		}
-		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
-		if err != nil {
-			return nil, fmt.Errorf("CIMD dial: lookup %q: %w", host, err)
-		}
-		if len(ips) == 0 {
-			return nil, fmt.Errorf("%w: no addresses resolved for %q", ErrCIMDSSRFBlocked, host)
-		}
-		var firstErr error
-		for _, ip := range ips {
-			if err := f.checkIP(ip); err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			conn, dialErr := cimdDialer.DialContext(
-				ctx,
-				network,
-				net.JoinHostPort(ip.String(), port),
-			)
-			if dialErr == nil {
-				return conn, nil
-			}
-			if firstErr == nil {
-				firstErr = dialErr
-			}
-		}
-		if firstErr != nil {
-			return nil, firstErr
-		}
-		return nil, fmt.Errorf("CIMD dial: no usable addresses for %q", host)
-	}
+	t.DialContext = netguard.DialContext(
+		cimdDialer,
+		func(_ context.Context, _ string, ip net.IP) error { return f.checkIP(ip) },
+	)
 	return t
 }
 
@@ -400,26 +339,8 @@ func parseHTTPSURL(rawURL string) (*url.URL, error) {
 // (RFC 1918 + ULA), link-local (unicast + multicast), unspecified, multicast
 // and the rest of RFC 6890's special-use blocks are all rejected.
 func (f *CIMDFetcher) checkIP(ip net.IP) error {
-	if ip.IsLoopback() && !f.AllowLoopback {
-		return fmt.Errorf("%w: resolved to loopback address %s", ErrCIMDSSRFBlocked, ip)
-	}
-	if ip.IsPrivate() {
-		return fmt.Errorf("%w: resolved to private address %s", ErrCIMDSSRFBlocked, ip)
-	}
-	if cgnatBlock.Contains(ip) {
-		return fmt.Errorf("%w: resolved to CGNAT address %s", ErrCIMDSSRFBlocked, ip)
-	}
-	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-		return fmt.Errorf("%w: resolved to link-local address %s", ErrCIMDSSRFBlocked, ip)
-	}
-	if ip.IsUnspecified() {
-		return fmt.Errorf("%w: resolved to unspecified address %s", ErrCIMDSSRFBlocked, ip)
-	}
-	if ip.IsMulticast() {
-		return fmt.Errorf("%w: resolved to multicast address %s", ErrCIMDSSRFBlocked, ip)
-	}
-	if slices.ContainsFunc(specialUseBlocks, func(n *net.IPNet) bool { return n.Contains(ip) }) {
-		return fmt.Errorf("%w: resolved to special-use address %s", ErrCIMDSSRFBlocked, ip)
+	if err := (netguard.Policy{AllowLoopback: f.AllowLoopback}).Check(ip); err != nil {
+		return fmt.Errorf("%w: %w", ErrCIMDSSRFBlocked, err)
 	}
 	return nil
 }

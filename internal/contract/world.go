@@ -197,6 +197,7 @@ func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
 	}), "")
 
 	router := api.NewRouter(api.RouterConfig{
+		Hosts:          auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:       handlers,
 		Broadcaster:    broadcaster,
 		SPA:            spa,

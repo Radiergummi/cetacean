@@ -61,8 +61,13 @@ type RouterConfig struct {
 	AuthProvider       auth.Provider
 	BasePath           string
 	PublicURL          string
-	CORS               *CORSConfig
-	TLSEnabled         bool
+
+	// Hosts are the names a request's Host may carry; main.go builds the one
+	// set /mcp's own guard reads too.
+	Hosts auth.HostSet
+
+	CORS       *CORSConfig
+	TLSEnabled bool
 
 	// InlineScriptHashes are CSP `'sha256-…'` tokens for the SPA's inline
 	// scripts, from InlineScriptHashes. Empty means no inline script runs.
@@ -1171,6 +1176,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		// canonicalises names the same resource, and a rule matching the path
 		// it came in on answers /-/resync.json differently from /-/resync.
 		cleanPaths,
+		hostGuard(cfg.Hosts),
 		negotiate,
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),

@@ -18,6 +18,10 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
+    A request whose `Host` is not one of the
+    [names Cetacean answers for](/configuration#server.public_url) is answered
+    `421 Misdirected Request` (`CSR002`). It is not repeated under each operation.
+
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —

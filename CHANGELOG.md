@@ -34,8 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
 - A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
+- **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
+- **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
+- The image check no longer follows a registry's redirect to plain HTTP or to a private address on another domain, nor asks another domain's token service
 - Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
 - `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one
 - An MCP write the Docker engine refuses, or can't be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log
