@@ -56,41 +56,42 @@ func ServiceLinks(labels map[string]string) []ServiceLink {
 }
 
 // StackLinks is the union of its member services' links, with exact
-// duplicates of title and value merged.
+// duplicates merged. The order is total, so the response's ETag is stable.
 func StackLinks(services []swarm.Service) []ServiceLink {
-	type key struct{ title, href, text string }
-
 	var links []ServiceLink
 
-	seen := make(map[key]bool)
-
 	for _, svc := range services {
-		for _, link := range ServiceLinks(svc.Spec.Labels) {
-			k := key{link.Title, link.Href, link.Text}
-			if seen[k] {
-				continue
-			}
-
-			seen[k] = true
-			links = append(links, link)
-		}
+		links = append(links, ServiceLinks(svc.Spec.Labels)...)
 	}
 
 	slices.SortFunc(links, func(a, b ServiceLink) int {
 		return cmp.Or(
 			strings.Compare(a.ID, b.ID),
-			strings.Compare(a.Href+a.Text, b.Href+b.Text),
+			strings.Compare(a.Href, b.Href),
+			strings.Compare(a.Text, b.Text),
+			strings.Compare(a.Title, b.Title),
 		)
 	})
 
-	return links
+	return slices.Compact(links)
 }
 
+// isHTTPURL accepts an absolute http(s) URL with a hostname, written only in
+// the characters RFC 3986 allows, so an href is always a valid URI.
 func isHTTPURL(value string) bool {
+	if strings.ContainsFunc(value, func(r rune) bool { return !isURIChar(r) }) {
+		return false
+	}
+
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.Host == "" {
+	if err != nil || parsed.Hostname() == "" {
 		return false
 	}
 
 	return strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")
+}
+
+func isURIChar(r rune) bool {
+	return 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || '0' <= r && r <= '9' ||
+		strings.ContainsRune("-._~:/?#[]@!$&'()*+,;=%", r)
 }

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -48,6 +49,31 @@ func TestServiceLinks(t *testing.T) {
 			"schemeless value is text",
 			map[string]string{"cetacean.link.x": "grafana.example.com"},
 			[]ServiceLink{{ID: "x", Title: "x", Text: "grafana.example.com"}},
+		},
+		{
+			"empty hostname is text",
+			map[string]string{"cetacean.link.x": "https://:8080/path"},
+			[]ServiceLink{{ID: "x", Title: "x", Text: "https://:8080/path"}},
+		},
+		{
+			"whitespace is text",
+			map[string]string{"cetacean.link.x": "https://example.com/a b"},
+			[]ServiceLink{{ID: "x", Title: "x", Text: "https://example.com/a b"}},
+		},
+		{
+			"control character is text",
+			map[string]string{"cetacean.link.x": "https://example.com/a\x7f"},
+			[]ServiceLink{{ID: "x", Title: "x", Text: "https://example.com/a\x7f"}},
+		},
+		{
+			"non-ascii is text",
+			map[string]string{"cetacean.link.x": "https://example.com/ä"},
+			[]ServiceLink{{ID: "x", Title: "x", Text: "https://example.com/ä"}},
+		},
+		{
+			"percent-encoded url is a link",
+			map[string]string{"cetacean.link.x": "https://example.com/a%20b?q=1#top"},
+			[]ServiceLink{{ID: "x", Title: "x", Href: "https://example.com/a%20b?q=1#top"}},
 		},
 		{
 			"title without url is ignored",
@@ -103,7 +129,7 @@ func TestStackLinks(t *testing.T) {
 		}
 	}
 
-	got := StackLinks([]swarm.Service{
+	services := []swarm.Service{
 		service(map[string]string{
 			"cetacean.link.repo":    "https://git.example.com/app",
 			"cetacean.link.grafana": "https://grafana.example.com/api",
@@ -116,17 +142,30 @@ func TestStackLinks(t *testing.T) {
 			"cetacean.link.source":       "https://git.example.com/app",
 			"cetacean.link.source.title": "repo",
 		}),
+		service(map[string]string{
+			"cetacean.link.repo":       "https://git.example.com/app",
+			"cetacean.link.repo.title": "Code",
+		}),
 		service(nil),
-	})
+	}
 
 	want := []ServiceLink{
 		{ID: "grafana", Title: "grafana", Href: "https://grafana.example.com/api"},
 		{ID: "grafana", Title: "grafana", Href: "https://grafana.example.com/worker"},
+		{ID: "repo", Title: "Code", Href: "https://git.example.com/app"},
 		{ID: "repo", Title: "repo", Href: "https://git.example.com/app"},
+		{ID: "source", Title: "repo", Href: "https://git.example.com/app"},
 	}
 
-	if !reflect.DeepEqual(got, want) {
+	if got := StackLinks(services); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
+	}
+
+	// The member order must not change the answer, or the ETag would churn.
+	slices.Reverse(services)
+
+	if got := StackLinks(services); !reflect.DeepEqual(got, want) {
+		t.Fatalf("reversed members: got %+v, want %+v", got, want)
 	}
 }
 
