@@ -2376,7 +2376,8 @@ paths:
       tags: [Plugins]
       summary: Configure plugin settings
       description: |
-        Updates plugin args and environment variables. Requires operations level 2.
+        Updates plugin args and environment variables. Requires operations level 2, and level 3 for a
+        setting that names one of the plugin's mounts or devices, which sets a host path.
         Returns the updated plugin detail, or 204 with `Prefer: return=minimal`.
       parameters:
         - name: name

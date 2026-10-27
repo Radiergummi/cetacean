@@ -12,6 +12,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -274,6 +275,18 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 	settings := make([]string, 0, len(req.Args)+len(req.Env))
 	settings = append(settings, req.Args...)
 	settings = append(settings, req.Env...)
+
+	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
+	if err != nil {
+		writeDockerError(w, r, err, "plugin", name)
+		return
+	}
+
+	if err := cluster.CheckPluginSettings(*plugin, settings, h.levelFor(r)); err != nil {
+		writeErrorCode(w, r, "OPS001", err.Error())
+		return
+	}
+
 	slog.Info("configuring plugin", "plugin", name, "count", len(settings))
 
 	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {

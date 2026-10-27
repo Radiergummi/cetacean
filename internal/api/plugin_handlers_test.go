@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/errdefs"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -413,6 +414,65 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 	}
 	if resp["@type"] != "Plugin" {
 		t.Errorf("@type=%v, want Plugin", resp["@type"])
+	}
+}
+
+// A plugin's mount source and device path are host paths, so setting either
+// needs the impactful tier though the endpoint is a level-2 one.
+func TestHandleConfigurePlugin_HostPathsRequireImpactfulLevel(t *testing.T) {
+	cases := []struct {
+		body    string
+		level   config.OperationsLevel
+		refused bool
+	}{
+		{`{"env":["DEBUG=1"]}`, config.OpsConfiguration, false},
+		{`{"env":["state.source=/"]}`, config.OpsConfiguration, true},
+		{`{"args":["state=/"]}`, config.OpsConfiguration, true},
+		{`{"env":["disk.path=/dev/sda"]}`, config.OpsConfiguration, true},
+		{`{"env":["state.source=/"]}`, config.OpsImpactful, false},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s at level %d", tc.body, tc.level), func(t *testing.T) {
+			configured := false
+			pc := &mockPluginClient{
+				pluginConfigureFn: func(context.Context, string, []string) error {
+					configured = true
+					return nil
+				},
+				pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+					return &types.Plugin{Name: name, Config: types.PluginConfig{
+						Env:    []types.PluginEnv{{Name: "DEBUG", Settable: []string{"value"}}},
+						Mounts: []types.PluginMount{{Name: "state", Settable: []string{"source"}}},
+						Linux: types.PluginConfigLinux{Devices: []types.PluginDevice{
+							{Name: "disk", Settable: []string{"path"}},
+						}},
+					}}, nil
+				},
+			}
+			h := newTestHandlers(t, withPluginClient(pc), withOpsLevel(tc.level))
+
+			req := httptest.NewRequest("PATCH", "/plugins/p/settings", strings.NewReader(tc.body))
+			req.SetPathValue("name", "p")
+			w := httptest.NewRecorder()
+			h.HandleConfigurePlugin(w, req)
+
+			if !tc.refused {
+				if w.Code != http.StatusOK || !configured {
+					t.Fatalf("status=%d configured=%v, want 200 and a write; body: %s",
+						w.Code, configured, w.Body.String())
+				}
+
+				return
+			}
+
+			if w.Code != http.StatusForbidden || configured {
+				t.Fatalf("status=%d configured=%v, want 403 and no write; body: %s",
+					w.Code, configured, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), "OPS001") {
+				t.Errorf("body does not name OPS001: %s", w.Body.String())
+			}
+		})
 	}
 }
 
