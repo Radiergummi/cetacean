@@ -201,6 +201,7 @@ func TestBuildPlacementJGF(t *testing.T) {
 		c,
 		svcNames,
 		svcImages,
+		nil,
 		readableServiceIDs,
 		"/api/context.jsonld",
 	)
@@ -389,7 +390,7 @@ func TestBuildNetworkJGF_EmptyInput(t *testing.T) {
 
 func TestBuildPlacementJGF_EmptyInput(t *testing.T) {
 	c := cache.New(nil)
-	g := buildPlacementJGF(nil, c, nil, nil, nil, "/api/context.jsonld")
+	g := buildPlacementJGF(nil, c, nil, nil, nil, nil, "/api/context.jsonld")
 
 	if g.ID != "placement" {
 		t.Errorf("id=%q, want placement", g.ID)
@@ -518,7 +519,7 @@ func TestBuildPlacementJGF_TaskImageFallback(t *testing.T) {
 	svcImages := map[string]string{"svc1": "webapp:v2"}
 	readable := map[string]bool{"svc1": true}
 
-	g := buildPlacementJGF(c.ListNodes(), c, svcNames, svcImages, readable, jsonLDContext)
+	g := buildPlacementJGF(c.ListNodes(), c, svcNames, svcImages, nil, readable, jsonLDContext)
 
 	if len(g.Hyperedges) != 1 {
 		t.Fatalf("hyperedges=%d, want 1", len(g.Hyperedges))
@@ -813,6 +814,7 @@ func TestBuildPlacementJGFIgnoresReplacedTasks(t *testing.T) {
 		c,
 		map[string]string{"svc1": "web"},
 		map[string]string{"svc1": "nginx"},
+		nil,
 		map[string]bool{"svc1": true},
 		"/api/context.jsonld",
 	)

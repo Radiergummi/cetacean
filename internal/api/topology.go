@@ -73,9 +73,12 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 	// Build service name/image lookup and readable set from ACL-filtered services.
 	svcNames := make(map[string]string, len(services))
 	svcImages := make(map[string]string, len(services))
+	svcNetworks := make(map[string][]map[string]any, len(services))
 	readableServiceIDs := make(map[string]bool, len(services))
+	overlays := cluster.OverlayNetworks(networks)
 	for _, svc := range services {
 		svcNames[svc.ID] = svc.Spec.Name
+		svcNetworks[svc.ID] = placementNetworks(svc, overlays)
 		if svc.Spec.TaskTemplate.ContainerSpec != nil {
 			svcImages[svc.ID] = cluster.StripImageDigest(svc.Spec.TaskTemplate.ContainerSpec.Image)
 		}
@@ -87,6 +90,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 		h.cache,
 		svcNames,
 		svcImages,
+		svcNetworks,
 		readableServiceIDs,
 		contextURL,
 	)
@@ -345,11 +349,38 @@ func buildNetworkJGF(
 	}
 }
 
+// placementNetworks lists the overlays a service is on, sorted by name so the
+// document's ETag does not flip with map iteration order.
+func placementNetworks(svc swarm.Service, overlays map[string]network.Summary) []map[string]any {
+	attachments := cluster.ServiceAttachments(svc, overlays)
+	ids := make([]string, 0, len(attachments))
+	for id := range attachments {
+		ids = append(ids, id)
+	}
+
+	sort.Slice(ids, func(i, j int) bool {
+		a, b := overlays[ids[i]].Name, overlays[ids[j]].Name
+		if a != b {
+			return a < b
+		}
+		return ids[i] < ids[j]
+	})
+
+	entries := make([]map[string]any, len(ids))
+	for i, id := range ids {
+		entries[i] = map[string]any{"id": jgf.URN("network", id), "name": overlays[id].Name}
+	}
+
+	return entries
+}
+
 // buildPlacementJGF produces a JGF hypergraph of the placement topology.
+// svcNetworks must already be limited to the networks the caller may read.
 func buildPlacementJGF(
 	clusterNodes []swarm.Node,
 	c *cache.Cache,
 	svcNames, svcImages map[string]string,
+	svcNetworks map[string][]map[string]any,
 	readableServiceIDs map[string]bool,
 	contextURL string,
 ) jgf.Graph {
@@ -376,6 +407,7 @@ func buildPlacementJGF(
 				"role":         string(n.Spec.Role),
 				"state":        string(n.Status.State),
 				"availability": string(n.Spec.Availability),
+				"addr":         n.Status.Addr,
 			},
 		}
 
@@ -421,6 +453,7 @@ func buildPlacementJGF(
 				"@context": contextURL,
 				"kind":     "service",
 				"image":    svcImages[svcID],
+				"networks": svcNetworks[svcID],
 			},
 		}
 
