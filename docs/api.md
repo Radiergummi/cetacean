@@ -796,6 +796,10 @@ services sharing an overlay network. `placement` has a vertex per node and per s
 service listing the nodes its tasks run on. A node vertex carries `address`, and a service vertex `networks`, the
 overlays it's attached to as `id` and `name`, limited to the networks you may read.
 
+Each `GET /services` item carries `RunningTasks` and `DesiredTasks`: the replicas, the ready, active nodes a global
+service's constraints admit, or the completions a job's run needs. A job's item adds `CompletedTasks` and
+`FailedTasks`, counting only its current run; a rejected task counts as failed.
+
 `GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent

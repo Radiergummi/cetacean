@@ -227,3 +227,45 @@ func TestCompletedJobTaskCountFollowsTheCurrentIteration(t *testing.T) {
 		t.Errorf("Snapshot().CompletedJobsByService = %d, want 1", got)
 	}
 }
+
+// A job's failures count over its current run as its completions do, and a
+// rejection is a failure; nothing but a job has either.
+func TestTaskTallies(t *testing.T) {
+	c := New(nil)
+
+	job := stackService("job-1", "app")
+	job.Spec.Mode = swarm.ServiceMode{ReplicatedJob: &swarm.ReplicatedJob{}}
+	job.JobStatus = &swarm.JobStatus{JobIteration: swarm.Version{Index: 7}}
+	c.SetService(job)
+	c.SetService(stackService("web", "app"))
+
+	task := func(id, service string, iteration *swarm.Version, state swarm.TaskState) swarm.Task {
+		return swarm.Task{
+			ID:           id,
+			ServiceID:    service,
+			JobIteration: iteration,
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: state},
+		}
+	}
+
+	previous, current := &swarm.Version{Index: 3}, &swarm.Version{Index: 7}
+	c.SetTask(task("old-done", "job-1", previous, swarm.TaskStateComplete))
+	c.SetTask(task("old-failed", "job-1", previous, swarm.TaskStateFailed))
+	c.SetTask(task("done", "job-1", current, swarm.TaskStateComplete))
+	c.SetTask(task("failed", "job-1", current, swarm.TaskStateFailed))
+	c.SetTask(task("rejected", "job-1", nil, swarm.TaskStateRejected))
+	c.SetTask(task("busy", "job-1", current, swarm.TaskStateRunning))
+	c.SetTask(task("up", "web", nil, swarm.TaskStateRunning))
+	c.SetTask(task("crashed", "web", nil, swarm.TaskStateFailed))
+
+	tallies := c.TaskTallies()
+
+	if got, want := tallies["job-1"], (TaskTally{Running: 1, Completed: 1, Failed: 2}); got != want {
+		t.Errorf("job tally = %+v, want %+v", got, want)
+	}
+
+	if got, want := tallies["web"], (TaskTally{Running: 1}); got != want {
+		t.Errorf("service tally = %+v, want %+v", got, want)
+	}
+}
