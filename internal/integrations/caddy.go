@@ -12,9 +12,10 @@ import (
 // CaddyIntegration represents the Caddyfile caddy-docker-proxy builds from a
 // service's labels. Label values are Go templates, kept unevaluated.
 type CaddyIntegration struct {
-	Name      string `json:"name"`
-	Enabled   bool   `json:"enabled"`
-	Caddyfile string `json:"caddyfile"`
+	Name      string   `json:"name"`
+	Enabled   bool     `json:"enabled"`
+	Labels    []string `json:"labels"`
+	Caddyfile string   `json:"caddyfile"`
 }
 
 // The label filter and path grammar are caddy-docker-proxy's own, from
@@ -36,10 +37,14 @@ func detectCaddy(labels map[string]string) *CaddyIntegration {
 	root := &caddyBlock{}
 	byPath := map[string]*caddyBlock{}
 
+	var claimed []string
+
 	for k, v := range labels {
 		if !caddyLabel.MatchString(k) {
 			continue
 		}
+
+		claimed = append(claimed, k)
 
 		block := caddyBlockAt(root, k, byPath)
 		if block == nil {
@@ -56,13 +61,19 @@ func detectCaddy(labels map[string]string) *CaddyIntegration {
 	}
 
 	root.sort()
+	slices.Sort(claimed)
 
 	var b strings.Builder
 	for _, block := range root.children {
 		block.write(&b, 0)
 	}
 
-	return &CaddyIntegration{Name: "caddy", Enabled: true, Caddyfile: b.String()}
+	return &CaddyIntegration{
+		Name:      "caddy",
+		Enabled:   true,
+		Labels:    claimed,
+		Caddyfile: b.String(),
+	}
 }
 
 // caddyBlockAt returns nil for a path with an empty segment, such as

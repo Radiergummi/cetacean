@@ -2,12 +2,12 @@ import { IntegrationSection } from "./IntegrationSection";
 import type { DocoCDIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import TimeAgo from "@/components/TimeAgo";
-import { formatYesNo } from "@/lib/format";
+import { formatDateTime, formatYesNo } from "@/lib/format";
 import { ExternalLink } from "lucide-react";
 
 const docsUrl = "https://github.com/kimdre/doco-cd/wiki";
 
-const fullCommitSHA = /^[0-9a-f]{40,64}$/;
+const fullCommitSHA = /^[0-9a-f]{40,64}$/i;
 
 function shortRevision(value: string): string {
   return fullCommitSHA.test(value) ? value.slice(0, 7) : value;
@@ -102,13 +102,7 @@ export function DocoCDPanel({
             ],
             trigger && trigger !== commit && ["Trigger", shortRevision(trigger)],
             source && ["Source type", source],
-            certExpiry && [
-              "Certificate expires",
-              <TimeAgo
-                key="cert-expiry"
-                date={certExpiry}
-              />,
-            ],
+            certExpiry && ["Certificate expires", formatDateTime(certExpiry)],
             version && ["doco-cd version", version],
           ]}
         />
@@ -127,13 +121,7 @@ export function DocoCDPanel({
                   date={job.lastRun}
                 />,
               ],
-              job.nextRun && [
-                "Next run",
-                <TimeAgo
-                  key="next-run"
-                  date={job.nextRun}
-                />,
-              ],
+              job.nextRun && ["Next run", formatDateTime(job.nextRun)],
             ]}
           />
         )}

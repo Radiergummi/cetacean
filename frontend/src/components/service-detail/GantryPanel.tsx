@@ -132,6 +132,12 @@ export function GantryPanel({
     setForm((previous) => ({ ...previous, [key]: value }));
   }
 
+  // A value Gantry doesn't know still gets an option, so the select shows it.
+  const manifestOptions: string[] =
+    form.manifestCmd && !(manifestCommands as readonly string[]).includes(form.manifestCmd)
+      ? [...manifestCommands, form.manifestCmd]
+      : [...manifestCommands];
+
   async function handleSave(ifMatch: string | undefined) {
     await saveModelledLabels(
       rawLabels,
@@ -142,6 +148,22 @@ export function GantryPanel({
       ifMatch,
     );
   }
+
+  const rows = [
+    integration.manifestCmd && ["Manifest command", integration.manifestCmd],
+    integration.manifestOptions && ["Manifest options", integration.manifestOptions],
+    ["Roll back on failure", formatYesNo(integration.rollbackOnFailure)],
+    integration.rollbackOptions && ["Rollback options", integration.rollbackOptions],
+    ["Update jobs", formatYesNo(integration.updateJobs)],
+    integration.updateOptions && ["Update options", integration.updateOptions],
+    integration.updateTimeoutSeconds !== undefined && [
+      "Update timeout",
+      integration.updateTimeoutSeconds === 0 ? "None" : `${integration.updateTimeoutSeconds}s`,
+    ],
+    integration.authConfig && ["Auth config", integration.authConfig],
+  ] satisfies Parameters<typeof KVTable>[0]["rows"];
+
+  const hasOverrides = rows.some((row) => row && row[1]);
 
   const editForm = (
     <div className="space-y-3">
@@ -171,7 +193,7 @@ export function GantryPanel({
               onChange={(event) => update("manifestCmd", event.target.value)}
             >
               <option value="">Gantry default</option>
-              {manifestCommands.map((command) => (
+              {manifestOptions.map((command) => (
                 <option
                   key={command}
                   value={command}
@@ -277,23 +299,11 @@ export function GantryPanel({
       serviceId={serviceId}
       onRawSave={onSaved}
     >
-      <KVTable
-        rows={[
-          integration.manifestCmd && ["Manifest command", integration.manifestCmd],
-          integration.manifestOptions && ["Manifest options", integration.manifestOptions],
-          ["Roll back on failure", formatYesNo(integration.rollbackOnFailure)],
-          integration.rollbackOptions && ["Rollback options", integration.rollbackOptions],
-          ["Update jobs", formatYesNo(integration.updateJobs)],
-          integration.updateOptions && ["Update options", integration.updateOptions],
-          integration.updateTimeoutSeconds !== undefined && [
-            "Update timeout",
-            integration.updateTimeoutSeconds === 0
-              ? "None"
-              : `${integration.updateTimeoutSeconds}s`,
-          ],
-          integration.authConfig && ["Auth config", integration.authConfig],
-        ]}
-      />
+      {hasOverrides ? (
+        <KVTable rows={rows} />
+      ) : (
+        <p className="text-sm text-muted-foreground">No overrides; Gantry's defaults apply.</p>
+      )}
     </IntegrationSection>
   );
 }

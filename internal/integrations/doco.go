@@ -3,6 +3,7 @@ package integrations
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -12,6 +13,7 @@ import (
 type DocoCDIntegration struct {
 	Name       string     `json:"name"`
 	Enabled    bool       `json:"enabled"`
+	Labels     []string   `json:"labels"`
 	Deployment string     `json:"deployment,omitempty"`
 	Source     string     `json:"source,omitempty"`
 	Repository string     `json:"repository,omitempty"`
@@ -37,8 +39,6 @@ type DocoCDJob struct {
 }
 
 func detectDocoCD(labels map[string]string) *DocoCDIntegration {
-	var found bool
-
 	integration := &DocoCDIntegration{Name: "doco-cd", Enabled: true}
 
 	for k, v := range labels {
@@ -47,7 +47,7 @@ func detectDocoCD(labels map[string]string) *DocoCDIntegration {
 			continue
 		}
 
-		found = true
+		integration.Labels = append(integration.Labels, k)
 
 		if jobKey, ok := strings.CutPrefix(suffix, "job."); ok {
 			if integration.Job == nil {
@@ -83,9 +83,11 @@ func detectDocoCD(labels map[string]string) *DocoCDIntegration {
 		}
 	}
 
-	if !found {
+	if len(integration.Labels) == 0 {
 		return nil
 	}
+
+	slices.Sort(integration.Labels)
 
 	if integration.Source != "oci" {
 		integration.CommitURL = docoCommitURL(integration.SourceURL, integration.Commit)
@@ -121,10 +123,15 @@ func parseDocoTime(value string) *time.Time {
 }
 
 // stripURLCredentials drops the userinfo of a URL, which for a clone URL can
-// carry an access token. Anything that does not parse is returned as is.
+// carry an access token. A URL that doesn't parse, such as one whose password
+// holds a `/`, is dropped whole rather than risk passing a token through.
 func stripURLCredentials(raw string) string {
 	u, err := url.Parse(raw)
-	if err != nil || u.User == nil || u.Host == "" {
+	if err != nil {
+		return ""
+	}
+
+	if u.User == nil || u.Host == "" {
 		return raw
 	}
 
@@ -134,7 +141,7 @@ func stripURLCredentials(raw string) string {
 }
 
 var (
-	commitSHA = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+	commitSHA = regexp.MustCompile(`^(?i)[0-9a-f]{7,64}$`)
 	scpLike   = regexp.MustCompile(`^[^@/]+@([^:/]+):(.+)$`)
 )
 
@@ -169,23 +176,34 @@ func docoCommitURL(source, sha string) string {
 		return ""
 	}
 
-	host := strings.ToLower(u.Hostname())
-
-	var commitPath string
-
-	switch {
-	case strings.Contains(host, "gitlab"):
-		commitPath = "/-/commit/"
-	case strings.Contains(host, "github"),
-		strings.Contains(host, "gitea"),
-		strings.Contains(host, "forgejo"),
-		host == "codeberg.org":
-		commitPath = "/commit/"
-	default:
+	commitPath := forgeCommitPath(strings.ToLower(u.Hostname()))
+	if commitPath == "" {
 		return ""
 	}
 
 	web.Path = "/" + repository + commitPath + sha
 
 	return web.String()
+}
+
+// forgeCommitPath names a forge by its public host, or by a first DNS label
+// that is exactly the forge's name, as in gitlab.example.com.
+func forgeCommitPath(host string) string {
+	switch host {
+	case "gitlab.com":
+		return "/-/commit/"
+	case "github.com", "gitea.com", "codeberg.org":
+		return "/commit/"
+	}
+
+	first, _, _ := strings.Cut(host, ".")
+
+	switch first {
+	case "gitlab":
+		return "/-/commit/"
+	case "github", "gitea", "forgejo":
+		return "/commit/"
+	}
+
+	return ""
 }

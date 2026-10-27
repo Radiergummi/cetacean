@@ -1,17 +1,19 @@
 package integrations
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // ShepherdIntegration represents parsed Shepherd auto-update configuration.
 type ShepherdIntegration struct {
-	Name       string `json:"name"`
-	Enabled    bool   `json:"enabled"`
-	AuthConfig string `json:"authConfig,omitempty"`
+	Name       string   `json:"name"`
+	Enabled    bool     `json:"enabled"`
+	Labels     []string `json:"labels"`
+	AuthConfig string   `json:"authConfig,omitempty"`
 }
 
 func detectShepherd(labels map[string]string) *ShepherdIntegration {
-	var found bool
-
 	integration := &ShepherdIntegration{Name: "shepherd"}
 
 	for k, v := range labels {
@@ -20,16 +22,18 @@ func detectShepherd(labels map[string]string) *ShepherdIntegration {
 			continue
 		}
 
-		found = true
+		integration.Labels = append(integration.Labels, k)
 
 		if suffix == "auth.config" {
 			integration.AuthConfig = v
 		}
 	}
 
-	if !found {
+	if len(integration.Labels) == 0 {
 		return nil
 	}
+
+	slices.Sort(integration.Labels)
 
 	integration.Enabled = enabled(labels, "shepherd.")
 

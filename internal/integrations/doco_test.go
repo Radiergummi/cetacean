@@ -123,6 +123,19 @@ func TestDetectDocoCD_SourceURLCredentialsAreStripped(t *testing.T) {
 	}
 }
 
+func TestDetectDocoCD_UnparsableSourceURLIsDropped(t *testing.T) {
+	got := detectDocoCD(map[string]string{ //nolint:gosec // test data, not real credentials
+		"cd.doco.source.url": "https://user:ab/cd@gitlab.com/acme/shop.git",
+	})
+	if got == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if got.SourceURL != "" {
+		t.Errorf("SourceURL = %q, want it dropped", got.SourceURL)
+	}
+}
+
 func TestDetectDocoCD_NoLabels(t *testing.T) {
 	if got := detectDocoCD(map[string]string{"cd.other": "x"}); got != nil {
 		t.Errorf("expected nil result, got %+v", got)
@@ -170,6 +183,24 @@ func TestDocoCommitURL(t *testing.T) {
 			"http://forgejo.lan:3000/acme/shop/commit/" + docoSHA,
 		},
 		{"unknown forge", "https://git.example.com/acme/shop.git", docoSHA, ""},
+		{
+			"self-hosted gitlab",
+			"https://gitlab.example.com/acme/shop.git",
+			docoSHA,
+			"https://gitlab.example.com/acme/shop/-/commit/" + docoSHA,
+		},
+		{
+			"forge name inside another label",
+			"https://github-mirror.gitlab.corp/acme/shop.git",
+			docoSHA,
+			"",
+		},
+		{
+			"uppercase sha",
+			"https://github.com/acme/shop.git",
+			"ABCDEF0",
+			"https://github.com/acme/shop/commit/ABCDEF0",
+		},
 		{"not a sha", "https://github.com/acme/shop.git", "main", ""},
 		{"no repository path", "https://github.com/", docoSHA, ""},
 		{"oci reference", "ghcr.io/acme/shop:main", docoSHA, ""},

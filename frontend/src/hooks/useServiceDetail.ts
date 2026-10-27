@@ -24,7 +24,6 @@ import type { SSEEvent } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { deriveServiceSubResources } from "../lib/deriveServiceState";
-import { isIntegrationLabel } from "../lib/integrationLabels";
 import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,6 +44,18 @@ function serviceUsageQueries(serviceName: string) {
     cpu: `sum(rate(container_cpu_usage_seconds_total{${selector}}[5m])) * 100`,
     memory: `sum(container_memory_usage_bytes{${selector}})`,
   };
+}
+
+function sameLabels(
+  left: Record<string, string> | null | undefined,
+  right: Record<string, string> | null | undefined,
+): boolean {
+  const entries = Object.entries(left ?? {});
+
+  return (
+    entries.length === Object.keys(right ?? {}).length &&
+    entries.every(([key, value]) => right?.[key] === value)
+  );
 }
 
 export function useServiceDetail(id: string | undefined) {
@@ -98,7 +109,19 @@ export function useServiceDetail(id: string | undefined) {
   const onEvent = useCallback(
     (event: SSEEvent, { setData, refetch }: DetailResourceActions<ServiceDetail>) => {
       if (event.type === "service" && event.resource) {
-        setData((previous) => ({ ...previous, service: event.resource as Service }));
+        const service = event.resource as Service;
+        let labelsChanged = false;
+
+        setData((previous) => {
+          labelsChanged = !sameLabels(previous.service.Spec.Labels, service.Spec.Labels);
+
+          return { ...previous, service };
+        });
+
+        // The integrations are read from the labels on the server.
+        if (labelsChanged) {
+          refetch();
+        }
       } else if (event.type === "service" || event.type === "sync") {
         // Service deletions and full syncs come without a payload — refetch to
         // pick up the new state (or surface 404 on delete).
@@ -235,11 +258,9 @@ export function useServiceDetail(id: string | undefined) {
       return serviceLabels;
     }
 
-    return Object.fromEntries(
-      Object.entries(serviceLabels).filter(
-        ([key]) => !integrations.some(({ name }) => isIntegrationLabel(name, key)),
-      ),
-    );
+    const claimed = new Set(integrations.flatMap(({ labels }) => labels));
+
+    return Object.fromEntries(Object.entries(serviceLabels).filter(([key]) => !claimed.has(key)));
   }, [serviceLabels, integrations]);
 
   return {

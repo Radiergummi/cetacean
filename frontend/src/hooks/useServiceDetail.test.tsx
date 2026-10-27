@@ -202,4 +202,36 @@ describe("useServiceDetail", () => {
     expect(result.current.changes).toHaveLength(1);
     expect(result.current.integrations).toHaveLength(1);
   });
+
+  it("refetches the detail when an event changes the labels the integrations are read from", async () => {
+    const { result } = renderHook(() => useServiceDetail("svc1"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+    const fetches = vi.mocked(api.service).mock.calls.length;
+
+    act(() => {
+      subscriber?.({
+        type: "service",
+        action: "update",
+        id: "svc1",
+        resource: { ...service, Spec: { ...service.Spec, Name: "renamed" } },
+      });
+    });
+
+    await waitFor(() => expect(result.current.service?.Spec.Name).toBe("renamed"));
+    expect(api.service).toHaveBeenCalledTimes(fetches);
+
+    act(() => {
+      subscriber?.({
+        type: "service",
+        action: "update",
+        id: "svc1",
+        resource: { ...service, Spec: { ...service.Spec, Labels: { "caddy.encode": "gzip" } } },
+      });
+    });
+
+    await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1));
+  });
 });

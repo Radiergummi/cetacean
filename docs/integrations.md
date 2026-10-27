@@ -33,8 +33,10 @@ The Caddy panel matches the labels caddy-docker-proxy itself reads: `caddy`, `ca
 not `caddy_ingress_network`. Template expressions such as `{{upstreams 8080}}` are shown as written, not evaluated.
 A label prefix changed through `CADDY_DOCKER_LABEL_PREFIX` isn't recognized.
 
-The doco-cd panel links the deployed commit when the host of the source URL names GitHub, GitLab, Gitea, Forgejo, or
-Codeberg, and shows the commit as text otherwise. Credentials in the source URL are left out of the panel.
+The doco-cd panel links the deployed commit when the source URL is on `github.com`, `gitlab.com`, `gitea.com`, or
+`codeberg.org`, or on a host whose first label names the forge, such as `gitlab.example.com`. Otherwise it shows the
+commit as text. The structured view leaves credentials out of the source URL, and omits a URL it can't parse; the
+raw label still holds it as written.
 
 Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services, and middlewares are
 parsed into structure.
@@ -58,6 +60,7 @@ routers or `tls.options`, are kept when you save it.
 ## API
 
 Detected integrations appear as an `integrations` array on `GET /services/{id}`, omitted when nothing was detected.
+Each one names the service `labels` it was read from, which the dashboard leaves out of the generic labels section.
 See the [API reference][api] for the full schema.
 
 [api]: api

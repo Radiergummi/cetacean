@@ -1,21 +1,12 @@
-import {
-  diffLabels,
-  diffModelledLabels,
-  isIntegrationLabel,
-  rawLabelsForIntegration,
-} from "./integrationLabels";
+import { diffLabels, diffModelledLabels, rawLabelsForIntegration } from "./integrationLabels";
 import { describe, expect, it } from "vitest";
 
 describe("rawLabelsForIntegration", () => {
   it("returns empty array for null labels", () => {
-    expect(rawLabelsForIntegration(null, "traefik")).toEqual([]);
+    expect(rawLabelsForIntegration(null, ["traefik.enable"])).toEqual([]);
   });
 
-  it("returns empty array for unknown integration name", () => {
-    expect(rawLabelsForIntegration({ "foo.bar": "baz" }, "unknown")).toEqual([]);
-  });
-
-  it("filters traefik labels from mixed labels", () => {
+  it("keeps only the labels the integration claimed", () => {
     const labels = {
       "traefik.enable": "true",
       "traefik.http.routers.app.rule": "Host(`app.example.com`)",
@@ -23,7 +14,10 @@ describe("rawLabelsForIntegration", () => {
       "com.docker.stack.namespace": "mystack",
     };
 
-    const result = rawLabelsForIntegration(labels, "traefik");
+    const result = rawLabelsForIntegration(labels, [
+      "traefik.enable",
+      "traefik.http.routers.app.rule",
+    ]);
 
     expect(result).toEqual([
       ["traefik.enable", "true"],
@@ -31,53 +25,10 @@ describe("rawLabelsForIntegration", () => {
     ]);
   });
 
-  it("filters shepherd labels correctly", () => {
-    const labels = {
-      "shepherd.enable": "true",
-      "shepherd.image-update": "monitor",
-      "traefik.enable": "true",
-    };
-
-    const result = rawLabelsForIntegration(labels, "shepherd");
-
-    expect(result).toEqual([
-      ["shepherd.enable", "true"],
-      ["shepherd.image-update", "monitor"],
+  it("skips a claimed label the service no longer has", () => {
+    expect(rawLabelsForIntegration({ caddy: "example.com" }, ["caddy", "caddy.encode"])).toEqual([
+      ["caddy", "example.com"],
     ]);
-  });
-
-  it("filters swarm-cronjob labels with swarm.cronjob. prefix", () => {
-    const labels = {
-      "swarm.cronjob.enable": "true",
-      "swarm.cronjob.schedule": "0 * * * *",
-      "swarm.other": "nope",
-    };
-
-    const result = rawLabelsForIntegration(labels, "swarm-cronjob");
-
-    expect(result).toEqual([
-      ["swarm.cronjob.enable", "true"],
-      ["swarm.cronjob.schedule", "0 * * * *"],
-    ]);
-  });
-
-  it("filters diun labels correctly", () => {
-    const labels = {
-      "diun.enable": "true",
-      "diun.watch_repo": "true",
-      "other.label": "value",
-    };
-
-    const result = rawLabelsForIntegration(labels, "diun");
-
-    expect(result).toEqual([
-      ["diun.enable", "true"],
-      ["diun.watch_repo", "true"],
-    ]);
-  });
-
-  it("returns empty array for empty labels object", () => {
-    expect(rawLabelsForIntegration({}, "traefik")).toEqual([]);
   });
 });
 
@@ -150,26 +101,5 @@ describe("diffModelledLabels", () => {
     expect(diffModelledLabels(raw, before, after)).toEqual([
       { op: "add", path: "/traefik.http.routers.web.priority", value: "10" },
     ]);
-  });
-});
-
-describe("isIntegrationLabel", () => {
-  it("matches caddy labels by caddy-docker-proxy's grammar, not by prefix", () => {
-    expect(isIntegrationLabel("caddy", "caddy")).toBe(true);
-    expect(isIntegrationLabel("caddy", "caddy_0")).toBe(true);
-    expect(isIntegrationLabel("caddy", "caddy.reverse_proxy")).toBe(true);
-    expect(isIntegrationLabel("caddy", "caddy_1.route_0.a")).toBe(true);
-    expect(isIntegrationLabel("caddy", "caddyfile_path")).toBe(false);
-    expect(isIntegrationLabel("caddy", "caddy_ingress_network")).toBe(false);
-  });
-
-  it("matches doco-cd and gantry labels by prefix", () => {
-    expect(isIntegrationLabel("doco-cd", "cd.doco.deployment.target.sha")).toBe(true);
-    expect(isIntegrationLabel("doco-cd", "cd.other")).toBe(false);
-    expect(isIntegrationLabel("gantry", "gantry.update.jobs")).toBe(true);
-  });
-
-  it("matches nothing for an unknown integration", () => {
-    expect(isIntegrationLabel("unknown", "unknown.key")).toBe(false);
   });
 });

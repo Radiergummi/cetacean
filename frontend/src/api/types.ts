@@ -382,6 +382,7 @@ export interface TraefikMiddleware {
 export interface TraefikIntegration {
   name: "traefik";
   enabled: boolean;
+  labels: string[];
   routers?: TraefikRouter[] | undefined;
   services?: TraefikService[] | undefined;
   middlewares?: TraefikMiddleware[] | undefined;
@@ -390,12 +391,14 @@ export interface TraefikIntegration {
 export interface ShepherdIntegration {
   name: "shepherd";
   enabled: boolean;
+  labels: string[];
   authConfig?: string | undefined;
 }
 
 export interface CronjobIntegration {
   name: "swarm-cronjob";
   enabled: boolean;
+  labels: string[];
   schedule?: string | undefined;
   skipRunning?: boolean | undefined;
   replicas?: number | undefined;
@@ -406,6 +409,7 @@ export interface CronjobIntegration {
 export interface DiunIntegration {
   name: "diun";
   enabled: boolean;
+  labels: string[];
   watchRepo?: boolean | undefined;
   notifyOn?: string | undefined;
   maxTags?: number | undefined;
@@ -421,6 +425,7 @@ export interface DiunIntegration {
 export interface CaddyIntegration {
   name: "caddy";
   enabled: boolean;
+  labels: string[];
   caddyfile: string;
 }
 
@@ -436,6 +441,7 @@ export interface DocoCDJob {
 export interface DocoCDIntegration {
   name: "doco-cd";
   enabled: boolean;
+  labels: string[];
   deployment?: string | undefined;
   source?: string | undefined;
   repository?: string | undefined;
@@ -453,6 +459,7 @@ export interface DocoCDIntegration {
 export interface GantryIntegration {
   name: "gantry";
   enabled: boolean;
+  labels: string[];
   authConfig?: string | undefined;
   manifestCmd?: string | undefined;
   manifestOptions?: string | undefined;

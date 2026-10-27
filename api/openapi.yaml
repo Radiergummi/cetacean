@@ -8937,7 +8937,7 @@ components:
     TraefikIntegration:
       type: object
       description: Traefik reverse proxy integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
@@ -8946,6 +8946,11 @@ components:
         enabled:
           type: boolean
           description: Whether the Traefik integration is enabled
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         routers:
           type: array
           items:
@@ -8961,6 +8966,7 @@ components:
       example:
         name: traefik
         enabled: true
+        labels: [traefik.enable, traefik.http.routers.web.rule]
         routers:
           - name: webapp
             rule: "Host(`app.example.com`)"
@@ -9068,30 +9074,41 @@ components:
     ShepherdIntegration:
       type: object
       description: Shepherd auto-update integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [shepherd]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         authConfig:
           type: string
           description: Registry auth configuration ID
       example:
         name: shepherd
         enabled: true
+        labels: [shepherd.enable]
 
     CronjobIntegration:
       type: object
       description: Swarm Cronjob integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [swarm-cronjob]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         schedule:
           type: string
           description: Cron expression
@@ -9106,6 +9123,7 @@ components:
       example:
         name: swarm-cronjob
         enabled: true
+        labels: [swarm.cronjob.enable, swarm.cronjob.schedule]
         schedule: "0 3 * * *"
         skipRunning: true
         replicas: 1
@@ -9115,13 +9133,18 @@ components:
     DiunIntegration:
       type: object
       description: Diun image update notifier integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [diun]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         regopt:
           type: string
           description: Registry options name
@@ -9152,6 +9175,7 @@ components:
       example:
         name: diun
         enabled: true
+        labels: [diun.enable, diun.watch_repo]
         watchRepo: true
         notifyOn: new;update
         sortTags: semver
@@ -9165,30 +9189,41 @@ components:
         caddy-docker-proxy configuration detected from service labels, as the
         Caddyfile it builds from them. Label values are Go templates, and are
         kept as written rather than evaluated.
-      required: [name, enabled, caddyfile]
+      required: [name, enabled, caddyfile, labels]
       properties:
         name:
           type: string
           enum: [caddy]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         caddyfile:
           type: string
       example:
         name: caddy
         enabled: true
+        labels: [caddy, caddy.reverse_proxy]
         caddyfile: "example.com {\n\treverse_proxy {{upstreams 8080}}\n}\n"
 
     DocoCDIntegration:
       type: object
       description: The deployment provenance doco-cd writes onto the services it deploys
-      required: [name, enabled]
+      required: [name, enabled, labels]
       properties:
         name:
           type: string
           enum: [doco-cd]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         deployment:
           type: string
           description: The doco-cd deployment name
@@ -9250,6 +9285,7 @@ components:
       example:
         name: doco-cd
         enabled: true
+        labels: [cd.doco.deployment.name, cd.doco.deployment.target.sha]
         deployment: shop
         source: git
         repository: acme/shop
@@ -9265,7 +9301,7 @@ components:
       description: >
         Gantry service update configuration detected from service labels. A
         field that is absent leaves Gantry's own default in place.
-      required: [name, enabled]
+      required: [name, enabled, labels]
       properties:
         name:
           type: string
@@ -9273,6 +9309,11 @@ components:
         enabled:
           type: boolean
           description: False when `gantry.services.excluded` is `true`
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         authConfig:
           type: string
         manifestCmd:
@@ -9294,6 +9335,7 @@ components:
       example:
         name: gantry
         enabled: true
+        labels: [gantry.manifest.cmd, gantry.update.timeout_seconds]
         manifestCmd: manifest
         rollbackOnFailure: true
         updateTimeoutSeconds: 300

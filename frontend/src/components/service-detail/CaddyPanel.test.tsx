@@ -14,7 +14,12 @@ describe("CaddyPanel", () => {
   it("edits its labels in the raw view, having no form of its own", () => {
     render(
       <CaddyPanel
-        integration={{ name: "caddy", enabled: true, caddyfile: "example.com {\n}\n" }}
+        integration={{
+          name: "caddy",
+          enabled: true,
+          labels: ["caddy"],
+          caddyfile: "example.com {\n}\n",
+        }}
         rawLabels={[["caddy", "example.com"]]}
         serviceId="s1"
         onSaved={vi.fn<() => void>()}
@@ -30,5 +35,9 @@ describe("CaddyPanel", () => {
     expect(screen.queryByText("Caddyfile")).toBeNull();
     expect(screen.getByDisplayValue("example.com")).toBeTruthy();
     expect(screen.getByRole("button", { name: /structured/i })).toHaveProperty("disabled", true);
+
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(screen.getByText("Caddyfile")).toBeTruthy();
   });
 });

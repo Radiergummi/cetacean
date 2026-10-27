@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 const integration: TraefikIntegration = {
   name: "traefik",
   enabled: true,
+  labels: [],
   routers: [
     {
       name: "web",

@@ -30,7 +30,7 @@ export function IntegrationPanels({
   return (
     <>
       {integrations.map((integration) => {
-        const rawLabels = rawLabelsForIntegration(serviceLabels, integration.name);
+        const rawLabels = rawLabelsForIntegration(serviceLabels, integration.labels);
 
         const panelProps = {
           rawLabels,
