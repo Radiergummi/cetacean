@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -237,8 +238,15 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 	c := cache.New(nil)
 	populateSpecFixtures(c)
 
-	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+
+		if strings.HasSuffix(r.URL.Path, "/query_range") {
+			_, _ = io.WriteString(w, `{"status":"success","data":{"resultType":"matrix",`+
+				`"result":[{"metric":{},"values":[[1,"1"],[2,"1"]]}]}}`)
+			return
+		}
+
 		_, _ = io.WriteString(w, `{"status":"success","data":{"resultType":"vector",`+
 			`"result":[{"metric":{},"value":[1,"1"]}]}}`)
 	}))
@@ -272,6 +280,13 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 
 	h := newTestHandlers(t, withCache(c), withPromClient(promapi.NewClient(prom.URL)),
 		withPluginClient(plugins), withSystemClient(system))
+
+	// Seeded, so /-/docker-latest-version answers without calling GitHub.
+	h.dockerVersionCache.version = &DockerLatestVersion{
+		Version: "28.0.0",
+		URL:     "https://github.com/moby/moby/releases/tag/v28.0.0",
+	}
+	h.dockerVersionCache.fetchedAt = time.Now()
 
 	entries := cluster.NewSecretEntries()
 	h.SetSecretEntries(entries)
