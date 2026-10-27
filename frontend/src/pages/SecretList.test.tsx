@@ -107,9 +107,13 @@ describe("SecretList", () => {
     expect(screen.getByRole("columnheader", { name: "Used by" })).toBeInTheDocument();
     expect(screen.queryByText("db-v1")).not.toBeInTheDocument();
 
+    const streams = MockEventSource.instances.length;
+
     fireEvent.click(toggle);
 
     expect(await screen.findByText("db-v1")).toBeInTheDocument();
+    // The expansion follows the list's stream rather than opening its own.
+    expect(MockEventSource.instances.length).toBe(streams);
     expect(mockSecretVersions).toHaveBeenCalledWith("db-v3", expect.anything());
 
     const rows = screen.getAllByRole("row").map(({ textContent }) => textContent ?? "");
@@ -148,14 +152,22 @@ describe("SecretList", () => {
     await screen.findByText("db-password");
 
     const calls = mockSecrets.mock.calls.length;
-    act(() =>
-      MockEventSource.instance.simulateEvent("service", {
-        type: "service",
-        action: "update",
-        id: "svc1",
-        resource: { ID: "svc1" },
-      }),
-    );
+    const service = (secretID: string) => ({
+      type: "service",
+      action: "update",
+      id: "svc1",
+      resource: {
+        ID: "svc1",
+        Spec: { TaskTemplate: { ContainerSpec: { Secrets: [{ SecretID: secretID }] } } },
+      },
+    });
+
+    // A service naming no loaded secret leaves the list alone.
+    act(() => MockEventSource.instance.simulateEvent("service", service("elsewhere")));
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(mockSecrets.mock.calls.length).toBe(calls);
+
+    act(() => MockEventSource.instance.simulateEvent("service", service("s1")));
 
     await waitFor(() => expect(mockSecrets.mock.calls.length).toBeGreaterThan(calls), {
       timeout: 2000,

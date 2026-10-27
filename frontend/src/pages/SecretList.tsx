@@ -8,6 +8,7 @@ import {
   UsedBy,
   VersionedName,
   useVersionExpansion,
+  versionListEvents,
   type VersionRow,
 } from "../components/ResourceVersions";
 import TimeAgo from "../components/TimeAgo";
@@ -21,15 +22,17 @@ type Row = VersionRow<SecretListItem>;
  */
 const sseType = "secret,service";
 
+const relevantEvent = versionListEvents("Secrets");
+
 export default function SecretList() {
   const {
     expanded,
     toggle: toggleVersions,
     arrange,
     follow,
+    onEvent,
   } = useVersionExpansion(
     "/secrets",
-    `/events?types=${sseType}`,
     useCallback((id: string, signal: AbortSignal) => api.secretVersions(id, signal), []),
   );
 
@@ -45,6 +48,8 @@ export default function SecretList() {
       fetchFn={(params, signal) => api.secrets(params, signal)}
       arrange={arrange}
       onItems={follow}
+      onEvent={onEvent}
+      relevantEvent={relevantEvent}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/secrets/${ID}`}
       columns={(sortKey, sortDir, toggle) => [

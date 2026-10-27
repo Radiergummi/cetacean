@@ -26,6 +26,10 @@ export interface UseListPageConfig<T> {
    * handed the rows loaded so far.
    */
   relevantEvent?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
+  /**
+   * Told of each stream event the list acts on, so a view of it can follow too.
+   */
+  onEvent?: ((event: SSEEvent) => void) | undefined;
 }
 
 interface UseListPageResult<T> {
@@ -61,6 +65,7 @@ export function useListPage<T>({
   filter,
   derived,
   relevantEvent,
+  onEvent,
 }: UseListPageConfig<T>): UseListPageResult<T> {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(defaultSort);
@@ -76,6 +81,7 @@ export function useListPage<T>({
     debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
     relevantEvent,
     Boolean(derived),
+    onEvent,
   );
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 

@@ -64,6 +64,7 @@ export function useSwarmQuery<T>(
   filtered = false,
   relevant?: (event: SSEEvent, loaded: readonly T[]) => boolean,
   derived = false,
+  onEvent?: (event: SSEEvent) => void,
 ) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
@@ -71,6 +72,7 @@ export function useSwarmQuery<T>(
   const filteredRef = useLatestRef(filtered);
   const derivedRef = useLatestRef(derived);
   const relevantRef = useLatestRef(relevant);
+  const onEventRef = useLatestRef(onEvent);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
@@ -109,6 +111,7 @@ export function useSwarmQuery<T>(
         const key = [...queryKeyRef.current];
 
         if (event.type === "sync") {
+          onEventRef.current?.(event);
           void queryClient.invalidateQueries({ queryKey: key });
 
           return;
@@ -122,6 +125,8 @@ export function useSwarmQuery<T>(
         ) {
           return;
         }
+
+        onEventRef.current?.(event);
 
         if (!currentData?.pages) {
           return;

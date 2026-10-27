@@ -292,24 +292,58 @@ function findServicesUsing(
     .map((service) => ({ id: service.ID, name: service.Spec.Name }));
 }
 
+/**
+ * The services whose spec or previous spec names a config or secret, as the
+ * server lists them: one only its previous spec names is marked `rollback`.
+ */
+function servicesReferencing(
+  dataset: Dataset,
+  names: (spec: Service["Spec"] | undefined) => boolean,
+): ServiceRef[] {
+  return dataset.services.flatMap((service) => {
+    if (names(service.Spec)) {
+      return [{ id: service.ID, name: service.Spec.Name }];
+    }
+
+    if (names(service.PreviousSpec)) {
+      return [{ id: service.ID, name: service.Spec.Name, rollback: true }];
+    }
+
+    return [];
+  });
+}
+
 function servicesUsingConfig(dataset: Dataset, id: string): ServiceRef[] {
-  return findServicesUsing(
+  return servicesReferencing(
     dataset,
-    ({ Spec }) =>
-      Spec.TaskTemplate?.ContainerSpec?.Configs?.some(({ ConfigID }) => ConfigID === id) ?? false,
+    (spec) =>
+      spec?.TaskTemplate?.ContainerSpec?.Configs?.some(({ ConfigID }) => ConfigID === id) ?? false,
   );
 }
 
 function servicesUsingSecret(dataset: Dataset, id: string): ServiceRef[] {
-  return findServicesUsing(
+  return servicesReferencing(
     dataset,
-    ({ Spec }) =>
-      Spec.TaskTemplate?.ContainerSpec?.Secrets?.some(({ SecretID }) => SecretID === id) ?? false,
+    (spec) =>
+      spec?.TaskTemplate?.ContainerSpec?.Secrets?.some(({ SecretID }) => SecretID === id) ?? false,
   );
 }
 
 const versionLabel = "cetacean.version-of";
-const versionSuffix = /[_-](?:[0-9a-f]{8,}|v[0-9]+)$/i;
+const versionSuffix = /[_-](?:([0-9a-f]{8,})|v[0-9]+)$/i;
+
+/**
+ * A name less its version suffix, where a hash must hold a letter, as on the server.
+ */
+function stripVersionSuffix(name: string): string {
+  const match = versionSuffix.exec(name);
+
+  if (!match || (match[1] !== undefined && !/[a-f]/i.test(match[1]))) {
+    return name;
+  }
+
+  return name.slice(0, match.index);
+}
 
 interface Versionable {
   ID: string;
@@ -324,7 +358,7 @@ interface Versionable {
  */
 function versionKey({ Spec: { Name, Labels } }: Versionable): { stack: string; name: string } {
   const stack = Labels?.[stackLabel] ?? "";
-  const name = Labels?.[versionLabel] || Name.replace(versionSuffix, "");
+  const name = Labels?.[versionLabel] || stripVersionSuffix(Name);
   const prefix = [`${stack}_`, `${stack}-`].find(
     (candidate) => stack && name.startsWith(candidate) && name.length > candidate.length,
   );
@@ -413,10 +447,10 @@ function versionDetail<T extends Versionable>(
 
   return {
     usedBy: item?.UsedBy ?? 0,
+    ...(item?.NewestVersion && { newestVersion: true }),
     ...(item?.VersionOf && {
       versionOf: item.VersionOf,
       versionInferred: item.VersionInferred,
-      newestVersion: item.NewestVersion,
       olderVersions: item.OlderVersions,
     }),
   };

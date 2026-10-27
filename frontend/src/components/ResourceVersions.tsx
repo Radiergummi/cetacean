@@ -1,7 +1,7 @@
 import type { VersionedListItem } from "@/api/types";
 import ResourceName from "@/components/ResourceName";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useResourceStream } from "@/hooks/useResourceStream";
+import type { SSEEvent } from "@/hooks/useResourceStream";
 import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -36,14 +36,41 @@ function groupOf({ VersionOf, Spec: { Labels } }: Item): string {
   return `${Labels?.[stackNamespaceLabel] ?? ""}\u0000${VersionOf ?? ""}`;
 }
 
+interface ServiceReferences {
+  TaskTemplate?: { ContainerSpec?: Record<string, { ConfigID?: string; SecretID?: string }[]> };
+}
+
+/**
+ * Keeps a config or secret list's stream to what can change its rows: their
+ * own events, which cover a reference gained or lost, and a service whose spec
+ * or previous spec names a loaded row.
+ */
+export function versionListEvents(field: "Configs" | "Secrets") {
+  return (event: SSEEvent, loaded: readonly { ID: string }[]): boolean => {
+    if (event.type !== "service") {
+      return true;
+    }
+
+    const service = event.resource as
+      | { Spec?: ServiceReferences; PreviousSpec?: ServiceReferences }
+      | undefined;
+    const ids = new Set(loaded.map(({ ID }) => ID));
+
+    return [service?.Spec, service?.PreviousSpec].some((spec) =>
+      (spec?.TaskTemplate?.ContainerSpec?.[field] ?? []).some(({ ConfigID, SecretID }) =>
+        ids.has(ConfigID ?? SecretID ?? ""),
+      ),
+    );
+  };
+}
+
 /**
  * Which groups are expanded, the older versions the server lists for each,
  * and `arrange`, which places those beneath the newest version they belong to.
- * The groups refetch on the events the list itself refetches on.
+ * `onEvent` refetches the groups on the events the list itself acts on.
  */
 export function useVersionExpansion<T extends Item>(
   path: string,
-  streamPath: string,
   fetchGroup: (id: string, signal: AbortSignal) => Promise<T[]>,
 ) {
   const queryClient = useQueryClient();
@@ -53,15 +80,12 @@ export function useVersionExpansion<T extends Item>(
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
 
-  useResourceStream(
-    expanded.length > 0 ? streamPath : undefined,
-    useCallback(() => {
-      refetchTimer.current ??= setTimeout(() => {
-        refetchTimer.current = undefined;
-        void queryClient.invalidateQueries({ queryKey: [path, "versionsOf"] });
-      }, refetchDelay);
-    }, [queryClient, path]),
-  );
+  const onEvent = useCallback(() => {
+    refetchTimer.current ??= setTimeout(() => {
+      refetchTimer.current = undefined;
+      void queryClient.invalidateQueries({ queryKey: [path, "versionsOf"] });
+    }, refetchDelay);
+  }, [queryClient, path]);
 
   const toggle = useCallback((item: Item) => {
     setExpansions((current) =>
@@ -123,7 +147,7 @@ export function useVersionExpansion<T extends Item>(
     [older],
   );
 
-  return { expanded, toggle, arrange, follow };
+  return { expanded, toggle, arrange, follow, onEvent };
 }
 
 /**

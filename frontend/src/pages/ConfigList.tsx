@@ -8,6 +8,7 @@ import {
   UsedBy,
   VersionedName,
   useVersionExpansion,
+  versionListEvents,
   type VersionRow,
 } from "../components/ResourceVersions";
 import TimeAgo from "../components/TimeAgo";
@@ -21,15 +22,17 @@ type Row = VersionRow<ConfigListItem>;
  */
 const sseType = "config,service";
 
+const relevantEvent = versionListEvents("Configs");
+
 export default function ConfigList() {
   const {
     expanded,
     toggle: toggleVersions,
     arrange,
     follow,
+    onEvent,
   } = useVersionExpansion(
     "/configs",
-    `/events?types=${sseType}`,
     useCallback((id: string, signal: AbortSignal) => api.configVersions(id, signal), []),
   );
 
@@ -45,6 +48,8 @@ export default function ConfigList() {
       fetchFn={(params, signal) => api.configs(params, signal)}
       arrange={arrange}
       onItems={follow}
+      onEvent={onEvent}
+      relevantEvent={relevantEvent}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/configs/${ID}`}
       columns={(sortKey, sortDir, toggle) => [
