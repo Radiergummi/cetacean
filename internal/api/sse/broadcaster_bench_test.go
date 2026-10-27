@@ -195,7 +195,7 @@ func serveOneClient(b *testing.B, target string) (*Broadcaster, *benchRecorder, 
 	w := &benchRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	var wg sync.WaitGroup
-	wg.Go(func() { br.ServeHTTP(w, req) })
+	wg.Go(func() { br.ServeSSE(w, req, TypesFilter(req), ReplayAll) })
 
 	for {
 		br.mu.RLock()

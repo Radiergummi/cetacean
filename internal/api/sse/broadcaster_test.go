@@ -66,7 +66,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -93,7 +93,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -121,7 +121,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -173,7 +173,7 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -200,7 +200,7 @@ func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -311,7 +311,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 
 	// This recorder doesn't implement Flusher, so we need a flushRecorder
 	fw := &flushRecorder{ResponseRecorder: w}
-	b.ServeHTTP(fw, req)
+	b.ServeSSE(fw, req, TypesFilter(req), ReplayAll)
 
 	if w.Code != http.StatusTooManyRequests {
 		t.Errorf("status = %d, want 429", w.Code)
@@ -800,7 +800,7 @@ func TestSSE_429PastOneOwnersShare(t *testing.T) {
 	b.mu.Unlock()
 
 	w := httptest.NewRecorder()
-	b.ServeHTTP(&flushRecorder{ResponseRecorder: w}, hog)
+	b.ServeSSE(&flushRecorder{ResponseRecorder: w}, hog, TypesFilter(hog), ReplayAll)
 
 	if w.Code != http.StatusTooManyRequests || recorded.code != "SSE001" {
 		t.Fatalf("status = %d, code = %q; want 429 SSE001", w.Code, recorded.code)
@@ -813,7 +813,12 @@ func TestSSE_429PastOneOwnersShare(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(&flushRecorder{ResponseRecorder: httptest.NewRecorder()}, other)
+		b.ServeSSE(
+			&flushRecorder{ResponseRecorder: httptest.NewRecorder()},
+			other,
+			TypesFilter(other),
+			ReplayAll,
+		)
 		close(done)
 	}()
 

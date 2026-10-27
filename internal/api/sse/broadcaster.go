@@ -189,10 +189,6 @@ func TypesFilter(r *http.Request) func(cache.Event) bool {
 	return func(e cache.Event) bool { return e.Type == cache.EventSync || types[string(e.Type)] }
 }
 
-func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	b.ServeSSE(w, r, TypesFilter(r), ReplayAll)
-}
-
 func (b *Broadcaster) ServeSSE(
 	w http.ResponseWriter,
 	r *http.Request,
