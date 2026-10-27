@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import { api, pageSize } from "../api/client";
 import type { Task } from "../api/types";
 import DataTable, { type Column } from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
@@ -14,7 +14,7 @@ import TaskStateFilter, { taskStateExpression } from "../components/TaskStateFil
 import TaskStatusBadge from "../components/TaskStatusBadge";
 import { useListPage } from "../hooks/useListPage";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
-import { useTaskMetrics } from "../hooks/useTaskMetrics";
+import { useTaskMetricsResult } from "../hooks/useTaskMetrics";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { sortColumn } from "../lib/sortColumn";
 import { useMemo } from "react";
@@ -69,18 +69,29 @@ export default function TaskList() {
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
-  // Scoped to the services of the running tasks loaded so far: a regex over
-  // service IDs stays bounded as pages load, where one over task IDs would not.
-  const metricsFilter = useMemo(() => {
-    const serviceIds = new Set(
-      tasks.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
-    );
+  // Scoped to the services of the running tasks loaded so far, in batches no
+  // larger than a page of rows: every query is a GET, and its URL must stay
+  // inside what a proxy in front of Prometheus accepts.
+  const metricsFilters = useMemo(() => {
+    const serviceIds = [
+      ...new Set(
+        tasks.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
+      ),
+    ].sort();
+    const filters: string[] = [];
 
-    return serviceIds.size > 0
-      ? `container_label_com_docker_swarm_service_id=~"${[...serviceIds].sort().join("|")}"`
-      : "";
+    for (let offset = 0; offset < serviceIds.length; offset += pageSize) {
+      const batch = serviceIds.slice(offset, offset + pageSize).join("|");
+
+      filters.push(`container_label_com_docker_swarm_service_id=~"${batch}"`);
+    }
+
+    return filters;
   }, [tasks]);
-  const taskMetrics = useTaskMetrics(metricsFilter, hasCadvisor);
+  const { metrics: taskMetrics, error: metricsError } = useTaskMetricsResult(
+    metricsFilters,
+    hasCadvisor,
+  );
 
   const columns: Column<Task>[] = useMemo(
     () => [
@@ -191,6 +202,11 @@ export default function TaskList() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
+      {hasCadvisor && metricsError && (
+        <div className="mb-4">
+          <FetchError message={`Task metrics could not be loaded: ${metricsError.message}`} />
+        </div>
+      )}
       <div className="mb-4 flex justify-end">
         <TaskStateFilter
           tasks={tasks}

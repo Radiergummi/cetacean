@@ -15,6 +15,13 @@ interface RangeField<T> {
 // One instance, so a consumer memoising on the result does not rebuild on every
 // render while the query is disabled or pending.
 const noMetrics: Record<string, never> = {};
+const noResult = { metrics: noMetrics, error: null };
+
+export interface MetricsMapResult<T> {
+  metrics: Record<string, T>;
+  /** The first query that failed on the last poll; the rest still fill `metrics`. */
+  error: Error | null;
+}
 
 export interface MetricsMapSpec<T> {
   /**
@@ -39,28 +46,36 @@ export function useMetricsMap<T>(
   refreshInterval = 30_000,
   step = 120,
 ): Record<string, T> {
+  return useMetricsMapResult(cacheKey, spec, enabled, refreshInterval, step).metrics;
+}
+
+/**
+ * As useMetricsMap, for a page that says when its metrics failed to load.
+ */
+export function useMetricsMapResult<T>(
+  cacheKey: string,
+  spec: MetricsMapSpec<T>,
+  enabled: boolean,
+  refreshInterval = 30_000,
+  step = 120,
+): MetricsMapResult<T> {
   const { data } = useQuery({
     queryKey: ["metrics-map", cacheKey],
-    queryFn: async () => {
+    queryFn: async (): Promise<MetricsMapResult<T>> => {
+      let failure: Error | null = null;
+      const record = (error: unknown) => {
+        console.warn(error);
+        failure ??= error instanceof Error ? error : new Error(String(error));
+
+        return null;
+      };
       const now = Math.floor(Date.now() / 1000);
       const start = now - 3600;
       const [instantResponses, rangeResponses] = await Promise.all([
-        Promise.all(
-          (spec.instant ?? []).map(({ query }) =>
-            api.metricsQuery(query).catch((error) => {
-              console.warn(error);
-              return null;
-            }),
-          ),
-        ),
+        Promise.all((spec.instant ?? []).map(({ query }) => api.metricsQuery(query).catch(record))),
         Promise.all(
           (spec.range ?? []).map(({ query }) =>
-            api
-              .metricsQueryRange(query, String(start), String(now), String(step))
-              .catch((error) => {
-                console.warn(error);
-                return null;
-              }),
+            api.metricsQueryRange(query, String(start), String(now), String(step)).catch(record),
           ),
         ),
       ]);
@@ -91,7 +106,7 @@ export function useMetricsMap<T>(
         });
       });
 
-      return map;
+      return { metrics: map, error: failure };
     },
     enabled,
     placeholderData: keepPreviousData,
@@ -99,5 +114,5 @@ export function useMetricsMap<T>(
     staleTime: refreshInterval,
   });
 
-  return data ?? (noMetrics as Record<string, T>);
+  return data ?? (noResult as MetricsMapResult<T>);
 }

@@ -159,18 +159,18 @@ describe("TaskList", () => {
 
   // The page holds a page of tasks; the series of every task in the cluster
   // would be most of the response and none of the rows.
-  it("asks for the metrics of the services whose tasks it shows", async () => {
-    vi.mocked(api.monitoringStatus).mockResolvedValue({
-      prometheusConfigured: true,
-      prometheusReachable: true,
-      queryable: true,
-      nodeExporter: null,
-      cadvisor: { targets: 1, nodes: 1 },
-    });
+  // Every row keeps its sparklines, but no single query names more services
+  // than one page of rows can, so the URL stays well inside proxy limits.
+  it("asks for the metrics of the shown services in bounded batches", async () => {
+    enableCadvisor();
+    vi.mocked(api.metricsQueryRange).mockResolvedValue(null as never);
     mockTasks.mockResolvedValue({
       data: {
-        items: [fakeTask(0), { ...fakeTask(1), ServiceID: "svc2" }],
-        total: 2,
+        items: Array.from({ length: 120 }, (_, index) => ({
+          ...fakeTask(index),
+          ServiceID: `svc${index % 60}`,
+        })),
+        total: 120,
         limit: 50,
         offset: 0,
       },
@@ -182,11 +182,39 @@ describe("TaskList", () => {
     await waitFor(() => expect(api.metricsQueryRange).toHaveBeenCalled());
 
     const queries = vi.mocked(api.metricsQueryRange).mock.calls.map(([query]) => query as string);
-
-    expect(queries.length).toBeGreaterThan(0);
+    const named = new Set<string>();
 
     for (const query of queries) {
-      expect(query).toContain('container_label_com_docker_swarm_service_id=~"svc1|svc2"');
+      const ids = /service_id=~"([^"]*)"/.exec(query)?.[1]?.split("|") ?? [];
+
+      expect(ids.length).toBeGreaterThan(0);
+      expect(ids.length).toBeLessThanOrEqual(50);
+      ids.forEach((id) => named.add(id));
     }
+
+    expect(named.size).toBe(60);
+  });
+
+  it("says when the task metrics could not be loaded", async () => {
+    enableCadvisor();
+    vi.mocked(api.metricsQueryRange).mockRejectedValue(new Error("Request-URI Too Long"));
+    mockTasks.mockResolvedValue({
+      data: { items: [fakeTask(0)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<TaskList />, { wrapper });
+
+    expect(await screen.findByText(/Request-URI Too Long/)).toBeInTheDocument();
   });
 });
+
+function enableCadvisor() {
+  vi.mocked(api.monitoringStatus).mockResolvedValue({
+    prometheusConfigured: true,
+    prometheusReachable: true,
+    queryable: true,
+    nodeExporter: null,
+    cadvisor: { targets: 1, nodes: 1 },
+  });
+}
