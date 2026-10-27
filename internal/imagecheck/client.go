@@ -40,9 +40,15 @@ var (
 	// image, which Cetacean holds no credentials for.
 	ErrUnauthorized = errors.New("registry refused anonymous access")
 
-	// ErrNotFound is a registry that does not know the tag.
-	ErrNotFound = errors.New("tag not found in registry")
+	// ErrNotFound is a registry that does not know the tag or digest.
+	ErrNotFound = errors.New("not found in registry")
+
+	// ErrTooLarge is content over the size its caller allowed.
+	ErrTooLarge = errors.New("registry content larger than allowed")
 )
+
+// maxRedirects is net/http's own default, which a CheckRedirect replaces.
+const maxRedirects = 10
 
 // Client resolves tags against registries over HTTPS, anonymously.
 type Client struct {
@@ -57,9 +63,103 @@ type bearerToken struct {
 	expires time.Time
 }
 
-// NewClient returns a client sending its requests through httpClient.
+// NewClient returns a client sending its requests through a copy of
+// httpClient. net/http keeps Authorization across a redirect to the same host
+// on another port; a pull token is for the registry alone, so the copy drops it.
 func NewClient(httpClient *http.Client) *Client {
-	return &Client{http: httpClient, tokens: map[string]bearerToken{}}
+	own := *httpClient
+	own.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+
+		if req.URL.Host != via[0].URL.Host {
+			req.Header.Del("Authorization")
+		}
+
+		return nil
+	}
+
+	return &Client{http: &own, tokens: map[string]bearerToken{}}
+}
+
+// Manifest fetches the manifest digest names, refusing a body that does not
+// hash to it, and returns it with the media type the registry states.
+func (c *Client) Manifest(
+	ctx context.Context,
+	ref Reference,
+	digest string,
+) ([]byte, string, error) {
+	target := "https://" + ref.Host + "/v2/" + ref.Repository + "/manifests/" + digest
+
+	body, header, err := c.fetchDigested(ctx, target, ref, digest, maxManifestSize)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return body, header.Get("Content-Type"), nil
+}
+
+// Blob fetches the blob digest names, at most limit bytes of it, refusing a
+// body that does not hash to it.
+func (c *Client) Blob(
+	ctx context.Context,
+	ref Reference,
+	digest string,
+	limit int64,
+) ([]byte, error) {
+	target := "https://" + ref.Host + "/v2/" + ref.Repository + "/blobs/" + digest
+	body, _, err := c.fetchDigested(ctx, target, ref, digest, limit)
+
+	return body, err
+}
+
+func (c *Client) fetchDigested(
+	ctx context.Context,
+	target string,
+	ref Reference,
+	digest string,
+	limit int64,
+) ([]byte, http.Header, error) {
+	resp, err := c.send(ctx, http.MethodGet, target, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if err := statusError(resp.StatusCode); err != nil {
+		return nil, nil, err
+	}
+
+	if resp.ContentLength > limit {
+		return nil, nil, ErrTooLarge
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if int64(len(body)) > limit {
+		return nil, nil, ErrTooLarge
+	}
+
+	newHash := sha256.New
+	if strings.HasPrefix(digest, "sha512:") {
+		newHash = sha512.New
+	}
+
+	h := newHash()
+	h.Write(body)
+
+	algorithm, _, _ := strings.Cut(digest, ":")
+	if got := algorithm + ":" + hex.EncodeToString(h.Sum(nil)); got != digest {
+		return nil, nil, fmt.Errorf("requested %s, but the registry sent content hashing to %s",
+			digest, got)
+	}
+
+	return body, resp.Header, nil
 }
 
 // Resolve returns the digest of the manifest ref's tag names now.

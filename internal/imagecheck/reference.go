@@ -61,6 +61,32 @@ func ParsePinned(image string) (ref Reference, pinned string, ok bool) {
 	return Reference{Host: host, Repository: repository, Tag: tag}, pinned, true
 }
 
+// ParseDigested parses an image addressed by digest, with or without a tag:
+// `name@digest` is pinned as exactly as `name:tag@digest`. The tag, when there
+// is one, is kept but nothing here asks about it.
+func ParseDigested(image string) (ref Reference, digest string, ok bool) {
+	name, digest, found := strings.Cut(image, "@")
+	if !found || !digestGrammar.MatchString(digest) {
+		return Reference{}, "", false
+	}
+
+	tag := ""
+	if colon := strings.LastIndex(name, ":"); colon > strings.LastIndex(name, "/") {
+		name, tag = name[:colon], name[colon+1:]
+
+		if !tagGrammar.MatchString(tag) {
+			return Reference{}, "", false
+		}
+	}
+
+	host, repository := splitHost(name)
+	if !nameGrammar.MatchString(repository) {
+		return Reference{}, "", false
+	}
+
+	return Reference{Host: host, Repository: repository, Tag: tag}, digest, true
+}
+
 // splitHost applies Docker's rule: the first component is a registry only if
 // it has a dot or a port, is localhost, or has an upper-case letter. Anything
 // else is a Docker Hub repository, under library/ when it has no namespace.
