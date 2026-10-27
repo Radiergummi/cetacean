@@ -80,7 +80,7 @@ func TestAServiceOrNodeEventReListsItsTasks(t *testing.T) {
 			streamed := make(chan struct{})
 			go func() {
 				defer close(streamed)
-				w.watchEvents(ctx, time.Time{})
+				w.watchEvents(ctx, time.Time{}, true)
 			}()
 
 			mc.eventsCh <- tc.event
@@ -140,7 +140,7 @@ func TestTheTaskPollAppliesOnlyRealChanges(t *testing.T) {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 	}()
 
 	waitFor(t, "the poll to apply", func() bool {
@@ -188,7 +188,7 @@ func TestTheTaskPollStandsAsideForASync(t *testing.T) {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -226,7 +226,7 @@ func TestATaskPollAgainstAHungEngineEnds(t *testing.T) {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 	}()
 
 	mc.eventsCh <- events.Message{

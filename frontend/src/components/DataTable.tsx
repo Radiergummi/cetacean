@@ -217,20 +217,16 @@ export default function DataTable<T>({
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLTableRowElement>(null);
   const useVirtual = data.length > virtualThreshold;
-  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [cursor, setCursor] = useState<{ key: string; index: number } | null>(null);
 
   const prevVirtualRef = useRef(useVirtual);
 
-  // Keep the cursor pointing at a row that still exists, rather than dropping
-  // it whenever `data` changes. The list hooks rebuild that array on every
-  // render and an SSE event rewrites the rows it holds, so keying a reset on
-  // its identity cleared the selection under the person's hands on any live
-  // collection. Only a list that shrank past the cursor has to move it, and
-  // that is settled during render so no pass ever commits an
-  // `aria-activedescendant` naming a row that is no longer there.
-  if (selectedIndex >= data.length) {
-    setSelectedIndex(data.length - 1);
-  }
+  // The cursor follows its row's key, so an insert, a remove or an expanded
+  // group above it leaves it on the same resource. Only when that row is gone
+  // does it fall back to the position it held, clamped to the rows left.
+  const keyedIndex = cursor ? data.findIndex((item) => keyFn(item) === cursor.key) : -1;
+  const selectedIndex =
+    keyedIndex >= 0 || !cursor ? keyedIndex : Math.min(cursor.index, data.length - 1);
 
   // Reset scroll when switching render mode
   useEffect(() => {
@@ -255,21 +251,30 @@ export default function DataTable<T>({
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (!data.length) {
+      // Keys typed on a link, button or field inside a cell are theirs.
+      if (event.target !== event.currentTarget || !data.length) {
         return;
       }
+
+      const moveTo = (index: number) => {
+        const item = data[index];
+
+        if (item) {
+          setCursor({ key: keyFn(item), index });
+        }
+      };
 
       switch (event.key) {
         case "ArrowDown":
         case "j":
           event.preventDefault();
-          setSelectedIndex((index) => Math.min(index + 1, data.length - 1));
+          moveTo(Math.min(selectedIndex + 1, data.length - 1));
           break;
 
         case "ArrowUp":
         case "k":
           event.preventDefault();
-          setSelectedIndex((index) => Math.max(index - 1, 0));
+          moveTo(Math.max(selectedIndex - 1, 0));
           break;
 
         case "Enter":
@@ -285,7 +290,7 @@ export default function DataTable<T>({
           break;
       }
     },
-    [data, selectedIndex, onRowClick],
+    [data, keyFn, selectedIndex, onRowClick],
   );
 
   return (

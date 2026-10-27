@@ -701,8 +701,9 @@ EventSource clients ignore it.
 
 Each event carries an `id:`. Treat it as opaque: it names a position in the change history of one Cetacean process.
 EventSource clients send `Last-Event-ID` on reconnect and the server replays what they missed from the change history.
-Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer or one written
-before Cetacean restarted; all three send a `sync` event telling the client to refetch.
+Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer, one written
+before Cetacean restarted, or one from before Cetacean last re-read the whole cluster; all four send a `sync` event
+telling the client to refetch.
 A client that reads too slowly to take every event gets a `sync` event in place of the ones it missed. One that stops
 reading altogether is disconnected once a write to it has been blocked for 30 seconds, and reconnects from its last
 cursor. Network buffers absorb writes first, so that can be well after the client stopped reading.
@@ -908,9 +909,19 @@ now asks for a different set—a tag republished after the review—with `409` (
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
-Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
+Three level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
 doesn't already have that is a bind, a named pipe, a volume with driver options, or a named volume the manager doesn't
-hold as a plain `local` volume; and `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`.
+hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`; and
+`PATCH /plugins/{name}/settings` a setting that names one of the plugin's mounts or devices, since it sets a host path.
+
+A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
+capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
+a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
+`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `ports`, `networks`, `secrets`,
+`configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change.
+`POST /services/{id}/rollback` needs it when either the current or the previous spec has host access. Below that they
+answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so host access that comes
+only through one isn't held to this rule.
 
 ### Preconditions
 

@@ -93,7 +93,7 @@ func TestSSE_AFullInboxLagsTheClientsItWasFor(t *testing.T) {
 	nodes := &sseClient{match: TypeMatcher(cache.EventNode)}
 	b := &Broadcaster{
 		clients: map[*sseClient]struct{}{services: {}, nodes: {}},
-		inbox:   make(chan cache.Event), // nothing reads it: always full
+		inbox:   make(chan frameEvent), // nothing reads it: always full
 	}
 
 	b.Broadcast(cache.Event{Type: cache.EventService, ID: "s1", HistoryID: 1})

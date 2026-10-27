@@ -855,6 +855,8 @@ export const api = {
     ),
   services: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<ServiceListItem>("/services", params, signal, schema.serviceListSchema),
+  allServices: (params?: ListParams, signal?: AbortSignal) =>
+    fetchAll<ServiceListItem>("/services", signal, schema.serviceListSchema, params),
   recommendations: () =>
     fetchJSON<RecommendationsResponse>(
       "/recommendations",
@@ -867,6 +869,8 @@ export const api = {
     fetchText(`/services/${encodeURIComponent(id)}`, signal, "application/yaml"),
   tasks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
+  allTasks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchAll<Task>("/tasks", signal, schema.taskSchema, params),
   ports: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<PublishedPort>("/ports", params, signal, schema.publishedPortSchema),
   stacks: (params?: ListParams, signal?: AbortSignal) =>

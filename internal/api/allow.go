@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -33,6 +34,11 @@ func (h *Handlers) tiered(acl Constructor, level config.OperationsLevel) tieredC
 		chain: NewChain(acl, h.requireLevel(level), attributeWrite),
 		level: level,
 	}
+}
+
+// operation is tiered at the level the shared table gives each operation.
+func (h *Handlers) operation(acl Constructor) func(cluster.Operation) tieredChain {
+	return func(op cluster.Operation) tieredChain { return h.tiered(acl, op.Tier()) }
 }
 
 func (c tieredChain) Append(constructors ...Constructor) tieredChain {

@@ -29,12 +29,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
+- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 - **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
 - The image check no longer follows a registry's redirect to plain HTTP or to a private address on another domain, nor asks another domain's token service
+- Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
+- `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one
+- An MCP write the Docker engine refuses, or can't be reached for, shows the engine's message only when the API would; otherwise it points to Cetacean's log
+- A history or `get_events` query naming a task as `<service>.<slot>` resolves only for callers who can read that service
 - A global service no node can run reads as running rather than pending wherever a service state is shown
 - The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
 - Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting
@@ -44,7 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
+- When reading the cluster fails at startup or after reconnecting, such as during a manager election, the dashboard and `/-/ready` recover within seconds instead of minutes
+- A browser tab whose event stream reconnects after Cetacean re-read the whole cluster now refetches, instead of keeping data that re-read replaced
 - A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
+- Detail pages, the cluster overview, topology and history keep refreshing during a rollout or crash loop instead of waiting for the events to stop
+- A node without its own node-exporter no longer shows the metrics of another node whose name starts the same, like `worker-1` for `worker-12`
+- In a table, Enter on a link or button opens that link instead of the selected row, and the selection stays on its row as rows come and go
+- A global service with nothing running, or a job whose latest run failed, shows as failing on the stack and services pages instead of green, and a partly failed run as a warning; every service health indicator follows one rule
+- Detail pages and a stack page's task counts say why they failed to load and offer Retry
+- Attaching a config in place of one removed in the same edit defaults to the removed config's path, as secrets already did
+- The task list asks Prometheus only for the services it shows, keeps its sparklines while loading more, and says when metrics fail; metrics stop polling in a background tab
 
 ## [0.18.0] - 2026-10-24
 

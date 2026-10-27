@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -216,6 +217,73 @@ var serviceSectionWriters = map[string]sectionWriter{
 	},
 }
 
+// hostAccessSections are the sections that can change what runs in the
+// container. Each names the change a request makes for cluster.CheckHostAccessHeld,
+// or returns "" for one that leaves it alone.
+// A value that doesn't decode is the writer's to refuse, so it changes nothing.
+var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, string) string{
+	sectionCommand: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		value, err := decodeSection[commandValue](req, section)
+		if err != nil {
+			return ""
+		}
+
+		before := containerSpec(svc)
+		after := *before
+		value.applyTo(&after)
+
+		return cluster.CommandChange(before, &after)
+	},
+	sectionPlacement: func(swarm.Service, mcplib.CallToolRequest, string) string {
+		return "changing the placement of"
+	},
+	sectionEnv: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return ""
+		}
+
+		current := make(map[string]string)
+		for _, variable := range containerSpec(svc).Env {
+			name, value, _ := strings.Cut(variable, "=")
+			current[name] = value
+		}
+
+		updated, err := mergePatchMutator(patch)(current)
+		if err != nil {
+			return ""
+		}
+
+		return cluster.EnvChange(current, updated)
+	},
+	sectionPorts: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		ports, err := decodeSection[[]swarm.PortConfig](req, section)
+		if err != nil {
+			return ""
+		}
+
+		var current []swarm.PortConfig
+		if svc.Spec.EndpointSpec != nil {
+			current = svc.Spec.EndpointSpec.Ports
+		}
+
+		return cluster.PortsChange(current, ports)
+	},
+	sectionHealthcheck: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		value, err := decodeSection[healthcheckValue](req, section)
+		if err != nil {
+			return ""
+		}
+
+		hc, err := value.toHealthConfig()
+		if err != nil {
+			return ""
+		}
+
+		return cluster.HealthcheckChange(containerSpec(svc).Healthcheck, hc)
+	},
+}
+
 // updateServiceSections is the advertised enum and the error message's list:
 // the table's own keys, sorted so tools/list is byte-stable across runs.
 var updateServiceSections = slices.Sorted(maps.Keys(serviceSectionWriters))
@@ -349,6 +417,15 @@ func (s *Server) toolUpdateService(
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
+	}
+
+	if changes, held := hostAccessSections[section]; held {
+		ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
+			return changes(svc, req, section)
+		})
+		if err != nil {
+			return "", err
+		}
 	}
 
 	writeClient, err := s.requireWriteClient()

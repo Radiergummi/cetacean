@@ -154,6 +154,32 @@ describe("api client", () => {
     );
   });
 
+  it("pages through every service matching a filter", async () => {
+    const services = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `svc${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `web_${from + index}`, Mode: { Replicated: { Replicas: 1 } } },
+        RunningTasks: 1,
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: services(0, 200), total: 260, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: services(200, 60), total: 260, limit: 200, offset: 200 }),
+      );
+
+    const all = await api.allServices({ filter: 'stack == "web"' });
+
+    expect(all).toHaveLength(260);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      `/services?${new URLSearchParams({ filter: 'stack == "web"' })}`,
+      expect.anything(),
+    );
+  });
+
   it("stops paging when the server returns an empty page short of the total", async () => {
     mockFetch.mockReturnValue(jsonResponse({ items: [], total: 10, limit: 200, offset: 0 }));
 

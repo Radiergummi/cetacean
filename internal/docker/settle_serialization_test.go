@@ -21,7 +21,7 @@ func startLoop(t *testing.T, w *Watcher) context.Context {
 	streamed := make(chan struct{})
 	go func() {
 		defer close(streamed)
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 	}()
 	t.Cleanup(func() {
 		cancel()

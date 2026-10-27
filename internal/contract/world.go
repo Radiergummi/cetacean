@@ -128,6 +128,13 @@ type World struct {
 func NewWorld(t *testing.T) *World {
 	t.Helper()
 
+	return NewWorldAt(t, config.OpsImpactful)
+}
+
+// NewWorldAt is NewWorld with both transports at one operations level.
+func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
+	t.Helper()
+
 	c := cache.New(nil)
 	seedCluster(c)
 
@@ -157,7 +164,7 @@ func NewWorld(t *testing.T) *World {
 		nil, nil, nil, nil,
 		ready,
 		nil,
-		config.OpsImpactful,
+		level,
 		nil,
 		evaluator,
 	)
@@ -175,7 +182,7 @@ func NewWorld(t *testing.T) *World {
 			OperationsLevel: config.OpsInherit,
 			AuthBypass:      []string{"headers"},
 		},
-		GlobalOpsLevel: config.OpsImpactful,
+		GlobalOpsLevel: level,
 		AuthMode:       "headers",
 		AuthProvider:   authProvider,
 	})

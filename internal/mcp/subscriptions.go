@@ -327,36 +327,11 @@ func (s *Server) resolveTarget(
 	identity *auth.Identity,
 	target subscriptionTarget,
 ) (string, string, bool) {
-	prefix := string(target.typ) + ":"
+	record, found, _ := cluster.LookupAs(
+		s.cache, string(target.typ), target.id, s.readerFor(identity),
+	)
 
-	switch target.typ {
-	case cache.EventService:
-		svc, ok, _ := s.cache.ResolveService(target.id)
-		return svc.ID, prefix + svc.Spec.Name, ok
-	case cache.EventNode:
-		node, ok, _ := s.cache.ResolveNode(target.id)
-		return node.ID, prefix + cluster.NodeACLName(node), ok
-	case cache.EventTask:
-		task, ok, _ := s.resolveTaskAs(identity, target.id)
-		return task.ID, prefix + task.ID, ok
-	case cache.EventConfig:
-		cfg, ok, _ := s.cache.ResolveConfig(target.id)
-		return cfg.ID, prefix + cfg.Spec.Name, ok
-	case cache.EventSecret:
-		sec, ok, _ := s.cache.ResolveSecret(target.id)
-		return sec.ID, prefix + sec.Spec.Name, ok
-	case cache.EventNetwork:
-		net, ok, _ := s.cache.ResolveNetwork(target.id)
-		return net.ID, prefix + net.Name, ok
-	case cache.EventStack:
-		_, ok := s.cache.GetStack(target.id)
-		return target.id, prefix + target.id, ok
-	case cache.EventVolume:
-		_, ok := s.cache.GetVolume(target.id)
-		return target.id, prefix + target.id, ok
-	default:
-		return "", "", false
-	}
+	return record.ID, record.Resource(), found
 }
 
 // targetReadable reports whether identity may read the subscribed resource

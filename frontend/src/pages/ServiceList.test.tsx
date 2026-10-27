@@ -15,6 +15,7 @@ vi.mock("../api/client", () => ({
   emptyMethods: new Set(),
   api: {
     services: vi.fn<() => void>(),
+    allTasks: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
   },
 }));
@@ -41,6 +42,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", localStorageStub);
   mockServices.mockReset();
+  vi.mocked(api.allTasks).mockClear();
 });
 
 afterEach(() => {
@@ -152,4 +154,100 @@ describe("ServiceList", () => {
       expect(screen.getByText("Server error")).toBeInTheDocument();
     });
   });
+
+  // A job desires nothing running, so its card's dot needs how its tasks ended.
+  it("marks the card of a job whose tasks all failed as critical", async () => {
+    showCards();
+
+    const job = fakeJob("job1", "migrate");
+
+    mockServices.mockResolvedValue({
+      data: { items: [job], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    vi.mocked(api.allTasks).mockResolvedValue([
+      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
+    ] as never);
+
+    render(<ServiceList />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "critical" })).toBeInTheDocument();
+    });
+  });
+
+  // The service stream carries no task events; a job re-run in place that now
+  // completes only shows on the task stream.
+  it("refreshes a job card when one of its tasks changes", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeJob("job1", "migrate")], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    vi.mocked(api.allTasks).mockResolvedValue([
+      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
+    ] as never);
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByRole("img", { name: "critical" })).toBeInTheDocument();
+
+    const completed = { ID: "t2", ServiceID: "job1", Status: { State: "complete" } };
+    const stream = [...MockEventSource.instances]
+      .reverse()
+      .find(({ listeners }) => listeners.has("task"));
+
+    vi.mocked(api.allTasks).mockResolvedValue([completed] as never);
+    act(() =>
+      stream?.simulateEvent("task", {
+        type: "task",
+        action: "update",
+        id: "t2",
+        resource: completed,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("img", { name: "healthy" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
+  });
+
+  // The cards share one question about every job on the page.
+  it("asks how every loaded job ended in one request", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: {
+        items: [fakeJob("job1", "migrate"), fakeJob("job2", "seed")],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    await waitFor(() => expect(api.allTasks).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(api.allTasks).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.allTasks).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ filter: expect.stringContaining('service in ["job1","job2"]') }),
+    );
+  });
 });
+
+function showCards() {
+  vi.stubGlobal("localStorage", {
+    ...localStorageStub,
+    getItem: (key: string) => (key === "viewMode:services" ? "grid" : null),
+  });
+}
+
+function fakeJob(id: string, name: string): ServiceListItem {
+  const job = fakeService(id, name, 0, 0);
+
+  job.Spec.Mode = { ReplicatedJob: {} };
+
+  return job;
+}

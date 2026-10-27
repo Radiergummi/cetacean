@@ -85,7 +85,7 @@ describe("StackGraph", () => {
     const service = container.querySelector('.react-flow__node[data-id="service:svc-web"]');
 
     expect(service?.textContent).toContain("1/2 running");
-    expect(service?.querySelector("[data-healthy]")).toBeNull();
+    expect(service?.querySelector("[data-health=warning]")).not.toBeNull();
   });
 
   it("dims what the focused node does not touch, and names it in the URL", () => {

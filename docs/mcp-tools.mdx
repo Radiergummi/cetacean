@@ -197,13 +197,15 @@ writes](#conditional-writes) for when it moves on by itself). `replicas` is omit
 <McpTool name="update_service_image" level={1}>
     <Fragment slot="arguments">`id`, `image`, `version`</Fragment>
 
-    Sets the container image, triggering a rolling deploy per the service's update policy.
+    Sets the container image, triggering a rolling deploy per the service's update policy. On a service with host
+    access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added capability—it needs level 3.
 </McpTool>
 
 <McpTool name="rollback_service" level={1}>
     <Fragment slot="arguments">`id`, `version`</Fragment>
 
-    Reverts to the previous spec. Only one previous spec is retained, so calling twice doesn't unwind further.
+    Reverts to the previous spec. Only one previous spec is retained, so calling twice doesn't unwind further. On a
+    service with host access in either spec it needs level 3, so it can't restore a bind a level-3 caller removed.
 </McpTool>
 
 <McpTool name="restart_service" level={1}>
@@ -269,6 +271,9 @@ than read as empty.
     | `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
 
     Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
+    On a service with host access, `placement`, and an `env`, `ports`, `command`, or `healthcheck` value that changes
+    the section, need level 3, as `update_service_image` does; so do `update_service_secrets`,
+    `update_service_configs`, and `update_service_mounts` when they change the set attached.
     A `null` value is refused for every section.
 
     Secrets, configs, and mounts aren't sections here. Each takes a list rather than a spec fragment, and
