@@ -9,6 +9,7 @@ import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
+import { useJobOutcomes } from "../hooks/useJobOutcomes";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
@@ -210,10 +211,7 @@ export default function ServiceList() {
           <ResourceCard
             title={
               <span className="flex items-center gap-2">
-                <HealthDot
-                  running={service.RunningTasks}
-                  desired={desiredTasks(service.Spec.Mode)}
-                />
+                <ServiceHealthDot service={service} />
                 <ResourceName name={service.Spec.Name} />
               </span>
             }
@@ -247,6 +245,20 @@ export default function ServiceList() {
       emptyMessage={(hasSearch) =>
         hasSearch ? "No services match your search" : "No services found"
       }
+    />
+  );
+}
+
+/** A card's health dot; a job's asks how its finished tasks ended. */
+function ServiceHealthDot({ service }: { service: ServiceListItem }) {
+  const services = useMemo(() => [service], [service]);
+  const outcomes = useJobOutcomes(services);
+
+  return (
+    <HealthDot
+      running={service.RunningTasks}
+      desired={desiredTasks(service.Spec.Mode)}
+      outcome={outcomes[service.ID]}
     />
   );
 }

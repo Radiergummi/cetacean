@@ -883,6 +883,8 @@ export const api = {
     fetchText(`/services/${encodeURIComponent(id)}`, signal, "application/yaml"),
   tasks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
+  allTasks: (params?: ListParams, signal?: AbortSignal) =>
+    fetchAll<Task>("/tasks", signal, schema.taskSchema, params),
   ports: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<PublishedPort>("/ports", params, signal, schema.publishedPortSchema),
   stacks: (params?: ListParams, signal?: AbortSignal) =>

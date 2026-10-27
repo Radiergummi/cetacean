@@ -19,11 +19,26 @@ export function desiredTasks(mode: Service["Spec"]["Mode"]): number | undefined 
   return undefined;
 }
 
+/** How a job's finished tasks ended. */
+export interface JobOutcome {
+  completed: number;
+  failed: number;
+}
+
 /**
  * The one rule every service health indicator applies. Without a target, only
  * nothing running is a verdict: some tasks running may still be a shortfall.
+ * A job that runs nothing, completed nothing and failed is critical.
  */
-export function serviceHealth(running: number, desired: number | undefined): ServiceHealth {
+export function serviceHealth(
+  running: number,
+  desired: number | undefined,
+  outcome?: JobOutcome | undefined,
+): ServiceHealth {
+  if (outcome && running === 0 && outcome.completed === 0 && outcome.failed > 0) {
+    return "critical";
+  }
+
   if (desired === undefined) {
     return running === 0 ? "critical" : "unknown";
   }

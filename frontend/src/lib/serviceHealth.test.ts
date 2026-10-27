@@ -40,4 +40,16 @@ describe("serviceHealth", () => {
   it("does not call a running global service healthy without knowing its target", () => {
     expect(serviceHealth(2, undefined)).toBe("unknown");
   });
+
+  it("is critical for a job whose tasks failed and none completed", () => {
+    expect(serviceHealth(0, 0, { completed: 0, failed: 3 })).toBe("critical");
+  });
+
+  it("is healthy for a job that completed despite earlier failures", () => {
+    expect(serviceHealth(0, 0, { completed: 1, failed: 3 })).toBe("healthy");
+  });
+
+  it("is healthy for a job still running after a failure", () => {
+    expect(serviceHealth(1, 0, { completed: 0, failed: 1 })).toBe("healthy");
+  });
 });

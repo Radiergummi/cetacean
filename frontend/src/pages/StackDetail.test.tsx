@@ -26,6 +26,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   api: {
     stack: vi.fn<() => Promise<unknown>>(),
     allServices: vi.fn<() => Promise<unknown>>(),
+    allTasks: vi.fn<() => Promise<unknown>>(),
     serviceTasks: vi.fn<() => Promise<unknown>>(),
   },
 }));
@@ -52,6 +53,7 @@ beforeEach(() => {
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
   vi.mocked(api.allServices).mockResolvedValue([] as never);
+  vi.mocked(api.allTasks).mockResolvedValue([] as never);
 });
 
 describe("StackDetail", () => {
@@ -173,6 +175,35 @@ describe("StackDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     await waitFor(() => expect(api.allServices).toHaveBeenCalled());
+  });
+
+  // A job desires no running tasks, so a count alone calls it healthy however
+  // its tasks ended.
+  it("shows a job whose tasks all failed as critical", async () => {
+    const job = { ID: "job1", Spec: { Name: "web_migrate", Mode: { ReplicatedJob: {} } } };
+
+    vi.mocked(api.stack).mockResolvedValue({
+      data: { stack: { ...stack, services: [job] } },
+      allowedMethods: new Set<string>(),
+    } as never);
+    vi.mocked(api.allServices).mockResolvedValue([{ ...job, RunningTasks: 0 }] as never);
+    vi.mocked(api.allTasks).mockResolvedValue([
+      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
+      { ID: "t2", ServiceID: "job1", Status: { State: "failed" } },
+    ] as never);
+
+    const { container } = renderStackDetail();
+
+    await waitFor(() => {
+      expect(container.querySelector("td [data-health]")).toHaveAttribute(
+        "data-health",
+        "critical",
+      );
+    });
+    expect(api.allTasks).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: expect.stringContaining('service in ["job1"]') }),
+      expect.anything(),
+    );
   });
 
   // More members than one page of a list holds still each get their count.

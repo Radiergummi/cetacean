@@ -16,6 +16,7 @@ vi.mock("../api/client", () => ({
   setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
     services: vi.fn<() => void>(),
+    allTasks: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
   },
 }));
@@ -151,6 +152,31 @@ describe("ServiceList", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Server error")).toBeInTheDocument();
+    });
+  });
+
+  // A job desires nothing running, so its card's dot needs how its tasks ended.
+  it("marks the card of a job whose tasks all failed as critical", async () => {
+    vi.stubGlobal("localStorage", {
+      ...localStorageStub,
+      getItem: (key: string) => (key === "viewMode:services" ? "grid" : null),
+    });
+
+    const job = fakeService("job1", "migrate", 0, 0);
+
+    job.Spec.Mode = { ReplicatedJob: {} };
+    mockServices.mockResolvedValue({
+      data: { items: [job], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    vi.mocked(api.allTasks).mockResolvedValue([
+      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
+    ] as never);
+
+    render(<ServiceList />, { wrapper });
+
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "critical" })).toBeInTheDocument();
     });
   });
 });

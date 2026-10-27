@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { StackResponse } from "../api/types";
+import type { ServiceListItem, StackResponse } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import DetailError from "../components/DetailError";
@@ -12,6 +12,7 @@ import ServiceLinks from "../components/ServiceLinks";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useDetailResource } from "../hooks/useDetailResource";
+import { jobOutcomesKey, useJobOutcomes } from "../hooks/useJobOutcomes";
 import { serviceModeLabel } from "../lib/deriveServiceState";
 import { desiredTasks } from "../lib/serviceHealth";
 import type { TaskCount } from "../lib/stackGraph";
@@ -19,16 +20,18 @@ import { useQuery } from "@tanstack/react-query";
 import { lazy, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 
+const noMembers: ServiceListItem[] = [];
+
 const StackGraph = lazy(() => import("../components/stack-detail/stack-graph/StackGraph"));
 
 export default function StackDetail() {
   const { name } = useParams<{ name: string }>();
 
   // Any of the stack's resources changing changes the document it projects,
-  // and the running counts its services report.
+  // the running counts its services report, and how its jobs' tasks ended.
   const servicesKey = useMemo(() => ["stack-services", name] as const, [name]);
   const extraQueryKeys = useMemo(
-    () => [composeQueryKey(`stack:${name}`), servicesKey] as const,
+    () => [composeQueryKey(`stack:${name}`), servicesKey, jobOutcomesKey] as const,
     [name, servicesKey],
   );
 
@@ -52,15 +55,20 @@ export default function StackDetail() {
   });
 
   const members = membersQuery.data;
+  const outcomes = useJobOutcomes(members ?? noMembers);
   const taskCounts = useMemo(() => {
     const counts: Record<string, TaskCount> = {};
 
     for (const { ID, RunningTasks, Spec } of members ?? []) {
-      counts[ID] = { running: RunningTasks, desired: desiredTasks(Spec.Mode) };
+      counts[ID] = {
+        running: RunningTasks,
+        desired: desiredTasks(Spec.Mode),
+        outcome: outcomes[ID],
+      };
     }
 
     return counts;
-  }, [members]);
+  }, [members, outcomes]);
 
   if (error) {
     return (
