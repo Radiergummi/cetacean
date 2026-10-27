@@ -154,7 +154,8 @@ Over the API, the same sequence is `POST /secrets`, then `PATCH /services/{id}/s
 ### Versions
 
 Rotation leaves a trail of versions behind, so the config and secret lists show only the newest version of each
-group; **+N older** loads the others beneath it. The **Used by** column counts the services using each one, or whose previous spec does, since a rollback needs it, and an
+group; **+N older** loads the others beneath it. The **Used by** column counts the services using each one, or whose previous spec does, since a rollback needs it
+(the detail page lists those as **for a rollback**), and an
 older version none of the services you can see uses says so.
 
 Versions group only within one stack, by their `com.docker.stack.namespace` label, so a replacement must carry the

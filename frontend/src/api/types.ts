@@ -370,6 +370,10 @@ export interface SpecChange {
 export interface ServiceRef {
   id: string;
   name: string;
+  /**
+   * Only the service's previous spec names the config or secret: a rollback needs it.
+   */
+  rollback?: boolean | undefined;
 }
 
 export interface TraefikTLSDomain {

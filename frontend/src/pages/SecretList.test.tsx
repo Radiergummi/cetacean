@@ -214,6 +214,26 @@ describe("SecretList", () => {
     expect(screen.queryByText("db-v1")).not.toBeInTheDocument();
   });
 
+  it("leaves out a newer head the group fetch saw before the list did", async () => {
+    const head = { ...version("db-v2", 1, true), NewestVersion: true, OlderVersions: 1 };
+
+    mockSecrets.mockResolvedValue({
+      data: { items: [head], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    mockSecretVersions.mockResolvedValue([
+      { ...version("db-v3", 0, true), NewestVersion: true, OlderVersions: 2 },
+      head,
+      version("db-v1", 0, true),
+    ]);
+    render(<SecretList />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "+1 older" }));
+
+    expect(await screen.findByText("db-v1")).toBeInTheDocument();
+    expect(screen.queryByText("db-v3")).not.toBeInTheDocument();
+  });
+
   it("keeps the toggle outside the card link in grid view", async () => {
     vi.stubGlobal("localStorage", {
       ...localStorageStub,

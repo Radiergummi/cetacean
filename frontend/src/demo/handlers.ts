@@ -382,7 +382,10 @@ function selectVersions<T extends Versionable>(
   const params = new URL(request.url).searchParams;
   const annotated = annotateVersions(items, usedBy);
   const of = params.get("versionsOf");
-  let selected = annotated.filter(({ rank }) => params.get("versions") === "all" || rank === 0);
+  const versions = params.get("versions");
+  const searching = Boolean(params.get("search")) || Boolean(params.get("filter"));
+  const all = versions === "all" || (!versions && searching);
+  let selected = annotated.filter(({ rank }) => all || rank === 0);
 
   if (of) {
     const target = annotated.find(({ ID }) => ID === of);

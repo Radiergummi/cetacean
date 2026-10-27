@@ -128,10 +128,9 @@ export function useSwarmQuery<T>(
         );
 
         // Only the server can say whether a change moves a resource into or
-        // out of a filtered collection, so ask it again — once per burst, and
-        // for whole pages, keeping the total and the loaded rows in step.
-        // A derived list must ask even when it holds the row a remove names:
-        // what the server lists in its place may be a row it does not hold yet.
+        // out of a filtered collection, so ask it again — once per burst, for
+        // whole pages. A derived list asks on a held remove too: what replaces
+        // the row may be one it does not hold yet.
         if (filteredRef.current && !(held && event.action === "remove" && !derivedRef.current)) {
           refetchTimer.current ??= setTimeout(() => {
             refetchTimer.current = undefined;

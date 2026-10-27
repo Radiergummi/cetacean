@@ -114,7 +114,9 @@ export function useVersionExpansion<T extends Item>(
       return items.flatMap((item) => [
         item,
         ...(older.get(item.ID) ?? [])
-          .filter(({ ID }) => !listed.has(ID))
+          // A version the list heads elsewhere, or one that overtook a head
+          // it has not caught up with, is no older version of this one.
+          .filter(({ ID, NewestVersion }) => !listed.has(ID) && !NewestVersion)
           .map((version) => ({ ...version, olderVersion: true })),
       ]);
     },
