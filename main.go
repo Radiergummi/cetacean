@@ -26,6 +26,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -367,6 +368,8 @@ func main() {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
 	imageChecker := startImageCheck(ctx, cfg, stateCache.ListServices, watcher.Ready())
+	imageAttestations := startImageAttestations(cfg)
+	_ = imageAttestations
 
 	// Recommendations engine
 	var recEngine *recommendations.Engine
@@ -1112,6 +1115,20 @@ func startImageCheck(
 	slog.Info("image check enabled")
 
 	return checker
+}
+
+// startImageAttestations returns the attestation store, or nil when it is
+// off, which every consumer reads as disabled.
+func startImageAttestations(cfg *config.Config) *attestations.Store {
+	if !cfg.ImageAttestations {
+		slog.Info("image attestations disabled")
+
+		return nil
+	}
+
+	slog.Info("image attestations enabled")
+
+	return attestations.NewStore(imagecheck.NewClient(&http.Client{Timeout: 10 * time.Second}))
 }
 
 // setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil

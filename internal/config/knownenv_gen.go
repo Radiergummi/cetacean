@@ -43,6 +43,7 @@ var knownEnvVars = map[string]bool{
 	"CETACEAN_DOCKER_TLS_CERT":                    true,
 	"CETACEAN_DOCKER_TLS_KEY":                     true,
 	"CETACEAN_FORWARDED_HEADERS":                  true,
+	"CETACEAN_IMAGE_ATTESTATIONS":                 true,
 	"CETACEAN_IMAGE_CHECK":                        true,
 	"CETACEAN_LISTEN_ADDR":                        true,
 	"CETACEAN_LOG_FORMAT":                         true,

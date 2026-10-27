@@ -8,25 +8,26 @@ import (
 // Flags holds parsed CLI flag values. Pointer fields distinguish
 // "not set" (nil) from "set to zero value".
 type Flags struct {
-	Config          string   // path to TOML config file
-	Args            []string // positional arguments after the flags
-	Listen          *string
-	DockerHost      *string
-	DockerTLSCA     *string
-	DockerTLSCert   *string
-	DockerTLSKey    *string
-	DockerTaskPoll  *string
-	PrometheusURL   *string
-	LogLevel        *string
-	LogFormat       *string
-	Pprof           *bool
-	SelfMetrics     *bool
-	VersionCheck    *bool
-	ImageCheck      *bool
-	Recommendations *bool
-	BasePath        *string
-	PublicURL       *string
-	Version         bool
+	Config            string   // path to TOML config file
+	Args              []string // positional arguments after the flags
+	Listen            *string
+	DockerHost        *string
+	DockerTLSCA       *string
+	DockerTLSCert     *string
+	DockerTLSKey      *string
+	DockerTaskPoll    *string
+	PrometheusURL     *string
+	LogLevel          *string
+	LogFormat         *string
+	Pprof             *bool
+	SelfMetrics       *bool
+	VersionCheck      *bool
+	ImageCheck        *bool
+	ImageAttestations *bool
+	Recommendations   *bool
+	BasePath          *string
+	PublicURL         *string
+	Version           bool
 
 	// Auth
 	AuthMode *string
@@ -141,6 +142,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"image-check",
 		false,
 		"Ask registries whether a service's image tag has moved (env: CETACEAN_IMAGE_CHECK, default true)",
+	)
+	imageAttestations := fs.Bool(
+		"image-attestations",
+		false,
+		"Fetch the provenance and SBOM an image's registry holds when a service or task is viewed (env: CETACEAN_IMAGE_ATTESTATIONS, default true)",
 	)
 	recs := fs.Bool(
 		"recommendations",
@@ -269,6 +275,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.VersionCheck = versionCheck
 		case "image-check":
 			f.ImageCheck = imageCheck
+		case "image-attestations":
+			f.ImageAttestations = imageAttestations
 		case "base-path":
 			f.BasePath = basePath
 		case "auth-mode":
