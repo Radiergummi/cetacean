@@ -69,7 +69,6 @@ type Server struct {
 	clients       *ClientRegistry // nil when DCREnabled is false
 	keys          *keyMaterial    // nil when no root was configured
 	resources     resourceSet
-	now           func() time.Time
 }
 
 // issuerID is the external base URL clients discover this authorization server
@@ -108,7 +107,7 @@ func NewServer(cfg ServerConfig) *Server {
 	if km != nil {
 		issuer = newTokenIssuer(km, cfg.issuerID())
 	} else {
-		issuer = &TokenIssuer{Issuer: cfg.issuerID(), now: time.Now}
+		issuer = &TokenIssuer{Issuer: cfg.issuerID()}
 	}
 
 	cimd := &CIMDFetcher{
@@ -197,7 +196,6 @@ func NewServer(cfg ServerConfig) *Server {
 		clients:       clients,
 		keys:          km,
 		resources:     newResourceSet(cfg),
-		now:           time.Now,
 	}
 }
 

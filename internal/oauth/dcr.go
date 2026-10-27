@@ -88,8 +88,6 @@ type ClientRegistry struct {
 	rateMu    sync.Mutex
 	buckets   map[string]*ipBucket
 	rateLimit int // requests per hour per IP
-
-	now func() time.Time
 }
 
 // newClientRegistry creates a new registry with the given capacity and rate limit.
@@ -99,7 +97,6 @@ func newClientRegistry(maxClients, rateLimit int) *ClientRegistry {
 		buckets:    make(map[string]*ipBucket),
 		maxClients: maxClients,
 		rateLimit:  rateLimit,
-		now:        time.Now,
 	}
 }
 
@@ -197,7 +194,7 @@ func (r *ClientRegistry) checkRateLimit(ip string) bool {
 	r.rateMu.Lock()
 	defer r.rateMu.Unlock()
 
-	now := r.now()
+	now := time.Now()
 	for k, b := range r.buckets {
 		if now.After(b.resetAt) {
 			delete(r.buckets, k)
@@ -405,7 +402,7 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		GrantTypes:              grantTypes,
 		ResponseTypes:           responseTypes,
 		TokenEndpointAuthMethod: authMethod,
-		ClientIDIssuedAt:        s.now().Unix(),
+		ClientIDIssuedAt:        time.Now().Unix(),
 		ApplicationType:         applicationType,
 	}
 
