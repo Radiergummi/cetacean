@@ -217,6 +217,92 @@ func SelectPlatform(
 	return attestations.Platform{}, ErrPlatformUnknown
 }
 
+// AttestationTarget is the image a service or task runs, what its registry
+// holds about it, and the platforms a request for an SBOM or a Dockerfile may
+// name.
+type AttestationTarget struct {
+	Image      string
+	Attested   attestations.Image
+	Candidates []attestations.Platform
+}
+
+// ServiceAttestationTarget offers every platform of the image svc's spec names.
+func ServiceAttestationTarget(
+	ctx context.Context,
+	svc swarm.Service,
+	src AttestationSource,
+) AttestationTarget {
+	t := AttestationTarget{Image: containerImage(svc.Spec.TaskTemplate.ContainerSpec)}
+	t.Attested = imageOf(ctx, src, t.Image)
+
+	for _, p := range t.Attested.Platforms {
+		t.Candidates = append(t.Candidates, p.Platform)
+	}
+
+	return t
+}
+
+// TaskAttestationTarget offers the platforms of the image task runs that its
+// node can run.
+func TaskAttestationTarget(
+	ctx context.Context,
+	task swarm.Task,
+	node *swarm.Node,
+	src AttestationSource,
+) AttestationTarget {
+	t := AttestationTarget{Image: containerImage(task.Spec.ContainerSpec)}
+	t.Attested = imageOf(ctx, src, t.Image)
+	t.Candidates = TaskPlatforms(task, node, t.Attested)
+
+	return t
+}
+
+func imageOf(ctx context.Context, src AttestationSource, image string) attestations.Image {
+	if src == nil {
+		return attestations.Image{Status: attestations.StatusDisabled}
+	}
+
+	return src.Image(ctx, image)
+}
+
+// SBOMView is one platform's SBOM as both transports render it.
+type SBOMView struct {
+	Platform   string                 `json:"platform"`
+	Generators []string               `json:"generators"`
+	Created    *time.Time             `json:"created,omitempty"`
+	Summary    SBOMSummary            `json:"summary"`
+	Packages   []attestations.Package `json:"packages"`
+}
+
+type SBOMSummary struct {
+	Total      int            `json:"total"`
+	Licensed   int            `json:"licensed"`
+	Ecosystems map[string]int `json:"ecosystems"`
+}
+
+func NewSBOMView(p attestations.Platform, sbom *attestations.SBOM) SBOMView {
+	packages := sbom.Packages
+	if packages == nil {
+		packages = []attestations.Package{}
+	}
+
+	return SBOMView{
+		Platform:   p.String(),
+		Generators: sbom.Generators,
+		Created:    sbom.Created,
+		Summary: SBOMSummary{
+			Total: len(packages), Licensed: sbom.Licensed, Ecosystems: sbom.Ecosystems,
+		},
+		Packages: packages,
+	}
+}
+
+// DockerfileView is one platform's Dockerfile with its layers.
+type DockerfileView struct {
+	Platform string `json:"platform"`
+	*attestations.Dockerfile
+}
+
 func nodeRuns(node swarm.Node, p attestations.Platform) bool {
 	have := node.Description.Platform
 

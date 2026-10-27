@@ -21,13 +21,10 @@ import (
 // revalidated instead.
 const attestationCacheControl = "private, max-age=3600"
 
-// imageTarget is the image a service or task runs, with the platforms a
-// request about it may name.
+// imageTarget is the attestation target of the resource a request addresses.
 type imageTarget struct {
-	path       string // the resource the request addresses, for @id
-	image      string
-	status     attestations.Image
-	candidates []attestations.Platform
+	path string // for @id
+	cluster.AttestationTarget
 }
 
 func (h *Handlers) HandleServiceProvenance(w http.ResponseWriter, r *http.Request) {
@@ -128,18 +125,18 @@ func (h *Handlers) attestationEndpoint(
 
 		writeAllow(w, readOnly)
 
-		if !h.imageAvailable(w, r, target.status) {
+		if !h.imageAvailable(w, r, target.Attested) {
 			return
 		}
 
-		platform, err := cluster.SelectPlatform(target.candidates, r.URL.Query().Get("platform"))
+		platform, err := cluster.SelectPlatform(target.Candidates, r.URL.Query().Get("platform"))
 		switch {
 		case errors.Is(err, cluster.ErrPlatformRequired):
 			writeErrorCode(w, r, "ATT003", "this image has attestations for "+
-				platformList(target.candidates)+"; name one in the platform query parameter")
+				platformList(target.Candidates)+"; name one in the platform query parameter")
 			return
 		case err != nil:
-			writeErrorCode(w, r, "ATT004", "name one of "+platformList(target.candidates))
+			writeErrorCode(w, r, "ATT004", "name one of "+platformList(target.Candidates))
 			return
 		}
 
@@ -157,20 +154,9 @@ func (h *Handlers) serviceImage(
 		return imageTarget{}, false
 	}
 
-	image := ""
-	if spec := svc.Spec.TaskTemplate.ContainerSpec; spec != nil {
-		image = spec.Image
-	}
-
-	img := h.attestationImage(r, image)
-
-	var candidates []attestations.Platform
-	for _, p := range img.Platforms {
-		candidates = append(candidates, p.Platform)
-	}
-
 	return imageTarget{
-		path: "/services/" + svc.ID + suffix, image: image, status: img, candidates: candidates,
+		path:              "/services/" + svc.ID + suffix,
+		AttestationTarget: cluster.ServiceAttestationTarget(r.Context(), svc, h.attestations),
 	}, true
 }
 
@@ -184,27 +170,12 @@ func (h *Handlers) taskImage(
 		return imageTarget{}, false
 	}
 
-	image := ""
-	if spec := task.Spec.ContainerSpec; spec != nil {
-		image = spec.Image
-	}
-
-	img := h.attestationImage(r, image)
-
 	return imageTarget{
-		path:       "/tasks/" + task.ID + suffix,
-		image:      image,
-		status:     img,
-		candidates: cluster.TaskPlatforms(task, h.taskNode(task), img),
+		path: "/tasks/" + task.ID + suffix,
+		AttestationTarget: cluster.TaskAttestationTarget(
+			r.Context(), task, h.taskNode(task), h.attestations,
+		),
 	}, true
-}
-
-func (h *Handlers) attestationImage(r *http.Request, image string) attestations.Image {
-	if h.attestations == nil {
-		return attestations.Image{Status: attestations.StatusDisabled}
-	}
-
-	return h.attestations.Image(r.Context(), image)
 }
 
 func (h *Handlers) lookupTaskACL(w http.ResponseWriter, r *http.Request) (swarm.Task, bool) {
@@ -270,20 +241,6 @@ func writeAttestationError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-type imageSBOMBody struct {
-	Platform   string                 `json:"platform"`
-	Generators []string               `json:"generators"`
-	Created    *time.Time             `json:"created,omitempty"`
-	Summary    imageSBOMSummary       `json:"summary"`
-	Packages   []attestations.Package `json:"packages"`
-}
-
-type imageSBOMSummary struct {
-	Total      int            `json:"total"`
-	Licensed   int            `json:"licensed"`
-	Ecosystems map[string]int `json:"ecosystems"`
-}
-
 func (h *Handlers) writeSBOM(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -291,7 +248,7 @@ func (h *Handlers) writeSBOM(
 	target imageTarget,
 	platform attestations.Platform,
 ) {
-	sbom, raw, err := h.attestations.SBOM(r.Context(), target.image, platform)
+	sbom, raw, err := h.attestations.SBOM(r.Context(), target.Image, platform)
 	if err != nil {
 		writeAttestationError(w, r, err)
 		return
@@ -314,30 +271,10 @@ func (h *Handlers) writeSBOM(
 
 		writeCSV(w, r, "sbom", table)
 	default:
-		packages := sbom.Packages
-		if packages == nil {
-			packages = []attestations.Package{}
-		}
-
-		writeCachedJSON(
-			w,
-			r,
-			NewDetailResponse(r.Context(), target.path, "ImageSBOM", imageSBOMBody{
-				Platform:   platform.String(),
-				Generators: sbom.Generators,
-				Created:    sbom.Created,
-				Summary: imageSBOMSummary{
-					Total: len(sbom.Packages), Licensed: sbom.Licensed, Ecosystems: sbom.Ecosystems,
-				},
-				Packages: packages,
-			}),
-		)
+		writeCachedJSON(w, r, NewDetailResponse(
+			r.Context(), target.path, "ImageSBOM", cluster.NewSBOMView(platform, sbom),
+		))
 	}
-}
-
-type imageDockerfileBody struct {
-	Platform string `json:"platform"`
-	*attestations.Dockerfile
 }
 
 func (h *Handlers) writeDockerfile(
@@ -347,7 +284,7 @@ func (h *Handlers) writeDockerfile(
 	target imageTarget,
 	platform attestations.Platform,
 ) {
-	d, err := h.attestations.Dockerfile(r.Context(), target.image, platform)
+	d, err := h.attestations.Dockerfile(r.Context(), target.Image, platform)
 	if err != nil {
 		writeAttestationError(w, r, err)
 		return
@@ -363,7 +300,7 @@ func (h *Handlers) writeDockerfile(
 	}
 
 	writeCachedJSON(w, r, NewDetailResponse(r.Context(), target.path, "ImageDockerfile",
-		imageDockerfileBody{Platform: platform.String(), Dockerfile: d}))
+		cluster.DockerfileView{Platform: platform.String(), Dockerfile: d}))
 }
 
 func platformList(platforms []attestations.Platform) string {

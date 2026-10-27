@@ -267,6 +267,48 @@ func TestCILinks(t *testing.T) {
 	}
 }
 
+func TestServiceAttestationTargetOffersEveryPlatform(t *testing.T) {
+	svc := swarm.Service{Spec: swarm.ServiceSpec{TaskTemplate: taskOn("", "").Spec}}
+
+	got := ServiceAttestationTarget(context.Background(), svc,
+		&fakeAttestations{image: imageWith(amd64, arm64)})
+	if got.Image != svc.Spec.TaskTemplate.ContainerSpec.Image ||
+		!slices.Equal(got.Candidates, []attestations.Platform{amd64, arm64}) {
+		t.Errorf("got %+v", got)
+	}
+
+	if got := ServiceAttestationTarget(context.Background(), svc, nil); got.Attested.Status !=
+		attestations.StatusDisabled {
+		t.Errorf("nil source: %+v", got)
+	}
+}
+
+func TestTaskAttestationTargetOffersItsNodesPlatforms(t *testing.T) {
+	node := nodeOn("n1", "aarch64")
+
+	got := TaskAttestationTarget(context.Background(), taskOn("n1", swarm.TaskStateRunning), &node,
+		&fakeAttestations{image: imageWith(amd64, arm64)})
+	if !slices.Equal(got.Candidates, []attestations.Platform{arm64}) {
+		t.Errorf("candidates = %v", got.Candidates)
+	}
+}
+
+func TestSBOMViewSummarises(t *testing.T) {
+	view := NewSBOMView(amd64, &attestations.SBOM{
+		Licensed:   1,
+		Ecosystems: map[string]int{"deb": 2},
+		Packages:   []attestations.Package{{Name: "a"}, {Name: "b"}},
+	})
+
+	if view.Platform != "linux/amd64" || view.Summary.Total != 2 || view.Summary.Licensed != 1 {
+		t.Errorf("view = %+v", view)
+	}
+
+	if empty := NewSBOMView(amd64, &attestations.SBOM{}); empty.Packages == nil {
+		t.Error("an empty SBOM lists null packages")
+	}
+}
+
 func TestProvenanceDisabled(t *testing.T) {
 	got := ServiceProvenance(context.Background(), swarm.Service{Spec: swarm.ServiceSpec{
 		TaskTemplate: taskOn("", "").Spec,
