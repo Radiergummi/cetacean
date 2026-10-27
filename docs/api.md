@@ -801,10 +801,11 @@ names a newer image in its registry than the digest the service runs: `image`, `
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
 `GET /networks/{id}` carries `addresses`, and each `GET /networks` item `Addresses`, for a swarm network on the
-default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `taskAddresses` and `loadBalancers`.
-`excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't counted. Sorting
-by `addresses` orders by the share in use. The counts cover every service and task on the network, including ones the
-caller can't read. [Network addresses](dashboard#network-addresses) explains the figure.
+default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `taskAddresses` and
+`loadBalancers`. `excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't
+counted. Sorting by `addresses` orders by the share in use, with networks that have no figure last either way. The
+counts cover every service and task on the network, including ones the caller can't read. [Network
+addresses](dashboard#network-addresses) explains the figure.
 
 `GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
 `GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either

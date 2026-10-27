@@ -82,6 +82,29 @@ func TestHandleListNetworks_Addresses(t *testing.T) {
 	}
 }
 
+// A network without a figure sorts last whichever way the list is ordered.
+func TestHandleListNetworks_SortByAddressesAscending(t *testing.T) {
+	h := newTestHandlers(t, withCache(addressesCache()))
+
+	req := httptest.NewRequest("GET", "/networks?sort=addresses&dir=asc", nil)
+	w := httptest.NewRecorder()
+	h.HandleListNetworks(w, req)
+
+	var resp CollectionResponse[cluster.NetworkListItem]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	var order []string
+	for _, item := range resp.Items {
+		order = append(order, item.ID)
+	}
+
+	if !slices.Equal(order, []string{"empty", "busy", "bridge"}) {
+		t.Errorf("order by addresses asc = %v, want [empty busy bridge]", order)
+	}
+}
+
 func TestHandleListNetworks_AddressesCSV(t *testing.T) {
 	router := newTestRouterWithCache(t, addressesCache())
 

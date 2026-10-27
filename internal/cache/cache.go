@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/radiergummi/cetacean/internal/metrics"
 	"github.com/radiergummi/cetacean/internal/placement"
@@ -182,7 +183,8 @@ type Cache struct {
 	// report a wholly replaced cache as unchanged.
 	generation atomic.Uint64
 
-	addresses atomic.Pointer[addressMemo]
+	addresses     atomic.Pointer[addressMemo]
+	addressCounts singleflight.Group
 }
 
 // Generation returns a counter that advances on every change to the cache's

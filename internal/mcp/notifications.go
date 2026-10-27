@@ -379,9 +379,14 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 			if !s.targetReadable(d.identity, d.target) {
 				continue
 			}
+		} else if d.ownTarget {
+			// The notification names only the watched resource, so reading it
+			// is all the subscriber needs, whatever the event was about.
+			if !s.targetReadable(d.identity, d.target) {
+				continue
+			}
 		} else if hasResource && !cluster.CanReadEvent(event, canRead) ||
-			d.via != "" && !canRead(d.via) ||
-			d.ownTarget && !s.targetReadable(d.identity, d.target) {
+			d.via != "" && !canRead(d.via) {
 			continue
 		}
 

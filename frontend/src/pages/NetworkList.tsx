@@ -10,13 +10,15 @@ import { sortColumn } from "../lib/sortColumn";
 import { Link } from "react-router-dom";
 
 /**
- * A network's address figure moves with its own changes, the VIPs services
- * hold, the nodes in the swarm, and the tasks attached to it. Only a task on a
- * network the list holds can move a row; any other, which a busy cluster sends
- * constantly, would refetch for nothing. A task removed without a payload
- * might have been on one.
+ * Whether an event can move a loaded row's address figure: a task only on a
+ * listed network, a node only while ingress is listed. A task removed without
+ * a payload might have been on one.
  */
 export function movesAddresses({ type, resource }: SSEEvent, loaded: readonly Network[]): boolean {
+  if (type === "node") {
+    return loaded.some(({ Ingress }) => Ingress);
+  }
+
   if (type !== "task" || !resource) {
     return true;
   }

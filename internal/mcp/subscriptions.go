@@ -204,10 +204,6 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 	return keys
 }
 
-// addressNetworks is cluster.AddressNetworks, a variable so a test can see
-// whether an event asked it.
-var addressNetworks = cluster.AddressNetworks
-
 // addressNetworkKeys reaches the watched networks whose address figure the
 // event may move. Nothing is worked out while no network is watched, which is
 // the common case on a path every cache write takes.
@@ -217,19 +213,14 @@ func (s *Server) addressNetworkKeys(event cache.Event) []eventKey {
 		return nil
 	}
 
-	ids, all := addressNetworks(s.cache, event)
-	if all {
-		keys := make([]eventKey, len(watched))
-		for i, target := range watched {
-			keys[i] = eventKey{target: target, ownTarget: true}
-		}
-
-		return keys
+	addressNetworks := s.addressNetworks
+	if addressNetworks == nil {
+		addressNetworks = cluster.AddressNetworks
 	}
 
 	var keys []eventKey
 
-	for _, id := range ids {
+	for _, id := range addressNetworks(s.cache, event) {
 		keys = append(keys, eventKey{
 			target:    subscriptionTarget{typ: cache.EventNetwork, id: id},
 			ownTarget: true,

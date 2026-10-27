@@ -1,10 +1,15 @@
 package cache
 
 import (
+	"fmt"
+	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 func TestStoreAddressesKeepsTheNewerGeneration(t *testing.T) {
@@ -23,6 +28,30 @@ func TestStoreAddressesKeepsTheNewerGeneration(t *testing.T) {
 
 	if c.addresses.Load() != newest {
 		t.Error("a newer count was not stored")
+	}
+}
+
+func TestNetworkAddressesSharesOneCountAmongConcurrentMisses(t *testing.T) {
+	c := New(nil)
+	for i := range 200 {
+		c.SetTask(swarm.Task{ID: fmt.Sprintf("t%d", i)})
+	}
+
+	const callers = 16
+
+	counts := make([]map[string]ipam.Addresses, callers)
+
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Go(func() { counts[i] = c.NetworkAddresses() })
+	}
+	wg.Wait()
+
+	first := reflect.ValueOf(counts[0]).Pointer()
+	for i, got := range counts {
+		if reflect.ValueOf(got).Pointer() != first {
+			t.Fatalf("caller %d got a count of its own", i)
+		}
 	}
 }
 

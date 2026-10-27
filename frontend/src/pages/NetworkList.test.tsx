@@ -170,6 +170,14 @@ describe("NetworkList", () => {
 });
 
 describe("movesAddresses", () => {
+  it("lets a node event through only while ingress is listed", () => {
+    const node = { type: "node", action: "create", id: "n1", resource: {} };
+    const ingress = { ...fakeNetwork("n2", "ingress"), Ingress: true };
+
+    expect(movesAddresses(node, [fakeNetwork("n1", "backend")])).toBe(false);
+    expect(movesAddresses(node, [fakeNetwork("n1", "backend"), ingress])).toBe(true);
+  });
+
   const loaded = [fakeNetwork("n1", "backend")];
   const task = (networkID: string) => ({
     type: "task",
@@ -189,13 +197,10 @@ describe("movesAddresses", () => {
     );
   });
 
-  it("lets every other event and a bare task removal through", () => {
+  it("lets a service event and a bare task removal through", () => {
     expect(
       movesAddresses({ type: "service", action: "update", id: "s1", resource: {} }, loaded),
     ).toBe(true);
-    expect(movesAddresses({ type: "node", action: "create", id: "n1", resource: {} }, loaded)).toBe(
-      true,
-    );
     expect(movesAddresses({ type: "task", action: "remove", id: "t3" }, loaded)).toBe(true);
   });
 });

@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // The network resource and describe read through one digest, so pinning the
@@ -71,6 +72,37 @@ func TestNetworkListingCarriesAddresses(t *testing.T) {
 
 	if len(listing) != 2 {
 		t.Errorf("listing = %d networks, want 2", len(listing))
+	}
+}
+
+// find's raw records are the listing's, so they carry the figure too.
+func TestFindRawNetworksCarryAddresses(t *testing.T) {
+	srv := newToolTestServer(t, addressesCache(), &fakeWriteClient{}, config.OpsReadOnly)
+
+	td, ok := srv.findTool("find")
+	if !ok {
+		t.Fatal("find not registered")
+	}
+
+	out, err := td.handler(context.Background(), newCallToolRequest("find", map[string]any{
+		"type": "networks",
+		"raw":  true,
+	}))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	var found struct {
+		Raw []struct {
+			Addresses map[string]any `json:"Addresses"`
+		} `json:"raw"`
+	}
+	if err := json.Unmarshal([]byte(out), &found); err != nil {
+		t.Fatalf("unmarshal: %v: %s", err, out)
+	}
+
+	if len(found.Raw) != 1 || found.Raw[0].Addresses["used"] != 2.0 {
+		t.Errorf("raw = %+v, want one network with used 2", found.Raw)
 	}
 }
 

@@ -222,6 +222,10 @@ type Server struct {
 	notifications       *NotificationManager
 	cancelNotifications func()
 
+	// addressNetworks names the networks an event may move the address figure
+	// of; nil is cluster.AddressNetworks.
+	addressNetworks func(*cache.Cache, cache.Event) []string
+
 	// taskOwners binds each task to the identity that created it.
 	taskOwners taskOwners
 

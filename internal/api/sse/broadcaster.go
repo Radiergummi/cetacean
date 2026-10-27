@@ -572,9 +572,7 @@ func NetworkMatcher(c *cache.Cache, id string) func(cache.Event) bool {
 			return true
 		}
 
-		ids, all := cluster.AddressNetworks(c, e)
-
-		return all || slices.Contains(ids, id)
+		return slices.Contains(cluster.AddressNetworks(c, e), id)
 	}
 }
 

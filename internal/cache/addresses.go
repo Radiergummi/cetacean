@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"strconv"
+
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/ipam"
@@ -22,15 +24,20 @@ func (c *Cache) NetworkAddresses() map[string]ipam.Addresses {
 		return memo.counts
 	}
 
-	counts := ipam.Count(
-		c.ListNetworks(),
-		c.eachServiceUnordered,
-		c.eachTaskUnordered,
-		c.NodeCount(),
-	)
-	c.storeAddresses(&addressMemo{generation: generation, counts: counts})
+	// Concurrent misses on one generation share a single count.
+	counted, _, _ := c.addressCounts.Do(strconv.FormatUint(generation, 10), func() (any, error) {
+		counts := ipam.Count(
+			c.ListNetworks(),
+			c.eachServiceUnordered,
+			c.eachTaskUnordered,
+			c.NodeCount(),
+		)
+		c.storeAddresses(&addressMemo{generation: generation, counts: counts})
 
-	return counts
+		return counts, nil
+	})
+
+	return counted.(map[string]ipam.Addresses)
 }
 
 // NetworkAddressesOf is the figure of one network, nil when it has none.

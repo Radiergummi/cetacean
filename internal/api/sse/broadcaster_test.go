@@ -972,8 +972,18 @@ func TestResourceMatcherSeesTaskRemoves(t *testing.T) {
 
 func TestNetworkMatcherSeesWhatMovesItsAddresses(t *testing.T) {
 	c := cache.New(nil)
-	c.SetNetwork(network.Summary{ID: "net1"})
-	c.SetNetwork(network.Summary{ID: "ingress", Ingress: true})
+	c.SetNetwork(network.Summary{
+		ID:    "net1",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
+	})
+	c.SetNetwork(network.Summary{
+		ID:      "ingress",
+		Scope:   "swarm",
+		Ingress: true,
+		IPAM:    network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.0.0/24"}}},
+	})
+	c.SetNetwork(network.Summary{ID: "bridge", Scope: "local"})
 
 	attached := []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net1"}}}
 	elsewhere := []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net2"}}}
@@ -1006,6 +1016,12 @@ func TestNetworkMatcherSeesWhatMovesItsAddresses(t *testing.T) {
 			"net1",
 			cache.Event{Type: cache.EventService, Resource: swarm.Service{}},
 			true,
+		},
+		{
+			"a service, on a network without a figure",
+			"bridge",
+			cache.Event{Type: cache.EventService, Resource: swarm.Service{}},
+			false,
 		},
 		{"a node, on an overlay", "net1", cache.Event{Type: cache.EventNode, ID: "n1"}, false},
 		{"a node, on ingress", "ingress", cache.Event{Type: cache.EventNode, ID: "n1"}, true},

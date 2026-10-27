@@ -48,8 +48,18 @@ func TestNetworkAddresses(t *testing.T) {
 
 func TestAddressNetworks(t *testing.T) {
 	c := cache.New(nil)
-	c.SetNetwork(network.Summary{ID: "ingress", Ingress: true})
-	c.SetNetwork(network.Summary{ID: "backend"})
+	c.SetNetwork(network.Summary{
+		ID:      "ingress",
+		Scope:   "swarm",
+		Ingress: true,
+		IPAM:    network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.0.0/24"}}},
+	})
+	c.SetNetwork(network.Summary{
+		ID:    "backend",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
+	})
+	c.SetNetwork(network.Summary{ID: "bridge", Scope: "local"})
 
 	attached := swarm.Task{NetworksAttachments: []swarm.NetworkAttachment{
 		{Network: swarm.Network{ID: "backend"}},
@@ -57,39 +67,30 @@ func TestAddressNetworks(t *testing.T) {
 	}}
 
 	tests := []struct {
-		name    string
-		event   cache.Event
-		wantIDs []string
-		wantAll bool
+		name  string
+		event cache.Event
+		want  []string
 	}{
 		{
 			"an attached task",
 			cache.Event{Type: cache.EventTask, Resource: attached},
 			[]string{"backend", "ingress"},
-			false,
 		},
+		{"a task on no network", cache.Event{Type: cache.EventTask, Resource: swarm.Task{}}, nil},
+		{"a task without its record", cache.Event{Type: cache.EventTask, Action: "remove"}, nil},
 		{
-			"a task on no network",
-			cache.Event{Type: cache.EventTask, Resource: swarm.Task{}},
-			nil,
-			false,
+			"a service reaches every network with a figure",
+			cache.Event{Type: cache.EventService, Resource: swarm.Service{}},
+			[]string{"backend", "ingress"},
 		},
-		{
-			"a task without its record",
-			cache.Event{Type: cache.EventTask, Action: "remove"},
-			nil,
-			false,
-		},
-		{"a service", cache.Event{Type: cache.EventService, Resource: swarm.Service{}}, nil, true},
-		{"a node", cache.Event{Type: cache.EventNode, ID: "n1"}, []string{"ingress"}, false},
-		{"a network", cache.Event{Type: cache.EventNetwork, ID: "backend"}, nil, false},
-		{"a config", cache.Event{Type: cache.EventConfig, ID: "c1"}, nil, false},
+		{"a node", cache.Event{Type: cache.EventNode, ID: "n1"}, []string{"ingress"}},
+		{"a network", cache.Event{Type: cache.EventNetwork, ID: "backend"}, nil},
+		{"a config", cache.Event{Type: cache.EventConfig, ID: "c1"}, nil},
 	}
 
 	for _, tt := range tests {
-		ids, all := AddressNetworks(c, tt.event)
-		if !slices.Equal(ids, tt.wantIDs) || all != tt.wantAll {
-			t.Errorf("%s: got %v, %v; want %v, %v", tt.name, ids, all, tt.wantIDs, tt.wantAll)
+		if got := AddressNetworks(c, tt.event); !slices.Equal(got, tt.want) {
+			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
 		}
 	}
 }

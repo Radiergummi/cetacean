@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/docker/api/types/network"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
@@ -233,10 +232,6 @@ func (s *Server) readResourceContents(
 		data = digest
 	}
 
-	if networks, ok := data.([]network.Summary); ok {
-		data = cluster.NetworkListItems(networks, s.cache.NetworkAddresses())
-	}
-
 	b, err := json.Marshal(data)
 	if err != nil {
 		return "", "", fmt.Errorf("marshal resource: %w", err)
@@ -399,7 +394,10 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	case "networks":
 		if resourceID == "" {
-			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
+			return cluster.NetworkListItems(
+				s.filterNetworks(ctx, s.cache.ListNetworks()),
+				s.cache.NetworkAddresses(),
+			), nil
 		}
 		net, found, err := s.cache.ResolveNetwork(resourceID)
 		net, err = resolved(net, found, s.visibleAmbiguity(ctx, "network", err))(uri)

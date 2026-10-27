@@ -1,10 +1,11 @@
 package api
 
 import (
-	"fmt"
+	"cmp"
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/docker/docker/api/types/network"
 
@@ -57,14 +58,6 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 			"name":   func(n network.Summary) string { return n.Name },
 			"driver": func(n network.Summary) string { return n.Driver },
 			"scope":  func(n network.Summary) string { return n.Scope },
-			"addresses": func(n network.Summary) string {
-				a, ok := addresses[n.ID]
-				if !ok || a.Usable == 0 {
-					return ""
-				}
-
-				return fmt.Sprintf("%020d", a.Used*1_000_000/a.Usable)
-			},
 		},
 	}
 
@@ -81,6 +74,10 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 	networks, p, ok := prepareList(h, w, r, spec)
 	if !ok {
 		return
+	}
+
+	if p.Sort == "addresses" {
+		sortByAddressUse(networks, addresses, strings.EqualFold(p.Dir, "desc"))
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
@@ -102,6 +99,39 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 			return cluster.NetworkListItems(page, addresses)
 		},
 	)
+}
+
+// sortByAddressUse orders networks by the share of their addresses in use. A
+// network without a figure sorts after every one with, in either direction,
+// which a string sort key cannot express.
+func sortByAddressUse(
+	networks []network.Summary,
+	addresses map[string]ipam.Addresses,
+	descending bool,
+) {
+	share := func(n network.Summary) (ipam.Addresses, bool) {
+		a, ok := addresses[n.ID]
+
+		return a, ok && a.Usable > 0
+	}
+
+	slices.SortStableFunc(networks, func(x, y network.Summary) int {
+		a, aOK := share(x)
+		b, bOK := share(y)
+
+		switch {
+		case aOK != bOK && aOK:
+			return -1
+		case aOK != bOK:
+			return 1
+		case !aOK:
+			return 0
+		case descending:
+			return cmp.Compare(b.Used*a.Usable, a.Used*b.Usable)
+		default:
+			return cmp.Compare(a.Used*b.Usable, b.Used*a.Usable)
+		}
+	})
 }
 
 // csvTableForNetworks is the rows' table with the address figure before the
