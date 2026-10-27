@@ -46,14 +46,15 @@ export default function StackDetail() {
 
   const { data: members } = useQuery({
     queryKey: servicesKey,
-    queryFn: ({ signal }) => api.services({ filter: `stack == ${JSON.stringify(name)}` }, signal),
+    queryFn: ({ signal }) =>
+      api.allServices({ filter: `stack == ${JSON.stringify(name)}` }, signal),
     enabled: !!stack?.services?.length,
   });
 
   const taskCounts = useMemo(() => {
     const counts: Record<string, TaskCount> = {};
 
-    for (const { ID, RunningTasks, Spec } of members?.data.items ?? []) {
+    for (const { ID, RunningTasks, Spec } of members ?? []) {
       counts[ID] = { running: RunningTasks, desired: desiredTasks(Spec.Mode) };
     }
 

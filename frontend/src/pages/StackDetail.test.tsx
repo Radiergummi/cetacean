@@ -25,7 +25,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/client")>()),
   api: {
     stack: vi.fn<() => Promise<unknown>>(),
-    services: vi.fn<() => Promise<unknown>>(),
+    allServices: vi.fn<() => Promise<unknown>>(),
     serviceTasks: vi.fn<() => Promise<unknown>>(),
   },
 }));
@@ -51,10 +51,7 @@ beforeEach(() => {
     allowedMethods: new Set<string>(),
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
-  vi.mocked(api.services).mockResolvedValue({
-    data: { items: [], total: 0, limit: 50, offset: 0 },
-    allowedMethods: new Set<string>(),
-  } as never);
+  vi.mocked(api.allServices).mockResolvedValue([] as never);
 });
 
 describe("StackDetail", () => {
@@ -148,10 +145,7 @@ describe("StackDetail", () => {
       data: { stack: { ...stack, services: [global] } },
       allowedMethods: new Set<string>(),
     } as never);
-    vi.mocked(api.services).mockResolvedValue({
-      data: { items: [{ ...global, RunningTasks: 0 }], total: 1, limit: 50, offset: 0 },
-      allowedMethods: new Set<string>(),
-    } as never);
+    vi.mocked(api.allServices).mockResolvedValue([{ ...global, RunningTasks: 0 }] as never);
 
     const { container } = renderStackDetail();
 
@@ -161,11 +155,33 @@ describe("StackDetail", () => {
         "critical",
       );
     });
-    expect(api.services).toHaveBeenCalledWith(
+    expect(api.allServices).toHaveBeenCalledWith(
       expect.objectContaining({ filter: 'stack == "web"' }),
       expect.anything(),
     );
     expect(api.serviceTasks).not.toHaveBeenCalled();
+  });
+
+  // More members than one page of a list holds still each get their count.
+  it("counts the tasks of every service in a large stack", async () => {
+    const members = Array.from({ length: 60 }, (_, index) => ({
+      ID: `svc${index}`,
+      Spec: { Name: `web_${index}`, Mode: { Replicated: { Replicas: 2 } } },
+    }));
+
+    vi.mocked(api.stack).mockResolvedValue({
+      data: { stack: { ...stack, services: members } },
+      allowedMethods: new Set<string>(),
+    } as never);
+    vi.mocked(api.allServices).mockResolvedValue(
+      members.map((member) => ({ ...member, RunningTasks: 2 })) as never,
+    );
+
+    const { container } = renderStackDetail();
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("td [data-health=healthy]")).toHaveLength(60);
+    });
   });
 });
 

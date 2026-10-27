@@ -869,6 +869,8 @@ export const api = {
     ),
   services: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<ServiceListItem>("/services", params, signal, schema.serviceListSchema),
+  allServices: (params?: ListParams, signal?: AbortSignal) =>
+    fetchAll<ServiceListItem>("/services", signal, schema.serviceListSchema, params),
   recommendations: () =>
     fetchJSON<RecommendationsResponse>(
       "/recommendations",
