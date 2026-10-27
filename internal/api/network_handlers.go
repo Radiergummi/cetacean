@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/docker/docker/api/types/network"
-	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -15,31 +14,6 @@ import (
 )
 
 // --- Networks ---
-
-type NetworkListItem struct {
-	network.Summary
-
-	Addresses *ipam.Addresses `json:"Addresses,omitempty"`
-}
-
-// MarshalJSON appends Addresses to the network's own fields by hand: goccy/
-// go-json SIGSEGVs encoding a network.Summary embedded in a struct.
-func (n NetworkListItem) MarshalJSON() ([]byte, error) {
-	body, err := json.Marshal(n.Summary)
-	if err != nil || n.Addresses == nil {
-		return body, err
-	}
-
-	addresses, err := json.Marshal(n.Addresses)
-	if err != nil {
-		return nil, err
-	}
-
-	body = append(body[:len(body)-1], `,"Addresses":`...)
-	body = append(body, addresses...)
-
-	return append(body, '}'), nil
-}
 
 func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -123,17 +97,9 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		p,
 		validator,
 		"Network",
-		func(n NetworkListItem) string { return "/networks/" + n.ID },
-		func(page []network.Summary) []NetworkListItem {
-			items := make([]NetworkListItem, len(page))
-			for i, net := range page {
-				items[i] = NetworkListItem{Summary: net}
-				if a, ok := addresses[net.ID]; ok {
-					items[i].Addresses = &a
-				}
-			}
-
-			return items
+		func(n cluster.NetworkListItem) string { return "/networks/" + n.ID },
+		func(page []network.Summary) []cluster.NetworkListItem {
+			return cluster.NetworkListItems(page, addresses)
 		},
 	)
 }

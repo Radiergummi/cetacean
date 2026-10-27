@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
@@ -57,7 +58,7 @@ func TestHandleListNetworks_Addresses(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp CollectionResponse[NetworkListItem]
+	var resp CollectionResponse[cluster.NetworkListItem]
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatal(err)
 	}

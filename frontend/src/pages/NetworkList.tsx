@@ -11,16 +11,19 @@ import { Link } from "react-router-dom";
 
 /**
  * A network's address figure moves with its own changes, the VIPs services
- * hold, the nodes in the swarm, and the tasks attached to it; any other task
- * event, which a busy cluster sends constantly, would refetch for nothing. A
- * task removed without a payload might have been attached.
+ * hold, the nodes in the swarm, and the tasks attached to it. Only a task on a
+ * network the list holds can move a row; any other, which a busy cluster sends
+ * constantly, would refetch for nothing. A task removed without a payload
+ * might have been on one.
  */
-export function movesAddresses({ type, resource }: SSEEvent): boolean {
+export function movesAddresses({ type, resource }: SSEEvent, loaded: readonly Network[]): boolean {
   if (type !== "task" || !resource) {
     return true;
   }
 
-  return ((resource as Task).NetworksAttachments ?? []).length > 0;
+  return ((resource as Task).NetworksAttachments ?? []).some(({ Network }) =>
+    loaded.some(({ Id }) => Id === Network.ID),
+  );
 }
 
 export default function NetworkList() {

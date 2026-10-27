@@ -16,7 +16,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
 	"github.com/radiergummi/cetacean/internal/docker"
-	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 const (
@@ -235,7 +234,7 @@ func (s *Server) readResourceContents(
 	}
 
 	if networks, ok := data.([]network.Summary); ok {
-		data = s.networkListing(networks)
+		data = cluster.NetworkListItems(networks, s.cache.NetworkAddresses())
 	}
 
 	b, err := json.Marshal(data)
@@ -244,28 +243,6 @@ func (s *Server) readResourceContents(
 	}
 
 	return string(b), mcpMIMEType, nil
-}
-
-// networkListEntry is a network as the cetacean://networks listing serves it,
-// with its address figure beside Docker's fields as GET /networks has it.
-type networkListEntry struct {
-	network.Summary
-
-	Addresses *ipam.Addresses `json:"Addresses,omitempty"`
-}
-
-func (s *Server) networkListing(networks []network.Summary) []networkListEntry {
-	addresses := s.cache.NetworkAddresses()
-	entries := make([]networkListEntry, len(networks))
-
-	for i, net := range networks {
-		entries[i] = networkListEntry{Summary: net}
-		if a, ok := addresses[net.ID]; ok {
-			entries[i].Addresses = &a
-		}
-	}
-
-	return entries
 }
 
 // composeDoc renders the document both compose resources return.

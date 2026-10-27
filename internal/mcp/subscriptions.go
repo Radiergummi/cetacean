@@ -45,10 +45,12 @@ func (sub subscription) keys() []subscriptionTarget {
 }
 
 // eventKey is an index key an event looks up. via is the ACL resource the
-// subscriber must also read, when the event reaches it through a parent.
+// subscriber must also read, when the event reaches it through a parent;
+// ownTarget asks instead that the subscriber may read what it subscribed to.
 type eventKey struct {
-	target subscriptionTarget
-	via    string
+	target    subscriptionTarget
+	via       string
+	ownTarget bool
 }
 
 // subscribableTypes is every resource type a cetacean://<type>s/<id> URI names.
@@ -202,33 +204,42 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 	return keys
 }
 
-// addressNetworkKeys reaches the networks whose address figure the event may
-// move, as cluster.AddressNetworks names them. A network gone from the cache
-// has nothing left to notify about, so only cached ones are named.
+// addressNetworks is cluster.AddressNetworks, a variable so a test can see
+// whether an event asked it.
+var addressNetworks = cluster.AddressNetworks
+
+// addressNetworkKeys reaches the watched networks whose address figure the
+// event may move. Nothing is worked out while no network is watched, which is
+// the common case on a path every cache write takes.
 func (s *Server) addressNetworkKeys(event cache.Event) []eventKey {
-	ids, all := cluster.AddressNetworks(s.cache, event)
-
-	var keys []eventKey
-
-	add := func(net network.Summary) {
-		via := "network:" + net.Name
-		keys = append(keys,
-			eventKey{target: subscriptionTarget{typ: cache.EventNetwork, id: net.ID}, via: via},
-			eventKey{target: subscriptionTarget{typ: cache.EventNetwork, id: net.Name}, via: via},
-		)
+	watched := s.notifications.networkTargets()
+	if len(watched) == 0 {
+		return nil
 	}
 
+	ids, all := addressNetworks(s.cache, event)
 	if all {
-		for net := range s.cache.EachNetwork {
-			add(net)
+		keys := make([]eventKey, len(watched))
+		for i, target := range watched {
+			keys[i] = eventKey{target: target, ownTarget: true}
 		}
 
 		return keys
 	}
 
+	var keys []eventKey
+
 	for _, id := range ids {
-		if net, ok := s.cache.GetNetwork(id); ok {
-			add(net)
+		keys = append(keys, eventKey{
+			target:    subscriptionTarget{typ: cache.EventNetwork, id: id},
+			ownTarget: true,
+		})
+
+		if net, ok := s.cache.GetNetwork(id); ok && net.Name != "" {
+			keys = append(keys, eventKey{
+				target:    subscriptionTarget{typ: cache.EventNetwork, id: net.Name},
+				ownTarget: true,
+			})
 		}
 	}
 

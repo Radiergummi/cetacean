@@ -238,6 +238,56 @@ func TestSubscriptionNetworkFollowsWhatMovesItsAddresses(t *testing.T) {
 	assertUpdated(t, got, "cetacean://networks/backend", "cetacean://networks/ingress")
 }
 
+func TestSubscriptionWithoutNetworkWatchersAsksNoNetworks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net-ingress", Name: "ingress", Ingress: true})
+	c.SetService(stackService("svc-watched", "watched", ""))
+	srv := newResourceTestServer(t, c)
+
+	original := addressNetworks
+	t.Cleanup(func() { addressNetworks = original })
+
+	asked := 0
+	addressNetworks = func(c *cache.Cache, ev cache.Event) ([]string, bool) {
+		asked++
+
+		return original(c, ev)
+	}
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://services/watched", nil)
+
+	c.SetNode(swarm.Node{ID: "node-quiet"})
+	c.SetService(stackService("svc-watched", "watched", ""))
+	c.SetTask(swarm.Task{
+		ID:                  "task-quiet",
+		NetworksAttachments: []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net-ingress"}}},
+	})
+
+	if asked != 0 {
+		t.Errorf("worked out the networks of %d events with no network watched", asked)
+	}
+
+	srv.notifications.Subscribe(session(name), "cetacean://networks/ingress", nil)
+	drainUpdated(t, name)
+
+	c.SetNode(swarm.Node{ID: "node-loud"})
+
+	if asked == 0 {
+		t.Error("a watched network did not ask which networks an event reaches")
+	}
+
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/ingress")
+
+	srv.notifications.Unsubscribe(session(name), "cetacean://networks/ingress")
+	asked = 0
+	c.SetNode(swarm.Node{ID: "node-quiet-again"})
+
+	if asked != 0 {
+		t.Error("an unsubscribed network still made events ask")
+	}
+}
+
 func TestSubscriptionLogsFollowServiceTasks(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-logs", "logger", ""))

@@ -170,26 +170,32 @@ describe("NetworkList", () => {
 });
 
 describe("movesAddresses", () => {
-  it("lets a task attached to a network through", () => {
-    expect(
-      movesAddresses({
-        type: "task",
-        action: "update",
-        id: "t1",
-        resource: { NetworksAttachments: [{ Network: { ID: "n1" } }] },
-      }),
-    ).toBe(true);
+  const loaded = [fakeNetwork("n1", "backend")];
+  const task = (networkID: string) => ({
+    type: "task",
+    action: "update",
+    id: "t1",
+    resource: { NetworksAttachments: [{ Network: { ID: networkID } }] },
   });
 
-  it("ignores a task attached to none", () => {
-    expect(movesAddresses({ type: "task", action: "update", id: "t2", resource: {} })).toBe(false);
+  it("lets a task attached to a listed network through", () => {
+    expect(movesAddresses(task("n1"), loaded)).toBe(true);
+  });
+
+  it("ignores a task on a network the list doesn't hold, or on none", () => {
+    expect(movesAddresses(task("n9"), loaded)).toBe(false);
+    expect(movesAddresses({ type: "task", action: "update", id: "t2", resource: {} }, loaded)).toBe(
+      false,
+    );
   });
 
   it("lets every other event and a bare task removal through", () => {
-    expect(movesAddresses({ type: "service", action: "update", id: "s1", resource: {} })).toBe(
+    expect(
+      movesAddresses({ type: "service", action: "update", id: "s1", resource: {} }, loaded),
+    ).toBe(true);
+    expect(movesAddresses({ type: "node", action: "create", id: "n1", resource: {} }, loaded)).toBe(
       true,
     );
-    expect(movesAddresses({ type: "node", action: "create", id: "n1", resource: {} })).toBe(true);
-    expect(movesAddresses({ type: "task", action: "remove", id: "t3" })).toBe(true);
+    expect(movesAddresses({ type: "task", action: "remove", id: "t3" }, loaded)).toBe(true);
   });
 });
