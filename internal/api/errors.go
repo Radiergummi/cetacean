@@ -270,6 +270,13 @@ var errorRegistry = map[string]ErrorDef{
 		Description: "Failed to create the request to the Prometheus server.",
 		Suggestion:  "This is a server-side error. Check the Cetacean logs for details.",
 	},
+	"MTR008": {
+		Code:        "MTR008",
+		Title:       "Prometheus Response Too Large",
+		Status:      http.StatusBadGateway,
+		Description: "Prometheus answered with more than the 10 MiB the proxy forwards.",
+		Suggestion:  "Narrow the query: fewer series, a shorter range, or a larger step.",
+	},
 
 	// ── LOG: log streaming ────────────────────────────────────────────
 	"LOG001": {Code: "LOG001", Title: "Too Many Log Streams", Status: http.StatusTooManyRequests,

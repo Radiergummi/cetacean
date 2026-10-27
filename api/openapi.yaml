@@ -385,6 +385,10 @@ paths:
                 description: Prometheus labels response (proxied as-is)
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -424,6 +428,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -609,6 +617,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 

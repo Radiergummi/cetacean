@@ -156,10 +156,24 @@ func (pc *Client) get(ctx context.Context, path string, params url.Values) ([]by
 		return nil, err
 	}
 	defer respBody.Close()
-	body, err := io.ReadAll(io.LimitReader(respBody, maxResponseBytes))
+	return readLimited(respBody)
+}
+
+// ErrResponseTooLarge is the cause of an error for a Prometheus answer longer
+// than maxResponseBytes, which is refused rather than cut short.
+var ErrResponseTooLarge = errors.New("prometheus response exceeds the size limit")
+
+// readLimited reads a whole body of at most maxResponseBytes. It reads one
+// byte past the limit, since a body of exactly the limit is not too large.
+func readLimited(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
 	if err != nil {
 		return nil, unreachable(err)
 	}
+	if len(body) > maxResponseBytes {
+		return nil, &redactedError{message: "prometheus response too large", cause: ErrResponseTooLarge}
+	}
+
 	return body, nil
 }
 
