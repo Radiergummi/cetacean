@@ -79,6 +79,15 @@ export function IntegrationSection({
 
   const activeView: View = (editing || !visualContent) && view === "graph" ? "structured" : view;
 
+  // A panel without a form edits its labels in the raw view.
+  function edit() {
+    if (!editContent) {
+      setView("raw");
+    }
+
+    startEditing();
+  }
+
   // Leaving the raw editor re-seeds the structured form from the labels the
   // user may have just rewritten there.
   function changeView(next: View) {
@@ -121,6 +130,7 @@ export function IntegrationSection({
               variant="outline"
               size="sm"
               onClick={() => changeView(view === "raw" ? "structured" : "raw")}
+              disabled={editing && !editContent}
             >
               {view === "raw" ? <Layers className="size-3" /> : <Code className="size-3" />}
               {view === "raw" ? "Structured" : "Labels"}
@@ -131,7 +141,7 @@ export function IntegrationSection({
             <Button
               variant="outline"
               size="sm"
-              onClick={startEditing}
+              onClick={edit}
             >
               <Pencil className="size-3" />
               Edit
@@ -157,7 +167,7 @@ export function IntegrationSection({
             return updated;
           }}
         />
-      ) : editing ? (
+      ) : editing && editContent ? (
         <div className="rounded-lg border p-3">
           <div className="space-y-4">
             {editContent}

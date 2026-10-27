@@ -24,7 +24,7 @@ import type { SSEEvent } from "../hooks/useResourceStream";
 import { useTaskMetrics } from "../hooks/useTaskMetrics";
 import { getSemanticChartColor } from "../lib/chartColors";
 import { deriveServiceSubResources } from "../lib/deriveServiceState";
-import { integrationLabelPrefix } from "../lib/integrationLabels";
+import { isIntegrationLabel } from "../lib/integrationLabels";
 import { cpuThresholds, memoryThresholds } from "../lib/resourceThresholds";
 import { escapePromQL } from "../lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -235,20 +235,9 @@ export function useServiceDetail(id: string | undefined) {
       return serviceLabels;
     }
 
-    const prefixes = integrations
-      .map(
-        ({ name: integrationName }) =>
-          integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix],
-      )
-      .filter(Boolean);
-
-    if (prefixes.length === 0) {
-      return serviceLabels;
-    }
-
     return Object.fromEntries(
       Object.entries(serviceLabels).filter(
-        ([key]) => !prefixes.some((prefix) => key.startsWith(prefix)),
+        ([key]) => !integrations.some(({ name }) => isIntegrationLabel(name, key)),
       ),
     );
   }, [serviceLabels, integrations]);

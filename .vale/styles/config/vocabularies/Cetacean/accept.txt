@@ -57,10 +57,13 @@ Alertmanager
 API(?:s|'s)?
 Astro
 Caddy
+caddy-docker-proxy
+Caddyfile
 cAdvisor
 CAs
 Cetacean
 CIDRs
+Codeberg
 Compose's
 containerd(?:'s)?
 Dex
@@ -68,6 +71,9 @@ Diun
 Docker(?:'s)?
 Dockerfiles?
 ETags?
+Forgejo
+Gantry
+Gitea
 GitHub
 Graphviz
 HAProxy

@@ -1,7 +1,10 @@
 import type { Integration } from "../../api/types";
 import { rawLabelsForIntegration } from "../../lib/integrationLabels";
+import { CaddyPanel } from "./CaddyPanel";
 import { CronjobPanel } from "./CronjobPanel";
 import { DiunPanel } from "./DiunPanel";
+import { DocoCDPanel } from "./DocoCDPanel";
+import { GantryPanel } from "./GantryPanel";
 import { ShepherdPanel } from "./ShepherdPanel";
 import { TraefikPanel } from "./TraefikPanel";
 
@@ -64,6 +67,30 @@ export function IntegrationPanels({
           case "diun":
             return (
               <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "caddy":
+            return (
+              <CaddyPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "doco-cd":
+            return (
+              <DocoCDPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "gantry":
+            return (
+              <GantryPanel
                 key={integration.name}
                 integration={integration}
                 {...panelProps}

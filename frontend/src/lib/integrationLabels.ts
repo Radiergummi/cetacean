@@ -112,17 +112,34 @@ export const badgeBlue = `${badgeBase} bg-blue-100 text-blue-800 dark:bg-blue-90
 export const badgePurple = `${badgeBase} bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300`;
 export const badgeTeal = `${badgeBase} bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300`;
 
-export const integrationLabelPrefix = {
+const integrationLabelPrefix = {
   traefik: "traefik.",
   shepherd: "shepherd.",
   "swarm-cronjob": "swarm.cronjob.",
   diun: "diun.",
+  "doco-cd": "cd.doco.",
+  gantry: "gantry.",
 } as const;
 
-export type IntegrationName = keyof typeof integrationLabelPrefix;
+// caddy-docker-proxy's own label filter: `caddy`, `caddy_0`, `caddy.x`, not `caddyfile`.
+const caddyLabel = /^caddy(_\d+)?(\.|$)/;
 
 /**
- * Filter a label map to entries matching a known integration prefix.
+ * Whether a label belongs to the named integration.
+ */
+export function isIntegrationLabel(integrationName: string, key: string): boolean {
+  if (integrationName === "caddy") {
+    return caddyLabel.test(key);
+  }
+
+  const prefix: string | undefined =
+    integrationLabelPrefix[integrationName as keyof typeof integrationLabelPrefix];
+
+  return prefix !== undefined && key.startsWith(prefix);
+}
+
+/**
+ * Filter a label map to entries belonging to the named integration.
  */
 export function rawLabelsForIntegration(
   labels: Record<string, string> | null,
@@ -132,11 +149,5 @@ export function rawLabelsForIntegration(
     return [];
   }
 
-  const prefix = integrationLabelPrefix[integrationName as IntegrationName];
-
-  if (!prefix) {
-    return [];
-  }
-
-  return Object.entries(labels).filter(([key]) => key.startsWith(prefix));
+  return Object.entries(labels).filter(([key]) => isIntegrationLabel(integrationName, key));
 }

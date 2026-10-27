@@ -418,11 +418,59 @@ export interface DiunIntegration {
   metadata?: Record<string, string> | undefined;
 }
 
+export interface CaddyIntegration {
+  name: "caddy";
+  enabled: boolean;
+  caddyfile: string;
+}
+
+export interface DocoCDJob {
+  enabled: boolean;
+  schedule?: string | undefined;
+  executionMode?: string | undefined;
+  skipRunning?: boolean | undefined;
+  lastRun?: string | undefined;
+  nextRun?: string | undefined;
+}
+
+export interface DocoCDIntegration {
+  name: "doco-cd";
+  enabled: boolean;
+  deployment?: string | undefined;
+  source?: string | undefined;
+  repository?: string | undefined;
+  sourceUrl?: string | undefined;
+  ref?: string | undefined;
+  commit?: string | undefined;
+  commitUrl?: string | undefined;
+  trigger?: string | undefined;
+  deployedAt?: string | undefined;
+  version?: string | undefined;
+  certExpiry?: string | undefined;
+  job?: DocoCDJob | undefined;
+}
+
+export interface GantryIntegration {
+  name: "gantry";
+  enabled: boolean;
+  authConfig?: string | undefined;
+  manifestCmd?: string | undefined;
+  manifestOptions?: string | undefined;
+  rollbackOnFailure?: boolean | undefined;
+  rollbackOptions?: string | undefined;
+  updateJobs?: boolean | undefined;
+  updateOptions?: string | undefined;
+  updateTimeoutSeconds?: number | undefined;
+}
+
 export type Integration =
   | TraefikIntegration
   | ShepherdIntegration
   | CronjobIntegration
-  | DiunIntegration;
+  | DiunIntegration
+  | CaddyIntegration
+  | DocoCDIntegration
+  | GantryIntegration;
 
 export interface ServiceDetail {
   service: Service;

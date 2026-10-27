@@ -1,4 +1,9 @@
-import { diffLabels, diffModelledLabels, rawLabelsForIntegration } from "./integrationLabels";
+import {
+  diffLabels,
+  diffModelledLabels,
+  isIntegrationLabel,
+  rawLabelsForIntegration,
+} from "./integrationLabels";
 import { describe, expect, it } from "vitest";
 
 describe("rawLabelsForIntegration", () => {
@@ -145,5 +150,26 @@ describe("diffModelledLabels", () => {
     expect(diffModelledLabels(raw, before, after)).toEqual([
       { op: "add", path: "/traefik.http.routers.web.priority", value: "10" },
     ]);
+  });
+});
+
+describe("isIntegrationLabel", () => {
+  it("matches caddy labels by caddy-docker-proxy's grammar, not by prefix", () => {
+    expect(isIntegrationLabel("caddy", "caddy")).toBe(true);
+    expect(isIntegrationLabel("caddy", "caddy_0")).toBe(true);
+    expect(isIntegrationLabel("caddy", "caddy.reverse_proxy")).toBe(true);
+    expect(isIntegrationLabel("caddy", "caddy_1.route_0.a")).toBe(true);
+    expect(isIntegrationLabel("caddy", "caddyfile_path")).toBe(false);
+    expect(isIntegrationLabel("caddy", "caddy_ingress_network")).toBe(false);
+  });
+
+  it("matches doco-cd and gantry labels by prefix", () => {
+    expect(isIntegrationLabel("doco-cd", "cd.doco.deployment.target.sha")).toBe(true);
+    expect(isIntegrationLabel("doco-cd", "cd.other")).toBe(false);
+    expect(isIntegrationLabel("gantry", "gantry.update.jobs")).toBe(true);
+  });
+
+  it("matches nothing for an unknown integration", () => {
+    expect(isIntegrationLabel("unknown", "unknown.key")).toBe(false);
   });
 });
