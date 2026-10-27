@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/docker/docker/client"
 
 	"github.com/radiergummi/cetacean/internal/docker"
 )
@@ -37,11 +38,12 @@ func actionable(err error) bool {
 }
 
 // fromEngine reports an error the engine classified, which every API answer
-// is, or a transport failure on the way to it. Resolve answers ErrUnknown for
+// is, or a failure to reach it: the client's own, which names the socket and
+// carries no class, or a raw transport error. Resolve answers ErrUnknown for
 // an unclassified error too, so a deliberate Unknown is asked for separately.
 func fromEngine(err error) bool {
 	_, transport := errors.AsType[*url.Error](err)
-	if _, dial := errors.AsType[net.Error](err); dial {
+	if _, dial := errors.AsType[net.Error](err); dial || client.IsErrConnectionFailed(err) {
 		transport = true
 	}
 
