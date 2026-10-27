@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -21,6 +22,13 @@ func SeedCreatedConfig(
 ) {
 	cfg, err := inspect(ctx, id)
 	if err != nil {
+		slog.Warn(
+			"inspecting a created config failed; seeding a stand-in",
+			"config",
+			name,
+			"error",
+			err,
+		)
 		now := time.Now()
 		cfg = swarm.Config{
 			ID:        id,
@@ -43,6 +51,13 @@ func SeedCreatedSecret(
 ) {
 	sec, err := inspect(ctx, id)
 	if err != nil {
+		slog.Warn(
+			"inspecting a created secret failed; seeding a stand-in",
+			"secret",
+			name,
+			"error",
+			err,
+		)
 		now := time.Now()
 		sec = swarm.Secret{
 			ID:        id,

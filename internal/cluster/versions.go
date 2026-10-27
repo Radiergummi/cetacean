@@ -1,7 +1,9 @@
 package cluster
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -60,24 +62,17 @@ type VersionDetail struct {
 // Detail spells v for a detail, with usedBy readable services using it.
 func (v Version) Detail(usedBy int) VersionDetail { return VersionDetail(v.Fields(usedBy)) }
 
-// Map is d as a map, holding exactly the keys its JSON does, for a detail
-// that is a map rather than a struct.
+// Map is d as a map, for a detail that is a map rather than a struct. It is
+// d's own JSON, so the keys cannot drift from what the struct tags say.
 func (d VersionDetail) Map() map[string]any {
-	out := map[string]any{"usedBy": d.UsedBy}
-	if d.VersionOf != "" {
-		out["versionOf"] = d.VersionOf
+	body, err := json.Marshal(d)
+	if err != nil {
+		panic(fmt.Sprintf("marshal version detail: %v", err)) // a struct of scalars
 	}
-	if d.VersionInferred {
-		out["versionInferred"] = true
-	}
-	if d.NewestVersion {
-		out["newestVersion"] = true
-	}
-	if d.InUse {
-		out["inUse"] = true
-	}
-	if d.OlderVersions != 0 {
-		out["olderVersions"] = d.OlderVersions
+
+	var out map[string]any
+	if err := json.Unmarshal(body, &out); err != nil {
+		panic(fmt.Sprintf("unmarshal version detail: %v", err))
 	}
 
 	return out
@@ -450,8 +445,8 @@ func (x *VersionIndex) SecretVersion(sec swarm.Secret, canRead func(resource str
 
 // DigestsTouchedBy names the configs and secrets whose digest event changes
 // besides any it names itself: the other versions in a config's or secret's
-// group, and in the group an update took it out of. A service's references
-// need nothing here: the cache sends ref_changed for each one gained or lost.
+// group, and in the group an update took it out of. A ref_changed one does
+// too, since whether a version is in use moves its siblings' inUse and counts.
 func (x *VersionIndex) DigestsTouchedBy(event cache.Event) (configs, secrets []VersionRef) {
 	if event.HistoryID == 0 {
 		return x.digestsTouchedBy(event)
@@ -476,7 +471,12 @@ func (x *VersionIndex) DigestsTouchedBy(event cache.Event) (configs, secrets []V
 }
 
 func (x *VersionIndex) digestsTouchedBy(event cache.Event) (configs, secrets []VersionRef) {
-	switch resource := event.Resource.(type) {
+	resource := event.Resource
+	if event.Action == "ref_changed" {
+		resource = x.record(event)
+	}
+
+	switch resource := resource.(type) {
 	case swarm.Config:
 		all, _ := x.current()
 		keys := []versions.GroupKey{versions.Key(versions.ConfigItem(resource))}
@@ -498,6 +498,23 @@ func (x *VersionIndex) digestsTouchedBy(event cache.Event) (configs, secrets []V
 	default:
 		return nil, nil
 	}
+}
+
+// record is the config or secret a ref_changed names, which carries none.
+func (x *VersionIndex) record(event cache.Event) any {
+	switch event.Type {
+	case cache.EventConfig:
+		if cfg, ok := x.cache.GetConfig(event.ID); ok {
+			return cfg
+		}
+	case cache.EventSecret:
+		if sec, ok := x.cache.GetSecret(event.ID); ok {
+			return sec
+		}
+	default:
+	}
+
+	return nil
 }
 
 // TouchesDigest reports whether event changes the digest of the config or

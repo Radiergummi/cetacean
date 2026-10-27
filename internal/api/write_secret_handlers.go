@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -51,10 +52,14 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 
 			return id, err
 		},
-		buildFallback: func(id string, name string) any {
+		// Created now and labelled as asked; see the config's.
+		buildFallback: func(id, name string, labels map[string]string) any {
+			now := time.Now()
+
 			return h.secretBody(r, swarm.Secret{
-				ID:   id,
-				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+				ID:        id,
+				CreatedAt: now, UpdatedAt: now,
+				Spec: swarm.SecretSpec{Name: name, Labels: labels},
 			})
 		},
 		buildResponse: func(id string) (any, bool) {

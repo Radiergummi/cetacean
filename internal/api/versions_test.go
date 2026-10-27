@@ -366,3 +366,32 @@ func TestSecretStreamHearsItsVersions(t *testing.T) {
 		)
 	}
 }
+
+// Repointing a service from db_v2 to db_v1 changes which older versions are in
+// use, which db_v3's detail reports, so its stream hears of it.
+func TestSecretStreamHearsItsSiblingsUse(t *testing.T) {
+	c := versionedCache()
+	h := newTestHandlers(t, withCache(c))
+	match := sse.VersionMatcher(h.versions, cache.EventSecret, "db_v3")
+
+	var events []cache.Event
+	c.AddOnChangeListener(func(e cache.Event) {
+		if e.Action == "ref_changed" {
+			events = append(events, e)
+		}
+	})
+
+	c.SetService(swarm.Service{
+		ID: "allowed-svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "allowed-svc"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+				Secrets: []*swarm.SecretReference{{SecretID: "db_v1"}},
+			}},
+		},
+	})
+
+	if !slices.ContainsFunc(events, match) {
+		t.Errorf("db_v3's stream matched none of %+v", events)
+	}
+}

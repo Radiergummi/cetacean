@@ -267,6 +267,44 @@ func TestVersionIndexAnswersEachEventOnce(t *testing.T) {
 	}
 }
 
+// Repointing a service from v1 to v2 changes which older versions are in use,
+// so v3's digest, which counts them, hears of it too.
+func TestVersionIndexFollowsAReferenceChange(t *testing.T) {
+	c := cache.New(nil)
+	for i, name := range []string{"db_v1", "db_v2", "db_v3"} {
+		c.SetSecret(versionedSecret(name, i+1))
+	}
+
+	using := func(id string) swarm.Service {
+		return swarm.Service{
+			ID: "svc",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "api"},
+				TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: id}},
+				}},
+			},
+		}
+	}
+	c.SetService(using("db_v1"))
+
+	var changed []cache.Event
+	c.AddOnChangeListener(func(e cache.Event) {
+		if e.Action == "ref_changed" {
+			changed = append(changed, e)
+		}
+	})
+	c.SetService(using("db_v2"))
+
+	index := NewVersionIndex(c)
+	if len(changed) == 0 ||
+		!slices.ContainsFunc(changed, func(e cache.Event) bool {
+			return index.TouchesDigest(e, cache.EventSecret, "db_v3")
+		}) {
+		t.Errorf("no ref_changed of %+v touches db_v3", changed)
+	}
+}
+
 func TestVersionIndexFollowsARelabel(t *testing.T) {
 	c := cache.New(nil)
 	for i, name := range []string{"db_v1", "db_v2", "other_v1"} {

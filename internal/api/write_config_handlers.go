@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -38,10 +39,15 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 
 			return id, err
 		},
-		buildFallback: func(id string, name string) any {
+		// Created now and labelled as asked, so it ranks and groups as the
+		// real record will.
+		buildFallback: func(id, name string, labels map[string]string) any {
+			now := time.Now()
+
 			return h.configBody(r, swarm.Config{
-				ID:   id,
-				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+				ID:        id,
+				CreatedAt: now, UpdatedAt: now,
+				Spec: swarm.ConfigSpec{Name: name, Labels: labels},
 			})
 		},
 		buildResponse: func(id string) (any, bool) {
