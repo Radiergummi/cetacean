@@ -146,6 +146,11 @@ which starts on the platform most of the service's running tasks are on; a task 
 When there is nothing to show, the section says why in one line: the image has no attestations, isn't pinned by
 digest, is private, or is gone from its registry. [`server.image_attestations`][configuration] turns it off.
 
+When the image has an SBOM, the section links its **SBOM** page: every package with its version, ecosystem,
+license, and where in the image it was found, searchable by name or package URL and filterable by ecosystem and
+license, with the list downloadable as CSV or as the SPDX document itself. Distribution packages usually declare a
+license; Go modules in a Syft SBOM never do, and the page says so instead of leaving the column unexplained.
+
 ## Network addresses
 
 An overlay network that runs out of addresses fails new tasks, and the default `/24` holds 253. The networks list
