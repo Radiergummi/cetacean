@@ -232,7 +232,7 @@ requirements:
         with: "\tif false {"
       - file: internal/netguard/netguard.go
         replace: "\tif slices.ContainsFunc(specialUseBlocks, func(n *net.IPNet) bool { return n.Contains(ip) }) {"
-        with: "\tif false {"
+        with: "\tif slices.ContainsFunc(specialUseBlocks, func(n *net.IPNet) bool { return false }) {"
 
   - id: loopback-exception-not-in-production
     level: MUST
