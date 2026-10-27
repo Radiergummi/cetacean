@@ -298,6 +298,10 @@ List endpoints page by query parameter or by HTTP `Range` header.
 | `search`  | string | none    | Case-insensitive substring match on name                      |
 | `filter`  | string | none    | [expr-lang](https://expr-lang.org/) expression, max 512 chars |
 
+A `limit` or `offset` that isn't a whole number in range, a `dir` other than `asc` or `desc`, or a `sort` the
+list doesn't offer is refused with `400` ([`API016`](api/errors#API016)). The same goes for a malformed
+`before` or `limit` on `/history`, the feeds and `/search`.
+
 ```http tab
 GET /services?limit=10&offset=20 HTTP/1.1
 
@@ -314,10 +318,13 @@ curl "http://localhost:9000/configs?search=nginx"
 
 ### Range header pagination
 
-List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
+List endpoints accept `Range: items=0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
 Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
-*/142`. Query parameters take precedence when both are present. With `If-Range` naming the `ETag` of the page
-you hold, the range is served only if that page is unchanged; otherwise you get the first page with a `200`.
+*/142`. Query parameters take precedence when both are present, and a malformed `Range` or one naming several
+ranges is ignored. `Range: items 0-24`, without the `=`, is still accepted but deprecated.
+
+The `ETag` is the collection's, the same on every page and on the full answer. With `If-Range` naming it, any
+page is served as long as the list is unchanged; otherwise you get the first page with a `200`.
 
 ### History pagination
 
@@ -1036,7 +1043,7 @@ the changelog marks each one **Breaking**.
 - **Response bodies:** field names, types and meaning, the `@type` of each document, and every term
   `/api/context.jsonld` defines.
 - **Errors:** every problem code and the status it answers with, as the [error reference](api/errors) lists them.
-- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items` and
+- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items=` and
   `Content-Range`, the `?filter=` grammar and its fields, and the `?sort=` fields.
 - **Feeds and spreadsheets:** which endpoints serve them, and CSV column names and order.
 - **Event streams:** event names, payload shapes, `Last-Event-ID` replay and the `sync` and `full_sync` events, as

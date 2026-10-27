@@ -626,7 +626,7 @@ async function fetchRange<T>(
   const response = await fetch(apiPath(url), {
     headers: {
       Accept: "application/json",
-      Range: `items ${offset}-${end}`,
+      Range: `items=${offset}-${end}`,
     },
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });

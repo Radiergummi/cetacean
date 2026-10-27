@@ -28,7 +28,7 @@ afterAll(() => server.close());
 describe("demo handler coverage", () => {
   it.each(buildDemoEndpoints(dataset))("GET %s returns a response", async (path) => {
     const response = await fetch(`http://localhost${path}`, {
-      headers: { Accept: "application/json", Range: "items 0-49" },
+      headers: { Accept: "application/json", Range: "items=0-49" },
     });
 
     expect(response.status).toBeLessThan(500);
@@ -37,7 +37,7 @@ describe("demo handler coverage", () => {
 
 async function fetchJSON(path: string) {
   const response = await fetch(`http://localhost${path}`, {
-    headers: { Accept: "application/json", Range: "items 0-49" },
+    headers: { Accept: "application/json", Range: "items=0-49" },
   });
   if (!response.ok) {
     throw new Error(`${path} returned ${response.status}`);

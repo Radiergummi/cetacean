@@ -298,7 +298,7 @@ func TestHistoryToEntries(t *testing.T) {
 func TestParseAtomPagination(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
-		beforeID, limit := parseFeedPagination(req)
+		beforeID, limit, _ := parseFeedPagination(req)
 
 		if beforeID != 0 {
 			t.Errorf("beforeID = %d, want 0", beforeID)
@@ -311,7 +311,7 @@ func TestParseAtomPagination(t *testing.T) {
 
 	t.Run("parses values", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
-		beforeID, limit := parseFeedPagination(req)
+		beforeID, limit, _ := parseFeedPagination(req)
 
 		if beforeID != 100 {
 			t.Errorf("beforeID = %d, want 100", beforeID)
@@ -324,7 +324,7 @@ func TestParseAtomPagination(t *testing.T) {
 
 	t.Run("caps limit at 200", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?limit=500", nil)
-		_, limit := parseFeedPagination(req)
+		_, limit, _ := parseFeedPagination(req)
 
 		if limit != 200 {
 			t.Errorf("limit = %d, want 200", limit)

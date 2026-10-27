@@ -5232,6 +5232,8 @@ paths:
                 $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   # ── Stacks ───────────────────────────────────────────────────────────
 
@@ -6981,7 +6983,7 @@ components:
     limit:
       name: limit
       in: query
-      description: Page size
+      description: Page size; a larger value is clamped to 200, and one that is not a positive integer is refused with `API016`
       schema:
         type: integer
         minimum: 1
@@ -6991,7 +6993,7 @@ components:
     offset:
       name: offset
       in: query
-      description: Starting offset for pagination
+      description: Starting offset for pagination; one that is not a non-negative integer is refused with `API016`
       schema:
         type: integer
         minimum: 0
@@ -7002,15 +7004,18 @@ components:
       in: header
       required: false
       description: >
-        Pagination by item range, an alternative to `limit` and `offset`:
-        `items <first>-<last>`, both zero-based and inclusive, with the same
-        200-item cap. Ignored when either query parameter is present. A range
-        that is less than the whole list answers 206 with `Content-Range`; one
-        that starts past the end, or names several ranges, answers 416. JSON
+        Pagination by item range (RFC 9110 §14.2), an alternative to `limit`
+        and `offset`: `items=<first>-<last>`, both zero-based and inclusive,
+        with the same 200-item cap. `items <first>-<last>` is accepted as a
+        deprecated spelling. Ignored when either query parameter is present, and
+        when it is malformed or names several ranges. A range that is less than
+        the whole list answers 206 with `Content-Range`; one that starts past
+        the end answers 416. The 200 and 206 answers carry the collection's
+        ETag, so `If-Range` holds across pages until the list changes. JSON
         only: a CSV download answers 200 with every row.
       schema:
         type: string
-      example: items 0-49
+      example: items=0-49
 
     versions:
       name: versions
@@ -7036,7 +7041,7 @@ components:
     dir:
       name: dir
       in: query
-      description: Sort direction
+      description: Sort direction, in any case; any other value is refused with `API016`, as is a `sort` the list does not name
       schema:
         type: string
         enum: [asc, desc]
@@ -7367,8 +7372,7 @@ components:
 
     RangeNotSatisfiable:
       description: >
-        The `Range` starts past the last item, with `Content-Range: items */<total>`,
-        or names more than one range, with no `Content-Range`
+        The `Range` starts past the last item, with `Content-Range: items */<total>`
       headers:
         Content-Range:
           $ref: "#/components/headers/Content-Range"

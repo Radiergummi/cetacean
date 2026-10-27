@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -20,6 +22,7 @@ type listSpec[T any] struct {
 	searchName   func(T) string                                // nil = no search support
 	filterEnv    filter.Env[T]                                 // filter.Nodes, filter.Tasks, …
 	sortKeys     map[string]func(T) string                     // sort field accessors
+	extraSorts   []string                                      // sort keys the handler applies itself
 	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
 	versions     *versionedSpec[T]                             // optional: groups a config or secret list into versions
 	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
@@ -101,7 +104,7 @@ func handleListOf[T, U any](
 		return
 	}
 
-	r, validator = h.ifRange(r, validator)
+	r = ifRange(r, validator)
 
 	items, versions, p, ok := prepareList(h, w, r, spec, sel)
 	if !ok {
@@ -207,8 +210,12 @@ func prepareList[T any](
 	}
 
 	p, err := parsePagination(r)
+	if err == nil && p.Sort != "" && spec.sortKeys[p.Sort] == nil &&
+		!slices.Contains(spec.extraSorts, p.Sort) {
+		err = fmt.Errorf(`invalid "sort" parameter: %q is not a sort key of this list`, p.Sort)
+	}
 	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		writeErrorCode(w, r, "API016", err.Error())
 		return nil, versions, PageParams{}, false
 	}
 

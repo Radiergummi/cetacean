@@ -79,7 +79,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 0-49" },
+        headers: { Accept: "application/json", Range: "items=0-49" },
       }),
     );
   });
@@ -90,7 +90,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes?sort=hostname&dir=desc&search=web",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 0-49" },
+        headers: { Accept: "application/json", Range: "items=0-49" },
       }),
     );
   });
@@ -101,7 +101,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 50-99" },
+        headers: { Accept: "application/json", Range: "items=50-99" },
       }),
     );
   });
@@ -149,7 +149,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenLastCalledWith(
       "/secrets?versions=all",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 200-399" },
+        headers: { Accept: "application/json", Range: "items=200-399" },
       }),
     );
   });

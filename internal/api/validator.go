@@ -28,7 +28,6 @@ var validatorSeed = maphash.MakeSeed()
 //     than risk colliding;
 //   - the negotiated media type, since one resource is served as JSON, Atom,
 //     CSV or JSON Feed;
-//   - the Range header, which selects a slice of the collection;
 //   - the base path, which absolute @id values are built from.
 //
 // The content coding is not here: codedETag suffixes it onto whatever this
@@ -65,7 +64,6 @@ func (h *Handlers) derivedETag(r *http.Request) string {
 	for _, part := range []string{
 		r.URL.Path,
 		r.URL.RawQuery,
-		r.Header.Get("Range"),
 		BasePathFromContext(r.Context()),
 	} {
 		_, _ = hash.WriteString(part)
