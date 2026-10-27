@@ -644,11 +644,13 @@ export function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     }
   }
 
-  // A global service runs on every ready node that is active or paused; the
-  // demo's services carry no placement constraints.
-  const eligibleNodes = dataset.nodes.filter(
-    ({ Status, Spec }) =>
-      Status.State === "ready" && (Spec.Availability === "active" || Spec.Availability === "pause"),
+  // A global service keeps its tasks on every ready node that is active or
+  // paused, and starts new ones only on active nodes; the demo's services carry
+  // no placement constraints.
+  const readyNodes = dataset.nodes.filter(({ Status }) => Status.State === "ready");
+  const eligibleNodes = readyNodes.filter(({ Spec }) => Spec.Availability === "active").length;
+  const schedulableNodes = readyNodes.filter(
+    ({ Spec }) => Spec.Availability === "active" || Spec.Availability === "pause",
   ).length;
 
   let reservedCPU = 0;
@@ -666,7 +668,7 @@ export function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
       replicas = service.Spec.Mode.Replicated.Replicas;
     } else if (service.Spec.Mode.Global) {
-      replicas = eligibleNodes;
+      replicas = schedulableNodes;
     }
 
     reservedCPU += (reservations.NanoCPUs ?? 0) * replicas;
@@ -712,8 +714,9 @@ const updatingStates = new Set(["updating", "rollback_started", "rollback_paused
 
 /**
  * The server's overview rule, without restart tracking: a service mid-update
- * counts in neither bucket, a job converges once a task completed, and a
- * global service with nowhere to run has nothing outstanding.
+ * counts in neither bucket, a job converges once its run met its completion
+ * target, and a global service with nowhere to run has nothing outstanding.
+ * Running counts only tasks the orchestrator still means to run.
  */
 function demoServiceState(
   service: Service,
@@ -725,13 +728,17 @@ function demoServiceState(
   }
 
   const own = tasks.filter(({ ServiceID }) => ServiceID === service.ID);
-  const running = own.filter(({ Status }) => Status.State === "running").length;
+  const running = own.filter(
+    ({ Status, DesiredState }) =>
+      Status.State === "running" && DesiredState !== "shutdown" && DesiredState !== "remove",
+  ).length;
   const { Mode } = service.Spec;
 
   if (Mode.ReplicatedJob || Mode.GlobalJob) {
-    const completed = own.some(({ Status }) => Status.State === "complete");
+    const completed = own.filter(({ Status }) => Status.State === "complete").length;
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
 
-    return running > 0 || completed ? "converged" : "degraded";
+    return running > 0 || completed >= Math.max(target, 1) ? "converged" : "degraded";
   }
 
   if (Mode.Global) {

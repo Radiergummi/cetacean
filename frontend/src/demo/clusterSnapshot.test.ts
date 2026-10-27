@@ -24,11 +24,12 @@ function service(id: string, mode: Service["Spec"]["Mode"], cpu = 0): Service {
   return copy;
 }
 
-function task(serviceID: string, state: string): Task {
+function task(serviceID: string, state: string, desiredState = "running"): Task {
   const copy = structuredClone(base.tasks[0]!);
   copy.ID = `${serviceID}-${state}-${Math.random()}`;
   copy.ServiceID = serviceID;
   copy.Status.State = state;
+  copy.DesiredState = desiredState;
 
   return copy;
 }
@@ -83,5 +84,41 @@ describe("demo cluster snapshot", () => {
     );
 
     expect(result.reservedCPU).toBe(100);
+  });
+
+  it("reserves for a paused node, which keeps its task, but places nothing new there", () => {
+    const reserved = snapshot(
+      [node("n1", "active"), node("n2", "pause")],
+      [service("agent", { Global: {} }, 100)],
+      [],
+    );
+    const pausedOnly = snapshot([node("n1", "pause")], [service("agent", { Global: {} })], []);
+
+    expect(reserved.reservedCPU).toBe(200);
+    expect(pausedOnly.servicesConverged).toBe(1);
+  });
+
+  it("holds a job to its completion target", () => {
+    const result = snapshot(
+      [node("n1", "active")],
+      [
+        service("short", { ReplicatedJob: { TotalCompletions: 2 } }),
+        service("done", { ReplicatedJob: { TotalCompletions: 2 } }),
+      ],
+      [task("short", "complete"), task("done", "complete"), task("done", "complete")],
+    );
+
+    expect(result.servicesConverged).toBe(1);
+    expect(result.servicesDegraded).toBe(1);
+  });
+
+  it("does not count a task being shut down as running", () => {
+    const result = snapshot(
+      [node("n1", "active")],
+      [service("web", { Replicated: { Replicas: 1 } })],
+      [task("web", "running", "shutdown")],
+    );
+
+    expect(result.servicesDegraded).toBe(1);
   });
 });
