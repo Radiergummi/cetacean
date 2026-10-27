@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -52,7 +53,7 @@ var validPermissions = map[string]bool{
 // validateGrant checks a single grant for structural errors.
 func validateGrant(g Grant) error {
 	if len(g.Resources) == 0 {
-		return fmt.Errorf("resources must not be empty")
+		return errors.New("resources must not be empty")
 	}
 
 	for _, r := range g.Resources {
@@ -94,7 +95,7 @@ func validateGrant(g Grant) error {
 	}
 
 	if len(g.Permissions) == 0 {
-		return fmt.Errorf("permissions must not be empty")
+		return errors.New("permissions must not be empty")
 	}
 
 	for _, perm := range g.Permissions {
@@ -138,7 +139,7 @@ func ParsePolicy(data []byte) (*Policy, error) {
 		return &p, nil
 	}
 
-	return nil, fmt.Errorf("could not parse policy as JSON, TOML, or YAML")
+	return nil, errors.New("could not parse policy as JSON, TOML, or YAML")
 }
 
 // ParsePolicyFile reads a policy file and parses it by extension.

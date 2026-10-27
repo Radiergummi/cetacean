@@ -1,12 +1,8 @@
 import { api } from "../api/client";
 import type { StackSummary } from "../api/types";
-import DataTable, { type Column } from "../components/DataTable";
-import EmptyState from "../components/EmptyState";
-import FetchError from "../components/FetchError";
+import type { Column } from "../components/DataTable";
 import { HealthDot, ReplicaHealth } from "../components/HealthIndicator";
-import ListToolbar from "../components/ListToolbar";
-import { SkeletonTable } from "../components/LoadingSkeleton";
-import PageHeader from "../components/PageHeader";
+import { ListPageView } from "../components/ResourceListPage";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useViewMode } from "../hooks/useViewMode";
@@ -15,7 +11,7 @@ import { stackHealth } from "../lib/stackHealth";
 import { cardGridClass } from "../lib/styles";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export default function StackList() {
   const [search, , setSearch] = useSearchParam("q");
@@ -29,7 +25,6 @@ export default function StackList() {
     queryFn: () => api.stacksSummary(),
   });
   const [viewMode, setViewMode] = useViewMode("stacks");
-  const navigate = useNavigate();
 
   useDebouncedInvalidation("/stacks", [["stacks-summary"]]);
 
@@ -84,47 +79,17 @@ export default function StackList() {
     [],
   );
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Stacks" />
-        <SkeletonTable columns={4} />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <FetchError
-        message={error.message}
-        onRetry={() => refetch()}
-      />
-    );
-  }
-
   return (
-    <div>
-      <PageHeader title="Stacks" />
-      <ListToolbar
-        search={search}
-        onSearchChange={setSearch}
-        placeholder="Search stacks…"
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
-      {filtered.length === 0 ? (
-        <EmptyState message={search ? "No stacks match your search" : "No stacks found"} />
-      ) : viewMode === "table" ? (
-        <DataTable
-          label="Stacks"
-          columns={columns}
-          data={filtered}
-          keyFn={({ name }) => name}
-          onRowClick={({ name }) => navigate(`/stacks/${name}`)}
-        />
-      ) : (
+    <ListPageView
+      title="Stacks"
+      searchPlaceholder="Search stacks…"
+      itemPath={({ name }) => `/stacks/${name}`}
+      keyFn={({ name }) => name}
+      columns={columns}
+      emptyMessage={(hasSearch) => (hasSearch ? "No stacks match your search" : "No stacks found")}
+      renderGrid={(stacks) => (
         <div className={cardGridClass}>
-          {filtered.map((stack) => (
+          {stacks.map((stack) => (
             <StackCard
               key={stack.name}
               stack={stack}
@@ -132,7 +97,17 @@ export default function StackList() {
           ))}
         </div>
       )}
-    </div>
+      data={filtered}
+      loading={loading}
+      error={error}
+      retry={() => {
+        void refetch();
+      }}
+      search={search}
+      setSearch={setSearch}
+      viewMode={viewMode}
+      setViewMode={setViewMode}
+    />
   );
 }
 

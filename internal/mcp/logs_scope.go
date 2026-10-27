@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -222,7 +223,7 @@ func (s *Server) servicesInScope(
 
 	case "stack":
 		if target == "" {
-			return nil, 0, fmt.Errorf("stack: a stack name is required")
+			return nil, 0, errors.New("stack: a stack name is required")
 		}
 
 		for _, svc := range all {

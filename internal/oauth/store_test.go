@@ -135,15 +135,16 @@ func TestRefreshTokenGrantFamilyAbsoluteExpiry(t *testing.T) {
 	spec.Satisfies(t, "oauth/oauth-2-1/unauthenticated-client-exposure-is-limited")
 
 	s := NewRefreshTokenStore()
+	now := time.Unix(1_700_000_000, 0)
+	s.now = func() time.Time { return now }
 
-	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, 10*time.Millisecond)
+	original := s.Issue(RefreshTokenData{Subject: "u", ClientID: "c"}, time.Hour)
 	res := s.Rotate(original, 24*time.Hour)
 	if !res.OK {
 		t.Fatal("first rotation should succeed")
 	}
 
-	// Wait past the original family TTL.
-	time.Sleep(20 * time.Millisecond)
+	now = now.Add(2 * time.Hour)
 
 	// The new token should be expired even though it was minted with a 24h TTL,
 	// because grantExpiresAt carried forward from Issue and clamps the per-token

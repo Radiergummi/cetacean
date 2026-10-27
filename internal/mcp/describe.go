@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -60,7 +61,7 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 
 	id := strings.TrimSpace(req.GetString("id", ""))
 	if id == "" {
-		return "", fmt.Errorf("`id` is required")
+		return "", errors.New("`id` is required")
 	}
 
 	// The identifier is spliced into a cetacean:// path, so a separator in it

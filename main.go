@@ -755,7 +755,7 @@ func main() {
 
 	slog.Info(
 		"server started",
-		"addr",
+		"listen_addr",
 		cfg.ListenAddr,
 		"base_path",
 		cfg.BasePath,
@@ -964,7 +964,7 @@ func serveDualListeners(
 	// failing HEALTHCHECK takes the start period plus its retries, and outside
 	// Swarm nothing restarts a container for being unhealthy.
 	go func() {
-		slog.Info("meta server started", "addr", cfg.ListenAddr)
+		slog.Info("meta server started", "listen_addr", cfg.ListenAddr)
 		if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("meta server error", "error", err)
 			os.Exit(1)
@@ -1030,10 +1030,7 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	signingKey, _ := config.SigningKeyBytes(d.cfg.OAuth.SigningKey)
 	if len(signingKey) == 0 {
 		signingKey = make([]byte, 32)
-		if _, err := rand.Read(signingKey); err != nil {
-			slog.Error("OAuth signing key generation failed", "error", err)
-			os.Exit(1)
-		}
+		_, _ = rand.Read(signingKey)
 		slog.Warn(
 			"OAuth signing key auto-generated; tokens won't survive restarts. Set CETACEAN_OAUTH_SIGNING_KEY, or CETACEAN_OAUTH_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
 		)

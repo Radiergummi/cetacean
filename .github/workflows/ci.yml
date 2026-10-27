@@ -179,6 +179,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/node
       - run: pnpm --filter frontend exec oxlint
+      - run: pnpm --filter frontend exec knip
       - run: pnpm --filter frontend exec oxfmt --check .
       - run: pnpm --filter frontend check
       # The whole workspace: audit reads the lockfile and ignores --filter.
