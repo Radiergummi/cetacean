@@ -185,6 +185,10 @@ func (h *Handlers) serveLogsSSE(
 	fetch logFetcher,
 	since, streamFilter string,
 ) {
+	if sse.ServeHead(w, r) {
+		return
+	}
+
 	release, callerFull, ok := h.logStreams.Acquire(r, maxLogSSEConns)
 	if !ok {
 		w.Header().Set("Retry-After", sse.RetryAfter())

@@ -770,6 +770,35 @@ func (f *flushRecorder) Write(b []byte) (int, error) {
 	return f.ResponseRecorder.Write(b)
 }
 
+// net/http discards a HEAD's body, so a stream served to one would never end.
+func TestSSE_HeadAnswersWithoutRegisteringAClient(t *testing.T) {
+	b := NewBroadcaster(0, noopErrorWriter, nil)
+	defer b.Close()
+
+	fw := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(fw, httptest.NewRequest(http.MethodHead, "/events", nil), nil, ReplayAll)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HEAD on a stream did not return")
+	}
+
+	if fw.Code != http.StatusOK || fw.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("HEAD answered %d with Content-Type %q, want 200 text/event-stream",
+			fw.Code, fw.Header().Get("Content-Type"))
+	}
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if len(b.clients) != 0 || len(b.owners) != 0 {
+		t.Errorf("HEAD left %d clients and %d owners registered", len(b.clients), len(b.owners))
+	}
+}
+
 func (f *flushRecorder) bodyString() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

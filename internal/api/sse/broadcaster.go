@@ -193,12 +193,31 @@ func (b *Broadcaster) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b.ServeSSE(w, r, TypesFilter(r), ReplayAll)
 }
 
+// ServeHead answers a HEAD on a stream with the headers a GET opens it with,
+// and reports whether it did. net/http discards a HEAD's body, so a stream
+// served to one never ends; the caller returns before taking any slot.
+func ServeHead(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodHead {
+		return false
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+
+	return true
+}
+
 func (b *Broadcaster) ServeSSE(
 	w http.ResponseWriter,
 	r *http.Request,
 	match func(cache.Event) bool,
 	replayType cache.EventType,
 ) {
+	if ServeHead(w, r) {
+		return
+	}
+
 	if _, ok := w.(http.Flusher); !ok {
 		b.writeError(w, r, "API005", "streaming not supported")
 		return
