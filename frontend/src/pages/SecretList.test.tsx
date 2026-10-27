@@ -142,7 +142,9 @@ describe("SecretList", () => {
     });
   });
 
-  it("refetches when a service changes, since that changes who uses a secret", async () => {
+  // A service gaining or losing a secret, in its spec or its previous one,
+  // reaches the list as that secret's ref_changed; no service stream is needed.
+  it("refetches when a reference to a secret changes", async () => {
     mockSecrets.mockResolvedValue({
       data: { items: [fakeSecret("s1", "db-password")], total: 1, limit: 50, offset: 0 },
       allowedMethods: new Set(),
@@ -152,22 +154,14 @@ describe("SecretList", () => {
     await screen.findByText("db-password");
 
     const calls = mockSecrets.mock.calls.length;
-    const service = (secretID: string) => ({
-      type: "service",
-      action: "update",
-      id: "svc1",
-      resource: {
-        ID: "svc1",
-        Spec: { TaskTemplate: { ContainerSpec: { Secrets: [{ SecretID: secretID }] } } },
-      },
-    });
 
-    // A service naming no loaded secret leaves the list alone.
-    act(() => MockEventSource.instance.simulateEvent("service", service("elsewhere")));
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    expect(mockSecrets.mock.calls.length).toBe(calls);
-
-    act(() => MockEventSource.instance.simulateEvent("service", service("s1")));
+    act(() =>
+      MockEventSource.instance.simulateEvent("secret", {
+        type: "secret",
+        action: "ref_changed",
+        id: "s1",
+      }),
+    );
 
     await waitFor(() => expect(mockSecrets.mock.calls.length).toBeGreaterThan(calls), {
       timeout: 2000,
@@ -224,6 +218,59 @@ describe("SecretList", () => {
 
     await screen.findByText("api-key", undefined, { timeout: 2000 });
     expect(screen.queryByText("db-v1")).not.toBeInTheDocument();
+  });
+
+  // A removed head leaves the group headless until the list refetches; it
+  // stays open through that and follows the version promoted in its place.
+  it("keeps a group open while its removed head is replaced", async () => {
+    const head = (id: string, older: number) => ({
+      ...version(id, 0, true),
+      NewestVersion: true,
+      OlderVersions: older,
+    });
+    const page = (items: SecretListItem[]) => ({
+      data: { items, total: items.length, limit: 50, offset: 0 },
+      allowedMethods: new Set<string>(),
+    });
+
+    mockSecrets.mockResolvedValue(page([head("db-v3", 2)]));
+    mockSecretVersions.mockResolvedValue([version("db-v2", 0, true), version("db-v1", 0, true)]);
+    render(<SecretList />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "+2 older" }));
+    await screen.findByText("db-v1");
+
+    mockSecrets.mockResolvedValue(page([head("db-v2", 1)]));
+    act(() =>
+      broadcast({ type: "secret", action: "remove", id: "db-v3", resource: { ID: "db-v3" } }),
+    );
+
+    await waitFor(
+      () => expect(mockSecretVersions).toHaveBeenCalledWith("db-v2", expect.anything()),
+      { timeout: 2000 },
+    );
+    expect(screen.getByRole("button", { name: "Hide older" })).toBeInTheDocument();
+  });
+
+  // Rotation midway: the old version still runs, so it is listed, not hidden.
+  it("marks an older version a service still uses", async () => {
+    mockSecrets.mockResolvedValue({
+      data: {
+        items: [
+          { ...version("db-v2", 0, true), NewestVersion: true },
+          { ...version("db-v1", 1, true), InUse: true },
+        ],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set(),
+    });
+    render(<SecretList />, { wrapper });
+
+    const row = (await screen.findByText("db-v1")).closest("tr");
+
+    expect(row?.textContent).toContain("older, in use");
   });
 
   it("leaves out a newer head the group fetch saw before the list did", async () => {

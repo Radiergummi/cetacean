@@ -61,6 +61,14 @@ function column(key: keyof ResourceRecord, header: string): WidgetColumn {
   return { key: String(key), header, value: field(key) };
 }
 
+/**
+ * A yes/no column. `find` omits a false flag, so an absent one reads "no"
+ * rather than an em dash, as the CSV export's `false` does.
+ */
+function flag(key: keyof ResourceRecord, header: string): WidgetColumn {
+  return { key: String(key), header, value: (record) => (record[key] ? "yes" : "no") };
+}
+
 const columnsByType: Record<string, WidgetColumn[]> = {
   services: [
     column("name", "Name"),
@@ -88,7 +96,7 @@ const columnsByType: Record<string, WidgetColumn[]> = {
     column("name", "Name"),
     column("stack", "Stack"),
     column("versionOf", "Version of"),
-    column("newestVersion", "Newest"),
+    flag("newestVersion", "Newest"),
     column("usedBy", "Used by"),
     column("id", "ID"),
   ],
@@ -96,7 +104,7 @@ const columnsByType: Record<string, WidgetColumn[]> = {
     column("name", "Name"),
     column("stack", "Stack"),
     column("versionOf", "Version of"),
-    column("newestVersion", "Newest"),
+    flag("newestVersion", "Newest"),
     column("usedBy", "Used by"),
     column("id", "ID"),
   ],

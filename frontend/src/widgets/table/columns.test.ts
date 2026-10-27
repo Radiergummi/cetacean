@@ -22,4 +22,17 @@ describe("columnsFor", () => {
       detail: "nginx:alpine",
     });
   });
+
+  // find omits a false newestVersion; the column still says "no", as the CSV does.
+  it("names an older version as not the newest", () => {
+    const [older, newest] = [
+      { id: "s1", name: "db_v1", type: "secret", versionOf: "db", usedBy: 0 },
+      { id: "s2", name: "db_v2", type: "secret", versionOf: "db", newestVersion: true, usedBy: 1 },
+    ].map((row) =>
+      Object.fromEntries(columnsFor("secrets").map(({ key, value }) => [key, value(row)])),
+    );
+
+    expect(older?.newestVersion).toBe("no");
+    expect(newest?.newestVersion).toBe("yes");
+  });
 });

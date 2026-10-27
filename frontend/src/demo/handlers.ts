@@ -371,8 +371,10 @@ function versionKey({ Spec: { Name, Labels } }: Versionable): { stack: string; n
  */
 function annotateVersions<T extends Versionable>(
   items: T[],
-  usedBy: (id: string) => number,
+  users: (id: string) => ServiceRef[],
 ): Array<T & VersionedListItem & { groupKey: string; rank: number }> {
+  // An older version a current spec uses is shown; only the rest are counted.
+  const inUse = (id: string) => users(id).some(({ rollback }) => !rollback);
   const groups = new Map<string, T[]>();
 
   for (const item of items) {
@@ -390,18 +392,20 @@ function annotateVersions<T extends Versionable>(
     );
     const rank = members.findIndex(({ ID }) => ID === item.ID);
     const grouped = members.length > 1;
+    const hidden = members.filter(({ ID }, index) => index > 0 && !inUse(ID)).length;
 
     return {
       ...item,
       groupKey: grouped ? key : item.ID,
       rank,
-      UsedBy: usedBy(item.ID),
+      UsedBy: users(item.ID).length,
       // An ungrouped item is its own newest version, as on the server.
       NewestVersion: rank === 0,
       ...(grouped && {
         VersionOf: name,
         VersionInferred: members.some(({ Spec: { Labels } }) => !Labels?.[versionLabel]),
-        ...(rank === 0 && { OlderVersions: members.length - 1 }),
+        ...(rank > 0 && inUse(item.ID) && { InUse: true }),
+        ...(rank === 0 && hidden > 0 && { OlderVersions: hidden }),
       }),
     };
   });
@@ -412,16 +416,16 @@ function annotateVersions<T extends Versionable>(
  */
 function selectVersions<T extends Versionable>(
   items: T[],
-  usedBy: (id: string) => number,
+  users: (id: string) => ServiceRef[],
   request: Request,
 ): Array<T & VersionedListItem> {
   const params = new URL(request.url).searchParams;
-  const annotated = annotateVersions(items, usedBy);
+  const annotated = annotateVersions(items, users);
   const of = params.get("versionsOf");
   const versions = params.get("versions");
   const searching = Boolean(params.get("search")) || Boolean(params.get("filter"));
   const all = versions === "all" || (!versions && searching);
-  let selected = annotated.filter(({ rank }) => all || rank === 0);
+  let selected = annotated.filter(({ rank, InUse }) => all || rank === 0 || InUse);
 
   if (of) {
     const target = annotated.find(({ ID }) => ID === of);
@@ -441,13 +445,14 @@ function selectVersions<T extends Versionable>(
 function versionDetail<T extends Versionable>(
   items: T[],
   id: string,
-  usedBy: (id: string) => number,
+  users: (id: string) => ServiceRef[],
 ) {
-  const item = annotateVersions(items, usedBy).find(({ ID }) => ID === id);
+  const item = annotateVersions(items, users).find(({ ID }) => ID === id);
 
   return {
     usedBy: item?.UsedBy ?? 0,
     ...(item?.NewestVersion && { newestVersion: true }),
+    ...(item?.InUse && { inUse: true }),
     ...(item?.VersionOf && {
       versionOf: item.VersionOf,
       versionInferred: item.VersionInferred,
@@ -1572,11 +1577,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         detailEnvelope(`/configs/${config.ID}`, "Config", {
           config,
           services,
-          ...versionDetail(
-            dataset.configs,
-            config.ID,
-            (id) => servicesUsingConfig(dataset, id).length,
-          ),
+          ...versionDetail(dataset.configs, config.ID, (id) => servicesUsingConfig(dataset, id)),
         } satisfies ConfigDetail),
       );
     }),
@@ -1584,7 +1585,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     get("*/configs", ({ request }) => {
       const items = selectVersions(
         dataset.configs,
-        (id) => servicesUsingConfig(dataset, id).length,
+        (id) => servicesUsingConfig(dataset, id),
         request,
       );
 
@@ -1605,11 +1606,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         detailEnvelope(`/secrets/${secret.ID}`, "Secret", {
           secret,
           services,
-          ...versionDetail(
-            dataset.secrets,
-            secret.ID,
-            (id) => servicesUsingSecret(dataset, id).length,
-          ),
+          ...versionDetail(dataset.secrets, secret.ID, (id) => servicesUsingSecret(dataset, id)),
         } satisfies SecretDetail),
       );
     }),
@@ -1617,7 +1614,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     get("*/secrets", ({ request }) => {
       const items = selectVersions(
         dataset.secrets,
-        (id) => servicesUsingSecret(dataset, id).length,
+        (id) => servicesUsingSecret(dataset, id),
         request,
       );
 

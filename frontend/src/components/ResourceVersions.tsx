@@ -1,7 +1,6 @@
 import type { VersionedListItem } from "@/api/types";
 import ResourceName from "@/components/ResourceName";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { SSEEvent } from "@/hooks/useResourceStream";
 import { stackNamespaceLabel } from "@/lib/parseStackLabels";
 import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,44 +23,18 @@ type Item = VersionedListItem & {
 };
 
 /**
- * An expanded group: the newest version it was opened under, and the group
- * itself, which outlives that version when a newer one arrives.
+ * An expanded group, which outlives the version heading it: id is the newest
+ * version the list last showed for it, and missingSince the fetch count when
+ * the list first showed no row of it.
  */
 interface Expansion {
   id: string;
   group: string;
+  missingSince?: number | undefined;
 }
 
 function groupOf({ VersionOf, Spec: { Labels } }: Item): string {
   return `${Labels?.[stackNamespaceLabel] ?? ""}\u0000${VersionOf ?? ""}`;
-}
-
-interface ServiceReferences {
-  TaskTemplate?: { ContainerSpec?: Record<string, { ConfigID?: string; SecretID?: string }[]> };
-}
-
-/**
- * Keeps a config or secret list's stream to what can change its rows: their
- * own events, which cover a reference gained or lost, and a service whose spec
- * or previous spec names a loaded row.
- */
-export function versionListEvents(field: "Configs" | "Secrets") {
-  return (event: SSEEvent, loaded: readonly { ID: string }[]): boolean => {
-    if (event.type !== "service") {
-      return true;
-    }
-
-    const service = event.resource as
-      | { Spec?: ServiceReferences; PreviousSpec?: ServiceReferences }
-      | undefined;
-    const ids = new Set(loaded.map(({ ID }) => ID));
-
-    return [service?.Spec, service?.PreviousSpec].some((spec) =>
-      (spec?.TaskTemplate?.ContainerSpec?.[field] ?? []).some(({ ConfigID, SecretID }) =>
-        ids.has(ConfigID ?? SecretID ?? ""),
-      ),
-    );
-  };
 }
 
 /**
@@ -95,24 +68,41 @@ export function useVersionExpansion<T extends Item>(
     );
   }, []);
 
-  // A group stays open under whichever version now heads it, and closes once
-  // nothing loaded heads it, so no query or stream outlives what it showed.
-  const follow = useCallback((items: T[]) => {
-    const heads = new Map(
-      items.filter(({ NewestVersion }) => NewestVersion).map((item) => [groupOf(item), item.ID]),
-    );
+  // A group stays open under whichever version now heads it. It closes only
+  // once a fetch has finished with no row of it loaded: a row a stream event
+  // took out locally may be replaced by the next version when the list refetches.
+  const follow = useCallback((items: T[], fetches: number) => {
+    const groups = new Map<string, string | undefined>();
+
+    for (const item of items) {
+      if (item.VersionOf !== undefined) {
+        const group = groupOf(item);
+
+        groups.set(group, item.NewestVersion ? item.ID : groups.get(group));
+      }
+    }
 
     setExpansions((current) => {
-      const next = current.flatMap(({ group }) => {
-        const id = heads.get(group);
+      const next = current.flatMap((expansion): Expansion[] => {
+        if (groups.has(expansion.group)) {
+          return [{ id: groups.get(expansion.group) ?? expansion.id, group: expansion.group }];
+        }
 
-        return id === undefined ? [] : [{ id, group }];
+        if (expansion.missingSince === undefined) {
+          return [{ ...expansion, missingSince: fetches }];
+        }
+
+        return fetches > expansion.missingSince ? [] : [expansion];
       });
 
-      return next.length === current.length &&
-        next.every(({ id }, index) => id === current[index]?.id)
-        ? current
-        : next;
+      const unchanged =
+        next.length === current.length &&
+        next.every(
+          ({ id, missingSince }, index) =>
+            id === current[index]?.id && missingSince === current[index]?.missingSince,
+        );
+
+      return unchanged ? current : next;
     });
   }, []);
 
@@ -192,7 +182,7 @@ export function OlderVersionsToggle({
  * An older version renders indented beneath the newest.
  */
 export function VersionedName({
-  item: { ID, Spec, VersionInferred, NewestVersion, olderVersion },
+  item: { ID, Spec, VersionInferred, NewestVersion, InUse, olderVersion },
 }: {
   item: VersionRow<Item>;
 }) {
@@ -200,6 +190,16 @@ export function VersionedName({
 
   if (olderVersion) {
     return <div className="border-l-2 pl-3">{name}</div>;
+  }
+
+  // An older version a service still runs is listed on its own row.
+  if (InUse) {
+    return (
+      <span className="flex items-center gap-2">
+        {name}
+        <span className="text-xs text-muted-foreground">older, in use</span>
+      </span>
+    );
   }
 
   if (!NewestVersion || !VersionInferred) {

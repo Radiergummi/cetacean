@@ -8,7 +8,6 @@ import {
   UsedBy,
   VersionedName,
   useVersionExpansion,
-  versionListEvents,
   type VersionRow,
 } from "../components/ResourceVersions";
 import TimeAgo from "../components/TimeAgo";
@@ -16,13 +15,6 @@ import { sortColumn } from "../lib/sortColumn";
 import { useCallback } from "react";
 
 type Row = VersionRow<ConfigListItem>;
-
-/**
- * A service event changes who uses a config, so the list follows both.
- */
-const sseType = "config,service";
-
-const relevantEvent = versionListEvents("Configs");
 
 export default function ConfigList() {
   const {
@@ -40,7 +32,7 @@ export default function ConfigList() {
     <ResourceListPage<Row>
       title="Configs"
       path="/configs"
-      sseType={sseType}
+      sseType="config"
       derived
       defaultSort="name"
       searchPlaceholder="Search configs…"
@@ -49,7 +41,6 @@ export default function ConfigList() {
       arrange={arrange}
       onItems={follow}
       onEvent={onEvent}
-      relevantEvent={relevantEvent}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/configs/${ID}`}
       columns={(sortKey, sortDir, toggle) => [

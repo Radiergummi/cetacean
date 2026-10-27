@@ -41,6 +41,10 @@ interface UseListPageResult<T> {
   hasMore: boolean;
   loadMore: () => void;
   allowedMethods: Set<string>;
+  /**
+   * How many fetches have finished, as useSwarmQuery counts them.
+   */
+  fetches: number;
   search: string;
   setSearch: (value: string) => void;
   sortKey: string | undefined;
@@ -69,20 +73,21 @@ export function useListPage<T>({
 }: UseListPageConfig<T>): UseListPageResult<T> {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(defaultSort);
-  const { data, total, loading, error, retry, hasMore, loadMore, allowedMethods } = useSwarmQuery(
-    [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, filter, offset }, signal),
-      [debouncedSearch, sortKey, sortDir, filter, fetchFn],
-    ),
-    sseType,
-    keyFn,
-    debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
-    relevantEvent,
-    Boolean(derived),
-    onEvent,
-  );
+  const { data, total, loading, error, retry, hasMore, loadMore, allowedMethods, fetches } =
+    useSwarmQuery(
+      [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
+      useCallback(
+        (offset: number, signal: AbortSignal) =>
+          fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, filter, offset }, signal),
+        [debouncedSearch, sortKey, sortDir, filter, fetchFn],
+      ),
+      sseType,
+      keyFn,
+      debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
+      relevantEvent,
+      Boolean(derived),
+      onEvent,
+    );
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 
   return {
@@ -94,6 +99,7 @@ export function useListPage<T>({
     hasMore,
     loadMore,
     allowedMethods,
+    fetches,
     search,
     setSearch,
     sortKey,

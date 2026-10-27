@@ -164,10 +164,12 @@ Over the API, the same sequence is `POST /secrets`, then `PATCH /services/{id}/s
 
 ### Versions
 
-Rotation leaves a trail of versions behind, so the config and secret lists show only the newest version of each
-group; **+N older** loads the others beneath it. The **Used by** column counts the services using each one, or whose previous spec does, since a rollback needs it
-(the detail page lists those as **for a rollback**), and an
-older version none of the services you can see uses says so.
+Rotation leaves a trail of versions behind, so the config and secret lists show the newest version of each group,
+and beside it any older version a service still runs, marked **older, in use**: a version in use is never hidden.
+**+N older** loads the rest beneath the newest. The **Used by** column counts the services using each one, or whose
+previous spec does, since a rollback needs it (the detail page lists those as **for a rollback**), and an older
+version none of the services you can see uses says so. A search, a filter expression, or a label filter shows every
+version it matches; narrowing by stack, state, node or image does not.
 
 Versions group only within one stack, by their `com.docker.stack.namespace` label, so a replacement must carry the
 same stack label as the version it replaces. Within a stack, a config or secret labeled `cetacean.version-of=<name>`

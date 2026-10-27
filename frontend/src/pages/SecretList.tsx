@@ -8,7 +8,6 @@ import {
   UsedBy,
   VersionedName,
   useVersionExpansion,
-  versionListEvents,
   type VersionRow,
 } from "../components/ResourceVersions";
 import TimeAgo from "../components/TimeAgo";
@@ -16,13 +15,6 @@ import { sortColumn } from "../lib/sortColumn";
 import { useCallback } from "react";
 
 type Row = VersionRow<SecretListItem>;
-
-/**
- * A service event changes who uses a secret, so the list follows both.
- */
-const sseType = "secret,service";
-
-const relevantEvent = versionListEvents("Secrets");
 
 export default function SecretList() {
   const {
@@ -40,7 +32,7 @@ export default function SecretList() {
     <ResourceListPage<Row>
       title="Secrets"
       path="/secrets"
-      sseType={sseType}
+      sseType="secret"
       derived
       defaultSort="name"
       searchPlaceholder="Search secrets…"
@@ -49,7 +41,6 @@ export default function SecretList() {
       arrange={arrange}
       onItems={follow}
       onEvent={onEvent}
-      relevantEvent={relevantEvent}
       keyFn={({ ID }) => ID}
       itemPath={({ ID }) => `/secrets/${ID}`}
       columns={(sortKey, sortDir, toggle) => [

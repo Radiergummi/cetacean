@@ -243,6 +243,13 @@ export interface VersionedListItem {
   VersionOf?: string | undefined;
   VersionInferred?: boolean | undefined;
   NewestVersion?: boolean | undefined;
+  /**
+   * An older version a service's current spec uses, which a listing shows by default.
+   */
+  InUse?: boolean | undefined;
+  /**
+   * On the newest version, how many older ones no current spec uses.
+   */
   OlderVersions?: number | undefined;
   UsedBy: number;
 }
@@ -555,6 +562,7 @@ export interface ConfigDetail {
   versionOf?: string | undefined;
   versionInferred?: boolean | undefined;
   newestVersion?: boolean | undefined;
+  inUse?: boolean | undefined;
   olderVersions?: number | undefined;
   usedBy: number;
 }
@@ -565,6 +573,7 @@ export interface SecretDetail {
   versionOf?: string | undefined;
   versionInferred?: boolean | undefined;
   newestVersion?: boolean | undefined;
+  inUse?: boolean | undefined;
   olderVersions?: number | undefined;
   usedBy: number;
 }

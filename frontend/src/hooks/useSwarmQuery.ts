@@ -5,7 +5,7 @@ import { type SSEEvent, useResourceStream } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -263,6 +263,19 @@ export function useSwarmQuery<T>(
     ),
   );
 
+  // Counts the fetches that finished, so a reader can tell a list the server
+  // answered from one only a stream event has edited.
+  const [fetches, setFetches] = useState(0);
+  const wasFetching = useRef(false);
+
+  useEffect(() => {
+    if (wasFetching.current && !query.isFetching) {
+      setFetches((count) => count + 1);
+    }
+
+    wasFetching.current = query.isFetching;
+  }, [query.isFetching]);
+
   const loading = query.isLoading;
   const loadingMore = query.isFetchingNextPage;
   const error = query.error ?? null;
@@ -279,5 +292,16 @@ export function useSwarmQuery<T>(
     void queryClient.invalidateQueries({ queryKey: [...queryKey] });
   }, [queryClient, queryKey]);
 
-  return { data, total, loading, loadingMore, error, retry, hasMore, loadMore, allowedMethods };
+  return {
+    data,
+    total,
+    loading,
+    loadingMore,
+    error,
+    retry,
+    hasMore,
+    loadMore,
+    allowedMethods,
+    fetches,
+  };
 }

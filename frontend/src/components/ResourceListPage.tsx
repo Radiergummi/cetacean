@@ -31,9 +31,10 @@ interface ResourceListConfig<T> extends UseListPageConfig<T> {
    */
   arrange?: ((items: T[]) => T[]) | undefined;
   /**
-   * Told each time the loaded items change. Keep it stable between renders.
+   * Told each time the loaded items change, with how many fetches have
+   * finished. Keep it stable between renders.
    */
-  onItems?: ((items: T[]) => void) | undefined;
+  onItems?: ((items: T[], fetches: number) => void) | undefined;
 }
 
 export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
@@ -48,6 +49,7 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
     hasMore,
     loadMore,
     allowedMethods,
+    fetches,
     search,
     setSearch,
     sortKey,
@@ -66,8 +68,8 @@ export default function ResourceListPage<T>(config: ResourceListConfig<T>) {
   const data = useMemo(() => (arrange ? arrange(loaded) : loaded), [arrange, loaded]);
 
   useEffect(() => {
-    onItems?.(loaded);
-  }, [onItems, loaded]);
+    onItems?.(loaded, fetches);
+  }, [onItems, loaded, fetches]);
 
   if (loading) {
     return (
