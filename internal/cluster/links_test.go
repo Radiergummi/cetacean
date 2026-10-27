@@ -56,19 +56,32 @@ func TestServiceLinks(t *testing.T) {
 			[]ServiceLink{{ID: "x", Title: "x", Text: "https://:8080/path"}},
 		},
 		{
-			"whitespace is text",
-			map[string]string{"cetacean.link.x": "https://example.com/a b"},
-			[]ServiceLink{{ID: "x", Title: "x", Text: "https://example.com/a b"}},
+			"href is normalised",
+			map[string]string{"cetacean.link.x": "https://wiki.example.com/Bäckerei"},
+			[]ServiceLink{{ID: "x", Title: "x", Href: "https://wiki.example.com/B%C3%A4ckerei"}},
 		},
 		{
-			"control character is text",
-			map[string]string{"cetacean.link.x": "https://example.com/a\x7f"},
-			[]ServiceLink{{ID: "x", Title: "x", Text: "https://example.com/a\x7f"}},
+			"userinfo is text",
+			map[string]string{"cetacean.link.x": "https://grafana.corp.example@attacker.example/"},
+			[]ServiceLink{
+				{ID: "x", Title: "x", Text: "https://grafana.corp.example@attacker.example/"},
+			},
 		},
 		{
-			"non-ascii is text",
-			map[string]string{"cetacean.link.x": "https://example.com/ä"},
-			[]ServiceLink{{ID: "x", Title: "x", Text: "https://example.com/ä"}},
+			"title is trimmed",
+			map[string]string{
+				"cetacean.link.x":       "https://example.com",
+				"cetacean.link.x.title": "  Dashboard\t",
+			},
+			[]ServiceLink{{ID: "x", Title: "Dashboard", Href: "https://example.com"}},
+		},
+		{
+			"whitespace-only title falls back to id",
+			map[string]string{
+				"cetacean.link.x":       "https://example.com",
+				"cetacean.link.x.title": " \n ",
+			},
+			[]ServiceLink{{ID: "x", Title: "x", Href: "https://example.com"}},
 		},
 		{
 			"percent-encoded url is a link",
@@ -132,52 +145,72 @@ func TestServiceLinks(t *testing.T) {
 	}
 }
 
-func TestHTTPURLFollowsRFC3986(t *testing.T) {
+// An empty want means the value is not structurally an http(s) URL and stays
+// text; otherwise want is the href, a valid RFC 3986 URI.
+func TestNormaliseHTTPURL(t *testing.T) {
 	tests := []struct {
 		value string
-		want  bool
+		want  string
 	}{
-		{"https://example.com", true},
-		{"http://example.com/", true},
-		{"HTTPS://Example.COM/a/b", true},
-		{"https://example.com/a%20b?q=1&r=a/b?c#top/x?y", true},
-		{"https://user:pass@example.com:8443/p", true},
-		{"https://[2001:db8::1]:8080/p", true},
-		{"https://[::1]/", true},
-		{"https://example.com:/p", true},
-		{"https://example.com/a:b@c!$&'()*+,;=-._~", true},
+		{"https://example.com", "https://example.com"},
+		{"http://example.com/", "http://example.com/"},
+		{"HTTPS://Example.COM/a/b", "HTTPS://Example.COM/a/b"},
+		{
+			"https://example.com/a%20b?q=1&r=a/b?c#top/x?y",
+			"https://example.com/a%20b?q=1&r=a/b?c#top/x?y",
+		},
+		{"https://example.com:8443/p", "https://example.com:8443/p"},
+		{"https://example.com:65535/", "https://example.com:65535/"},
+		{"https://example.com:/p", "https://example.com:/p"},
+		{"https://[2001:db8::1]:8080/p", "https://[2001:db8::1]:8080/p"},
+		{"https://[::1]/", "https://[::1]/"},
+		{"https://example.com/a:b@c!$&'()*+,;=-._~", "https://example.com/a:b@c!$&'()*+,;=-._~"},
+		{
+			`https://grafana.example.com/explore?left={"queries":[{"expr":"{job=\"web\"}"}]}`,
+			"https://grafana.example.com/explore?left=" +
+				"%7B%22queries%22:%5B%7B%22expr%22:%22%7Bjob=%5C%22web%5C%22%7D%22%7D%5D%7D",
+		},
+		{
+			`https://prometheus.example.com/graph?g0.expr=up{job="web"}`,
+			"https://prometheus.example.com/graph?g0.expr=up%7Bjob=%22web%22%7D",
+		},
+		{"https://wiki.example.com/Bäckerei", "https://wiki.example.com/B%C3%A4ckerei"},
+		{"https://example.com/a b", "https://example.com/a%20b"},
+		{"https://example.com/a\x7f", "https://example.com/a%7F"},
+		{"https://example.com/a[b]", "https://example.com/a%5Bb%5D"},
+		{"https://example.com/#a#b", "https://example.com/#a%23b"},
+		{"https://example.com/?q=%zz", "https://example.com/?q=%25zz"},
+		{"https://example.com/%2", "https://example.com/%252"},
+		{"https://example.com/%", "https://example.com/%25"},
+		{"https://example.com/|^`<>\\", "https://example.com/%7C%5E%60%3C%3E%5C"},
 
-		{"ftp://example.com", false},
-		{"javascript:alert(1)", false},
-		{"https:example.com", false},
-		{"https://", false},
-		{"https://:8080/path", false},
-		{"https://example.com/a b", false},
-		{"https://example.com/a\x7f", false},
-		{"https://example.com/ä", false},
-		{"https://example.com/a[b]", false},
-		{"https://example.com/#a#b", false},
-		{"https://example.com/?q=%zz", false},
-		{"https://example.com/%2", false},
-		{"https://example.com/%", false},
-		{"https://ex[ample.com/", false},
-		{"https://[example.com]/", false},
-		{"https://[192.0.2.1]/", false},
-		{"https://[fe80::1%25en0]/", false},
-		{"https://[::1/", false},
-		{"https://[::1]x/", false},
-		{"https://example.com:80a/", false},
-		{"https://example.com:80:81/", false},
-		{"https://us er@example.com/", false},
-		{`https://example.com/"q"`, false},
-		{"https://example.com/a\\b", false},
-		{"https://example.com/{x}", false},
+		{"ftp://example.com", ""},
+		{"javascript:alert(1)", ""},
+		{"https:example.com", ""},
+		{"https://", ""},
+		{"https:///path", ""},
+		{"https://:8080/path", ""},
+		{"https://user@example.com/", ""},
+		{"https://grafana.corp.example@attacker.example/", ""},
+		{"https://ex[ample.com/", ""},
+		{"https://exa mple.com/", ""},
+		{"https://bäckerei.example/", ""},
+		{"https://[example.com]/", ""},
+		{"https://[192.0.2.1]/", ""},
+		{"https://[fe80::1%25en0]/", ""},
+		{"https://[::1/", ""},
+		{"https://[::1]x/", ""},
+		{"https://example.com:80a/", ""},
+		{"https://example.com:80:81/", ""},
+		{"https://example.com:65536/", ""},
+		{"https://example.com:99999999999999999999/", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {
-			if got := isHTTPURL(tt.value); got != tt.want {
-				t.Errorf("isHTTPURL(%q) = %v, want %v", tt.value, got, tt.want)
+			got, ok := normaliseHTTPURL(tt.value)
+			if ok != (tt.want != "") || got != tt.want {
+				t.Errorf("normaliseHTTPURL(%q) = %q, %v; want %q", tt.value, got, ok, tt.want)
 			}
 		})
 	}

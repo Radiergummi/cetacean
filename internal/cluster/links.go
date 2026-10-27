@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -40,14 +41,14 @@ func ServiceLinks(labels map[string]string) []ServiceLink {
 			continue
 		}
 
-		title := labels[key+linkTitleSuffix]
+		title := strings.TrimSpace(labels[key+linkTitleSuffix])
 		if title == "" {
 			title = id
 		}
 
 		link := ServiceLink{ID: id, Title: title}
-		if isHTTPURL(value) {
-			link.Href = value
+		if href, ok := normaliseHTTPURL(value); ok {
+			link.Href = href
 		} else {
 			link.Text = value
 		}
@@ -100,41 +101,51 @@ func StackLinks(services []swarm.Service) []ServiceLink {
 	return links
 }
 
-// isHTTPURL accepts only an absolute http(s) URL that is a valid URI by the
-// RFC 3986 grammar, with a non-empty host, so an href is always well-formed.
-func isHTTPURL(value string) bool {
+// normaliseHTTPURL returns value as a valid RFC 3986 URI when it is
+// structurally an absolute http(s) URL, percent-encoding whatever its path,
+// query and fragment may not hold. Userinfo is refused: it can make a link
+// read as one host while it opens another.
+func normaliseHTTPURL(value string) (string, bool) {
 	scheme, rest, ok := strings.Cut(value, "://")
 	if !ok || !strings.EqualFold(scheme, "http") && !strings.EqualFold(scheme, "https") {
-		return false
+		return "", false
 	}
 
 	rest, fragment, hasFragment := strings.Cut(rest, "#")
-	if hasFragment && !validURIPart(fragment, ":@/?") {
-		return false
-	}
-
 	rest, query, hasQuery := strings.Cut(rest, "?")
-	if hasQuery && !validURIPart(query, ":@/?") {
-		return false
-	}
 
 	authority, path := rest, ""
 	if i := strings.IndexByte(rest, '/'); i >= 0 {
 		authority, path = rest[:i], rest[i:]
 	}
 
-	return validURIPart(path, ":@/") && validAuthority(authority)
+	if !validAuthority(authority) {
+		return "", false
+	}
+
+	var out strings.Builder
+
+	out.WriteString(scheme + "://" + authority)
+	percentEncode(&out, path, ":@/")
+
+	if hasQuery {
+		out.WriteByte('?')
+		percentEncode(&out, query, ":@/?")
+	}
+
+	if hasFragment {
+		out.WriteByte('#')
+		percentEncode(&out, fragment, ":@/?")
+	}
+
+	return out.String(), true
 }
 
-// validAuthority checks [userinfo "@"] host [":" port], where host is a
-// bracketed IPv6 literal or a non-empty reg-name.
+// validAuthority checks host [":" port], where host is a bracketed IPv6
+// literal or a non-empty reg-name, and port is empty or at most 65535.
 func validAuthority(authority string) bool {
-	if i := strings.LastIndexByte(authority, '@'); i >= 0 {
-		if !validURIPart(authority[:i], ":") {
-			return false
-		}
-
-		authority = authority[i+1:]
+	if strings.Contains(authority, "@") {
+		return false
 	}
 
 	var host, port string
@@ -159,36 +170,72 @@ func validAuthority(authority string) bool {
 		}
 	} else {
 		host, port, _ = strings.Cut(authority, ":")
-		if !validURIPart(host, "") {
+		if host == "" || !validRegName(host) {
 			return false
 		}
 	}
 
-	return host != "" &&
-		!strings.ContainsFunc(port, func(r rune) bool { return r < '0' || r > '9' })
+	if port == "" {
+		return true
+	}
+
+	if strings.ContainsFunc(port, func(r rune) bool { return r < '0' || r > '9' }) {
+		return false
+	}
+
+	n, err := strconv.Atoi(port)
+
+	return err == nil && n <= 65535
 }
 
-// validURIPart reports whether s holds only unreserved characters, sub-delims,
-// well-formed percent-escapes, and the extra characters its component allows.
-func validURIPart(s, extra string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-
-		switch {
+// validRegName reports whether host holds only unreserved characters,
+// sub-delims and well-formed percent-escapes.
+func validRegName(host string) bool {
+	for i := 0; i < len(host); i++ {
+		switch c := host[i]; {
 		case c == '%':
-			if i+2 >= len(s) || !isHex(s[i+1]) || !isHex(s[i+2]) {
+			if !isEscape(host, i) {
 				return false
 			}
 
 			i += 2
-		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9':
-		case strings.IndexByte("-._~!$&'()*+,;="+extra, c) >= 0:
-		default:
+		case !isURIUnreservedOrSubDelim(c):
 			return false
 		}
 	}
 
 	return true
+}
+
+// percentEncode writes s with every byte the component does not allow
+// percent-encoded, leaving well-formed escapes as they are.
+func percentEncode(out *strings.Builder, s, extra string) {
+	const hex = "0123456789ABCDEF"
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
+		switch {
+		case c == '%' && isEscape(s, i):
+			out.WriteString(s[i : i+3])
+			i += 2
+		case c != '%' && (isURIUnreservedOrSubDelim(c) || strings.IndexByte(extra, c) >= 0):
+			out.WriteByte(c)
+		default:
+			out.WriteByte('%')
+			out.WriteByte(hex[c>>4])
+			out.WriteByte(hex[c&0x0f])
+		}
+	}
+}
+
+func isEscape(s string, i int) bool {
+	return i+2 < len(s) && isHex(s[i+1]) && isHex(s[i+2])
+}
+
+func isURIUnreservedOrSubDelim(c byte) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' ||
+		strings.IndexByte("-._~!$&'()*+,;=", c) >= 0
 }
 
 func isHex(c byte) bool {

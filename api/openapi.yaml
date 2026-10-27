@@ -9063,11 +9063,15 @@ components:
         href:
           type: string
           format: uri
-          description: The label's value, when it is an http or https URL
+          description: >
+            The label's value, when it is an http or https URL, with any
+            character a URI can't hold percent-encoded
           example: https://grafana.example.com/d/web
         text:
           type: string
-          description: The label's value, when it is not an http or https URL
+          description: >
+            The label's value, when it is not an http or https URL, or is one
+            with a user name or password
           example: pager:web-team
         services:
           type: array

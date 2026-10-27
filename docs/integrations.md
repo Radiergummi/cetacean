@@ -78,7 +78,8 @@ that is empty or only whitespace. The labels belong under `deploy.labels`, on th
 
 The service detail page shows the links under its title, and the stack detail page the links of all its services,
 with exact duplicates merged. Where two links on a stack share a title, each also names the services declaring it.
-Only well-formed `http` and `https` URLs become links, opening in a new tab; any other value is shown as plain text.
+A value that is an `http` or `https` URL becomes a link, opening in a new tab, with any character a URL can't hold
+percent-encoded. Any other value is shown as plain text, and so is a URL with a user name or password in it.
 
 ## API
 
