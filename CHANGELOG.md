@@ -27,10 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
+- List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
+- A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 
 ### Fixed
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- Writes honor `If-None-Match` and `If-Unmodified-Since`, and reads `If-Match` and `If-Unmodified-Since`, evaluated in RFC 9110 order and refused with `412`
+- A write whose `Accept` rules out JSON is refused with `406` before it changes anything, unless it sends `Prefer: return=minimal`
+- `OPTIONS` answers with `Allow` and `Accept-Patch`, and a `GET` on a write-only path such as `/services/{id}/scale` answers `405` to clients not asking for HTML
+- `HEAD` on an event stream, log tail or metrics stream returns at once instead of holding the connection open
+- Read-only endpoints report `Allow`, `/metrics/status` sends an `ETag`, and `/metrics/labels` refuses a non-JSON `Accept`
+- A Prometheus answer over 10 MiB returns `502 MTR008` instead of a truncated body that blanked the charts
+- Problem details for `413`, `416` and `422` carry RFC 9110's titles, such as `Range Not Satisfiable`
 
 ## [0.18.0] - 2026-10-24
 
