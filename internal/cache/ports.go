@@ -2,40 +2,42 @@ package cache
 
 import (
 	"cmp"
-	"fmt"
 	"slices"
 
 	"github.com/docker/docker/api/types/swarm"
 )
 
-// PublishedPort is one port a service publishes on the cluster's nodes. An
-// ingress port is bound on every node, so only a host-mode port names Nodes.
+// PublishedPort is one port a service publishes, as Docker reports it, with the
+// service publishing it. An ingress port is bound on every node, so only a
+// host-mode port names Nodes.
 type PublishedPort struct {
-	PublishedPort uint32   `json:"publishedPort"`
-	TargetPort    uint32   `json:"targetPort"`
-	Protocol      string   `json:"protocol"`
-	PublishMode   string   `json:"publishMode"`
-	ServiceID     string   `json:"serviceId"`
-	ServiceName   string   `json:"serviceName"`
-	Stack         string   `json:"stack,omitempty"`
-	Nodes         []string `json:"nodes,omitempty"`
+	swarm.PortConfig
+	ServiceID   string   `json:"ServiceID"`
+	ServiceName string   `json:"ServiceName"`
+	Stack       string   `json:"Stack,omitempty"`
+	Nodes       []string `json:"Nodes,omitempty"`
 }
 
-// ListPublishedPorts returns every published port, by port then protocol. A
-// host-mode port is read off the running tasks rather than the endpoint: only
-// they say which nodes bind it, and which port each got when Swarm chose one.
+type hostPortKey struct {
+	service           string
+	protocol          swarm.PortConfigProtocol
+	published, target uint32
+}
+
+// ListPublishedPorts returns every published port, by port, protocol, target
+// and service. A host-mode port is read off the tasks holding it rather than
+// the endpoint: only they say which nodes bind it, and which port each got
+// when Swarm chose one. A starting task already holds its port.
 func (c *Cache) ListPublishedPorts() []PublishedPort {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	var out []PublishedPort
 
-	// A host-mode port's row, by service, protocol and port, gathers the
-	// nodes of every task binding it.
-	hostRows := map[string]int{}
+	hostRows := map[hostPortKey]int{}
 
 	for _, t := range c.tasks {
-		if t.Status.State != swarm.TaskStateRunning {
+		if t.Status.State != swarm.TaskStateRunning && t.Status.State != swarm.TaskStateStarting {
 			continue
 		}
 
@@ -49,7 +51,7 @@ func (c *Cache) ListPublishedPorts() []PublishedPort {
 				continue
 			}
 
-			key := fmt.Sprintf("%s/%s/%d/%d", svc.ID, p.Protocol, p.PublishedPort, p.TargetPort)
+			key := hostPortKey{svc.ID, p.Protocol, p.PublishedPort, p.TargetPort}
 
 			index, ok := hostRows[key]
 			if !ok {
@@ -80,6 +82,7 @@ func (c *Cache) ListPublishedPorts() []PublishedPort {
 		return cmp.Or(
 			cmp.Compare(a.PublishedPort, b.PublishedPort),
 			cmp.Compare(a.Protocol, b.Protocol),
+			cmp.Compare(a.TargetPort, b.TargetPort),
 			cmp.Compare(a.ServiceName, b.ServiceName),
 		)
 	})
@@ -88,18 +91,14 @@ func (c *Cache) ListPublishedPorts() []PublishedPort {
 }
 
 func publishedPort(svc swarm.Service, p swarm.PortConfig) PublishedPort {
-	mode := p.PublishMode
-	if mode == "" {
-		mode = swarm.PortConfigPublishModeIngress
+	if p.PublishMode == "" {
+		p.PublishMode = swarm.PortConfigPublishModeIngress
 	}
 
 	return PublishedPort{
-		PublishedPort: p.PublishedPort,
-		TargetPort:    p.TargetPort,
-		Protocol:      string(p.Protocol),
-		PublishMode:   string(mode),
-		ServiceID:     svc.ID,
-		ServiceName:   svc.Spec.Name,
-		Stack:         svc.Spec.Labels[StackLabel],
+		PortConfig:  p,
+		ServiceID:   svc.ID,
+		ServiceName: svc.Spec.Name,
+		Stack:       svc.Spec.Labels[StackLabel],
 	}
 }

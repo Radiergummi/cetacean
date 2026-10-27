@@ -1,5 +1,6 @@
 import type { FetchResult, ListParams } from "../api/client";
 import type { CollectionResponse } from "../api/types";
+import type { SSEEvent } from "./useResourceStream";
 import { useSearchParam } from "./useSearchParam";
 import { useSortParams, type SortDir } from "./useSort";
 import { useSwarmQuery } from "./useSwarmQuery";
@@ -20,6 +21,8 @@ export interface UseListPageConfig<T> {
    * so an event can't patch a row in place and every one refetches instead.
    */
   derived?: boolean | undefined;
+  /** Events this rejects leave the list alone; a sync always refetches. */
+  relevantEvent?: ((event: SSEEvent) => boolean) | undefined;
 }
 
 interface UseListPageResult<T> {
@@ -54,6 +57,7 @@ export function useListPage<T>({
   keyFn,
   filter,
   derived,
+  relevantEvent,
 }: UseListPageConfig<T>): UseListPageResult<T> {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(defaultSort);
@@ -67,6 +71,7 @@ export function useListPage<T>({
     sseType,
     keyFn,
     debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
+    relevantEvent,
   );
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 

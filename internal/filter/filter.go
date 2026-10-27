@@ -369,8 +369,8 @@ func PortEnv(p cache.PublishedPort, m map[string]any) map[string]any {
 	}
 	m["published"] = int(p.PublishedPort)
 	m["target"] = int(p.TargetPort)
-	m["protocol"] = p.Protocol
-	m["mode"] = p.PublishMode
+	m["protocol"] = string(p.Protocol)
+	m["mode"] = string(p.PublishMode)
 	m["service"] = p.ServiceName
 	m["stack"] = p.Stack
 	m["nodes"] = len(p.Nodes)

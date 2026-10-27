@@ -515,8 +515,8 @@ func TestPortEnv(t *testing.T) {
 	port := cache.PublishedPort{
 		PublishedPort: 8080,
 		TargetPort:    80,
-		Protocol:      "tcp",
-		PublishMode:   "ingress",
+		Protocol:      swarm.PortConfigProtocolTCP,
+		PublishMode:   swarm.PortConfigPublishModeIngress,
 		ServiceName:   "shop_web",
 		Stack:         "shop",
 	}

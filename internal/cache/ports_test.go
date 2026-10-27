@@ -87,27 +87,27 @@ func TestListPublishedPorts(t *testing.T) {
 
 	want := []PublishedPort{
 		{
-			PublishedPort: 53,
-			TargetPort:    53,
 			Protocol:      "udp",
+			TargetPort:    53,
+			PublishedPort: 53,
 			PublishMode:   "ingress",
 			ServiceID:     "web",
 			ServiceName:   "shop_web",
 			Stack:         "shop",
 		},
 		{
-			PublishedPort: 443,
-			TargetPort:    443,
 			Protocol:      "tcp",
+			TargetPort:    443,
+			PublishedPort: 443,
 			PublishMode:   "host",
 			ServiceID:     "edge",
 			ServiceName:   "edge",
 			Nodes:         []string{"n1", "n2"},
 		},
 		{
-			PublishedPort: 8080,
-			TargetPort:    80,
 			Protocol:      "tcp",
+			TargetPort:    80,
+			PublishedPort: 8080,
 			PublishMode:   "ingress",
 			ServiceID:     "web",
 			ServiceName:   "shop_web",
@@ -137,5 +137,31 @@ func TestListPublishedPorts_HostModeWithoutRunningTasks(t *testing.T) {
 
 	if got := c.ListPublishedPorts(); len(got) != 0 {
 		t.Errorf("a host-mode port bound nowhere should not be listed, got %+v", got)
+	}
+}
+
+// Two dynamic host ports of one service can get the same host port on
+// different nodes; they stay two rows, ordered by target.
+func TestListPublishedPorts_SamePortDifferentTargets(t *testing.T) {
+	c := New(nil)
+	c.SetService(
+		swarm.Service{
+			ID:   "edge",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "edge"}},
+		},
+	)
+	for id, target := range map[string]uint32{"n1": 81, "n2": 80} {
+		c.SetTask(swarm.Task{ID: "t-" + id, ServiceID: "edge", NodeID: id, Status: swarm.TaskStatus{
+			State: swarm.TaskStateRunning,
+			PortStatus: swarm.PortStatus{Ports: []swarm.PortConfig{{
+				Protocol: swarm.PortConfigProtocolTCP, TargetPort: target, PublishedPort: 30001,
+				PublishMode: swarm.PortConfigPublishModeHost,
+			}}},
+		}})
+	}
+
+	got := c.ListPublishedPorts()
+	if len(got) != 2 || got[0].TargetPort != 80 || got[1].TargetPort != 81 {
+		t.Errorf("ListPublishedPorts() = %+v, want two rows ordered by target", got)
 	}
 }

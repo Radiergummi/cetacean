@@ -103,7 +103,7 @@ The API accepts expression filters through `?filter=` that the dashboard's searc
 The published ports page at `/ports` lists every port the services publish, one row per port: the published and
 target port, protocol, publish mode, and the service and stack behind it. An ingress port is bound on every node; a
 host-mode port shows how many nodes bind it. Search matches the service name. It has no entry in the navigation
-bar; open it with `g` `o` or from the command palette.
+bar; open it with `g` `o`, or with the **Published ports** button on the networks list.
 
 ## Detail pages
 

@@ -118,16 +118,16 @@ export const stackDetailSchema = z.looseObject({
   volumes: z.array(volumeSchema),
 });
 
-/** The list item, which is the summary a stack list shows, not the detail. */
 export const publishedPortSchema = z.looseObject({
-  publishedPort: z.number(),
-  targetPort: z.number(),
-  protocol: z.string(),
-  publishMode: z.string(),
-  serviceId: z.string(),
-  serviceName: z.string(),
+  PublishedPort: z.number(),
+  TargetPort: z.number(),
+  Protocol: z.string(),
+  PublishMode: z.string(),
+  ServiceID: z.string(),
+  ServiceName: z.string(),
 });
 
+/** The list item, which is the summary a stack list shows, not the detail. */
 export const stackListSchema = z.looseObject({
   name: z.string(),
   services: z.array(z.string()),

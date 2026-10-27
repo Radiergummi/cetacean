@@ -87,3 +87,16 @@ func TestGetPublishedPortsAppliesACL(t *testing.T) {
 		t.Errorf("result = %+v, want only web's port", result)
 	}
 }
+
+func TestGetPublishedPortsRefusesAnInvalidPort(t *testing.T) {
+	td, _ := portsServer(t).findTool("get_published_ports")
+
+	for _, port := range []any{"http", 0.0, -1.0, 80.5, 70000.0} {
+		if _, err := td.handler(
+			ctxWithIdentity(),
+			newCallToolRequest("get_published_ports", map[string]any{"port": port}),
+		); err == nil {
+			t.Errorf("port %v was accepted", port)
+		}
+	}
+}

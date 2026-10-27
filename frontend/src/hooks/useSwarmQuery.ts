@@ -1,7 +1,7 @@
 import type { FetchResult } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useLatestRef } from "./useLatestRef";
-import { useResourceStream } from "./useResourceStream";
+import { type SSEEvent, useResourceStream } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,11 +53,13 @@ export function useSwarmQuery<T>(
   sseType: string,
   getId: (item: T) => string,
   filtered = false,
+  relevant?: (event: SSEEvent) => boolean,
 ) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
   const filteredRef = useLatestRef(filtered);
+  const relevantRef = useLatestRef(relevant);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
@@ -98,6 +100,10 @@ export function useSwarmQuery<T>(
         if (event.type === "sync") {
           void queryClient.invalidateQueries({ queryKey: key });
 
+          return;
+        }
+
+        if (relevantRef.current && !relevantRef.current(event)) {
           return;
         }
 

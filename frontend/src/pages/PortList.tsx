@@ -1,22 +1,38 @@
 import { api } from "../api/client";
-import type { PublishedPort } from "../api/types";
+import type { PublishedPort, Task } from "../api/types";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
+import type { SSEEvent } from "../hooks/useResourceStream";
 import { sortColumn } from "../lib/sortColumn";
 
-function boundOn({ publishMode, nodes }: PublishedPort): string {
-  if (publishMode !== "host") {
+function boundOn({ PublishMode, Nodes }: PublishedPort): string {
+  if (PublishMode !== "host") {
     return "every node";
   }
 
-  const count = nodes?.length ?? 0;
+  const count = Nodes?.length ?? 0;
 
   return count === 1 ? "1 node" : `${count} nodes`;
 }
 
-function portLabel({ publishedPort, protocol }: PublishedPort): string {
-  return `${publishedPort}/${protocol}`;
+function portLabel({ PublishedPort, Protocol }: PublishedPort): string {
+  return `${PublishedPort}/${Protocol}`;
+}
+
+/**
+ * Only a task holding a host port can move a row; any other task event, which a
+ * busy cluster sends constantly, would refetch the list for nothing. A task
+ * removed without a payload might have held one.
+ */
+function changesPorts({ type, resource }: SSEEvent): boolean {
+  if (type !== "task" || !resource) {
+    return true;
+  }
+
+  return ((resource as Task).Status?.PortStatus?.Ports ?? []).some(
+    ({ PublishMode }) => PublishMode === "host",
+  );
 }
 
 export default function PortList() {
@@ -26,14 +42,15 @@ export default function PortList() {
       path="/ports"
       sseType="service,task"
       derived
+      relevantEvent={changesPorts}
       defaultSort="published"
       searchPlaceholder="Search by service…"
       viewModeKey="ports"
       fetchFn={(params, signal) => api.ports(params, signal)}
-      keyFn={({ serviceId, publishedPort, protocol, publishMode }) =>
-        `${serviceId}-${publishedPort}-${protocol}-${publishMode}`
+      keyFn={({ ServiceID, PublishedPort, Protocol, TargetPort }) =>
+        `${ServiceID}-${PublishedPort}-${Protocol}-${TargetPort}`
       }
-      itemPath={({ serviceId }) => `/services/${serviceId}`}
+      itemPath={({ ServiceID }) => `/services/${ServiceID}`}
       columns={(sortKey, sortDir, toggle) => [
         {
           ...sortColumn("Published", "published", sortKey, sortDir, toggle),
@@ -41,19 +58,19 @@ export default function PortList() {
         },
         {
           ...sortColumn("Target", "target", sortKey, sortDir, toggle),
-          cell: ({ targetPort }) => <span className="font-mono">{targetPort}</span>,
+          cell: ({ TargetPort }) => <span className="font-mono">{TargetPort}</span>,
         },
         {
           ...sortColumn("Mode", "mode", sortKey, sortDir, toggle),
-          cell: ({ publishMode }) => publishMode,
+          cell: ({ PublishMode }) => PublishMode,
         },
         {
           ...sortColumn("Service", "service", sortKey, sortDir, toggle),
-          cell: ({ serviceName }) => <ResourceName name={serviceName} />,
+          cell: ({ ServiceName }) => <ResourceName name={ServiceName} />,
         },
         {
           ...sortColumn("Stack", "stack", sortKey, sortDir, toggle),
-          cell: ({ stack }) => stack ?? "—",
+          cell: ({ Stack }) => Stack ?? "—",
         },
         {
           header: "Bound on",
@@ -63,8 +80,8 @@ export default function PortList() {
       renderCard={(port) => (
         <ResourceCard
           title={<span className="font-mono">{portLabel(port)}</span>}
-          to={`/services/${port.serviceId}`}
-          meta={[port.serviceName, `→ ${port.targetPort}`, port.publishMode, boundOn(port)]}
+          to={`/services/${port.ServiceID}`}
+          meta={[port.ServiceName, `→ ${port.TargetPort}`, port.PublishMode, boundOn(port)]}
         />
       )}
       emptyMessage={(hasSearch) =>
@@ -73,3 +90,5 @@ export default function PortList() {
     />
   );
 }
+
+export { changesPorts };

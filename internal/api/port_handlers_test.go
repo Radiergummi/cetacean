@@ -38,10 +38,11 @@ func portsCache() *cache.Cache {
 type portsPage struct {
 	Total int `json:"total"`
 	Items []struct {
-		ID            string `json:"@id"`
-		Type          string `json:"@type"`
-		PublishedPort int    `json:"publishedPort"`
-		ServiceName   string `json:"serviceName"`
+		ID            string   `json:"@id"`
+		Type          string   `json:"@type"`
+		PublishedPort int      `json:"PublishedPort"`
+		ServiceName   string   `json:"ServiceName"`
+		Nodes         []string `json:"Nodes"`
 	} `json:"items"`
 }
 
@@ -76,7 +77,7 @@ func TestHandleListPorts(t *testing.T) {
 		t.Fatalf("expected 3 ports from 443 up, got %+v", page)
 	}
 
-	if page.Items[0].ID != "/services/s3#port-443-tcp" || page.Items[0].Type != "PublishedPort" {
+	if page.Items[0].ID != "/services/s3#port-443-tcp-80" || page.Items[0].Type != "PublishedPort" {
 		t.Errorf("item = %+v, want a fragment of its service typed PublishedPort", page.Items[0])
 	}
 }
@@ -135,5 +136,44 @@ func TestHandleListPorts_CSV(t *testing.T) {
 
 	if lines[1] != "443,80,tcp,ingress,api,,,s3" {
 		t.Errorf("first record = %q", lines[1])
+	}
+}
+
+// A host-mode port names the nodes binding it only where the caller may read
+// them, as a task names its node.
+func TestHandleListPorts_NamesOnlyReadableNodes(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(
+		swarm.Service{
+			ID:   "edge",
+			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "edge"}},
+		},
+	)
+	for _, node := range []string{"n1", "n2"} {
+		c.SetNode(
+			swarm.Node{ID: node, Description: swarm.NodeDescription{Hostname: "host-" + node}},
+		)
+		c.SetTask(
+			swarm.Task{ID: "t-" + node, ServiceID: "edge", NodeID: node, Status: swarm.TaskStatus{
+				State: swarm.TaskStateRunning,
+				PortStatus: swarm.PortStatus{Ports: []swarm.PortConfig{{
+					Protocol: swarm.PortConfigProtocolTCP, TargetPort: 443, PublishedPort: 443,
+					PublishMode: swarm.PortConfigPublishModeHost,
+				}}},
+			}},
+		)
+	}
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources:   []string{"service:edge", "node:host-n1"},
+		Audience:    []string{"*"},
+		Permissions: []string{"read"},
+	}}})
+	h := newTestHandlers(t, withCache(c), withACL(e))
+
+	page := listPorts(t, h, "/ports", &auth.Identity{Subject: "user1"})
+	if page.Total != 1 || len(page.Items[0].Nodes) != 1 || page.Items[0].Nodes[0] != "n1" {
+		t.Errorf("expected the port with only n1 named, got %+v", page)
 	}
 }

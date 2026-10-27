@@ -5278,15 +5278,15 @@ paths:
                 "@context": /api/context.jsonld
                 "@type": Collection
                 items:
-                  - "@id": /services/r8m2x5nk3p7q#port-8080-tcp
+                  - "@id": /services/r8m2x5nk3p7q#port-8080-tcp-80
                     "@type": PublishedPort
-                    publishedPort: 8080
-                    targetPort: 80
-                    protocol: tcp
-                    publishMode: ingress
-                    serviceId: r8m2x5nk3p7q
-                    serviceName: myapp_web
-                    stack: myapp
+                    Protocol: tcp
+                    TargetPort: 80
+                    PublishedPort: 8080
+                    PublishMode: ingress
+                    ServiceID: r8m2x5nk3p7q
+                    ServiceName: myapp_web
+                    Stack: myapp
                 total: 1
                 limit: 50
                 offset: 0
@@ -7698,30 +7698,37 @@ components:
 
     PublishedPort:
       type: object
-      description: One port a service publishes
-      required: [publishedPort, targetPort, protocol, publishMode, serviceId, serviceName]
+      description: >
+        One port a service publishes: Docker's PortConfig, with the service
+        publishing it. A host-mode port names the nodes binding it, where the
+        caller may read them.
+      required: [Protocol, TargetPort, PublishedPort, PublishMode, ServiceID, ServiceName]
       properties:
-        publishedPort:
-          type: integer
-          description: The port bound on the nodes
-        targetPort:
-          type: integer
-          description: The port inside the container
-        protocol:
+        Name:
+          type: string
+        Protocol:
           type: string
           enum: [tcp, udp, sctp]
-        publishMode:
+        TargetPort:
+          type: integer
+          description: The port inside the container
+        PublishedPort:
+          type: integer
+          description: The port bound on the nodes
+        PublishMode:
           type: string
           enum: [ingress, host]
-        serviceId:
+        ServiceID:
           type: string
-        serviceName:
+        ServiceName:
           type: string
-        stack:
+        Stack:
           type: string
-        nodes:
+        Nodes:
           type: array
-          description: The IDs of the nodes binding a host-mode port; absent for an ingress port, which every node binds
+          description: >
+            The IDs of the nodes binding a host-mode port, leaving out those the
+            caller may not read; absent for an ingress port, which every node binds
           items:
             type: string
 

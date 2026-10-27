@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"fmt"
+	"math"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -26,19 +28,27 @@ func (s *Server) toolGetPublishedPorts(
 		return "", err
 	}
 
+	port, err := portArgument(req)
+	if err != nil {
+		return "", err
+	}
+
+	identity := auth.IdentityFromContext(ctx)
+	canRead := func(resource string) bool { return s.canRead(identity, resource) }
+
 	ports := acl.Filter(
 		s.acl,
-		auth.IdentityFromContext(ctx),
+		identity,
 		"read",
-		s.cache.ListPublishedPorts(),
+		cluster.PublishedPorts(s.cache, canRead),
 		cluster.PortACLResource,
 	)
 
-	if port := req.GetInt("port", 0); port != 0 {
+	if port != 0 {
 		matching := make([]cache.PublishedPort, 0, 1)
 
 		for _, p := range ports {
-			if int(p.PublishedPort) == port {
+			if p.PublishedPort == port {
 				matching = append(matching, p)
 			}
 		}
@@ -51,4 +61,30 @@ func (s *Server) toolGetPublishedPorts(
 	}
 
 	return marshalResult(portsResult{Items: ports, Total: len(ports)})
+}
+
+// portArgument reads the optional `port`, refusing anything that isn't a port
+// rather than answering for all of them, or for none, as though it were.
+func portArgument(req mcplib.CallToolRequest) (uint32, error) {
+	raw, present := req.GetArguments()["port"]
+	if !present || raw == nil {
+		return 0, nil
+	}
+
+	var number float64
+
+	switch value := raw.(type) {
+	case float64:
+		number = value
+	case int:
+		number = float64(value)
+	default:
+		number = math.NaN()
+	}
+
+	if number != math.Trunc(number) || number < 1 || number > 65535 {
+		return 0, fmt.Errorf("port must be a whole number from 1 to 65535; got %v", raw)
+	}
+
+	return uint32(number), nil
 }

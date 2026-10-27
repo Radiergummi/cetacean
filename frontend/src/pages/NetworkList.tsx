@@ -3,7 +3,9 @@ import type { Network } from "../api/types";
 import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
+import { buttonVariants } from "../components/ui/button";
 import { sortColumn } from "../lib/sortColumn";
+import { Link } from "react-router-dom";
 
 export default function NetworkList() {
   return (
@@ -14,6 +16,14 @@ export default function NetworkList() {
       defaultSort="name"
       searchPlaceholder="Search networks…"
       viewModeKey="networks"
+      actions={() => (
+        <Link
+          to="/ports"
+          className={buttonVariants({ variant: "outline" })}
+        >
+          Published ports
+        </Link>
+      )}
       fetchFn={(params, signal) => api.networks(params, signal)}
       keyFn={({ Id }) => Id}
       itemPath={({ Id }) => `/networks/${Id}`}

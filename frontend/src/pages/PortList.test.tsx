@@ -5,7 +5,7 @@ import {
   createWrapper,
   localStorageStub,
 } from "../test/mocks";
-import PortList from "./PortList";
+import PortList, { changesPorts } from "./PortList";
 import { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -24,22 +24,22 @@ const mockPorts = vi.mocked(api.ports);
 
 const ports: PublishedPort[] = [
   {
-    publishedPort: 443,
-    targetPort: 8443,
-    protocol: "tcp",
-    publishMode: "host",
-    serviceId: "s1",
-    serviceName: "edge",
-    nodes: ["n1", "n2"],
+    PublishedPort: 443,
+    TargetPort: 8443,
+    Protocol: "tcp",
+    PublishMode: "host",
+    ServiceID: "s1",
+    ServiceName: "edge",
+    Nodes: ["n1", "n2"],
   },
   {
-    publishedPort: 8080,
-    targetPort: 80,
-    protocol: "tcp",
-    publishMode: "ingress",
-    serviceId: "s2",
-    serviceName: "shop_web",
-    stack: "shop",
+    PublishedPort: 8080,
+    TargetPort: 80,
+    Protocol: "tcp",
+    PublishMode: "ingress",
+    ServiceID: "s2",
+    ServiceName: "shop_web",
+    Stack: "shop",
   },
 ];
 
@@ -86,5 +86,30 @@ describe("PortList", () => {
     await waitFor(() => {
       expect(screen.getByText("No service publishes a port")).toBeInTheDocument();
     });
+  });
+});
+
+describe("changesPorts", () => {
+  const task = (mode: string) => ({
+    type: "task",
+    action: "update",
+    id: "t1",
+    resource: { Status: { PortStatus: { Ports: [{ PublishMode: mode }] } } },
+  });
+
+  it("lets a task holding a host port through", () => {
+    expect(changesPorts(task("host"))).toBe(true);
+  });
+
+  it("ignores a task that holds no host port", () => {
+    expect(changesPorts(task("ingress"))).toBe(false);
+    expect(
+      changesPorts({ type: "task", action: "update", id: "t2", resource: { Status: {} } }),
+    ).toBe(false);
+  });
+
+  it("lets every service event and a bare task removal through", () => {
+    expect(changesPorts({ type: "service", action: "update", id: "s1", resource: {} })).toBe(true);
+    expect(changesPorts({ type: "task", action: "remove", id: "t3" })).toBe(true);
   });
 });

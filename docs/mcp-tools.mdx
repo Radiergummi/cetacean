@@ -144,7 +144,8 @@ What the cluster is doing now, and what it did recently.
     <Fragment slot="arguments">`port`</Fragment>
 
     Every port the services publish, by port, with the service and stack behind it. An ingress port is bound on every
-    node; a host-mode port names the node IDs binding it. Answers which service owns a port, or whether one is free.
+    node; a host-mode port names the IDs of the nodes binding it that the caller may read. Answers which service owns
+    a port, or whether one is free.
     Only ports of services the caller may read are listed, as on [`GET /ports`][api].
 </McpTool>
 
