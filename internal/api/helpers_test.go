@@ -274,7 +274,7 @@ func testRouterConfig(
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	cfg := RouterConfig{
-		AllowedHosts:       []string{"example.com", "cetacean.example.com"},
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           h,
 		Broadcaster:        b,
 		SPA:                spa,

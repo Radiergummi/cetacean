@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -119,7 +120,7 @@ func TestHostGuard(t *testing.T) {
 			config.OpsReadOnly,
 			func(o *Options) {
 				o.PublicURL = publicURL
-				o.AllowedHosts = []string{"swarm.lan"}
+				o.Hosts = auth.NewHostSet(publicURL, "swarm.lan")
 			},
 		)
 
@@ -145,6 +146,8 @@ func TestHostGuard(t *testing.T) {
 		{"public host with a port passes", "https://Swarm.Example.ts.net", "swarm.example.ts.net:443", http.StatusOK},
 		{"loopback host passes", "", "localhost:9000", http.StatusOK},
 		{"an allowed host passes", "", "Swarm.lan:9000", http.StatusOK},
+		{"an IP address passes, as at the API", "", "10.0.0.5:9000", http.StatusOK},
+		{"no Host is refused", "", "", http.StatusForbidden},
 		{"foreign host is refused", "https://swarm.example.ts.net", "rebind.evil.example", http.StatusForbidden},
 		{"no public URL refuses a foreign host", "", "swarm.example.ts.net", http.StatusForbidden},
 	} {

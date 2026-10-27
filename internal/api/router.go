@@ -63,9 +63,9 @@ type RouterConfig struct {
 	BasePath           string
 	PublicURL          string
 
-	// AllowedHosts are the names, besides PublicURL's host, loopback and any IP
-	// literal, a request's Host may carry.
-	AllowedHosts []string
+	// Hosts are the names a request's Host may carry; main.go builds the one
+	// set /mcp's own guard reads too.
+	Hosts auth.HostSet
 
 	CORS       *CORSConfig
 	TLSEnabled bool
@@ -1093,7 +1093,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		// canonicalises names the same resource, and a rule matching the path
 		// it came in on answers /-/resync.json differently from /-/resync.
 		cleanPaths,
-		hostGuard(cfg.PublicURL, cfg.AllowedHosts),
+		hostGuard(cfg.Hosts),
 		negotiate,
 		cors(cfg.CORS),
 		crossOriginProtection(cfg.CORS, cfg.PublicURL),

@@ -621,8 +621,26 @@ func main() {
 			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
 
+	var tsnetDomains []string
+	if tsnetServer != nil {
+		tsnetDomains = tsnetServer.CertDomains()
+	}
+
+	if warning := hostGuardWarning(
+		cfg.ListenAddr, cfg.PublicURL, cfg.AllowedHosts, tsnetDomains,
+	); warning != "" {
+		slog.Warn(warning)
+	}
+
+	// One set for both guards, so /mcp never answers a Host the API refuses.
+	hosts := auth.NewHostSet(
+		cfg.PublicURL,
+		append(allowedHosts(cfg.ListenAddr, tsnetDomains), cfg.AllowedHosts...)...,
+	)
+
 	deps := mcpDeps{
 		cfg:          cfg,
+		hosts:        hosts,
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
@@ -673,17 +691,6 @@ func main() {
 	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier, mcpResource)
 	defer closeMCP()
 
-	var tsnetDomains []string
-	if tsnetServer != nil {
-		tsnetDomains = tsnetServer.CertDomains()
-	}
-
-	if warning := hostGuardWarning(
-		cfg.ListenAddr, cfg.PublicURL, cfg.AllowedHosts, tsnetDomains,
-	); warning != "" {
-		slog.Warn(warning)
-	}
-
 	router := api.NewRouter(api.RouterConfig{
 		Handlers:           handlers,
 		Broadcaster:        broadcaster,
@@ -699,7 +706,7 @@ func main() {
 		AuthProvider:       authProvider,
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,
-		AllowedHosts:       append(allowedHosts(cfg.ListenAddr, tsnetDomains), cfg.AllowedHosts...),
+		Hosts:              hosts,
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled() || tsnetMode,
 		TrustedProxies:     cfg.TrustedProxies,
@@ -1004,6 +1011,7 @@ func serveDualListeners(
 // onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
+	hosts        auth.HostSet
 	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
@@ -1180,7 +1188,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		ImageDigests:    imageDigests,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
-		AllowedHosts:    d.cfg.AllowedHosts,
+		Hosts:           d.hosts,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 		Streams:         d.streams,

@@ -190,7 +190,7 @@ func NewWorld(t *testing.T) *World {
 	}), "")
 
 	router := api.NewRouter(api.RouterConfig{
-		AllowedHosts:   []string{"example.com", "cetacean.example.com"},
+		Hosts:          auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:       handlers,
 		Broadcaster:    broadcaster,
 		SPA:            spa,

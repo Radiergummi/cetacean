@@ -7,15 +7,32 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/auth"
 )
 
 func hostGuardRouter(t *testing.T, opts ...routerOption) http.Handler {
 	t.Helper()
 
 	return newTestRouterWithConfig(t, append([]routerOption{func(cfg *RouterConfig) {
-		cfg.AllowedHosts = nil
-		cfg.PublicURL = "https://swarm.example.com"
+		cfg.Hosts = auth.NewHostSet("https://swarm.example.com")
 	}}, opts...))
+}
+
+// A blank server.allowed_hosts entry must not admit a request with no Host.
+func TestHostGuard_RefusesAMissingHost(t *testing.T) {
+	router := hostGuardRouter(t, func(cfg *RouterConfig) {
+		cfg.Hosts = auth.NewHostSet("", "")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/services", nil)
+	req.Host = ""
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMisdirectedRequest {
+		t.Errorf("status = %d, want 421", rec.Code)
+	}
 }
 
 func TestHostGuard_RefusesAForeignNameWith421(t *testing.T) {
@@ -47,7 +64,7 @@ func TestHostGuard_RefusesAForeignNameWith421(t *testing.T) {
 
 func TestHostGuard_AdmitsOurOwnNames(t *testing.T) {
 	router := hostGuardRouter(t, func(cfg *RouterConfig) {
-		cfg.AllowedHosts = []string{"cetacean.tailnet.ts.net"}
+		cfg.Hosts = auth.NewHostSet("https://swarm.example.com", "cetacean.tailnet.ts.net")
 	})
 
 	for _, host := range []string{

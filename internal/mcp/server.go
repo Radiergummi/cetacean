@@ -196,9 +196,8 @@ type Server struct {
 	// 403 (DNS-rebinding defense).
 	allowedOrigins []string
 
-	// knownHosts are server.public_url's hostname and server.allowed_hosts,
-	// lowercased: the non-loopback Hosts hostGuard admits on a loopback connection.
-	knownHosts []string
+	// hosts are the names hostGuard admits on a loopback connection.
+	hosts auth.HostSet
 
 	// iconBaseURL is the canonical external base (issuer + base path) that tool
 	// icon `src` values are built from, e.g. "https://cetacean.example.com".
@@ -281,9 +280,9 @@ type Options struct {
 	// AllowedOrigins, as the API's cross-origin guard admits it.
 	PublicURL string
 
-	// AllowedHosts is server.allowed_hosts, admitted by hostGuard as
-	// PublicURL's host is.
-	AllowedHosts []string
+	// Hosts are the names the REST edge answers for, which hostGuard admits
+	// on a loopback connection as well.
+	Hosts auth.HostSet
 
 	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
 	// is unset, and the tool then says metrics are unavailable rather than
@@ -369,7 +368,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		prom:           opts.Prometheus,
 		images:         opts.ImageDigests,
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
-		knownHosts:     knownHosts(opts.PublicURL, opts.AllowedHosts),
+		hosts:          opts.Hosts,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
 		versions:       opts.Versions,
@@ -543,39 +542,20 @@ func (s *Server) Handler() http.Handler {
 	return s.originGuard(s.hostGuard(h))
 }
 
-// hostGuard refuses a non-loopback Host on a loopback connection, as mcp-go's
-// own DNS-rebinding check does, unless it is server.public_url's host or in
-// server.allowed_hosts: a same-host reverse proxy dials loopback and may keep
-// the public Host.
+// hostGuard refuses, on a loopback connection, a Host the REST edge would
+// refuse too, as mcp-go's own DNS-rebinding check does: a same-host reverse
+// proxy dials loopback and may keep the public Host.
 func (s *Server) hostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
-		host := auth.HostName(r.Host)
-
 		if local == nil || !auth.IsLoopbackHost(auth.HostName(local.String())) ||
-			auth.IsLoopbackHost(host) ||
-			slices.Contains(s.knownHosts, strings.ToLower(host)) {
+			s.hosts.Admits(r.Host) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		http.Error(w, "forbidden host", http.StatusForbidden)
 	})
-}
-
-// knownHosts lowercases publicURL's hostname, when there is one, and allowed.
-func knownHosts(publicURL string, allowed []string) []string {
-	var hosts []string
-
-	if u, err := url.Parse(publicURL); publicURL != "" && err == nil {
-		hosts = append(hosts, strings.ToLower(u.Hostname()))
-	}
-
-	for _, host := range allowed {
-		hosts = append(hosts, strings.ToLower(auth.HostName(host)))
-	}
-
-	return hosts
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport

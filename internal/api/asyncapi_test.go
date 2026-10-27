@@ -16,6 +16,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
@@ -274,7 +275,7 @@ func TestAsyncAPINamesTheDeployment(t *testing.T) {
 		router := newTestRouterWithConfig(
 			t,
 			[]routerOption{withAsyncAPISpec(t), func(cfg *RouterConfig) {
-				cfg.AllowedHosts = []string{"one.example.com", "two.example.com"}
+				cfg.Hosts = auth.NewHostSet("", "one.example.com", "two.example.com")
 			}},
 			withCache(cache.New(nil)),
 		)

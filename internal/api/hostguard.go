@@ -3,40 +3,24 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"net/netip"
-	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
-// hostGuard refuses a request whose Host names none of ours: the DNS-rebinding
-// defence, since a rebound page is same-origin to the browser. An IP literal
-// cannot be rebound and loopback is ours; a trusted proxy has routed by Host
-// already. Probes that read no cluster state pass, as health checks name anything.
-func hostGuard(publicURL string, allowed []string) Constructor {
-	if u, err := url.Parse(publicURL); publicURL != "" && err == nil {
-		allowed = append(slices.Clone(allowed), u.Host)
-	}
-
-	names := make([]string, 0, len(allowed))
-	for _, name := range allowed {
-		if name = auth.HostName(name); name != "" {
-			names = append(names, strings.ToLower(name))
-		}
-	}
-
+// hostGuard refuses a request whose Host hosts does not admit: the
+// DNS-rebinding defence, since a rebound page is same-origin to the browser. A
+// trusted proxy has routed by Host already, and probes that read no cluster
+// state pass, as health checks name anything.
+func hostGuard(hosts auth.HostSet) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			host := auth.HostName(r.Host)
-
-			if isProbe(r) || auth.FromTrustedProxy(r.Context()) || auth.IsLoopbackHost(host) ||
-				isIPLiteral(host) || slices.Contains(names, strings.ToLower(host)) {
+			if isProbe(r) || auth.FromTrustedProxy(r.Context()) || hosts.Admits(r.Host) {
 				next.ServeHTTP(w, r)
 				return
 			}
 
+			host := auth.HostName(r.Host)
 			writeErrorCode(w, r, "CSR002", fmt.Sprintf(
 				"this server does not answer for host %q; add it to server.allowed_hosts, "+
 					"or set server.public_url to the URL it is reached at",
@@ -44,11 +28,6 @@ func hostGuard(publicURL string, allowed []string) Constructor {
 			))
 		})
 	}
-}
-
-func isIPLiteral(host string) bool {
-	_, err := netip.ParseAddr(host)
-	return err == nil
 }
 
 // isProbe matches the meta endpoints a health check or scraper reaches by
