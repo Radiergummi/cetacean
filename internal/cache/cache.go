@@ -964,7 +964,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	schedulable := c.schedulableNodesLocked()
+	schedulable := c.schedulableNodesLocked(true)
 
 	out := make([]StackSummary, 0, len(c.stacks))
 	for _, stack := range c.stacks {
@@ -1023,14 +1023,14 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 
 // schedulableNodesLocked is where a global service runs: every ready node that
 // is active or paused and meets its constraints, since pausing stops new
-// placements but keeps tasks.
-func (c *Cache) schedulableNodesLocked() []swarm.Node {
+// placements but keeps tasks. Without paused nodes, it is where one can start.
+func (c *Cache) schedulableNodesLocked(withPaused bool) []swarm.Node {
 	schedulable := make([]swarm.Node, 0, len(c.nodes.items))
 	for _, n := range c.nodes.items {
 		availability := n.Spec.Availability
 		if n.Status.State == swarm.NodeStateReady &&
 			(availability == swarm.NodeAvailabilityActive ||
-				availability == swarm.NodeAvailabilityPause) {
+				withPaused && availability == swarm.NodeAvailabilityPause) {
 			schedulable = append(schedulable, n)
 		}
 	}
@@ -1038,17 +1038,17 @@ func (c *Cache) schedulableNodesLocked() []swarm.Node {
 	return schedulable
 }
 
-// EligibleNodeCounts is how many nodes each of the given global services can
-// run on, keyed by service ID; services of any other mode are absent.
+// EligibleNodeCounts is how many nodes each of the given global services could
+// start a task on, keyed by service ID; services of any other mode are absent.
 func (c *Cache) EligibleNodeCounts(services ...swarm.Service) map[string]int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	schedulable := c.schedulableNodesLocked()
+	eligible := c.schedulableNodesLocked(false)
 	out := make(map[string]int)
 	for _, svc := range services {
 		if svc.Spec.Mode.Global != nil {
-			out[svc.ID] = globalTaskCount(svc, schedulable)
+			out[svc.ID] = globalTaskCount(svc, eligible)
 		}
 	}
 
@@ -1294,7 +1294,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 	}
 
 	// A job reserves nothing here: it has no standing task count to reserve for.
-	schedulable := c.schedulableNodesLocked()
+	schedulable := c.schedulableNodesLocked(true)
 	var reservedCPU, reservedMemory int64
 	for _, svc := range c.services {
 		var desired int

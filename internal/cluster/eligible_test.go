@@ -19,6 +19,7 @@ func TestAGlobalServiceReadsTheSameStateEverywhere(t *testing.T) {
 	}{
 		{swarm.NodeAvailabilityActive, "pending"},
 		{swarm.NodeAvailabilityDrain, "running"},
+		{swarm.NodeAvailabilityPause, "running"},
 	} {
 		t.Run(string(tc.availability), func(t *testing.T) {
 			c := cache.New(nil)
