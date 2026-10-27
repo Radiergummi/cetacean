@@ -1,0 +1,1563 @@
+{
+ "_type": "https://in-toto.io/Statement/v0.1",
+ "predicate": {
+  "buildConfig": {
+   "digestMapping": {
+    "sha256:04189fda06e9c0d76571708ef7e95be1f73b0e7b0c2e63f3ee78e317d92c04de": "step7",
+    "sha256:1f4eb4fa09850f0ce6b56e4cf9f85b317392bc963e3bf0167cd05456e7ff9993": "step2",
+    "sha256:247d14b3218dbf7fcb29061406dc83fd7dd31e57346fcc85abc4aafa0a522c03": "step8",
+    "sha256:2d72ea0b3df09aafeeb1486ad9db292a669e17f657c5d10c7856c79f955e6b49": "step6",
+    "sha256:63743e69367b2bf86c7026c397fcb25a189bc176102873eacb2856c6b1b765eb": "step4",
+    "sha256:9aa0935027782c3d51e122a2cd4a558d4e9af37c8136992a8f3d9a1f902480ad": "step3",
+    "sha256:a77f52e14e5566d525697e68c41d2486b91b115d8048d2aec1d5a228283fa7e3": "step5",
+    "sha256:c8ac021015a7ac4f918d0b57061e42b9e658b5d7107748f921d73907b3c15faf": "step0",
+    "sha256:d9db5a22f36faf3f8d2bd85121911227cafadf60671fde5c5578939089bb9d5f": "step1"
+   },
+   "llbDefinition": [
+    {
+     "id": "step0",
+     "op": {
+      "Op": {
+       "source": {
+        "identifier": "docker-image://docker.io/oisupport/staging-amd64:65db3a615990481c0625b159a0f93cc2918929ef4247146d715f70ade5339d1e@sha256:4876fdea29cac1a33a3195f1eb1952feb1fca7dd6dd00be3e2f1879cf20d34d2"
+       }
+      },
+      "constraints": {},
+      "platform": {
+       "Architecture": "amd64",
+       "OS": "linux"
+      }
+     }
+    },
+    {
+     "id": "step1",
+     "inputs": [
+      "step0:0"
+     ],
+     "op": {
+      "Op": {
+       "exec": {
+        "meta": {
+         "args": [
+          "/bin/sh",
+          "-c",
+          "set -x     && groupadd --system --gid 101 nginx     && useradd --system --gid nginx --no-create-home --home /nonexistent --comment \"nginx user\" --shell /bin/false --uid 101 nginx     && apt-get update     && apt-get install --no-install-recommends --no-install-suggests -y gnupg1 ca-certificates     &&     NGINX_GPGKEYS=\"573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 8540A6F18833A80E9C1653A42FD21310B49F6B46 9E9BE90EACBCDE69FE9B204CBCDCD8A38D88A2B3\";     NGINX_GPGKEY_PATH=/etc/apt/keyrings/nginx-archive-keyring.gpg;     export GNUPGHOME=\"$(mktemp -d)\";     found='';     for NGINX_GPGKEY in $NGINX_GPGKEYS; do     for server in         hkp://keyserver.ubuntu.com:80         pgp.mit.edu     ; do         echo \"Fetching GPG key $NGINX_GPGKEY from $server\";         gpg1 --batch --keyserver \"$server\" --keyserver-options timeout=10 --recv-keys \"$NGINX_GPGKEY\" && found=yes && break;     done;     test -z \"$found\" && echo >&2 \"error: failed to fetch GPG key $NGINX_GPGKEY\" && exit 1;     done;     gpg1 --batch --export $NGINX_GPGKEYS > \"$NGINX_GPGKEY_PATH\" ;     rm -rf \"$GNUPGHOME\";     apt-get remove --purge --auto-remove -y gnupg1 && rm -rf /var/lib/apt/lists/*     && dpkgArch=\"$(dpkg --print-architecture)\"     && nginxPackages=\"         nginx=${NGINX_VERSION}-${PKG_RELEASE}         nginx-module-xslt=${NGINX_VERSION}-${DYNPKG_RELEASE}         nginx-module-geoip=${NGINX_VERSION}-${DYNPKG_RELEASE}         nginx-module-image-filter=${NGINX_VERSION}-${DYNPKG_RELEASE}         nginx-module-njs=${NGINX_VERSION}+${NJS_VERSION}-${NJS_RELEASE}         nginx-module-acme=${NGINX_VERSION}+${ACME_VERSION}-${PKG_RELEASE}     \"     && case \"$dpkgArch\" in         amd64|arm64)             echo \"deb [signed-by=$NGINX_GPGKEY_PATH] https://nginx.org/packages/mainline/debian/ trixie nginx\" >> /etc/apt/sources.list.d/nginx.list             && apt-get update             ;;         *)             tempDir=\"$(mktemp -d)\"             && chmod 777 \"$tempDir\"                         && savedAptMark=\"$(apt-mark showmanual)\"                         && apt-get update             && apt-get install --no-install-recommends --no-install-suggests -y                 cargo                 curl                 devscripts                 equivs                 git                 libxml2-utils                 lsb-release                 xsltproc             && (                 cd \"$tempDir\"                 && export CARGO_HOME=\"$tempDir/.cargo\"                 && REVISION=\"${NGINX_VERSION}-${PKG_RELEASE}\"                 && REVISION=${REVISION%~*}                 && curl -f -L -O https://github.com/nginx/pkg-oss/archive/${REVISION}.tar.gz                 && PKGOSSCHECKSUM=\"e5f00e946092f1e50144db1d26e52d43efb2bc2cbb93b3b5b468aaf78516afab169af9f21d115276c60de8bfc6da1615acc0d092cc99f7b0ed1abb182af56d0d *${REVISION}.tar.gz\"                 && if [ \"$(openssl sha512 -r ${REVISION}.tar.gz)\" = \"$PKGOSSCHECKSUM\" ]; then                     echo \"pkg-oss tarball checksum verification succeeded!\";                 else                     echo \"pkg-oss tarball checksum verification failed!\";                     exit 1;                 fi                 && tar xzvf ${REVISION}.tar.gz                 && cd pkg-oss-${REVISION}                 && cd debian                 && for target in base module-geoip module-image-filter module-njs module-xslt module-acme; do                     make rules-$target;                     mk-build-deps --install --tool=\"apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes\"                         debuild-$target/nginx-$NGINX_VERSION/debian/control;                 done                 && make base module-geoip module-image-filter module-njs module-xslt module-acme             )                         && apt-mark showmanual | xargs apt-mark auto > /dev/null             && { [ -z \"$savedAptMark\" ] || apt-mark manual $savedAptMark; }                         && ls -lAFh \"$tempDir\"             && ( cd \"$tempDir\" && dpkg-scanpackages . > Packages )             && grep '^Package: ' \"$tempDir/Packages\"             && echo \"deb [ trusted=yes ] file://$tempDir ./\" > /etc/apt/sources.list.d/temp.list             && apt-get -o Acquire::GzipIndexes=false update             ;;     esac         && apt-get install --no-install-recommends --no-install-suggests -y                         $nginxPackages                         gettext-base                         curl     && apt-get remove --purge --auto-remove -y && rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/nginx.list         && if [ -n \"$tempDir\" ]; then         apt-get purge -y --auto-remove         && rm -rf \"$tempDir\" /etc/apt/sources.list.d/temp.list;     fi     && ln -sf /dev/stdout /var/log/nginx/access.log     && ln -sf /dev/stderr /var/log/nginx/error.log     && mkdir /docker-entrypoint.d"
+         ],
+         "cwd": "/",
+         "env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NGINX_VERSION=1.31.8",
+          "NJS_VERSION=1.0.2",
+          "NJS_RELEASE=1~trixie",
+          "ACME_VERSION=0.4.1",
+          "PKG_RELEASE=1~trixie",
+          "DYNPKG_RELEASE=1~trixie"
+         ],
+         "removeMountStubsRecursive": true
+        },
+        "mounts": [
+         {
+          "dest": "/",
+          "input": 0,
+          "output": 0
+         }
+        ]
+       }
+      },
+      "constraints": {},
+      "platform": {
+       "Architecture": "amd64",
+       "OS": "linux"
+      }
+     }
+    },
+    {
+     "id": "step2",
+     "op": {
+      "Op": {
+       "source": {
+        "attrs": {
+         "git.authheadersecret": "GIT_AUTH_HEADER",
+         "git.authtokensecret": "GIT_AUTH_TOKEN",
+         "git.fullurl": "https://github.com/nginx/docker-nginx.git"
+        },
+        "identifier": "git://github.com/nginx/docker-nginx.git#6fabb4c960a02a1e576d2789974c45f4cd2aa854:mainline/debian"
+       }
+      },
+      "constraints": {}
+     }
+    }
+   ]
+  },
+  "buildType": "https://mobyproject.org/buildkit@v1",
+  "builder": {
+   "id": "https://github.com/docker-library"
+  },
+  "invocation": {
+   "configSource": {
+    "entryPoint": "Dockerfile",
+    "uri": "https://github.com/nginx/docker-nginx.git#6fabb4c960a02a1e576d2789974c45f4cd2aa854:mainline/debian"
+   },
+   "environment": {
+    "platform": "linux/amd64"
+   },
+   "parameters": {
+    "args": {
+     "build-arg:BUILDKIT_DOCKERFILE_CHECK": "skip=all",
+     "build-arg:BUILDKIT_SYNTAX": "tianon/buildkit:0.16@sha256:74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3",
+     "cmdline": "tianon/buildkit:0.16@sha256:74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3",
+     "context:debian:trixie-slim": "docker-image://oisupport/staging-amd64:65db3a615990481c0625b159a0f93cc2918929ef4247146d715f70ade5339d1e@sha256:4876fdea29cac1a33a3195f1eb1952feb1fca7dd6dd00be3e2f1879cf20d34d2",
+     "frontend.caps": "moby.buildkit.frontend.contexts+forward",
+     "source": "tianon/buildkit:0.16@sha256:74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3"
+    },
+    "frontend": "gateway.v0",
+    "secrets": [
+     {
+      "id": "GIT_AUTH_HEADER",
+      "optional": true
+     },
+     {
+      "id": "GIT_AUTH_TOKEN",
+      "optional": true
+     }
+    ]
+   }
+  },
+  "materials": [
+   {
+    "digest": {
+     "sha256": "13c89fb6085aceb41f9556825c59d957917a3be670e3493598bd1f7f2a49f2fe"
+    },
+    "uri": "pkg:docker/docker/scout-sbom-indexer@1?digest=sha256:13c89fb6085aceb41f9556825c59d957917a3be670e3493598bd1f7f2a49f2fe"
+   },
+   {
+    "digest": {
+     "sha256": "4876fdea29cac1a33a3195f1eb1952feb1fca7dd6dd00be3e2f1879cf20d34d2"
+    },
+    "uri": "pkg:docker/oisupport/staging-amd64@65db3a615990481c0625b159a0f93cc2918929ef4247146d715f70ade5339d1e?digest=sha256:4876fdea29cac1a33a3195f1eb1952feb1fca7dd6dd00be3e2f1879cf20d34d2&platform=linux%2Famd64"
+   },
+   {
+    "digest": {
+     "sha256": "74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3"
+    },
+    "uri": "pkg:docker/tianon/buildkit@0.16?digest=sha256:74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3&platform=linux%2Famd64"
+   },
+   {
+    "digest": {
+     "sha256": "74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3"
+    },
+    "uri": "pkg:docker/tianon/buildkit@0.16?digest=sha256:74e9cc0b4cdd66fe1ef01e9ca16a74e400d10aa52ba568ae56e8c38eb70695a3"
+   },
+   {
+    "digest": {
+     "sha1": "6fabb4c960a02a1e576d2789974c45f4cd2aa854"
+    },
+    "uri": "https://github.com/nginx/docker-nginx.git#6fabb4c960a02a1e576d2789974c45f4cd2aa854"
+   }
+  ],
+  "metadata": {
+   "buildFinishedOn": "2026-10-21T22:17:19.840021043Z",
+   "buildInvocationID": "xt1qzvnchojxe0lc3hzywz9rr",
+   "buildStartedOn": "2026-10-21T22:16:52.472224835Z",
+   "completeness": {
+    "environment": true,
+    "materials": true,
+    "parameters": true
+   },
+   "https://mobyproject.org/buildkit@v1#metadata": {
+    "layers": {
+     "step0:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       }
+      ]
+     ],
+     "step1:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       },
+       {
+        "digest": "sha256:d5f3a4724daf7ef265e822b9e7bc813f81fa874021416f85600b1a50f8f31668",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 34034143
+       }
+      ]
+     ],
+     "step3:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       },
+       {
+        "digest": "sha256:d5f3a4724daf7ef265e822b9e7bc813f81fa874021416f85600b1a50f8f31668",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 34034143
+       },
+       {
+        "digest": "sha256:9a2c3eb3312e060544ab843916778df87bdfd1ccc2f900f4c7b5b6621cafb969",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 627
+       }
+      ]
+     ],
+     "step4:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       },
+       {
+        "digest": "sha256:d5f3a4724daf7ef265e822b9e7bc813f81fa874021416f85600b1a50f8f31668",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 34034143
+       },
+       {
+        "digest": "sha256:9a2c3eb3312e060544ab843916778df87bdfd1ccc2f900f4c7b5b6621cafb969",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 627
+       },
+       {
+        "digest": "sha256:dd00b11a22aa6edf682f44c616708dccfcc2513833ae3332fa592a274c8d0b46",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 963
+       }
+      ]
+     ],
+     "step5:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       },
+       {
+        "digest": "sha256:d5f3a4724daf7ef265e822b9e7bc813f81fa874021416f85600b1a50f8f31668",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 34034143
+       },
+       {
+        "digest": "sha256:9a2c3eb3312e060544ab843916778df87bdfd1ccc2f900f4c7b5b6621cafb969",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 627
+       },
+       {
+        "digest": "sha256:dd00b11a22aa6edf682f44c616708dccfcc2513833ae3332fa592a274c8d0b46",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 963
+       },
+       {
+        "digest": "sha256:24bf03b6a474380c0028556fb90b12481507ce72a8eb2c47bf7cb5821ff67ed0",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 405
+       }
+      ]
+     ],
+     "step6:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       },
+       {
+        "digest": "sha256:d5f3a4724daf7ef265e822b9e7bc813f81fa874021416f85600b1a50f8f31668",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 34034143
+       },
+       {
+        "digest": "sha256:9a2c3eb3312e060544ab843916778df87bdfd1ccc2f900f4c7b5b6621cafb969",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 627
+       },
+       {
+        "digest": "sha256:dd00b11a22aa6edf682f44c616708dccfcc2513833ae3332fa592a274c8d0b46",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 963
+       },
+       {
+        "digest": "sha256:24bf03b6a474380c0028556fb90b12481507ce72a8eb2c47bf7cb5821ff67ed0",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 405
+       },
+       {
+        "digest": "sha256:a856bfc2a772ef056c042c1d609d713c6680e83575dccfce4ac133a74ada04e2",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 1211
+       }
+      ]
+     ],
+     "step7:0": [
+      [
+       {
+        "digest": "sha256:f2be67225471500c788ce88c597eb5ea8336e912ad1ca4815650e0281afe2034",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 29843579
+       },
+       {
+        "digest": "sha256:d5f3a4724daf7ef265e822b9e7bc813f81fa874021416f85600b1a50f8f31668",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 34034143
+       },
+       {
+        "digest": "sha256:9a2c3eb3312e060544ab843916778df87bdfd1ccc2f900f4c7b5b6621cafb969",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 627
+       },
+       {
+        "digest": "sha256:dd00b11a22aa6edf682f44c616708dccfcc2513833ae3332fa592a274c8d0b46",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 963
+       },
+       {
+        "digest": "sha256:24bf03b6a474380c0028556fb90b12481507ce72a8eb2c47bf7cb5821ff67ed0",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 405
+       },
+       {
+        "digest": "sha256:a856bfc2a772ef056c042c1d609d713c6680e83575dccfce4ac133a74ada04e2",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 1211
+       },
+       {
+        "digest": "sha256:8334177aa35bb8b1c2047c4160eb0fa0326f21dfc924d1d6968a85ccf283ac57",
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "size": 1398
+       }
+      ]
+     ]
+    },
+    "source": {
+     "infos": [
+      {
+       "data": "IwojIE5PVEU6IFRISVMgRE9DS0VSRklMRSBJUyBHRU5FUkFURUQgVklBICJ1cGRhdGUuc2giCiMKIyBQTEVBU0UgRE8gTk9UIEVESVQgSVQgRElSRUNUTFkuCiMKRlJPTSBkZWJpYW46dHJpeGllLXNsaW0KCkxBQkVMIG1haW50YWluZXI9Ik5HSU5YIERvY2tlciBNYWludGFpbmVycyA8ZG9ja2VyLW1haW50QG5naW54LmNvbT4iCgpFTlYgTkdJTlhfVkVSU0lPTiAgIDEuMzEuOApFTlYgTkpTX1ZFUlNJT04gICAgIDEuMC4yCkVOViBOSlNfUkVMRUFTRSAgICAgMX50cml4aWUKRU5WIEFDTUVfVkVSU0lPTiAgICAwLjQuMQpFTlYgUEtHX1JFTEVBU0UgICAgIDF+dHJpeGllCkVOViBEWU5QS0dfUkVMRUFTRSAgMX50cml4aWUKClJVTiBzZXQgLXggXAojIGNyZWF0ZSBuZ2lueCB1c2VyL2dyb3VwIGZpcnN0LCB0byBiZSBjb25zaXN0ZW50IHRocm91Z2hvdXQgZG9ja2VyIHZhcmlhbnRzCiAgICAmJiBncm91cGFkZCAtLXN5c3RlbSAtLWdpZCAxMDEgbmdpbnggXAogICAgJiYgdXNlcmFkZCAtLXN5c3RlbSAtLWdpZCBuZ2lueCAtLW5vLWNyZWF0ZS1ob21lIC0taG9tZSAvbm9uZXhpc3RlbnQgLS1jb21tZW50ICJuZ2lueCB1c2VyIiAtLXNoZWxsIC9iaW4vZmFsc2UgLS11aWQgMTAxIG5naW54IFwKICAgICYmIGFwdC1nZXQgdXBkYXRlIFwKICAgICYmIGFwdC1nZXQgaW5zdGFsbCAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyAtLW5vLWluc3RhbGwtc3VnZ2VzdHMgLXkgZ251cGcxIGNhLWNlcnRpZmljYXRlcyBcCiAgICAmJiBcCiAgICBOR0lOWF9HUEdLRVlTPSI1NzNCRkQ2QjNEOEZCQzY0MTA3OUE2QUJBQkY1QkQ4MjdCRDlCRjYyIDg1NDBBNkYxODgzM0E4MEU5QzE2NTNBNDJGRDIxMzEwQjQ5RjZCNDYgOUU5QkU5MEVBQ0JDREU2OUZFOUIyMDRDQkNEQ0Q4QTM4RDg4QTJCMyI7IFwKICAgIE5HSU5YX0dQR0tFWV9QQVRIPS9ldGMvYXB0L2tleXJpbmdzL25naW54LWFyY2hpdmUta2V5cmluZy5ncGc7IFwKICAgIGV4cG9ydCBHTlVQR0hPTUU9IiQobWt0ZW1wIC1kKSI7IFwKICAgIGZvdW5kPScnOyBcCiAgICBmb3IgTkdJTlhfR1BHS0VZIGluICROR0lOWF9HUEdLRVlTOyBkbyBcCiAgICBmb3Igc2VydmVyIGluIFwKICAgICAgICBoa3A6Ly9rZXlzZXJ2ZXIudWJ1bnR1LmNvbTo4MCBcCiAgICAgICAgcGdwLm1pdC5lZHUgXAogICAgOyBkbyBcCiAgICAgICAgZWNobyAiRmV0Y2hpbmcgR1BHIGtleSAkTkdJTlhfR1BHS0VZIGZyb20gJHNlcnZlciI7IFwKICAgICAgICBncGcxIC0tYmF0Y2ggLS1rZXlzZXJ2ZXIgIiRzZXJ2ZXIiIC0ta2V5c2VydmVyLW9wdGlvbnMgdGltZW91dD0xMCAtLXJlY3Yta2V5cyAiJE5HSU5YX0dQR0tFWSIgJiYgZm91bmQ9eWVzICYmIGJyZWFrOyBcCiAgICBkb25lOyBcCiAgICB0ZXN0IC16ICIkZm91bmQiICYmIGVjaG8gPiYyICJlcnJvcjogZmFpbGVkIHRvIGZldGNoIEdQRyBrZXkgJE5HSU5YX0dQR0tFWSIgJiYgZXhpdCAxOyBcCiAgICBkb25lOyBcCiAgICBncGcxIC0tYmF0Y2ggLS1leHBvcnQgJE5HSU5YX0dQR0tFWVMgPiAiJE5HSU5YX0dQR0tFWV9QQVRIIiA7IFwKICAgIHJtIC1yZiAiJEdOVVBHSE9NRSI7IFwKICAgIGFwdC1nZXQgcmVtb3ZlIC0tcHVyZ2UgLS1hdXRvLXJlbW92ZSAteSBnbnVwZzEgJiYgcm0gLXJmIC92YXIvbGliL2FwdC9saXN0cy8qIFwKICAgICYmIGRwa2dBcmNoPSIkKGRwa2cgLS1wcmludC1hcmNoaXRlY3R1cmUpIiBcCiAgICAmJiBuZ2lueFBhY2thZ2VzPSIgXAogICAgICAgIG5naW54PSR7TkdJTlhfVkVSU0lPTn0tJHtQS0dfUkVMRUFTRX0gXAogICAgICAgIG5naW54LW1vZHVsZS14c2x0PSR7TkdJTlhfVkVSU0lPTn0tJHtEWU5QS0dfUkVMRUFTRX0gXAogICAgICAgIG5naW54LW1vZHVsZS1nZW9pcD0ke05HSU5YX1ZFUlNJT059LSR7RFlOUEtHX1JFTEVBU0V9IFwKICAgICAgICBuZ2lueC1tb2R1bGUtaW1hZ2UtZmlsdGVyPSR7TkdJTlhfVkVSU0lPTn0tJHtEWU5QS0dfUkVMRUFTRX0gXAogICAgICAgIG5naW54LW1vZHVsZS1uanM9JHtOR0lOWF9WRVJTSU9OfSske05KU19WRVJTSU9OfS0ke05KU19SRUxFQVNFfSBcCiAgICAgICAgbmdpbngtbW9kdWxlLWFjbWU9JHtOR0lOWF9WRVJTSU9OfSske0FDTUVfVkVSU0lPTn0tJHtQS0dfUkVMRUFTRX0gXAogICAgIiBcCiAgICAmJiBjYXNlICIkZHBrZ0FyY2giIGluIFwKICAgICAgICBhbWQ2NHxhcm02NCkgXAojIGFyY2hlcyBvZmZpY2lhbHkgYnVpbHQgYnkgdXBzdHJlYW0KICAgICAgICAgICAgZWNobyAiZGViIFtzaWduZWQtYnk9JE5HSU5YX0dQR0tFWV9QQVRIXSBodHRwczovL25naW54Lm9yZy9wYWNrYWdlcy9tYWlubGluZS9kZWJpYW4vIHRyaXhpZSBuZ2lueCIgPj4gL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvbmdpbngubGlzdCBcCiAgICAgICAgICAgICYmIGFwdC1nZXQgdXBkYXRlIFwKICAgICAgICAgICAgOzsgXAogICAgICAgICopIFwKIyB3ZSdyZSBvbiBhbiBhcmNoaXRlY3R1cmUgdXBzdHJlYW0gZG9lc24ndCBvZmZpY2lhbGx5IGJ1aWxkIGZvcgojIGxldCdzIGJ1aWxkIGJpbmFyaWVzIGZyb20gdGhlIHB1Ymxpc2hlZCBwYWNrYWdpbmcgc291cmNlcwojIG5ldyBkaXJlY3RvcnkgZm9yIHN0b3Jpbmcgc291cmNlcyBhbmQgLmRlYiBmaWxlcwogICAgICAgICAgICB0ZW1wRGlyPSIkKG1rdGVtcCAtZCkiIFwKICAgICAgICAgICAgJiYgY2htb2QgNzc3ICIkdGVtcERpciIgXAojICg3NzcgdG8gZW5zdXJlIEFQVCdzICJfYXB0IiB1c2VyIGNhbiBhY2Nlc3MgaXQgdG9vKQogICAgICAgICAgICBcCiMgc2F2ZSBsaXN0IG9mIGN1cnJlbnRseS1pbnN0YWxsZWQgcGFja2FnZXMgc28gYnVpbGQgZGVwZW5kZW5jaWVzIGNhbiBiZSBjbGVhbmx5IHJlbW92ZWQgbGF0ZXIKICAgICAgICAgICAgJiYgc2F2ZWRBcHRNYXJrPSIkKGFwdC1tYXJrIHNob3dtYW51YWwpIiBcCiAgICAgICAgICAgIFwKIyBidWlsZCAuZGViIGZpbGVzIGZyb20gdXBzdHJlYW0ncyBwYWNrYWdpbmcgc291cmNlcwogICAgICAgICAgICAmJiBhcHQtZ2V0IHVwZGF0ZSBcCiAgICAgICAgICAgICYmIGFwdC1nZXQgaW5zdGFsbCAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyAtLW5vLWluc3RhbGwtc3VnZ2VzdHMgLXkgXAogICAgICAgICAgICAgICAgY2FyZ28gXAogICAgICAgICAgICAgICAgY3VybCBcCiAgICAgICAgICAgICAgICBkZXZzY3JpcHRzIFwKICAgICAgICAgICAgICAgIGVxdWl2cyBcCiAgICAgICAgICAgICAgICBnaXQgXAogICAgICAgICAgICAgICAgbGlieG1sMi11dGlscyBcCiAgICAgICAgICAgICAgICBsc2ItcmVsZWFzZSBcCiAgICAgICAgICAgICAgICB4c2x0cHJvYyBcCiAgICAgICAgICAgICYmICggXAogICAgICAgICAgICAgICAgY2QgIiR0ZW1wRGlyIiBcCiAgICAgICAgICAgICAgICAmJiBleHBvcnQgQ0FSR09fSE9NRT0iJHRlbXBEaXIvLmNhcmdvIiBcCiAgICAgICAgICAgICAgICAmJiBSRVZJU0lPTj0iJHtOR0lOWF9WRVJTSU9OfS0ke1BLR19SRUxFQVNFfSIgXAogICAgICAgICAgICAgICAgJiYgUkVWSVNJT049JHtSRVZJU0lPTiV+Kn0gXAogICAgICAgICAgICAgICAgJiYgY3VybCAtZiAtTCAtTyBodHRwczovL2dpdGh1Yi5jb20vbmdpbngvcGtnLW9zcy9hcmNoaXZlLyR7UkVWSVNJT059LnRhci5neiBcCiAgICAgICAgICAgICAgICAmJiBQS0dPU1NDSEVDS1NVTT0iZTVmMDBlOTQ2MDkyZjFlNTAxNDRkYjFkMjZlNTJkNDNlZmIyYmMyY2JiOTNiM2I1YjQ2OGFhZjc4NTE2YWZhYjE2OWFmOWYyMWQxMTUyNzZjNjBkZThiZmM2ZGExNjE1YWNjMGQwOTJjYzk5ZjdiMGVkMWFiYjE4MmFmNTZkMGQgKiR7UkVWSVNJT059LnRhci5neiIgXAogICAgICAgICAgICAgICAgJiYgaWYgWyAiJChvcGVuc3NsIHNoYTUxMiAtciAke1JFVklTSU9OfS50YXIuZ3opIiA9ICIkUEtHT1NTQ0hFQ0tTVU0iIF07IHRoZW4gXAogICAgICAgICAgICAgICAgICAgIGVjaG8gInBrZy1vc3MgdGFyYmFsbCBjaGVja3N1bSB2ZXJpZmljYXRpb24gc3VjY2VlZGVkISI7IFwKICAgICAgICAgICAgICAgIGVsc2UgXAogICAgICAgICAgICAgICAgICAgIGVjaG8gInBrZy1vc3MgdGFyYmFsbCBjaGVja3N1bSB2ZXJpZmljYXRpb24gZmFpbGVkISI7IFwKICAgICAgICAgICAgICAgICAgICBleGl0IDE7IFwKICAgICAgICAgICAgICAgIGZpIFwKICAgICAgICAgICAgICAgICYmIHRhciB4enZmICR7UkVWSVNJT059LnRhci5neiBcCiAgICAgICAgICAgICAgICAmJiBjZCBwa2ctb3NzLSR7UkVWSVNJT059IFwKICAgICAgICAgICAgICAgICYmIGNkIGRlYmlhbiBcCiAgICAgICAgICAgICAgICAmJiBmb3IgdGFyZ2V0IGluIGJhc2UgbW9kdWxlLWdlb2lwIG1vZHVsZS1pbWFnZS1maWx0ZXIgbW9kdWxlLW5qcyBtb2R1bGUteHNsdCBtb2R1bGUtYWNtZTsgZG8gXAogICAgICAgICAgICAgICAgICAgIG1ha2UgcnVsZXMtJHRhcmdldDsgXAogICAgICAgICAgICAgICAgICAgIG1rLWJ1aWxkLWRlcHMgLS1pbnN0YWxsIC0tdG9vbD0iYXB0LWdldCAtbyBEZWJ1Zzo6cGtnUHJvYmxlbVJlc29sdmVyPXllcyAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyAtLXllcyIgXAogICAgICAgICAgICAgICAgICAgICAgICBkZWJ1aWxkLSR0YXJnZXQvbmdpbngtJE5HSU5YX1ZFUlNJT04vZGViaWFuL2NvbnRyb2w7IFwKICAgICAgICAgICAgICAgIGRvbmUgXAogICAgICAgICAgICAgICAgJiYgbWFrZSBiYXNlIG1vZHVsZS1nZW9pcCBtb2R1bGUtaW1hZ2UtZmlsdGVyIG1vZHVsZS1uanMgbW9kdWxlLXhzbHQgbW9kdWxlLWFjbWUgXAogICAgICAgICAgICApIFwKIyB3ZSBkb24ndCByZW1vdmUgQVBUIGxpc3RzIGhlcmUgYmVjYXVzZSB0aGV5IGdldCByZS1kb3dubG9hZGVkIGFuZCByZW1vdmVkIGxhdGVyCiAgICAgICAgICAgIFwKIyByZXNldCBhcHQtbWFyaydzICJtYW51YWwiIGxpc3Qgc28gdGhhdCAicHVyZ2UgLS1hdXRvLXJlbW92ZSIgd2lsbCByZW1vdmUgYWxsIGJ1aWxkIGRlcGVuZGVuY2llcwojICh3aGljaCBpcyBkb25lIGFmdGVyIHdlIGluc3RhbGwgdGhlIGJ1aWx0IHBhY2thZ2VzIHNvIHdlIGRvbid0IGhhdmUgdG8gcmVkb3dubG9hZCBhbnkgb3ZlcmxhcHBpbmcgZGVwZW5kZW5jaWVzKQogICAgICAgICAgICAmJiBhcHQtbWFyayBzaG93bWFudWFsIHwgeGFyZ3MgYXB0LW1hcmsgYXV0byA+IC9kZXYvbnVsbCBcCiAgICAgICAgICAgICYmIHsgWyAteiAiJHNhdmVkQXB0TWFyayIgXSB8fCBhcHQtbWFyayBtYW51YWwgJHNhdmVkQXB0TWFyazsgfSBcCiAgICAgICAgICAgIFwKIyBjcmVhdGUgYSB0ZW1wb3JhcnkgbG9jYWwgQVBUIHJlcG8gdG8gaW5zdGFsbCBmcm9tIChzbyB0aGF0IGRlcGVuZGVuY3kgcmVzb2x1dGlvbiBjYW4gYmUgaGFuZGxlZCBieSBBUFQsIGFzIGl0IHNob3VsZCBiZSkKICAgICAgICAgICAgJiYgbHMgLWxBRmggIiR0ZW1wRGlyIiBcCiAgICAgICAgICAgICYmICggY2QgIiR0ZW1wRGlyIiAmJiBkcGtnLXNjYW5wYWNrYWdlcyAuID4gUGFja2FnZXMgKSBcCiAgICAgICAgICAgICYmIGdyZXAgJ15QYWNrYWdlOiAnICIkdGVtcERpci9QYWNrYWdlcyIgXAogICAgICAgICAgICAmJiBlY2hvICJkZWIgWyB0cnVzdGVkPXllcyBdIGZpbGU6Ly8kdGVtcERpciAuLyIgPiAvZXRjL2FwdC9zb3VyY2VzLmxpc3QuZC90ZW1wLmxpc3QgXAojIHdvcmsgYXJvdW5kIHRoZSBmb2xsb3dpbmcgQVBUIGlzc3VlIGJ5IHVzaW5nICJBY3F1aXJlOjpHemlwSW5kZXhlcz1mYWxzZSIgKG92ZXJyaWRpbmcgIi9ldGMvYXB0L2FwdC5jb25mLmQvZG9ja2VyLWd6aXAtaW5kZXhlcyIpCiMgICBDb3VsZCBub3Qgb3BlbiBmaWxlIC92YXIvbGliL2FwdC9saXN0cy9wYXJ0aWFsL190bXBfdG1wLk9EV2xqcFFma0VfLl9QYWNrYWdlcyAtIG9wZW4gKDEzOiBQZXJtaXNzaW9uIGRlbmllZCkKIyAgIC4uLgojICAgRTogRmFpbGVkIHRvIGZldGNoIHN0b3JlOi92YXIvbGliL2FwdC9saXN0cy9wYXJ0aWFsL190bXBfdG1wLk9EV2xqcFFma0VfLl9QYWNrYWdlcyAgQ291bGQgbm90IG9wZW4gZmlsZSAvdmFyL2xpYi9hcHQvbGlzdHMvcGFydGlhbC9fdG1wX3RtcC5PRFdsanBRZmtFXy5fUGFja2FnZXMgLSBvcGVuICgxMzogUGVybWlzc2lvbiBkZW5pZWQpCiAgICAgICAgICAgICYmIGFwdC1nZXQgLW8gQWNxdWlyZTo6R3ppcEluZGV4ZXM9ZmFsc2UgdXBkYXRlIFwKICAgICAgICAgICAgOzsgXAogICAgZXNhYyBcCiAgICBcCiAgICAmJiBhcHQtZ2V0IGluc3RhbGwgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgLS1uby1pbnN0YWxsLXN1Z2dlc3RzIC15IFwKICAgICAgICAgICAgICAgICAgICAgICAgJG5naW54UGFja2FnZXMgXAogICAgICAgICAgICAgICAgICAgICAgICBnZXR0ZXh0LWJhc2UgXAogICAgICAgICAgICAgICAgICAgICAgICBjdXJsIFwKICAgICYmIGFwdC1nZXQgcmVtb3ZlIC0tcHVyZ2UgLS1hdXRvLXJlbW92ZSAteSAmJiBybSAtcmYgL3Zhci9saWIvYXB0L2xpc3RzLyogL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvbmdpbngubGlzdCBcCiAgICBcCiMgaWYgd2UgaGF2ZSBsZWZ0b3ZlcnMgZnJvbSBidWlsZGluZywgbGV0J3MgcHVyZ2UgdGhlbSAoaW5jbHVkaW5nIGV4dHJhLCB1bm5lY2Vzc2FyeSBidWlsZCBkZXBzKQogICAgJiYgaWYgWyAtbiAiJHRlbXBEaXIiIF07IHRoZW4gXAogICAgICAgIGFwdC1nZXQgcHVyZ2UgLXkgLS1hdXRvLXJlbW92ZSBcCiAgICAgICAgJiYgcm0gLXJmICIkdGVtcERpciIgL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvdGVtcC5saXN0OyBcCiAgICBmaSBcCiMgZm9yd2FyZCByZXF1ZXN0IGFuZCBlcnJvciBsb2dzIHRvIGRvY2tlciBsb2cgY29sbGVjdG9yCiAgICAmJiBsbiAtc2YgL2Rldi9zdGRvdXQgL3Zhci9sb2cvbmdpbngvYWNjZXNzLmxvZyBcCiAgICAmJiBsbiAtc2YgL2Rldi9zdGRlcnIgL3Zhci9sb2cvbmdpbngvZXJyb3IubG9nIFwKIyBjcmVhdGUgYSBkb2NrZXItZW50cnlwb2ludC5kIGRpcmVjdG9yeQogICAgJiYgbWtkaXIgL2RvY2tlci1lbnRyeXBvaW50LmQKCkNPUFkgZG9ja2VyLWVudHJ5cG9pbnQuc2ggLwpDT1BZIDEwLWxpc3Rlbi1vbi1pcHY2LWJ5LWRlZmF1bHQuc2ggL2RvY2tlci1lbnRyeXBvaW50LmQKQ09QWSAxNS1sb2NhbC1yZXNvbHZlcnMuZW52c2ggL2RvY2tlci1lbnRyeXBvaW50LmQKQ09QWSAyMC1lbnZzdWJzdC1vbi10ZW1wbGF0ZXMuc2ggL2RvY2tlci1lbnRyeXBvaW50LmQKQ09QWSAzMC10dW5lLXdvcmtlci1wcm9jZXNzZXMuc2ggL2RvY2tlci1lbnRyeXBvaW50LmQKRU5UUllQT0lOVCBbIi9kb2NrZXItZW50cnlwb2ludC5zaCJdCgpFWFBPU0UgODAKClNUT1BTSUdOQUwgU0lHUVVJVAoKQ01EIFsibmdpbngiLCAiLWciLCAiZGFlbW9uIG9mZjsiXQo=",
+       "digestMapping": {
+        "sha256:1f4eb4fa09850f0ce6b56e4cf9f85b317392bc963e3bf0167cd05456e7ff9993": "step0",
+        "sha256:e086acca8307e59ff9bff9fc68ba312be36e535e4ade0305c4d4b87f8841288c": "step1"
+       },
+       "filename": "Dockerfile",
+       "language": "Dockerfile",
+       "llbDefinition": [
+        {
+         "id": "step0",
+         "op": {
+          "Op": {
+           "source": {
+            "attrs": {
+             "git.authheadersecret": "GIT_AUTH_HEADER",
+             "git.authtokensecret": "GIT_AUTH_TOKEN",
+             "git.fullurl": "https://github.com/nginx/docker-nginx.git"
+            },
+            "identifier": "git://github.com/nginx/docker-nginx.git#6fabb4c960a02a1e576d2789974c45f4cd2aa854:mainline/debian"
+           }
+          },
+          "constraints": {}
+         }
+        },
+        {
+         "id": "step1",
+         "inputs": [
+          "step0:0"
+         ],
+         "op": {
+          "Op": null
+         }
+        }
+       ]
+      }
+     ],
+     "locations": {
+      "step0": {},
+      "step1": {
+       "locations": [
+        {
+         "ranges": [
+          {
+           "end": {
+            "line": 17
+           },
+           "start": {
+            "line": 17
+           }
+          },
+          {
+           "end": {
+            "line": 18
+           },
+           "start": {
+            "line": 18
+           }
+          },
+          {
+           "end": {
+            "line": 19
+           },
+           "start": {
+            "line": 19
+           }
+          },
+          {
+           "end": {
+            "line": 20
+           },
+           "start": {
+            "line": 20
+           }
+          },
+          {
+           "end": {
+            "line": 21
+           },
+           "start": {
+            "line": 21
+           }
+          },
+          {
+           "end": {
+            "line": 22
+           },
+           "start": {
+            "line": 22
+           }
+          },
+          {
+           "end": {
+            "line": 23
+           },
+           "start": {
+            "line": 23
+           }
+          },
+          {
+           "end": {
+            "line": 24
+           },
+           "start": {
+            "line": 24
+           }
+          },
+          {
+           "end": {
+            "line": 25
+           },
+           "start": {
+            "line": 25
+           }
+          },
+          {
+           "end": {
+            "line": 26
+           },
+           "start": {
+            "line": 26
+           }
+          },
+          {
+           "end": {
+            "line": 27
+           },
+           "start": {
+            "line": 27
+           }
+          },
+          {
+           "end": {
+            "line": 28
+           },
+           "start": {
+            "line": 28
+           }
+          },
+          {
+           "end": {
+            "line": 29
+           },
+           "start": {
+            "line": 29
+           }
+          },
+          {
+           "end": {
+            "line": 30
+           },
+           "start": {
+            "line": 30
+           }
+          },
+          {
+           "end": {
+            "line": 31
+           },
+           "start": {
+            "line": 31
+           }
+          },
+          {
+           "end": {
+            "line": 32
+           },
+           "start": {
+            "line": 32
+           }
+          },
+          {
+           "end": {
+            "line": 33
+           },
+           "start": {
+            "line": 33
+           }
+          },
+          {
+           "end": {
+            "line": 34
+           },
+           "start": {
+            "line": 34
+           }
+          },
+          {
+           "end": {
+            "line": 35
+           },
+           "start": {
+            "line": 35
+           }
+          },
+          {
+           "end": {
+            "line": 36
+           },
+           "start": {
+            "line": 36
+           }
+          },
+          {
+           "end": {
+            "line": 37
+           },
+           "start": {
+            "line": 37
+           }
+          },
+          {
+           "end": {
+            "line": 38
+           },
+           "start": {
+            "line": 38
+           }
+          },
+          {
+           "end": {
+            "line": 39
+           },
+           "start": {
+            "line": 39
+           }
+          },
+          {
+           "end": {
+            "line": 40
+           },
+           "start": {
+            "line": 40
+           }
+          },
+          {
+           "end": {
+            "line": 41
+           },
+           "start": {
+            "line": 41
+           }
+          },
+          {
+           "end": {
+            "line": 42
+           },
+           "start": {
+            "line": 42
+           }
+          },
+          {
+           "end": {
+            "line": 43
+           },
+           "start": {
+            "line": 43
+           }
+          },
+          {
+           "end": {
+            "line": 44
+           },
+           "start": {
+            "line": 44
+           }
+          },
+          {
+           "end": {
+            "line": 45
+           },
+           "start": {
+            "line": 45
+           }
+          },
+          {
+           "end": {
+            "line": 46
+           },
+           "start": {
+            "line": 46
+           }
+          },
+          {
+           "end": {
+            "line": 47
+           },
+           "start": {
+            "line": 47
+           }
+          },
+          {
+           "end": {
+            "line": 48
+           },
+           "start": {
+            "line": 48
+           }
+          },
+          {
+           "end": {
+            "line": 49
+           },
+           "start": {
+            "line": 49
+           }
+          },
+          {
+           "end": {
+            "line": 50
+           },
+           "start": {
+            "line": 50
+           }
+          },
+          {
+           "end": {
+            "line": 51
+           },
+           "start": {
+            "line": 51
+           }
+          },
+          {
+           "end": {
+            "line": 52
+           },
+           "start": {
+            "line": 52
+           }
+          },
+          {
+           "end": {
+            "line": 53
+           },
+           "start": {
+            "line": 53
+           }
+          },
+          {
+           "end": {
+            "line": 54
+           },
+           "start": {
+            "line": 54
+           }
+          },
+          {
+           "end": {
+            "line": 55
+           },
+           "start": {
+            "line": 55
+           }
+          },
+          {
+           "end": {
+            "line": 56
+           },
+           "start": {
+            "line": 56
+           }
+          },
+          {
+           "end": {
+            "line": 57
+           },
+           "start": {
+            "line": 57
+           }
+          },
+          {
+           "end": {
+            "line": 58
+           },
+           "start": {
+            "line": 58
+           }
+          },
+          {
+           "end": {
+            "line": 59
+           },
+           "start": {
+            "line": 59
+           }
+          },
+          {
+           "end": {
+            "line": 60
+           },
+           "start": {
+            "line": 60
+           }
+          },
+          {
+           "end": {
+            "line": 61
+           },
+           "start": {
+            "line": 61
+           }
+          },
+          {
+           "end": {
+            "line": 62
+           },
+           "start": {
+            "line": 62
+           }
+          },
+          {
+           "end": {
+            "line": 63
+           },
+           "start": {
+            "line": 63
+           }
+          },
+          {
+           "end": {
+            "line": 64
+           },
+           "start": {
+            "line": 64
+           }
+          },
+          {
+           "end": {
+            "line": 65
+           },
+           "start": {
+            "line": 65
+           }
+          },
+          {
+           "end": {
+            "line": 66
+           },
+           "start": {
+            "line": 66
+           }
+          },
+          {
+           "end": {
+            "line": 67
+           },
+           "start": {
+            "line": 67
+           }
+          },
+          {
+           "end": {
+            "line": 68
+           },
+           "start": {
+            "line": 68
+           }
+          },
+          {
+           "end": {
+            "line": 69
+           },
+           "start": {
+            "line": 69
+           }
+          },
+          {
+           "end": {
+            "line": 70
+           },
+           "start": {
+            "line": 70
+           }
+          },
+          {
+           "end": {
+            "line": 71
+           },
+           "start": {
+            "line": 71
+           }
+          },
+          {
+           "end": {
+            "line": 72
+           },
+           "start": {
+            "line": 72
+           }
+          },
+          {
+           "end": {
+            "line": 73
+           },
+           "start": {
+            "line": 73
+           }
+          },
+          {
+           "end": {
+            "line": 74
+           },
+           "start": {
+            "line": 74
+           }
+          },
+          {
+           "end": {
+            "line": 75
+           },
+           "start": {
+            "line": 75
+           }
+          },
+          {
+           "end": {
+            "line": 76
+           },
+           "start": {
+            "line": 76
+           }
+          },
+          {
+           "end": {
+            "line": 77
+           },
+           "start": {
+            "line": 77
+           }
+          },
+          {
+           "end": {
+            "line": 78
+           },
+           "start": {
+            "line": 78
+           }
+          },
+          {
+           "end": {
+            "line": 79
+           },
+           "start": {
+            "line": 79
+           }
+          },
+          {
+           "end": {
+            "line": 80
+           },
+           "start": {
+            "line": 80
+           }
+          },
+          {
+           "end": {
+            "line": 81
+           },
+           "start": {
+            "line": 81
+           }
+          },
+          {
+           "end": {
+            "line": 82
+           },
+           "start": {
+            "line": 82
+           }
+          },
+          {
+           "end": {
+            "line": 83
+           },
+           "start": {
+            "line": 83
+           }
+          },
+          {
+           "end": {
+            "line": 84
+           },
+           "start": {
+            "line": 84
+           }
+          },
+          {
+           "end": {
+            "line": 85
+           },
+           "start": {
+            "line": 85
+           }
+          },
+          {
+           "end": {
+            "line": 86
+           },
+           "start": {
+            "line": 86
+           }
+          },
+          {
+           "end": {
+            "line": 87
+           },
+           "start": {
+            "line": 87
+           }
+          },
+          {
+           "end": {
+            "line": 88
+           },
+           "start": {
+            "line": 88
+           }
+          },
+          {
+           "end": {
+            "line": 89
+           },
+           "start": {
+            "line": 89
+           }
+          },
+          {
+           "end": {
+            "line": 90
+           },
+           "start": {
+            "line": 90
+           }
+          },
+          {
+           "end": {
+            "line": 91
+           },
+           "start": {
+            "line": 91
+           }
+          },
+          {
+           "end": {
+            "line": 92
+           },
+           "start": {
+            "line": 92
+           }
+          },
+          {
+           "end": {
+            "line": 93
+           },
+           "start": {
+            "line": 93
+           }
+          },
+          {
+           "end": {
+            "line": 94
+           },
+           "start": {
+            "line": 94
+           }
+          },
+          {
+           "end": {
+            "line": 95
+           },
+           "start": {
+            "line": 95
+           }
+          },
+          {
+           "end": {
+            "line": 96
+           },
+           "start": {
+            "line": 96
+           }
+          },
+          {
+           "end": {
+            "line": 97
+           },
+           "start": {
+            "line": 97
+           }
+          },
+          {
+           "end": {
+            "line": 98
+           },
+           "start": {
+            "line": 98
+           }
+          },
+          {
+           "end": {
+            "line": 99
+           },
+           "start": {
+            "line": 99
+           }
+          },
+          {
+           "end": {
+            "line": 100
+           },
+           "start": {
+            "line": 100
+           }
+          },
+          {
+           "end": {
+            "line": 101
+           },
+           "start": {
+            "line": 101
+           }
+          },
+          {
+           "end": {
+            "line": 102
+           },
+           "start": {
+            "line": 102
+           }
+          },
+          {
+           "end": {
+            "line": 103
+           },
+           "start": {
+            "line": 103
+           }
+          },
+          {
+           "end": {
+            "line": 104
+           },
+           "start": {
+            "line": 104
+           }
+          },
+          {
+           "end": {
+            "line": 105
+           },
+           "start": {
+            "line": 105
+           }
+          },
+          {
+           "end": {
+            "line": 106
+           },
+           "start": {
+            "line": 106
+           }
+          },
+          {
+           "end": {
+            "line": 107
+           },
+           "start": {
+            "line": 107
+           }
+          },
+          {
+           "end": {
+            "line": 108
+           },
+           "start": {
+            "line": 108
+           }
+          },
+          {
+           "end": {
+            "line": 109
+           },
+           "start": {
+            "line": 109
+           }
+          },
+          {
+           "end": {
+            "line": 110
+           },
+           "start": {
+            "line": 110
+           }
+          },
+          {
+           "end": {
+            "line": 111
+           },
+           "start": {
+            "line": 111
+           }
+          },
+          {
+           "end": {
+            "line": 112
+           },
+           "start": {
+            "line": 112
+           }
+          },
+          {
+           "end": {
+            "line": 113
+           },
+           "start": {
+            "line": 113
+           }
+          },
+          {
+           "end": {
+            "line": 114
+           },
+           "start": {
+            "line": 114
+           }
+          },
+          {
+           "end": {
+            "line": 115
+           },
+           "start": {
+            "line": 115
+           }
+          },
+          {
+           "end": {
+            "line": 116
+           },
+           "start": {
+            "line": 116
+           }
+          },
+          {
+           "end": {
+            "line": 117
+           },
+           "start": {
+            "line": 117
+           }
+          },
+          {
+           "end": {
+            "line": 118
+           },
+           "start": {
+            "line": 118
+           }
+          },
+          {
+           "end": {
+            "line": 119
+           },
+           "start": {
+            "line": 119
+           }
+          },
+          {
+           "end": {
+            "line": 120
+           },
+           "start": {
+            "line": 120
+           }
+          },
+          {
+           "end": {
+            "line": 121
+           },
+           "start": {
+            "line": 121
+           }
+          },
+          {
+           "end": {
+            "line": 122
+           },
+           "start": {
+            "line": 122
+           }
+          },
+          {
+           "end": {
+            "line": 123
+           },
+           "start": {
+            "line": 123
+           }
+          },
+          {
+           "end": {
+            "line": 124
+           },
+           "start": {
+            "line": 124
+           }
+          },
+          {
+           "end": {
+            "line": 125
+           },
+           "start": {
+            "line": 125
+           }
+          },
+          {
+           "end": {
+            "line": 126
+           },
+           "start": {
+            "line": 126
+           }
+          },
+          {
+           "end": {
+            "line": 127
+           },
+           "start": {
+            "line": 127
+           }
+          },
+          {
+           "end": {
+            "line": 128
+           },
+           "start": {
+            "line": 128
+           }
+          },
+          {
+           "end": {
+            "line": 129
+           },
+           "start": {
+            "line": 129
+           }
+          },
+          {
+           "end": {
+            "line": 130
+           },
+           "start": {
+            "line": 130
+           }
+          },
+          {
+           "end": {
+            "line": 131
+           },
+           "start": {
+            "line": 131
+           }
+          },
+          {
+           "end": {
+            "line": 132
+           },
+           "start": {
+            "line": 132
+           }
+          },
+          {
+           "end": {
+            "line": 133
+           },
+           "start": {
+            "line": 133
+           }
+          },
+          {
+           "end": {
+            "line": 134
+           },
+           "start": {
+            "line": 134
+           }
+          },
+          {
+           "end": {
+            "line": 135
+           },
+           "start": {
+            "line": 135
+           }
+          },
+          {
+           "end": {
+            "line": 136
+           },
+           "start": {
+            "line": 136
+           }
+          }
+         ]
+        }
+       ]
+      },
+      "step2": {},
+      "step3": {
+       "locations": [
+        {
+         "ranges": [
+          {
+           "end": {
+            "line": 138
+           },
+           "start": {
+            "line": 138
+           }
+          }
+         ]
+        }
+       ]
+      },
+      "step4": {
+       "locations": [
+        {
+         "ranges": [
+          {
+           "end": {
+            "line": 139
+           },
+           "start": {
+            "line": 139
+           }
+          }
+         ]
+        }
+       ]
+      },
+      "step5": {
+       "locations": [
+        {
+         "ranges": [
+          {
+           "end": {
+            "line": 140
+           },
+           "start": {
+            "line": 140
+           }
+          }
+         ]
+        }
+       ]
+      },
+      "step6": {
+       "locations": [
+        {
+         "ranges": [
+          {
+           "end": {
+            "line": 141
+           },
+           "start": {
+            "line": 141
+           }
+          }
+         ]
+        }
+       ]
+      },
+      "step7": {
+       "locations": [
+        {
+         "ranges": [
+          {
+           "end": {
+            "line": 142
+           },
+           "start": {
+            "line": 142
+           }
+          }
+         ]
+        }
+       ]
+      }
+     }
+    }
+   },
+   "reproducible": false
+  }
+ },
+ "predicateType": "https://slsa.dev/provenance/v0.2",
+ "subject": [
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31.8?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@mainline?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@latest?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31.8-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@mainline-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31.8?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@mainline?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@latest?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31.8-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@mainline-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/oisupport/staging-amd64@4fefbbd1bef60231104cb07485ccbb1e16eb091b64f60db8ffbbe774792febb8?platform=linux%2Famd64"
+  }
+ ]
+}
