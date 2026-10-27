@@ -1258,7 +1258,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		MaxNodeCPU:        nodes.MaxNodeCPU,
 		MaxNodeMemory:     nodes.MaxNodeMemory,
 		LastSync:          c.lastSync,
-		Quorum:            quorum.Of(slices.Collect(maps.Values(c.nodes.items))),
+		Quorum:            quorum.Of(maps.Values(c.nodes.items)),
 		RunningByService:  runningByService,
 		Flapping:          flapping,
 

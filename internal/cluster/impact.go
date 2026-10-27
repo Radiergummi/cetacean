@@ -245,7 +245,7 @@ func RoleImpact(node swarm.Node, nodes []swarm.Node, role swarm.NodeRole) Impact
 		return Impact{Summary: fmt.Sprintf("Node %s is already a %s; nothing changes.", name, role)}
 	}
 
-	q := quorum.Of(nodes)
+	q := quorum.Of(slices.Values(nodes))
 	managers, reachable := q.Managers, q.Reachable
 
 	after, reachableAfter := managers+1, reachable+1
@@ -273,7 +273,7 @@ func RoleImpact(node swarm.Node, nodes []swarm.Node, role swarm.NodeRole) Impact
 		effects = append(effects, fmt.Sprintf(
 			"Quorum survives: %d of %d managers reachable, %d needed; it then tolerates %s.",
 			reachableAfter, after, needed,
-			plural((after-1)/2, "manager failure", "manager failures")))
+			plural(reachableAfter-needed, "manager failure", "manager failures")))
 	default:
 		effects = append(effects, fmt.Sprintf(
 			"Quorum is lost: %d of %d managers reachable, %d needed.",

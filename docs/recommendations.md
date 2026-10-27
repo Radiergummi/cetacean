@@ -26,9 +26,9 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 | `single-replica` | One replica, so any node problem is an outage |
 | `manager-has-workloads` | A manager node is `active`, so Swarm may schedule ordinary tasks on it alongside cluster management. Not raised unless a ready, active worker could take those tasks |
 | `uneven-distribution` | The busiest node runs more than three times the tasks of the quietest |
-| `single-manager` | One manager, so losing it leaves the swarm unable to schedule or update anything. Not raised unless there are at least three nodes, enough for three managers |
+| `single-manager` | One manager, so losing it leaves the swarm unable to schedule or update anything. Not raised unless at least three nodes are ready, enough for three managers |
 | `even-managers` | An even number of managers, which tolerates no more failures than one fewer |
-| `quorum-at-risk` | Too few managers are reachable to survive another loss, or quorum is already lost. Critical |
+| `quorum-at-risk` | A manager is unreachable. A warning while quorum survives more losses, critical once one more loss would break it or it's already lost |
 | `flaky-service` | More than 5 involuntary task failures within the lookback window |
 | `node-disk-full` | Node disk above 90% |
 | `node-memory-pressure` | Node memory above 90% |

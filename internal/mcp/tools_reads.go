@@ -338,7 +338,7 @@ func (s *Server) readTools() []toolDef {
 				"get_cluster_status",
 				mcplib.WithToolTitle("Check overall cluster health"),
 				mcplib.WithDescription(
-					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state or restarting in a loop, the nodes that are down or draining, the rollouts in flight, and how much CPU and memory is reserved against what the cluster has. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
+					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state or restarting in a loop, the nodes that are down or draining, the rollouts in flight, how much CPU and memory is reserved against what the cluster has, and the manager quorum: how many managers are reachable and how many more failures it survives. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
 				),
 				mcplib.WithOutputSchema[cluster.ClusterStatus](),
 				mcplib.WithReadOnlyHintAnnotation(true),

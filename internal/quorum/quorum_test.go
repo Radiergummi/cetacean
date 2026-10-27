@@ -1,6 +1,7 @@
 package quorum
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -18,11 +19,10 @@ func worker() swarm.Node {
 }
 
 func TestOf(t *testing.T) {
-	reachable, unreachable := manager(
-		swarm.ReachabilityReachable,
-	), manager(
-		swarm.ReachabilityUnreachable,
-	)
+	up, down := manager(swarm.ReachabilityReachable), manager(swarm.ReachabilityUnreachable)
+	unknown := manager(swarm.ReachabilityUnknown)
+	// Asked to become a manager, but not yet a Raft member.
+	promoting := swarm.Node{Spec: swarm.NodeSpec{Role: swarm.NodeRoleManager}}
 
 	tests := []struct {
 		name  string
@@ -30,53 +30,25 @@ func TestOf(t *testing.T) {
 		want  Quorum
 	}{
 		{"no managers", []swarm.Node{worker()}, Quorum{}},
+		{"one manager", []swarm.Node{up, worker()}, Quorum{1, 1, 1, true, 0}},
+		{"three healthy", []swarm.Node{up, up, up}, Quorum{3, 3, 2, true, 1}},
+		{"three, one down", []swarm.Node{up, up, down}, Quorum{3, 2, 2, true, 0}},
+		{"three, two down", []swarm.Node{up, down, down}, Quorum{3, 1, 2, false, 0}},
+		{"four healthy", []swarm.Node{up, up, up, up}, Quorum{4, 4, 3, true, 1}},
+		{"five healthy", []swarm.Node{up, up, up, up, up}, Quorum{5, 5, 3, true, 2}},
+		{"unknown counts as reachable", []swarm.Node{up, up, unknown}, Quorum{3, 3, 2, true, 1}},
 		{
-			"one manager",
-			[]swarm.Node{reachable, worker()},
-			Quorum{Managers: 1, Reachable: 1, Size: 1, CanLose: 0},
-		},
-		{
-			"three healthy",
-			[]swarm.Node{reachable, reachable, reachable},
-			Quorum{Managers: 3, Reachable: 3, Size: 2, CanLose: 1},
-		},
-		{
-			"three, one down",
-			[]swarm.Node{reachable, reachable, unreachable},
-			Quorum{Managers: 3, Reachable: 2, Size: 2, CanLose: 0},
-		},
-		{
-			"three, two down",
-			[]swarm.Node{reachable, unreachable, unreachable},
-			Quorum{Managers: 3, Reachable: 1, Size: 2, CanLose: 0},
-		},
-		{
-			"four healthy",
-			[]swarm.Node{reachable, reachable, reachable, reachable},
-			Quorum{Managers: 4, Reachable: 4, Size: 3, CanLose: 1},
-		},
-		{
-			"five healthy",
-			[]swarm.Node{reachable, reachable, reachable, reachable, reachable},
-			Quorum{Managers: 5, Reachable: 5, Size: 3, CanLose: 2},
+			"a promotion in flight is not a member",
+			[]swarm.Node{up, up, up, promoting},
+			Quorum{3, 3, 2, true, 1},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Of(tt.nodes); got != tt.want {
+			if got := Of(slices.Values(tt.nodes)); got != tt.want {
 				t.Errorf("Of() = %+v, want %+v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestHeld(t *testing.T) {
-	if !(Quorum{Managers: 3, Reachable: 2, Size: 2}).Held() {
-		t.Error("2 of 3 reachable should hold quorum")
-	}
-
-	if (Quorum{Managers: 3, Reachable: 1, Size: 2}).Held() {
-		t.Error("1 of 3 reachable should not hold quorum")
 	}
 }

@@ -354,7 +354,11 @@ func TestClusterChecker_UnevenDistribution(t *testing.T) {
 
 func TestClusterChecker_Quorum(t *testing.T) {
 	node := func(id string, role swarm.NodeRole, reachability swarm.Reachability) swarm.Node {
-		n := swarm.Node{ID: id, Spec: swarm.NodeSpec{Role: role}}
+		n := swarm.Node{
+			ID:     id,
+			Spec:   swarm.NodeSpec{Role: role},
+			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		}
 		if role == swarm.NodeRoleManager {
 			n.ManagerStatus = &swarm.ManagerStatus{Reachability: reachability}
 		}
@@ -362,6 +366,12 @@ func TestClusterChecker_Quorum(t *testing.T) {
 		return n
 	}
 	up, down := swarm.ReachabilityReachable, swarm.ReachabilityUnreachable
+	downNode := func(id string) swarm.Node {
+		n := node(id, swarm.NodeRoleWorker, "")
+		n.Status.State = swarm.NodeStateDown
+
+		return n
+	}
 	manager, worker := swarm.NodeRoleManager, swarm.NodeRoleWorker
 
 	tests := []struct {
@@ -414,6 +424,24 @@ func TestClusterChecker_Quorum(t *testing.T) {
 				node("m3", manager, down),
 			},
 			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+		{
+			name: "an unreachable manager with tolerance left is a warning",
+			nodes: []swarm.Node{
+				node("m1", manager, up), node("m2", manager, up), node("m3", manager, up),
+				node("m4", manager, up), node("m5", manager, down),
+			},
+			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityWarning},
+		},
+		{
+			name:  "a lone unreachable manager has lost quorum",
+			nodes: []swarm.Node{node("m1", manager, down)},
+			want:  map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+		{
+			name:  "down workers are no nodes to promote",
+			nodes: []swarm.Node{node("m1", manager, up), downNode("w1"), downNode("w2")},
+			want:  map[Category]Severity{},
 		},
 	}
 

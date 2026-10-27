@@ -326,6 +326,14 @@ export const properties: Property[] = [
     usedOn: ["Cluster"],
   },
   {
+    name: "quorum",
+    iri: "urn:cetacean:quorum",
+    description:
+      "The manager quorum: managers, how many are reachable, how many must be, whether they are, and how many more can be lost.",
+    expectedType: "Object",
+    usedOn: ["Cluster"],
+  },
+  {
     name: "query",
     iri: "urn:cetacean:query",
     description: "The search query string.",
@@ -710,6 +718,7 @@ export const types: ResourceType[] = [
       "totalCPU",
       "totalMemory",
       "tasksByState",
+      "quorum",
       "prometheusConfigured",
     ],
   },

@@ -8001,7 +8001,7 @@ components:
             - Tasks for a service are unevenly distributed across nodes
             - The swarm has one manager although it has the nodes for three
             - An even number of managers tolerates no more failures than one fewer
-            - One more manager loss would break quorum, or quorum is already lost
+            - A manager is unreachable; critical once one more loss would break quorum, or it is already lost
         severity:
           type: string
           enum: [info, warning, critical]
@@ -8137,7 +8137,7 @@ components:
         maxNodeCPU: 4
         maxNodeMemory: 8589934592
         lastSync: "2026-04-13T12:00:00Z"
-        quorum: { managers: 3, reachable: 3, size: 2, canLose: 1 }
+        quorum: { managers: 3, reachable: 3, size: 2, held: true, canLose: 1 }
         prometheusConfigured: true
         localNodeID: qz7k3v9xm2p4
 
@@ -8146,16 +8146,20 @@ components:
       description: >
         The swarm's Raft quorum, counted over every manager whatever the
         caller's grants, like the node counts beside it.
-      required: [managers, reachable, size, canLose]
+      required: [managers, reachable, size, held, canLose]
       properties:
         managers:
           type: integer
+          description: Raft members, nodes carrying a manager status, whatever role they were asked to take
         reachable:
           type: integer
-          description: Managers their peers can reach
+          description: Managers their peers have not found unreachable; one whose reachability is still unknown counts
         size:
           type: integer
-          description: Reachable managers needed to accept changes, a majority of `managers`
+          description: Reachable managers needed to accept changes, a majority of `managers`; 0 when there are none
+        held:
+          type: boolean
+          description: Whether enough managers are reachable to accept changes; false when there are none
         canLose:
           type: integer
           description: >
@@ -8165,6 +8169,7 @@ components:
         managers: 3
         reachable: 3
         size: 2
+        held: true
         canLose: 1
 
     ClusterCapacity:

@@ -311,10 +311,10 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let reachableManagers = 0;
 
   for (const node of dataset.nodes) {
-    if (node.Spec.Role === "manager") {
+    if (node.ManagerStatus) {
       managers++;
 
-      if (node.ManagerStatus?.Reachability === "reachable") {
+      if (node.ManagerStatus.Reachability !== "unreachable") {
         reachableManagers++;
       }
     }
@@ -399,9 +399,19 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
 }
 
 function quorumOf(managers: number, reachable: number): ManagerQuorum {
+  if (managers === 0) {
+    return { managers, reachable, size: 0, held: false, canLose: 0 };
+  }
+
   const size = Math.floor(managers / 2) + 1;
 
-  return { managers, reachable, size, canLose: Math.max(reachable - size, 0) };
+  return {
+    managers,
+    reachable,
+    size,
+    held: reachable >= size,
+    canLose: Math.max(reachable - size, 0),
+  };
 }
 
 function buildStackSummaries(dataset: Dataset): StackSummary[] {

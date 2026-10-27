@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -113,10 +114,17 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 }
 
 // quorumRecommendations flags a manager set that tolerates fewer failures than
-// the nodes allow. One manager is only flagged with two other nodes to promote,
-// since a second manager alone tolerates no more failures than the first.
+// the nodes allow. One manager is only flagged with two other ready nodes to
+// promote, since a second manager alone tolerates no more failures than one.
 func quorumRecommendations(nodes []swarm.Node) []Recommendation {
-	q := quorum.Of(nodes)
+	q := quorum.Of(slices.Values(nodes))
+
+	ready := 0
+	for _, n := range nodes {
+		if n.Status.State == swarm.NodeStateReady {
+			ready++
+		}
+	}
 
 	var recs []Recommendation
 
@@ -130,7 +138,7 @@ func quorumRecommendations(nodes []swarm.Node) []Recommendation {
 	}
 
 	switch {
-	case q.Managers == 1 && len(nodes) >= 3:
+	case q.Managers == 1 && ready >= 3:
 		recs = append(recs, cluster(CategorySingleManager, SeverityWarning,
 			"Only 1 manager: losing it stops the swarm accepting changes"))
 	case q.Managers >= 2 && q.Managers%2 == 0:
@@ -139,7 +147,7 @@ func quorumRecommendations(nodes []swarm.Node) []Recommendation {
 	}
 
 	switch {
-	case q.Managers > 1 && !q.Held():
+	case q.Managers > 0 && !q.Held:
 		recs = append(recs, cluster(CategoryQuorumAtRisk, SeverityCritical, fmt.Sprintf(
 			"Quorum lost: %d of %d managers reachable, %d needed",
 			q.Reachable,
@@ -150,7 +158,19 @@ func quorumRecommendations(nodes []swarm.Node) []Recommendation {
 		recs = append(recs, cluster(CategoryQuorumAtRisk, SeverityCritical, fmt.Sprintf(
 			"%d of %d managers reachable: one more loss stops the swarm accepting changes",
 			q.Reachable, q.Managers)))
+	case q.Reachable < q.Managers:
+		recs = append(recs, cluster(CategoryQuorumAtRisk, SeverityWarning, fmt.Sprintf(
+			"%d of %d managers reachable: quorum survives %d more %s",
+			q.Reachable, q.Managers, q.CanLose, plural(q.CanLose, "loss", "losses"))))
 	}
 
 	return recs
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+
+	return many
 }

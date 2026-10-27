@@ -12,10 +12,10 @@ import (
 // counting them, since a count guarantees a second call. Every unhealthy entry
 // is a Row, so it carries the id and name the next describe needs.
 type ClusterStatus struct {
-	// Healthy is the one-line answer: nothing degraded, unreachable, or
-	// stalled mid-rollout. A node deliberately drained is the cluster doing
-	// what it was told, so it lands in DrainingNodes and leaves this true; an
-	// update still rolling likewise, and only one Swarm has paused counts.
+	// Healthy is the one-line answer: nothing degraded, unreachable (a manager
+	// included, whatever its node reports), or stalled mid-rollout. A drained
+	// node or a rolling update is the cluster doing what it was told and leaves
+	// this true; only an update Swarm has paused counts.
 	Healthy bool `json:"healthy"`
 
 	NodeCount    int `json:"nodeCount"`
@@ -130,7 +130,8 @@ func BuildClusterStatus(
 
 	status.Healthy = len(status.UnhealthyServices) == 0 &&
 		len(status.UnhealthyNodes) == 0 &&
-		stalled == 0
+		stalled == 0 &&
+		snap.Quorum.Reachable == snap.Quorum.Managers
 
 	return status
 }

@@ -2,24 +2,31 @@
 // the domain layer and the recommendations engine share one reading of it.
 package quorum
 
-import "github.com/docker/docker/api/types/swarm"
+import (
+	"iter"
+
+	"github.com/docker/docker/api/types/swarm"
+)
 
 // Quorum is the manager picture: how many managers there are, how many are
-// reachable, how many must be for the swarm to accept changes, and how many
-// more reachable managers it can lose before it can't.
+// reachable, how many must be for the swarm to accept changes, whether they
+// are, and how many more reachable managers it can lose before it can't.
 type Quorum struct {
-	Managers  int `json:"managers"`
-	Reachable int `json:"reachable"`
-	Size      int `json:"size"`
-	CanLose   int `json:"canLose"`
+	Managers  int  `json:"managers"`
+	Reachable int  `json:"reachable"`
+	Size      int  `json:"size"`
+	Held      bool `json:"held"`
+	CanLose   int  `json:"canLose"`
 }
 
-// Of counts the managers among nodes.
-func Of(nodes []swarm.Node) Quorum {
+// Of counts the Raft members among nodes: a node is a manager once it carries
+// a ManagerStatus, whatever role it has been asked to take. Without managers,
+// as before the first sync, nothing is held.
+func Of(nodes iter.Seq[swarm.Node]) Quorum {
 	var q Quorum
 
-	for _, n := range nodes {
-		if n.Spec.Role != swarm.NodeRoleManager {
+	for n := range nodes {
+		if n.ManagerStatus == nil {
 			continue
 		}
 
@@ -35,18 +42,18 @@ func Of(nodes []swarm.Node) Quorum {
 	}
 
 	q.Size = Size(q.Managers)
+	q.Held = q.Reachable >= q.Size
 	q.CanLose = max(q.Reachable-q.Size, 0)
 
 	return q
 }
 
-// Held reports whether enough managers are reachable to accept changes.
-func (q Quorum) Held() bool { return q.Reachable >= q.Size }
-
 // Size is the majority of managers Raft needs.
 func Size(managers int) int { return managers/2 + 1 }
 
-// Reachable reports whether a node is a manager its peers can reach.
+// Reachable reports whether a node is a manager its peers have not found
+// unreachable. Docker reports "unknown" while an election settles, so only an
+// explicit "unreachable" counts against quorum.
 func Reachable(n swarm.Node) bool {
-	return n.ManagerStatus != nil && n.ManagerStatus.Reachability == swarm.ReachabilityReachable
+	return n.ManagerStatus != nil && n.ManagerStatus.Reachability != swarm.ReachabilityUnreachable
 }
