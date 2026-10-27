@@ -542,7 +542,7 @@ func mcpFindID(t *testing.T, proc *sut.Process, resourceType, name string) strin
 type readToolSpec struct {
 	name           string
 	args           func(baselineIDs) map[string]any
-	gatedOnService bool // true for get_logs/watch: toolACLSpecs requires service:read
+	gatedOnService bool // true for get_logs/watch: their toolDef gate is service:read
 }
 
 func driveReadTool(spec readToolSpec) mcpDriveFunc {
@@ -569,8 +569,8 @@ func driveReadTool(spec readToolSpec) mcpDriveFunc {
 
 type mcpDriveFunc func(t *testing.T, env *harness.Env, proc *sut.Process, ids baselineIDs)
 
-// driveFind checks find (never gated in toolACLSpecs by design — see the map
-// in internal/mcp/server.go) across every persona: always visible, and
+// driveFind checks find (ungated by design — it has no toolDef gate,
+// see internal/mcp/tools_reads.go) across every persona: always visible, and
 // per-type results are ACL-filtered rather than refused, so anonymous must
 // get zero items rather than an error.
 func driveFind(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
