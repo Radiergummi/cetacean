@@ -26,6 +26,7 @@ type tieredChain struct {
 	chain       Chain
 	level       config.OperationsLevel
 	acceptPatch string
+	noContent   bool
 }
 
 func (h *Handlers) tiered(acl Constructor, level config.OperationsLevel) tieredChain {
@@ -49,8 +50,34 @@ func (c tieredChain) TakesJSONPatch() tieredChain {
 	return c
 }
 
+// AnswersNoContent marks a write that only ever answers 204, which has no
+// representation for Accept to refuse.
+func (c tieredChain) AnswersNoContent() tieredChain {
+	c.noContent = true
+
+	return c
+}
+
 func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
-	return tieredHandler{c.chain.ThenFunc(fn), c.level, c.acceptPatch}
+	handler := c.chain.ThenFunc(fn)
+	if !c.noContent {
+		handler = acceptsJSONAnswer(handler)
+	}
+
+	return tieredHandler{handler, c.level, c.acceptPatch}
+}
+
+// acceptsJSONAnswer refuses a write whose JSON answer the client would not
+// accept, before anything runs, unless it asked for no body at all.
+func acceptsJSONAnswer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !preferMinimal(r) && !acceptable(r, ContentTypeJSON) {
+			notAcceptable(w, r, "application/json")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 type tieredHandler struct {

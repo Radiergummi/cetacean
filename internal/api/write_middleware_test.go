@@ -23,6 +23,62 @@ func handlersAt(level config.OperationsLevel) *Handlers {
 	return &Handlers{operationsLevel: level, tokenOperationsLevel: level}
 }
 
+// A write whose answer the client refuses is refused before it runs; one that
+// answers no content has no representation for Accept to refuse.
+func TestWritesCheckAcceptBeforeTheMutation(t *testing.T) {
+	replicas := uint64(1)
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID: "svc1",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "web"},
+			Mode:        swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: &replicas}},
+		},
+	})
+
+	var scaled, removed int
+	wc := &mockWriteClient{
+		scaleServiceFn: func(_ context.Context, id string, _ uint64) (swarm.Service, error) {
+			scaled++
+			svc, _ := c.GetService(id)
+			return svc, nil
+		},
+		removeServiceFn: func(context.Context, string) error {
+			removed++
+			return nil
+		},
+	}
+	router := newTestRouterWithCache(t, c, withWriteClient(wc), withOpsLevel(config.OpsImpactful))
+
+	send := func(method, target, accept, prefer string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, strings.NewReader(`{"replicas":2}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", accept)
+		if prefer != "" {
+			req.Header.Set("Prefer", prefer)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		return w
+	}
+
+	if w := send(http.MethodPut, "/services/svc1/scale", "text/csv", ""); w.Code != http.StatusNotAcceptable || scaled != 0 {
+		t.Errorf("Accept: text/csv answered %d after %d scales, want 406 and none: %s",
+			w.Code, scaled, w.Body.String())
+	}
+
+	if w := send(http.MethodPut, "/services/svc1/scale", "text/csv", "return=minimal"); w.Code != http.StatusNoContent || scaled != 1 {
+		t.Errorf("Accept: text/csv with return=minimal answered %d after %d scales, want 204 and one",
+			w.Code, scaled)
+	}
+
+	if w := send(http.MethodDelete, "/services/svc1", "text/csv", ""); w.Code != http.StatusNoContent || removed != 1 {
+		t.Errorf("DELETE with Accept: text/csv answered %d after %d removals, want 204 and one",
+			w.Code, removed)
+	}
+}
+
 func TestRequireLevel_Allowed(t *testing.T) {
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

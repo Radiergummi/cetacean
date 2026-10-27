@@ -560,6 +560,10 @@ Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
 resource.
 
+A write answering with a body checks `Accept` before it changes anything: an `Accept` that rules out JSON answers
+`406` ([`API003`](api/errors#API003)) and the write doesn't happen. `Prefer: return=minimal` lifts the check, since
+the answer then has no body, as do the writes that always answer `204`.
+
 Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
 is added when TLS is enabled.
 

@@ -445,23 +445,24 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	)
 	mux.Handle(
 		"POST /swarm/rotate-token",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostRotateToken),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostRotateToken),
 	)
 	mux.Handle(
 		"POST /swarm/rotate-unlock-key",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostRotateUnlockKey),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostRotateUnlockKey),
 	)
 	mux.Handle(
 		"POST /swarm/force-rotate-ca",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostForceRotateCA),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostForceRotateCA),
 	)
 	mux.Handle("GET /swarm/unlock-key", swarmTier3.ThenFunc(h.HandleGetUnlockKey))
 	mux.Handle(
 		"POST /swarm/unlock",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePostUnlockSwarm),
+		swarmTier3.Append(clusterExists).AnswersNoContent().ThenFunc(h.HandlePostUnlockSwarm),
 	)
 	mux.Handle("DELETE /tokens/{subject}",
-		swarmTier3.Append(clusterExists).ThenFunc(HandleRevokeSubject(cfg.TokenRevoker)))
+		swarmTier3.Append(clusterExists).AnswersNoContent().
+			ThenFunc(HandleRevokeSubject(cfg.TokenRevoker)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, feedHandlers{}, spa))
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa))
@@ -477,14 +478,14 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("POST /plugins", pluginWildTier3.ThenFunc(h.HandleInstallPlugin))
 	mux.Handle(
 		"POST /plugins/{name}/enable",
-		pluginTier2.Append(pluginExists).ThenFunc(h.HandleEnablePlugin),
+		pluginTier2.Append(pluginExists).AnswersNoContent().ThenFunc(h.HandleEnablePlugin),
 	)
 	mux.Handle(
 		"POST /plugins/{name}/disable",
-		pluginTier2.Append(pluginExists).ThenFunc(h.HandleDisablePlugin),
+		pluginTier2.Append(pluginExists).AnswersNoContent().ThenFunc(h.HandleDisablePlugin),
 	)
 	mux.Handle("DELETE /plugins/{name}",
-		pluginTier3.Append(h.precond(h.pluginRepresentation)).
+		pluginTier3.Append(h.precond(h.pluginRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemovePlugin))
 	mux.Handle(
 		"POST /plugins/{name}/upgrade",
@@ -600,7 +601,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		nodeTier3.Append(h.precond(h.nodeRoleRepresentation)).
 			ThenFunc(h.HandleUpdateNodeRole))
 	mux.Handle("DELETE /nodes/{id}",
-		nodeTier3.Append(h.precond(h.nodeRepresentation)).
+		nodeTier3.Append(h.precond(h.nodeRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
@@ -756,7 +757,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			ThenFunc(h.HandleUpdateServiceEndpointMode),
 	)
 	mux.Handle("DELETE /services/{id}",
-		svcTier3.Append(h.precond(h.serviceRepresentation)).
+		svcTier3.Append(h.precond(h.serviceRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveService))
 
 	// Tasks
@@ -785,7 +786,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiatedWithSSE(h.HandleTaskLogs, h.HandleTaskLogs, feedHandlers{}, spa),
 	)
 	mux.Handle("DELETE /tasks/{id}",
-		taskTier3.Append(h.precond(h.taskRepresentation)).
+		taskTier3.Append(h.precond(h.taskRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveTask))
 
 	// History
@@ -852,7 +853,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /configs/{id}",
-		cfgTier3.Append(h.precond(h.configRepresentation)).
+		cfgTier3.Append(h.precond(h.configRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveConfig))
 	// The name is in the body, so the handler checks the write grant on it.
 	mux.Handle("POST /configs", createTier2.ThenFunc(h.HandleCreateConfig))
@@ -891,7 +892,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /secrets/{id}",
-		secTier3.Append(h.precond(h.secretRepresentation)).
+		secTier3.Append(h.precond(h.secretRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveSecret))
 	mux.Handle("POST /secrets", createTier2.ThenFunc(h.HandleCreateSecret))
 	mux.HandleFunc(
@@ -935,7 +936,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /networks/{id}",
-		netTier3.Append(h.precond(h.networkRepresentation)).
+		netTier3.Append(h.precond(h.networkRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveNetwork))
 
 	// Volumes
@@ -962,7 +963,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		),
 	)
 	mux.Handle("DELETE /volumes/{name}",
-		volTier3.Append(h.precond(h.volumeRepresentation)).
+		volTier3.Append(h.precond(h.volumeRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveVolume))
 
 	// Search
