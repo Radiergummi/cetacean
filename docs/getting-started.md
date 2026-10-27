@@ -152,7 +152,7 @@ In `local` Tailscale mode, Cetacean talks only to the host's Tailscale daemon, w
 | [Dashboard][dashboard]             | Navigation, the command palette, and the chart and log viewer controls                    |
 | [Monitoring][monitoring]           | Prometheus, node-exporter, and cAdvisor, for charts and capacity bars                     |
 | [Recommendations][recommendations] | What Cetacean flags about your cluster, and how to tune or turn it off                    |
-| [Integrations][integrations]       | Structured panels for Traefik, Caddy, Shepherd, Gantry, swarm-cronjob, Diun, and doco-cd |
+| [Integrations][integrations]       | Structured panels for Traefik, Caddy, Shepherd, Gantry, swarm-cronjob, Diun, doco-cd, and more |
 | [Authorization][authorization]     | Per-resource read and write grants, once callers are identified                           |
 | [MCP server][mcp]                  | The same access for an AI agent, under the same operations level and grants               |
 | [API guide][api]                   | REST endpoints, SSE streams, and the Atom feed on every resource page                     |

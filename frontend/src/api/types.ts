@@ -523,6 +523,23 @@ export interface GantryIntegration {
   updateTimeoutSeconds?: number | undefined;
 }
 
+export interface DeploymentActionIntegration {
+  name: "docker-swarm-deployment-action";
+  enabled: boolean;
+  labels: string[];
+  version?: string | undefined;
+  repository?: string | undefined;
+  repositoryUrl?: string | undefined;
+  ref?: string | undefined;
+  commit?: string | undefined;
+  commitUrl?: string | undefined;
+  runUrl?: string | undefined;
+  actor?: string | undefined;
+  monitor?: boolean | undefined;
+  monitorTimeoutSeconds?: number | undefined;
+  healthCheckWarnings?: boolean | undefined;
+}
+
 export type Integration =
   | TraefikIntegration
   | ShepherdIntegration
@@ -530,7 +547,8 @@ export type Integration =
   | DiunIntegration
   | CaddyIntegration
   | DocoCDIntegration
-  | GantryIntegration;
+  | GantryIntegration
+  | DeploymentActionIntegration;
 
 /**
  * A custom link from a `cetacean.link.<id>` service label. Exactly one of
