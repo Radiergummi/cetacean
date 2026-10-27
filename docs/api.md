@@ -386,6 +386,7 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 | Secrets  | `id`, `name`                                                                                                                        |
 | Networks | `id`, `name`, `driver`, `scope` (`swarm`/`local`)                                                                                   |
 | Volumes  | `name`, `driver`, `scope`                                                                                                           |
+| Ports    | `published` (int), `target` (int), `protocol`, `mode` (`ingress`/`host`), `service` (name), `stack`, `nodes` (count, 0 for ingress) |
 
 Task `state` takes the Docker task states: `new`, `allocated`, `pending`, `assigned`, `accepted`, `preparing`,
 `ready`, `starting`, `running`, `complete`, `shutdown`, `failed`, `rejected`, `remove`, `orphaned`. `exit_code` is
@@ -765,6 +766,7 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
 | Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels`, `/secret-entries/{id}` |
 | Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |
+| Ports | `/ports` |
 | Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
 | Cross-resource | `/search?q=`, `/history`, `/events`, `/recommendations`, `/topology`, `/profile` |

@@ -21,6 +21,7 @@ export const navigationShortcuts: NavigationShortcut[] = [
   { keys: ["g", "c"], description: "Go to configs", path: "/configs" },
   { keys: ["g", "x"], description: "Go to secrets", path: "/secrets" },
   { keys: ["g", "w"], description: "Go to networks", path: "/networks" },
+  { keys: ["g", "o"], description: "Go to published ports", path: "/ports" },
   { keys: ["g", "v"], description: "Go to volumes", path: "/volumes" },
   { keys: ["g", "p"], description: "Go to plugins", path: "/plugins" },
   { keys: ["g", "i"], description: "Go to swarm info", path: "/swarm" },

@@ -674,6 +674,13 @@ export const types: ResourceType[] = [
     properties: ["secret", "name", "services"],
   },
   {
+    name: "PublishedPort",
+    description:
+      "One port a service publishes: Docker's `PortConfig`, with the service and stack publishing it and, for a host-mode port, the nodes binding it. Its `@id` is a fragment of the service.",
+    endpoint: "/ports",
+    properties: [],
+  },
+  {
     name: "Network",
     description: "A Docker network.",
     endpoint: "/networks/{id}",

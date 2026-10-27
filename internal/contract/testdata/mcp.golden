@@ -46,6 +46,8 @@ tool get_metrics -> ui://cetacean/metrics
   get_metrics.range: string enum(1h,24h,6h,7d)
   get_metrics.target: string enum(cluster,node,service) required
   get_metrics.top: number
+tool get_published_ports
+  get_published_ports.port: number
 tool get_recommendations -> ui://cetacean/recommendations
   get_recommendations.severity: string
 tool get_topology -> ui://cetacean/topology
