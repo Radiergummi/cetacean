@@ -83,9 +83,11 @@ fmt-check:
 ## Build everything
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-# The commit's time rather than the clock's, so rebuilding a commit is reproducible.
-DATE    ?= $(shell TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd 2>/dev/null \
-             || date -u +%Y-%m-%dT%H:%M:%SZ)
+# A clean tree is stamped with its commit's time, so rebuilding a commit is
+# reproducible; a dirty one (as VERSION's -dirty counts it) with the clock's.
+DATE    ?= $(shell if [ -z "$$(git status --porcelain --untracked-files=no 2>/dev/null)" ] \
+             && d=$$(TZ=UTC0 git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd 2>/dev/null) \
+             && [ -n "$$d" ]; then echo "$$d"; else date -u +%Y-%m-%dT%H:%M:%SZ; fi)
 LDFLAGS := -X github.com/radiergummi/cetacean/internal/version.Version=$(VERSION) \
            -X github.com/radiergummi/cetacean/internal/version.Commit=$(COMMIT) \
            -X github.com/radiergummi/cetacean/internal/version.Date=$(DATE)
