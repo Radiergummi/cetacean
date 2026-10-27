@@ -180,18 +180,19 @@ func (b *Broadcaster) syncFrame() frameEvent {
 	return e
 }
 
-// needsSync reports whether a sync landed after a cursor. One that names a sync
-// has seen that one; one that does not has seen none at or after its position,
-// since a frame ending in a sync carries its number.
-func (b *Broadcaster) needsSync(afterID, seen uint64) bool {
+// needsSync reports whether a sync landed after a cursor, and otherwise the
+// newest sync the cursor covers. One that names a sync has seen that one; one
+// that does not has seen none at or after its position, since a frame ending
+// in a sync carries its number.
+func (b *Broadcaster) needsSync(afterID, seen uint64) (need bool, covered uint64) {
 	mark := b.lastSync.Load()
 	switch {
 	case mark == nil:
-		return false
+		return false, 0
 	case seen > 0:
-		return seen != mark.seq
+		return seen != mark.seq, mark.seq
 	default:
-		return mark.pos >= afterID
+		return mark.pos >= afterID, mark.seq
 	}
 }
 
@@ -435,7 +436,12 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	afterID, seen, ok := b.cursor(lastID)
-	if !ok || b.needsSync(afterID, seen) {
+	if !ok {
+		return writeSync()
+	}
+
+	need, covered := b.needsSync(afterID, seen)
+	if need {
 		return writeSync()
 	}
 
@@ -445,7 +451,7 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	if len(entries) == 0 {
-		return afterID, 0, nil
+		return afterID, covered, nil
 	}
 
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
@@ -473,10 +479,10 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	if len(replay) == 0 {
-		return afterID, 0, nil
+		return afterID, covered, nil
 	}
 
-	return replay[len(replay)-1].HistoryID, 0, b.writeFrame(stream, replay)
+	return replay[len(replay)-1].HistoryID, covered, b.writeFrame(stream, replay)
 }
 
 // writeFrame writes events as one frame under the stream's write deadline.

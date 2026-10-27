@@ -141,3 +141,60 @@ func TestSSE_ReplaySyncCoversAResyncThatRacesIt(t *testing.T) {
 		t.Errorf("sent %d sync frames, want 1:\n%s", got, body)
 	}
 }
+
+// A reconnect the replay found caught up has every sync recorded so far, so
+// one of those still on its way through the inbox is not sent to it again.
+func TestSSE_ReplayCoversASyncStillInTheInbox(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		entries int // appended after the sync, which the replay sends
+	}{
+		{"nothing to replay", 0},
+		{"entries to replay", 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h := cache.NewHistory(100)
+			appendEntries(h, 3)
+
+			// No fanOut yet: whatever is broadcast waits in the inbox.
+			b := &Broadcaster{
+				clients:           make(map[*sseClient]struct{}),
+				owners:            make(map[string]int),
+				inbox:             make(chan frameEvent, 256),
+				stop:              make(chan struct{}),
+				batchInterval:     10 * time.Millisecond,
+				keepaliveInterval: time.Hour,
+				writeError:        noopErrorWriter,
+				replay:            h,
+				epoch:             newEpoch(),
+			}
+			defer b.Close()
+
+			b.Broadcast(syncEvent(h.Count()))
+			appendEntries(h, 1)
+			cursor := b.EventID(h.Count())
+			appendEntries(h, test.entries)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			req := httptest.NewRequestWithContext(ctx, "GET", "/events", nil)
+			req.Header.Set("Last-Event-ID", cursor)
+			w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				b.ServeSSE(w, req, nil, ReplayAll)
+			}()
+
+			waitForClients(t, b, 1)
+			go b.fanOut()
+			b.Broadcast(cache.Event{Type: cache.EventNode, Action: "update", ID: "marker"})
+			waitForBody(t, w, `"marker"`)
+			cancel()
+			<-done
+
+			if body := w.bodyString(); strings.Contains(body, `"type":"sync"`) {
+				t.Errorf("a sync the replay covered was sent again:\n%s", body)
+			}
+		})
+	}
+}
