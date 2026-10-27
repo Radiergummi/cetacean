@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
@@ -66,6 +67,18 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			config.OpsConfiguration, true,
 		},
 		{
+			"healthcheck test", current,
+			`{"name":"update_service","arguments":{"id":"web","section":"healthcheck",` +
+				`"value":{"test":["CMD","sh"]}}}`,
+			config.OpsConfiguration, true,
+		},
+		{
+			"healthcheck interval only", current,
+			`{"name":"update_service","arguments":{"id":"web","section":"healthcheck",` +
+				`"value":{"interval":"10s"}}}`,
+			config.OpsConfiguration, false,
+		},
+		{
 			"image without host access", unbound,
 			`{"name":"update_service_image","arguments":{"id":"web","image":"nginx:2"}}`,
 			config.OpsOperational, false,
@@ -100,6 +113,11 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 					},
 					updateServicePlaceFn: func(
 						ctx context.Context, _ string, _ *swarm.Placement,
+					) (swarm.Service, error) {
+						return write(ctx)
+					},
+					updateServiceHealthFn: func(
+						ctx context.Context, _ string, _ *container.HealthConfig,
 					) (swarm.Service, error) {
 						return write(ctx)
 					},

@@ -5166,6 +5166,10 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		return h.HandlePatchServiceContainerConfig
 	}
 	placement := func(h *Handlers) http.HandlerFunc { return h.HandlePutServicePlacement }
+	putHealthcheck := func(h *Handlers) http.HandlerFunc { return h.HandlePutServiceHealthcheck }
+	patchHealthcheck := func(h *Handlers) http.HandlerFunc {
+		return h.HandlePatchServiceHealthcheck
+	}
 
 	cases := []struct {
 		name    string
@@ -5219,6 +5223,26 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			placement, config.OpsConfiguration, true,
 		},
 		{
+			"healthcheck test",
+			current, "PUT", "/healthcheck", `{"Test":["CMD","sh"]}`,
+			putHealthcheck, config.OpsConfiguration, true,
+		},
+		{
+			"healthcheck interval only",
+			current, "PUT", "/healthcheck", `{"Interval":1000000000}`,
+			putHealthcheck, config.OpsConfiguration, false,
+		},
+		{
+			"patched healthcheck test",
+			current, "PATCH", "/healthcheck", `{"Test":["CMD","sh"]}`,
+			patchHealthcheck, config.OpsConfiguration, true,
+		},
+		{
+			"patched healthcheck interval only",
+			current, "PATCH", "/healthcheck", `{"Interval":1000000000}`,
+			patchHealthcheck, config.OpsConfiguration, false,
+		},
+		{
 			"image without host access",
 			unbound,
 			"PUT",
@@ -5265,6 +5289,11 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 					return write(ctx)
 				}
 				mock.updateServiceSpecFn = func(ctx context.Context, _ string, _ swarm.ServiceSpec) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceHealthcheckFn = func(
+					ctx context.Context, _ string, _ *container.HealthConfig,
+				) (swarm.Service, error) {
 					return write(ctx)
 				}
 

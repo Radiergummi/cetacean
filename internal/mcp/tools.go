@@ -462,7 +462,7 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	ctx, err = s.checkHostAccessHeld(ctx, cond, id, "changing the image of")
+	ctx, err = s.checkHostAccessHeld(ctx, cond, s.cachedService(id), "changing the image of")
 	if err != nil {
 		return "", err
 	}
@@ -495,7 +495,7 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
-	ctx, err = s.checkHostAccessHeld(ctx, cond, id, "rolling back")
+	ctx, err = s.checkHostAccessHeld(ctx, cond, s.cachedService(id), "rolling back")
 	if err != nil {
 		return "", err
 	}
@@ -513,20 +513,27 @@ func (s *Server) toolRollbackService(
 	return marshalResult(s.serviceMutation(svc))
 }
 
-// checkHostAccessHeld is cluster.CheckHostAccessHeld for the service id names,
-// pinning the write to the version it checked.
+// checkHostAccessHeld is cluster.CheckHostAccessHeld for a change to svc, an
+// empty one passing, and pins the write to the version it checked.
 func (s *Server) checkHostAccessHeld(
 	ctx context.Context,
 	cond condition,
-	id, change string,
+	svc swarm.Service,
+	change string,
 ) (context.Context, error) {
-	svc, _, _ := s.cache.ResolveService(id)
-	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
-	if err := cluster.CheckHostAccessHeld(svc, change, s.cache.GetVolume, level); err != nil {
-		return ctx, err
+	if change != "" {
+		level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+		if err := cluster.CheckHostAccessHeld(svc, change, s.cache.GetVolume, level); err != nil {
+			return ctx, err
+		}
 	}
 
 	return s.pinChecked(ctx, cond, svc)
+}
+
+func (s *Server) cachedService(id string) swarm.Service {
+	svc, _, _ := s.cache.ResolveService(id)
+	return svc
 }
 
 func (s *Server) toolRestartService(

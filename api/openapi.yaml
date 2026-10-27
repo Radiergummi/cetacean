@@ -4176,7 +4176,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Replace service healthcheck config
-      description: Replaces the healthcheck configuration for the service. Requires operations level 2.
+      description: Replaces the healthcheck configuration for the service. Requires operations level 2, and level 3 to change `Test` when the current or previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4228,7 +4228,8 @@ paths:
       summary: Patch service healthcheck config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service healthcheck configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3
+        to change `Test` when the current or previous spec has host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"

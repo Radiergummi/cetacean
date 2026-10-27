@@ -238,6 +238,16 @@ func TestCheckHostAccessHeld(t *testing.T) {
 	capable := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
 		ContainerSpec: &swarm.ContainerSpec{CapabilityAdd: []string{"SYS_ADMIN"}},
 	}}
+	elsewhere := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "elsewhere", Target: "/e"}},
+		},
+	}}
+	hostroot := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "hostroot", Target: "/h"}},
+		},
+	}}
 
 	cases := []struct {
 		name    string
@@ -254,6 +264,13 @@ func TestCheckHostAccessHeld(t *testing.T) {
 			"current capability at tier 2",
 			swarm.Service{Spec: capable},
 			config.OpsConfiguration,
+			true,
+		},
+		{"unknown volume at tier 1", swarm.Service{Spec: elsewhere}, config.OpsOperational, false},
+		{
+			"bind-backed volume at tier 1",
+			swarm.Service{Spec: hostroot},
+			config.OpsOperational,
 			true,
 		},
 		{

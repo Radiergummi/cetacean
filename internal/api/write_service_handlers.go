@@ -300,6 +300,10 @@ type serviceSpecFieldPatch[T any] struct {
 	typeName string
 	field    func(*swarm.ServiceSpec) (**T, error)
 	body     func(swarm.Service) any
+
+	// held names a change to what runs in the container, for
+	// cluster.CheckHostAccessHeld, or returns "" for one that isn't.
+	held func(before, after *T) string
 }
 
 // patchServiceSpecField merges a merge-patch body into one spec field, an
@@ -312,7 +316,8 @@ func patchServiceSpecField[T any](
 ) {
 	id := r.PathValue("id")
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -323,8 +328,14 @@ func patchServiceSpecField[T any](
 
 	slog.Info("updating service "+patch.name, "service", id)
 
+	ctx := r.Context()
+	if patch.held != nil {
+		ctx = docker.PinChecked(ctx, "service", svc.ID, svc.Version)
+	}
+
+	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
-		r.Context(),
+		ctx,
 		id,
 		func(spec *swarm.ServiceSpec) error {
 			field, err := patch.field(spec)
@@ -340,6 +351,15 @@ func patchServiceSpecField[T any](
 			var result T
 			if err := merge(current, &result); err != nil {
 				return err
+			}
+
+			if patch.held != nil {
+				if change := patch.held(current, &result); change != "" {
+					err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level)
+					if err != nil {
+						return &specPatchError{"OPS001", err.Error()}
+					}
+				}
 			}
 
 			*field = &result
@@ -439,7 +459,8 @@ func (h *Handlers) HandleGetServiceHealthcheck(w http.ResponseWriter, r *http.Re
 func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
@@ -448,9 +469,20 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	ctx := docker.PinChecked(r.Context(), "service", svc.ID, svc.Version)
+	var before []string
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil && cs.Healthcheck != nil {
+		before = cs.Healthcheck.Test
+	}
+	if !slices.Equal(before, hc.Test) {
+		if ctx, ok = h.checkHostAccessHeld(w, r, svc, changingHealthcheck); !ok {
+			return
+		}
+	}
+
 	slog.Info("updating service healthcheck", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServiceHealthcheck(r.Context(), id, &hc)
+	updated, err := h.serviceSpec.UpdateServiceHealthcheck(ctx, id, &hc)
 	if err != nil {
 		writeResourceError(w, r, err, "service", id, "SVC001")
 		return
@@ -588,8 +620,17 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 			return &spec.TaskTemplate.ContainerSpec.Healthcheck, nil
 		},
 		body: serviceHealthcheckBody,
+		held: func(before, after *container.HealthConfig) string {
+			if slices.Equal(before.Test, after.Test) {
+				return ""
+			}
+
+			return changingHealthcheck
+		},
 	})
 }
+
+const changingHealthcheck = "changing the healthcheck command of"
 
 type containerConfigResponse struct {
 	Command         []string       `json:"command"`

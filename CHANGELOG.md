@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
-- Changing the image, command, user or placement of a service with a bind mount or added capability, in its current or previous spec, or rolling it back, needs operations level 3, in the API and MCP alike
+- Changing the image, command, user, health check command or placement of a service with a bind mount or added capability in its current or previous spec, or rolling it back, needs operations level 3
 - `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 
 ### Fixed

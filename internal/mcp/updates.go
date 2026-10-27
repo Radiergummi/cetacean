@@ -216,11 +216,42 @@ var serviceSectionWriters = map[string]sectionWriter{
 	},
 }
 
-// hostAccessSections are the sections that change what runs in the container,
-// each with how a refusal names the change.
-var hostAccessSections = map[string]string{
-	sectionCommand:   "changing the command of",
-	sectionPlacement: "changing the placement of",
+// hostAccessSections are the sections that can change what runs in the
+// container. Each names the change a request makes for cluster.CheckHostAccessHeld,
+// or returns "" for one that leaves it alone.
+var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, string) string{
+	sectionCommand: func(swarm.Service, mcplib.CallToolRequest, string) string {
+		return "changing the command of"
+	},
+	sectionPlacement: func(swarm.Service, mcplib.CallToolRequest, string) string {
+		return "changing the placement of"
+	},
+	sectionHealthcheck: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		// A value that doesn't decode is the writer's to refuse.
+		value, err := decodeSection[healthcheckValue](req, section)
+		if err != nil {
+			return ""
+		}
+
+		hc, err := value.toHealthConfig()
+		if err != nil {
+			return ""
+		}
+
+		var before, after []string
+		if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil && cs.Healthcheck != nil {
+			before = cs.Healthcheck.Test
+		}
+		if hc != nil {
+			after = hc.Test
+		}
+
+		if slices.Equal(before, after) {
+			return ""
+		}
+
+		return "changing the healthcheck command of"
+	},
 }
 
 // updateServiceSections is the advertised enum and the error message's list:
@@ -358,8 +389,9 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
-	if change, held := hostAccessSections[section]; held {
-		ctx, err = s.checkHostAccessHeld(ctx, cond, id, change)
+	if changes, held := hostAccessSections[section]; held {
+		svc, _, _ := s.cache.ResolveService(id)
+		ctx, err = s.checkHostAccessHeld(ctx, cond, svc, changes(svc, req, section))
 		if err != nil {
 			return "", err
 		}

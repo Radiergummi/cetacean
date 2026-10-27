@@ -71,8 +71,18 @@ func CheckHostAccessHeld(
 		return nil
 	}
 
+	// A volume the manager doesn't hold most likely lives on a worker; unlike
+	// CheckMounts, a held mount of one is not presumed to reach the host.
+	known := func(name string) (volume.Volume, bool) {
+		if stored, ok := lookup(name); ok {
+			return stored, true
+		}
+
+		return volume.Volume{Name: name, Driver: "local"}, true
+	}
+
 	for _, spec := range []*swarm.ServiceSpec{&svc.Spec, svc.PreviousSpec} {
-		if what := specHostAccess(spec, lookup); what != "" {
+		if what := specHostAccess(spec, known); what != "" {
 			return &HostAccessError{What: change + " a service with " + what}
 		}
 	}

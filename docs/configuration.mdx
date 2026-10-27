@@ -456,28 +456,29 @@ expose. Each level includes everything below it. A request above the configured 
 `403 Forbidden` with error code `OPS001`.
 
 A service has host access when its current or previous spec carries a bind, named-pipe, or cluster
-mount, a volume with driver options, or an added capability. Changing what runs with that access
-needs level 3, whatever level the endpoint otherwise needs.
+mount, a volume with driver options, or an added capability. A named volume the manager doesn't
+hold, typically one on a worker, doesn't count. Changing what runs with that access needs level 3,
+whatever level the endpoint otherwise needs. Environment changes aren't covered by this rule.
 
-| Operation                                                                                    | 0 read-only | 1 operational | 2 configuration | 3 impactful |
-|----------------------------------------------------------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
-| Browse all resources                                                                         |      ✔      |       ✔       |        ✔        |      ✔      |
-| Scale, restart, roll back, update image                                                      |      —      |       ✔       |        ✔        |      ✔      |
-| Edit service definitions (env, labels, resources, ports, placement, policies)                |      —      |       —       |        ✔        |      ✔      |
-| Attach configs, secrets, networks, volumes, and tmpfs mounts to a service                    |      —      |       —       |        ✔        |      ✔      |
-| Edit node labels                                                                             |      —      |       —       |        ✔        |      ✔      |
-| Create configs and secrets, edit their labels                                                |      —      |       —       |        ✔        |      ✔      |
-| Enable, disable, or configure plugins                                                        |      —      |       —       |        ✔        |      ✔      |
-| Edit swarm settings (raft, orchestration, dispatcher)                                        |      —      |       —       |        ✔        |      ✔      |
-| Delete any resource                                                                          |      —      |       —       |        —        |      ✔      |
-| Add a bind or named-pipe mount, a volume driver, or a capability to a service                |      —      |       —       |        —        |      ✔      |
-| Set a plugin's mount source or device path                                                   |      —      |       —       |        —        |      ✔      |
-| Change the image, command, user, or placement of a service with host access, or roll it back |      —      |       —       |        —        |      ✔      |
-| Change node availability or role                                                             |      —      |       —       |        —        |      ✔      |
-| Change a service's endpoint mode                                                             |      —      |       —       |        —        |      ✔      |
-| Install, upgrade, or remove plugins                                                          |      —      |       —       |        —        |      ✔      |
-| Manage CA and encryption, read and rotate join tokens, unlock the swarm                      |      —      |       —       |        —        |      ✔      |
-| Revoke OAuth clients a user authorized (`DELETE /tokens/{subject}`)                          |      —      |       —       |        —        |      ✔      |
+| Operation                                                                                                          | 0 read-only | 1 operational | 2 configuration | 3 impactful |
+|--------------------------------------------------------------------------------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
+| Browse all resources                                                                                               |      ✔      |       ✔       |        ✔        |      ✔      |
+| Scale, restart, roll back, update image                                                                            |      —      |       ✔       |        ✔        |      ✔      |
+| Edit service definitions (env, labels, resources, ports, placement, policies)                                      |      —      |       —       |        ✔        |      ✔      |
+| Attach configs, secrets, networks, volumes, and tmpfs mounts to a service                                          |      —      |       —       |        ✔        |      ✔      |
+| Edit node labels                                                                                                   |      —      |       —       |        ✔        |      ✔      |
+| Create configs and secrets, edit their labels                                                                      |      —      |       —       |        ✔        |      ✔      |
+| Enable, disable, or configure plugins                                                                              |      —      |       —       |        ✔        |      ✔      |
+| Edit swarm settings (raft, orchestration, dispatcher)                                                              |      —      |       —       |        ✔        |      ✔      |
+| Delete any resource                                                                                                |      —      |       —       |        —        |      ✔      |
+| Add a bind or named-pipe mount, a volume driver, or a capability to a service                                      |      —      |       —       |        —        |      ✔      |
+| Set a plugin's mount source or device path                                                                         |      —      |       —       |        —        |      ✔      |
+| Change the image, command, user, health check command, or placement of a service with host access, or roll it back |      —      |       —       |        —        |      ✔      |
+| Change node availability or role                                                                                   |      —      |       —       |        —        |      ✔      |
+| Change a service's endpoint mode                                                                                   |      —      |       —       |        —        |      ✔      |
+| Install, upgrade, or remove plugins                                                                                |      —      |       —       |        —        |      ✔      |
+| Manage CA and encryption, read and rotate join tokens, unlock the swarm                                            |      —      |       —       |        —        |      ✔      |
+| Revoke OAuth clients a user authorized (`DELETE /tokens/{subject}`)                                                |      —      |       —       |        —        |      ✔      |
 
 Operations level and [grants][interaction-with-operations-level] are independent checks
 and both must pass. Operations level is the global ceiling, grants control per-user scope. Set
