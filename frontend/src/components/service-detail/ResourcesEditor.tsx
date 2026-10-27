@@ -316,7 +316,7 @@ export function ResourcesEditor({
             formatLabel={formatMemoryTick}
           />
         </div>
-      ) : capacityQuery.isError ? (
+      ) : capacityQuery.isError && !capacityQuery.isFetching ? (
         <p className="text-xs text-status-danger">
           Failed to load cluster capacity. Try closing and reopening the editor.
         </p>

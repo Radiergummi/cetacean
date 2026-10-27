@@ -54,7 +54,7 @@ export function NetworksEditor({
       editDisabled={!canEdit}
       onEditStart={() => {
         version.capture();
-        void networksQuery.refetch();
+        void networksQuery.refetch({ cancelRefetch: false });
       }}
       emptyLabel="No networks attached"
       emptyHint="Click Edit to attach Docker networks to this service."
@@ -107,7 +107,7 @@ export function NetworksEditor({
               placeholder="Select network..."
               allowCustom={false}
             />
-            {networksQuery.isError && (
+            {networksQuery.isError && !networksQuery.isFetching && (
               <p className="mt-1 text-xs text-status-danger">
                 Failed to load networks. Try closing and reopening the editor.
               </p>
