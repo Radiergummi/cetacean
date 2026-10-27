@@ -9,7 +9,7 @@ import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
-This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 28 tools, 6 prompts, and 5
+This page is the catalog an agent sees over Cetacean's MCP server: 20 resources, 28 tools, 6 prompts, and 5
 widgets. For enabling the server, authorization, and configuration, see [MCP server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] isn't
@@ -377,7 +377,7 @@ Where work is allowed to run, and who votes in Raft.
 
 ## Resources
 
-Resources are read-only views returned as `application/json`. Three are static, eleven are URI templates.
+Resources are read-only views returned as `application/json`. Three are static, seventeen are URI templates.
 
 | URI                          | Contents                                                                                                                                                                                                                  |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -390,7 +390,7 @@ Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `re
 cores.
 
 Templated resources return the same compact digest the `describe` tool builds. The exceptions are
-`services/{id}/logs`, the recent log lines, and the two `compose` documents, which are YAML rather than JSON.
+`services/{id}/logs`, the recent log lines; the two `compose` documents, which are YAML rather than JSON; and the six image attestation views, read from the image's registry when asked.
 
 | URI template                       | Contents                                                                        |
 |------------------------------------|---------------------------------------------------------------------------------|
@@ -399,6 +399,12 @@ Templated resources return the same compact digest the `describe` tool builds. T
 | `cetacean://services/{id}/logs`    | Service logs merged across replicas, subscribable; not a digest                 |
 | `cetacean://services/{id}/compose` | The service as a one-service Compose file; everything it references is external |
 | `cetacean://tasks/{id}`            | Task digest; the parent service and node are in `related`, not top-level fields |
+| `cetacean://services/{id}/provenance` | The image's build provenance per platform, as recorded and not verified, or why there is none |
+| `cetacean://tasks/{id}/provenance` | The same for the image the task runs, on the platforms its node can run |
+| `cetacean://services/{id}/sbom{?platform}` | One platform's SBOM as a package table, never the SPDX document |
+| `cetacean://tasks/{id}/sbom{?platform}` | The same for the platform of the task's node |
+| `cetacean://services/{id}/dockerfile{?platform}` | The embedded Dockerfile with the layers and bytes each instruction produced |
+| `cetacean://tasks/{id}/dockerfile{?platform}` | The same for the platform of the task's node |
 | `cetacean://stacks/{name}`         | Stack digest, rolling up its member resources                                   |
 | `cetacean://stacks/{name}/compose` | The stack as a Compose file; secrets and configs are referenced, never exported |
 | `cetacean://configs/{id}`          | Config digest; the payload's size in bytes, never the payload                   |

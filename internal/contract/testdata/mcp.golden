@@ -124,10 +124,16 @@ resource-template cetacean://nodes/{id}
 resource-template cetacean://secrets/{id}
 resource-template cetacean://services/{id}
 resource-template cetacean://services/{id}/compose
+resource-template cetacean://services/{id}/dockerfile{?platform}
 resource-template cetacean://services/{id}/logs
+resource-template cetacean://services/{id}/provenance
+resource-template cetacean://services/{id}/sbom{?platform}
 resource-template cetacean://stacks/{name}
 resource-template cetacean://stacks/{name}/compose
 resource-template cetacean://tasks/{id}
+resource-template cetacean://tasks/{id}/dockerfile{?platform}
+resource-template cetacean://tasks/{id}/provenance
+resource-template cetacean://tasks/{id}/sbom{?platform}
 resource-template cetacean://volumes/{name}
 resource cetacean://cluster
 resource cetacean://history

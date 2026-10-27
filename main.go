@@ -637,6 +637,7 @@ func main() {
 		rec:          recEngine,
 		prometheus:   promClient,
 		images:       imageChecker,
+		attestations: imageAttestations,
 		tracer:       mcpTracer,
 		streams:      streams,
 		logReads:     logReads,
@@ -1008,17 +1009,18 @@ type mcpDeps struct {
 	// than finding out by trying again.
 	dataDirReady bool
 
-	cache       *cache.Cache
-	writeClient mcp.DockerWriteClient
-	logs        mcp.LogStreamer
-	acl         *acl.Evaluator
-	rec         mcp.RecommendationEngine
-	prometheus  *promapi.Client
-	images      *imagecheck.Checker
-	tracer      oteltrace.Tracer
-	streams     *sse.Lifetime
-	logReads    *sse.Slots
-	versions    *cluster.VersionIndex
+	cache        *cache.Cache
+	writeClient  mcp.DockerWriteClient
+	logs         mcp.LogStreamer
+	acl          *acl.Evaluator
+	rec          mcp.RecommendationEngine
+	prometheus   *promapi.Client
+	images       *imagecheck.Checker
+	attestations *attestations.Store
+	tracer       oteltrace.Tracer
+	streams      *sse.Lifetime
+	logReads     *sse.Slots
+	versions     *cluster.VersionIndex
 
 	secretEntries *cluster.SecretEntries
 }
@@ -1169,6 +1171,11 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		imageDigests = d.images
 	}
 
+	var imageAttestations cluster.AttestationSource
+	if d.attestations != nil {
+		imageAttestations = d.attestations
+	}
+
 	mcpSrv, err := mcp.New(d.cache, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
@@ -1182,6 +1189,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		ImageDigests:    imageDigests,
+		Attestations:    imageAttestations,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
