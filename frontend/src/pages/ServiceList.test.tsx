@@ -43,6 +43,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", localStorageStub);
   mockServices.mockReset();
+  vi.mocked(api.allTasks).mockClear();
 });
 
 afterEach(() => {
@@ -157,14 +158,10 @@ describe("ServiceList", () => {
 
   // A job desires nothing running, so its card's dot needs how its tasks ended.
   it("marks the card of a job whose tasks all failed as critical", async () => {
-    vi.stubGlobal("localStorage", {
-      ...localStorageStub,
-      getItem: (key: string) => (key === "viewMode:services" ? "grid" : null),
-    });
+    showCards();
 
-    const job = fakeService("job1", "migrate", 0, 0);
+    const job = fakeJob("job1", "migrate");
 
-    job.Spec.Mode = { ReplicatedJob: {} };
     mockServices.mockResolvedValue({
       data: { items: [job], total: 1, limit: 50, offset: 0 },
       allowedMethods: new Set(),
@@ -179,4 +176,43 @@ describe("ServiceList", () => {
       expect(screen.getByRole("img", { name: "critical" })).toBeInTheDocument();
     });
   });
+
+  // The cards share one question about every job on the page.
+  it("asks how every loaded job ended in one request", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: {
+        items: [fakeJob("job1", "migrate"), fakeJob("job2", "seed")],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    await waitFor(() => expect(api.allTasks).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(api.allTasks).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.allTasks).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ filter: expect.stringContaining('service in ["job1","job2"]') }),
+    );
+  });
 });
+
+function showCards() {
+  vi.stubGlobal("localStorage", {
+    ...localStorageStub,
+    getItem: (key: string) => (key === "viewMode:services" ? "grid" : null),
+  });
+}
+
+function fakeJob(id: string, name: string): ServiceListItem {
+  const job = fakeService(id, name, 0, 0);
+
+  job.Spec.Mode = { ReplicatedJob: {} };
+
+  return job;
+}

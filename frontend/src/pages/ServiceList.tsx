@@ -18,7 +18,7 @@ import { desiredTasks } from "../lib/serviceHealth";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
 import { cn } from "../lib/utils";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function ServiceList() {
@@ -26,6 +26,10 @@ export default function ServiceList() {
   const hasCadvisor = isCadvisorReady(monitoring);
   const { getForService } = useServiceMetrics();
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
+
+  // One question for every job loaded, rather than one per card.
+  const [loaded, setLoaded] = useState<ServiceListItem[]>([]);
+  const outcomes = useJobOutcomes(loaded);
 
   const recommendationsByService = useMemo(() => {
     const map = new Map<string, Recommendation[]>();
@@ -176,6 +180,7 @@ export default function ServiceList() {
       viewModeKey="services"
       fetchFn={(params, signal) => api.services(params, signal)}
       keyFn={({ ID }) => ID}
+      onItems={setLoaded}
       itemPath={({ ID }) => `/services/${ID}`}
       columns={columns}
       skeletonColumns={6}
@@ -211,7 +216,11 @@ export default function ServiceList() {
           <ResourceCard
             title={
               <span className="flex items-center gap-2">
-                <ServiceHealthDot service={service} />
+                <HealthDot
+                  running={service.RunningTasks}
+                  desired={desiredTasks(service.Spec.Mode)}
+                  outcome={outcomes[service.ID]}
+                />
                 <ResourceName name={service.Spec.Name} />
               </span>
             }
@@ -245,20 +254,6 @@ export default function ServiceList() {
       emptyMessage={(hasSearch) =>
         hasSearch ? "No services match your search" : "No services found"
       }
-    />
-  );
-}
-
-/** A card's health dot; a job's asks how its finished tasks ended. */
-function ServiceHealthDot({ service }: { service: ServiceListItem }) {
-  const services = useMemo(() => [service], [service]);
-  const outcomes = useJobOutcomes(services);
-
-  return (
-    <HealthDot
-      running={service.RunningTasks}
-      desired={desiredTasks(service.Spec.Mode)}
-      outcome={outcomes[service.ID]}
     />
   );
 }
