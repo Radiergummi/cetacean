@@ -118,11 +118,15 @@ func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 	return recs
 }
 
-// formatCountedWindow renders the window a failure count actually covers, to
-// the minute and never as zero: a restored snapshot dates the tracker from an
-// hour-truncated bucket, so the window can be seconds old.
+// formatCountedWindow renders the window a failure count actually covers, in
+// whole hours, or minutes under an hour, and never as zero: a restored
+// snapshot dates the tracker from an hour-truncated bucket.
 func formatCountedWindow(d time.Duration) string {
-	return formatPromDuration(max(d.Truncate(time.Minute), time.Minute))
+	if d < time.Hour {
+		return formatPromDuration(max(d.Truncate(time.Minute), time.Minute))
+	}
+
+	return formatPromDuration(d.Truncate(time.Hour))
 }
 
 func (oc *OperationalChecker) nodeRecs(

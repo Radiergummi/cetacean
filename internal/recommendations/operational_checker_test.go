@@ -314,7 +314,8 @@ func TestOperationalChecker_FlakyServiceWindowIsNeverZero(t *testing.T) {
 	}
 }
 
-// formatCountedWindow reads like the sizing lookback, to the minute.
+// formatCountedWindow is prose: a window reads in whole hours or days, minutes
+// only under an hour, and never as zero.
 func TestFormatCountedWindow(t *testing.T) {
 	cases := []struct {
 		in   time.Duration
@@ -322,7 +323,8 @@ func TestFormatCountedWindow(t *testing.T) {
 	}{
 		{30 * time.Second, "1m"},
 		{45 * time.Minute, "45m"},
-		{90*time.Minute + 20*time.Second, "90m"},
+		{90*time.Minute + 20*time.Second, "1h"},
+		{76*time.Hour + 17*time.Minute, "76h"},
 		{25 * time.Hour, "25h"},
 		{7 * 24 * time.Hour, "7d"},
 	}
