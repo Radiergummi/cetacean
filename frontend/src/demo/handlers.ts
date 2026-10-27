@@ -231,21 +231,60 @@ function findServicesUsing(
     .map((service) => ({ id: service.ID, name: service.Spec.Name }));
 }
 
+/** Task states that still hold their addresses; past running they are freed. */
+const addressHoldingStates = new Set([
+  "new",
+  "allocated",
+  "pending",
+  "assigned",
+  "accepted",
+  "preparing",
+  "ready",
+  "starting",
+  "running",
+]);
+
 /**
- * A demo network's address figure, counted as the server does over the
- * dataset: a VIP per service, an address per live task, and a load balancer
- * per node with such a task, or per node in the swarm for ingress.
+ * The usable addresses of an IPv4 subnet, as the server counts them: less the
+ * network and broadcast addresses up to a /30, and the gateway. The dataset
+ * sets no IP range or auxiliary address, and its gateways sit in the subnet.
  */
-function demoAddresses(dataset: Dataset, network: Network): NetworkAddresses | undefined {
-  if (network.Scope !== "swarm") {
+function usableAddresses(subnet: string): number | undefined {
+  const [address, prefix] = subnet.split("/");
+  const bits = Number(prefix);
+
+  if (!address?.includes(".") || !Number.isInteger(bits) || bits < 0 || bits > 32) {
     return undefined;
   }
 
-  const usable = (network.IPAM.Config ?? []).reduce((total, { Subnet }) => {
-    const bits = Number(Subnet?.split("/")[1]);
+  const size = 2 ** (32 - bits);
 
-    return Subnet?.includes(".") && bits <= 30 ? total + 2 ** (32 - bits) - 3 : total;
-  }, 0);
+  return bits <= 30 ? size - 3 : size - 1;
+}
+
+/**
+ * A demo network's address figure, under the server's rules: only a swarm
+ * network on the default IPAM driver with an IPv4 subnet has one. The dataset
+ * records no VIPs or attachments, so a VIP-mode service stands in for its VIP
+ * and a service's tasks for the addresses they hold.
+ */
+function demoAddresses(dataset: Dataset, network: Network): NetworkAddresses | undefined {
+  const driver = network.IPAM.Driver;
+
+  if (network.Scope !== "swarm" || (driver && driver !== "default")) {
+    return undefined;
+  }
+
+  const pools = (network.IPAM.Config ?? []).flatMap(({ Subnet }) => {
+    const usable = Subnet ? usableAddresses(Subnet) : undefined;
+
+    return usable === undefined ? [] : [usable];
+  });
+
+  if (pools.length === 0) {
+    return undefined;
+  }
+
   const services = dataset.services.filter((service) =>
     network.Ingress
       ? (service.Endpoint?.Ports ?? []).some(({ PublishMode }) => PublishMode === "ingress")
@@ -253,15 +292,15 @@ function demoAddresses(dataset: Dataset, network: Network): NetworkAddresses | u
   );
   const serviceIDs = new Set(services.map(({ ID }) => ID));
   const tasks = dataset.tasks.filter(
-    ({ ServiceID, Status }) => serviceIDs.has(ServiceID) && Status.State === "running",
+    ({ ServiceID, Status }) => serviceIDs.has(ServiceID) && addressHoldingStates.has(Status.State),
   );
   const vips = services.filter(({ Spec }) => Spec.EndpointSpec?.Mode !== "dnsrr").length;
   const loadBalancers = network.Ingress
     ? dataset.nodes.length
-    : new Set(tasks.map(({ NodeID }) => NodeID)).size;
+    : new Set(tasks.flatMap(({ NodeID }) => (NodeID ? [NodeID] : []))).size;
 
   return {
-    usable,
+    usable: pools.reduce((total, usable) => total + usable, 0),
     used: vips + tasks.length + loadBalancers,
     vips,
     tasks: tasks.length,

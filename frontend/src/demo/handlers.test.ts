@@ -136,6 +136,13 @@ describe("detail response shapes", () => {
     expect(addresses.used).toBe(addresses.vips! + addresses.tasks! + addresses.loadBalancers!);
   });
 
+  it("GET /networks/:id leaves the figure off a local network", async () => {
+    const local = dataset.networks.find(({ Scope }) => Scope === "local")!;
+    const data = await fetchJSON(`/networks/${local.Id}`);
+
+    expect(data).not.toHaveProperty("addresses");
+  });
+
   it("GET /volumes/:name has volume and services", async () => {
     const data = await fetchJSON(`/volumes/${dataset.volumes[0]?.Name}`);
     expect(data).toHaveProperty("volume");
