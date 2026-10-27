@@ -2587,3 +2587,69 @@ func TestHandleGetService_NoIntegrationsField(t *testing.T) {
 		t.Error("expected no integrations field when none detected")
 	}
 }
+
+func TestHandleGetService_Links(t *testing.T) {
+	c := cache.New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.Labels = map[string]string{
+		"cetacean.link.grafana":       "https://grafana.example.com/d/web",
+		"cetacean.link.grafana.title": "Dashboard",
+		"cetacean.link.oncall":        "pager:web-team",
+	}
+	c.SetService(svc)
+	h := newTestHandlers(t, withCache(c))
+
+	req := httptest.NewRequest("GET", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetService(w, req)
+
+	var body struct {
+		Links []cluster.ServiceLink `json:"links"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	want := []cluster.ServiceLink{
+		{ID: "grafana", Title: "Dashboard", Href: "https://grafana.example.com/d/web"},
+		{ID: "oncall", Title: "oncall", Text: "pager:web-team"},
+	}
+	if !slices.Equal(body.Links, want) {
+		t.Errorf("links = %+v, want %+v", body.Links, want)
+	}
+}
+
+func TestHandleGetStack_LinksAreTheUnionOfItsServices(t *testing.T) {
+	c := cache.New(nil)
+	for _, id := range []string{"svc1", "svc2"} {
+		svc := swarm.Service{ID: id}
+		svc.Spec.Name = id
+		svc.Spec.Labels = map[string]string{
+			"com.docker.stack.namespace": "mystack",
+			"cetacean.link.repo":         "https://git.example.com/mystack",
+		}
+		c.SetService(svc)
+	}
+	h := newTestHandlers(t, withCache(c))
+
+	req := httptest.NewRequest("GET", "/stacks/mystack", nil)
+	req.SetPathValue("name", "mystack")
+	w := httptest.NewRecorder()
+	h.HandleGetStack(w, req)
+
+	var body struct {
+		Links []cluster.ServiceLink `json:"links"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	want := []cluster.ServiceLink{
+		{ID: "repo", Title: "repo", Href: "https://git.example.com/mystack"},
+	}
+	if !slices.Equal(body.Links, want) {
+		t.Errorf("links = %+v, want %+v", body.Links, want)
+	}
+}

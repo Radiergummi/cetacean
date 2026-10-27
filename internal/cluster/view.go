@@ -540,6 +540,10 @@ func ServiceDetails(svc swarm.Service) map[string]any {
 		"replicas": ReplicaCount(svc),
 	}
 
+	if links := ServiceLinks(svc.Spec.Labels); len(links) > 0 {
+		details["links"] = links
+	}
+
 	spec := svc.Spec.TaskTemplate.ContainerSpec
 	if spec != nil {
 		details["image"] = StripImageDigest(spec.Image)
