@@ -209,8 +209,8 @@ var errorRegistry = map[string]ErrorDef{
 		Code:        "CSR002",
 		Title:       "Misdirected Request",
 		Status:      http.StatusMisdirectedRequest,
-		Description: "The request's Host names neither this server's public URL, its listen address, an IP address nor loopback, so it may come from a page that rebound its own name to this server.",
-		Suggestion:  "Reach the server at the host in the server.public_url setting, by IP address, or through a trusted proxy.",
+		Description: "The request's Host names none of this server's names, an IP address or loopback, so it may come from a page that rebound its own name to this server.",
+		Suggestion:  "Add the host to the server.allowed_hosts setting, or set server.public_url to the URL the server is reached at.",
 	},
 
 	// ── FLT: filter expressions ───────────────────────────────────────

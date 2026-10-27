@@ -693,7 +693,7 @@ func main() {
 		AuthProvider:       authProvider,
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,
-		AllowedHosts:       allowedHosts(cfg.ListenAddr, tsnetDomains),
+		AllowedHosts:       append(allowedHosts(cfg.ListenAddr, tsnetDomains), cfg.AllowedHosts...),
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled() || tsnetMode,
 		TrustedProxies:     cfg.TrustedProxies,

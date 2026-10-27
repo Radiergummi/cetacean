@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -36,7 +37,11 @@ func hostGuard(publicURL string, allowed []string) Constructor {
 				return
 			}
 
-			writeErrorCode(w, r, "CSR002", "this server does not answer for host "+r.Host)
+			writeErrorCode(w, r, "CSR002", fmt.Sprintf(
+				"this server does not answer for host %q; add it to server.allowed_hosts, "+
+					"or set server.public_url to the URL it is reached at",
+				host,
+			))
 		})
 	}
 }

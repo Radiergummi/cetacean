@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +37,11 @@ func TestHostGuard_RefusesAForeignNameWith421(t *testing.T) {
 	}
 	if want := "/api/errors/CSR002"; problem.Type != want {
 		t.Errorf("type = %q, want %q", problem.Type, want)
+	}
+	for _, want := range []string{"rebind.attacker.example", "server.allowed_hosts", "server.public_url"} {
+		if !strings.Contains(problem.Detail, want) {
+			t.Errorf("detail %q does not name %s", problem.Detail, want)
+		}
 	}
 }
 

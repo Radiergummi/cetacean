@@ -18,8 +18,8 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
-    A request whose `Host` names neither `server.public_url`'s host, an IP
-    address nor `localhost`, and that did not come through a trusted proxy, is
+    A request whose `Host` names neither `server.public_url`'s host, a name in
+    `server.allowed_hosts`, an IP address nor `localhost`, and that did not come through a trusted proxy, is
     answered `421 Misdirected Request` (`CSR002`) on every path but
     `/-/health`, `/-/ready` and `/-/metrics`. It is not repeated under each operation.
 

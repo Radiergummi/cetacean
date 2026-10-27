@@ -37,7 +37,11 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
 <ConfigParam name="server.public_url" flag="-public-url" env="CETACEAN_PUBLIC_URL">
   Canonical external URL clients reach Cetacean at, for example `https://cetacean.example.com`. Origin only—set the path prefix with [`server.base_path`][server.base_path], which is used for both inbound and outbound paths. Supplies the default for [`oauth.issuer`][oauth.issuer] and [`auth.oidc.redirect_url`][auth.oidc.redirect_url], and makes Atom and JSON Feed links independent of the `X-Forwarded-*` headers a client can set. Set it behind a reverse proxy.
 
-  Its host is one of the names Cetacean answers for. A request whose `Host` is none of them is refused with `421`, which stops a site that points its own name at Cetacean (DNS rebinding) from reading the API as its visitor. Also accepted: any IP address, `localhost`, a host name in [`server.listen_addr`][server.listen_addr], the tailnet name in [`tsnet` mode][tailscale], and any request from a [trusted proxy][server.trusted_proxies]. If you reach Cetacean by another name, set this to it. `/-/health`, `/-/ready`, and `/-/metrics` answer under any name.
+  Its host is one of the names Cetacean answers for. A request whose `Host` is none of them is refused with `421`, which stops a site that points its own name at Cetacean (DNS rebinding) from reading the API as its visitor. Also accepted: any IP address, `localhost`, a host name in [`server.listen_addr`][server.listen_addr], the tailnet name in [`tsnet` mode][tailscale], each name in [`server.allowed_hosts`][server.allowed_hosts], and any request from a [trusted proxy][server.trusted_proxies]. `/-/health`, `/-/ready`, and `/-/metrics` answer under any name.
+</ConfigParam>
+
+<ConfigParam name="server.allowed_hosts" flag="-allowed-hosts" env="CETACEAN_ALLOWED_HOSTS">
+  Further host names Cetacean answers for, as a comma-separated list, for example `swarm.lan,cetacean.tailnet.ts.net`. Add every name people reach Cetacean by other than the host of [`server.public_url`][server.public_url]; a request naming any other host is refused with `421`. IP addresses and `localhost` need no entry.
 </ConfigParam>
 
 <ConfigParam name="docker.host" flag="-docker-host" env="CETACEAN_DOCKER_HOST" default="unix:///var/run/docker.sock">
@@ -524,6 +528,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [operations-level]: #operations-level
 [recommendations]: recommendations
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
+[server.allowed_hosts]: #server.allowed_hosts
 [server.base_path]: #server.base_path
 [server.forwarded_headers]: #server.forwarded_headers
 [server.listen_addr]: #server.listen_addr
