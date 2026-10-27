@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
+	"golang.org/x/net/http/httpproxy"
 )
 
 const (
@@ -57,10 +58,13 @@ type Checker struct {
 func New(list func() []swarm.Service) *Checker {
 	return &Checker{
 		services: list,
-		client:   NewClient(&http.Client{Timeout: requestTimeout, Transport: guardedTransport()}),
-		now:      time.Now,
-		spacing:  requestSpacing,
-		entries:  map[string]*entry{},
+		client: NewClient(&http.Client{
+			Timeout:   requestTimeout,
+			Transport: guardedTransport(httpproxy.FromEnvironment()),
+		}),
+		now:     time.Now,
+		spacing: requestSpacing,
+		entries: map[string]*entry{},
 	}
 }
 

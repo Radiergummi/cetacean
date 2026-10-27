@@ -60,10 +60,16 @@ type bearerToken struct {
 }
 
 // NewClient returns a client sending its requests through a copy of
-// httpClient that follows only redirects checkRedirect admits.
+// httpClient that follows only redirects redirectPolicy admits.
 func NewClient(httpClient *http.Client) *Client {
 	guarded := *httpClient
-	guarded.CheckRedirect = checkRedirect
+
+	transport := guarded.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+
+	guarded.CheckRedirect = redirectPolicy(transport)
 
 	return &Client{http: &guarded, tokens: map[string]bearerToken{}}
 }
@@ -231,8 +237,8 @@ func (c *Client) cachedToken(key string) string {
 }
 
 // fetchToken asks the challenge's realm for an anonymous pull token. The realm
-// must be HTTPS, or anyone on the path could replay the token, and on the site
-// of the host that challenged, or any registry could aim the request anywhere.
+// must be HTTPS, or anyone on the path could replay the token, and one
+// realmAllowed admits, or any registry could aim the request anywhere.
 func (c *Client) fetchToken(
 	ctx context.Context,
 	ch challenge,
@@ -244,7 +250,7 @@ func (c *Client) fetchToken(
 		return bearerToken{}, fmt.Errorf("registry named an unusable token realm")
 	}
 
-	if !sameSite(realm.Host, challenger) {
+	if !realmAllowed(ctx, realm.Host, challenger) {
 		return bearerToken{}, fmt.Errorf("%w: %s", errForeignRealm, realm.Host)
 	}
 

@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
+	"syscall"
 )
 
 // ErrBlocked is an address the policy refuses to dial.
@@ -72,49 +74,44 @@ func (p Policy) Check(ip net.IP) error {
 	return nil
 }
 
-// Screen decides whether one resolved address of host may be dialled.
-type Screen func(ctx context.Context, host string, ip net.IP) error
+// Private reports whether ip is in RFC 1918, ULA or CGNAT space.
+func Private(ip net.IP) bool {
+	return ip.IsPrivate() || cgnatBlock.Contains(ip)
+}
 
-// DialContext resolves the host, screens every address and dials the first
-// survivor by address, so a rebinding resolver cannot answer the screen and
-// the connect differently.
+// Screen decides whether ip, one address of the host:port the caller asked to
+// dial, may be connected to.
+type Screen func(ctx context.Context, address string, ip net.IP) error
+
+type dialAddressKey struct{}
+
+// DialContext dials through a copy of dialer that screens each address at
+// connect time, after resolution, so a rebinding resolver cannot answer the
+// screen and the connect differently, and the dialer keeps its parallel dials.
 func DialContext(
 	dialer *net.Dialer,
 	screen Screen,
 ) func(ctx context.Context, network, address string) (net.Conn, error) {
-	return func(ctx context.Context, network, address string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(address)
+	screened := *dialer
+	screened.ControlContext = func(ctx context.Context, _, connect string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(connect)
 		if err != nil {
-			return nil, fmt.Errorf("dial: invalid address %q: %w", address, err)
+			return err
 		}
 
-		ips := []net.IP{net.ParseIP(host)}
-		if ips[0] == nil {
-			ips, err = net.DefaultResolver.LookupIP(ctx, "ip", host)
-			if err != nil {
-				return nil, fmt.Errorf("dial: lookup %q: %w", host, err)
-			}
-		}
-		if len(ips) == 0 {
-			return nil, fmt.Errorf("%w: no addresses resolved for %q", ErrBlocked, host)
+		addr, err := netip.ParseAddr(host)
+		if err != nil {
+			return fmt.Errorf("%w: %q is not an address", ErrBlocked, connect)
 		}
 
-		var firstErr error
-		for _, ip := range ips {
-			if err := screen(ctx, host, ip); err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-			if dialErr == nil {
-				return conn, nil
-			}
-			if firstErr == nil {
-				firstErr = dialErr
-			}
-		}
-		return nil, firstErr
+		address, _ := ctx.Value(dialAddressKey{}).(string)
+
+		return screen(ctx, address, net.IP(addr.Unmap().WithZone("").AsSlice()))
+	}
+
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		ctx = context.WithValue(ctx, dialAddressKey{}, address)
+
+		return screened.DialContext(ctx, network, address)
 	}
 }

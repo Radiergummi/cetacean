@@ -19,20 +19,63 @@ const maxRedirects = 10
 
 type registryKey struct{}
 
-// withRegistry records the registry host a service names, which screen
-// measures every other host against.
+// registry is the host a service names, and whether it sits on the LAN.
+type registry struct {
+	host string
+	lan  bool
+}
+
+// lookupIP resolves a name for isLAN; a variable so tests need no DNS.
+var lookupIP = net.DefaultResolver.LookupIP
+
+// withRegistry records the registry a service names, which screen and the
+// realm rule measure every other host against.
 func withRegistry(ctx context.Context, host string) context.Context {
-	return context.WithValue(ctx, registryKey{}, host)
+	return context.WithValue(ctx, registryKey{}, registry{host: host, lan: isLAN(ctx, host)})
+}
+
+func registryOf(ctx context.Context) registry {
+	r, _ := ctx.Value(registryKey{}).(registry)
+	return r
+}
+
+// isLAN reports whether host, or every address it resolves to, is private or
+// loopback. A host that does not resolve is not.
+func isLAN(ctx context.Context, host string) bool {
+	host = hostOnly(host)
+
+	ips := []net.IP{net.ParseIP(host)}
+	if ips[0] == nil {
+		var err error
+		if ips, err = lookupIP(ctx, "ip", host); err != nil || len(ips) == 0 {
+			return false
+		}
+	}
+
+	for _, ip := range ips {
+		if !netguard.Private(ip) && !ip.IsLoopback() {
+			return false
+		}
+	}
+
+	return true
 }
 
 // screen admits the registry's own site to private and loopback addresses, as
-// a registry on the LAN is the operator's choice. A host the registry sends us
-// to on another site gets the full screen; link-local is refused to everyone.
-func screen(ctx context.Context, host string, ip net.IP) error {
-	registry, _ := ctx.Value(registryKey{}).(string)
-	own := registry != "" && sameSite(host, registry)
+// a registry on the LAN is the operator's choice, and so is where it sends us.
+// A public registry's hops elsewhere get the full screen; link-local never passes.
+func screen(ctx context.Context, address string, ip net.IP) error {
+	r := registryOf(ctx)
+	own := r.host != "" && (r.lan || sameSite(address, r.host))
 
 	return netguard.Policy{AllowLoopback: own, AllowPrivate: own}.Check(ip)
+}
+
+// realmAllowed admits a token realm on the site of the host that challenged,
+// or anywhere on the LAN when the registry is on it too: Harbor by address
+// with its realm at harbor.lan, or registry.lan with auth.lan.
+func realmAllowed(ctx context.Context, realm, challenger string) bool {
+	return sameSite(realm, challenger) || registryOf(ctx).lan && isLAN(ctx, realm)
 }
 
 // sameSite reports whether a and b, host or host:port, are one host or share a
@@ -62,57 +105,92 @@ func hostOnly(hostport string) string {
 	return strings.Trim(hostport, "[]")
 }
 
-// checkRedirect follows only https, and screens an address literal the way
-// the dialer would, which matters when a proxy does the dialling.
-func checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= maxRedirects {
-		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+// redirectPolicy follows only https and screens an address literal the way
+// the dialer would. Through a proxy no address can be screened, so a redirect
+// must also stay on the registry's site.
+func redirectPolicy(transport http.RoundTripper) func(*http.Request, []*http.Request) error {
+	var proxy func(*http.Request) (*url.URL, error)
+	if t, ok := transport.(*http.Transport); ok {
+		proxy = t.Proxy
 	}
 
-	if req.URL.Scheme != "https" {
-		return fmt.Errorf("registry redirected to %s, not https", req.URL.Scheme)
-	}
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
 
-	if ip := net.ParseIP(req.URL.Hostname()); ip != nil {
-		return screen(req.Context(), req.URL.Hostname(), ip)
-	}
+		if req.URL.Scheme != "https" {
+			return fmt.Errorf("registry redirected to %s, not https", req.URL.Scheme)
+		}
 
-	return nil
+		if proxy != nil {
+			if through, err := proxy(req); err != nil || through != nil {
+				if r := registryOf(req.Context()); !sameSite(req.URL.Host, r.host) {
+					return fmt.Errorf(
+						"%w: redirect to %s leaves %s through a proxy",
+						netguard.ErrBlocked, req.URL.Host, r.host,
+					)
+				}
+			}
+		}
+
+		if ip := net.ParseIP(req.URL.Hostname()); ip != nil {
+			return screen(req.Context(), req.URL.Host, ip)
+		}
+
+		return nil
+	}
 }
 
-// guardedTransport dials only screened addresses. A proxy configured in the
-// environment is the operator's and is dialled unscreened.
-func guardedTransport() *http.Transport {
+// guardedTransport dials only screened addresses. The proxy env names is the
+// operator's and is dialled unscreened, on its own port only.
+func guardedTransport(env *httpproxy.Config) *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	proxyFor := env.ProxyFunc()
+	transport.Proxy = func(req *http.Request) (*url.URL, error) { return proxyFor(req.URL) }
 
 	proxies := map[string]bool{}
-	env := httpproxy.FromEnvironment()
 	for _, proxy := range []string{env.HTTPSProxy, env.HTTPProxy} {
-		if proxy == "" {
-			continue
-		}
-
-		// ProxyFromEnvironment reads a value with no scheme as http.
-		if !strings.Contains(proxy, "://") {
-			proxy = "http://" + proxy
-		}
-
-		if u, err := url.Parse(proxy); err == nil {
-			proxies[strings.ToLower(u.Hostname())] = true
+		if address := proxyAddress(proxy); address != "" {
+			proxies[address] = true
 		}
 	}
 
 	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
 	transport.DialContext = netguard.DialContext(
 		dialer,
-		func(ctx context.Context, host string, ip net.IP) error {
-			if proxies[strings.ToLower(host)] {
+		func(ctx context.Context, address string, ip net.IP) error {
+			if proxies[strings.ToLower(address)] {
 				return nil
 			}
 
-			return screen(ctx, host, ip)
+			return screen(ctx, address, ip)
 		},
 	)
 
 	return transport
+}
+
+// proxyAddress is the host:port a proxy setting dials, with its scheme's port
+// when it names none. ProxyFromEnvironment reads a value with no scheme as http.
+func proxyAddress(proxy string) string {
+	if proxy == "" {
+		return ""
+	}
+
+	if !strings.Contains(proxy, "://") {
+		proxy = "http://" + proxy
+	}
+
+	u, err := url.Parse(proxy)
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443", "socks5": "1080"}[u.Scheme]
+	}
+
+	return strings.ToLower(net.JoinHostPort(u.Hostname(), port))
 }
