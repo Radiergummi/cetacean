@@ -1451,6 +1451,12 @@ func TestSnapshot_Reservations(t *testing.T) {
 	if snap.ReservedMemory != 576*1024*1024 {
 		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 576*1024*1024)
 	}
+	if got, ok := snap.GlobalEligible["agent"]; !ok || got != 1 {
+		t.Errorf("GlobalEligible[agent] = %d (present %t), want 1", got, ok)
+	}
+	if _, ok := snap.GlobalEligible["svc1"]; ok {
+		t.Error("GlobalEligible names a replicated service")
+	}
 }
 
 // What happened to a crash-looping service happened to its tasks; asking the

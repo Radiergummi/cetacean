@@ -95,6 +95,9 @@ func BuildClusterStatus(
 
 	for _, row := range RowsForServices(services, running, snap.CompletedJobsByService, snap.Flapping) {
 		svc := byID[row.ID]
+		if row.State == "pending" && nowhereToRun(svc, snap) {
+			row.State = "running"
+		}
 
 		// A stalled rollout is a rollout even though the service does not read
 		// as "updating": a paused update is settled as far as the replica count
@@ -150,6 +153,9 @@ func CountServiceStates(
 			snap.CompletedJobsByService[svc.ID],
 			snap.Flapping[svc.ID],
 		)
+		if state == "pending" && nowhereToRun(svc, snap) {
+			state = "running"
+		}
 
 		switch state {
 		case "running", stateCompleted:
@@ -160,6 +166,14 @@ func CountServiceStates(
 	}
 
 	return converged, degraded
+}
+
+// nowhereToRun reports a global service no node can take, which, like one
+// scaled to zero, has nothing outstanding rather than everything pending.
+func nowhereToRun(svc swarm.Service, snap cache.ClusterSnapshot) bool {
+	eligible, known := snap.GlobalEligible[svc.ID]
+
+	return svc.Spec.Mode.Global != nil && known && eligible == 0
 }
 
 // rolloutStalled reports whether a spec change stopped short rather than

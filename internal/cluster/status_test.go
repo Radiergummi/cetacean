@@ -305,3 +305,31 @@ func TestCountServiceStatesFollowsTheStateRule(t *testing.T) {
 		t.Errorf("converged=%d degraded=%d, want 3 and 3", converged, degraded)
 	}
 }
+
+// A global service no node can take, with every node drained or a constraint
+// none meets, has nothing outstanding, like a service scaled to zero.
+func TestAGlobalServiceWithNowhereToRunIsNotDegraded(t *testing.T) {
+	svc := swarm.Service{
+		ID: "agent",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "agent"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+		},
+	}
+	snap := cache.ClusterSnapshot{GlobalEligible: map[string]int{"agent": 0}}
+
+	converged, degraded := CountServiceStates(snap, []swarm.Service{svc})
+	if converged != 1 || degraded != 0 {
+		t.Errorf("converged=%d degraded=%d, want 1 and 0", converged, degraded)
+	}
+
+	status := BuildClusterStatus(snap, []swarm.Service{svc}, nil, nil)
+	if len(status.UnhealthyServices) != 0 {
+		t.Errorf("unhealthy = %+v, want none", status.UnhealthyServices)
+	}
+
+	snap.GlobalEligible["agent"] = 2
+	if _, degraded := CountServiceStates(snap, []swarm.Service{svc}); degraded != 1 {
+		t.Errorf("degraded=%d, want 1 with two eligible nodes and none running", degraded)
+	}
+}

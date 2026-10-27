@@ -127,6 +127,10 @@ type ClusterSnapshot struct {
 
 	// CompletedJobsByService is CompletedJobTaskCounts, from the same walk.
 	CompletedJobsByService map[string]int `json:"-"`
+
+	// GlobalEligible is how many nodes each global service can run on, and
+	// names every global service; zero means it has nowhere to run.
+	GlobalEligible map[string]int `json:"-"`
 }
 
 // FlappingServices returns the services currently in a restart loop.
@@ -1278,19 +1282,21 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 
 	// A job reserves nothing here: it has no standing task count to reserve for.
 	schedulable := c.schedulableNodesLocked()
+	globalEligible := make(map[string]int)
 	var reservedCPU, reservedMemory int64
 	for _, svc := range c.services {
-		res := svc.Spec.TaskTemplate.Resources
-		if res == nil || res.Reservations == nil {
-			continue
-		}
-
 		var desired int
 		switch {
 		case svc.Spec.Mode.Global != nil:
 			desired = globalTaskCount(svc, schedulable)
+			globalEligible[svc.ID] = desired
 		case svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil:
 			desired = int(*svc.Spec.Mode.Replicated.Replicas)
+		}
+
+		res := svc.Spec.TaskTemplate.Resources
+		if res == nil || res.Reservations == nil {
+			continue
 		}
 
 		reservedCPU += res.Reservations.NanoCPUs * int64(desired)
@@ -1318,6 +1324,7 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		Flapping:         c.restarts.Flapping(),
 
 		CompletedJobsByService: completedJobsByService,
+		GlobalEligible:         globalEligible,
 	}
 }
 
