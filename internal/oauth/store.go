@@ -10,12 +10,10 @@ import (
 )
 
 // generateOpaqueToken returns a 32-byte cryptographically random token
-// encoded as base64url (no padding). Panics on RNG failure.
+// encoded as base64url (no padding).
 func generateOpaqueToken() string {
 	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		panic("oauth: crypto/rand failure: " + err.Error())
-	}
+	_, _ = rand.Read(b)
 
 	return base64.RawURLEncoding.EncodeToString(b)
 }

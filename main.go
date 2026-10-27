@@ -1030,10 +1030,7 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	signingKey, _ := config.SigningKeyBytes(d.cfg.OAuth.SigningKey)
 	if len(signingKey) == 0 {
 		signingKey = make([]byte, 32)
-		if _, err := rand.Read(signingKey); err != nil {
-			slog.Error("OAuth signing key generation failed", "error", err)
-			os.Exit(1)
-		}
+		_, _ = rand.Read(signingKey)
 		slog.Warn(
 			"OAuth signing key auto-generated; tokens won't survive restarts. Set CETACEAN_OAUTH_SIGNING_KEY, or CETACEAN_OAUTH_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
 		)

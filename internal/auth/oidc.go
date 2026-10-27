@@ -514,8 +514,6 @@ func isRelativePath(s string) bool {
 // generateState returns 16 random bytes hex-encoded for CSRF protection.
 func generateState() string {
 	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic("auth: failed to generate state: " + err.Error())
-	}
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }

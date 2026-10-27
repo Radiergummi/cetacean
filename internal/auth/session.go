@@ -40,9 +40,7 @@ type SessionCodec struct {
 // NewSessionCodec creates a SessionCodec with a random 32-byte key.
 func NewSessionCodec() *SessionCodec {
 	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		panic("auth: failed to generate session key: " + err.Error())
-	}
+	_, _ = rand.Read(key)
 	return &SessionCodec{key: key, now: time.Now}
 }
 

@@ -221,11 +221,7 @@ func issueCSRFNonce(
 	secure bool,
 	path string,
 ) (token string, nonce string) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic("oauth: crypto/rand failure: " + err.Error())
-	}
-	nonce = base64.RawURLEncoding.EncodeToString(b)
+	nonce = rand.Text()
 	token = csrfMAC(signingKey, nonce, binding)
 
 	//nolint:gosec // G124: cookie is HttpOnly + SameSite=Strict; Secure is true on HTTPS issuers and intentionally off only for loopback HTTP dev, which gosec can't prove from the variable.
