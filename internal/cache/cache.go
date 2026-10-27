@@ -181,6 +181,8 @@ type Cache struct {
 	// advance for one — see notify. A validator derived from that number would
 	// report a wholly replaced cache as unchanged.
 	generation atomic.Uint64
+
+	addresses atomic.Pointer[addressMemo]
 }
 
 // Generation returns a counter that advances on every change to the cache's
@@ -553,9 +555,9 @@ func (c *Cache) EachTask(yield func(swarm.Task) bool) {
 	}
 }
 
-// EachTaskUnordered is EachTask in no particular order, for a scan that only
+// eachTaskUnordered is EachTask in no particular order, for a scan that only
 // counts and so need not pay for the sort.
-func (c *Cache) EachTaskUnordered(yield func(swarm.Task) bool) {
+func (c *Cache) eachTaskUnordered(yield func(swarm.Task) bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

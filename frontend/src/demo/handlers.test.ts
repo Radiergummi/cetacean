@@ -133,7 +133,9 @@ describe("detail response shapes", () => {
 
     expect(addresses.usable).toBe(253);
     expect(addresses.loadBalancers).toBe(dataset.nodes.length);
-    expect(addresses.used).toBe(addresses.vips! + addresses.tasks! + addresses.loadBalancers!);
+    expect(addresses.used).toBe(
+      addresses.vips! + addresses.taskAddresses! + addresses.loadBalancers!,
+    );
   });
 
   it("GET /networks/:id leaves the figure off a local network", async () => {

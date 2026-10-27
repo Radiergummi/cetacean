@@ -6326,7 +6326,7 @@ paths:
                       usable: 253
                       used: 9
                       vips: 2
-                      tasks: 4
+                      taskAddresses: 4
                       loadBalancers: 3
                       excludesAttachedContainers: false
                 total: 6
@@ -6418,7 +6418,7 @@ paths:
                   usable: 253
                   used: 9
                   vips: 2
-                  tasks: 4
+                  taskAddresses: 4
                   loadBalancers: 3
                   excludesAttachedContainers: false
             application/atom+xml:
@@ -7821,20 +7821,20 @@ components:
         swarm-scoped networks on the default IPAM driver with an IPv4 subnet.
         Counted over every service and task on the network, including those
         the caller may not read.
-      required: [usable, used, vips, tasks, loadBalancers, excludesAttachedContainers]
+      required: [usable, used, vips, taskAddresses, loadBalancers, excludesAttachedContainers]
       properties:
         usable:
           type: integer
           description: >
             Addresses the subnets (or their IP ranges) can hand out, less the
-            network, broadcast, gateway and auxiliary addresses
+            network, broadcast and gateway addresses
         used:
           type: integer
-          description: The sum of `vips`, `tasks` and `loadBalancers`
+          description: The sum of `vips`, `taskAddresses` and `loadBalancers`
         vips:
           type: integer
           description: Service virtual IPs on the network
-        tasks:
+        taskAddresses:
           type: integer
           description: Addresses held by tasks that have not stopped
         loadBalancers:
@@ -7851,7 +7851,7 @@ components:
         usable: 253
         used: 9
         vips: 2
-        tasks: 4
+        taskAddresses: 4
         loadBalancers: 3
         excludesAttachedContainers: false
 

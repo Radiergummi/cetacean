@@ -70,7 +70,7 @@ const networkAddresses = z.looseObject({
   usable: z.number(),
   used: z.number(),
   vips: z.number(),
-  tasks: z.number(),
+  taskAddresses: z.number(),
   loadBalancers: z.number(),
   excludesAttachedContainers: z.boolean(),
 });

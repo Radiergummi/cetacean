@@ -604,7 +604,7 @@ Send `Accept: text/event-stream` to any resource list or detail URL to open a st
 
 A list stream carries events for one resource type. A detail stream carries events for one resource plus the resources
 that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, a network
-stream includes the tasks attached to it, the services with a virtual IP on it, and every node, and a stack stream
+stream includes the tasks attached to it and every service event, plus node events on `ingress`, and a stack stream
 includes its member services, tasks, configs, secrets, networks, and volumes.
 
 ```http tab
@@ -795,7 +795,7 @@ names a newer image in its registry than the digest the service runs: `image`, `
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
 `GET /networks/{id}` carries `addresses`, and each `GET /networks` item `Addresses`, for a swarm network on the
-default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `tasks` and `loadBalancers`.
+default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `taskAddresses` and `loadBalancers`.
 `excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't counted. Sorting
 by `addresses` orders by the share in use. The counts cover every service and task on the network, including ones the
 caller can't read. [Network addresses](dashboard#network-addresses) explains the figure.

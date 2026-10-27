@@ -82,7 +82,7 @@ func TestEachTaskUnorderedYieldsEveryTask(t *testing.T) {
 	}
 
 	seen := map[string]bool{}
-	for task := range c.EachTaskUnordered {
+	for task := range c.eachTaskUnordered {
 		seen[task.ID] = true
 	}
 
@@ -91,7 +91,7 @@ func TestEachTaskUnorderedYieldsEveryTask(t *testing.T) {
 	}
 
 	count := 0
-	for range c.EachTaskUnordered {
+	for range c.eachTaskUnordered {
 		count++
 		break
 	}

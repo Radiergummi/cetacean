@@ -49,8 +49,8 @@ func TestNetworkResourceCarriesAddresses(t *testing.T) {
 	}
 
 	got := digest.Details.Addresses
-	if got["usable"] != 253.0 || got["used"] != 2.0 || got["tasks"] != 1.0 ||
+	if got["usable"] != 253.0 || got["used"] != 2.0 || got["taskAddresses"] != 1.0 ||
 		got["loadBalancers"] != 1.0 {
-		t.Errorf("addresses = %v, want usable 253, used 2, tasks 1, loadBalancers 1", got)
+		t.Errorf("addresses = %v, want usable 253, used 2, taskAddresses 1, loadBalancers 1", got)
 	}
 }

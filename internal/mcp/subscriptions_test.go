@@ -210,13 +210,15 @@ func TestSubscriptionServiceAndNodeFollowTheirTasks(t *testing.T) {
 	}
 }
 
-func TestSubscriptionNetworkFollowsAttachedTasks(t *testing.T) {
+func TestSubscriptionNetworkFollowsWhatMovesItsAddresses(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "net-follow", Name: "backend", Scope: "swarm"})
+	c.SetNetwork(network.Summary{ID: "net-ingress", Name: "ingress", Scope: "swarm", Ingress: true})
 	srv := newResourceTestServer(t, c)
 
 	name := t.Name()
 	srv.notifications.Subscribe(session(name), "cetacean://networks/backend", nil)
+	srv.notifications.Subscribe(session(name), "cetacean://networks/ingress", nil)
 
 	c.SetTask(swarm.Task{ID: "task-elsewhere"})
 	c.SetTask(swarm.Task{
@@ -225,8 +227,15 @@ func TestSubscriptionNetworkFollowsAttachedTasks(t *testing.T) {
 			Network: swarm.Network{ID: "net-follow"},
 		}},
 	})
-
 	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/backend")
+
+	c.SetNode(swarm.Node{ID: "node-joined"})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/ingress")
+
+	c.SetService(swarm.Service{ID: "svc-any"})
+	got := drainUpdated(t, name)
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://networks/backend", "cetacean://networks/ingress")
 }
 
 func TestSubscriptionLogsFollowServiceTasks(t *testing.T) {

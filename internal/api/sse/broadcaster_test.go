@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -969,26 +970,31 @@ func TestResourceMatcherSeesTaskRemoves(t *testing.T) {
 	}
 }
 
-func TestResourceMatcherNetworkSeesWhatMovesItsAddresses(t *testing.T) {
-	match := ResourceMatcher(cache.EventNetwork, "net1")
+func TestNetworkMatcherSeesWhatMovesItsAddresses(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1"})
+	c.SetNetwork(network.Summary{ID: "ingress", Ingress: true})
+
 	attached := []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net1"}}}
 	elsewhere := []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net2"}}}
-	vip := swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{{NetworkID: "net1"}}}
 
 	tests := []struct {
 		name  string
+		id    string
 		event cache.Event
 		want  bool
 	}{
-		{"itself", cache.Event{Type: cache.EventNetwork, ID: "net1"}, true},
-		{"another network", cache.Event{Type: cache.EventNetwork, ID: "net2"}, false},
+		{"itself", "net1", cache.Event{Type: cache.EventNetwork, ID: "net1"}, true},
+		{"another network", "net1", cache.Event{Type: cache.EventNetwork, ID: "net2"}, false},
 		{
 			"an attached task",
+			"net1",
 			cache.Event{Type: cache.EventTask, Resource: swarm.Task{NetworksAttachments: attached}},
 			true,
 		},
 		{
 			"a task elsewhere",
+			"net1",
 			cache.Event{
 				Type:     cache.EventTask,
 				Resource: swarm.Task{NetworksAttachments: elsewhere},
@@ -996,22 +1002,19 @@ func TestResourceMatcherNetworkSeesWhatMovesItsAddresses(t *testing.T) {
 			false,
 		},
 		{
-			"a service with a VIP on it",
-			cache.Event{Type: cache.EventService, Resource: swarm.Service{Endpoint: vip}},
+			"any service",
+			"net1",
+			cache.Event{Type: cache.EventService, Resource: swarm.Service{}},
 			true,
 		},
-		{
-			"a service without one",
-			cache.Event{Type: cache.EventService, Resource: swarm.Service{}},
-			false,
-		},
-		{"a node", cache.Event{Type: cache.EventNode, ID: "n1"}, true},
-		{"a config", cache.Event{Type: cache.EventConfig, ID: "net1"}, false},
-		{"a sync", cache.Event{Type: cache.EventSync}, true},
+		{"a node, on an overlay", "net1", cache.Event{Type: cache.EventNode, ID: "n1"}, false},
+		{"a node, on ingress", "ingress", cache.Event{Type: cache.EventNode, ID: "n1"}, true},
+		{"a config", "net1", cache.Event{Type: cache.EventConfig, ID: "net1"}, false},
+		{"a sync", "net1", cache.Event{Type: cache.EventSync}, true},
 	}
 
 	for _, tt := range tests {
-		if got := match(tt.event); got != tt.want {
+		if got := NetworkMatcher(c, tt.id)(tt.event); got != tt.want {
 			t.Errorf("%s: matched = %v, want %v", tt.name, got, tt.want)
 		}
 	}

@@ -80,10 +80,9 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 
 	recs = append(recs, quorumRecommendations(nodes)...)
 
-	networks := cc.cache.ListNetworks()
 	recs = append(recs, addressRecommendations(
-		networks,
-		ipam.Count(networks, slices.Values(services), slices.Values(tasks), len(nodes)),
+		cc.cache.ListNetworks(),
+		cc.cache.NetworkAddresses(),
 	)...)
 
 	// Uneven task distribution

@@ -6,7 +6,7 @@ function addresses(used: number, usable: number) {
     usable,
     used,
     vips: 0,
-    tasks: used,
+    taskAddresses: used,
     loadBalancers: 0,
     excludesAttachedContainers: false,
   };

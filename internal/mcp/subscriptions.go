@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/docker/docker/api/types/network"
@@ -117,9 +118,9 @@ func (s *Server) subscriptionFor(uri string, identity *auth.Identity) subscripti
 
 // eventKeys is every key an event reaches, as the REST stream for the same
 // resource sees it: a service or node with its tasks, a task by its slot name,
-// a stack with its members. Each lookup is by key, never a scan.
+// a stack with its members, a network with what moves its address figure.
 func (s *Server) eventKeys(event cache.Event) []eventKey {
-	keys := directEventKeys(event)
+	keys := append(directEventKeys(event), s.addressNetworkKeys(event)...)
 
 	switch event.Type {
 	case cache.EventTask:
@@ -181,8 +182,6 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 		}
 	}
 
-	keys = append(keys, s.taskNetworkKeys(task)...)
-
 	if task.NodeID == "" {
 		return keys
 	}
@@ -204,26 +203,26 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 	return keys
 }
 
-// taskNetworkKeys reaches the networks a task attaches to, whose address
-// counts it moves. A network gone from the cache has nothing left to notify
-// about, so only cached ones are named.
-func (s *Server) taskNetworkKeys(task swarm.Task) []eventKey {
-	var keys []eventKey
-
-	network := func(id string) subscriptionTarget {
-		return subscriptionTarget{typ: cache.EventNetwork, id: id}
+// addressNetworkKeys reaches the networks whose address figure the event may
+// move, as cluster.AddressNetworks names them. A network gone from the cache
+// has nothing left to notify about, so only cached ones are named.
+func (s *Server) addressNetworkKeys(event cache.Event) []eventKey {
+	ids, all := cluster.AddressNetworks(s.cache, event)
+	if !all && len(ids) == 0 {
+		return nil
 	}
 
-	for _, attachment := range task.NetworksAttachments {
-		net, ok := s.cache.GetNetwork(attachment.Network.ID)
-		if !ok {
+	var keys []eventKey
+
+	for net := range s.cache.EachNetwork {
+		if !all && !slices.Contains(ids, net.ID) {
 			continue
 		}
 
 		via := "network:" + net.Name
 		keys = append(keys,
-			eventKey{target: network(net.ID), via: via},
-			eventKey{target: network(net.Name), via: via},
+			eventKey{target: subscriptionTarget{typ: cache.EventNetwork, id: net.ID}, via: via},
+			eventKey{target: subscriptionTarget{typ: cache.EventNetwork, id: net.Name}, via: via},
 		)
 	}
 

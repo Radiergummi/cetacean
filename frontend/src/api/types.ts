@@ -204,7 +204,7 @@ export interface Task {
       Image?: string | undefined;
     } | null;
   };
-  NetworksAttachments?: { Network: { ID?: string | undefined } }[] | undefined;
+  NetworksAttachments?: { Network: { ID: string } }[] | undefined;
 }
 
 export interface Config {
@@ -258,13 +258,13 @@ export interface Network {
 
 /**
  * How much of a network's IPv4 address pool is in use. `used` is `vips`,
- * `tasks` and `loadBalancers` together.
+ * `taskAddresses` and `loadBalancers` together.
  */
 export interface NetworkAddresses {
   usable: number;
   used: number;
   vips: number;
-  tasks: number;
+  taskAddresses: number;
   loadBalancers: number;
   excludesAttachedContainers: boolean;
 }

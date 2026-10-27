@@ -479,7 +479,7 @@ func TestNetworkDigestReportsSubnets(t *testing.T) {
 
 func TestNetworkDigestReportsAddresses(t *testing.T) {
 	net := overlay("net1", "demo_overlay")
-	addresses := ipam.Addresses{Usable: 253, Used: 3, Tasks: 2, LoadBalancers: 1}
+	addresses := ipam.Addresses{Usable: 253, Used: 3, TaskAddresses: 2, LoadBalancers: 1}
 
 	if got := NetworkDigest(net, nil, &addresses).Details["addresses"]; got != addresses {
 		t.Errorf("addresses = %+v, want %+v", got, addresses)

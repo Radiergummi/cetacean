@@ -247,7 +247,7 @@ const addressHoldingStates = new Set([
 /**
  * The usable addresses of an IPv4 subnet, as the server counts them: less the
  * network and broadcast addresses up to a /30, and the gateway. The dataset
- * sets no IP range or auxiliary address, and its gateways sit in the subnet.
+ * sets no IP range, and its gateways sit in the subnet.
  */
 function usableAddresses(subnet: string): number | undefined {
   const [address, prefix] = subnet.split("/");
@@ -303,7 +303,7 @@ function demoAddresses(dataset: Dataset, network: Network): NetworkAddresses | u
     usable: pools.reduce((total, usable) => total + usable, 0),
     used: vips + tasks.length + loadBalancers,
     vips,
-    tasks: tasks.length,
+    taskAddresses: tasks.length,
     loadBalancers,
     excludesAttachedContainers: network.Attachable,
   };

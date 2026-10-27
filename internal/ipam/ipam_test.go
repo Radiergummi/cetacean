@@ -33,9 +33,21 @@ func TestUsable(t *testing.T) {
 			true,
 		},
 		{
-			"range clear of the reserved addresses",
+			"range clear of network and broadcast takes its gateway from the range",
 			network.IPAMConfig{Subnet: "10.0.0.0/16", IPRange: "10.0.4.0/24"},
+			255,
+			true,
+		},
+		{
+			"range with an explicit gateway outside it",
+			network.IPAMConfig{Subnet: "10.0.0.0/16", IPRange: "10.0.4.0/24", Gateway: "10.0.0.1"},
 			256,
+			true,
+		},
+		{
+			"range with an explicit gateway inside it",
+			network.IPAMConfig{Subnet: "10.0.0.0/16", IPRange: "10.0.4.0/24", Gateway: "10.0.4.9"},
+			255,
 			true,
 		},
 		{
@@ -47,7 +59,7 @@ func TestUsable(t *testing.T) {
 		{
 			"range holding broadcast",
 			network.IPAMConfig{Subnet: "10.0.0.0/16", IPRange: "10.0.255.0/24"},
-			255,
+			254,
 			true,
 		},
 		{
@@ -57,12 +69,12 @@ func TestUsable(t *testing.T) {
 			true,
 		},
 		{
-			"auxiliary addresses are reserved",
+			"auxiliary addresses are not reserved",
 			network.IPAMConfig{
 				Subnet:     "10.0.1.0/24",
-				AuxAddress: map[string]string{"a": "10.0.1.10", "b": "10.0.1.1", "c": "10.0.2.1"},
+				AuxAddress: map[string]string{"a": "10.0.1.10"},
 			},
-			252,
+			253,
 			true,
 		},
 		{"IPv6", network.IPAMConfig{Subnet: "fd00::/64"}, 0, false},
@@ -158,16 +170,16 @@ func TestCount(t *testing.T) {
 	got := Count(networks, slices.Values(services), slices.Values(tasks), 5)
 
 	want := map[string]Addresses{
-		"app":     {Usable: 506, Used: 7, VIPs: 1, Tasks: 4, LoadBalancers: 2},
-		"ingress": {Usable: 253, Used: 7, VIPs: 1, Tasks: 1, LoadBalancers: 5},
+		"app":     {Usable: 506, Used: 7, VIPs: 1, TaskAddresses: 4, LoadBalancers: 2},
+		"ingress": {Usable: 253, Used: 7, VIPs: 1, TaskAddresses: 1, LoadBalancers: 5},
 		"attachable": {
 			Usable:                     253,
 			Used:                       2,
-			Tasks:                      1,
+			TaskAddresses:              1,
 			LoadBalancers:              1,
 			ExcludesAttachedContainers: true,
 		},
-		"dual": {Usable: 253, Used: 3, VIPs: 1, Tasks: 1, LoadBalancers: 1},
+		"dual": {Usable: 253, Used: 3, VIPs: 1, TaskAddresses: 1, LoadBalancers: 1},
 	}
 
 	if len(got) != len(want) {

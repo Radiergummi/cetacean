@@ -13,12 +13,12 @@ import (
 )
 
 // Addresses is one network's IPv4 pool: how many addresses it can hand out,
-// and how many are taken, by what. Used is VIPs + Tasks + LoadBalancers.
+// and how many are taken, by what. Used is VIPs + TaskAddresses + LoadBalancers.
 type Addresses struct {
 	Usable        int `json:"usable"`
 	Used          int `json:"used"`
 	VIPs          int `json:"vips"`
-	Tasks         int `json:"tasks"`
+	TaskAddresses int `json:"taskAddresses"`
 	LoadBalancers int `json:"loadBalancers"`
 
 	// ExcludesAttachedContainers is set on an attachable network, whose
@@ -112,7 +112,7 @@ func Count(
 
 			for _, addr := range attachment.Addresses {
 				if take(t, addr) {
-					t.Tasks++
+					t.TaskAddresses++
 				}
 			}
 		}
@@ -128,7 +128,7 @@ func Count(
 			t.LoadBalancers = nodes
 		}
 
-		t.Used = t.VIPs + t.Tasks + t.LoadBalancers
+		t.Used = t.VIPs + t.TaskAddresses + t.LoadBalancers
 		result[id] = t.Addresses
 	}
 
@@ -157,8 +157,8 @@ func live(task swarm.Task) bool {
 
 // usable counts the addresses an IPv4 pool can hand out: its IPRange, or the
 // whole subnet, less the network and broadcast addresses (none on a /31 or
-// /32), the gateway swarm reserves, and any auxiliary addresses. Not ok for
-// anything but an IPv4 subnet.
+// /32) and the gateway. Without an explicit one, the gateway is the first free
+// address of the range. Swarm reserves no auxiliary addresses.
 func usable(cfg network.IPAMConfig) (int, bool) {
 	subnet, err := netip.ParsePrefix(cfg.Subnet)
 	if err != nil || !subnet.Addr().Is4() {
@@ -185,16 +185,15 @@ func usable(cfg network.IPAMConfig) (int, bool) {
 		reserved[last] = struct{}{}
 	}
 
-	gateway := min(first+1, last)
 	if addr, err := netip.ParseAddr(cfg.Gateway); err == nil && addr.Is4() {
-		gateway = toUint(addr)
-	}
+		reserved[toUint(addr)] = struct{}{}
+	} else {
+		for addr := low; addr <= high; addr++ {
+			if _, taken := reserved[addr]; !taken {
+				reserved[addr] = struct{}{}
 
-	reserved[gateway] = struct{}{}
-
-	for _, aux := range cfg.AuxAddress {
-		if addr, err := netip.ParseAddr(aux); err == nil && addr.Is4() {
-			reserved[toUint(addr)] = struct{}{}
+				break
+			}
 		}
 	}
 

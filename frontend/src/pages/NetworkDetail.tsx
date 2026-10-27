@@ -82,7 +82,7 @@ function AddressesPanel({ addresses }: { addresses: NetworkAddresses }) {
         />
         <InfoCard
           label="Task addresses"
-          value={String(addresses.tasks)}
+          value={String(addresses.taskAddresses)}
         />
         <InfoCard
           label="Load balancers"

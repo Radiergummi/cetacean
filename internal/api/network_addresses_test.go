@@ -70,7 +70,7 @@ func TestHandleListNetworks_Addresses(t *testing.T) {
 		t.Errorf("order by addresses desc = %v, want [busy empty bridge]", order)
 	}
 
-	want := ipam.Addresses{Usable: 5, Used: 2, Tasks: 1, LoadBalancers: 1}
+	want := ipam.Addresses{Usable: 5, Used: 2, TaskAddresses: 1, LoadBalancers: 1}
 	if got := resp.Items[0].Addresses; got == nil || *got != want {
 		t.Errorf("busy: Addresses = %+v, want %+v", got, want)
 	}
@@ -84,7 +84,7 @@ func TestHandleGetNetwork_Addresses(t *testing.T) {
 	h := newTestHandlers(t, withCache(addressesCache()))
 
 	for id, want := range map[string]*ipam.Addresses{
-		"busy":   {Usable: 5, Used: 2, Tasks: 1, LoadBalancers: 1},
+		"busy":   {Usable: 5, Used: 2, TaskAddresses: 1, LoadBalancers: 1},
 		"bridge": nil,
 	} {
 		req := httptest.NewRequest("GET", "/networks/"+id, nil)

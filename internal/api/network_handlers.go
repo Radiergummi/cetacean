@@ -66,9 +66,7 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
-	// Counted over the list prepareList fetches, before the ACL narrows it, so
-	// the sort can read it as well as the page.
-	var addresses map[string]ipam.Addresses
+	addresses := cluster.NetworkAddresses(h.cache)
 
 	spec := listSpec[network.Summary]{
 		resourceType: "network",
@@ -77,11 +75,6 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		aclName:      func(n network.Summary) string { return n.Name },
 		searchName:   func(n network.Summary) string { return n.Name },
 		filterEnv:    filter.Networks,
-		prepare: func(networks []network.Summary) []network.Summary {
-			addresses = cluster.NetworkAddresses(h.cache, networks)
-
-			return networks
-		},
 		sortKeys: map[string]func(network.Summary) string{
 			"name":   func(n network.Summary) string { return n.Name },
 			"driver": func(n network.Summary) string { return n.Driver },
@@ -92,7 +85,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 					return ""
 				}
 
-				return fmt.Sprintf("%07d", a.Used*1_000_000/a.Usable)
+				return fmt.Sprintf("%020d", a.Used*1_000_000/a.Usable)
 			},
 		},
 	}
