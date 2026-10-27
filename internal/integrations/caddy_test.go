@@ -91,6 +91,26 @@ func TestDetectCaddy(t *testing.T) {
 	}
 }
 
+func TestDetectCaddy_SkipsEmptyPathSegments(t *testing.T) {
+	got := detectCaddy(map[string]string{
+		"caddy":        "example.com",
+		"caddy.":       "x",
+		"caddy..x":     "y",
+		"caddy.encode": "gzip",
+	})
+	if got == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if want := "example.com {\n\tencode gzip\n}\n"; got.Caddyfile != want {
+		t.Errorf("Caddyfile =\n%s\nwant\n%s", got.Caddyfile, want)
+	}
+
+	if only := detectCaddy(map[string]string{"caddy.": "x"}); only != nil {
+		t.Errorf("expected nil result, got %+v", only)
+	}
+}
+
 func TestDetectCaddy_IgnoresLookalikes(t *testing.T) {
 	labels := map[string]string{
 		"caddy_ingress_network": "proxy",

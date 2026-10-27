@@ -121,7 +121,8 @@ const integrationLabelPrefix = {
   gantry: "gantry.",
 } as const;
 
-// caddy-docker-proxy's own label filter: `caddy`, `caddy_0`, `caddy.x`, not `caddyfile`.
+// caddy-docker-proxy's own label filter, as in internal/integrations/caddy.go:
+// `caddy`, `caddy_0`, `caddy.x`, not `caddyfile`.
 const caddyLabel = /^caddy(_\d+)?(\.|$)/;
 
 /**

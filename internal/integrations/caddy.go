@@ -42,6 +42,9 @@ func detectCaddy(labels map[string]string) *CaddyIntegration {
 		}
 
 		block := caddyBlockAt(root, k, byPath)
+		if block == nil {
+			continue
+		}
 
 		if v = strings.TrimSpace(v); v != "" {
 			block.keys = append(block.keys, v)
@@ -62,12 +65,18 @@ func detectCaddy(labels map[string]string) *CaddyIntegration {
 	return &CaddyIntegration{Name: "caddy", Enabled: true, Caddyfile: b.String()}
 }
 
+// caddyBlockAt returns nil for a path with an empty segment, such as
+// `caddy.` or `caddy..x`, which the path grammar doesn't match.
 func caddyBlockAt(root *caddyBlock, path string, byPath map[string]*caddyBlock) *caddyBlock {
 	if block, ok := byPath[path]; ok {
 		return block
 	}
 
 	match := caddyPath.FindStringSubmatch(strings.ReplaceAll(path, `\.`, caddyEscapedDot))
+	if match == nil {
+		return nil
+	}
+
 	parentPath := strings.ReplaceAll(match[1], caddyEscapedDot, `\.`)
 	name := strings.ReplaceAll(match[3], caddyEscapedDot, ".")
 
@@ -79,8 +88,12 @@ func caddyBlockAt(root *caddyBlock, path string, byPath map[string]*caddyBlock) 
 	if parentPath == "" {
 		root.children = append(root.children, block)
 	} else {
-		block.keys = []string{name}
 		parent := caddyBlockAt(root, parentPath, byPath)
+		if parent == nil {
+			return nil
+		}
+
+		block.keys = []string{name}
 		parent.children = append(parent.children, block)
 	}
 

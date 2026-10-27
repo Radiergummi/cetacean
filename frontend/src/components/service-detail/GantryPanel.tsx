@@ -5,6 +5,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
+import { formatYesNo } from "@/lib/format";
 import { saveModelledLabels } from "@/lib/integrationLabels";
 import { useState } from "react";
 
@@ -106,10 +107,6 @@ function OverrideSelect({
       )}
     </Field>
   );
-}
-
-function yesNo(value: boolean | undefined): string | undefined {
-  return value === undefined ? undefined : value ? "Yes" : "No";
 }
 
 /**
@@ -284,9 +281,9 @@ export function GantryPanel({
         rows={[
           integration.manifestCmd && ["Manifest command", integration.manifestCmd],
           integration.manifestOptions && ["Manifest options", integration.manifestOptions],
-          ["Roll back on failure", yesNo(integration.rollbackOnFailure)],
+          ["Roll back on failure", formatYesNo(integration.rollbackOnFailure)],
           integration.rollbackOptions && ["Rollback options", integration.rollbackOptions],
-          ["Update jobs", yesNo(integration.updateJobs)],
+          ["Update jobs", formatYesNo(integration.updateJobs)],
           integration.updateOptions && ["Update options", integration.updateOptions],
           integration.updateTimeoutSeconds !== undefined && [
             "Update timeout",

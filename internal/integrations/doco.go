@@ -174,11 +174,12 @@ func docoCommitURL(source, sha string) string {
 	var commitPath string
 
 	switch {
-	case strings.Contains(host, "github"):
-		commitPath = "/commit/"
 	case strings.Contains(host, "gitlab"):
 		commitPath = "/-/commit/"
-	case host == "codeberg.org", strings.Contains(host, "gitea"), strings.Contains(host, "forgejo"):
+	case strings.Contains(host, "github"),
+		strings.Contains(host, "gitea"),
+		strings.Contains(host, "forgejo"),
+		host == "codeberg.org":
 		commitPath = "/commit/"
 	default:
 		return ""

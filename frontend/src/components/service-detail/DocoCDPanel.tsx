@@ -2,6 +2,7 @@ import { IntegrationSection } from "./IntegrationSection";
 import type { DocoCDIntegration } from "@/api/types";
 import { KVTable } from "@/components/data";
 import TimeAgo from "@/components/TimeAgo";
+import { formatYesNo } from "@/lib/format";
 import { ExternalLink } from "lucide-react";
 
 const docsUrl = "https://github.com/kimdre/doco-cd/wiki";
@@ -118,7 +119,7 @@ export function DocoCDPanel({
               ["Scheduled job", job.enabled ? "Enabled" : "Disabled"],
               job.schedule && ["Schedule", job.schedule],
               job.executionMode && ["Execution mode", job.executionMode],
-              job.skipRunning !== undefined && ["Skip running", job.skipRunning ? "Yes" : "No"],
+              ["Skip running", formatYesNo(job.skipRunning)],
               job.lastRun && [
                 "Last run",
                 <TimeAgo
