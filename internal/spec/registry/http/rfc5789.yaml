@@ -18,6 +18,10 @@ requirements:
       provide (e.g., in response to a GET during this operation) a partially
       modified representation.
     url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\tmaps.Copy(result, m)"
+        with: "\tmaps.Copy(result, m)\n\tresult = m"
 
   - id: a-failed-patch-changes-nothing
     level: MUST
@@ -25,6 +29,10 @@ requirements:
       If the entire patch document cannot be successfully applied, then the
       server MUST NOT apply any of the changes.
     url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\t\tcase \"remove\":\n\t\t\tif _, ok := result[key]; !ok {\n"
+        with: "\t\tcase \"remove\":\n\t\t\tif _, ok := result[key]; !ok {\n\t\t\t\treturn result, nil\n"
 
   - id: patch-document-suits-the-resource
     level: MUST

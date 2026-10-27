@@ -2,9 +2,9 @@ import { api } from "../api/client";
 import type { Node } from "../api/types";
 import ActivitySection from "../components/ActivitySection";
 import { MetadataGrid } from "../components/data";
+import DetailError from "../components/DetailError";
 import DiskUsageSection from "../components/DiskUsageSection";
 import ErrorBoundary from "../components/ErrorBoundary";
-import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
@@ -56,6 +56,7 @@ export default function NodeDetail() {
     data: node,
     history,
     error,
+    retry,
     allowedMethods,
     editable,
   } = useDetailResource<Node>(id, api.node, "/nodes", { extraQueryKeys });
@@ -121,7 +122,13 @@ export default function NodeDetail() {
   );
 
   if (error) {
-    return <FetchError message="Failed to load node" />;
+    return (
+      <DetailError
+        error={error}
+        fallback="Failed to load node"
+        onRetry={retry}
+      />
+    );
   }
 
   if (!node) {

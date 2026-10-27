@@ -11,7 +11,7 @@ import {
   ResourceLink,
   Timestamp,
 } from "../components/data";
-import FetchError from "../components/FetchError";
+import DetailError from "../components/DetailError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -157,8 +157,9 @@ export default function NetworkDetail() {
 
   if (error) {
     return (
-      <FetchError
-        message={error.message || "Failed to load network"}
+      <DetailError
+        error={error}
+        fallback="Failed to load network"
         onRetry={retry}
       />
     );

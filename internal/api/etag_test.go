@@ -20,8 +20,6 @@ import (
 )
 
 func TestETagGeneration(t *testing.T) {
-	spec.Satisfies(t, "http/rfc9110/an-etag-is-sent-when-changes-are-detectable")
-
 	body := []byte(`{"hello":"world"}`)
 	etag := computeETag(body)
 
@@ -43,6 +41,8 @@ func TestETagGeneration(t *testing.T) {
 }
 
 func TestETagConditionalRequest(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/an-etag-is-sent-when-changes-are-detectable")
+
 	data := map[string]string{"status": "ok"}
 
 	// First request: should get 200 + ETag header

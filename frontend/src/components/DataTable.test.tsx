@@ -258,4 +258,64 @@ describe("DataTable", () => {
     fireEvent.click(screen.getByText("clear"));
     expect(container.querySelectorAll("[data-selected]")).toHaveLength(0);
   });
+
+  it("leaves Enter on a link inside a cell to the link", () => {
+    const onClick = vi.fn<(item: Item) => void>();
+    const linked: Column<Item>[] = [
+      { header: "Name", cell: ({ name }) => <a href="#x">{name}</a> },
+    ];
+
+    render(
+      <DataTable
+        columns={linked}
+        data={data}
+        keyFn={({ id }) => id}
+        onRowClick={onClick}
+      />,
+    );
+
+    const grid = screen.getByRole("grid");
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.keyDown(screen.getByText("Beta"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByText("Beta"), { key: "ArrowDown" });
+
+    expect(onClick).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(grid, { key: "Enter" });
+    expect(onClick).toHaveBeenCalledWith(data[0]);
+  });
+
+  it("keeps the cursor on the same row when a row is inserted above it", () => {
+    const onClick = vi.fn<(item: Item) => void>();
+
+    function Harness() {
+      const [rows, setRows] = useState(data);
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setRows([{ id: "0", name: "Zero" }, ...data])}
+          >
+            insert
+          </button>
+          <DataTable
+            columns={columns}
+            data={rows}
+            keyFn={({ id }) => id}
+            onRowClick={onClick}
+          />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const grid = screen.getByRole("grid");
+
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.click(screen.getByText("insert"));
+    fireEvent.keyDown(grid, { key: "Enter" });
+
+    expect(onClick).toHaveBeenCalledWith(data[0]);
+  });
 });

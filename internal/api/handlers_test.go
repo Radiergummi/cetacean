@@ -556,6 +556,7 @@ func TestHandleGetNode_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	assertDetailNames(t, w.Body.Bytes(), "/nodes/n1", "node", "n1")
 }
 
 func TestHandleServiceTasks(t *testing.T) {
@@ -842,6 +843,7 @@ func TestHandleGetService_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	assertDetailNames(t, w.Body.Bytes(), "/services/svc1", "service", "svc1")
 }
 
 func TestHandleGetTask_Found(t *testing.T) {
@@ -857,6 +859,7 @@ func TestHandleGetTask_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	assertDetailNames(t, w.Body.Bytes(), "/tasks/t1", "task", "t1")
 }
 
 func TestHandleListTasks(t *testing.T) {
@@ -1094,6 +1097,9 @@ func TestHandleGetStack_Found(t *testing.T) {
 	}
 	if wrapper.Type != "Stack" {
 		t.Errorf("@type=%s, want Stack", wrapper.Type)
+	}
+	if wrapper.ID != "/stacks/mystack" {
+		t.Errorf("@id=%s, want /stacks/mystack", wrapper.ID)
 	}
 }
 
@@ -2183,6 +2189,9 @@ func TestHandleGetConfig_Found(t *testing.T) {
 	if resp.Type != "Config" {
 		t.Errorf("@type=%s, want Config", resp.Type)
 	}
+	if resp.ID != "/configs/cfg1" {
+		t.Errorf("@id=%s, want /configs/cfg1", resp.ID)
+	}
 }
 
 func TestHandleGetSecret_Found(t *testing.T) {
@@ -2226,6 +2235,9 @@ func TestHandleGetSecret_Found(t *testing.T) {
 	if resp.Type != "Secret" {
 		t.Errorf("@type=%s, want Secret", resp.Type)
 	}
+	if resp.ID != "/secrets/sec1" {
+		t.Errorf("@id=%s, want /secrets/sec1", resp.ID)
+	}
 }
 
 func TestHandleGetNetwork_Found(t *testing.T) {
@@ -2264,6 +2276,9 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 	}
 	if resp.Type != "Network" {
 		t.Errorf("@type=%s, want Network", resp.Type)
+	}
+	if resp.ID != "/networks/net1" {
+		t.Errorf("@id=%s, want /networks/net1", resp.ID)
 	}
 }
 
@@ -2305,6 +2320,9 @@ func TestHandleGetVolume_Found(t *testing.T) {
 	}
 	if resp.Type != "Volume" {
 		t.Errorf("@type=%s, want Volume", resp.Type)
+	}
+	if resp.ID != "/volumes/data-vol" {
+		t.Errorf("@id=%s, want /volumes/data-vol", resp.ID)
 	}
 }
 
@@ -2654,5 +2672,26 @@ func TestHandleGetStack_LinksAreTheUnionOfItsServices(t *testing.T) {
 	}
 	if !reflect.DeepEqual(body.Links, want) {
 		t.Errorf("links = %+v, want %+v", body.Links, want)
+	}
+}
+
+// assertDetailNames checks that a detail body is about the resource the path
+// asked for: its @id, and the ID inside the embedded resource.
+func assertDetailNames(t *testing.T, body []byte, wantPath, member, wantID string) {
+	t.Helper()
+
+	var resp map[string]json.RawMessage
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+
+	var id string
+	if err := json.Unmarshal(resp["@id"], &id); err != nil || id != wantPath {
+		t.Errorf("@id=%s, want %s", resp["@id"], wantPath)
+	}
+
+	var resource struct{ ID string }
+	if err := json.Unmarshal(resp[member], &resource); err != nil || resource.ID != wantID {
+		t.Errorf("%s.ID=%q, want %q (err=%v)", member, resource.ID, wantID, err)
 	}
 }

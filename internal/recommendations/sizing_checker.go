@@ -127,14 +127,24 @@ func measured(cpuData, memData map[string]float64, service string) *serviceMetri
 	return &serviceMetrics{cpu: cpu, memory: mem}
 }
 
-// formatPromDuration formats a time.Duration as a Prometheus duration string.
+// formatPromDuration formats a time.Duration as a Prometheus duration string,
+// in the largest unit that holds it exactly.
 func formatPromDuration(d time.Duration) string {
-	hours := int(d.Hours())
-	if hours%24 == 0 && hours >= 24 {
-		return fmt.Sprintf("%dd", hours/24)
+	for _, unit := range []struct {
+		size   time.Duration
+		suffix string
+	}{
+		{24 * time.Hour, "d"},
+		{time.Hour, "h"},
+		{time.Minute, "m"},
+		{time.Second, "s"},
+	} {
+		if d >= unit.size && d%unit.size == 0 {
+			return fmt.Sprintf("%d%s", d/unit.size, unit.suffix)
+		}
 	}
 
-	return fmt.Sprintf("%dh", hours)
+	return fmt.Sprintf("%dms", d.Milliseconds())
 }
 
 func extractSpec(svc swarm.Service) serviceSpec {

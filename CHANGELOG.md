@@ -26,15 +26,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
 
 ### Changed
+- The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
+- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
 - A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed
+- A global service no node can run reads as running rather than pending wherever a service state is shown
+- The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
+- Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting
+- A `sizing.thresholds.lookback` under an hour, or not a whole number of hours, is queried as set instead of being cut to whole hours; startup refuses one under `1m`
+- Placement constraints match values, built-in keys and label prefixes regardless of case, as Swarm does, in drain impact and the desired task count of global services
+- MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
+- A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
+- Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
+- When reading the cluster fails at startup or after reconnecting, such as during a manager election, the dashboard and `/-/ready` recover within seconds instead of minutes
+- A browser tab whose event stream reconnects after Cetacean re-read the whole cluster now refetches, instead of keeping data that re-read replaced
 - Writes honor `If-None-Match` and `If-Unmodified-Since`, and reads `If-Match` and `If-Unmodified-Since`, evaluated in RFC 9110 order and refused with `412`
 - A write whose `Accept` rules out JSON is refused with `406` before it changes anything, unless it sends `Prefer: return=minimal`
 - `OPTIONS` answers with `Allow` and `Accept-Patch`, and a `GET` on a write-only path such as `/services/{id}/scale` answers `405` to clients not asking for HTML
@@ -43,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A Prometheus answer over 10 MiB returns `502 MTR008` instead of a truncated body that blanked the charts
 - Problem details for `413`, `416` and `422` carry RFC 9110's titles, such as `Range Not Satisfiable`
 - A service page's network names, its network picker, and a task page's service and node details retry a failed load; the picker says when networks can't be listed
+- Detail pages, the cluster overview, topology and history keep refreshing during a rollout or crash loop instead of waiting for the events to stop
+- A node without its own node-exporter no longer shows the metrics of another node whose name starts the same, like `worker-1` for `worker-12`
+- In a table, Enter on a link or button opens that link instead of the selected row, and the selection stays on its row as rows come and go
+- A global service with nothing running, or a job whose latest run failed, shows as failing on the stack and services pages instead of green, and a partly failed run as a warning; every service health indicator follows one rule
+- Detail pages and a stack page's task counts say why they failed to load and offer Retry
+- Attaching a config in place of one removed in the same edit defaults to the removed config's path, as secrets already did
+- The task list asks Prometheus only for the services it shows, keeps its sparklines while loading more, and says when metrics fail; metrics stop polling in a background tab
 
 ## [0.18.0] - 2026-10-24
 

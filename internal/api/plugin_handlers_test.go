@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/docker/docker/errdefs"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -160,8 +162,10 @@ func TestHandleListPlugins_Empty(t *testing.T) {
 }
 
 func TestHandleGetPlugin_OK(t *testing.T) {
+	var inspected string
 	pc := &mockPluginClient{
 		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+			inspected = name
 			return &types.Plugin{Name: name, Enabled: true}, nil
 		},
 	}
@@ -182,6 +186,12 @@ func TestHandleGetPlugin_OK(t *testing.T) {
 	}
 	if resp["@type"] != "Plugin" {
 		t.Errorf("@type=%v, want Plugin", resp["@type"])
+	}
+	if resp["@id"] != "/plugins/my-plugin" {
+		t.Errorf("@id=%v, want /plugins/my-plugin", resp["@id"])
+	}
+	if inspected != "my-plugin" {
+		t.Errorf("inspected %q, want my-plugin", inspected)
 	}
 }
 
@@ -204,8 +214,10 @@ func TestHandleGetPlugin_NotFound(t *testing.T) {
 }
 
 func TestHandleEnablePlugin_OK(t *testing.T) {
+	var target string
 	pc := &mockPluginClient{
-		pluginEnableFn: func(_ context.Context, _ string) error {
+		pluginEnableFn: func(_ context.Context, name string) error {
+			target = name
 			return nil
 		},
 	}
@@ -219,11 +231,16 @@ func TestHandleEnablePlugin_OK(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
 	}
+	if target != "my-plugin" {
+		t.Errorf("enabled %q, want my-plugin", target)
+	}
 }
 
 func TestHandleDisablePlugin_OK(t *testing.T) {
+	var target string
 	pc := &mockPluginClient{
-		pluginDisableFn: func(_ context.Context, _ string) error {
+		pluginDisableFn: func(_ context.Context, name string) error {
+			target = name
 			return nil
 		},
 	}
@@ -237,13 +254,19 @@ func TestHandleDisablePlugin_OK(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status=%d, want 204; body: %s", w.Code, w.Body.String())
 	}
+	if target != "my-plugin" {
+		t.Errorf("disabled %q, want my-plugin", target)
+	}
 }
 
 func TestHandleRemovePlugin_OK(t *testing.T) {
-	var removedForce bool
+	var (
+		removed      string
+		removedForce bool
+	)
 	pc := &mockPluginClient{
-		pluginRemoveFn: func(_ context.Context, _ string, force bool) error {
-			removedForce = force
+		pluginRemoveFn: func(_ context.Context, name string, force bool) error {
+			removed, removedForce = name, force
 			return nil
 		},
 	}
@@ -260,13 +283,19 @@ func TestHandleRemovePlugin_OK(t *testing.T) {
 	if removedForce {
 		t.Error("expected force=false")
 	}
+	if removed != "my-plugin" {
+		t.Errorf("removed %q, want my-plugin", removed)
+	}
 }
 
 func TestHandleRemovePlugin_Force(t *testing.T) {
-	var removedForce bool
+	var (
+		removed      string
+		removedForce bool
+	)
 	pc := &mockPluginClient{
-		pluginRemoveFn: func(_ context.Context, _ string, force bool) error {
-			removedForce = force
+		pluginRemoveFn: func(_ context.Context, name string, force bool) error {
+			removed, removedForce = name, force
 			return nil
 		},
 	}
@@ -283,11 +312,16 @@ func TestHandleRemovePlugin_Force(t *testing.T) {
 	if !removedForce {
 		t.Error("expected force=true")
 	}
+	if removed != "my-plugin" {
+		t.Errorf("removed %q, want my-plugin", removed)
+	}
 }
 
 func TestHandlePluginPrivileges_OK(t *testing.T) {
+	var asked string
 	pc := &mockPluginClient{
-		pluginPrivilegesFn: func(_ context.Context, _ string) (types.PluginPrivileges, error) {
+		pluginPrivilegesFn: func(_ context.Context, remote string) (types.PluginPrivileges, error) {
+			asked = remote
 			return types.PluginPrivileges{{Name: "network", Value: []string{"host"}}}, nil
 		},
 	}
@@ -300,6 +334,9 @@ func TestHandlePluginPrivileges_OK(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	if asked != "example/plugin:latest" {
+		t.Errorf("asked for the privileges of %q, want example/plugin:latest", asked)
 	}
 	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
@@ -331,8 +368,10 @@ func TestHandlePluginPrivileges_MissingRemote(t *testing.T) {
 }
 
 func TestHandleInstallPlugin_OK(t *testing.T) {
+	var installed string
 	pc := &mockPluginClient{
 		pluginInstallFn: func(_ context.Context, remote string) (*types.Plugin, error) {
+			installed = remote
 			return &types.Plugin{Name: "example/plugin:latest", Enabled: false}, nil
 		},
 	}
@@ -346,6 +385,9 @@ func TestHandleInstallPlugin_OK(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status=%d, want 201; body: %s", w.Code, w.Body.String())
 	}
+	if installed != "example/plugin:latest" {
+		t.Errorf("installed %q, want example/plugin:latest", installed)
+	}
 
 	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -357,8 +399,10 @@ func TestHandleInstallPlugin_OK(t *testing.T) {
 }
 
 func TestHandleUpgradePlugin_OK(t *testing.T) {
+	var upgraded, upgradedTo string
 	pc := &mockPluginClient{
-		pluginUpgradeFn: func(_ context.Context, _ string, _ string) error {
+		pluginUpgradeFn: func(_ context.Context, name, remote string) error {
+			upgraded, upgradedTo = name, remote
 			return nil
 		},
 		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
@@ -376,6 +420,9 @@ func TestHandleUpgradePlugin_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
+	if upgraded != "my-plugin" || upgradedTo != "example/plugin:v2" {
+		t.Errorf("upgraded %q to %q, want my-plugin to example/plugin:v2", upgraded, upgradedTo)
+	}
 
 	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -387,8 +434,13 @@ func TestHandleUpgradePlugin_OK(t *testing.T) {
 }
 
 func TestHandleConfigurePlugin_OK(t *testing.T) {
+	var (
+		configured string
+		args       []string
+	)
 	pc := &mockPluginClient{
-		pluginConfigureFn: func(_ context.Context, _ string, _ []string) error {
+		pluginConfigureFn: func(_ context.Context, name string, a []string) error {
+			configured, args = name, a
 			return nil
 		},
 		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
@@ -406,6 +458,9 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
 	}
+	if configured != "my-plugin" || !slices.Equal(args, []string{"DEBUG=1", "LOG_LEVEL=info"}) {
+		t.Errorf("configured %q with %v, want my-plugin with the request's args", configured, args)
+	}
 
 	var resp map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -413,6 +468,65 @@ func TestHandleConfigurePlugin_OK(t *testing.T) {
 	}
 	if resp["@type"] != "Plugin" {
 		t.Errorf("@type=%v, want Plugin", resp["@type"])
+	}
+}
+
+// A plugin's mount source and device path are host paths, so setting either
+// needs the impactful tier though the endpoint is a level-2 one.
+func TestHandleConfigurePlugin_HostPathsRequireImpactfulLevel(t *testing.T) {
+	cases := []struct {
+		body    string
+		level   config.OperationsLevel
+		refused bool
+	}{
+		{`{"env":["DEBUG=1"]}`, config.OpsConfiguration, false},
+		{`{"env":["state.source=/"]}`, config.OpsConfiguration, true},
+		{`{"args":["state=/"]}`, config.OpsConfiguration, true},
+		{`{"env":["disk.path=/dev/sda"]}`, config.OpsConfiguration, true},
+		{`{"env":["state.source=/"]}`, config.OpsImpactful, false},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%s at level %d", tc.body, tc.level), func(t *testing.T) {
+			configured := false
+			pc := &mockPluginClient{
+				pluginConfigureFn: func(context.Context, string, []string) error {
+					configured = true
+					return nil
+				},
+				pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+					return &types.Plugin{Name: name, Config: types.PluginConfig{
+						Env:    []types.PluginEnv{{Name: "DEBUG", Settable: []string{"value"}}},
+						Mounts: []types.PluginMount{{Name: "state", Settable: []string{"source"}}},
+						Linux: types.PluginConfigLinux{Devices: []types.PluginDevice{
+							{Name: "disk", Settable: []string{"path"}},
+						}},
+					}}, nil
+				},
+			}
+			h := newTestHandlers(t, withPluginClient(pc), withOpsLevel(tc.level))
+
+			req := httptest.NewRequest("PATCH", "/plugins/p/settings", strings.NewReader(tc.body))
+			req.SetPathValue("name", "p")
+			w := httptest.NewRecorder()
+			h.HandleConfigurePlugin(w, req)
+
+			if !tc.refused {
+				if w.Code != http.StatusOK || !configured {
+					t.Fatalf("status=%d configured=%v, want 200 and a write; body: %s",
+						w.Code, configured, w.Body.String())
+				}
+
+				return
+			}
+
+			if w.Code != http.StatusForbidden || configured {
+				t.Fatalf("status=%d configured=%v, want 403 and no write; body: %s",
+					w.Code, configured, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), "OPS001") {
+				t.Errorf("body does not name OPS001: %s", w.Body.String())
+			}
+		})
 	}
 }
 

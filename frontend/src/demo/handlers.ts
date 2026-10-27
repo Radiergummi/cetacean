@@ -604,7 +604,7 @@ function deriveStacks(dataset: Dataset) {
   return stacks;
 }
 
-function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
+export function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   const tasksByState: Record<string, number> = {};
 
   for (const task of dataset.tasks) {
@@ -644,6 +644,15 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     }
   }
 
+  // A global service keeps its tasks on every ready node that is active or
+  // paused, and starts new ones only on active nodes; the demo's services carry
+  // no placement constraints.
+  const readyNodes = dataset.nodes.filter(({ Status }) => Status.State === "ready");
+  const eligibleNodes = readyNodes.filter(({ Spec }) => Spec.Availability === "active").length;
+  const schedulableNodes = readyNodes.filter(
+    ({ Spec }) => Spec.Availability === "active" || Spec.Availability === "pause",
+  ).length;
+
   let reservedCPU = 0;
   let reservedMemory = 0;
 
@@ -654,12 +663,12 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
       continue;
     }
 
-    let replicas = 1;
+    let replicas = 0;
 
     if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
       replicas = service.Spec.Mode.Replicated.Replicas;
     } else if (service.Spec.Mode.Global) {
-      replicas = dataset.nodes.length;
+      replicas = schedulableNodes;
     }
 
     reservedCPU += (reservations.NanoCPUs ?? 0) * replicas;
@@ -670,21 +679,13 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let servicesDegraded = 0;
 
   for (const service of dataset.services) {
-    let desired = 0;
+    const state = demoServiceState(service, dataset.tasks, eligibleNodes);
 
-    if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
-      desired = service.Spec.Mode.Replicated.Replicas;
-    } else if (service.Spec.Mode.Global) {
-      desired = dataset.nodes.length;
+    if (state === "converged") {
+      servicesConverged++;
     }
 
-    const running = dataset.tasks.filter(
-      (t) => t.ServiceID === service.ID && t.Status.State === "running",
-    ).length;
-
-    if (running >= desired) {
-      servicesConverged++;
-    } else {
+    if (state === "degraded") {
       servicesDegraded++;
     }
   }
@@ -707,6 +708,46 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     quorum: quorumOf(managers, reachableManagers),
     prometheusConfigured: true,
   };
+}
+
+const updatingStates = new Set(["updating", "rollback_started", "rollback_paused"]);
+
+/**
+ * The server's overview rule, without restart tracking: a service mid-update
+ * counts in neither bucket, a job converges once its run met its completion
+ * target, and a global service with nowhere to run has nothing outstanding.
+ * Running counts only tasks the orchestrator still means to run.
+ */
+function demoServiceState(
+  service: Service,
+  tasks: Task[],
+  eligibleNodes: number,
+): "converged" | "degraded" | "updating" {
+  if (service.UpdateStatus && updatingStates.has(service.UpdateStatus.State ?? "")) {
+    return "updating";
+  }
+
+  const own = tasks.filter(({ ServiceID }) => ServiceID === service.ID);
+  const running = own.filter(
+    ({ Status, DesiredState }) =>
+      Status.State === "running" && DesiredState !== "shutdown" && DesiredState !== "remove",
+  ).length;
+  const { Mode } = service.Spec;
+
+  if (Mode.ReplicatedJob || Mode.GlobalJob) {
+    const completed = own.filter(({ Status }) => Status.State === "complete").length;
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
+
+    return running > 0 || completed >= Math.max(target, 1) ? "converged" : "degraded";
+  }
+
+  if (Mode.Global) {
+    return running > 0 || eligibleNodes === 0 ? "converged" : "degraded";
+  }
+
+  const desired = Mode.Replicated?.Replicas ?? 0;
+
+  return running >= desired ? "converged" : "degraded";
 }
 
 function quorumOf(managers: number, reachable: number): ManagerQuorum {

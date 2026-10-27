@@ -462,6 +462,10 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, always("changing the image of"))
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -491,6 +495,10 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, always(cluster.RollingBack))
+	if err != nil {
+		return "", err
+	}
 	wc, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -503,6 +511,57 @@ func (s *Server) toolRollbackService(
 		return "", err
 	}
 	return marshalResult(s.serviceMutation(svc))
+}
+
+// guardHostAccess runs cluster.CheckHostAccessHeld on the change a write to the
+// service id names makes. Below level 3 the service must resolve and the write is
+// addressed by its full ID; if it holds host access, the write is also pinned to
+// the cached version judged, so a stale cache can't pass for "unchanged".
+func (s *Server) guardHostAccess(
+	ctx context.Context,
+	cond condition,
+	id string,
+	change func(swarm.Service) string,
+) (context.Context, string, error) {
+	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+	if level >= config.OpsImpactful {
+		return ctx, id, nil
+	}
+
+	svc, found, err := s.cache.ResolveService(id)
+	if err != nil {
+		return ctx, id, err
+	}
+	if !found {
+		return ctx, id, fmt.Errorf("service %q not found", id)
+	}
+
+	what := change(svc)
+	if cluster.HeldHostAccess(svc, what == cluster.RollingBack, s.cache.GetVolume) == "" {
+		return ctx, svc.ID, nil
+	}
+
+	if err := cluster.CheckHostAccessHeld(svc, what, s.cache.GetVolume, level); err != nil {
+		return ctx, id, err
+	}
+
+	ctx, err = s.pinChecked(ctx, cond, svc)
+
+	return ctx, svc.ID, err
+}
+
+// always is a change every request to a tool makes.
+func always(change string) func(swarm.Service) string {
+	return func(swarm.Service) string { return change }
+}
+
+// containerSpec is svc's container spec, or an empty one.
+func containerSpec(svc swarm.Service) *swarm.ContainerSpec {
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		return cs
+	}
+
+	return &swarm.ContainerSpec{}
 }
 
 func (s *Server) toolRestartService(
@@ -705,6 +764,7 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 			svc,
 			running,
 			s.cache.CompletedJobTaskCount(svc.ID),
+			s.cache.EligibleNodeCounts(svc)[svc.ID],
 			s.cache.IsFlapping(svc.ID),
 		),
 		Version: svc.Version.Index,

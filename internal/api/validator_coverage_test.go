@@ -5,9 +5,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/radiergummi/cetacean/internal/api/sse"
-	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 // Compression and conditional caching are a property of which write helper a
@@ -16,15 +13,7 @@ import (
 // places, so its presence on a 2xx GET witnesses that the helpers were used.
 func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 	specBytes, doc, _ := loadTestSpec(t)
-
-	c := cache.New(nil)
-	populateSpecFixtures(c)
-
-	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
-	defer b.Close()
-
-	router := newTestRouter(t, h, b, specBytes)
+	router, requests := newSpecWalkRouter(t, specBytes)
 
 	// Endpoints that bypass the helpers today and are not fixed here. They
 	// are listed rather than skipped so the debt is visible and cannot grow
@@ -40,7 +29,11 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 			continue
 		}
 
-		requestPath, ok := resolvePath(pathTemplate)
+		requestPath, ok := requests[pathTemplate]
+		if !ok {
+			requestPath, ok = resolvePath(pathTemplate)
+		}
+
 		if !ok {
 			t.Logf("skipping %s: no fixture for path parameters", pathTemplate)
 			continue
@@ -53,11 +46,11 @@ func TestEveryReadEndpointCarriesAValidator(t *testing.T) {
 
 			router.ServeHTTP(rec, req)
 
-			// A non-2xx says the fixture could not reach the handler, not
-			// that the handler is wrong. TestEveryReadEndpointMatchesSpec
-			// reports those; here they are simply not evidence.
+			// A non-2xx means the fixture never reached the handler, which
+			// is a gap in newSpecWalkRouter rather than evidence either way.
 			if rec.Code < 200 || rec.Code >= 300 {
-				t.Skipf("status=%d, handler not reached", rec.Code)
+				t.Fatalf("status=%d — the fixture cannot reach this handler; "+
+					"extend newSpecWalkRouter: %s", rec.Code, rec.Body.String())
 			}
 
 			checked++

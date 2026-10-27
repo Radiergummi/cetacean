@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -43,6 +44,9 @@ type mockClient struct {
 	// syncGate, when set, holds every FullSync until it is closed.
 	syncGate chan struct{}
 
+	// fullSyncDelay is how long every FullSync takes, unless its context ends.
+	fullSyncDelay time.Duration
+
 	// listTasksFn, when set, replaces ListTasksIn's default behaviour.
 	listTasksFn func(ctx context.Context, scope TaskScope) ([]swarm.Task, error)
 
@@ -70,6 +74,13 @@ func (m *mockClient) setNodes(nodes []swarm.Node) {
 
 func (m *mockClient) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	call := m.fullSyncs.Add(1)
+	if m.fullSyncDelay > 0 {
+		select {
+		case <-time.After(m.fullSyncDelay):
+		case <-ctx.Done():
+			return cache.FullSyncData{}, ctx.Err()
+		}
+	}
 	if m.syncGate != nil {
 		select {
 		case <-m.syncGate:
@@ -194,6 +205,16 @@ func (m *mockClient) Logs(
 
 func (m *mockClient) Close() error { return nil }
 
+// deliver applies one event the way the event loop does: as a batch of one.
+func deliver(ctx context.Context, w *Watcher, msg events.Message) {
+	key, action := w.eventKeyFromMsg(msg)
+	if key.id == "" {
+		return
+	}
+
+	w.processBatch(ctx, map[eventKey]coalesced{key: coalesced{}.then(action)})
+}
+
 // --- Tests ---
 
 func TestHandleEvent_NodeUpdate(t *testing.T) {
@@ -206,7 +227,7 @@ func TestHandleEvent_NodeUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.NodeEventType,
 		Actor: events.Actor{ID: "n1"},
 	})
@@ -226,7 +247,7 @@ func TestHandleEvent_NodeRemove(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "n1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.NodeEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "n1"},
@@ -247,7 +268,7 @@ func TestHandleEvent_ServiceUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.ServiceEventType,
 		Actor: events.Actor{ID: "s1"},
 	})
@@ -267,7 +288,7 @@ func TestHandleEvent_ServiceRemove(t *testing.T) {
 	c.SetService(swarm.Service{ID: "s1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ServiceEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "s1"},
@@ -283,7 +304,7 @@ func TestHandleEvent_ConfigUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.ConfigEventType,
 		Actor: events.Actor{ID: "cfg1"},
 	})
@@ -299,7 +320,7 @@ func TestHandleEvent_ConfigRemove(t *testing.T) {
 	c.SetConfig(swarm.Config{ID: "cfg1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ConfigEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "cfg1"},
@@ -315,7 +336,7 @@ func TestHandleEvent_SecretUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.SecretEventType,
 		Actor: events.Actor{ID: "sec1"},
 	})
@@ -331,7 +352,7 @@ func TestHandleEvent_SecretRemove(t *testing.T) {
 	c.SetSecret(swarm.Secret{ID: "sec1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.SecretEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "sec1"},
@@ -347,7 +368,7 @@ func TestHandleEvent_NetworkUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.NetworkEventType,
 		Actor: events.Actor{ID: "net1"},
 	})
@@ -363,7 +384,7 @@ func TestHandleEvent_NetworkRemove(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.NetworkEventType,
 		Action: "remove",
 		Actor:  events.Actor{ID: "net1"},
@@ -380,7 +401,7 @@ func TestHandleEvent_NetworkDestroy(t *testing.T) {
 	c.SetNetwork(network.Summary{ID: "net1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.NetworkEventType,
 		Action: "destroy",
 		Actor:  events.Actor{ID: "net1"},
@@ -399,7 +420,7 @@ func TestHandleEvent_VolumeUpdate(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.VolumeEventType,
 		Actor: events.Actor{ID: "vol1"},
 	})
@@ -419,7 +440,7 @@ func TestHandleEvent_VolumeDestroy(t *testing.T) {
 	c.SetVolume(volume.Volume{Name: "vol1"})
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.VolumeEventType,
 		Action: "destroy",
 		Actor:  events.Actor{ID: "vol1"},
@@ -438,7 +459,7 @@ func TestHandleEvent_ContainerToTask(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type: events.ContainerEventType,
 		Actor: events.Actor{
 			ID: "container1",
@@ -468,7 +489,7 @@ func TestHandleEvent_ContainerWithoutTaskID(t *testing.T) {
 	c := cache.New(nil)
 	w := NewWatcher(mc, c, "")
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.ContainerEventType,
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{}},
 	})
@@ -487,7 +508,7 @@ func TestHandleEvent_InspectError(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 
 	// Should not panic, should not add to cache
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  events.NodeEventType,
 		Actor: events.Actor{ID: "n1"},
 	})
@@ -579,7 +600,7 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 		mc.errCh <- fmt.Errorf("stream ended")
 	}()
 
-	w.watchEvents(ctx, time.Time{})
+	w.watchEvents(ctx, time.Time{}, true)
 	cancel()
 
 	if _, ok := c.GetNode("n1"); !ok {
@@ -596,7 +617,7 @@ func TestWatchEvents_StopsOnContextCancel(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 		close(done)
 	}()
 
@@ -641,41 +662,178 @@ func TestRun_SignalsReady(t *testing.T) {
 	}
 }
 
+// A retried sync runs on the event loop beside a cache that already serves
+// reads, so a hung one must give the loop back well before a full sync's own
+// timeout would, or every event and Refresh waits behind it.
+func TestRetriedSyncGivesTheLoopBackSoon(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{}) // never opens: every sync hangs
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.watchEvents(ctx, time.Time{}, false)
+		}()
+
+		// Past the first retry and its bound, before the second retry.
+		time.Sleep(time.Second + retrySyncTimeout + time.Second/2)
+		synctest.Wait()
+		if mc.fullSyncs.Load() != 1 {
+			t.Fatalf("FullSync ran %d times, want the one retry", mc.fullSyncs.Load())
+		}
+
+		if err := w.Refresh(ctx, string(events.NodeEventType), "n1"); err != nil {
+			t.Errorf("Refresh behind a retried sync = %v", err)
+		}
+
+		cancel()
+		<-done
+	})
+}
+
+// runLoop runs w's event loop after a failed sync until the test ends.
+func runLoop(t *testing.T, w *Watcher) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.watchEvents(ctx, time.Time{}, false)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+}
+
+// A Refresh waiting to be handed to the loop goes first: a retry that finds
+// one waits for its next turn rather than letting the hand-off time out.
+func TestRetriedSyncWaitsForAWaitingRefresh(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		w := NewWatcher(mc, cache.New(nil), "")
+		runLoop(t, w)
+
+		w.refreshWaiting.Add(1)
+		time.Sleep(time.Second + time.Millisecond)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got != 0 {
+			t.Errorf("a retry ran with a Refresh waiting (FullSync ran %d times)", got)
+		}
+
+		w.refreshWaiting.Add(-1)
+		time.Sleep(maxBackoff)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got != 1 {
+			t.Errorf("FullSync ran %d times once nothing waited, want 1", got)
+		}
+	})
+}
+
+// Steady events keep a batch pending almost all the time; the retry flushes
+// it and goes ahead rather than waiting for a quiet moment that never comes.
+func TestRetriedSyncIsNotStarvedBySteadyEvents(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		w := NewWatcher(mc, cache.New(nil), "")
+		runLoop(t, w)
+
+		for range int(5*time.Second/(debounceWindow/7)) + 1 {
+			mc.eventsCh <- events.Message{Type: events.NodeEventType, Actor: events.Actor{ID: "n1"}}
+			time.Sleep(debounceWindow / 7)
+		}
+		synctest.Wait()
+
+		select {
+		case <-w.Ready():
+		default:
+			t.Errorf("no retried sync succeeded under steady events (%d ran)", mc.fullSyncs.Load())
+		}
+	})
+}
+
+// A cluster whose full sync takes longer than a retry's first bound still
+// recovers: each failed retry is given longer than the last.
+func TestRetriedSyncTimeoutGrowsWithTheBackoff(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.fullSyncDelay = retrySyncTimeout + retrySyncTimeout/2
+		w := NewWatcher(mc, cache.New(nil), "")
+		runLoop(t, w)
+
+		time.Sleep(2 * time.Minute)
+		synctest.Wait()
+
+		select {
+		case <-w.Ready():
+		default:
+			t.Errorf("a slow sync never succeeded as a retry (%d ran)", mc.fullSyncs.Load())
+		}
+	})
+}
+
 // A manager started before its swarm elects a leader refuses every swarm list
-// while its event stream stays up, so no reconnect follows; the periodic sync
-// that succeeds once a leader exists has to be the one that reports ready.
-func TestRun_PeriodicSyncSignalsReadyAfterFailedStartup(t *testing.T) {
-	mc := newMockClient()
-	for _, name := range swarmResources {
-		mc.listErrors[name] = errors.New("the swarm does not have a leader")
-	}
+// while its event stream stays up, so no reconnect follows. The sync is retried
+// on a short backoff, so the instance is ready within seconds of a leader
+// existing rather than at the next periodic sync.
+func TestRun_RetriesAFailedStartupSync(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		for _, name := range swarmResources {
+			mc.listErrors[name] = errors.New("the swarm does not have a leader")
+		}
 
-	w := NewWatcher(mc, cache.New(nil), "")
-	w.syncInterval = 5 * time.Millisecond
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	go w.Run(t.Context())
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.Run(ctx)
+		}()
 
-	for mc.fullSyncs.Load() == 0 {
-		time.Sleep(time.Millisecond)
-	}
-	select {
-	case <-w.Ready():
-		t.Fatal("ready before any swarm resource could be listed")
-	default:
-	}
+		// Long enough for several retries, each failing.
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got < 3 {
+			t.Errorf("FullSync ran %d times in five seconds after failing, want retries", got)
+		}
+		select {
+		case <-w.Ready():
+			t.Fatal("ready before any swarm resource could be listed")
+		default:
+		}
 
-	mc.mu.Lock()
-	clear(mc.listErrors)
-	mc.mu.Unlock()
+		mc.mu.Lock()
+		clear(mc.listErrors)
+		mc.mu.Unlock()
 
-	select {
-	case <-w.Ready():
-	case <-time.After(2 * time.Second):
-		t.Fatal("a successful periodic sync did not signal ready")
-	}
-	if connected, _ := w.Liveness(); !connected {
-		t.Fatal("ready while the watcher reports the cluster as untracked")
-	}
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		select {
+		case <-w.Ready():
+		default:
+			t.Fatal("a failed startup sync was not retried within the backoff")
+		}
+		if connected, _ := w.Liveness(); !connected {
+			t.Error("ready while the watcher reports the cluster as untracked")
+		}
+
+		// Retries stop once one succeeds.
+		calls := mc.fullSyncs.Load()
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got != calls {
+			t.Errorf("FullSync ran %d more times after a success", got-calls)
+		}
+
+		cancel()
+		<-done
+	})
 }
 
 // A manual resync is not the watcher's own: it may run while the stream is
@@ -759,11 +917,14 @@ func TestRun_ReconnectsAfterEventStreamError(t *testing.T) {
 
 // Swarm garbage-collects a task's record once it leaves the history window and
 // emits no removal event, so the only trace is that the next inspect 404s. A
-// not-found surviving every retry is the daemon's answer rather than a race —
-// the retries still run, since during a deploy a 404 means "not registered yet".
+// task outlives its container, so a 404 for one is final, not worth a retry
+// that would hold the event loop.
 func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
+	var calls atomic.Int32
+
 	mc := newMockClient()
 	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+		calls.Add(1)
 		return nil, cerrdefs.ErrNotFound
 	}
 
@@ -776,14 +937,156 @@ func TestHandleEventDeletesTaskThatNoLongerExists(t *testing.T) {
 	})
 
 	w := NewWatcher(mc, c, "")
-	w.handleEvent(context.Background(), events.Message{
-		Type:  "task",
-		Actor: events.Actor{ID: "t1"},
+	deliver(context.Background(), w, events.Message{
+		Type:   events.ContainerEventType,
+		Action: "destroy",
+		Actor: events.Actor{
+			ID:         "container1",
+			Attributes: map[string]string{"com.docker.swarm.task.id": "t1"},
+		},
 	})
+	w.waitForSettles()
 
 	if _, ok := c.GetTask("t1"); ok {
 		t.Error("task Docker no longer has is still in the cache")
 	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("inspected a missing task %d times, want 1", got)
+	}
+}
+
+// During a stack deploy a create event can outrun the object it announces, so
+// a 404 on a create is retried rather than taken as the answer.
+func TestCreateEventRetriesAnObjectNotVisibleYet(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(_ context.Context, _ events.Type, id string) (any, error) {
+		if calls.Add(1) == 1 {
+			return nil, cerrdefs.ErrNotFound
+		}
+		return swarm.Service{ID: id}, nil
+	}
+
+	c := cache.New(nil)
+	w := NewWatcher(mc, c, "")
+	deliver(context.Background(), w, events.Message{
+		Type:   events.ServiceEventType,
+		Action: "create",
+		Actor:  events.Actor{ID: "svc1"},
+	})
+
+	if _, ok := c.GetService("svc1"); !ok {
+		t.Error("a service created a moment before its inspect was dropped")
+	}
+}
+
+// Past its create, a 404 means the object is gone: its remove event is on the
+// way, and retrying would only hold the event loop until it arrives.
+func TestUpdateEventTakesNotFoundAsFinal(t *testing.T) {
+	var calls atomic.Int32
+
+	mc := newMockClient()
+	mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+		calls.Add(1)
+		return nil, cerrdefs.ErrNotFound
+	}
+
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	w := NewWatcher(mc, c, "")
+	deliver(context.Background(), w, events.Message{
+		Type:   events.ServiceEventType,
+		Action: "update",
+		Actor:  events.Actor{ID: "svc1"},
+	})
+
+	if _, ok := c.GetService("svc1"); ok {
+		t.Error("a service Docker no longer has is still in the cache")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("inspected a missing service %d times, want 1", got)
+	}
+}
+
+// Any event coalesced onto a create in the same window must keep the create's
+// retry, or the object the deploy just made is dropped.
+func TestCoalescedCreateKeepsItsRetry(t *testing.T) {
+	for _, test := range []struct {
+		kind    events.Type
+		actions []events.Action
+	}{
+		{events.ServiceEventType, []events.Action{"create", "update"}},
+		{events.NetworkEventType, []events.Action{"create", "connect"}},
+		{events.VolumeEventType, []events.Action{"create", "mount", "unmount"}},
+	} {
+		t.Run(string(test.kind), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var calls atomic.Int32
+
+				mc := newMockClient()
+				mc.inspectFn = func(ctx context.Context, kind events.Type, id string) (any, error) {
+					if calls.Add(1) == 1 {
+						return nil, cerrdefs.ErrNotFound
+					}
+					return newMockClient().Inspect(ctx, kind, id)
+				}
+
+				c := cache.New(nil)
+				w := NewWatcher(mc, c, "")
+				for _, action := range test.actions {
+					mc.eventsCh <- events.Message{
+						Type:   test.kind,
+						Action: action,
+						Actor:  events.Actor{ID: "x1"},
+					}
+				}
+
+				ctx, cancel := context.WithCancel(t.Context())
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					w.watchEvents(ctx, time.Time{}, true)
+				}()
+
+				time.Sleep(time.Second)
+				synctest.Wait()
+				cancel()
+				<-done
+
+				if got := calls.Load(); got != 2 {
+					t.Errorf("inspected %d times, want a retry after the not-found", got)
+				}
+			})
+		})
+	}
+}
+
+// One attempt timing out is a slow engine, not a verdict: the next attempt
+// runs, and only the caller's own context ending stops the retries.
+func TestInspectRetriesAnAttemptThatTimedOut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var calls atomic.Int32
+
+		mc := newMockClient()
+		mc.inspectFn = func(ctx context.Context, _ events.Type, id string) (any, error) {
+			if calls.Add(1) == 1 {
+				return hangingInspect(ctx, "", id)
+			}
+			return swarm.Node{ID: id}, nil
+		}
+
+		c := cache.New(nil)
+		w := NewWatcher(mc, c, "")
+		deliver(t.Context(), w, events.Message{
+			Type:  events.NodeEventType,
+			Actor: events.Actor{ID: "n1"},
+		})
+
+		if _, ok := c.GetNode("n1"); !ok {
+			t.Error("an inspect whose first attempt timed out was not retried")
+		}
+	})
 }
 
 // A transient failure is not evidence of absence. Dropping the record on one
@@ -800,7 +1103,7 @@ func TestHandleEventKeepsTaskWhenInspectFailsTransiently(t *testing.T) {
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc"})
 
 	w := NewWatcher(mc, c, "")
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:  "task",
 		Actor: events.Actor{ID: "t1"},
 	})
@@ -839,7 +1142,7 @@ func TestContainerDeathReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 10 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "die",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -885,7 +1188,7 @@ func TestNonTerminalContainerEventInspectsOnce(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 10 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "start",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -930,7 +1233,7 @@ func TestContainerStartReinspectsUntilSwarmCatchesUp(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 10 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "start",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -984,7 +1287,7 @@ func TestContainerStartStopsReinspectingOnceRunning(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "start",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -1029,7 +1332,7 @@ func TestContainerDeathKeepsReinspectingWhileSwarmLags(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = 5 * time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "die",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -1068,7 +1371,7 @@ func TestSettleRetriesAreBounded(t *testing.T) {
 	w := NewWatcher(mc, c, "")
 	w.settleDelay = time.Millisecond
 
-	w.handleEvent(context.Background(), events.Message{
+	deliver(context.Background(), w, events.Message{
 		Type:   events.ContainerEventType,
 		Action: "die",
 		Actor: events.Actor{ID: "container1", Attributes: map[string]string{
@@ -1167,7 +1470,7 @@ func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	w.watchEvents(ctx, time.Time{})
+	w.watchEvents(ctx, time.Time{}, true)
 
 	if connected, _ := w.Liveness(); connected {
 		t.Error("still connected after the event stream ended")
@@ -1215,58 +1518,57 @@ func TestManualResyncFailureLeavesTheStreamVerdictAlone(t *testing.T) {
 // Each manual resync sweeps the whole Docker API, and two racing ones let the
 // older fetch overwrite the newer, so concurrent calls share one sync.
 func TestResyncCoalescesConcurrentCalls(t *testing.T) {
-	mc := newMockClient()
-	mc.syncGate = make(chan struct{})
-	w := NewWatcher(mc, cache.New(nil), "")
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{})
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	var callers sync.WaitGroup
-	for range 5 {
-		callers.Go(func() {
-			if err := w.Resync(context.Background()); err != nil {
-				t.Errorf("Resync: %v", err)
-			}
-		})
-	}
+		var callers sync.WaitGroup
+		for range 5 {
+			callers.Go(func() {
+				if err := w.Resync(context.Background()); err != nil {
+					t.Errorf("Resync: %v", err)
+				}
+			})
+		}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	time.Sleep(50 * time.Millisecond) // let the other callers join the flight
-	close(mc.syncGate)
-	callers.Wait()
+		// Every caller is parked: one in the gated sync, the rest on its flight.
+		synctest.Wait()
+		close(mc.syncGate)
+		callers.Wait()
 
-	if got := mc.fullSyncs.Load(); got != 1 {
-		t.Errorf("FullSync ran %d times, want 1", got)
-	}
+		if got := mc.fullSyncs.Load(); got != 1 {
+			t.Errorf("FullSync ran %d times, want 1", got)
+		}
+	})
 }
 
 // A caller that gives up must not stay parked on the shared flight, which runs
 // detached from every caller and may outlast them all.
 func TestResyncReturnsWhenCallerCancels(t *testing.T) {
-	mc := newMockClient()
-	mc.syncGate = make(chan struct{})
-	defer close(mc.syncGate)
-	w := NewWatcher(mc, cache.New(nil), "")
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{})
+		defer close(mc.syncGate)
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	resynced := make(chan error, 1)
-	go func() { resynced <- w.Resync(ctx) }()
+		ctx, cancel := context.WithCancel(context.Background())
+		resynced := make(chan error, 1)
+		go func() { resynced <- w.Resync(ctx) }()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	cancel()
+		synctest.Wait()
+		cancel()
+		synctest.Wait()
 
-	select {
-	case err := <-resynced:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("Resync = %v, want context.Canceled", err)
+		select {
+		case err := <-resynced:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("Resync = %v, want context.Canceled", err)
+			}
+		default:
+			t.Fatal("Resync still blocked after its caller's context was cancelled")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Resync still blocked after its caller's context was cancelled")
-	}
+	})
 }
 
 // syncMu must serialize the periodic sync and a manual Resync that overlaps
@@ -1319,39 +1621,91 @@ func TestOlderSyncCannotOverwriteANewerOne(t *testing.T) {
 // manual Resync's syncMu would stall event processing for as long as that
 // resync takes. It must skip itself instead.
 func TestPeriodicSyncSkipsWhenAResyncIsRunning(t *testing.T) {
-	mc := newMockClient()
-	mc.syncGate = make(chan struct{})
-	w := NewWatcher(mc, cache.New(nil), "")
-	w.syncInterval = 5 * time.Millisecond
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.syncGate = make(chan struct{})
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	resynced := make(chan error, 1)
-	go func() { resynced <- w.Resync(context.Background()) }()
+		// Several ticks must fit inside the resync's own timeout.
+		w.syncInterval = fullSyncTimeout / 4
 
-	deadline := time.Now().Add(2 * time.Second)
-	for mc.fullSyncs.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
+		resynced := make(chan error, 1)
+		go func() { resynced <- w.Resync(context.Background()) }()
+		synctest.Wait()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		w.watchEvents(ctx, time.Time{})
-	}()
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.watchEvents(ctx, time.Time{}, true)
+		}()
 
-	// Several ticks' worth of time while the resync still holds syncMu.
-	time.Sleep(50 * time.Millisecond)
+		// Several ticks' worth of time while the resync still holds syncMu.
+		time.Sleep(3*w.syncInterval + time.Second)
+		synctest.Wait()
 
-	if got := mc.fullSyncs.Load(); got != 1 {
-		t.Errorf("FullSync called %d times while a resync was in flight, want 1", got)
-	}
+		if got := mc.fullSyncs.Load(); got != 1 {
+			t.Errorf("FullSync called %d times while a resync was in flight, want 1", got)
+		}
 
-	close(mc.syncGate)
+		close(mc.syncGate)
 
-	if err := <-resynced; err != nil {
-		t.Fatalf("Resync: %v", err)
-	}
+		if err := <-resynced; err != nil {
+			t.Fatalf("Resync: %v", err)
+		}
 
-	cancel()
-	<-done
+		cancel()
+		<-done
+	})
+}
+
+// hangingInspect answers only once its context ends, as a half-open TCP
+// connection to the engine or a hung volume plugin does.
+func hangingInspect(ctx context.Context, _ events.Type, _ string) (any, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// An inspect on the event loop holds every event behind it, so one that never
+// answers must give up on its own rather than wedge the loop for good.
+func TestEventInspectGivesUpOnAHungEngine(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.inspectFn = hangingInspect
+
+		c := cache.New(nil)
+		c.SetNode(swarm.Node{ID: "n1"})
+		w := NewWatcher(mc, c, "")
+
+		start := time.Now()
+		deliver(t.Context(), w, events.Message{
+			Type:  events.NodeEventType,
+			Actor: events.Actor{ID: "n1"},
+		})
+
+		// One budget across every attempt, not one per attempt.
+		if elapsed := time.Since(start); elapsed > inspectTimeout {
+			t.Errorf("a key against a hung engine held the loop for %v, want at most %v",
+				elapsed, inspectTimeout)
+		}
+		if _, ok := c.GetNode("n1"); !ok {
+			t.Error("a timed-out inspect dropped the cached node")
+		}
+	})
+}
+
+// Refresh carries a request context with no deadline of its own, and runs on
+// the event loop, so its inspect is bounded the same way, and answers as the
+// engine being unreachable does.
+func TestRefreshGivesUpOnAHungEngine(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		mc.inspectFn = hangingInspect
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		err := w.Refresh(t.Context(), string(events.ServiceEventType), "svc1")
+		if !cerrdefs.IsUnavailable(err) {
+			t.Errorf("Refresh = %v, want unavailable", err)
+		}
+	})
 }

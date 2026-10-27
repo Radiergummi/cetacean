@@ -221,3 +221,128 @@ func TestCheckCapabilities(t *testing.T) {
 		t.Errorf("added capability refused at tier 3: %v", err)
 	}
 }
+
+func TestCheckHostAccessHeld(t *testing.T) {
+	plain := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "cache", Target: "/c"}},
+		},
+	}}
+	socket := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{Mounts: []mount.Mount{{
+			Type:   mount.TypeBind,
+			Source: "/var/run/docker.sock",
+			Target: "/var/run/docker.sock",
+		}}},
+	}}
+	capable := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{CapabilityAdd: []string{"SYS_ADMIN"}},
+	}}
+	elsewhere := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "elsewhere", Target: "/e"}},
+		},
+	}}
+	hostroot := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "hostroot", Target: "/h"}},
+		},
+	}}
+
+	cases := []struct {
+		name    string
+		svc     swarm.Service
+		level   config.OperationsLevel
+		refused bool
+	}{
+		{"no host access at tier 1", swarm.Service{Spec: plain}, config.OpsOperational, false},
+		{"no container spec at tier 1", swarm.Service{}, config.OpsOperational, false},
+		{"current bind at tier 1", swarm.Service{Spec: socket}, config.OpsOperational, true},
+		{"current bind at tier 2", swarm.Service{Spec: socket}, config.OpsConfiguration, true},
+		{"current bind at tier 3", swarm.Service{Spec: socket}, config.OpsImpactful, false},
+		{
+			"current capability at tier 2",
+			swarm.Service{Spec: capable},
+			config.OpsConfiguration,
+			true,
+		},
+		{"unknown volume at tier 1", swarm.Service{Spec: elsewhere}, config.OpsOperational, false},
+		{
+			"bind-backed volume at tier 1",
+			swarm.Service{Spec: hostroot},
+			config.OpsOperational,
+			true,
+		},
+		{
+			"bind only in the previous spec at tier 1",
+			swarm.Service{Spec: plain, PreviousSpec: &socket},
+			config.OpsOperational,
+			false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CheckHostAccessHeld(tc.svc, "changing the image of", hostAccessVolumes, tc.level)
+
+			var denied *HostAccessError
+			if refused := errors.As(err, &denied); refused != tc.refused {
+				t.Errorf("err = %v, want refused=%v", err, tc.refused)
+			}
+		})
+	}
+
+	rollbacks := []struct {
+		name    string
+		svc     swarm.Service
+		level   config.OperationsLevel
+		refused bool
+	}{
+		{
+			"restoring a bind at tier 1",
+			swarm.Service{Spec: plain, PreviousSpec: &socket},
+			config.OpsOperational,
+			true,
+		},
+		{
+			"away from a bind at tier 1",
+			swarm.Service{Spec: socket, PreviousSpec: &plain},
+			config.OpsOperational,
+			true,
+		},
+		{
+			"restoring a bind at tier 3",
+			swarm.Service{Spec: plain, PreviousSpec: &socket},
+			config.OpsImpactful,
+			false,
+		},
+		{"with no previous spec", swarm.Service{Spec: plain}, config.OpsOperational, false},
+	}
+	for _, tc := range rollbacks {
+		t.Run("rollback "+tc.name, func(t *testing.T) {
+			err := CheckHostAccessHeld(tc.svc, RollingBack, hostAccessVolumes, tc.level)
+
+			var denied *HostAccessError
+			if refused := errors.As(err, &denied); refused != tc.refused {
+				t.Errorf("err = %v, want refused=%v", err, tc.refused)
+			}
+		})
+	}
+
+	err := CheckHostAccessHeld(
+		swarm.Service{Spec: socket},
+		"changing the image of",
+		hostAccessVolumes,
+		config.OpsOperational,
+	)
+	want := "changing the image of a service with a bind mount of /var/run/docker.sock " +
+		"requires operations level 3"
+	if err == nil || err.Error() != want {
+		t.Errorf("err = %v, want %q", err, want)
+	}
+
+	if err := CheckHostAccessHeld(
+		swarm.Service{Spec: socket}, "", hostAccessVolumes, config.OpsOperational,
+	); err != nil {
+		t.Errorf("an empty change refused: %v", err)
+	}
+}

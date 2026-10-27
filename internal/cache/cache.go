@@ -99,32 +99,29 @@ type StackSummary struct {
 }
 
 type ClusterSnapshot struct {
-	NodeCount         int            `json:"nodeCount"`
-	ServiceCount      int            `json:"serviceCount"`
-	TaskCount         int            `json:"taskCount"`
-	StackCount        int            `json:"stackCount"`
-	TasksByState      map[string]int `json:"tasksByState"`
-	NodesReady        int            `json:"nodesReady"`
-	NodesDown         int            `json:"nodesDown"`
-	NodesDraining     int            `json:"nodesDraining"`
-	TotalCPU          int            `json:"totalCPU"`
-	TotalMemory       int64          `json:"totalMemory"`
-	ServicesConverged int            `json:"servicesConverged"`
-	ServicesDegraded  int            `json:"servicesDegraded"`
-	ReservedCPU       int64          `json:"reservedCPU"`
-	ReservedMemory    int64          `json:"reservedMemory"`
-	MaxNodeCPU        int            `json:"maxNodeCPU"`
-	MaxNodeMemory     int64          `json:"maxNodeMemory"`
-	LastSync          time.Time      `json:"lastSync"`
-	Quorum            quorum.Quorum  `json:"quorum"`
+	NodeCount      int            `json:"nodeCount"`
+	ServiceCount   int            `json:"serviceCount"`
+	TaskCount      int            `json:"taskCount"`
+	StackCount     int            `json:"stackCount"`
+	TasksByState   map[string]int `json:"tasksByState"`
+	NodesReady     int            `json:"nodesReady"`
+	NodesDown      int            `json:"nodesDown"`
+	NodesDraining  int            `json:"nodesDraining"`
+	TotalCPU       int            `json:"totalCPU"`
+	TotalMemory    int64          `json:"totalMemory"`
+	ReservedCPU    int64          `json:"reservedCPU"`
+	ReservedMemory int64          `json:"reservedMemory"`
+	MaxNodeCPU     int            `json:"maxNodeCPU"`
+	MaxNodeMemory  int64          `json:"maxNodeMemory"`
+	LastSync       time.Time      `json:"lastSync"`
+	Quorum         quorum.Quorum  `json:"quorum"`
 
-	// RunningByService is the per-service running-task count Snapshot builds
-	// anyway to decide converged versus degraded, handed back so a caller
-	// needing both walks the task table once rather than twice under two locks.
-	// Not serialized: the REST /cluster payload is a published contract.
+	// RunningByService is the per-service running-task count, taken in the same
+	// walk as TasksByState so a caller deriving service states reads the task
+	// table once. Not serialized: the REST /cluster payload is a published contract.
 	RunningByService map[string]int `json:"-"`
 
-	// Flapping names the services in a restart loop, which count as degraded
+	// Flapping names the services in a restart loop, which are unhealthy
 	// whatever their running count says at the moment it was taken.
 	Flapping map[string]bool `json:"-"`
 
@@ -163,6 +160,7 @@ type Cache struct {
 	volumes        ResourceMap[volume.Volume]
 	stacks         map[string]Stack
 	lastSync       time.Time
+	tasksSynced    bool // Docker's task list has been synced, so later ones can be diffed
 	listenerMu     sync.RWMutex
 	listeners      []listenerEntry
 
@@ -761,18 +759,8 @@ func (c *Cache) DeleteTask(id string) {
 
 // addTaskIndex adds a task to the secondary indexes. Must be called with c.mu held for writing.
 func (c *Cache) addTaskIndex(t swarm.Task) {
-	if t.ServiceID != "" {
-		if c.tasksByService[t.ServiceID] == nil {
-			c.tasksByService[t.ServiceID] = make(map[string]struct{})
-		}
-		c.tasksByService[t.ServiceID][t.ID] = struct{}{}
-	}
-	if t.NodeID != "" {
-		if c.tasksByNode[t.NodeID] == nil {
-			c.tasksByNode[t.NodeID] = make(map[string]struct{})
-		}
-		c.tasksByNode[t.NodeID][t.ID] = struct{}{}
-	}
+	addIndexed(c.tasksByService, t.ServiceID, t.ID)
+	addIndexed(c.tasksByNode, t.NodeID, t.ID)
 }
 
 // pruneGoneServices forgets removed services no task refers to any more. Must
@@ -976,17 +964,7 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// A global service runs one task per ready node that is active or paused
-	// and meets its constraints: pausing stops new placements but keeps tasks.
-	schedulable := make([]swarm.Node, 0, len(c.nodes.items))
-	for _, n := range c.nodes.items {
-		availability := n.Spec.Availability
-		if n.Status.State == swarm.NodeStateReady &&
-			(availability == swarm.NodeAvailabilityActive ||
-				availability == swarm.NodeAvailabilityPause) {
-			schedulable = append(schedulable, n)
-		}
-	}
+	schedulable := c.schedulableNodesLocked(true)
 
 	out := make([]StackSummary, 0, len(c.stacks))
 	for _, stack := range c.stacks {
@@ -1040,6 +1018,40 @@ func (c *Cache) ListStackSummaries() []StackSummary {
 		out = append(out, s)
 	}
 	sortByName(out, func(s StackSummary) string { return s.Name })
+	return out
+}
+
+// schedulableNodesLocked is where a global service runs: every ready node that
+// is active or paused and meets its constraints, since pausing stops new
+// placements but keeps tasks. Without paused nodes, it is where one can start.
+func (c *Cache) schedulableNodesLocked(withPaused bool) []swarm.Node {
+	schedulable := make([]swarm.Node, 0, len(c.nodes.items))
+	for _, n := range c.nodes.items {
+		availability := n.Spec.Availability
+		if n.Status.State == swarm.NodeStateReady &&
+			(availability == swarm.NodeAvailabilityActive ||
+				withPaused && availability == swarm.NodeAvailabilityPause) {
+			schedulable = append(schedulable, n)
+		}
+	}
+
+	return schedulable
+}
+
+// EligibleNodeCounts is how many nodes each of the given global services could
+// start a task on, keyed by service ID; services of any other mode are absent.
+func (c *Cache) EligibleNodeCounts(services ...swarm.Service) map[string]int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	eligible := c.schedulableNodesLocked(false)
+	out := make(map[string]int)
+	for _, svc := range services {
+		if svc.Spec.Mode.Global != nil {
+			out[svc.ID] = globalTaskCount(svc, eligible)
+		}
+	}
+
 	return out
 }
 
@@ -1281,53 +1293,46 @@ func (c *Cache) Snapshot() ClusterSnapshot {
 		}
 	}
 
-	flapping := c.restarts.Flapping()
-
-	var servicesConverged, servicesDegraded int
+	// A job reserves nothing here: it has no standing task count to reserve for.
+	schedulable := c.schedulableNodesLocked(true)
 	var reservedCPU, reservedMemory int64
 	for _, svc := range c.services {
-		if svc.Spec.Mode.Global != nil {
-			if flapping[svc.ID] {
-				servicesDegraded++
-			} else {
-				servicesConverged++
-			}
-		} else if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
-			desired := int(*svc.Spec.Mode.Replicated.Replicas)
-			running := runningByService[svc.ID]
-			if running >= desired && !flapping[svc.ID] {
-				servicesConverged++
-			} else {
-				servicesDegraded++
-			}
-			if res := svc.Spec.TaskTemplate.Resources; res != nil && res.Reservations != nil {
-				reservedCPU += res.Reservations.NanoCPUs * int64(desired)
-				reservedMemory += res.Reservations.MemoryBytes * int64(desired)
-			}
+		var desired int
+		switch {
+		case svc.Spec.Mode.Global != nil:
+			desired = globalTaskCount(svc, schedulable)
+		case svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil:
+			desired = int(*svc.Spec.Mode.Replicated.Replicas)
 		}
+
+		res := svc.Spec.TaskTemplate.Resources
+		if res == nil || res.Reservations == nil {
+			continue
+		}
+
+		reservedCPU += res.Reservations.NanoCPUs * int64(desired)
+		reservedMemory += res.Reservations.MemoryBytes * int64(desired)
 	}
 
 	return ClusterSnapshot{
-		NodeCount:         nodes.Count,
-		ServiceCount:      len(c.services),
-		TaskCount:         len(c.tasks),
-		StackCount:        len(c.stacks),
-		TasksByState:      tasksByState,
-		NodesReady:        nodes.Ready,
-		NodesDown:         nodes.Down,
-		NodesDraining:     nodes.Draining,
-		TotalCPU:          nodes.TotalCPU,
-		TotalMemory:       nodes.TotalMemory,
-		ServicesConverged: servicesConverged,
-		ServicesDegraded:  servicesDegraded,
-		ReservedCPU:       reservedCPU,
-		ReservedMemory:    reservedMemory,
-		MaxNodeCPU:        nodes.MaxNodeCPU,
-		MaxNodeMemory:     nodes.MaxNodeMemory,
-		LastSync:          c.lastSync,
-		Quorum:            quorum.Of(maps.Values(c.nodes.items)),
-		RunningByService:  runningByService,
-		Flapping:          flapping,
+		NodeCount:        nodes.Count,
+		ServiceCount:     len(c.services),
+		TaskCount:        len(c.tasks),
+		StackCount:       len(c.stacks),
+		TasksByState:     tasksByState,
+		NodesReady:       nodes.Ready,
+		NodesDown:        nodes.Down,
+		NodesDraining:    nodes.Draining,
+		TotalCPU:         nodes.TotalCPU,
+		TotalMemory:      nodes.TotalMemory,
+		ReservedCPU:      reservedCPU,
+		ReservedMemory:   reservedMemory,
+		MaxNodeCPU:       nodes.MaxNodeCPU,
+		MaxNodeMemory:    nodes.MaxNodeMemory,
+		LastSync:         c.lastSync,
+		Quorum:           quorum.Of(maps.Values(c.nodes.items)),
+		RunningByService: runningByService,
+		Flapping:         c.restarts.Flapping(),
 
 		CompletedJobsByService: completedJobsByService,
 	}
@@ -1387,105 +1392,6 @@ func (c *Cache) nodeTotalsLocked() NodeTotals {
 	totals.MaxNodeCPU = int(maxNanoCPUs / 1e9)
 
 	return totals
-}
-
-// --- Bulk replace (for full sync) ---
-
-func (c *Cache) replaceNodes(nodes []swarm.Node) {
-	m := make(map[string]swarm.Node, len(nodes))
-	for _, n := range nodes {
-		m[n.ID] = n
-	}
-	c.mu.Lock()
-	c.nodes.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceServices(services []swarm.Service) {
-	m := make(map[string]swarm.Service, len(services))
-	for _, s := range services {
-		m[s.ID] = s
-	}
-	c.mu.Lock()
-	c.services = m
-	c.serviceRef.rebuild(c.services)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceTasks(tasks []swarm.Task) {
-	m := make(map[string]swarm.Task, len(tasks))
-	byService := make(map[string]map[string]struct{})
-	byNode := make(map[string]map[string]struct{})
-	for _, t := range tasks {
-		m[t.ID] = t
-		if t.ServiceID != "" {
-			if byService[t.ServiceID] == nil {
-				byService[t.ServiceID] = make(map[string]struct{})
-			}
-			byService[t.ServiceID][t.ID] = struct{}{}
-		}
-		if t.NodeID != "" {
-			if byNode[t.NodeID] == nil {
-				byNode[t.NodeID] = make(map[string]struct{})
-			}
-			byNode[t.NodeID][t.ID] = struct{}{}
-		}
-	}
-	c.mu.Lock()
-	c.tasks = m
-	c.tasksByService = byService
-	c.tasksByNode = byNode
-	c.pruneGoneServices()
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceConfigs(configs []swarm.Config) {
-	m := make(map[string]swarm.Config, len(configs))
-	for _, cfg := range configs {
-		m[cfg.ID] = cfg
-	}
-	c.mu.Lock()
-	c.configs.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceSecrets(secrets []swarm.Secret) {
-	m := make(map[string]swarm.Secret, len(secrets))
-	for _, s := range secrets {
-		s.Spec.Data = nil
-		m[s.ID] = s
-	}
-	c.mu.Lock()
-	c.secrets.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceNetworks(networks []network.Summary) {
-	m := make(map[string]network.Summary, len(networks))
-	for _, n := range networks {
-		m[n.ID] = n
-	}
-	c.mu.Lock()
-	c.networks.Replace(m)
-	c.mu.Unlock()
-}
-
-func (c *Cache) replaceVolumes(volumes []volume.Volume) {
-	m := make(map[string]volume.Volume, len(volumes))
-	for _, v := range volumes {
-		m[v.Name] = v
-	}
-	c.mu.Lock()
-	c.volumes.Replace(m)
-	c.mu.Unlock()
-}
-
-// rebuildStacksSynced acquires the lock and rebuilds derived stack data.
-// Used by tests after calling individual replace* methods.
-func (c *Cache) rebuildStacksSynced() {
-	c.mu.Lock()
-	c.rebuildStacks()
-	c.mu.Unlock()
 }
 
 func addIndexed(by map[string]map[string]struct{}, parent, id string) {
@@ -1551,18 +1457,8 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 		byNode = make(map[string]map[string]struct{})
 		for _, t := range data.Tasks {
 			tasks[t.ID] = t
-			if t.ServiceID != "" {
-				if byService[t.ServiceID] == nil {
-					byService[t.ServiceID] = make(map[string]struct{})
-				}
-				byService[t.ServiceID][t.ID] = struct{}{}
-			}
-			if t.NodeID != "" {
-				if byNode[t.NodeID] == nil {
-					byNode[t.NodeID] = make(map[string]struct{})
-				}
-				byNode[t.NodeID][t.ID] = struct{}{}
-			}
+			addIndexed(byService, t.ServiceID, t.ID)
+			addIndexed(byNode, t.NodeID, t.ID)
 		}
 	}
 
@@ -1627,9 +1523,10 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	}
 
 	// Failures the live event stream missed: a task failed/rejected/orphaned
-	// here but not in the previous snapshot. The snapshot-load path overwrites
-	// these counts through Restore afterwards, so only the full sync is affected.
-	var newFailures []swarm.Task
+	// here but not in the previous snapshot. One the first sync finds that the
+	// cache never held is retained history, not a failure the tracker saw, so
+	// it only feeds the flapping window.
+	var newFailures, backfilled []swarm.Task
 	if data.HasTasks {
 		for id, listed := range tasks {
 			held, ok := c.tasks[id]
@@ -1647,11 +1544,16 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 				continue
 			}
 			old, existed := c.tasks[id]
-			if existed && IsFailureState(old.Status.State) {
-				continue
+			switch {
+			case existed && IsFailureState(old.Status.State):
+				// Counted when it failed.
+			case !existed && !c.tasksSynced:
+				backfilled = append(backfilled, t)
+			default:
+				newFailures = append(newFailures, t)
 			}
-			newFailures = append(newFailures, t)
 		}
+		c.tasksSynced = true
 		c.tasks = tasks
 		c.tasksByService = byService
 		c.tasksByNode = byNode
@@ -1677,10 +1579,11 @@ func (c *Cache) ReplaceAll(data FullSyncData) {
 	c.mu.Unlock()
 
 	for _, t := range newFailures {
-		if t.ServiceID == "" {
-			continue
-		}
 		c.restarts.Record(t.ServiceID, t.Status.Timestamp)
+	}
+
+	for _, t := range backfilled {
+		c.restarts.Backfill(t.ServiceID, t.Status.Timestamp)
 	}
 
 	for _, typ := range [...]EventType{

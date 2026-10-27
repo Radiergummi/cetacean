@@ -397,7 +397,7 @@ against measured usage. The other checkers use fixed thresholds.
 </ConfigParam>
 
 <ConfigParam name="sizing.thresholds.lookback" env="CETACEAN_SIZING_LOOKBACK" default="168h">
-  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days), and over which restarts count towards a flaky service (shortened while the process is younger than the window, since restarts are tracked in memory). A short window makes the over-provisioning check react to a quiet weekend; a long one needs that much history in Prometheus.
+  Window over which p95 usage is queried when deciding whether a service is over-provisioned (7 days), and over which restarts count towards a flaky service (shortened while the process is younger than the window, since restarts are tracked in memory). A short window makes the over-provisioning check react to a quiet weekend; a long one needs that much history in Prometheus. Startup refuses a window under `1m`.
 </ConfigParam>
 
 ## Config file
@@ -455,6 +455,15 @@ Flags given to the subcommand itself go before `healthcheck`.
 expose. Each level includes everything below it. A request above the configured level gets
 `403 Forbidden` with error code `OPS001`.
 
+A service has host access when its spec carries a bind, named-pipe, or cluster mount, a volume with
+driver options, or an added capability. A named volume the manager doesn't hold, typically one on a
+worker, doesn't count. Changing what runs with that access needs level 3, whatever level the
+endpoint otherwise needs: the image, command, user, working directory, health check command,
+environment, placement, published ports, networks, or the secrets, configs, and mounts attached.
+Resending the same values, in any order, isn't a change. A rollback needs it when either the
+current or the previous spec has host access. A named volume on a worker can't be inspected from
+the manager, so a service whose host access comes only through one isn't held to this rule.
+
 | Operation                                                                     | 0 read-only | 1 operational | 2 configuration | 3 impactful |
 |-------------------------------------------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
 | Browse all resources                                                          |      ✔      |       ✔       |        ✔        |      ✔      |
@@ -467,6 +476,8 @@ expose. Each level includes everything below it. A request above the configured 
 | Edit swarm settings (raft, orchestration, dispatcher)                         |      —      |       —       |        ✔        |      ✔      |
 | Delete any resource                                                           |      —      |       —       |        —        |      ✔      |
 | Add a bind or named-pipe mount, a volume driver, or a capability to a service |      —      |       —       |        —        |      ✔      |
+| Set a plugin's mount source or device path                                    |      —      |       —       |        —        |      ✔      |
+| Change what runs in a service with host access, or roll it back               |      —      |       —       |        —        |      ✔      |
 | Change node availability or role                                              |      —      |       —       |        —        |      ✔      |
 | Change a service's endpoint mode                                              |      —      |       —       |        —        |      ✔      |
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
