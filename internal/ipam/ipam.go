@@ -96,7 +96,7 @@ func Count(
 	}
 
 	for task := range tasks {
-		if !live(task.Status.State) {
+		if !live(task) {
 			continue
 		}
 
@@ -135,10 +135,11 @@ func Count(
 	return result
 }
 
-// live reports whether a task in state still holds its addresses. Past
-// running, the allocator has freed them although the task still lists them.
-func live(state swarm.TaskState) bool {
-	switch state {
+// live reports whether a task still holds its addresses. The allocator frees
+// them once the observed state passes running, whatever the desired state,
+// although the task still lists them.
+func live(task swarm.Task) bool {
+	switch task.Status.State {
 	case swarm.TaskStateNew,
 		swarm.TaskStateAllocated,
 		swarm.TaskStatePending,

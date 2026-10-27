@@ -14,7 +14,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 // describableResourceTypes maps the singular type name describe takes to the
@@ -165,15 +164,10 @@ func (s *Server) digestOf(
 		), nil
 
 	case network.Summary:
-		var addresses *ipam.Addresses
-		if a, ok := cluster.NetworkAddresses(s.cache, []network.Summary{resource})[resource.ID]; ok {
-			addresses = &a
-		}
-
 		return cluster.NetworkDigest(
 			resource,
 			s.filterServiceRefs(ctx, s.cache.ServicesUsingNetwork(resource.ID)),
-			addresses,
+			cluster.NetworkAddressesOf(s.cache, resource),
 		), nil
 
 	case volume.Volume:

@@ -32,8 +32,11 @@ func (cc *ClusterChecker) Interval() time.Duration { return 60 * time.Second }
 func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 	var recs []Recommendation
 
+	services := cc.cache.ListServices()
+	tasks := cc.cache.ListTasks()
+
 	// Single-replica services
-	for _, svc := range cc.cache.ListServices() {
+	for _, svc := range services {
 		if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil &&
 			*svc.Spec.Mode.Replicated.Replicas == 1 {
 			recs = append(recs, Recommendation{
@@ -80,12 +83,12 @@ func (cc *ClusterChecker) Check(_ context.Context) []Recommendation {
 	networks := cc.cache.ListNetworks()
 	recs = append(recs, addressRecommendations(
 		networks,
-		ipam.Count(networks, cc.cache.EachService, cc.cache.EachTask, len(nodes)),
+		ipam.Count(networks, slices.Values(services), slices.Values(tasks), len(nodes)),
 	)...)
 
 	// Uneven task distribution
 	taskCountByNode := make(map[string]int)
-	for _, task := range cc.cache.ListTasks() {
+	for _, task := range tasks {
 		if task.Status.State == swarm.TaskStateRunning {
 			taskCountByNode[task.NodeID]++
 		}

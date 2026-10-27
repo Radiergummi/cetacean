@@ -11,10 +11,15 @@ import (
 // It counts every service and task, the caller's readable ones or not: only
 // the totals leave, never which tasks hold an address.
 func NetworkAddresses(c *cache.Cache, networks []network.Summary) map[string]ipam.Addresses {
-	nodes := 0
-	for range c.EachNode {
-		nodes++
+	return ipam.Count(networks, c.EachService, c.EachTaskUnordered, c.NodeCount())
+}
+
+// NetworkAddressesOf is NetworkAddresses for one network, nil when it has no
+// figure.
+func NetworkAddressesOf(c *cache.Cache, net network.Summary) *ipam.Addresses {
+	if a, ok := NetworkAddresses(c, []network.Summary{net})[net.ID]; ok {
+		return &a
 	}
 
-	return ipam.Count(networks, c.EachService, c.EachTask, nodes)
+	return nil
 }

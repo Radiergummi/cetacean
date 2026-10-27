@@ -553,6 +553,19 @@ func (c *Cache) EachTask(yield func(swarm.Task) bool) {
 	}
 }
 
+// EachTaskUnordered is EachTask in no particular order, for a scan that only
+// counts and so need not pay for the sort.
+func (c *Cache) EachTaskUnordered(yield func(swarm.Task) bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for _, t := range c.tasks {
+		if !yield(t) {
+			return
+		}
+	}
+}
+
 // --- Services ---
 
 // SetService ignores a service older than the cached one, as SetTask does a

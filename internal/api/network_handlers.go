@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"sync"
 
 	"github.com/docker/docker/api/types/network"
 	json "github.com/goccy/go-json"
@@ -67,10 +66,9 @@ func (h *Handlers) HandleGetNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
-	// Counted once for every network, and only when a sort or a page asks.
-	addresses := sync.OnceValue(func() map[string]ipam.Addresses {
-		return cluster.NetworkAddresses(h.cache, h.cache.ListNetworks())
-	})
+	// Counted over the list prepareList fetches, before the ACL narrows it, so
+	// the sort can read it as well as the page.
+	var addresses map[string]ipam.Addresses
 
 	spec := listSpec[network.Summary]{
 		resourceType: "network",
@@ -79,12 +77,17 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		aclName:      func(n network.Summary) string { return n.Name },
 		searchName:   func(n network.Summary) string { return n.Name },
 		filterEnv:    filter.Networks,
+		prepare: func(networks []network.Summary) []network.Summary {
+			addresses = cluster.NetworkAddresses(h.cache, networks)
+
+			return networks
+		},
 		sortKeys: map[string]func(network.Summary) string{
 			"name":   func(n network.Summary) string { return n.Name },
 			"driver": func(n network.Summary) string { return n.Driver },
 			"scope":  func(n network.Summary) string { return n.Scope },
 			"addresses": func(n network.Summary) string {
-				a, ok := addresses()[n.ID]
+				a, ok := addresses[n.ID]
 				if !ok || a.Usable == 0 {
 					return ""
 				}
@@ -127,7 +130,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 			items := make([]NetworkListItem, len(page))
 			for i, net := range page {
 				items[i] = NetworkListItem{Summary: net}
-				if a, ok := addresses()[net.ID]; ok {
+				if a, ok := addresses[net.ID]; ok {
 					items[i].Addresses = &a
 				}
 			}

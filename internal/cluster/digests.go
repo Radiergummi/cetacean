@@ -359,11 +359,10 @@ func SecretDigest(sec swarm.Secret, users []cache.ServiceRef) Digest {
 	}
 }
 
-// NetworkDigest builds the detail view of one network. A network's ID tells
-// a caller nothing about whether a service could actually attach to it —
-// that's what the driver, scope and reachability booleans (internal,
-// attachable, ingress) and the subnets are for. A nil addresses is a network
-// with no address figure.
+// NetworkDigest builds the detail view of one network. Its ID says nothing
+// about whether a service could attach; the driver, scope, reachability
+// booleans (internal, attachable, ingress) and subnets do. A nil addresses
+// leaves the address figure out.
 func NetworkDigest(
 	net network.Summary,
 	users []cache.ServiceRef,

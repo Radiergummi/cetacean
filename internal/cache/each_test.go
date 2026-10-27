@@ -75,6 +75,32 @@ func TestEachMatchesListOrder(t *testing.T) {
 	})
 }
 
+func TestEachTaskUnorderedYieldsEveryTask(t *testing.T) {
+	c := New(nil)
+	for i := range 20 {
+		c.SetTask(swarm.Task{ID: fmt.Sprintf("id-%d", i)})
+	}
+
+	seen := map[string]bool{}
+	for task := range c.EachTaskUnordered {
+		seen[task.ID] = true
+	}
+
+	if len(seen) != 20 {
+		t.Errorf("yielded %d distinct tasks, want 20", len(seen))
+	}
+
+	count := 0
+	for range c.EachTaskUnordered {
+		count++
+		break
+	}
+
+	if count != 1 {
+		t.Errorf("kept yielding after a stop: %d", count)
+	}
+}
+
 func TestEachStopsOnFalse(t *testing.T) {
 	c := New(nil)
 	for i := range 10 {

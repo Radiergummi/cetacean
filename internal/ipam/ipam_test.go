@@ -182,20 +182,29 @@ func TestCount(t *testing.T) {
 }
 
 func TestLive(t *testing.T) {
-	for state, want := range map[swarm.TaskState]bool{
-		swarm.TaskStateNew:       true,
-		swarm.TaskStateAllocated: true,
-		swarm.TaskStateReady:     true,
-		swarm.TaskStateRunning:   true,
-		swarm.TaskStateComplete:  false,
-		swarm.TaskStateShutdown:  false,
-		swarm.TaskStateFailed:    false,
-		swarm.TaskStateRejected:  false,
-		swarm.TaskStateRemove:    false,
-		swarm.TaskStateOrphaned:  false,
-	} {
-		if got := live(state); got != want {
-			t.Errorf("live(%s) = %v, want %v", state, got, want)
+	tests := []struct {
+		state, desired swarm.TaskState
+		want           bool
+	}{
+		{swarm.TaskStateNew, swarm.TaskStateRunning, true},
+		{swarm.TaskStateAllocated, swarm.TaskStateRunning, true},
+		{swarm.TaskStateReady, swarm.TaskStateRunning, true},
+		{swarm.TaskStateRunning, swarm.TaskStateRunning, true},
+		// Asked to stop but not yet stopped: the addresses are still held.
+		{swarm.TaskStateRunning, swarm.TaskStateShutdown, true},
+		// Failed while still wanted running: already freed.
+		{swarm.TaskStateFailed, swarm.TaskStateRunning, false},
+		{swarm.TaskStateComplete, swarm.TaskStateShutdown, false},
+		{swarm.TaskStateShutdown, swarm.TaskStateShutdown, false},
+		{swarm.TaskStateRejected, swarm.TaskStateRunning, false},
+		{swarm.TaskStateRemove, swarm.TaskStateRemove, false},
+		{swarm.TaskStateOrphaned, swarm.TaskStateRunning, false},
+	}
+
+	for _, tt := range tests {
+		task := swarm.Task{DesiredState: tt.desired, Status: swarm.TaskStatus{State: tt.state}}
+		if got := live(task); got != tt.want {
+			t.Errorf("live(%s, desired %s) = %v, want %v", tt.state, tt.desired, got, tt.want)
 		}
 	}
 }
