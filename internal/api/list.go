@@ -21,6 +21,7 @@ type listSpec[T any] struct {
 	filterEnv    filter.Env[T]                                 // filter.Nodes, filter.Tasks, …
 	sortKeys     map[string]func(T) string                     // sort field accessors
 	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
+	narrow       func(readable []T) ([]T, error)               // optional: sees every readable item, before search; an error is a 400
 	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
 	idFunc       func(T) string                                // extracts JSON-LD @id path for each item
 	rows         func([]T) []cluster.Row                       // builds the CSV rendering; required unless csv is set
@@ -104,20 +105,6 @@ func handleListOf[T, U any](
 	writeListPage(w, r, items, p, validator, spec.itemType, idFunc, render)
 }
 
-// readable keeps the items the caller may read, for a value computed across a
-// whole list rather than one page of it.
-func readable[T any](
-	h *Handlers,
-	r *http.Request,
-	resourceType string,
-	items []T,
-	name func(T) string,
-) []T {
-	identity := auth.IdentityFromContext(r.Context())
-
-	return acl.FilterInPlaceNamed(h.acl, identity, "read", items, resourceType, name)
-}
-
 // writeListPage writes the page of items p names as the JSON collection, each
 // entry wrapped with @id and @type; render turns the page into those entries.
 func writeListPage[T, U any](
@@ -173,6 +160,14 @@ func prepareList[T any](
 		spec.resourceType,
 		spec.aclName,
 	)
+
+	if spec.narrow != nil {
+		var err error
+		if items, err = spec.narrow(items); err != nil {
+			writeErrorCode(w, r, "API016", err.Error())
+			return nil, PageParams{}, false
+		}
+	}
 
 	if spec.searchName != nil {
 		items = searchFilter(items, r.URL.Query().Get("search"), spec.searchName)

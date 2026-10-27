@@ -66,8 +66,8 @@ resources they returned, so a host can offer somewhere to go next.
 
 <McpTool name="find" level={0}>
     <Fragment slot="arguments">`type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`, `secrets`, `networks`,
-        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `limit` (200 typed, 3 per type otherwise),
-        `offset`, `raw`</Fragment>
+        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `versions` (`newest`, `all`), `limit` (200
+        typed, 3 per type otherwise), `offset`, `raw`</Fragment>
 
     Locates resources. With `type` it enumerates that type, paged by `offset` and capped at the same 200 the default
     sets. Without `type` it searches every type at once: `offset` is ignored, and the result carries `counts`, the
@@ -306,8 +306,8 @@ than read as empty.
 ### Cluster resources
 
 Configs, secrets, networks, and volumes. Swarm secrets and configs are immutable, so rotating one is three
-calls in order: `create_secret` for the replacement, labeled `cetacean.version-of=<logical name>` so it
-[groups with the versions it replaces](dashboard#versions), [`update_service_secrets`](#update_service_secrets) to
+calls in order: `create_secret` for the replacement, labeled `cetacean.version-of=<logical name>` and with the old
+version's `com.docker.stack.namespace` label so it [groups with the versions it replaces](dashboard#versions), [`update_service_secrets`](#update_service_secrets) to
 repoint each service that uses it (`describe` the secret first, its `related` array names them), then
 `remove_secret` once nothing references it. Configs follow the same sequence, and unlike a secret a config's
 content can be read back, so use a secret for anything sensitive.
@@ -444,10 +444,11 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 - stacks set `desired` alone, counting member services rather than replicas
 - nodes, tasks, configs, secrets, networks, and volumes set neither
 
-Config and secret rows also carry `usedBy`, the number of services using them, and, when they're one of
-several [versions](dashboard#versions), `versionOf` naming the group and `versionInferred` when
-it was matched by name. A config or secret digest carries the same three in `details`. All three count only
-what the caller may read.
+A config or secret listing shows only the newest version of each group of [versions](dashboard#versions)
+unless `versions` is `all`. Config and secret rows carry `usedBy`, the number of services using them, and, when
+they're one of several versions, `versionOf` naming the group, `versionInferred` when it was matched by name, and
+on the newest `newestVersion` and `olderVersions`, the number of older ones. A config or secret digest carries the
+same in `details`. All of them count only what the caller may read.
 
 **Digest** is the detail view of one resource, returned by `describe` and by every templated
 `cetacean://<type>/{id}` read. Alongside `id`, `name`, `type`, and `state` it adds:

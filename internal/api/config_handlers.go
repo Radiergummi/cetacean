@@ -7,7 +7,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
-	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // --- Configs ---
@@ -33,30 +32,11 @@ func (h *Handlers) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
 // ConfigListItem is a config as GET /configs lists it; see SecretListItem.
 type ConfigListItem struct {
 	swarm.Config
-	VersionOf       string `json:"VersionOf,omitempty"`
-	VersionInferred bool   `json:"VersionInferred,omitempty"`
-	UsedBy          int    `json:"UsedBy"`
+	VersionFields
 }
 
 func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
-	render := func(page []swarm.Config) []ConfigListItem {
-		grouped := versions.Configs(readable(h, r, "config", h.cache.ListConfigs(), configName))
-		items := make([]ConfigListItem, len(page))
-		for i, cfg := range page {
-			m := grouped[cfg.ID]
-			items[i] = ConfigListItem{
-				Config:          cfg,
-				VersionOf:       m.Of,
-				VersionInferred: m.Inferred,
-				UsedBy:          len(h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID))),
-			}
-		}
-
-		return items
-	}
-
-	idFunc := func(c ConfigListItem) string { return "/configs/" + c.ID }
-	handleListOf(h, w, r, listSpec[swarm.Config]{
+	spec := listSpec[swarm.Config]{
 		resourceType: "config",
 		linkTemplate: "/configs/{id}",
 		list:         h.cache.ListConfigs,
@@ -69,9 +49,25 @@ func (h *Handlers) HandleListConfigs(w http.ResponseWriter, r *http.Request) {
 			"updated": func(c swarm.Config) string { return c.UpdatedAt.String() },
 		},
 		itemType: "Config",
-		idFunc:   func(c swarm.Config) string { return "/configs/" + c.ID },
 		rows:     cluster.RowsForConfigs,
-	}, idFunc, render)
+	}
+
+	fields := versionedList(
+		h, r, &spec, configID, cluster.ConfigVersionGroups, h.cache.ServicesUsingConfig,
+	)
+
+	handleListOf(h, w, r, spec, func(c ConfigListItem) string { return "/configs/" + c.ID },
+		func(page []swarm.Config) []ConfigListItem {
+			items := make([]ConfigListItem, len(page))
+			for i, cfg := range page {
+				items[i] = ConfigListItem{Config: cfg, VersionFields: fields(cfg.ID)}
+			}
+
+			return items
+		},
+	)
 }
 
 func configName(c swarm.Config) string { return c.Spec.Name }
+
+func configID(c swarm.Config) string { return c.ID }

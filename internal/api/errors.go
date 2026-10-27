@@ -136,6 +136,13 @@ var errorRegistry = map[string]ErrorDef{
 		Suggestion: "Address the resource by its ID. The detail names every " +
 			"ID the request could have meant.",
 	},
+	"API016": {
+		Code:        "API016",
+		Title:       "Invalid Query Parameter",
+		Status:      http.StatusBadRequest,
+		Description: "A query parameter has a value the endpoint does not accept.",
+		Suggestion:  "The detail names the parameter and the values it takes.",
+	},
 
 	// ── AUT: authentication ───────────────────────────────────────────
 	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,

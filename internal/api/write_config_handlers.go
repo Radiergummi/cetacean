@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -27,16 +28,26 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		conflictCode: "CFG003",
 		basePath:     "/configs/",
 		typeName:     "Config",
-		create: func(ctx context.Context, name string, _ map[string]string, data []byte) (string, error) {
+		create: func(
+			ctx context.Context,
+			name string,
+			labels map[string]string,
+			data []byte,
+		) (string, error) {
 			id, err := h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
-				Name: name,
+				Name: name, Labels: labels,
 				Data: data,
 			})
 			if err == nil {
 				// Attaching resolves through the cache, which the watcher fills later.
+				now := time.Now()
 				h.cache.SetConfig(swarm.Config{
-					ID:   id,
-					Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+					ID:        id,
+					CreatedAt: now,
+					UpdatedAt: now,
+					Spec: swarm.ConfigSpec{
+						Annotations: swarm.Annotations{Name: name, Labels: labels},
+					},
 				})
 			}
 

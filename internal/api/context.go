@@ -26,6 +26,8 @@ const jsonLDContextDoc = `{
     "usedBy": "urn:cetacean:usedBy",
     "versionOf": "urn:cetacean:versionOf",
     "versionInferred": "urn:cetacean:versionInferred",
+    "newestVersion": "urn:cetacean:newestVersion",
+    "olderVersions": "urn:cetacean:olderVersions",
     "driver": "urn:cetacean:driver",
     "scope": "urn:cetacean:scope",
     "networks": {"@container": "@list"},

@@ -14,7 +14,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // listableResourceTypes are the resource types find can enumerate with a
@@ -87,6 +86,16 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		return "", err
 	}
 
+	groups, users := s.versionGroups(listed)
+	if groups != nil {
+		sel, err := cluster.ParseVersionSelection(req.GetString("versions", ""), "")
+		if err != nil {
+			return "", err
+		}
+
+		rows = cluster.SelectVersions(rows, func(r cluster.Row) string { return r.ID }, groups, sel)
+	}
+
 	filters := rowFilters{
 		query: query,
 		state: strings.TrimSpace(req.GetString("state", "")),
@@ -108,6 +117,10 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 	total := len(rows)
 	rows = paginate(rows, req)
+
+	if groups != nil {
+		annotateVersions(rows, groups, users, s.readPredicate(ctx))
+	}
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
 
@@ -218,14 +231,10 @@ func (s *Server) rowsFor(
 		return cluster.RowsForStacks(items), nil
 
 	case []swarm.Config:
-		rows := cluster.RowsForConfigs(items)
-
-		return s.versionedRows(ctx, rows, versions.Configs(items), c.ServicesUsingConfig), nil
+		return cluster.RowsForConfigs(items), nil
 
 	case []swarm.Secret:
-		rows := cluster.RowsForSecrets(items)
-
-		return s.versionedRows(ctx, rows, versions.Secrets(items), c.ServicesUsingSecret), nil
+		return cluster.RowsForSecrets(items), nil
 
 	case []network.Summary:
 		return cluster.RowsForNetworks(items), nil
@@ -243,22 +252,35 @@ func (s *Server) rowsFor(
 	}
 }
 
-// versionedRows places config or secret rows in the version groups found among
-// the readable listing they came from, and counts the readable services using
-// each.
-func (s *Server) versionedRows(
-	ctx context.Context,
-	rows []cluster.Row,
-	grouped map[string]versions.Membership,
-	users func(id string) []cache.ServiceRef,
-) []cluster.Row {
-	for i := range rows {
-		m := grouped[rows[i].ID]
-		rows[i].VersionOf, rows[i].VersionInferred = m.Of, m.Inferred
-		rows[i].UsedBy = new(len(s.filterServiceRefs(ctx, users(rows[i].ID))))
+// versionGroups groups a config or secret listing, which holds only what the
+// caller may read, and names who uses each; any other listing has no groups.
+func (s *Server) versionGroups(
+	listed any,
+) (cluster.VersionGroups, func(id string) []cache.ServiceRef) {
+	switch items := listed.(type) {
+	case []swarm.Config:
+		return cluster.ConfigVersionGroups(items), s.cache.ServicesUsingConfig
+	case []swarm.Secret:
+		return cluster.SecretVersionGroups(items), s.cache.ServicesUsingSecret
+	default:
+		return nil, nil
 	}
+}
 
-	return rows
+// annotateVersions places each row of a returned page among its versions and
+// counts the readable services using it.
+func annotateVersions(
+	rows []cluster.Row,
+	groups cluster.VersionGroups,
+	users func(id string) []cache.ServiceRef,
+	canRead func(resource string) bool,
+) {
+	for i := range rows {
+		v := groups.Version(rows[i].ID)
+		rows[i].VersionOf, rows[i].VersionInferred = v.Of, v.Inferred
+		rows[i].NewestVersion, rows[i].OlderVersions = v.Newest, v.OlderVersions
+		rows[i].UsedBy = new(cluster.ReadableUsers(users(rows[i].ID), canRead))
+	}
 }
 
 // rowFilters narrows a Row list after it is built. Only meaningful once `type`

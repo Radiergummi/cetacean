@@ -7,7 +7,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
-	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // --- Secrets ---
@@ -31,35 +30,14 @@ func (h *Handlers) HandleGetSecret(w http.ResponseWriter, r *http.Request) {
 	writeCachedJSON(w, r, rep)
 }
 
-// SecretListItem is a secret as GET /secrets lists it: grouped with its other
-// versions, and counting the services that use it, both over what the caller
-// may read.
+// SecretListItem is a secret as GET /secrets lists it.
 type SecretListItem struct {
 	swarm.Secret
-	VersionOf       string `json:"VersionOf,omitempty"`
-	VersionInferred bool   `json:"VersionInferred,omitempty"`
-	UsedBy          int    `json:"UsedBy"`
+	VersionFields
 }
 
 func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
-	render := func(page []swarm.Secret) []SecretListItem {
-		grouped := versions.Secrets(readable(h, r, "secret", h.cache.ListSecrets(), secretName))
-		items := make([]SecretListItem, len(page))
-		for i, sec := range page {
-			m := grouped[sec.ID]
-			items[i] = SecretListItem{
-				Secret:          sec,
-				VersionOf:       m.Of,
-				VersionInferred: m.Inferred,
-				UsedBy:          len(h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID))),
-			}
-		}
-
-		return items
-	}
-
-	idFunc := func(s SecretListItem) string { return "/secrets/" + s.ID }
-	handleListOf(h, w, r, listSpec[swarm.Secret]{
+	spec := listSpec[swarm.Secret]{
 		resourceType: "secret",
 		linkTemplate: "/secrets/{id}",
 		list:         h.cache.ListSecrets,
@@ -73,9 +51,25 @@ func (h *Handlers) HandleListSecrets(w http.ResponseWriter, r *http.Request) {
 			"updated": func(s swarm.Secret) string { return s.UpdatedAt.String() },
 		},
 		itemType: "Secret",
-		idFunc:   func(s swarm.Secret) string { return "/secrets/" + s.ID },
 		rows:     cluster.RowsForSecrets,
-	}, idFunc, render)
+	}
+
+	fields := versionedList(
+		h, r, &spec, secretID, cluster.SecretVersionGroups, h.cache.ServicesUsingSecret,
+	)
+
+	handleListOf(h, w, r, spec, func(s SecretListItem) string { return "/secrets/" + s.ID },
+		func(page []swarm.Secret) []SecretListItem {
+			items := make([]SecretListItem, len(page))
+			for i, sec := range page {
+				items[i] = SecretListItem{Secret: sec, VersionFields: fields(sec.ID)}
+			}
+
+			return items
+		},
+	)
 }
 
 func secretName(s swarm.Secret) string { return s.Spec.Name }
+
+func secretID(s swarm.Secret) string { return s.ID }

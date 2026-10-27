@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -112,8 +113,10 @@ var (
 			})
 		},
 		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
+			now := time.Now()
 			c.SetSecret(swarm.Secret{
-				ID:   id,
+				ID:        id,
+				CreatedAt: now, UpdatedAt: now,
 				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
 			})
 		},
@@ -134,8 +137,10 @@ var (
 			})
 		},
 		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
+			now := time.Now()
 			c.SetConfig(swarm.Config{
-				ID:   id,
+				ID:        id,
+				CreatedAt: now, UpdatedAt: now,
 				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
 			})
 		},

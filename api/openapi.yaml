@@ -5605,6 +5605,8 @@ paths:
             enum: [name, created, updated]
           example: name
         - $ref: "#/components/parameters/dir"
+        - $ref: "#/components/parameters/versions"
+        - $ref: "#/components/parameters/versionsOf"
       responses:
         "200":
           description: Paginated config list
@@ -5766,6 +5768,14 @@ paths:
                         description: >-
                           True when the group was matched by name rather than declared by the
                           cetacean.version-of label on every version. Absent when false.
+                      newestVersion:
+                        type: boolean
+                        description: >-
+                          True for the newest version of its group that the caller may read.
+                      olderVersions:
+                        type: integer
+                        description: >-
+                          On the newest version, how many older readable versions its group has.
                       usedBy:
                         type: integer
                         description: Number of services the caller may read that use this config
@@ -5933,6 +5943,8 @@ paths:
             enum: [name, created, updated]
           example: name
         - $ref: "#/components/parameters/dir"
+        - $ref: "#/components/parameters/versions"
+        - $ref: "#/components/parameters/versionsOf"
       responses:
         "200":
           description: Paginated secret list
@@ -6155,6 +6167,14 @@ paths:
                         description: >-
                           True when the group was matched by name rather than declared by the
                           cetacean.version-of label on every version. Absent when false.
+                      newestVersion:
+                        type: boolean
+                        description: >-
+                          True for the newest version of its group that the caller may read.
+                      olderVersions:
+                        type: integer
+                        description: >-
+                          On the newest version, how many older readable versions its group has.
                       usedBy:
                         type: integer
                         description: Number of services the caller may read that use this secret
@@ -6958,6 +6978,25 @@ components:
         type: string
       example: items 0-49
 
+    versions:
+      name: versions
+      in: query
+      description: >-
+        Which versions of a config or secret to list. `newest`, the default, lists only the
+        newest readable version of each group of versions, which counts the rest in
+        `OlderVersions`; `all` lists every version. Any other value is refused with `API016`.
+      schema:
+        type: string
+        enum: [newest, all]
+        default: newest
+    versionsOf:
+      name: versionsOf
+      in: query
+      description: >-
+        List only the readable versions grouped with the config or secret with this ID,
+        newest first unless `sort` says otherwise. An ID the caller cannot read lists nothing.
+      schema:
+        type: string
     dir:
       name: dir
       in: query
@@ -7798,6 +7837,16 @@ components:
                     description: >-
                       True when the group was matched by name rather than declared by the
                       cetacean.version-of label on every version. Absent when false.
+                  NewestVersion:
+                    type: boolean
+                    description: >-
+                      True for the newest version of its group that the caller may read.
+                      Absent for an ungrouped config and for older versions.
+                  OlderVersions:
+                    type: integer
+                    description: >-
+                      On the newest version, how many older versions of its group the caller
+                      may read. Absent otherwise.
                   UsedBy:
                     type: integer
                     description: Number of services the caller may read that use this config
@@ -7830,6 +7879,16 @@ components:
                     description: >-
                       True when the group was matched by name rather than declared by the
                       cetacean.version-of label on every version. Absent when false.
+                  NewestVersion:
+                    type: boolean
+                    description: >-
+                      True for the newest version of its group that the caller may read.
+                      Absent for an ungrouped secret and for older versions.
+                  OlderVersions:
+                    type: integer
+                    description: >-
+                      On the newest version, how many older versions of its group the caller
+                      may read. Absent otherwise.
                   UsedBy:
                     type: integer
                     description: Number of services the caller may read that use this secret

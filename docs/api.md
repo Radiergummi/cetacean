@@ -793,11 +793,17 @@ names a newer image in its registry than the digest the service runs: `image`, `
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
 
-`GET /configs/{id}` and `GET /secrets/{id}` carry `usedBy`, the number of services using it, and each
-`GET /configs` and `GET /secrets` item `UsedBy`. When the config or secret is one of several
-[versions](dashboard#versions), the detail carries `versionOf`, naming the group, and `versionInferred` when it was
-matched by name rather than declared with the `cetacean.version-of` label; a list item carries `VersionOf` and
-`VersionInferred`. All of them count only the configs, secrets and services the caller may read.
+`GET /configs` and `GET /secrets` list only the newest version of each group of [versions](dashboard#versions)
+by default; `?versions=all` lists every version, and `?versionsOf={id}` only those grouped with that ID, newest
+first. Any other `versions` value answers `400` ([`API016`](api/errors#API016)). The total, the pagination links and
+the ETag follow what is listed.
+
+`GET /configs/{id}` and `GET /secrets/{id}` carry `usedBy`, the number of services using it, and each list item
+`UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and `versionInferred` when
+it was matched by name rather than declared with the `cetacean.version-of` label; the newest carries
+`newestVersion` and `olderVersions`, the number of older ones. A list item spells them `VersionOf`,
+`VersionInferred`, `NewestVersion` and `OlderVersions`. All of them count only the configs, secrets, and services
+the caller may read, so the newest version a caller can read is the newest it is shown.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event

@@ -14,7 +14,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // describableResourceTypes maps the singular type name describe takes to the
@@ -154,15 +153,15 @@ func (s *Server) digestOf(
 
 	case swarm.Config:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID))
-		grouped := versions.Configs(s.filterConfigs(ctx, s.cache.ListConfigs()))
+		version := cluster.ConfigVersion(s.cache, resource, s.readPredicate(ctx))
 
-		return withVersion(cluster.ConfigDigest(resource, users), grouped, users), nil
+		return withVersion(cluster.ConfigDigest(resource, users), version, len(users)), nil
 
 	case swarm.Secret:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID))
-		grouped := versions.Secrets(s.filterSecrets(ctx, s.cache.ListSecrets()))
+		version := cluster.SecretVersion(s.cache, resource, s.readPredicate(ctx))
 
-		return withVersion(cluster.SecretDigest(resource, users), grouped, users), nil
+		return withVersion(cluster.SecretDigest(resource, users), version, len(users)), nil
 
 	case network.Summary:
 		return cluster.NetworkDigest(
@@ -312,15 +311,13 @@ func digestibleResourceType(uri string) (string, bool) {
 
 // withVersion adds to a config or secret digest its version group, found among
 // what the caller may read, and how many of the services it may read use it.
-func withVersion(
-	d cluster.Digest,
-	grouped map[string]versions.Membership,
-	users []cache.ServiceRef,
-) cluster.Digest {
-	d.Details["usedBy"] = len(users)
-	if m := grouped[d.ID]; m.Of != "" {
-		d.Details["versionOf"] = m.Of
-		d.Details["versionInferred"] = m.Inferred
+func withVersion(d cluster.Digest, v cluster.Version, usedBy int) cluster.Digest {
+	d.Details["usedBy"] = usedBy
+	if v.Of != "" {
+		d.Details["versionOf"] = v.Of
+		d.Details["versionInferred"] = v.Inferred
+		d.Details["newestVersion"] = v.Newest
+		d.Details["olderVersions"] = v.OlderVersions
 	}
 
 	return d

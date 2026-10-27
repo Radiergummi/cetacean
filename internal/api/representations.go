@@ -16,7 +16,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/integrations"
-	"github.com/radiergummi/cetacean/internal/versions"
 )
 
 // errNoRepresentation reports that the resource has no current representation,
@@ -389,14 +388,12 @@ func (h *Handlers) configRepresentation(r *http.Request) (any, error) {
 // configBody is the body the config GET and the create response share.
 func (h *Handlers) configBody(r *http.Request, cfg swarm.Config) ConfigResponse {
 	users := h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID))
-	m := versions.Configs(readable(h, r, "config", h.cache.ListConfigs(), configName))[cfg.ID]
+	version := cluster.ConfigVersion(h.cache, cfg, h.readChecker(r))
 
 	return ConfigResponse{
-		Config:          cfg,
-		Services:        users,
-		VersionOf:       m.Of,
-		VersionInferred: m.Inferred,
-		UsedBy:          len(users),
+		Config:              cfg,
+		Services:            users,
+		DetailVersionFields: DetailVersionFields(versionFields(version, len(users))),
 	}
 }
 
@@ -415,14 +412,12 @@ func (h *Handlers) secretRepresentation(r *http.Request) (any, error) {
 // clears the secret data: never expose it.
 func (h *Handlers) secretBody(r *http.Request, sec swarm.Secret) SecretResponse {
 	users := h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID))
-	m := versions.Secrets(readable(h, r, "secret", h.cache.ListSecrets(), secretName))[sec.ID]
+	version := cluster.SecretVersion(h.cache, sec, h.readChecker(r))
 
 	return SecretResponse{
-		Secret:          cluster.RedactSecret(sec),
-		Services:        users,
-		VersionOf:       m.Of,
-		VersionInferred: m.Inferred,
-		UsedBy:          len(users),
+		Secret:              cluster.RedactSecret(sec),
+		Services:            users,
+		DetailVersionFields: DetailVersionFields(versionFields(version, len(users))),
 	}
 }
 

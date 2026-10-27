@@ -41,10 +41,12 @@ type Row struct {
 	Desired int `json:"desired,omitempty"`
 	Running int `json:"running,omitempty"`
 
-	// VersionOf and VersionInferred place a config or secret among its other
-	// versions; UsedBy counts its services, and is nil for every other type.
+	// The version fields place a config or secret among its other versions;
+	// UsedBy counts its services, and is nil for every other type.
 	VersionOf       string `json:"versionOf,omitempty"`
 	VersionInferred bool   `json:"versionInferred,omitempty"`
+	NewestVersion   bool   `json:"newestVersion,omitempty"`
+	OlderVersions   int    `json:"olderVersions,omitempty"`
 	UsedBy          *int   `json:"usedBy,omitempty"`
 }
 

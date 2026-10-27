@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -12,19 +13,19 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// versionsServer holds db_v1 and db_v2, the newer used by one readable and one
-// denied service, and hidden_v1 and hidden_v2, of which only the newer is
-// readable.
+// versionsServer holds db_v1..3, db_v2 used by one readable and one denied
+// service, and app_v1..3, of which app_v3 is unreadable.
 func versionsServer(t *testing.T) (*Server, context.Context) {
 	t.Helper()
 
 	c := cache.New(nil)
-	for i, name := range []string{"db_v1", "db_v2", "hidden_v1", "hidden_v2"} {
+	for i, name := range []string{"db_v1", "db_v2", "db_v3", "app_v1", "app_v2", "app_v3"} {
 		c.SetSecret(swarm.Secret{
 			ID:        name,
-			CreatedAt: time.Date(2026, 1, i+1, 0, 0, 0, 0, time.UTC),
+			CreatedAt: time.Date(2026, 1, 1+i%3, 0, 0, 0, 0, time.UTC),
 			Spec:      swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
 		})
 	}
@@ -43,7 +44,9 @@ func versionsServer(t *testing.T) (*Server, context.Context) {
 
 	evaluator := acl.NewEvaluator()
 	evaluator.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
-		Resources:   []string{"secret:db_*", "secret:hidden_v2", "service:allowed-*"},
+		Resources: []string{
+			"secret:db_*", "secret:app_v1", "secret:app_v2", "service:allowed-*",
+		},
 		Audience:    []string{"user:agent@example.com"},
 		Permissions: []string{"read"},
 	}}})
@@ -57,56 +60,87 @@ func versionsServer(t *testing.T) (*Server, context.Context) {
 	return srv, ctx
 }
 
-func TestFindGroupsSecretVersions(t *testing.T) {
+type versionRow struct {
+	ID              string `json:"id"`
+	VersionOf       string `json:"versionOf"`
+	VersionInferred bool   `json:"versionInferred"`
+	NewestVersion   bool   `json:"newestVersion"`
+	OlderVersions   int    `json:"olderVersions"`
+	UsedBy          *int   `json:"usedBy"`
+}
+
+func findSecrets(t *testing.T, args map[string]any) ([]versionRow, int) {
+	t.Helper()
+
 	srv, ctx := versionsServer(t)
+	args["type"] = "secrets"
 
 	found, err := srv.toolFind(ctx, mcplib.CallToolRequest{
-		Params: mcplib.CallToolParams{Arguments: map[string]any{"type": "secrets"}},
+		Params: mcplib.CallToolParams{Arguments: args},
 	})
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
 
-	type row struct {
-		ID              string `json:"id"`
-		VersionOf       string `json:"versionOf"`
-		VersionInferred bool   `json:"versionInferred"`
-		UsedBy          *int   `json:"usedBy"`
-	}
-
 	var result struct {
-		Items []row `json:"items"`
+		Items []versionRow `json:"items"`
+		Total int          `json:"total"`
 	}
 	if err := json.Unmarshal([]byte(found), &result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 
-	got := map[string]row{}
-	for _, r := range result.Items {
+	return result.Items, result.Total
+}
+
+func TestFindListsTheNewestSecretVersions(t *testing.T) {
+	rows, total := findSecrets(t, map[string]any{})
+
+	got := map[string]versionRow{}
+	for _, r := range rows {
 		if r.UsedBy == nil {
-			t.Fatalf("%s carries no usedBy: %s", r.ID, found)
+			t.Fatalf("%s carries no usedBy", r.ID)
 		}
 		got[r.ID] = r
 	}
 
-	want := map[string]struct {
-		of     string
-		usedBy int
-	}{
-		"db_v1": {"db", 0},
+	// app_v3 is unreadable, so app_v2 heads its group.
+	if total != 2 || got["db_v3"].OlderVersions != 2 || !got["db_v3"].NewestVersion ||
+		got["app_v2"].OlderVersions != 1 || got["db_v3"].VersionOf != "db" {
+		t.Errorf("rows = %+v (total %d), want db_v3 and app_v2 heading their groups", rows, total)
+	}
+}
+
+func TestFindListsEverySecretVersion(t *testing.T) {
+	rows, total := findSecrets(t, map[string]any{"versions": "all"})
+
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+
 		// The denied service is not counted.
-		"db_v2": {"db", 1},
-		// Its other version is not readable, so it stands alone.
-		"hidden_v2": {"", 0},
-	}
-	if len(got) != len(want) {
-		t.Fatalf("rows = %+v, want %v", got, want)
-	}
-	for id, w := range want {
-		r := got[id]
-		if r.VersionOf != w.of || *r.UsedBy != w.usedBy || r.VersionInferred != (w.of != "") {
-			t.Errorf("%s = %+v, want versionOf %q usedBy %d", id, r, w.of, w.usedBy)
+		if r.ID == "db_v2" && (*r.UsedBy != 1 || r.NewestVersion) {
+			t.Errorf("db_v2 = %+v, want an older version used by 1", r)
 		}
+	}
+
+	slices.Sort(ids)
+	if want := []string{"app_v1", "app_v2", "db_v1", "db_v2", "db_v3"}; total != 5 ||
+		!slices.Equal(ids, want) {
+		t.Errorf("ids = %v (total %d), want %v", ids, total, want)
+	}
+}
+
+func TestFindRefusesAnUnknownVersionsValue(t *testing.T) {
+	srv, ctx := versionsServer(t)
+
+	_, err := srv.toolFind(ctx, mcplib.CallToolRequest{
+		Params: mcplib.CallToolParams{
+			Arguments: map[string]any{"type": "secrets", "versions": "some"},
+		},
+	})
+	if err == nil {
+		t.Error("find accepted versions=some")
 	}
 }
 
@@ -115,7 +149,7 @@ func TestDescribeCarriesSecretVersion(t *testing.T) {
 
 	described, err := srv.toolDescribe(ctx, mcplib.CallToolRequest{
 		Params: mcplib.CallToolParams{
-			Arguments: map[string]any{"type": "secret", "id": "db_v2"},
+			Arguments: map[string]any{"type": "secret", "id": "app_v2"},
 		},
 	})
 	if err != nil {
@@ -130,7 +164,38 @@ func TestDescribeCarriesSecretVersion(t *testing.T) {
 	}
 
 	d := result.Details
-	if d["versionOf"] != "db" || d["versionInferred"] != true || d["usedBy"] != 1.0 {
-		t.Errorf("details = %v, want a version of db used by 1", d)
+	if d["versionOf"] != "app" || d["newestVersion"] != true || d["olderVersions"] != 1.0 ||
+		d["usedBy"] != 0.0 {
+		t.Errorf("details = %v, want the newest readable app version", d)
+	}
+}
+
+// A created version must read as the newest of its group straight away, not as
+// a zero-time record older than every version it replaces.
+func TestCreatedVersionsAreSeededAsNew(t *testing.T) {
+	c := cache.New(nil)
+	writeClient := &fakeWriteClient{
+		createSecretFn: func(context.Context, swarm.SecretSpec) (string, error) { return "sec", nil },
+		createConfigFn: func(context.Context, swarm.ConfigSpec) (string, error) { return "cfg", nil },
+	}
+	handler := newToolTestServer(t, c, writeClient, config.OpsConfiguration).Handler()
+
+	before := time.Now()
+	callTool(t, handler, `{"name":"create_secret","arguments":{"name":"s_v2","data":"x",`+
+		`"labels":{"com.docker.stack.namespace":"app"}}}`)
+	callTool(t, handler, `{"name":"create_config","arguments":{"name":"c_v2","data":"x",`+
+		`"labels":{"com.docker.stack.namespace":"app"}}}`)
+
+	sec, _ := c.GetSecret("sec")
+	cfg, _ := c.GetConfig("cfg")
+
+	for name, meta := range map[string]swarm.Meta{"secret": sec.Meta, "config": cfg.Meta} {
+		if meta.CreatedAt.Before(before) || meta.UpdatedAt.Before(before) {
+			t.Errorf("seeded %s Meta = %+v, want the time of the create", name, meta)
+		}
+	}
+
+	if cfg.Spec.Labels["com.docker.stack.namespace"] != "app" {
+		t.Errorf("seeded config labels = %v, want the stack label kept", cfg.Spec.Labels)
 	}
 }
