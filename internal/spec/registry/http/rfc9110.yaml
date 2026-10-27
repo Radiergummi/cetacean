@@ -475,7 +475,7 @@ requirements:
     mutants:
       - file: internal/api/router.go
         replace: "\t\t\t\tw.Header().Set(\"Allow\", strings.Join(allow, \", \"))"
-        with: "\t\t\t\tw.Header().Set(\"Allow\", \"\")"
+        with: "\t\t\t\tw.Header().Set(\"Allow\", strings.Join(allow[:0], \", \"))"
 
 dismissed:
   a-range-on-an-unsupported-method-is-ignored: >-
