@@ -111,6 +111,7 @@ type ConsentStore struct {
 
 	mu      sync.Mutex
 	records map[string]ConsentRecord
+	now     func() time.Time
 }
 
 // NewConsentStore returns a ready-to-use ConsentStore whose approvals lapse
@@ -119,6 +120,7 @@ func NewConsentStore(ttl time.Duration) *ConsentStore {
 	return &ConsentStore{
 		ttl:     ttl,
 		records: make(map[string]ConsentRecord),
+		now:     time.Now,
 	}
 }
 
@@ -157,7 +159,7 @@ func (s *ConsentStore) Allows(key ConsentKey, fingerprint string) bool {
 
 	return exists &&
 		record.Fingerprint == fingerprint &&
-		!s.expired(record.GrantedAt, time.Now())
+		!s.expired(record.GrantedAt, s.now())
 }
 
 // Remember records an approval, replacing any earlier one for the same user,
@@ -178,7 +180,7 @@ func (s *ConsentStore) Remember(key ConsentKey, fingerprint string) {
 	// to lapsing is rewritten anyway, since re-approval is what renews the
 	// lease.
 	existing, exists := s.records[hash]
-	if exists && existing.Fingerprint == fingerprint && !s.expired(existing.GrantedAt, time.Now()) {
+	if exists && existing.Fingerprint == fingerprint && !s.expired(existing.GrantedAt, s.now()) {
 		s.mu.Unlock()
 
 		return
@@ -187,7 +189,7 @@ func (s *ConsentStore) Remember(key ConsentKey, fingerprint string) {
 	s.records[hash] = ConsentRecord{
 		ConsentKey:  key,
 		Fingerprint: fingerprint,
-		GrantedAt:   time.Now(),
+		GrantedAt:   s.now(),
 	}
 	s.mu.Unlock()
 
@@ -261,7 +263,7 @@ func (s *ConsentStore) Snapshot() []ConsentRecord {
 // Allows refuses a lapsed record but leaves it alone, so without this the file
 // would accumulate records that can never authorize anything again.
 func (s *ConsentStore) Restore(records []ConsentRecord) {
-	now := time.Now()
+	now := s.now()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
