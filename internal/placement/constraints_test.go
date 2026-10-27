@@ -81,6 +81,73 @@ func TestSatisfiesBuiltInKeys(t *testing.T) {
 	}
 }
 
+// Swarm reads node.role off the role the node holds, not the one asked of it:
+// a worker being promoted is not a manager until it has joined the managers.
+func TestSatisfiesRoleIsTheObservedRole(t *testing.T) {
+	promoting := gpuNode()
+	promoting.Spec.Role = swarm.NodeRoleManager
+
+	demoting := gpuNode()
+	demoting.ManagerStatus = &swarm.ManagerStatus{Reachability: swarm.ReachabilityReachable}
+
+	for _, tc := range []struct {
+		name       string
+		node       swarm.Node
+		constraint string
+		want       bool
+	}{
+		{"promoting, ==worker", promoting, "node.role==worker", true},
+		{"promoting, ==manager", promoting, "node.role==manager", false},
+		{"demoting, ==manager", demoting, "node.role==manager", true},
+		{"demoting, !=manager", demoting, "node.role!=manager", false},
+	} {
+		if ok, _ := Satisfies(tc.node, []string{tc.constraint}); ok != tc.want {
+			t.Errorf("%s: %s = %v, want %v", tc.name, tc.constraint, ok, tc.want)
+		}
+	}
+}
+
+// node.ip takes an address or a CIDR, matched against the node's address; a
+// value that is neither fails under either operator, as Swarm rejects it.
+func TestSatisfiesNodeIP(t *testing.T) {
+	node := gpuNode()
+	node.Status.Addr = "10.0.0.5"
+
+	v6 := gpuNode()
+	v6.Status.Addr = "2001:db8::2"
+
+	unaddressed := gpuNode()
+
+	for _, tc := range []struct {
+		node       swarm.Node
+		constraint string
+		want       bool
+	}{
+		{node, "node.ip==10.0.0.5", true},
+		{node, "node.ip!=10.0.0.5", false},
+		{node, "node.ip==10.0.0.6", false},
+		{node, "node.ip!=10.0.0.6", true},
+		{node, "node.ip==10.0.0.0/24", true},
+		{node, "node.ip!=10.0.0.0/24", false},
+		{node, "node.ip==10.1.0.0/16", false},
+		{node, "node.ip!=10.1.0.0/16", true},
+		{node, "Node.IP == 10.0.0.5", true},
+		{node, "node.ip==not-an-address", false},
+		{node, "node.ip!=not-an-address", false},
+		{v6, "node.ip==2001:db8::2", true},
+		{v6, "node.ip==2001:db8::/32", true},
+		{v6, "node.ip==10.0.0.0/8", false},
+		{unaddressed, "node.ip==10.0.0.5", false},
+		{unaddressed, "node.ip!=10.0.0.0/8", true},
+	} {
+		if ok, reason := Satisfies(tc.node, []string{tc.constraint}); ok != tc.want {
+			t.Errorf("%s on %q = %v, want %v", tc.constraint, tc.node.Status.Addr, ok, tc.want)
+		} else if !ok && reason == "" {
+			t.Errorf("%s gave no reason", tc.constraint)
+		}
+	}
+}
+
 // Engine labels are a separate namespace from node labels: the daemon sets
 // them, an operator sets the others, and a service may pin either.
 func TestSatisfiesEngineLabels(t *testing.T) {

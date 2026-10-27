@@ -3,6 +3,7 @@
 package placement
 
 import (
+	"net"
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -19,14 +20,23 @@ func Satisfies(node swarm.Node, constraints []string) (bool, string) {
 			return false, strings.TrimSpace(raw)
 		}
 
-		actual, known := nodeAttribute(node, key)
-		if !known {
-			return false, strings.TrimSpace(raw)
+		var matches bool
+		if strings.EqualFold(key, "node.ip") {
+			var valid bool
+			if matches, valid = addressMatches(node.Status.Addr, value); !valid {
+				return false, strings.TrimSpace(raw)
+			}
+		} else {
+			actual, known := nodeAttribute(node, key)
+			if !known {
+				return false, strings.TrimSpace(raw)
+			}
+
+			// An absent label is unset rather than empty: it equals nothing and
+			// differs from everything. Values compare without case, as Swarm's do.
+			matches = strings.EqualFold(actual, value)
 		}
 
-		// An absent label is unset rather than empty: it equals nothing and
-		// differs from everything. Values compare without case, as Swarm's do.
-		matches := strings.EqualFold(actual, value)
 		if op == "!=" {
 			matches = !matches
 		}
@@ -82,7 +92,13 @@ func nodeAttribute(node swarm.Node, key string) (string, bool) {
 	case "node.hostname":
 		return node.Description.Hostname, true
 	case "node.role":
-		return string(node.Spec.Role), true
+		// Swarm reads the role the node holds, which the Engine API shows
+		// only as ManagerStatus; Spec.Role is the one asked of it.
+		if node.ManagerStatus != nil {
+			return string(swarm.NodeRoleManager), true
+		}
+
+		return string(swarm.NodeRoleWorker), true
 	case "node.platform.os":
 		return node.Description.Platform.OS, true
 	case "node.platform.arch":
@@ -90,6 +106,23 @@ func nodeAttribute(node swarm.Node, key string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// addressMatches reports whether addr is the address value names, or lies in
+// the network it names. A value that is neither is invalid: Swarm then fails
+// the constraint whichever the operator.
+func addressMatches(addr, value string) (matches, valid bool) {
+	nodeIP := net.ParseIP(addr)
+
+	if ip := net.ParseIP(value); ip != nil {
+		return ip.Equal(nodeIP), true
+	}
+
+	if _, subnet, err := net.ParseCIDR(value); err == nil {
+		return subnet.Contains(nodeIP), true
+	}
+
+	return false, false
 }
 
 // cutPrefixFold is strings.CutPrefix with the prefix matched without case.
