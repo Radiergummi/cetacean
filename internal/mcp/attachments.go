@@ -148,6 +148,13 @@ func (s *Server) toolUpdateServiceSecrets(
 		})
 	}
 
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
+		return cluster.SecretsChange(containerSpec(svc).Secrets, resolved)
+	})
+	if err != nil {
+		return "", err
+	}
+
 	ctx, err = s.pinChecked(ctx, cond, svc)
 	if err != nil {
 		return "", err
@@ -225,6 +232,13 @@ func (s *Server) toolUpdateServiceConfigs(
 				Mode: defaultAttachmentMode,
 			},
 		})
+	}
+
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
+		return cluster.ConfigsChange(containerSpec(svc).Configs, resolved)
+	})
+	if err != nil {
+		return "", err
 	}
 
 	ctx, err = s.pinChecked(ctx, cond, svc)
@@ -333,6 +347,13 @@ func (s *Server) toolUpdateServiceMounts(
 
 	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
 	if err := cluster.CheckMounts(svc, mounts, s.cache.GetVolume, level); err != nil {
+		return "", err
+	}
+
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
+		return cluster.MountsChange(containerSpec(svc).Mounts, mounts)
+	})
+	if err != nil {
 		return "", err
 	}
 

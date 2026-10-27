@@ -57,17 +57,21 @@ func CheckMounts(
 	return nil
 }
 
+// RollingBack is the change a rollback makes, the one change that counts the
+// previous spec, since it makes that spec current.
+const RollingBack = "rolling back"
+
 // CheckHostAccessHeld refuses, below the impactful tier, a change to what runs in
-// a service whose current or previous spec reaches the host: the exemptions in
-// CheckMounts and CheckCapabilities would otherwise hand that access to new code.
-// The previous spec counts because a rollback, or the next one, restores it.
+// a service whose spec reaches the host: the exemptions in CheckMounts and
+// CheckCapabilities would otherwise hand that access to new code. An empty
+// change, one the *Change functions found nothing in, passes.
 func CheckHostAccessHeld(
 	svc swarm.Service,
 	change string,
 	lookup func(name string) (volume.Volume, bool),
 	level config.OperationsLevel,
 ) error {
-	if level >= config.OpsImpactful {
+	if level >= config.OpsImpactful || change == "" {
 		return nil
 	}
 
@@ -81,7 +85,12 @@ func CheckHostAccessHeld(
 		return volume.Volume{Name: name, Driver: "local"}, true
 	}
 
-	for _, spec := range []*swarm.ServiceSpec{&svc.Spec, svc.PreviousSpec} {
+	specs := []*swarm.ServiceSpec{&svc.Spec}
+	if change == RollingBack {
+		specs = append(specs, svc.PreviousSpec)
+	}
+
+	for _, spec := range specs {
 		if what := specHostAccess(spec, known); what != "" {
 			return &HostAccessError{What: change + " a service with " + what}
 		}

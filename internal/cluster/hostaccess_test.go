@@ -277,18 +277,49 @@ func TestCheckHostAccessHeld(t *testing.T) {
 			"bind only in the previous spec at tier 1",
 			swarm.Service{Spec: plain, PreviousSpec: &socket},
 			config.OpsOperational,
-			true,
-		},
-		{
-			"bind only in the previous spec at tier 3",
-			swarm.Service{Spec: plain, PreviousSpec: &socket},
-			config.OpsImpactful,
 			false,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := CheckHostAccessHeld(tc.svc, "changing the image of", hostAccessVolumes, tc.level)
+
+			var denied *HostAccessError
+			if refused := errors.As(err, &denied); refused != tc.refused {
+				t.Errorf("err = %v, want refused=%v", err, tc.refused)
+			}
+		})
+	}
+
+	rollbacks := []struct {
+		name    string
+		svc     swarm.Service
+		level   config.OperationsLevel
+		refused bool
+	}{
+		{
+			"restoring a bind at tier 1",
+			swarm.Service{Spec: plain, PreviousSpec: &socket},
+			config.OpsOperational,
+			true,
+		},
+		{
+			"away from a bind at tier 1",
+			swarm.Service{Spec: socket, PreviousSpec: &plain},
+			config.OpsOperational,
+			true,
+		},
+		{
+			"restoring a bind at tier 3",
+			swarm.Service{Spec: plain, PreviousSpec: &socket},
+			config.OpsImpactful,
+			false,
+		},
+		{"with no previous spec", swarm.Service{Spec: plain}, config.OpsOperational, false},
+	}
+	for _, tc := range rollbacks {
+		t.Run("rollback "+tc.name, func(t *testing.T) {
+			err := CheckHostAccessHeld(tc.svc, RollingBack, hostAccessVolumes, tc.level)
 
 			var denied *HostAccessError
 			if refused := errors.As(err, &denied); refused != tc.refused {
@@ -307,5 +338,11 @@ func TestCheckHostAccessHeld(t *testing.T) {
 		"requires operations level 3"
 	if err == nil || err.Error() != want {
 		t.Errorf("err = %v, want %q", err, want)
+	}
+
+	if err := CheckHostAccessHeld(
+		swarm.Service{Spec: socket}, "", hostAccessVolumes, config.OpsOperational,
+	); err != nil {
+		t.Errorf("an empty change refused: %v", err)
 	}
 }

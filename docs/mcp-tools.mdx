@@ -198,8 +198,7 @@ writes](#conditional-writes) for when it moves on by itself). `replicas` is omit
     <Fragment slot="arguments">`id`, `image`, `version`</Fragment>
 
     Sets the container image, triggering a rolling deploy per the service's update policy. On a service with host
-    access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added capability, in its current
-    or previous spec—it needs level 3.
+    access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added capability—it needs level 3.
 </McpTool>
 
 <McpTool name="rollback_service" level={1}>
@@ -272,8 +271,9 @@ than read as empty.
     | `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
 
     Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
-    `command`, `placement`, and a `healthcheck` that changes `test` need level 3 on a service with host access, as
-    `update_service_image` does.
+    `placement`, and a `command` or `healthcheck` that changes what runs, need level 3 on a service with host access,
+    as `update_service_image` does; so do `update_service_secrets`, `update_service_configs`, and
+    `update_service_mounts` when they change the set attached.
     A `null` value is refused for every section.
 
     Secrets, configs, and mounts aren't sections here. Each takes a list rather than a spec fragment, and

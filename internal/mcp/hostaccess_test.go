@@ -15,16 +15,24 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
-// Host access a service already holds is exempt from the mount and capability
-// checks, so changing what runs with it needs the impactful tier instead.
-func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
-	plain := swarm.ServiceSpec{
+// pinRule is when a host-access write is expected to name the version checked.
+type pinRule int
+
+const (
+	pinWhenChecked pinRule = iota // below level 3, when the write changes something
+	pinAlways                     // the attachment checks pin regardless
+)
+
+const socketBoundID = "svc1abcdef"
+
+func hostAccessSpecs() (plain, bound swarm.ServiceSpec) {
+	plain = swarm.ServiceSpec{
 		Name: "web",
 		TaskTemplate: swarm.TaskSpec{
 			ContainerSpec: &swarm.ContainerSpec{Image: "nginx"},
 		},
 	}
-	bound := plain
+	bound = plain
 	bound.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{
 		Image: "nginx",
 		Mounts: []mount.Mount{{
@@ -33,9 +41,72 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			Target: "/var/run/docker.sock",
 		}},
 	}
-	current := swarm.Service{ID: "svc1", Spec: bound, PreviousSpec: &plain}
-	previous := swarm.Service{ID: "svc1", Spec: plain, PreviousSpec: &bound}
-	unbound := swarm.Service{ID: "svc1", Spec: plain, PreviousSpec: &plain}
+
+	return plain, bound
+}
+
+// hostAccessWriteClient answers every write the host-access tools make with
+// record, which notes the call and the version it was pinned to.
+func hostAccessWriteClient(
+	record func(context.Context) (swarm.Service, error),
+) *fakeWriteClient {
+	return &fakeWriteClient{
+		updateServiceImageFn: func(ctx context.Context, _, _ string) (swarm.Service, error) {
+			return record(ctx)
+		},
+		rollbackServiceFn: func(ctx context.Context, _ string) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServicePlaceFn: func(
+			ctx context.Context, _ string, _ *swarm.Placement,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServiceHealthFn: func(
+			ctx context.Context, _ string, _ *container.HealthConfig,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServiceContainerFn: func(
+			ctx context.Context, _ string, _ func(*swarm.ContainerSpec),
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServiceSecretsFn: func(
+			ctx context.Context, _ string, _ []*swarm.SecretReference,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServiceConfigsFn: func(
+			ctx context.Context, _ string, _ []*swarm.ConfigReference,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+		updateServiceMountsFn: func(
+			ctx context.Context, _ string, _ []mount.Mount,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
+	}
+}
+
+// Host access a service already holds is exempt from the mount and capability
+// checks, so changing what runs with it needs the impactful tier instead.
+func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
+	plain, bound := hostAccessSpecs()
+	current := swarm.Service{ID: socketBoundID, Spec: bound, PreviousSpec: &plain}
+	previous := swarm.Service{ID: socketBoundID, Spec: plain, PreviousSpec: &bound}
+	unbound := swarm.Service{ID: socketBoundID, Spec: plain, PreviousSpec: &plain}
+
+	const (
+		tier1 = config.OpsOperational
+		tier2 = config.OpsConfiguration
+	)
+	section := func(name, value string) string {
+		return `{"name":"update_service","arguments":{"id":"web","section":"` + name +
+			`","value":` + value + `}}`
+	}
+	socketMount := `{"type":"bind","source":"/var/run/docker.sock","target":"/var/run/docker.sock"}`
 
 	cases := []struct {
 		name    string
@@ -43,50 +114,80 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		call    string
 		below   config.OperationsLevel
 		refused bool
+		changes bool
+		pin     pinRule
 	}{
 		{
 			"image", current,
 			`{"name":"update_service_image","arguments":{"id":"web","image":"evil"}}`,
-			config.OpsOperational, true,
+			tier1, true, true, pinWhenChecked,
+		},
+		{
+			"image with a bind only in the previous spec", previous,
+			`{"name":"update_service_image","arguments":{"id":"web","image":"nginx:2"}}`,
+			tier1, false, true, pinWhenChecked,
 		},
 		{
 			"rollback restoring a bind", previous,
 			`{"name":"rollback_service","arguments":{"id":"web"}}`,
-			config.OpsOperational, true,
+			tier1, true, true, pinWhenChecked,
 		},
 		{
-			"command", current,
-			`{"name":"update_service","arguments":{"id":"web","section":"command",` +
-				`"value":{"command":["sh"]}}}`,
-			config.OpsConfiguration, true,
+			"command", current, section("command", `{"command":["sh"]}`),
+			tier2, true, true, pinWhenChecked,
 		},
 		{
-			"placement", current,
-			`{"name":"update_service","arguments":{"id":"web","section":"placement",` +
-				`"value":{"Constraints":["node.role==manager"]}}}`,
-			config.OpsConfiguration, true,
+			"command unchanged", current, section("command", `{}`),
+			tier2, false, false, pinWhenChecked,
 		},
 		{
-			"healthcheck test", current,
-			`{"name":"update_service","arguments":{"id":"web","section":"healthcheck",` +
-				`"value":{"test":["CMD","sh"]}}}`,
-			config.OpsConfiguration, true,
+			"placement", current, section("placement", `{"Constraints":["node.role==manager"]}`),
+			tier2, true, true, pinWhenChecked,
 		},
 		{
-			"healthcheck interval only", current,
-			`{"name":"update_service","arguments":{"id":"web","section":"healthcheck",` +
-				`"value":{"interval":"10s"}}}`,
-			config.OpsConfiguration, false,
+			"healthcheck test", current, section("healthcheck", `{"test":["CMD","sh"]}`),
+			tier2, true, true, pinWhenChecked,
+		},
+		{
+			"healthcheck interval only", current, section("healthcheck", `{"interval":"10s"}`),
+			tier2, false, false, pinWhenChecked,
+		},
+		{
+			"secret added", current,
+			`{"name":"update_service_secrets","arguments":{"id":"web",` +
+				`"secrets":[{"name":"s","target":"/docker-entrypoint.sh"}]}}`,
+			tier2, true, true, pinAlways,
+		},
+		{
+			"config added", current,
+			`{"name":"update_service_configs","arguments":{"id":"web",` +
+				`"configs":[{"name":"c","target":"/docker-entrypoint.sh"}]}}`,
+			tier2, true, true, pinAlways,
+		},
+		{
+			"mount added beside the bind", current,
+			`{"name":"update_service_mounts","arguments":{"id":"web","mounts":[` + socketMount +
+				`,{"type":"tmpfs","target":"/docker-entrypoint.sh"}]}}`,
+			tier2, true, true, pinAlways,
+		},
+		{
+			"mounts unchanged",
+			current,
+			`{"name":"update_service_mounts","arguments":{"id":"web","mounts":[` + socketMount + `]}}`,
+			tier2,
+			false,
+			false,
+			pinAlways,
 		},
 		{
 			"image without host access", unbound,
 			`{"name":"update_service_image","arguments":{"id":"web","image":"nginx:2"}}`,
-			config.OpsOperational, false,
+			tier1, false, true, pinWhenChecked,
 		},
 		{
 			"rollback without host access", unbound,
 			`{"name":"rollback_service","arguments":{"id":"web"}}`,
-			config.OpsOperational, false,
+			tier1, false, true, pinWhenChecked,
 		},
 	}
 
@@ -96,44 +197,36 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 				c := cache.New(nil)
 				tc.svc.Version = swarm.Version{Index: 7}
 				c.SetService(tc.svc)
+				c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{
+					Annotations: swarm.Annotations{Name: "s"},
+				}})
+				c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{
+					Annotations: swarm.Annotations{Name: "c"},
+				}})
 
 				written := false
 				var pinned swarm.Version
-				write := func(ctx context.Context) (swarm.Service, error) {
+				wc := hostAccessWriteClient(func(ctx context.Context) (swarm.Service, error) {
 					written = true
-					pinned, _ = docker.PinnedVersion(ctx, "service", "svc1")
+					pinned, _ = docker.PinnedVersion(ctx, "service", socketBoundID)
 					return tc.svc, nil
-				}
-				wc := &fakeWriteClient{
-					updateServiceImageFn: func(ctx context.Context, _, _ string) (swarm.Service, error) {
-						return write(ctx)
-					},
-					rollbackServiceFn: func(ctx context.Context, _ string) (swarm.Service, error) {
-						return write(ctx)
-					},
-					updateServicePlaceFn: func(
-						ctx context.Context, _ string, _ *swarm.Placement,
-					) (swarm.Service, error) {
-						return write(ctx)
-					},
-					updateServiceHealthFn: func(
-						ctx context.Context, _ string, _ *container.HealthConfig,
-					) (swarm.Service, error) {
-						return write(ctx)
-					},
-					updateServiceContainerFn: func(
-						ctx context.Context, _ string, _ func(*swarm.ContainerSpec),
-					) (swarm.Service, error) {
-						return write(ctx)
-					},
-				}
+				})
 
 				handler := newToolTestServer(t, c, wc, level).Handler()
 
 				if !tc.refused || level >= config.OpsImpactful {
 					callTool(t, handler, tc.call)
-					if !written || pinned.Index != 7 {
-						t.Errorf("written=%v pinned=%v, want a write pinned to 7", written, pinned)
+					if !written {
+						t.Fatal("the write did not run")
+					}
+
+					wantPin := tc.pin == pinAlways ||
+						tc.changes && level < config.OpsImpactful
+					if wantPin && pinned.Index != 7 {
+						t.Errorf("write pinned to %v, want the checked version 7", pinned)
+					}
+					if !wantPin && pinned.Index != 0 {
+						t.Errorf("write pinned to %v, want it unpinned", pinned)
 					}
 
 					return
@@ -147,6 +240,34 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 					t.Errorf("the error does not name the tier: %s", raw)
 				}
 			})
+		}
+	}
+}
+
+// Docker takes an ID prefix the cache does not resolve. Below level 3 the
+// check needs the service it guards, so a write naming one is refused.
+func TestHostAccessHeldRefusesAnUnresolvedService(t *testing.T) {
+	_, bound := hostAccessSpecs()
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: socketBoundID, Spec: bound, Version: swarm.Version{Index: 7}})
+
+	written := false
+	wc := hostAccessWriteClient(func(context.Context) (swarm.Service, error) {
+		written = true
+		return swarm.Service{ID: socketBoundID, Spec: bound}, nil
+	})
+	handler := newToolTestServer(t, c, wc, config.OpsOperational).Handler()
+
+	for _, call := range []string{
+		`{"name":"update_service_image","arguments":{"id":"svc1abc","image":"evil"}}`,
+		`{"name":"rollback_service","arguments":{"id":"svc1abc"}}`,
+	} {
+		raw := callToolExpectingError(t, handler, call)
+		if written {
+			t.Fatalf("the write ran for an unresolved ID: %s", call)
+		}
+		if !strings.Contains(raw, "not found") {
+			t.Errorf("the error does not say the service was not found: %s", raw)
 		}
 	}
 }

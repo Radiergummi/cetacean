@@ -906,12 +906,13 @@ doesn't already have that is a bind, a named pipe, a volume with driver options,
 hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`; and
 `PATCH /plugins/{name}/settings` a setting that names one of the plugin's mounts or devices, since it sets a host path.
 
-A service whose current or previous spec has host access—a bind, named-pipe, or cluster mount, a volume with driver
-options, or an added capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`,
-`POST /services/{id}/rollback`, `PUT /services/{id}/placement`, a `PATCH /services/{id}/container-config` that changes
-`command`, `args`, `user`, or `groups`, and a `PUT` or `PATCH /services/{id}/healthcheck` that changes `Test`. Below
-that they answer `403` (`OPS001`). A named volume the manager doesn't hold doesn't count, and environment changes
-aren't covered.
+A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
+capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
+a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
+`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `secrets`, `configs`, or `mounts` that
+changes the set attached. `POST /services/{id}/rollback` needs it when either the current or the previous spec has host
+access. Below that they answer `403` (`OPS001`). A named volume the manager doesn't hold doesn't count, and environment
+changes aren't covered.
 
 ### Preconditions
 

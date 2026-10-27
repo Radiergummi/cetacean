@@ -5149,6 +5149,15 @@ func socketBoundSpec() swarm.ServiceSpec {
 	}}
 }
 
+// pinRule is when a host-access write is expected to name the version checked.
+type pinRule int
+
+const (
+	pinWhenChecked pinRule = iota // below level 3, when the write changes something
+	pinNever                      // the check reads the spec inside the write itself
+	pinAlways                     // the attachment checks pin regardless
+)
+
 // Host access a service already holds is exempt from the mount and capability
 // checks, so changing what runs with it needs the impactful tier instead.
 func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
@@ -5170,6 +5179,15 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 	patchHealthcheck := func(h *Handlers) http.HandlerFunc {
 		return h.HandlePatchServiceHealthcheck
 	}
+	secrets := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceSecrets }
+	configs := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceConfigs }
+	mounts := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts }
+
+	const (
+		tier1 = config.OpsOperational
+		tier2 = config.OpsConfiguration
+	)
+	socketMount := `{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}`
 
 	cases := []struct {
 		name    string
@@ -5180,87 +5198,119 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		handler func(*Handlers) http.HandlerFunc
 		below   config.OperationsLevel
 		refused bool
+		changes bool
+		pin     pinRule
 	}{
-		{"image", current, "PUT", "/image", `{"image":"evil"}`, image, config.OpsOperational, true},
+		{
+			"image",
+			current,
+			"PUT",
+			"/image",
+			`{"image":"evil"}`,
+			image,
+			tier1,
+			true,
+			true,
+			pinWhenChecked,
+		},
+		{
+			"image with a bind only in the previous spec",
+			previous, "PUT", "/image", `{"image":"nginx:2"}`,
+			image, tier1, false, true, pinWhenChecked,
+		},
 		{
 			"rollback restoring a bind",
-			previous,
-			"POST",
-			"/rollback",
-			"",
-			rollback,
-			config.OpsOperational,
-			true,
+			previous, "POST", "/rollback", "",
+			rollback, tier1, true, true, pinWhenChecked,
 		},
 		{
 			"rollback from a bind",
-			current,
-			"POST",
-			"/rollback",
-			"",
-			rollback,
-			config.OpsOperational,
-			true,
+			current, "POST", "/rollback", "",
+			rollback, tier1, true, true, pinWhenChecked,
 		},
 		{
 			"command",
 			current, "PATCH", "/container-config", `{"command":["sh"]}`,
-			containerConfig, config.OpsConfiguration, true,
+			containerConfig, tier2, true, true, pinNever,
 		},
 		{
 			"user",
 			current, "PATCH", "/container-config", `{"user":"root"}`,
-			containerConfig, config.OpsConfiguration, true,
+			containerConfig, tier2, true, true, pinNever,
+		},
+		{
+			"working directory",
+			current, "PATCH", "/container-config", `{"dir":"/tmp"}`,
+			containerConfig, tier2, true, true, pinNever,
 		},
 		{
 			"hostname only",
 			current, "PATCH", "/container-config", `{"hostname":"web"}`,
-			containerConfig, config.OpsConfiguration, false,
+			containerConfig, tier2, false, false, pinNever,
 		},
 		{
 			"placement",
 			current, "PUT", "/placement", `{"Constraints":["node.role==manager"]}`,
-			placement, config.OpsConfiguration, true,
+			placement, tier2, true, true, pinWhenChecked,
 		},
 		{
 			"healthcheck test",
 			current, "PUT", "/healthcheck", `{"Test":["CMD","sh"]}`,
-			putHealthcheck, config.OpsConfiguration, true,
+			putHealthcheck, tier2, true, true, pinWhenChecked,
 		},
 		{
 			"healthcheck interval only",
 			current, "PUT", "/healthcheck", `{"Interval":1000000000}`,
-			putHealthcheck, config.OpsConfiguration, false,
+			putHealthcheck, tier2, false, false, pinWhenChecked,
 		},
 		{
 			"patched healthcheck test",
 			current, "PATCH", "/healthcheck", `{"Test":["CMD","sh"]}`,
-			patchHealthcheck, config.OpsConfiguration, true,
+			patchHealthcheck, tier2, true, true, pinNever,
 		},
 		{
 			"patched healthcheck interval only",
 			current, "PATCH", "/healthcheck", `{"Interval":1000000000}`,
-			patchHealthcheck, config.OpsConfiguration, false,
+			patchHealthcheck, tier2, false, false, pinNever,
+		},
+		{
+			"secret added",
+			current, "PATCH", "/secrets",
+			`{"secrets":[{"secretID":"sec1","secretName":"s","fileName":"/docker-entrypoint.sh"}]}`,
+			secrets, tier2, true, true, pinAlways,
+		},
+		{
+			"config added",
+			current, "PATCH", "/configs",
+			`{"configs":[{"configID":"cfg1","configName":"c","fileName":"/docker-entrypoint.sh"}]}`,
+			configs, tier2, true, true, pinAlways,
+		},
+		{
+			"mount added beside the bind",
+			current, "PATCH", "/mounts",
+			`{"mounts":[` + socketMount + `,{"Type":"tmpfs","Target":"/docker-entrypoint.sh"}]}`,
+			mounts, tier2, true, true, pinAlways,
+		},
+		{
+			"mounts unchanged",
+			current, "PATCH", "/mounts", `{"mounts":[` + socketMount + `]}`,
+			mounts, tier2, false, false, pinAlways,
+		},
+		{
+			"secret added without host access",
+			unbound, "PATCH", "/secrets",
+			`{"secrets":[{"secretID":"sec1","secretName":"s"}]}`,
+			secrets, tier2, false, true, pinAlways,
 		},
 		{
 			"image without host access",
-			unbound,
-			"PUT",
-			"/image",
-			`{"image":"nginx:2"}`,
-			image,
-			config.OpsOperational,
-			false,
+			unbound, "PUT", "/image", `{"image":"nginx:2"}`,
+			image, tier1, false, true, pinWhenChecked,
 		},
 		{
 			"rollback without host access",
-			unbound,
-			"POST",
-			"/rollback",
-			"",
-			rollback,
-			config.OpsOperational,
-			false,
+			unbound, "POST", "/rollback", "",
+			rollback, tier1, false, true, pinWhenChecked,
 		},
 	}
 
@@ -5270,6 +5320,12 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 				c := cache.New(nil)
 				tc.svc.Version = swarm.Version{Index: 7}
 				c.SetService(tc.svc)
+				c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{
+					Annotations: swarm.Annotations{Name: "s"},
+				}})
+				c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{
+					Annotations: swarm.Annotations{Name: "c"},
+				}})
 
 				written := false
 				var pinned swarm.Version
@@ -5278,7 +5334,9 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 					pinned, _ = docker.PinnedVersion(ctx, "service", "svc1")
 					return swarm.Service{ID: "svc1", Spec: plain}, nil
 				}
+				live := tc.svc.Spec
 				mock := &mockWriteClient{}
+				mock.simulatedSpec = &live
 				mock.updateServiceImageFn = func(ctx context.Context, _, _ string) (swarm.Service, error) {
 					return write(ctx)
 				}
@@ -5293,6 +5351,21 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 				}
 				mock.updateServiceHealthcheckFn = func(
 					ctx context.Context, _ string, _ *container.HealthConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceSecretsFn = func(
+					ctx context.Context, _ string, _ []*swarm.SecretReference,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceConfigsFn = func(
+					ctx context.Context, _ string, _ []*swarm.ConfigReference,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceMountsFn = func(
+					ctx context.Context, _ string, _ []mount.Mount,
 				) (swarm.Service, error) {
 					return write(ctx)
 				}
@@ -5317,8 +5390,14 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 						t.Fatalf("status=%d written=%v, want 200 and a write; body: %s",
 							w.Code, written, w.Body.String())
 					}
-					if pinned.Index != 7 {
+
+					wantPin := tc.pin == pinAlways ||
+						tc.pin == pinWhenChecked && tc.changes && level < config.OpsImpactful
+					if wantPin && pinned.Index != 7 {
 						t.Errorf("write pinned to %v, want the checked version 7", pinned)
+					}
+					if !wantPin && pinned.Index != 0 {
+						t.Errorf("write pinned to %v, want it unpinned", pinned)
 					}
 
 					return

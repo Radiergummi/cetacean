@@ -3399,7 +3399,7 @@ paths:
           color: green
       tags: [Services]
       summary: Update service image
-      description: Updates the container image for a service. Requires level 3 when the current or previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
+      description: Updates the container image for a service. Requires level 3 when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
@@ -3449,7 +3449,7 @@ paths:
           color: green
       tags: [Services]
       summary: Rollback a service
-      description: Rolls back the service to its previous specification. Requires level 3 when the current or previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
+      description: Rolls back the service to its previous specification. Requires level 3 when the current or the previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
@@ -3739,7 +3739,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Update service placement constraints
-      description: Replaces the placement constraints and preferences for the service. Requires level 3 when the current or previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
+      description: Replaces the placement constraints and preferences for the service. Requires level 3 when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4176,7 +4176,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Replace service healthcheck config
-      description: Replaces the healthcheck configuration for the service. Requires operations level 2, and level 3 to change `Test` when the current or previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
+      description: Replaces the healthcheck configuration for the service. Requires operations level 2, and level 3 to change `Test` when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4229,7 +4229,7 @@ paths:
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service healthcheck configuration.
         Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3
-        to change `Test` when the current or previous spec has host access.
+        to change `Test` when the service has host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4736,7 +4736,7 @@ paths:
       summary: Patch service container config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service container configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`, or to change `command`, `args`, `user`, or `groups` of a service whose current or previous spec has host access.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`, or to change `command`, `args`, `dir`, `user`, or `groups` of a service with host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"

@@ -462,7 +462,7 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	ctx, err = s.checkHostAccessHeld(ctx, cond, s.cachedService(id), "changing the image of")
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, always("changing the image of"))
 	if err != nil {
 		return "", err
 	}
@@ -495,7 +495,7 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
-	ctx, err = s.checkHostAccessHeld(ctx, cond, s.cachedService(id), "rolling back")
+	ctx, id, err = s.guardHostAccess(ctx, cond, id, always(cluster.RollingBack))
 	if err != nil {
 		return "", err
 	}
@@ -513,27 +513,55 @@ func (s *Server) toolRollbackService(
 	return marshalResult(s.serviceMutation(svc))
 }
 
-// checkHostAccessHeld is cluster.CheckHostAccessHeld for a change to svc, an
-// empty one passing, and pins the write to the version it checked.
-func (s *Server) checkHostAccessHeld(
+// guardHostAccess runs cluster.CheckHostAccessHeld on the change a write to the
+// service id names makes. Below level 3 the service must resolve, and the write
+// is addressed by its full ID, pinned to the version checked when it changes
+// something; Docker's own prefix match would otherwise reach one never checked.
+func (s *Server) guardHostAccess(
 	ctx context.Context,
 	cond condition,
-	svc swarm.Service,
-	change string,
-) (context.Context, error) {
-	if change != "" {
-		level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
-		if err := cluster.CheckHostAccessHeld(svc, change, s.cache.GetVolume, level); err != nil {
-			return ctx, err
-		}
+	id string,
+	change func(swarm.Service) string,
+) (context.Context, string, error) {
+	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+	if level >= config.OpsImpactful {
+		return ctx, id, nil
 	}
 
-	return s.pinChecked(ctx, cond, svc)
+	svc, found, err := s.cache.ResolveService(id)
+	if err != nil {
+		return ctx, id, err
+	}
+	if !found {
+		return ctx, id, fmt.Errorf("service %q not found", id)
+	}
+
+	what := change(svc)
+	if what == "" {
+		return ctx, svc.ID, nil
+	}
+
+	if err := cluster.CheckHostAccessHeld(svc, what, s.cache.GetVolume, level); err != nil {
+		return ctx, id, err
+	}
+
+	ctx, err = s.pinChecked(ctx, cond, svc)
+
+	return ctx, svc.ID, err
 }
 
-func (s *Server) cachedService(id string) swarm.Service {
-	svc, _, _ := s.cache.ResolveService(id)
-	return svc
+// always is a change every request to a tool makes.
+func always(change string) func(swarm.Service) string {
+	return func(swarm.Service) string { return change }
+}
+
+// containerSpec is svc's container spec, or an empty one.
+func containerSpec(svc swarm.Service) *swarm.ContainerSpec {
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		return cs
+	}
+
+	return &swarm.ContainerSpec{}
 }
 
 func (s *Server) toolRestartService(

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -133,7 +133,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ctx, ok := h.checkHostAccessHeld(w, r, svc, "rolling back")
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, cluster.RollingBack)
 	if !ok {
 		return
 	}
@@ -146,15 +146,19 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 }
 
 // checkHostAccessHeld answers OPS001 for a change cluster.CheckHostAccessHeld
-// refuses, and otherwise pins the write to the version it checked.
+// refuses. A write the check was consulted for is pinned to the version it read.
 func (h *Handlers) checkHostAccessHeld(
 	w http.ResponseWriter,
 	r *http.Request,
 	svc swarm.Service,
 	change string,
 ) (context.Context, bool) {
-	err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, h.levelFor(r))
-	if err != nil {
+	level := h.levelFor(r)
+	if level >= config.OpsImpactful || change == "" {
+		return r.Context(), true
+	}
+
+	if err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level); err != nil {
 		writeErrorCode(w, r, "OPS001", err.Error())
 		return nil, false
 	}
@@ -316,8 +320,7 @@ func patchServiceSpecField[T any](
 ) {
 	id := r.PathValue("id")
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -328,14 +331,9 @@ func patchServiceSpecField[T any](
 
 	slog.Info("updating service "+patch.name, "service", id)
 
-	ctx := r.Context()
-	if patch.held != nil {
-		ctx = docker.PinChecked(ctx, "service", svc.ID, svc.Version)
-	}
-
 	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
-		ctx,
+		r.Context(),
 		id,
 		func(spec *swarm.ServiceSpec) error {
 			field, err := patch.field(spec)
@@ -354,11 +352,15 @@ func patchServiceSpecField[T any](
 			}
 
 			if patch.held != nil {
-				if change := patch.held(current, &result); change != "" {
-					err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level)
-					if err != nil {
-						return &specPatchError{"OPS001", err.Error()}
-					}
+				live := swarm.Service{Spec: *spec}
+				change := patch.held(current, &result)
+				if err := cluster.CheckHostAccessHeld(
+					live,
+					change,
+					h.cache.GetVolume,
+					level,
+				); err != nil {
+					return &specPatchError{"OPS001", err.Error()}
 				}
 			}
 
@@ -469,15 +471,14 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	ctx := docker.PinChecked(r.Context(), "service", svc.ID, svc.Version)
-	var before []string
-	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil && cs.Healthcheck != nil {
-		before = cs.Healthcheck.Test
+	var before *container.HealthConfig
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		before = cs.Healthcheck
 	}
-	if !slices.Equal(before, hc.Test) {
-		if ctx, ok = h.checkHostAccessHeld(w, r, svc, changingHealthcheck); !ok {
-			return
-		}
+
+	ctx, ok := h.checkHostAccessHeld(w, r, svc, cluster.HealthcheckChange(before, &hc))
+	if !ok {
+		return
 	}
 
 	slog.Info("updating service healthcheck", "service", id)
@@ -620,17 +621,9 @@ func (h *Handlers) HandlePatchServiceHealthcheck(w http.ResponseWriter, r *http.
 			return &spec.TaskTemplate.ContainerSpec.Healthcheck, nil
 		},
 		body: serviceHealthcheckBody,
-		held: func(before, after *container.HealthConfig) string {
-			if slices.Equal(before.Test, after.Test) {
-				return ""
-			}
-
-			return changingHealthcheck
-		},
+		held: cluster.HealthcheckChange,
 	})
 }
-
-const changingHealthcheck = "changing the healthcheck command of"
 
 type containerConfigResponse struct {
 	Command         []string       `json:"command"`
@@ -701,8 +694,7 @@ func (h *Handlers) HandleGetServiceContainerConfig(w http.ResponseWriter, r *htt
 func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if _, ok := lookupOr404(w, r, "service", id, h.cache.GetService); !ok {
 		return
 	}
 
@@ -715,7 +707,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
-		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
+		r.Context(),
 		id,
 		func(spec *swarm.ServiceSpec) error {
 			cs := spec.TaskTemplate.ContainerSpec
@@ -733,17 +725,20 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 				return &specPatchError{"OPS001", err.Error()}
 			}
 
-			if !slices.Equal(cs.Command, merged.Command) || !slices.Equal(cs.Args, merged.Args) ||
-				cs.User != merged.User || !slices.Equal(cs.Groups, merged.Groups) {
-				err := cluster.CheckHostAccessHeld(
-					svc,
-					"changing the command or user of",
-					h.cache.GetVolume,
-					level,
-				)
-				if err != nil {
-					return &specPatchError{"OPS001", err.Error()}
-				}
+			change := cluster.CommandChange(cs, &swarm.ContainerSpec{
+				Command: merged.Command,
+				Args:    merged.Args,
+				Dir:     merged.Dir,
+				User:    merged.User,
+				Groups:  merged.Groups,
+			})
+			if err := cluster.CheckHostAccessHeld(
+				current,
+				change,
+				h.cache.GetVolume,
+				level,
+			); err != nil {
+				return &specPatchError{"OPS001", err.Error()}
 			}
 
 			cs.Command = merged.Command
@@ -903,6 +898,19 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	var currentConfigs []*swarm.ConfigReference
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		currentConfigs = cs.Configs
+	}
+	if _, ok := h.checkHostAccessHeld(
+		w,
+		r,
+		svc,
+		cluster.ConfigsChange(currentConfigs, configs),
+	); !ok {
+		return
+	}
+
 	slog.Info("updating service configs", "service", id)
 
 	updated, err := h.serviceAttachment.UpdateServiceConfigs(
@@ -1009,6 +1017,19 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 				Mode: 0444,
 			},
 		}
+	}
+
+	var currentSecrets []*swarm.SecretReference
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		currentSecrets = cs.Secrets
+	}
+	if _, ok := h.checkHostAccessHeld(
+		w,
+		r,
+		svc,
+		cluster.SecretsChange(currentSecrets, secrets),
+	); !ok {
+		return
 	}
 
 	slog.Info("updating service secrets", "service", id)
@@ -1151,6 +1172,14 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 
 		if err := cluster.CheckMounts(svc, mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
 			writeErrorCode(w, r, "OPS001", err.Error())
+			return
+		}
+
+		var current []mount.Mount
+		if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+			current = cs.Mounts
+		}
+		if _, ok := h.checkHostAccessHeld(w, r, svc, cluster.MountsChange(current, mounts)); !ok {
 			return
 		}
 

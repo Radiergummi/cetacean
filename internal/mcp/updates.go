@@ -219,15 +219,24 @@ var serviceSectionWriters = map[string]sectionWriter{
 // hostAccessSections are the sections that can change what runs in the
 // container. Each names the change a request makes for cluster.CheckHostAccessHeld,
 // or returns "" for one that leaves it alone.
+// A value that doesn't decode is the writer's to refuse, so it changes nothing.
 var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, string) string{
-	sectionCommand: func(swarm.Service, mcplib.CallToolRequest, string) string {
-		return "changing the command of"
+	sectionCommand: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		value, err := decodeSection[commandValue](req, section)
+		if err != nil {
+			return ""
+		}
+
+		before := containerSpec(svc)
+		after := *before
+		value.applyTo(&after)
+
+		return cluster.CommandChange(before, &after)
 	},
 	sectionPlacement: func(swarm.Service, mcplib.CallToolRequest, string) string {
 		return "changing the placement of"
 	},
 	sectionHealthcheck: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
-		// A value that doesn't decode is the writer's to refuse.
 		value, err := decodeSection[healthcheckValue](req, section)
 		if err != nil {
 			return ""
@@ -238,19 +247,7 @@ var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, 
 			return ""
 		}
 
-		var before, after []string
-		if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil && cs.Healthcheck != nil {
-			before = cs.Healthcheck.Test
-		}
-		if hc != nil {
-			after = hc.Test
-		}
-
-		if slices.Equal(before, after) {
-			return ""
-		}
-
-		return "changing the healthcheck command of"
+		return cluster.HealthcheckChange(containerSpec(svc).Healthcheck, hc)
 	},
 }
 
@@ -390,8 +387,9 @@ func (s *Server) toolUpdateService(
 	}
 
 	if changes, held := hostAccessSections[section]; held {
-		svc, _, _ := s.cache.ResolveService(id)
-		ctx, err = s.checkHostAccessHeld(ctx, cond, svc, changes(svc, req, section))
+		ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
+			return changes(svc, req, section)
+		})
 		if err != nil {
 			return "", err
 		}
