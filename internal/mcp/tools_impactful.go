@@ -5,7 +5,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // impactfulTools returns the tier 3 tools: removals, and the node changes
@@ -43,7 +43,8 @@ func (s *Server) impactfulTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpUpdateNode,
+			gate:    toolGate{"node", "write"},
 			elicits: true,
 			handler: s.toolUpdateNode,
 		},
@@ -63,7 +64,8 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Service ID or name."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveService,
+			gate:    toolGate{"service", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
 				"id",
@@ -91,7 +93,8 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Task ID, or `<service>.<slot>` naming a live replica."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveTask,
+			gate:    toolGate{"task", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite, s.taskRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
@@ -114,7 +117,8 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Config ID."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveConfig,
+			gate:    toolGate{"config", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
 				"id",
@@ -142,7 +146,8 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Secret ID."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveSecret,
+			gate:    toolGate{"secret", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
 				"id",
@@ -170,7 +175,8 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Network ID."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveNetwork,
+			gate:    toolGate{"network", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
 				"id",
@@ -204,7 +210,8 @@ func (s *Server) impactfulTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveVolume,
+			gate:    toolGate{"volume", "write"},
 			elicits: true,
 			handler: s.toolRemoveVolume,
 		},

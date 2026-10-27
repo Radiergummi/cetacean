@@ -142,11 +142,12 @@ type ResourceRemover interface {
 	RemoveVolume(ctx context.Context, name string, force bool) error
 }
 
-// toolDef bundles an mcp-go tool, the operations tier required to expose it,
-// and the handler invoked by mcp-go when the tool is called.
+// toolDef bundles an mcp-go tool, the write it carries out if any, the grant
+// it is listed for, and the handler invoked by mcp-go when the tool is called.
 type toolDef struct {
 	tool    mcplib.Tool
-	tier    config.OperationsLevel
+	op      cluster.Operation
+	gate    toolGate
 	handler func(ctx context.Context, req mcplib.CallToolRequest) (string, error)
 
 	// widget names the MCP Apps view that renders this tool's result, if any.
@@ -157,6 +158,24 @@ type toolDef struct {
 	// elicits marks a tool that may ask a person before it acts. Such a tool
 	// must not declare task support: mcp-go cannot pause a task for input.
 	elicits bool
+}
+
+// toolGate is the resource type and permission a caller needs a grant on for
+// tools/list to show the tool; the zero gate shows it to everyone. Call-time
+// ACL enforces regardless — the gate only keeps the list truthful.
+type toolGate struct {
+	resourceType string
+	permission   string
+}
+
+// tier is the operations level the tool is registered at: its operation's,
+// or none for a read.
+func (td toolDef) tier() config.OperationsLevel {
+	if td.op == "" {
+		return config.OpsReadOnly
+	}
+
+	return td.op.Tier()
 }
 
 // toolIconCategory maps each tool to one of six verb-category icons served
@@ -239,8 +258,11 @@ func (s *Server) registerTools() {
 	opsLevel := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
 
 	s.registeredTools = make([]toolDef, 0, len(tools))
+	s.toolGates = make(map[string]toolGate, len(tools))
 	for _, td := range tools {
-		if opsLevel < td.tier {
+		s.toolGates[td.tool.Name] = td.gate
+
+		if opsLevel < td.tier() {
 			continue
 		}
 

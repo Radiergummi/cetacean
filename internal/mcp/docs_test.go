@@ -130,10 +130,10 @@ func TestEveryToolHasACardAtItsTier(t *testing.T) {
 			continue
 		}
 
-		if config.OperationsLevel(c.level) != def.tier {
+		if config.OperationsLevel(c.level) != def.tier() {
 			t.Errorf(
 				"tool %q: card says level %d, catalog registers it at %d",
-				def.tool.Name, c.level, def.tier,
+				def.tool.Name, c.level, def.tier(),
 			)
 		}
 	}

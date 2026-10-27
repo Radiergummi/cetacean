@@ -230,7 +230,7 @@ func (s *Server) toolTiers() map[string]config.OperationsLevel {
 
 	tiers := make(map[string]config.OperationsLevel, len(catalog))
 	for _, td := range catalog {
-		tiers[td.tool.Name] = td.tier
+		tiers[td.tool.Name] = td.tier()
 	}
 
 	return tiers
