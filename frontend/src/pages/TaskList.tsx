@@ -69,7 +69,18 @@ export default function TaskList() {
 
   const monitoring = useMonitoringStatus();
   const hasCadvisor = isCadvisorReady(monitoring);
-  const taskMetrics = useTaskMetrics(`container_label_com_docker_swarm_task_id!=""`, hasCadvisor);
+  // Scoped to the services of the running tasks loaded so far: a regex over
+  // service IDs stays bounded as pages load, where one over task IDs would not.
+  const metricsFilter = useMemo(() => {
+    const serviceIds = new Set(
+      tasks.filter(({ Status }) => Status.State === "running").map(({ ServiceID }) => ServiceID),
+    );
+
+    return serviceIds.size > 0
+      ? `container_label_com_docker_swarm_service_id=~"${[...serviceIds].sort().join("|")}"`
+      : "";
+  }, [tasks]);
+  const taskMetrics = useTaskMetrics(metricsFilter, hasCadvisor);
 
   const columns: Column<Task>[] = useMemo(
     () => [

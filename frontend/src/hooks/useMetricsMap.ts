@@ -95,7 +95,6 @@ export function useMetricsMap<T>(
     },
     enabled,
     refetchInterval: refreshInterval,
-    refetchIntervalInBackground: true,
     staleTime: refreshInterval,
   });
 

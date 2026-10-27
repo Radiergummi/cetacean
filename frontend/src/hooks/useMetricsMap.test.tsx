@@ -15,4 +15,18 @@ describe("useMetricsMap", () => {
 
     expect(result.current).toBe(first);
   });
+
+  it("stops polling while the tab is in the background", () => {
+    const client = createTestQueryClient();
+    const spec = { labelKey: "instance", empty: () => ({}) };
+
+    renderHook(() => useMetricsMap("background", spec, false), {
+      wrapper: createWrapper(client, { withRouter: false }),
+    });
+
+    const [observer] = client.getQueryCache().find({ queryKey: ["metrics-map", "background"] })
+      ?.observers ?? [undefined];
+
+    expect(observer?.options.refetchIntervalInBackground).toBeFalsy();
+  });
 });

@@ -19,6 +19,7 @@ vi.mock("../api/client", () => ({
   api: {
     tasks: vi.fn<() => void>(),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
+    metricsQueryRange: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
   },
 }));
 
@@ -154,5 +155,38 @@ describe("TaskList", () => {
 
     expect(await screen.findByText("Slot 1")).toBeInTheDocument();
     expect(requestedFilter()).toBeUndefined();
+  });
+
+  // The page holds a page of tasks; the series of every task in the cluster
+  // would be most of the response and none of the rows.
+  it("asks for the metrics of the services whose tasks it shows", async () => {
+    vi.mocked(api.monitoringStatus).mockResolvedValue({
+      prometheusConfigured: true,
+      prometheusReachable: true,
+      queryable: true,
+      nodeExporter: null,
+      cadvisor: { targets: 1, nodes: 1 },
+    });
+    mockTasks.mockResolvedValue({
+      data: {
+        items: [fakeTask(0), { ...fakeTask(1), ServiceID: "svc2" }],
+        total: 2,
+        limit: 50,
+        offset: 0,
+      },
+      allowedMethods: new Set(),
+    });
+
+    render(<TaskList />, { wrapper });
+
+    await waitFor(() => expect(api.metricsQueryRange).toHaveBeenCalled());
+
+    const queries = vi.mocked(api.metricsQueryRange).mock.calls.map(([query]) => query as string);
+
+    expect(queries.length).toBeGreaterThan(0);
+
+    for (const query of queries) {
+      expect(query).toContain('container_label_com_docker_swarm_service_id=~"svc1|svc2"');
+    }
   });
 });
