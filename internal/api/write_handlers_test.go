@@ -686,6 +686,40 @@ func TestHandleUpdateServiceImage_EmptyImage(t *testing.T) {
 	}
 }
 
+// MCP trims the image it is given, so the same request must land the same
+// reference over REST: a padded one trimmed, a blank one refused.
+func TestHandleUpdateServiceImage_TrimsWhitespace(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	var sent string
+	wc := &mockWriteClient{
+		updateServiceImageFn: func(_ context.Context, id string, image string) (swarm.Service, error) {
+			sent = image
+			return replicatedService(id), nil
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	for body, want := range map[string]int{
+		`{"image":" nginx:latest\n"}`: http.StatusOK,
+		`{"image":"   "}`:             http.StatusBadRequest,
+	} {
+		req := httptest.NewRequest("PUT", "/services/svc1/image", strings.NewReader(body))
+		req.SetPathValue("id", "svc1")
+		w := httptest.NewRecorder()
+		h.HandleUpdateServiceImage(w, req)
+
+		if w.Code != want {
+			t.Errorf("%s: status=%d, want %d", body, w.Code, want)
+		}
+	}
+
+	if sent != "nginx:latest" {
+		t.Errorf("image sent = %q, want it trimmed", sent)
+	}
+}
+
 func serviceWithPreviousSpec(id string) swarm.Service {
 	spec := swarm.ServiceSpec{}
 	svc := replicatedService(id)

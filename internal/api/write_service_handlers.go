@@ -97,6 +97,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
+	req.Image = cluster.ServiceImage(req.Image)
 	if req.Image == "" {
 		writeErrorCode(w, r, "SVC006", "image is required")
 		return

@@ -473,7 +473,7 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	image = strings.TrimSpace(image)
+	image = cluster.ServiceImage(image)
 	if image == "" {
 		return "", fmt.Errorf("image must not be empty")
 	}
@@ -598,7 +598,7 @@ func (s *Server) removeResolvedHandler(
 // caller may not be allowed to see what is in the way. The log keeps it.
 func removalError(err error, resource, key string) error {
 	if !cluster.IsRemovalConflict(err, resource) {
-		return err
+		return engineFailure(err)
 	}
 
 	slog.Info("removal refused", "resource", resource, "id", key, "error", err)

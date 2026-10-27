@@ -102,10 +102,11 @@ func (s *Server) pinChecked(
 }
 
 // refused reports a write the engine turned away for being out of sequence as
-// the caller's version having gone stale. Any other error passes through.
+// the caller's version having gone stale. Any other error goes through
+// engineFailure.
 func (s *Server) refused(c condition, err error) error {
 	if !c.set || !docker.IsOutOfSequence(err) {
-		return err
+		return engineFailure(err)
 	}
 
 	if stale, ok := errors.AsType[*docker.StaleVersionError](err); ok {
