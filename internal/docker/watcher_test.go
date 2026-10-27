@@ -590,7 +590,7 @@ func TestWatchEvents_ProcessesMessages(t *testing.T) {
 		mc.errCh <- fmt.Errorf("stream ended")
 	}()
 
-	w.watchEvents(ctx, time.Time{})
+	w.watchEvents(ctx, time.Time{}, true)
 	cancel()
 
 	if _, ok := c.GetNode("n1"); !ok {
@@ -607,7 +607,7 @@ func TestWatchEvents_StopsOnContextCancel(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 		close(done)
 	}()
 
@@ -653,40 +653,63 @@ func TestRun_SignalsReady(t *testing.T) {
 }
 
 // A manager started before its swarm elects a leader refuses every swarm list
-// while its event stream stays up, so no reconnect follows; the periodic sync
-// that succeeds once a leader exists has to be the one that reports ready.
-func TestRun_PeriodicSyncSignalsReadyAfterFailedStartup(t *testing.T) {
-	mc := newMockClient()
-	for _, name := range swarmResources {
-		mc.listErrors[name] = errors.New("the swarm does not have a leader")
-	}
+// while its event stream stays up, so no reconnect follows. The sync is retried
+// on a short backoff, so the instance is ready within seconds of a leader
+// existing rather than at the next periodic sync.
+func TestRun_RetriesAFailedStartupSync(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		for _, name := range swarmResources {
+			mc.listErrors[name] = errors.New("the swarm does not have a leader")
+		}
 
-	w := NewWatcher(mc, cache.New(nil), "")
-	w.syncInterval = 5 * time.Millisecond
+		w := NewWatcher(mc, cache.New(nil), "")
 
-	go w.Run(t.Context())
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.Run(ctx)
+		}()
 
-	for mc.fullSyncs.Load() == 0 {
-		time.Sleep(time.Millisecond)
-	}
-	select {
-	case <-w.Ready():
-		t.Fatal("ready before any swarm resource could be listed")
-	default:
-	}
+		// Long enough for several retries, each failing.
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got < 3 {
+			t.Errorf("FullSync ran %d times in five seconds after failing, want retries", got)
+		}
+		select {
+		case <-w.Ready():
+			t.Fatal("ready before any swarm resource could be listed")
+		default:
+		}
 
-	mc.mu.Lock()
-	clear(mc.listErrors)
-	mc.mu.Unlock()
+		mc.mu.Lock()
+		clear(mc.listErrors)
+		mc.mu.Unlock()
 
-	select {
-	case <-w.Ready():
-	case <-time.After(2 * time.Second):
-		t.Fatal("a successful periodic sync did not signal ready")
-	}
-	if connected, _ := w.Liveness(); !connected {
-		t.Fatal("ready while the watcher reports the cluster as untracked")
-	}
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		select {
+		case <-w.Ready():
+		default:
+			t.Fatal("a failed startup sync was not retried within the backoff")
+		}
+		if connected, _ := w.Liveness(); !connected {
+			t.Error("ready while the watcher reports the cluster as untracked")
+		}
+
+		// Retries stop once one succeeds.
+		calls := mc.fullSyncs.Load()
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		if got := mc.fullSyncs.Load(); got != calls {
+			t.Errorf("FullSync ran %d more times after a success", got-calls)
+		}
+
+		cancel()
+		<-done
+	})
 }
 
 // A manual resync is not the watcher's own: it may run while the stream is
@@ -890,7 +913,7 @@ func TestCoalescedCreateKeepsItsRetry(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			w.watchEvents(ctx, time.Time{})
+			w.watchEvents(ctx, time.Time{}, true)
 		}()
 
 		time.Sleep(time.Second)
@@ -1285,7 +1308,7 @@ func TestLivenessDropsWhenTheStreamEnds(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	w.watchEvents(ctx, time.Time{})
+	w.watchEvents(ctx, time.Time{}, true)
 
 	if connected, _ := w.Liveness(); connected {
 		t.Error("still connected after the event stream ended")
@@ -1454,7 +1477,7 @@ func TestPeriodicSyncSkipsWhenAResyncIsRunning(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		w.watchEvents(ctx, time.Time{})
+		w.watchEvents(ctx, time.Time{}, true)
 	}()
 
 	// Several ticks' worth of time while the resync still holds syncMu.

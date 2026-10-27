@@ -197,19 +197,19 @@ func (w *Watcher) Run(ctx context.Context) {
 	}()
 
 	since := eventsSince()
-	if err := w.fullSync(ctx); err == nil {
+	synced := w.fullSync(ctx) == nil
+	if synced {
 		w.writeSnapshot()
 	}
 
 	// Event stream with reconnect and exponential backoff.
 	backoff := 1 * time.Second
-	const maxBackoff = 30 * time.Second
 
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		w.watchEvents(ctx, since)
+		w.watchEvents(ctx, since, synced)
 		slog.Warn("event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
@@ -218,7 +218,8 @@ func (w *Watcher) Run(ctx context.Context) {
 		}
 		slog.Info("re-syncing after reconnect")
 		since = eventsSince()
-		if err := w.fullSync(ctx); err == nil {
+		synced = w.fullSync(ctx) == nil
+		if synced {
 			w.writeSnapshot()
 			backoff = 1 * time.Second // Reset on success.
 		} else {
@@ -383,6 +384,9 @@ const (
 
 	// eventReplayMargin is how far before a sync its event stream starts.
 	eventReplayMargin = 5 * time.Second
+
+	// maxBackoff caps the wait between reconnects, and between sync retries.
+	maxBackoff = 30 * time.Second
 )
 
 // eventKey identifies a unique resource for coalescing.
@@ -418,7 +422,7 @@ func isContainerDeath(action events.Action) bool {
 	}
 }
 
-func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
+func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool) {
 	msgCh, errCh := w.client.Events(ctx, since)
 
 	w.loopRunning.Store(true)
@@ -458,6 +462,48 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			pending = make(map[eventKey]coalesced)
 			w.processBatch(ctx, batch)
 		}
+	}
+
+	// loopSync re-reads the cluster from the loop and reports whether it did.
+	loopSync := func(kind string) bool {
+		flushPending()
+
+		// TryLock, not sync: a Resync that started before this loop did
+		// (it holds syncMu too) refreshes everything this one would, and
+		// waiting for it here would stall event processing behind it.
+		if !w.syncMu.TryLock() {
+			slog.Info(kind + " full re-sync skipped: a sync is already running")
+			return false
+		}
+
+		slog.Info(kind + " full re-sync")
+
+		// Beside a live stream a failure is not a disconnection, but a
+		// success is the stream's verdict restored. lastSync stopping is
+		// what reports a cache gone stale.
+		err := w.syncLocked(ctx)
+		w.syncMu.Unlock()
+
+		if err != nil {
+			return false
+		}
+
+		w.markTracking()
+		w.writeSnapshot()
+
+		return true
+	}
+
+	// Until a sync succeeds beside this stream, one is retried on a backoff,
+	// rather than leaving the cache stale, and the instance unready, until
+	// the periodic tick.
+	var retry *time.Timer
+	var retryC <-chan time.Time
+	retryDelay := time.Second
+	if !synced {
+		retry = time.NewTimer(retryDelay)
+		defer retry.Stop()
+		retryC = retry.C
 	}
 
 	for {
@@ -537,28 +583,18 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 				slog.Debug("task poll failed", "error", err)
 			}
 		case <-syncTicker.C:
-			flushPending()
-
-			// TryLock, not sync: a Resync that started before this loop did
-			// (it holds syncMu too) refreshes everything this tick would, and
-			// waiting for it here would stall event processing behind it.
-			if !w.syncMu.TryLock() {
-				slog.Info("periodic full re-sync skipped: a sync is already running")
+			if loopSync("periodic") && retryC != nil {
+				retry.Stop()
+				retryC = nil
+			}
+		case <-retryC:
+			if loopSync("retried") {
+				retryC = nil
 				continue
 			}
 
-			slog.Info("periodic full re-sync")
-
-			// Beside a live stream a failure is not a disconnection, but a
-			// success is the stream's verdict restored. lastSync stopping is
-			// what reports a cache gone stale.
-			err := w.syncLocked(ctx)
-			w.syncMu.Unlock()
-
-			if err == nil {
-				w.markTracking()
-				w.writeSnapshot()
-			}
+			retryDelay = min(retryDelay*2, maxBackoff)
+			retry.Reset(retryDelay)
 		}
 	}
 }
