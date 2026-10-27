@@ -216,6 +216,11 @@ func StreamDockerLogs(r io.Reader, ch chan<- LogLine) error {
 	})
 }
 
+// IdleCancelAfter is how long a one-shot read waits after the last frame before
+// taking the stream as finished. Lines from a remote node arrive later than
+// local ones, so a shorter wait drops them without saying so.
+const IdleCancelAfter = 2 * time.Second
+
 // ParseDockerLogsWithIdleCancel is like ParseDockerLogs but cancels the
 // context (via cancelFn) if no new frames arrive within idleTimeout after
 // the first frame. This works around Docker's ServiceLogs not closing the

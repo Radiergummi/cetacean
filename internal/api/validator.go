@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/binary"
 	"hash/maphash"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -20,6 +22,7 @@ var validatorSeed = maphash.MakeSeed()
 // is not theirs. The inputs, and why each is one:
 //
 //   - the cache generation, which is what actually changes;
+//   - the flapping services, a state that lapses with time and no mutation;
 //   - the ACL fingerprint, because every list is filtered per identity and the
 //     policy behind it is reloaded at runtime;
 //   - the path and the raw query, which carry the route, the resource id and
@@ -43,6 +46,11 @@ func (h *Handlers) derivedETag(r *http.Request) string {
 	var num [8]byte
 	binary.LittleEndian.PutUint64(num[:], h.cache.Generation())
 	_, _ = hash.Write(num[:])
+
+	for _, id := range slices.Sorted(maps.Keys(h.cache.FlappingServices())) {
+		_, _ = hash.WriteString(id)
+		_, _ = hash.Write([]byte{0x1e})
+	}
 
 	// A service row carries what the image check last found, which changes
 	// with no cache mutation behind it.

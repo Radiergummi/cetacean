@@ -27,11 +27,14 @@ func (s *Server) toolGetTopology(
 		))
 
 	case cluster.TopologyViewPlacement:
+		services := s.filterServices(ctx, s.cache.ListServices())
+
 		return marshalResult(cluster.PlacementGraph(
 			s.filterNodes(ctx, s.cache.ListNodes()),
 			s.cache.ListTasks(),
-			s.filterServices(ctx, s.cache.ListServices()),
+			services,
 			s.cache.FlappingServices(),
+			s.cache.EligibleNodeCounts(services...),
 		))
 
 	case cluster.TopologyViewDrainImpact:

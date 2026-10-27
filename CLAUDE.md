@@ -16,7 +16,7 @@ cluster — every resource browsable, with working cross-references between them
 ## Commands
 
 ```bash
-make check        # lint + typecheck + fmt-check + test + spec — the gate
+make check        # lint + typecheck + fmt-check + test + test-frontend + spec — the gate
 make lint-docs    # Vale over the published docs, README, CONTRIBUTING, and CHANGELOG
 make build        # frontend + widgets + go build
 make fmt          # gofmt + oxfmt (write)
@@ -57,7 +57,8 @@ pnpm --filter website dev               # Astro on :4321
 pnpm --filter website check             # astro check, covers .astro as well as .ts
 ```
 
-Docker: `docker build -t cetacean:latest .`, then `docker stack deploy -c compose.yaml cetacean`.
+Docker: `docker build --build-arg SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) -t cetacean:latest .`
+(the argument makes the build date the commit's), then `docker stack deploy -c compose.yaml cetacean`.
 Add `-c compose.prometheus.yaml` to join the `monitoring` network from `compose.monitoring.yaml`.
 
 ## Configuration

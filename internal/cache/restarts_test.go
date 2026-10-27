@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,6 +34,8 @@ func TestRestartTracker_RecordAndCount(t *testing.T) {
 	}
 }
 
+// Count already ignores what lies past the horizon, so only the stored
+// buckets show whether it was dropped rather than kept forever.
 func TestRestartTracker_PruneBeyondHorizon(t *testing.T) {
 	rt := NewRestartTracker(24*time.Hour, time.Hour)
 	now := time.Now()
@@ -40,8 +43,8 @@ func TestRestartTracker_PruneBeyondHorizon(t *testing.T) {
 	rt.Record("svc1", now.Add(-48*time.Hour))
 	rt.Record("svc1", now)
 
-	if got := rt.Count("svc1", 7*24*time.Hour); got != 1 {
-		t.Errorf("pruned tracker: want 1 remaining, got %d", got)
+	if got := len(rt.Snapshot().Services["svc1"]); got != 1 {
+		t.Errorf("buckets held = %d, want 1: the one past the horizon was kept", got)
 	}
 }
 
@@ -88,15 +91,19 @@ func TestRestartTracker_SnapshotRoundTrip(t *testing.T) {
 }
 
 func TestRestartTracker_RestorePrunesStale(t *testing.T) {
-	src := NewRestartTracker(24*time.Hour, time.Hour)
-	src.Record("svc1", time.Now().Add(-48*time.Hour))
-	snap := src.Snapshot()
-
+	now := time.Now()
 	dst := NewRestartTracker(24*time.Hour, time.Hour)
-	dst.Restore(snap)
+	dst.Restore(RestartTrackerSnapshot{
+		Horizon: 24 * time.Hour,
+		Bucket:  time.Hour,
+		Services: map[string]map[int64]uint32{"svc1": {
+			dst.bucketKey(now.Add(-48 * time.Hour)): 1,
+			dst.bucketKey(now):                      1,
+		}},
+	})
 
-	if got := dst.Count("svc1", 24*time.Hour); got != 0 {
-		t.Errorf("stale entries should be pruned on restore, got %d", got)
+	if got := len(dst.Snapshot().Services["svc1"]); got != 1 {
+		t.Errorf("buckets held = %d, want 1: a stale one survived the restore", got)
 	}
 }
 
@@ -379,5 +386,55 @@ func TestRestartTrackerFlappingKeepsNewest(t *testing.T) {
 
 	if !rt.Flapping()["loop"] {
 		t.Error("a late, older failure pushed the recent ones out")
+	}
+}
+
+// Swarm keeps failed tasks for days, and the first sync replays them: those
+// are history the tracker did not see, not failures since it began. A loop
+// already running then must still read as flapping.
+func TestCacheFirstSyncBackfillsOnlyTheFlappingWindow(t *testing.T) {
+	c := New(nil)
+	now := time.Now()
+
+	tasks := []swarm.Task{failedTask("old", "old", now.Add(-72*time.Hour))}
+	for i := range flappingRestarts {
+		id := fmt.Sprintf("loop-%d", i)
+		tasks = append(tasks, failedTask(id, "loop", now.Add(-time.Duration(i+1)*5*time.Second)))
+	}
+	c.ReplaceAll(FullSyncData{HasTasks: true, Tasks: tasks})
+
+	if got := c.RestartCount("old", 7*24*time.Hour); got != 0 {
+		t.Errorf("a failure the first sync found counted: got %d", got)
+	}
+	if got := c.RestartCount("loop", time.Hour); got != 0 {
+		t.Errorf("failures the first sync found counted: got %d", got)
+	}
+	if !c.IsFlapping("loop") {
+		t.Error("a loop the first sync found is not flapping")
+	}
+}
+
+// A failure that appears in a later sync happened while the tracker watched,
+// whatever the manager's clock stamped on it.
+func TestCacheLaterSyncCountsAFailureStampedInThePast(t *testing.T) {
+	c := New(nil)
+	c.ReplaceAll(FullSyncData{HasTasks: true})
+
+	skewed := time.Now().Add(-10 * time.Minute)
+	c.ReplaceAll(FullSyncData{
+		HasTasks: true,
+		Tasks:    []swarm.Task{failedTask("t1", "svc1", skewed)},
+	})
+
+	if got := c.RestartCount("svc1", time.Hour); got != 1 {
+		t.Errorf("a new failure behind our clock was dropped: got %d", got)
+	}
+}
+
+func failedTask(id, serviceID string, at time.Time) swarm.Task {
+	return swarm.Task{
+		ID:        id,
+		ServiceID: serviceID,
+		Status:    swarm.TaskStatus{State: swarm.TaskStateFailed, Timestamp: at},
 	}
 }

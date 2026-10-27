@@ -49,20 +49,11 @@ var licenseTextID = func() string {
 // skipped with a log line, so the gap stays visible.
 func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 	specBytes, doc, specRouter := loadTestSpec(t)
-
-	c := cache.New(nil)
-	populateSpecFixtures(c)
-
-	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
-	defer b.Close()
-
-	router := newTestRouter(t, h, b, specBytes)
+	router, requests := newSpecWalkRouter(t, specBytes)
 
 	var (
 		validated  int
 		unresolved int
-		nonSuccess int
 	)
 
 	for pathTemplate, pathItem := range doc.Paths.Map() {
@@ -74,7 +65,11 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 			continue
 		}
 
-		requestPath, ok := resolvePath(pathTemplate)
+		requestPath, ok := requests[pathTemplate]
+		if !ok {
+			requestPath, ok = resolvePath(pathTemplate)
+		}
+
 		if !ok {
 			t.Logf("skipping %s: no fixture for path parameters", pathTemplate)
 			unresolved++
@@ -101,17 +96,15 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 				t.Fatalf("read response body: %v", readErr)
 			}
 
-			// Only validate 2xx responses. 4xx/5xx are acceptable (endpoint
-			// might require prerequisites we can't easily set up), and the
-			// spec's error schemas are already covered by specific tests.
+			// A non-2xx means the fixture never reached the handler, so its
+			// success schema would go unchecked; newSpecWalkRouter must seed it.
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				t.Logf(
-					"status=%d (accepted, spec not validated): %s",
+				t.Fatalf(
+					"status=%d — the fixture cannot reach this handler; extend "+
+						"newSpecWalkRouter: %s",
 					resp.StatusCode,
 					strings.TrimSpace(string(bodyBytes)),
 				)
-				nonSuccess++
-				return
 			}
 
 			route, pathParams, err := specRouter.FindRoute(req)
@@ -146,10 +139,7 @@ func TestEveryReadEndpointMatchesSpec(t *testing.T) {
 		})
 	}
 
-	t.Logf(
-		"validated=%d non-2xx=%d unresolved-params=%d",
-		validated, nonSuccess, unresolved,
-	)
+	t.Logf("validated=%d unresolved-params=%d", validated, unresolved)
 }
 
 // kin-openapi has no decoder for the descriptions' own media types, and would
@@ -223,11 +213,6 @@ func skipEndpoint(path string) bool {
 
 	// Auth flow endpoints return redirects.
 	if strings.HasPrefix(path, "/auth/login") || strings.HasPrefix(path, "/auth/callback") {
-		return true
-	}
-
-	// Plugin endpoints hit a Docker client that isn't stubbed here.
-	if strings.HasPrefix(path, "/plugins") {
 		return true
 	}
 

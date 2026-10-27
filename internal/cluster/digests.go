@@ -178,7 +178,12 @@ var stackStateRank = map[string]int{
 // so State and Reason derive from its members by the rule RowsForServices
 // applies, or a stack and its own services list could disagree. Related spans
 // all five member types, since a stack's membership crosses that many.
-func StackDigest(stack cache.StackDetail, tasks []swarm.Task, flapping map[string]bool) Digest {
+func StackDigest(
+	stack cache.StackDetail,
+	tasks []swarm.Task,
+	flapping map[string]bool,
+	eligible map[string]int,
+) Digest {
 	// The same replica rule cache.RunningTaskCounts applies, so a stack's
 	// per-service counts and the service rows inside it cannot disagree: a
 	// task draining out of a rolling update reads Status.State: running for
@@ -215,8 +220,14 @@ func StackDigest(stack cache.StackDetail, tasks []swarm.Task, flapping map[strin
 
 	for _, svc := range stack.Services {
 		members = append(members, member{
-			svc:   svc,
-			state: DeriveServiceState(svc, running[svc.ID], completed[svc.ID], flapping[svc.ID]),
+			svc: svc,
+			state: DeriveServiceState(
+				svc,
+				running[svc.ID],
+				completed[svc.ID],
+				eligible[svc.ID],
+				flapping[svc.ID],
+			),
 		})
 		desiredTotal += ReplicaCount(svc)
 		runningTotal += running[svc.ID]

@@ -1,15 +1,22 @@
 package api
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
+	"github.com/docker/docker/errdefs"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
@@ -19,6 +26,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
+	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
 // Cached spec artifacts — parsing and validation cost dozens of ms so we only
@@ -218,4 +227,81 @@ func populateSpecFixtures(c *cache.Cache) {
 	c.SetNetwork(network.Summary{ID: "net1", Name: "net"})
 
 	c.SetVolume(volume.Volume{Name: "vol1", Driver: "local"})
+}
+
+// newSpecWalkRouter is the router both GET walks drive: the specFixtureIDs cache
+// plus stub Docker, Prometheus and secret-entry backends, so every endpoint
+// answering from one of those reaches its handler. The map gives the concrete
+// request for templates resolvePath cannot write down.
+func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string]string) {
+	t.Helper()
+
+	c := cache.New(nil)
+	populateSpecFixtures(c)
+
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if strings.HasSuffix(r.URL.Path, "/query_range") {
+			_, _ = io.WriteString(w, `{"status":"success","data":{"resultType":"matrix",`+
+				`"result":[{"metric":{},"values":[[1,"1"],[2,"1"]]}]}}`)
+			return
+		}
+
+		_, _ = io.WriteString(w, `{"status":"success","data":{"resultType":"vector",`+
+			`"result":[{"metric":{},"value":[1,"1"]}]}}`)
+	}))
+	t.Cleanup(prom.Close)
+
+	plugin := types.Plugin{
+		ID:      "plugin-id",
+		Name:    specFixtureIDs["/plugins/{name}"],
+		Enabled: true,
+		Config:  types.PluginConfig{Interface: types.PluginConfigInterface{Socket: "p.sock"}},
+	}
+	plugins := &mockPluginClient{
+		pluginListFn: func(context.Context) (types.PluginsListResponse, error) {
+			return types.PluginsListResponse{&plugin}, nil
+		},
+		pluginInspectFn: func(_ context.Context, name string) (*types.Plugin, error) {
+			if name != plugin.Name {
+				return nil, errdefs.NotFound(fmt.Errorf("plugin %s not found", name))
+			}
+			return &plugin, nil
+		},
+	}
+
+	system := &mockSystemClient{
+		swarmInspectFn: func(context.Context) (swarm.Swarm, error) { return validSwarm(), nil },
+		diskUsageFn: func(context.Context) (types.DiskUsage, error) {
+			return types.DiskUsage{LayersSize: 1 << 20}, nil
+		},
+		getUnlockKeyFn: func(context.Context) (string, error) { return "SWMKEY-1-test", nil },
+	}
+
+	h := newTestHandlers(t, withCache(c), withPromClient(promapi.NewClient(prom.URL)),
+		withPluginClient(plugins), withSystemClient(system))
+
+	// Seeded, so /-/docker-latest-version answers without calling GitHub.
+	h.dockerVersionCache.version = &DockerLatestVersion{
+		Version: "28.0.0",
+		URL:     "https://github.com/moby/moby/releases/tag/v28.0.0",
+	}
+	h.dockerVersionCache.fetchedAt = time.Now()
+
+	entries := cluster.NewSecretEntries()
+	h.SetSecretEntries(entries)
+
+	entry, err := entries.Open("anonymous", "db_password", nil, "utf8")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	t.Cleanup(b.Close)
+
+	return newTestRouter(t, h, b, specBytes), map[string]string{
+		"/secret-entries/{id}": "/secret-entries/" + entry.ID,
+		"/search":              "/search?q=web",
+	}
 }

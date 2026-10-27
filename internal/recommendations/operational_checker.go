@@ -118,20 +118,15 @@ func (oc *OperationalChecker) flakyServiceRecs() []Recommendation {
 	return recs
 }
 
-// formatCountedWindow renders the window a failure count actually covers.
-// formatPromDuration truncates to whole hours, which is right for a PromQL
-// range and wrong in prose: the tracker starts with the process, so the first
-// hour after a restart renders as "over the past 0h".
+// formatCountedWindow renders the window a failure count actually covers, in
+// whole hours, or minutes under an hour, and never as zero: a restored
+// snapshot dates the tracker from an hour-truncated bucket.
 func formatCountedWindow(d time.Duration) string {
 	if d < time.Hour {
-		// A restored snapshot dates the tracker from the oldest bucket it
-		// brought back, and buckets are truncated to the hour, so the window
-		// can be seconds old. Report the minute it rounds into rather than a
-		// zero that reads as "no observation at all".
-		return fmt.Sprintf("%dm", max(int(d.Minutes()), 1))
+		return formatPromDuration(max(d.Truncate(time.Minute), time.Minute))
 	}
 
-	return formatPromDuration(d)
+	return formatPromDuration(d.Truncate(time.Hour))
 }
 
 func (oc *OperationalChecker) nodeRecs(

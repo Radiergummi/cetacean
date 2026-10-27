@@ -88,6 +88,7 @@ func Search(
 							s,
 							c.RunningTaskCount(s.ID),
 							c.CompletedJobTaskCount(s.ID),
+							c.EligibleNodeCounts(s)[s.ID],
 							flapping[s.ID],
 						),
 					}
