@@ -31,6 +31,7 @@ import {
 import { DeployConfigSection } from "../components/service-detail/DeployConfigSection";
 import { IntegrationPanels } from "../components/service-detail/IntegrationPanels";
 import { ServiceStatusCard } from "../components/service-detail/ServiceStatusCard";
+import ServiceLinks from "../components/ServiceLinks";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
 import { useEditVersion } from "../hooks/useEditVersion";
@@ -83,12 +84,15 @@ export default function ServiceDetail() {
           stack: labels?.[stackNamespaceLabel],
         })}
         actions={
-          <ServiceActions
-            service={service}
-            serviceId={id!}
-            allowedMethods={detail.allowedMethods}
-            editable={detail.editable}
-          />
+          <>
+            <ServiceLinks links={detail.links} />
+            <ServiceActions
+              service={service}
+              serviceId={id!}
+              allowedMethods={detail.allowedMethods}
+              editable={detail.editable}
+            />
+          </>
         }
       />
 

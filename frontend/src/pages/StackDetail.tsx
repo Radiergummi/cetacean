@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { StackDetail as StackDetailType, Task } from "../api/types";
+import type { StackResponse, Task } from "../api/types";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import FetchError from "../components/FetchError";
@@ -8,6 +8,7 @@ import { TaskHealth } from "../components/HealthIndicator";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
+import ServiceLinks from "../components/ServiceLinks";
 import SimpleTable from "../components/SimpleTable";
 import { StackActions } from "../components/stack-detail/StackActions";
 import { useDetailResource } from "../hooks/useDetailResource";
@@ -38,13 +39,14 @@ export default function StackDetail() {
   const extraQueryKeys = useMemo(() => [composeQueryKey(`stack:${name}`)] as const, [name]);
 
   const {
-    data: stack,
+    data: response,
     error,
     allowedMethods,
-  } = useDetailResource<StackDetailType>(name, api.stack, "/stacks", {
+  } = useDetailResource<StackResponse>(name, api.stack, "/stacks", {
     history: false,
     extraQueryKeys,
   });
+  const stack = response?.stack;
 
   const [taskCounts, setTaskCounts] = useState<Record<string, TaskCount>>({});
 
@@ -131,16 +133,19 @@ export default function StackDetail() {
         subtitle={subtitle}
         breadcrumbs={[{ label: "Stacks", to: "/stacks" }, { label: stack.name }]}
         actions={
-          <StackActions
-            stackName={stack.name}
-            allowedMethods={allowedMethods}
-            resourceCounts={{
-              services: stack.services?.length ?? 0,
-              networks: stack.networks?.length ?? 0,
-              configs: stack.configs?.length ?? 0,
-              secrets: stack.secrets?.length ?? 0,
-            }}
-          />
+          <>
+            <ServiceLinks links={response?.links ?? []} />
+            <StackActions
+              stackName={stack.name}
+              allowedMethods={allowedMethods}
+              resourceCounts={{
+                services: stack.services?.length ?? 0,
+                networks: stack.networks?.length ?? 0,
+                configs: stack.configs?.length ?? 0,
+                secrets: stack.secrets?.length ?? 0,
+              }}
+            />
+          </>
         }
       />
 

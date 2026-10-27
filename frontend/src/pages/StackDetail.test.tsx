@@ -46,7 +46,7 @@ const stack = {
 beforeEach(() => {
   subscriber = undefined;
   vi.mocked(api.stack).mockResolvedValue({
-    data: stack,
+    data: { stack },
     allowedMethods: new Set<string>(),
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
