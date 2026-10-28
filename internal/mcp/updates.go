@@ -11,10 +11,11 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // The section names the spec-editing tools report, and the keys of the
-// cluster.ServiceDetails / NodeDigest projection each covers. Answering from
+// projection.ServiceDetails / NodeDigest projection each covers. Answering from
 // the same projection describe builds keeps an edit and a description in step,
 // and keeps values out: it reports environment and log-driver option *names*.
 const (
@@ -35,7 +36,7 @@ const (
 	sectionRole           = "role"
 )
 
-// serviceSectionKeys maps a section to the cluster.ServiceDetails keys that
+// serviceSectionKeys maps a section to the projection.ServiceDetails keys that
 // answer it. A key absent from the projection — an unset resource limit, a
 // service with no ports — is simply absent from the result, which is the same
 // thing describe reports and is how "there is nothing set here" is said.
@@ -341,7 +342,7 @@ func serviceUpdate(section string, svc swarm.Service) serviceUpdateResult {
 		Name:    svc.Spec.Name,
 		Version: svc.Version.Index,
 		Section: section,
-		Details: selectKeys(cluster.ServiceDetails(svc), serviceSectionKeys[section]),
+		Details: selectKeys(projection.ServiceDetails(svc), serviceSectionKeys[section]),
 	}
 }
 
@@ -349,7 +350,7 @@ func serviceUpdate(section string, svc swarm.Service) serviceUpdateResult {
 // digest projection rather than off the spec directly, for the same reason
 // serviceUpdate does: one description of a node, not two.
 func nodeUpdate(section string, node swarm.Node) nodeUpdateResult {
-	details := cluster.NodeDigest(node, nil, nil).Details
+	details := projection.NodeDigest(node, nil, nil).Details
 
 	return nodeUpdateResult{
 		ID:           node.ID,

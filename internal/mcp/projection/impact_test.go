@@ -1,4 +1,4 @@
-package cluster
+package projection
 
 import (
 	"strings"
@@ -7,6 +7,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func TestReferenceRemovalImpact_CountsWhatItCannotName(t *testing.T) {
@@ -179,12 +180,12 @@ func TestRoleImpact(t *testing.T) {
 }
 
 func TestDrainImpact_SummarisesTheGraph(t *testing.T) {
-	graph := TopologyGraph{
-		Nodes: []TopologyNode{
+	graph := cluster.TopologyGraph{
+		Nodes: []cluster.TopologyNode{
 			{ID: "n2", Label: "worker-2", Type: "node"},
-			{ID: "s1", Label: "web", Type: "service", State: drainStateMovable},
-			{ID: "s2", Label: "agent", Type: "service", State: drainStateGlobal},
-			{ID: "s3", Label: "db", Type: "service", State: drainStateStranded},
+			{ID: "s1", Label: "web", Type: "service", State: cluster.DrainStateMovable},
+			{ID: "s2", Label: "agent", Type: "service", State: cluster.DrainStateGlobal},
+			{ID: "s3", Label: "db", Type: "service", State: cluster.DrainStateStranded},
 		},
 		Note: "assessed against the 2 node(s) you can read",
 	}

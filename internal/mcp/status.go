@@ -5,7 +5,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // toolGetClusterStatus is the landing call. It reads through the same
@@ -27,7 +27,7 @@ func (s *Server) toolGetClusterStatus(
 	// RunningTaskCounts call, which would walk the whole task table again.
 	snap := s.cache.Snapshot()
 
-	return marshalResult(cluster.BuildClusterStatus(
+	return marshalResult(projection.BuildClusterStatus(
 		snap,
 		services,
 		nodes,

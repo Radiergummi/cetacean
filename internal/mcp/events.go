@@ -9,6 +9,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // maxEventLimit bounds one read. The ring holds 10,000 entries; handing all of
@@ -20,8 +21,8 @@ const (
 
 // eventsResult is what get_events answers with.
 type eventsResult struct {
-	Entries []cluster.TimelineEntry `json:"entries"`
-	Total   int                     `json:"total"`
+	Entries []projection.TimelineEntry `json:"entries"`
+	Total   int                        `json:"total"`
 
 	// Truncated says the window held more than Limit, so a caller narrowing
 	// by time knows it is looking at a page rather than the whole answer.
@@ -101,11 +102,11 @@ func (s *Server) toolGetEvents(
 
 	matched = cluster.NameHistoryTasks(s.cache, matched, s.readPredicate(ctx))
 
-	timeline := make([]cluster.TimelineEntry, 0, len(matched))
+	timeline := make([]projection.TimelineEntry, 0, len(matched))
 
 	for _, e := range matched {
-		timeline = append(timeline, cluster.TimelineEntry{
-			At:         cluster.TimelineTime(e.Timestamp),
+		timeline = append(timeline, projection.TimelineEntry{
+			At:         projection.TimelineTime(e.Timestamp),
 			Kind:       "change",
 			Type:       string(e.Type),
 			Name:       e.Name,
@@ -115,7 +116,7 @@ func (s *Server) toolGetEvents(
 		})
 	}
 
-	cluster.SortTimeline(timeline)
+	projection.SortTimeline(timeline)
 
 	result := eventsResult{
 		Entries:   timeline,

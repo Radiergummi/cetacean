@@ -4,6 +4,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // readTools returns the tier 0 tools: parameterized reads, ungated by operations
@@ -357,7 +358,7 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithDescription(
 					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state or restarting in a loop, the nodes that are down or draining, the rollouts in flight, how much CPU and memory is reserved against what the cluster has, and the manager quorum: how many managers are reachable and how many more failures it survives. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
 				),
-				mcplib.WithOutputSchema[cluster.ClusterStatus](),
+				mcplib.WithOutputSchema[projection.ClusterStatus](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),

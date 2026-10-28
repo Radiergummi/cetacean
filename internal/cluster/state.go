@@ -43,7 +43,7 @@ func ServiceConverged(svc swarm.Service, runningCount, completedCount int) (bool
 
 	// A job has nothing to keep running: it converges once its run completes.
 	if cache.IsJobService(svc) {
-		if jobState(svc, runningCount, completedCount) == stateCompleted {
+		if jobState(svc, runningCount, completedCount) == StateCompleted {
 			return true, fmt.Sprintf("converged: job completed (%d tasks)", completedCount)
 		}
 
@@ -67,8 +67,8 @@ func ServiceConverged(svc swarm.Service, runningCount, completedCount int) (bool
 	return false, fmt.Sprintf("waiting: %d/%d replicas running", runningCount, desired)
 }
 
-// stateCompleted is a job whose current run has finished; no other mode has it.
-const stateCompleted = "completed"
+// StateCompleted is a job whose current run has finished; no other mode has it.
+const StateCompleted = "completed"
 
 // Eligible is how many nodes a global service could run on, and whether that
 // is known at all: zero known nodes means nowhere to run, an unknown count not.
@@ -141,7 +141,7 @@ func jobState(svc swarm.Service, runningCount, completedCount int) string {
 	case runningCount > 0:
 		return "running"
 	case completedCount >= jobTarget(svc):
-		return stateCompleted
+		return StateCompleted
 	default:
 		return "failed"
 	}
@@ -185,11 +185,11 @@ func jobTotalCompletions(svc swarm.Service) int {
 	return 1
 }
 
-// deriveNodeState reports a node's practical condition, and is what both
+// DeriveNodeState reports a node's practical condition, and is what both
 // RowsForNodes and NodeDigest call. Status.State is Swarm's read on whether the
 // node is reachable, Spec.Availability the operator's decision about scheduling
 // there. Unreachable is worse, so Availability only answers once it is "ready".
-func deriveNodeState(node swarm.Node) string {
+func DeriveNodeState(node swarm.Node) string {
 	if node.Status.State != swarm.NodeStateReady {
 		return string(node.Status.State)
 	}
@@ -199,4 +199,33 @@ func deriveNodeState(node swarm.Node) string {
 	}
 
 	return string(swarm.NodeStateReady)
+}
+
+// CountServiceStates splits services by DeriveServiceState: running, and a job
+// whose run completed, are converged; failed, pending and flapping are the
+// degraded BuildClusterStatus names. A service mid-update is in neither.
+// eligible must be cache.EligibleNodeCounts of these same services.
+func CountServiceStates(
+	snap cache.ClusterSnapshot,
+	services []swarm.Service,
+	eligible map[string]int,
+) (converged, degraded int) {
+	for _, svc := range services {
+		state := DeriveServiceState(
+			svc,
+			snap.RunningByService[svc.ID],
+			snap.CompletedJobsByService[svc.ID],
+			EligibleIn(eligible, svc.ID),
+			snap.Flapping[svc.ID],
+		)
+
+		switch state {
+		case "running", StateCompleted:
+			converged++
+		case "failed", "pending", "flapping":
+			degraded++
+		}
+	}
+
+	return converged, degraded
 }

@@ -222,7 +222,7 @@ func PlacementGraph(
 			Label:  n.Description.Hostname,
 			Type:   "node",
 			Detail: string(n.Spec.Role),
-			State:  deriveNodeState(n),
+			State:  DeriveNodeState(n),
 		})
 	}
 

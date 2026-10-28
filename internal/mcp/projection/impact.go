@@ -1,4 +1,4 @@
-package cluster
+package projection
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
@@ -178,7 +179,7 @@ func ReferenceRemovalImpact(
 
 // DrainImpact describes draining node from graph, its DrainImpactGraph over
 // what the caller may read; hidden counts the services on the node they may not.
-func DrainImpact(node swarm.Node, graph TopologyGraph, hidden int) Impact {
+func DrainImpact(node swarm.Node, graph cluster.TopologyGraph, hidden int) Impact {
 	var movable, global, stranded []string
 
 	for _, vertex := range graph.Nodes {
@@ -187,11 +188,11 @@ func DrainImpact(node swarm.Node, graph TopologyGraph, hidden int) Impact {
 		}
 
 		switch vertex.State {
-		case drainStateMovable:
+		case cluster.DrainStateMovable:
 			movable = append(movable, vertex.Label)
-		case drainStateGlobal:
+		case cluster.DrainStateGlobal:
 			global = append(global, vertex.Label)
-		case drainStateStranded:
+		case cluster.DrainStateStranded:
 			stranded = append(stranded, vertex.Label)
 		}
 	}
@@ -201,7 +202,7 @@ func DrainImpact(node swarm.Node, graph TopologyGraph, hidden int) Impact {
 	}
 
 	impact := Impact{
-		Summary:          fmt.Sprintf("Drain node %s.", NodeACLName(node)),
+		Summary:          fmt.Sprintf("Drain node %s.", cluster.NodeACLName(node)),
 		Relation:         "Runs tasks of",
 		Dependents:       slices.Concat(movable, global, stranded),
 		HiddenDependents: hidden,
@@ -239,7 +240,7 @@ func DrainImpact(node swarm.Node, graph TopologyGraph, hidden int) Impact {
 // AvailabilityImpact describes setting node to pause or active. Drain has
 // DrainImpact, since only it moves work.
 func AvailabilityImpact(node swarm.Node, availability swarm.NodeAvailability) Impact {
-	name := NodeACLName(node)
+	name := cluster.NodeACLName(node)
 
 	if availability == swarm.NodeAvailabilityPause {
 		return Impact{
@@ -257,7 +258,7 @@ func AvailabilityImpact(node swarm.Node, availability swarm.NodeAvailability) Im
 // RoleImpact describes changing node's role, with the manager count and the
 // quorum before and after counted over every node in the cluster.
 func RoleImpact(node swarm.Node, nodes []swarm.Node, role swarm.NodeRole) Impact {
-	name := NodeACLName(node)
+	name := cluster.NodeACLName(node)
 
 	if node.Spec.Role == role {
 		return Impact{Summary: fmt.Sprintf("Node %s is already a %s; nothing changes.", name, role)}

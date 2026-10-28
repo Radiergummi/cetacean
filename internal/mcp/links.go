@@ -4,6 +4,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // maxResourceLinks bounds how many resource_link items one result carries.
@@ -64,7 +65,7 @@ func resourceLinksForRows(rows []cluster.Row) []mcplib.ResourceLink {
 // cross-references, which turns the names in a digest into somewhere the client
 // can go. Related is already bounded by the resource's shape and filtered to
 // what the caller may read, so the same bound applies here for free.
-func resourceLinksForDigest(digest cluster.Digest) []mcplib.ResourceLink {
+func resourceLinksForDigest(digest projection.Digest) []mcplib.ResourceLink {
 	links := make([]mcplib.ResourceLink, 0, 1+len(digest.Related))
 
 	if link, ok := resourceLinkFor(digest.Type, digest.ID, digest.Name, digest.State); ok {

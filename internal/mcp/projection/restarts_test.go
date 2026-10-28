@@ -1,14 +1,16 @@
-package cluster
+package projection
 
 import (
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // Pins what the live evaluation found missing: a service whose command exits
 // every few seconds described as "running" with a single recent failure, because
-// DeriveServiceState reports running whenever a replica is up and ServiceDigest
+// cluster.DeriveServiceState reports running whenever a replica is up and ServiceDigest
 // drops tasks the orchestrator has replaced. Together they hide a restart loop.
 func TestServiceDigestReportsRestartCounts(t *testing.T) {
 	svc := swarm.Service{
@@ -27,7 +29,7 @@ func TestServiceDigestReportsRestartCounts(t *testing.T) {
 		nil,
 		&ServiceRestarts{LastHour: 12, LastWeek: 840},
 		false,
-		Eligible{},
+		cluster.Eligible{},
 		nil,
 	)
 
@@ -51,7 +53,7 @@ func TestServiceDigestOmitsRestartsWhenUnknown(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 
-	got := ServiceDigest(svc, nil, nil, nil, false, Eligible{}, nil)
+	got := ServiceDigest(svc, nil, nil, nil, false, cluster.Eligible{}, nil)
 
 	if got.Restarts != nil {
 		t.Errorf("Restarts = %+v, want nil when no tracker was consulted", got.Restarts)
@@ -73,7 +75,7 @@ func TestServiceRestartsSeparatesRecentFromChronic(t *testing.T) {
 		nil,
 		&ServiceRestarts{LastHour: 20, LastWeek: 20},
 		false,
-		Eligible{},
+		cluster.Eligible{},
 		nil,
 	)
 	longBroken := ServiceDigest(
@@ -82,7 +84,7 @@ func TestServiceRestartsSeparatesRecentFromChronic(t *testing.T) {
 		nil,
 		&ServiceRestarts{LastHour: 20, LastWeek: 900},
 		false,
-		Eligible{},
+		cluster.Eligible{},
 		nil,
 	)
 
@@ -117,7 +119,7 @@ func TestServiceDigestExplainsAFlappingService(t *testing.T) {
 		},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil, true, Eligible{}, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, true, cluster.Eligible{}, nil)
 
 	if got.State != "flapping" {
 		t.Errorf("State = %q, want flapping", got.State)

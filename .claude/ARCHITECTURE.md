@@ -32,6 +32,7 @@ liability — it is the only part of the previous version of this file that rott
 | `compose/` | Live specs rendered back as a compose document that redeploys to the same state, not byte-identical to the original |
 | `imagecheck/` | Asks registries which digest a tag names now, so a stale deploy is told apart from a current one |
 | `mcp/` | The embedded MCP server: tools, resources, prompts, widgets, tracing |
+| `mcp/projection/` | What MCP renders that REST does not: resource digests, the impact text a confirmation asks with, cluster status, the timeline |
 | `prometheus/`, `prom/` | Query client and proxy; `prom/` is the three result types alone |
 | `recommendations/` | The checkers and the engine that schedules them |
 | `filter/`, `integrations/`, `metrics/`, `version/` | expr-lang filtering, third-party label detection, our own instrumentation, build stamps |
@@ -52,10 +53,10 @@ liability — it is the only part of the previous version of this file that rott
 ## Boundaries
 
 - A rule both transports must apply lives in `cluster/`. A projection only one of
-  them renders does not — most of `cluster/` is MCP's alone and is there because
-  MCP wants it below its transport, not because REST calls it. Putting a
-  one-sided projection there invites the next reader to assume a sharing that
-  does not exist, which is how the topology builders drifted.
+  them renders does not: MCP's digests, impacts, status and timeline live in
+  `mcp/projection/`. Putting a one-sided projection in `cluster/` invites the next
+  reader to assume a sharing that does not exist, which is how the topology
+  builders drifted.
 - A refused write is classified once, by `cluster.ClassifyWrite`, which also
   decides what of the engine's text a caller sees. A transport maps the
   `WriteError` it returns and never renders the engine's error itself.
