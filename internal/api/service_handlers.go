@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -36,6 +37,11 @@ func (h *Handlers) lookupServiceACL(
 type ServiceListItem struct {
 	swarm.Service
 	RunningTasks int `json:"RunningTasks"`
+	DesiredTasks int `json:"DesiredTasks"`
+
+	// A job's current run alone; absent for any other mode.
+	CompletedTasks *int `json:"CompletedTasks,omitempty"`
+	FailedTasks    *int `json:"FailedTasks,omitempty"`
 
 	ImageUpdate *cluster.ImageUpdate `json:"ImageUpdate,omitempty"`
 }
@@ -54,7 +60,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// The running counts come from the same cache, so the derived validator
+	// The task and node counts come from the same cache, so the derived validator
 	// covers them; see handleList.
 	validator := h.derivedETag(r)
 	if listNotModified(h, w, r, spec, validator) {
@@ -97,12 +103,22 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		"Service",
 		func(s ServiceListItem) string { return "/services/" + s.ID },
 		func(page []swarm.Service) []ServiceListItem {
+			tallies := h.cache.TaskTallies(page...)
+			eligible := h.cache.EligibleNodeCounts(page...)
+
 			items := make([]ServiceListItem, len(page))
 			for i, svc := range page {
+				tally := tallies[svc.ID]
 				items[i] = ServiceListItem{
 					Service:      svc,
-					RunningTasks: h.cache.RunningTaskCount(svc.ID),
+					RunningTasks: tally.Running,
+					DesiredTasks: cluster.DesiredTaskCount(svc, eligible[svc.ID]),
 					ImageUpdate:  h.imageUpdate(svc),
+				}
+
+				if cache.IsJobService(svc) {
+					items[i].CompletedTasks = new(tally.Completed)
+					items[i].FailedTasks = new(tally.Failed)
 				}
 			}
 

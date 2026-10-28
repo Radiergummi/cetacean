@@ -9,17 +9,16 @@ import ResourceCard from "../components/ResourceCard";
 import ResourceListPage from "../components/ResourceListPage";
 import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
-import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
-import { jobOutcomesKey, useJobOutcomes } from "../hooks/useJobOutcomes";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
+import type { SSEEvent } from "../hooks/useResourceStream";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { rolloutToneClass, serviceModeLabel, serviceUpdateStatus } from "../lib/deriveServiceState";
-import { desiredTasks } from "../lib/serviceHealth";
+import { serviceTaskCount } from "../lib/serviceHealth";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
 import { cn } from "../lib/utils";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 export default function ServiceList() {
@@ -27,30 +26,6 @@ export default function ServiceList() {
   const hasCadvisor = isCadvisorReady(monitoring);
   const { getForService } = useServiceMetrics();
   const { items: recommendations, hasData: hasRecommendations } = useRecommendations();
-
-  // One question for every job loaded, rather than one per card.
-  const [loaded, setLoaded] = useState<ServiceListItem[]>([]);
-  const outcomes = useJobOutcomes(loaded);
-
-  // How a job's tasks end reaches only the task stream; follow it while the
-  // list holds a job. A re-run changes the service, which re-keys the outcomes.
-  const jobIds = useMemo(
-    () =>
-      new Set(
-        loaded
-          .filter(({ Spec: { Mode } }) => Mode.ReplicatedJob || Mode.GlobalJob)
-          .map(({ ID }) => ID),
-      ),
-    [loaded],
-  );
-
-  useDebouncedInvalidation(
-    jobIds.size > 0 ? "/tasks" : undefined,
-    [jobOutcomesKey],
-    undefined,
-    undefined,
-    ({ resource }) => jobIds.has((resource as Task | undefined)?.ServiceID ?? ""),
-  );
 
   const recommendationsByService = useMemo(() => {
     const map = new Map<string, Recommendation[]>();
@@ -122,17 +97,15 @@ export default function ServiceList() {
         },
         {
           header: "Replicas",
-          cell: ({ RunningTasks, Spec }) => {
-            const desired = Spec.Mode.Replicated?.Replicas;
-
-            if (desired == null) {
+          cell: ({ RunningTasks, DesiredTasks, Spec: { Mode } }) => {
+            if (!Mode.Replicated && !Mode.Global) {
               return "\u2014";
             }
 
             return (
               <ReplicaHealth
                 running={RunningTasks}
-                desired={desired}
+                desired={DesiredTasks}
               />
             );
           },
@@ -201,7 +174,8 @@ export default function ServiceList() {
       viewModeKey="services"
       fetchFn={(params, signal) => api.services(params, signal)}
       keyFn={({ ID }) => ID}
-      onItems={setLoaded}
+      derived
+      relevantEvent={relevantEvent}
       itemPath={({ ID }) => `/services/${ID}`}
       columns={columns}
       skeletonColumns={6}
@@ -237,11 +211,7 @@ export default function ServiceList() {
           <ResourceCard
             title={
               <span className="flex items-center gap-2">
-                <HealthDot
-                  running={service.RunningTasks}
-                  desired={desiredTasks(service.Spec.Mode)}
-                  outcome={outcomes[service.ID]}
-                />
+                <HealthDot {...serviceTaskCount(service)} />
                 <ResourceName name={service.Spec.Name} />
               </span>
             }
@@ -277,6 +247,24 @@ export default function ServiceList() {
       }
     />
   );
+}
+
+/**
+ * Whether a stream event can move a loaded row: a task of a listed service, or
+ * a node, which moves a global service's eligible nodes. A replay carries no task.
+ */
+function relevantEvent({ type, resource }: SSEEvent, loaded: readonly ServiceListItem[]) {
+  if (type === "task") {
+    const serviceId = (resource as Task | undefined)?.ServiceID;
+
+    return serviceId === undefined || loaded.some(({ ID }) => ID === serviceId);
+  }
+
+  if (type === "node") {
+    return loaded.some(({ Spec: { Mode } }) => Mode.Global);
+  }
+
+  return true;
 }
 
 /** A service's rollout state — Docker's `UpdateStatus`, and nothing about health. */

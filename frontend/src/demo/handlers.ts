@@ -31,6 +31,7 @@ import type {
   ServiceConfigRef,
   ServiceDetail,
   ServiceLink,
+  ServiceListItem,
   ServiceMount,
   ServiceNetworkRef,
   ServiceRef,
@@ -938,13 +939,53 @@ function countRunningTasks(dataset: Dataset, serviceID: string): number {
   ).length;
 }
 
+/**
+ * A service as the list serves it: its desired count is the server's rule, and
+ * a job's outcome counts only its current run. The demo's services carry no
+ * placement constraints, so a global service is eligible on every ready, active node.
+ */
+function serviceListItem(dataset: Dataset, service: Service): ServiceListItem {
+  const { Mode } = service.Spec;
+  const RunningTasks = countRunningTasks(dataset, service.ID);
+
+  if (Mode.ReplicatedJob || Mode.GlobalJob) {
+    const iteration = service.JobStatus?.JobIteration.Index;
+    const run = dataset.tasks.filter(
+      ({ ServiceID, JobIteration }) =>
+        ServiceID === service.ID &&
+        (iteration === undefined ||
+          JobIteration?.Index === undefined ||
+          JobIteration.Index === iteration),
+    );
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
+
+    return {
+      ...service,
+      RunningTasks,
+      DesiredTasks: Math.max(target, 1),
+      CompletedTasks: run.filter(({ Status }) => Status.State === "complete").length,
+      FailedTasks: run.filter(
+        ({ Status }) => Status.State === "failed" || Status.State === "rejected",
+      ).length,
+    };
+  }
+
+  const DesiredTasks = Mode.Global
+    ? dataset.nodes.filter(
+        ({ Status, Spec }) => Status.State === "ready" && Spec.Availability === "active",
+      ).length
+    : (Mode.Replicated?.Replicas ?? 0);
+
+  return { ...service, RunningTasks, DesiredTasks };
+}
+
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
   function broadcastServiceUpdate(service: Service) {
     broadcast(clients, "service", "services", service.ID, {
       type: "service",
       action: "update",
       id: service.ID,
-      resource: { ...service, RunningTasks: countRunningTasks(dataset, service.ID) },
+      resource: serviceListItem(dataset, service),
     });
   }
 
@@ -1517,10 +1558,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     get("*/services", ({ request }) => {
-      const items = dataset.services.map((service) => ({
-        ...service,
-        RunningTasks: countRunningTasks(dataset, service.ID),
-      }));
+      const items = dataset.services.map((service) => serviceListItem(dataset, service));
       return jsonResponse(paginateWrapped(items, request, "Service", (s) => `/services/${s.ID}`));
     }),
 

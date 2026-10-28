@@ -169,8 +169,13 @@ export const stackListSchema = z.looseObject({
   volumes: z.array(z.string()),
 });
 
-/** A service row carries the running count the list column shows. */
-export const serviceListSchema = serviceSchema.extend({ RunningTasks: z.number() });
+/** A service row carries the task counts its health is judged on. */
+export const serviceListSchema = serviceSchema.extend({
+  RunningTasks: z.number(),
+  DesiredTasks: z.number(),
+  CompletedTasks: z.number().optional(),
+  FailedTasks: z.number().optional(),
+});
 
 export const stackDetailResponseSchema = z.looseObject({
   stack: stackDetailSchema,

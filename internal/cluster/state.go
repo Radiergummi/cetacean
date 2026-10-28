@@ -140,11 +140,30 @@ func jobState(svc swarm.Service, runningCount, completedCount int) string {
 	switch {
 	case runningCount > 0:
 		return "running"
-	case completedCount >= max(jobTotalCompletions(svc), 1):
+	case completedCount >= jobTarget(svc):
 		return stateCompleted
 	default:
 		return "failed"
 	}
+}
+
+// DesiredTaskCount is how many tasks a service asks for: its replicas, the
+// eligible nodes (cache.EligibleNodeCounts) of a global service, or the
+// completions a job's run needs to be done, as jobState judges it.
+func DesiredTaskCount(svc swarm.Service, eligibleNodes int) int {
+	switch {
+	case cache.IsJobService(svc):
+		return jobTarget(svc)
+	case svc.Spec.Mode.Global != nil:
+		return eligibleNodes
+	default:
+		return ReplicaCount(svc)
+	}
+}
+
+// jobTarget is how many completions finish a job's run.
+func jobTarget(svc swarm.Service) int {
+	return max(jobTotalCompletions(svc), 1)
 }
 
 // jobTotalCompletions is a replicated job's target, defaulted as Swarm does:

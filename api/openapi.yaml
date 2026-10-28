@@ -3108,6 +3108,7 @@ paths:
                           Mode:
                             Replicated: { Replicas: 3 }
                         RunningTasks: 3
+                        DesiredTasks: 3
                     total: 12
                     limit: 50
                     offset: 0
@@ -8119,7 +8120,7 @@ components:
 
     ServiceListItem:
       type: object
-      description: Service with running task count (extends Docker swarm.Service)
+      description: Service with its task counts (extends Docker swarm.Service)
       properties:
         "@id":
           type: string
@@ -8135,6 +8136,22 @@ components:
         RunningTasks:
           type: integer
           description: Number of currently running tasks
+        DesiredTasks:
+          type: integer
+          description: >-
+            How many tasks the service asks for: its replicas; for a global service, the
+            ready, active nodes its placement constraints admit; for a job, the completions
+            its run needs (TotalCompletions, else MaxConcurrent, else 1; 1 for a global job).
+        CompletedTasks:
+          type: integer
+          description: >-
+            For a job only, how many tasks of its current run (JobStatus.JobIteration)
+            completed. Absent for any other mode.
+        FailedTasks:
+          type: integer
+          description: >-
+            For a job only, how many tasks of its current run failed or were rejected.
+            Absent for any other mode.
         ImageUpdate:
           $ref: "#/components/schemas/ImageUpdate"
       example:
@@ -8150,6 +8167,7 @@ components:
           Mode:
             Replicated: { Replicas: 3 }
         RunningTasks: 3
+        DesiredTasks: 3
 
     EnrichedTask:
       type: object

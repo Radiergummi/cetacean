@@ -15,7 +15,6 @@ vi.mock("../api/client", () => ({
   emptyMethods: new Set(),
   api: {
     services: vi.fn<() => void>(),
-    allTasks: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
   },
 }));
@@ -33,6 +32,7 @@ const fakeService = (id: string, name: string, replicas = 3, running = 3): Servi
     Mode: { Replicated: { Replicas: replicas } },
   },
   RunningTasks: running,
+  DesiredTasks: replicas,
 });
 
 let testQueryClient: QueryClient;
@@ -42,7 +42,6 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", MockEventSource);
   vi.stubGlobal("localStorage", localStorageStub);
   mockServices.mockReset();
-  vi.mocked(api.allTasks).mockClear();
 });
 
 afterEach(() => {
@@ -155,87 +154,106 @@ describe("ServiceList", () => {
     });
   });
 
-  // A job desires nothing running, so its card's dot needs how its tasks ended.
-  it("marks the card of a job whose tasks all failed as critical", async () => {
+  it("judges a global service against its eligible nodes", async () => {
     showCards();
-
-    const job = fakeJob("job1", "migrate");
-
     mockServices.mockResolvedValue({
-      data: { items: [job], total: 1, limit: 50, offset: 0 },
+      data: { items: [fakeGlobal("g1", "agent", 3, 2)], total: 1, limit: 50, offset: 0 },
       allowedMethods: new Set(),
     });
-    vi.mocked(api.allTasks).mockResolvedValue([
-      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
-    ] as never);
 
     render(<ServiceList />, { wrapper });
 
-    await waitFor(() => {
-      expect(screen.getByRole("img", { name: "critical" })).toBeInTheDocument();
-    });
+    expect(await screen.findByRole("img", { name: "warning" })).toBeInTheDocument();
   });
 
-  // The service stream carries no task events; a job re-run in place that now
-  // completes only shows on the task stream.
-  it("refreshes a job card when one of its tasks changes", async () => {
-    showCards();
+  it("shows a global service's running count against its eligible nodes", async () => {
     mockServices.mockResolvedValue({
-      data: { items: [fakeJob("job1", "migrate")], total: 1, limit: 50, offset: 0 },
+      data: { items: [fakeGlobal("g1", "agent", 3, 2)], total: 1, limit: 50, offset: 0 },
       allowedMethods: new Set(),
     });
-    vi.mocked(api.allTasks).mockResolvedValue([
-      { ID: "t1", ServiceID: "job1", Status: { State: "failed" } },
-    ] as never);
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByText("2/3")).toBeInTheDocument();
+  });
+
+  it("marks the card of a job whose tasks all failed as critical", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeJob("job1", "migrate", 0, 3)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
 
     render(<ServiceList />, { wrapper });
 
     expect(await screen.findByRole("img", { name: "critical" })).toBeInTheDocument();
-
-    const completed = { ID: "t2", ServiceID: "job1", Status: { State: "complete" } };
-    const stream = [...MockEventSource.instances]
-      .reverse()
-      .find(({ listeners }) => listeners.has("task"));
-
-    vi.mocked(api.allTasks).mockResolvedValue([completed] as never);
-    act(() =>
-      stream?.simulateEvent("task", {
-        type: "task",
-        action: "update",
-        id: "t2",
-        resource: completed,
-      }),
-    );
-
-    expect(
-      await screen.findByRole("img", { name: "healthy" }, { timeout: 3000 }),
-    ).toBeInTheDocument();
   });
 
-  // The cards share one question about every job on the page.
-  it("asks how every loaded job ended in one request", async () => {
-    showCards();
+  // The services stream carries task events, so no second stream is opened.
+  it("refetches when a task of a listed service changes", async () => {
     mockServices.mockResolvedValue({
-      data: {
-        items: [fakeJob("job1", "migrate"), fakeJob("job2", "seed")],
-        total: 2,
-        limit: 50,
-        offset: 0,
-      },
+      data: { items: [fakeService("s1", "web", 3, 1)], total: 1, limit: 50, offset: 0 },
       allowedMethods: new Set(),
     });
 
     render(<ServiceList />, { wrapper });
 
-    await waitFor(() => expect(api.allTasks).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await screen.findByText("1/3")).toBeInTheDocument();
 
-    expect(api.allTasks).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(api.allTasks).mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({ filter: expect.stringContaining('service in ["job1","job2"]') }),
+    mockServices.mockResolvedValue({
+      data: { items: [fakeService("s1", "web", 3, 3)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    act(() =>
+      servicesStream()?.simulateEvent("task", {
+        type: "task",
+        action: "update",
+        id: "t1",
+        resource: { ID: "t1", ServiceID: "s1", Status: { State: "running" } },
+      }),
     );
+
+    expect(await screen.findByText("3/3", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("t1")).not.toBeInTheDocument();
+    expect(MockEventSource.instances.filter(({ url }) => url.includes("/tasks"))).toHaveLength(0);
+  });
+
+  it("leaves the list alone when a task of another service changes", async () => {
+    vi.useFakeTimers();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeService("s1", "web")], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("web")).toBeInTheDocument();
+    });
+
+    const calls = mockServices.mock.calls.length;
+
+    act(() =>
+      servicesStream()?.simulateEvent("task", {
+        type: "task",
+        action: "create",
+        id: "t9",
+        resource: { ID: "t9", ServiceID: "elsewhere", Status: { State: "running" } },
+      }),
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(mockServices.mock.calls.length).toBe(calls);
+    vi.useRealTimers();
   });
 });
+
+function servicesStream() {
+  return [...MockEventSource.instances].reverse().find(({ url }) => url.endsWith("/services"));
+}
 
 function showCards() {
   vi.stubGlobal("localStorage", {
@@ -244,10 +262,22 @@ function showCards() {
   });
 }
 
-function fakeJob(id: string, name: string): ServiceListItem {
+function fakeJob(id: string, name: string, completed = 0, failed = 0): ServiceListItem {
   const job = fakeService(id, name, 0, 0);
 
   job.Spec.Mode = { ReplicatedJob: {} };
+  job.DesiredTasks = 1;
+  job.CompletedTasks = completed;
+  job.FailedTasks = failed;
 
   return job;
+}
+
+function fakeGlobal(id: string, name: string, eligible: number, running: number): ServiceListItem {
+  const service = fakeService(id, name, 0, running);
+
+  service.Spec.Mode = { Global: {} };
+  service.DesiredTasks = eligible;
+
+  return service;
 }

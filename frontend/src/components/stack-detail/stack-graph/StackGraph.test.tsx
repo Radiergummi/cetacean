@@ -1,6 +1,6 @@
 import StackGraph from "./StackGraph";
 import type { StackDetail } from "@/api/types";
-import type { TaskCount } from "@/lib/stackGraph";
+import type { TaskCount } from "@/lib/serviceHealth";
 import { fireEvent, render } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";

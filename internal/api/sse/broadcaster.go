@@ -632,6 +632,17 @@ func TypeMatcher(typ cache.EventType) func(cache.Event) bool {
 	}
 }
 
+// ServiceListMatcher is TypeMatcher for the service list, plus the task and
+// node events that move the task counts and eligible nodes its rows carry.
+func ServiceListMatcher(e cache.Event) bool {
+	switch e.Type {
+	case cache.EventService, cache.EventTask, cache.EventNode, cache.EventSync:
+		return true
+	default:
+		return false
+	}
+}
+
 // ResourceMatcher returns a match function for per-resource SSE streams.
 // Sync events always pass through so clients can trigger a full refetch.
 func ResourceMatcher(typ cache.EventType, id string) func(cache.Event) bool {

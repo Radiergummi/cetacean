@@ -633,7 +633,8 @@ Send `Accept: text/event-stream` to any resource list or detail URL to open a st
 
 ### Per-resource streams
 
-A list stream carries events for one resource type. A detail stream carries events for one resource plus the resources
+A list stream carries events for one resource type; the service list stream adds task and node events, which move
+the counts its items carry. A detail stream carries events for one resource plus the resources
 that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, a network
 stream includes the tasks attached to it and every service event, plus node events on `ingress`, and a stack stream
 includes its member services, tasks, configs, secrets, networks, and volumes.
@@ -828,6 +829,10 @@ It's the same assessment as the MCP `get_topology` drain-impact view, and the da
 services sharing an overlay network. `placement` has a vertex per node and per service, and a placement entry per
 service listing the nodes its tasks run on. A node vertex carries `address`, and a service vertex `networks`, the
 overlays it's attached to as `id` and `name`, limited to the networks you may read.
+
+Each `GET /services` item carries `RunningTasks` and `DesiredTasks`: the replicas, the ready, active nodes a global
+service's constraints admit, or the completions a job's run needs. A job's item adds `CompletedTasks` and
+`FailedTasks`, counting only its current run; a rejected task counts as failed.
 
 `GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,

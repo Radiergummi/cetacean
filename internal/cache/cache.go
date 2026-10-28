@@ -1173,11 +1173,65 @@ func CountsAsJobCompletion(svc swarm.Service, task swarm.Task) bool {
 		return false
 	}
 
+	return inCurrentJobRun(svc, task)
+}
+
+// countsAsJobFailure is CountsAsJobCompletion for a task that failed or was
+// rejected.
+func countsAsJobFailure(svc swarm.Service, task swarm.Task) bool {
+	state := task.Status.State
+
+	return IsJobService(svc) &&
+		(state == swarm.TaskStateFailed || state == swarm.TaskStateRejected) &&
+		inCurrentJobRun(svc, task)
+}
+
+// inCurrentJobRun reports whether a job's task belongs to its current run; one
+// either side cannot place counts.
+func inCurrentJobRun(svc swarm.Service, task swarm.Task) bool {
 	if svc.JobStatus == nil || task.JobIteration == nil {
 		return true
 	}
 
 	return task.JobIteration.Index == svc.JobStatus.JobIteration.Index
+}
+
+// TaskTally is how a service's tasks stand: Running as RunningTaskCounts counts
+// it, and for a job how many of its current run's tasks completed or failed.
+type TaskTally struct {
+	Running, Completed, Failed int
+}
+
+// TaskTallies is a TaskTally for each of the given services, keyed by ID,
+// under one read lock.
+func (c *Cache) TaskTallies(services ...swarm.Service) map[string]TaskTally {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	tallies := make(map[string]TaskTally, len(services))
+	for _, given := range services {
+		svc, ok := c.services[given.ID]
+		if !ok {
+			continue
+		}
+
+		var tally TaskTally
+		for id := range c.tasksByService[svc.ID] {
+			t, ok := c.tasks[id]
+			switch {
+			case !ok:
+			case CountsAsRunningReplica(t):
+				tally.Running++
+			case CountsAsJobCompletion(svc, t):
+				tally.Completed++
+			case countsAsJobFailure(svc, t):
+				tally.Failed++
+			}
+		}
+		tallies[svc.ID] = tally
+	}
+
+	return tallies
 }
 
 // IsJobService reports whether a service runs to completion rather than forever.
