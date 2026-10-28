@@ -24,6 +24,9 @@ So this change persists a **timeline**, of which Docker-reported changes are the
 comes with one ID sequence, one store and one query surface, so each later kind is a row type,
 not another file.
 
+It is not the task timeline of #546, which the dashboard derives from the tasks Swarm still
+retains and which neither stores nor adds anything.
+
 ## Scope
 
 In:
@@ -32,7 +35,7 @@ In:
 - restoring the ring at startup
 - retention
 - gaps as timeline items
-- `storage.history_entries`
+- `storage.history_entries` and `storage.timeline`
 - the constraints that keep a shared database possible
 
 Out, each with its own issue:
@@ -57,6 +60,13 @@ All kinds share one ID sequence, so paging by `before`, `Last-Event-ID` replay, 
 the feeds carry every kind without a mechanism of their own. `HistoryEntry` gains `Kind` and
 `Until`; every other field keeps its meaning, and a gap leaves the resource fields empty.
 
+**One vocabulary.** MCP's `projection.TimelineEntry` already has a `kind` of `"change"` or
+`"log"`, where `log` is reserved for container log lines merged in for an agent. The kinds above are the
+same strings, declared once as constants beside `HistoryEntry` in `internal/cache`. `log` stays
+the projection's own: a log line is read from Docker on demand, never recorded, so it never
+reaches the store or `/history`. `get_events` copies `HistoryEntry.Kind` instead of writing
+`"change"`.
+
 ### On the wire
 
 `/history` stays the route and becomes the timeline. Every item carries `kind`, and a gap has
@@ -71,8 +81,8 @@ kind is an addition, and clients must ignore kinds they don't know; `docs/api.md
 - **CSV** gains `kind` and `until` columns at the end. A gap is a row: "nothing recorded from …
   to …" is part of what the log says.
 - **Atom and JSON Feed** carry a gap as an entry, titled for what it is.
-- **MCP** `get_events` already returns `cluster.TimelineEntry` with a `kind`. A gap is
-  `kind: "gap"` with an `until`.
+- **MCP** `get_events` returns `projection.TimelineEntry`. A gap is `kind: "gap"`, and
+  `TimelineEntry` gains `until`, in the same fixed-width format as `at`.
 - **SSE** gains a `gap` event, which the AsyncAPI document lists. The server accepts connections
   before the watcher is ready, so a client connected during startup receives it like any other
   event.
@@ -156,8 +166,8 @@ channel there would either block the cache on the disk or drop entries when full
 follows the ring. Every second it:
 
 1. calls `History.Since(lastWritten)`
-2. inserts what comes back, updates this process's `coverage.seen_at`, and applies retention, all
-   in one transaction
+2. inserts what comes back, updates this process's `coverage.seen_at`, and, when it inserted
+   anything, applies retention, all in one transaction
 3. advances `lastWritten`
 
 `notify` is untouched, and the cost is one read lock and one commit per second.
@@ -174,10 +184,12 @@ follows the ring. Every second it:
 
 ### Retention
 
-Each transaction keeps the newest `storage.history_entries` items of the kinds the ring holds, and
-deletes the rest. It also drops coverage rows that end before the oldest kept item. SQLite reuses
-the freed pages, so the file settles at a steady size without `VACUUM`. Annotations (#498) are
-outside this rule; their retention is #498's to decide.
+A transaction that inserted items keeps the newest `storage.history_entries` items of the kinds
+the ring holds, and deletes the rest. A tick that inserted nothing can't have pushed anything out,
+so on a quiet cluster the commit is the heartbeat alone; the first tick after startup always
+retains, since the size may have shrunk. Retention also drops coverage rows that end before the
+oldest kept item. SQLite reuses the freed pages, so the file settles at a steady size without
+`VACUUM`. Annotations (#498) are outside this rule; their retention is #498's to decide.
 
 ### Shutdown
 
@@ -231,9 +243,11 @@ broadcaster needs no change.
 
 ## Settings
 
-- **`storage.snapshot`** also turns persistence of the timeline on and off. The timeline is cluster
-  state like the snapshot. Its documentation, and that of `storage.data_dir`, names
-  `cetacean.db`.
+- **`storage.timeline`** (`CETACEAN_TIMELINE`, `-timeline`, default `true`) turns persistence of
+  the timeline on and off. It is not folded into `storage.snapshot`: the snapshot is current state
+  served while the live sync catches up, the timeline is a record, and turning off one says
+  nothing about wanting the other. The data directory is created when either needs it, and its
+  documentation names `cetacean.db`.
 - **`storage.history_entries`** (`CETACEAN_HISTORY_ENTRIES`, `-history-entries`) sizes the ring
   and the retention on disk. The default is 10,000; it accepts 1,000 to 100,000, and startup
   refuses anything outside that range, as it does for the `sizing.*` ranges. It applies with or
@@ -296,7 +310,9 @@ so a Cetacean that Swarm reschedules onto another manager leaves its timeline be
   - recording a gap
   - the writer that follows the ring
 
-Main wires them next to the snapshot, gated on `storage.snapshot` and on `dataDirReady`.
+`run()` in `main.go` opens the store beside the snapshot load, before `docker.NewWatcher`, gated on
+`storage.timeline` and on `dataDirReady`; `storage.timeline` joins the condition that creates the
+data directory.
 `.claude/ARCHITECTURE.md` gets a line on the trap: the writer follows the ring and must never be
 fed from `notify`.
 
@@ -316,6 +332,7 @@ fed from `notify`.
    a gap would report a stream complete that isn't.
 7. **Additive migrations only** within 1.x, with columns always named, so rollbacks keep working.
 8. **`storage.history_entries`**, 10,000 by default, bounded to 1,000–100,000.
+9. **`storage.timeline`** switches persistence, separate from `storage.snapshot`.
 
 ## Open
 
