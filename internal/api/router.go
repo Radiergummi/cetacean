@@ -305,62 +305,90 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	h := cfg.Handlers
 	h.refresher = cfg.Refresher
 	h.liveness = cfg.Liveness
-	b := cfg.Broadcaster
-	if b != nil {
-		b.SetBasePath(cfg.BasePath)
+	if cfg.Broadcaster != nil {
+		cfg.Broadcaster.SetBasePath(cfg.BasePath)
 	}
-	metricsProxy := cfg.MetricsProxy
-	spa := cfg.SPA
-	authProvider := cfg.AuthProvider
 
 	mux := &routeRecorder{mux: http.NewServeMux()}
+	rt := routes{h: h, mux: mux, cfg: cfg}
+	rt.meta()
+	rt.docs()
+	rt.events()
+	rt.cluster()
+	rt.plugins()
+	rt.nodes()
+	rt.services()
+	rt.tasks()
+	rt.stacks()
+	rt.configs()
+	rt.secrets()
+	rt.networks()
+	rt.volumes()
+	rt.views()
+	rt.mounts()
+	rt.fallback()
 
-	// The ACL resource each write endpoint checks the write grant on.
-	svcACL := h.writeResource("service")
-	nodeACL := h.writeResource("node")
-	taskACL := h.writeResource("task")
-	stackACL := pathResource("stack", "name")
-	cfgACL := h.writeResource("config")
-	secACL := h.writeResource("secret")
-	netACL := h.writeResource("network")
-	volACL := pathResource("volume", "name")
-	pluginACL := pathResource("plugin", "name")
-	pluginWildACL := wildcardResource("plugin")
-	swarmACL := swarmResource
+	stack := NewChain(
+		requestID,
+		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
+		recovery,
+		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
+		// Ahead of every middleware that decides by path: each spelling it
+		// canonicalises names the same resource, and a rule matching the path
+		// it came in on answers /-/resync.json differently from /-/resync.
+		cleanPaths,
+		hostGuard(cfg.Hosts),
+		negotiate,
+		cors(cfg.CORS),
+		crossOriginProtection(cfg.CORS, cfg.PublicURL),
+		auth.Middleware(cfg.AuthProvider, cfg.APITokens),
+		h.suffixedNames,
+		requireReady(h, mux),
+		discoveryLinks,
+		requestLogger,
+		// Innermost, so requestLogger wraps it: this middleware answers a
+		// name-addressed request itself instead of calling through, and
+		// anything it sits outside of therefore never runs for a redirect.
+		// Placed outside requestLogger, every 307 was missing from the request
+		// log and from the cetacean_http_* metrics alike — invisible exactly
+		// when a client is looping on one. It stays after requireReady for the
+		// opposite reason: a server whose cache is not filled yet resolves
+		// every name to nothing, and answering ENG001 is more honest than
+		// reporting the resource missing.
+		h.canonicalIdentifier,
+	)
 
-	// Derived (ACL, tier) chains for the gated route registrations below.
-	svcTier2 := h.tiered(svcACL, config.OpsConfiguration)
-	svcTier3 := h.tiered(svcACL, config.OpsImpactful)
-	nodeTier3 := h.tiered(nodeACL, config.OpsImpactful)
-	stackTier3 := h.tiered(stackACL, config.OpsImpactful)
-	cfgTier2 := h.tiered(cfgACL, config.OpsConfiguration)
-	secTier2 := h.tiered(secACL, config.OpsConfiguration)
-	// A write MCP exposes as well takes its tier from the shared table.
-	svcOp := h.operation(svcACL)
-	nodeOp := h.operation(nodeACL)
-	taskOp := h.operation(taskACL)
-	cfgOp := h.operation(cfgACL)
-	secOp := h.operation(secACL)
-	netOp := h.operation(netACL)
-	volOp := h.operation(volACL)
-	pluginTier2 := h.tiered(pluginACL, config.OpsConfiguration)
-	pluginTier3 := h.tiered(pluginACL, config.OpsImpactful)
-	pluginWildTier3 := h.tiered(pluginWildACL, config.OpsImpactful)
-	swarmTier2 := h.tiered(swarmACL, config.OpsConfiguration)
-	swarmTier3 := h.tiered(swarmACL, config.OpsImpactful)
-	// For the writes whose path serves no GET, so If-Match can never match.
-	serviceExists := h.unrepresented(h.serviceRepresentation)
-	nodeExists := h.unrepresented(h.nodeRepresentation)
-	pluginExists := h.unrepresented(h.pluginRepresentation)
-	clusterExists := h.unrepresented(subjectExists)
-	// A create checks the write grant on the name it creates, in the handler.
-	createOp := func(op cluster.Operation) tieredChain {
-		return tieredChain{
-			gates:   NewChain(h.requireLevel(op.Tier()), attributeWrite),
-			level:   op.Tier(),
-			permits: h.mayCreate,
-		}
+	return publicURLMiddleware(
+		cfg.PublicURL,
+		basePathMiddleware(cfg.BasePath, mux, stack.Then(mux)),
+	), mux
+}
+
+// routes registers the API one area at a time. Each method binds mux as a
+// local because internal/contract inventories the routes by parsing this file
+// for registrations on an identifier named mux.
+type routes struct {
+	h   *Handlers
+	mux *routeRecorder
+	cfg RouterConfig
+}
+
+// createOp gates a create, which checks the write grant on the name it
+// creates in the handler.
+func (rt routes) createOp(op cluster.Operation) tieredChain {
+	return tieredChain{
+		gates:   NewChain(rt.h.requireLevel(op.Tier()), attributeWrite),
+		level:   op.Tier(),
+		permits: rt.h.mayCreate,
 	}
+}
+
+// meta registers the authentication routes, the meta endpoints under /-/, and metrics.
+func (rt routes) meta() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	cfg := rt.cfg
+	authProvider := rt.cfg.AuthProvider
+	metricsProxy := rt.cfg.MetricsProxy
 
 	authProvider.RegisterRoutes(mux.mux)
 	mux.HandleFunc(
@@ -410,6 +438,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		feedHandlers{},
 		spa,
 	))
+}
+
+// docs registers the API's own documents: the OpenAPI and AsyncAPI descriptions, the JSON-LD context, discovery, and the error catalogue.
+func (rt routes) docs() {
+	mux, spa := rt.mux, rt.cfg.SPA
+	cfg := rt.cfg
 
 	// API documentation (content-negotiated)
 	apiDoc, openAPIYAML := HandleAPIDoc(cfg.OpenAPISpec, cfg.BasePath)
@@ -431,6 +465,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"GET /api/errors/{code}",
 		contentNegotiated(HandleErrorDetail, feedHandlers{}, spa),
 	)
+}
+
+// events registers the cluster-wide event stream and its feeds.
+func (rt routes) events() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	b := rt.cfg.Broadcaster
 
 	// SSE events
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
@@ -456,6 +496,15 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			)
 		}
 	})
+}
+
+// cluster registers the cluster and swarm routes, token revocation, and disk usage.
+func (rt routes) cluster() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	cfg := rt.cfg
+	swarmTier2 := h.tiered(swarmResource, config.OpsConfiguration)
+	swarmTier3 := h.tiered(swarmResource, config.OpsImpactful)
+	clusterExists := h.unrepresented(subjectExists)
 
 	// Cluster
 	mux.HandleFunc("GET /cluster", contentNegotiated(h.HandleCluster, feedHandlers{}, spa))
@@ -509,6 +558,18 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		swarmTier3.Append(clusterExists).AnswersNoContent().
 			ThenFunc(HandleRevokeSubject(cfg.TokenRevoker)))
 	mux.HandleFunc("GET /disk-usage", contentNegotiated(h.HandleDiskUsage, feedHandlers{}, spa))
+}
+
+// plugins registers the plugin routes.
+func (rt routes) plugins() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	pluginACL := pathResource("plugin", "name")
+	pluginTier2 := h.tiered(pluginACL, config.OpsConfiguration)
+	pluginTier3 := h.tiered(pluginACL, config.OpsImpactful)
+	pluginWildTier3 := h.tiered(wildcardResource("plugin"), config.OpsImpactful)
+	pluginExists := h.unrepresented(h.pluginRepresentation)
+	clusterExists := h.unrepresented(subjectExists)
+
 	// Plugins
 	mux.HandleFunc("GET /plugins", contentNegotiated(h.HandleListPlugins, feedHandlers{}, spa))
 	mux.HandleFunc("GET /plugins/{name}", contentNegotiated(h.HandleGetPlugin, feedHandlers{}, spa))
@@ -540,6 +601,15 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"PATCH /plugins/{name}/settings",
 		pluginTier2.Append(pluginExists).ThenFunc(h.HandleConfigurePlugin),
 	)
+}
+
+// nodes registers the node routes.
+func (rt routes) nodes() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	nodeACL := h.writeResource("node")
+	nodeTier3 := h.tiered(nodeACL, config.OpsImpactful)
+	nodeOp := h.operation(nodeACL)
+	nodeExists := h.unrepresented(h.nodeRepresentation)
 
 	// Nodes
 	mux.HandleFunc(
@@ -576,18 +646,44 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		contentNegotiated(h.HandleNodeDrainImpact, feedHandlers{}, spa),
 	)
 
-	// Published ports
-	mux.HandleFunc("GET /ports", contentNegotiated(h.HandleListPorts, feedHandlers{csv: true}, spa))
-
-	// Recommendations
-	mux.HandleFunc(
-		"GET /recommendations",
-		contentNegotiated(h.HandleRecommendations, feedHandlers{
-			atom:     h.feedRecommendationsHandler(renderAtom),
-			jsonFeed: h.feedRecommendationsHandler(renderJSONFeed),
-			csv:      true,
-		}, spa),
+	// Node write operations
+	mux.Handle(
+		"PUT /nodes/{id}/availability",
+		nodeOp(cluster.OpUpdateNode).Append(nodeExists).
+			ThenFunc(h.HandleUpdateNodeAvailability),
 	)
+	mux.HandleFunc(
+		"GET /nodes/{id}/labels",
+		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
+	)
+	mux.Handle(
+		"PATCH /nodes/{id}/labels",
+		nodeOp(
+			cluster.OpUpdateNodeLabels,
+		).Append(h.precond(h.nodeLabelsSpec().representation)).
+			TakesJSONPatch().
+			ThenFunc(h.HandlePatchNodeLabels),
+	)
+	mux.HandleFunc(
+		"GET /nodes/{id}/role",
+		contentNegotiated(h.HandleGetNodeRole, feedHandlers{}, spa),
+	)
+	mux.Handle("PUT /nodes/{id}/role",
+		nodeOp(cluster.OpUpdateNode).Append(h.precond(h.nodeRoleRepresentation)).
+			ThenFunc(h.HandleUpdateNodeRole))
+	mux.Handle("DELETE /nodes/{id}",
+		nodeTier3.Append(h.precondTimed(h.nodeRepresentation, h.nodeModified)).AnswersNoContent().
+			ThenFunc(h.HandleRemoveNode))
+}
+
+// services registers the service routes.
+func (rt routes) services() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	svcACL := h.writeResource("service")
+	svcTier2 := h.tiered(svcACL, config.OpsConfiguration)
+	svcTier3 := h.tiered(svcACL, config.OpsImpactful)
+	svcOp := h.operation(svcACL)
+	serviceExists := h.unrepresented(h.serviceRepresentation)
 
 	// Services
 	mux.HandleFunc(
@@ -625,35 +721,6 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"GET /services/{id}/logs",
 		contentNegotiatedWithSSE(h.HandleServiceLogs, h.HandleServiceLogs, feedHandlers{}, spa),
 	)
-
-	// Node write operations
-	mux.Handle(
-		"PUT /nodes/{id}/availability",
-		nodeOp(cluster.OpUpdateNode).Append(nodeExists).
-			ThenFunc(h.HandleUpdateNodeAvailability),
-	)
-	mux.HandleFunc(
-		"GET /nodes/{id}/labels",
-		contentNegotiated(h.HandleGetNodeLabels, feedHandlers{}, spa),
-	)
-	mux.Handle(
-		"PATCH /nodes/{id}/labels",
-		nodeOp(
-			cluster.OpUpdateNodeLabels,
-		).Append(h.precond(h.nodeLabelsSpec().representation)).
-			TakesJSONPatch().
-			ThenFunc(h.HandlePatchNodeLabels),
-	)
-	mux.HandleFunc(
-		"GET /nodes/{id}/role",
-		contentNegotiated(h.HandleGetNodeRole, feedHandlers{}, spa),
-	)
-	mux.Handle("PUT /nodes/{id}/role",
-		nodeOp(cluster.OpUpdateNode).Append(h.precond(h.nodeRoleRepresentation)).
-			ThenFunc(h.HandleUpdateNodeRole))
-	mux.Handle("DELETE /nodes/{id}",
-		nodeTier3.Append(h.precondTimed(h.nodeRepresentation, h.nodeModified)).AnswersNoContent().
-			ThenFunc(h.HandleRemoveNode))
 
 	// Service write operations — tier 1 (operational)
 	mux.Handle(
@@ -828,6 +895,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			AnswersNoContent().
 			ThenFunc(h.HandleRemoveService),
 	)
+}
+
+// tasks registers the task routes.
+func (rt routes) tasks() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	taskOp := h.operation(h.writeResource("task"))
 
 	// Tasks
 	mux.HandleFunc(
@@ -857,14 +930,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("DELETE /tasks/{id}",
 		taskOp(cluster.OpRemoveTask).Append(h.precond(h.taskRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveTask))
+}
 
-	// History
-	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
-		atom:      h.feedHistoryHandler(renderAtom),
-		jsonFeed:  h.feedHistoryHandler(renderJSONFeed),
-		csv:       true,
-		csvParams: historyCSVParams,
-	}, spa))
+// stacks registers the stack routes.
+func (rt routes) stacks() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	stackTier3 := h.tiered(pathResource("stack", "name"), config.OpsImpactful)
 
 	// Stacks
 	mux.HandleFunc(
@@ -894,6 +965,14 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("DELETE /stacks/{name}",
 		stackTier3.Append(h.precond(h.stackRepresentation)).
 			ThenFunc(h.HandleRemoveStack))
+}
+
+// configs registers the config routes.
+func (rt routes) configs() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	cfgACL := h.writeResource("config")
+	cfgTier2 := h.tiered(cfgACL, config.OpsConfiguration)
+	cfgOp := h.operation(cfgACL)
 
 	// Configs
 	mux.HandleFunc(
@@ -925,7 +1004,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		cfgOp(cluster.OpRemoveConfig).Append(h.precond(h.configRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveConfig))
 	// The name is in the body, so the handler checks the write grant on it.
-	mux.Handle("POST /configs", createOp(cluster.OpCreateConfig).ThenFunc(h.HandleCreateConfig))
+	mux.Handle("POST /configs", rt.createOp(cluster.OpCreateConfig).ThenFunc(h.HandleCreateConfig))
 	mux.HandleFunc(
 		"GET /configs/{id}/labels",
 		contentNegotiated(h.HandleGetConfigLabels, feedHandlers{}, spa),
@@ -933,6 +1012,14 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("PATCH /configs/{id}/labels",
 		cfgTier2.Append(h.precond(h.configLabelsSpec().representation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchConfigLabels))
+}
+
+// secrets registers the secret routes and secret entries.
+func (rt routes) secrets() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	secACL := h.writeResource("secret")
+	secTier2 := h.tiered(secACL, config.OpsConfiguration)
+	secOp := h.operation(secACL)
 
 	// Secrets
 	mux.HandleFunc(
@@ -963,7 +1050,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("DELETE /secrets/{id}",
 		secOp(cluster.OpRemoveSecret).Append(h.precond(h.secretRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveSecret))
-	mux.Handle("POST /secrets", createOp(cluster.OpCreateSecret).ThenFunc(h.HandleCreateSecret))
+	mux.Handle("POST /secrets", rt.createOp(cluster.OpCreateSecret).ThenFunc(h.HandleCreateSecret))
 	mux.HandleFunc(
 		"GET /secret-entries/{id}",
 		contentNegotiated(h.HandleGetSecretEntry, feedHandlers{}, spa),
@@ -975,6 +1062,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("PATCH /secrets/{id}/labels",
 		secTier2.Append(h.precond(h.secretLabelsSpec().representation)).TakesJSONPatch().
 			ThenFunc(h.HandlePatchSecretLabels))
+}
+
+// networks registers the network routes.
+func (rt routes) networks() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	netOp := h.operation(h.writeResource("network"))
 
 	// Networks
 	mux.HandleFunc(
@@ -1012,6 +1105,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			AnswersNoContent().
 			ThenFunc(h.HandleRemoveNetwork),
 	)
+}
+
+// volumes registers the volume routes.
+func (rt routes) volumes() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	volOp := h.operation(pathResource("volume", "name"))
 
 	// Volumes
 	mux.HandleFunc(
@@ -1039,6 +1138,32 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	mux.Handle("DELETE /volumes/{name}",
 		volOp(cluster.OpRemoveVolume).Append(h.precond(h.volumeRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveVolume))
+}
+
+// views registers the views across resources: ports, recommendations, history, search, the profile, and topology.
+func (rt routes) views() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+
+	// Published ports
+	mux.HandleFunc("GET /ports", contentNegotiated(h.HandleListPorts, feedHandlers{csv: true}, spa))
+
+	// Recommendations
+	mux.HandleFunc(
+		"GET /recommendations",
+		contentNegotiated(h.HandleRecommendations, feedHandlers{
+			atom:     h.feedRecommendationsHandler(renderAtom),
+			jsonFeed: h.feedRecommendationsHandler(renderJSONFeed),
+			csv:      true,
+		}, spa),
+	)
+
+	// History
+	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
+		atom:      h.feedHistoryHandler(renderAtom),
+		jsonFeed:  h.feedHistoryHandler(renderJSONFeed),
+		csv:       true,
+		csvParams: historyCSVParams,
+	}, spa))
 
 	// Search
 	mux.HandleFunc("GET /search", contentNegotiated(h.HandleSearch, h.searchFeeds(), spa))
@@ -1092,6 +1217,12 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 			)
 		})
 	}
+}
+
+// mounts registers what other packages serve under this mux, opt-in profiling, and the entry point.
+func (rt routes) mounts() {
+	mux, spa := rt.mux, rt.cfg.SPA
+	cfg := rt.cfg
 
 	// Profiling (opt-in via CETACEAN_PPROF=true)
 	if cfg.EnablePprof {
@@ -1124,6 +1255,11 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	// spellings. Served rather than redirected: the root has no spelling that
 	// carries a suffix, and "/.html" is a path proxies are hardened to refuse.
 	mux.HandleFunc("GET /index", contentNegotiated(HandleEntrypoint, feedHandlers{}, spa))
+}
+
+// fallback registers the catch-all that serves the dashboard, which must be registered last.
+func (rt routes) fallback() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
 
 	// SPA fallback (must be last). It answers 404 and never 406: a file it has
 	// is one representation with nothing to negotiate, and a path it does not
@@ -1170,41 +1306,6 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 
 		spa.ServeHTTP(w, r)
 	})
-
-	stack := NewChain(
-		requestID,
-		realIP(cfg.TrustedProxies, cfg.ForwardedHeaders),
-		recovery,
-		securityHeaders(cfg.TLSEnabled, cfg.InlineScriptHashes),
-		// Ahead of every middleware that decides by path: each spelling it
-		// canonicalises names the same resource, and a rule matching the path
-		// it came in on answers /-/resync.json differently from /-/resync.
-		cleanPaths,
-		hostGuard(cfg.Hosts),
-		negotiate,
-		cors(cfg.CORS),
-		crossOriginProtection(cfg.CORS, cfg.PublicURL),
-		auth.Middleware(authProvider, cfg.APITokens),
-		h.suffixedNames,
-		requireReady(h, mux),
-		discoveryLinks,
-		requestLogger,
-		// Innermost, so requestLogger wraps it: this middleware answers a
-		// name-addressed request itself instead of calling through, and
-		// anything it sits outside of therefore never runs for a redirect.
-		// Placed outside requestLogger, every 307 was missing from the request
-		// log and from the cetacean_http_* metrics alike — invisible exactly
-		// when a client is looping on one. It stays after requireReady for the
-		// opposite reason: a server whose cache is not filled yet resolves
-		// every name to nothing, and answering ENG001 is more honest than
-		// reporting the resource missing.
-		h.canonicalIdentifier,
-	)
-
-	return publicURLMiddleware(
-		cfg.PublicURL,
-		basePathMiddleware(cfg.BasePath, mux, stack.Then(mux)),
-	), mux
 }
 
 func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handler {
