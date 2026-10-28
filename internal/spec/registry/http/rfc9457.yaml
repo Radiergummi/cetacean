@@ -20,7 +20,7 @@ requirements:
       still behaves correctly.
     url: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.2
     mutants:
-      - file: internal/api/problem.go
+      - file: internal/api/problem/problem.go
         replace: "\tw.WriteHeader(p.Status)"
         with: "\tw.WriteHeader(http.StatusOK)"
 
@@ -71,7 +71,7 @@ requirements:
       and so on), although it MAY be localized to suit client preferences.
     url: https://www.rfc-editor.org/rfc/rfc9457#section-4.2.1
     mutants:
-      - file: internal/api/problem.go
+      - file: internal/api/problem/problem.go
         replace: "\t\treturn \"Range Not Satisfiable\""
         with: "\t\treturn http.StatusText(status)"
 

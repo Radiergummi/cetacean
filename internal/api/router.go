@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -301,8 +302,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 // it. Production calls NewRouter and drops the second value; the spec-parity
 // test and the Allow header read it.
 func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
-	auth.SetErrorWriter(WriteErrorCode)
-
 	h := cfg.Handlers
 	h.refresher = cfg.Refresher
 	h.liveness = cfg.Liveness
@@ -1084,7 +1083,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	// path is gone for good rather than merely absent today.
 	for _, removed := range []string{"/topology/networks", "/topology/placement"} {
 		mux.HandleFunc("GET "+removed, func(w http.ResponseWriter, r *http.Request) {
-			writeErrorCode(
+			problem.Write(
 				w,
 				r,
 				"API012",
@@ -1135,7 +1134,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		// this route knows nothing matched: `spa` is also the text/html arm of
 		// every contentNegotiated endpoint, where web.json is a real resource.
 		if hasMidPathExtension(r.URL.Path) {
-			writeProblem(w, r, http.StatusNotFound, "no such resource")
+			problem.WriteStatus(w, r, http.StatusNotFound, "no such resource")
 			return
 		}
 
@@ -1155,12 +1154,17 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 					w.WriteHeader(http.StatusNoContent)
 					return
 				}
-				writeProblem(w, r, http.StatusMethodNotAllowed, r.Method+" is not allowed here")
+				problem.WriteStatus(
+					w,
+					r,
+					http.StatusMethodNotAllowed,
+					r.Method+" is not allowed here",
+				)
 				return
 			}
 		}
 		if meta {
-			writeProblem(w, r, http.StatusNotFound, "no such resource")
+			problem.WriteStatus(w, r, http.StatusNotFound, "no such resource")
 			return
 		}
 
@@ -1215,7 +1219,7 @@ func requireReady(h *Handlers, mux *routeRecorder) func(http.Handler) http.Handl
 			if !h.isReady() && !servedFromSnapshot && readsClusterState(mux, r) &&
 				ct != ContentTypeHTML && ct != ContentTypeSSE &&
 				ct != ContentTypeUnsupported {
-				writeErrorCode(w, r, "ENG001", "Docker daemon is not reachable")
+				problem.Write(w, r, "ENG001", "Docker daemon is not reachable")
 				return
 			}
 			next.ServeHTTP(w, r)

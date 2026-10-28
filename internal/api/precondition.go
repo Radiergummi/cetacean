@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
@@ -67,11 +68,11 @@ func (h *Handlers) conditional(
 					"path", r.URL.Path, "error", err)
 
 				if cerrdefs.IsUnavailable(err) {
-					writeErrorCode(w, r, "ENG001", err.Error())
+					problem.Write(w, r, "ENG001", err.Error())
 					return
 				}
 
-				writeErrorCode(w, r, "ENG004",
+				problem.Write(w, r, "ENG004",
 					"failed to read the current representation")
 				return
 			}
@@ -100,11 +101,11 @@ func (h *Handlers) conditional(
 					"path", r.URL.Path, "error", err)
 
 				if cerrdefs.IsUnavailable(err) {
-					writeErrorCode(w, r, "ENG001", err.Error())
+					problem.Write(w, r, "ENG001", err.Error())
 					return
 				}
 
-				writeErrorCode(w, r, "ENG004",
+				problem.Write(w, r, "ENG004",
 					"failed to read the current representation")
 				return
 			}
@@ -113,7 +114,7 @@ func (h *Handlers) conditional(
 			// If-Unmodified-Since has no date, so only If-Match can fail.
 			if !represented {
 				if ifMatch != "" {
-					writeErrorCode(
+					problem.Write(
 						w,
 						r,
 						"API013",
@@ -128,7 +129,7 @@ func (h *Handlers) conditional(
 
 			body, err := json.Marshal(value)
 			if err != nil {
-				writeErrorCode(w, r, "API009", "failed to serialize response")
+				problem.Write(w, r, "API009", "failed to serialize response")
 				return
 			}
 			etag := computeETag(body)
@@ -139,12 +140,12 @@ func (h *Handlers) conditional(
 			}
 
 			if reason := preconditionFailed(r, etag, modified); reason != "" {
-				writeErrorCode(w, r, "API013", reason)
+				problem.Write(w, r, "API013", reason)
 				return
 			}
 
 			if ifNoneMatch != "" && etagMatch(ifNoneMatch, etag) {
-				writeErrorCode(w, r, "API013",
+				problem.Write(w, r, "API013",
 					"If-None-Match matched the current state of the resource")
 				return
 			}

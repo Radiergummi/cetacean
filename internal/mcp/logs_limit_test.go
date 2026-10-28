@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
 
@@ -110,10 +110,10 @@ func TestLogReadsReleaseTheirSlot(t *testing.T) {
 // REST's log reads draw on the same pool when main passes it in, so the two
 // transports together stay under one cap rather than one each.
 func TestLogReadsDrawOnAPoolPassedIn(t *testing.T) {
-	shared := new(sse.Slots)
+	shared := core.New(cache.New(nil), nil)
 	for i := range logs.MaxConcurrentReads {
 		r := &http.Request{RemoteAddr: fmt.Sprintf("10.0.1.%d:1234", i)}
-		release, _, ok := shared.Acquire(r, logs.MaxConcurrentReads)
+		release, _, ok := shared.LogReads.Acquire(r, logs.MaxConcurrentReads)
 		if !ok {
 			t.Fatalf("slot %d refused while filling", i)
 		}
@@ -122,12 +122,11 @@ func TestLogReadsDrawOnAPoolPassedIn(t *testing.T) {
 
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(cache.New(nil), Options{
+	srv, err := New(shared, Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		Logs:           &fakeLogStreamer{},
 		AuthMode:       "none",
-		LogReads:       shared,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

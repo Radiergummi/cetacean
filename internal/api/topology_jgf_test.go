@@ -922,7 +922,7 @@ func TestBuildNetworkJGFOrdersSharedNetworksDeterministically(t *testing.T) {
 func TestRemovedTopologyProjectionsAreGone(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
 
 	srv := httptest.NewServer(newTestRouter(t, h, b, nil))

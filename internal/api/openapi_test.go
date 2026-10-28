@@ -33,7 +33,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 	})
 
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
 	router := newTestRouter(t, h, b, specBytes)
 

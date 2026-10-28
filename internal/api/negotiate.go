@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -241,7 +242,7 @@ func (h *Handlers) namesReadablePlugin(r *http.Request, name string) bool {
 // notAcceptable refuses a type the endpoint does not serve, naming what it
 // does. Every dispatcher that chooses among representations ends here.
 func notAcceptable(w http.ResponseWriter, r *http.Request, serves string) {
-	writeErrorCode(w, r, "API003", "this endpoint supports "+serves)
+	problem.Write(w, r, "API003", "this endpoint supports "+serves)
 }
 
 // supportedTypes lists the names a client may ask for each ContentType by.

@@ -315,9 +315,9 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
-	prom := promapi.NewProxy("http://localhost:9090", noopErrorWriter)
+	prom := promapi.NewProxy("http://localhost:9090")
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
@@ -404,7 +404,7 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
@@ -550,7 +550,7 @@ func TestMetricsProxyIsNotGatedOnClusterReadiness(t *testing.T) {
 	router := newTestRouterWithConfig(
 		t,
 		[]routerOption{
-			func(cfg *RouterConfig) { cfg.MetricsProxy = promapi.NewProxy(prom.URL, noopErrorWriter) },
+			func(cfg *RouterConfig) { cfg.MetricsProxy = promapi.NewProxy(prom.URL) },
 		},
 		withCache(cache.New(nil)),
 		withReady(notReady),

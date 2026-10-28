@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 // assetVariant is one precompressed representation of a built asset, as
@@ -191,7 +193,7 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 		// its write succeeded when nothing was registered to receive it. A
 		// wrong method on a path that *does* exist is the router catch-all's 405.
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			writeProblem(w, r, http.StatusNotFound, "no such resource")
+			problem.WriteStatus(w, r, http.StatusNotFound, "no such resource")
 			return
 		}
 
@@ -207,7 +209,7 @@ func NewSPAHandler(fsys fs.FS, basePath string) http.Handler {
 			// The shell is text/html, so a client that ruled it out cannot
 			// be answered with it.
 			if htmlUnacceptable(r.Context()) {
-				writeProblem(w, r, http.StatusNotFound, "no such resource")
+				problem.WriteStatus(w, r, http.StatusNotFound, "no such resource")
 				return
 			}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 func TestNotificationSubscribeAndMatch(t *testing.T) {
@@ -269,7 +270,7 @@ func TestStartNotificationsCancelDetachesListener(t *testing.T) {
 	c := cache.New(nil)
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{Config: cfg, AuthMode: "none"})
+	srv, err := New(core.New(c, nil), Options{Config: cfg, AuthMode: "none"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

@@ -16,6 +16,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -36,7 +37,7 @@ func lookupOr404[T any](
 	item, ok := getter(key)
 	if !ok {
 		code := notFoundCodes[resource]
-		writeErrorCode(w, r, code, fmt.Sprintf("%s %q not found", resource, key))
+		problem.Write(w, r, code, fmt.Sprintf("%s %q not found", resource, key))
 	}
 	return item, ok
 }
@@ -58,7 +59,7 @@ func lookupACL[T any](
 	}
 
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", aclResource(item)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+		problem.Write(w, r, "ACL001", "access denied")
 		var zero T
 		return zero, false
 	}
@@ -133,13 +134,13 @@ func decodeListMergePatch[T any](
 		return nil, false, false
 	}
 	if patch == nil {
-		writeErrorCode(w, r, "API008", "the merge patch must be a JSON object")
+		problem.Write(w, r, "API008", "the merge patch must be a JSON object")
 		return nil, false, false
 	}
 
 	for name := range patch {
 		if name != member {
-			writeErrorCode(w, r, "API008", fmt.Sprintf(
+			problem.Write(w, r, "API008", fmt.Sprintf(
 				"unknown member %q: this merge patch takes only %q", name, member,
 			))
 			return nil, false, false
@@ -152,7 +153,7 @@ func decodeListMergePatch[T any](
 	}
 
 	if err := json.Unmarshal(raw, &list); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+		problem.Write(w, r, "API008", "invalid JSON")
 		return nil, false, false
 	}
 
@@ -164,7 +165,7 @@ func decodeBody[T any](w http.ResponseWriter, r *http.Request, code, message str
 
 	var v T
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		writeErrorCode(w, r, code, message)
+		problem.Write(w, r, code, message)
 		return v, false
 	}
 
@@ -181,22 +182,22 @@ func writeDockerError(
 	if cerrdefs.IsNotFound(err) {
 		detail := fmt.Sprintf("%s %q not found", resource, id)
 		if code, ok := notFoundCodes[resource]; ok {
-			writeErrorCode(w, r, code, detail)
+			problem.Write(w, r, code, detail)
 		} else {
-			writeProblem(w, r, http.StatusNotFound, detail)
+			problem.WriteStatus(w, r, http.StatusNotFound, detail)
 		}
 		return
 	}
 	if cerrdefs.IsInvalidArgument(err) {
-		writeErrorCode(w, r, "ENG003", err.Error())
+		problem.Write(w, r, "ENG003", err.Error())
 		return
 	}
 	if cerrdefs.IsUnavailable(err) {
-		writeErrorCode(w, r, "ENG001", err.Error())
+		problem.Write(w, r, "ENG001", err.Error())
 		return
 	}
 	slog.Error("failed to update "+resource, "error", err)
-	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
+	problem.Write(w, r, "ENG004", "failed to update "+resource)
 }
 
 // writeResourceError handles Docker API errors for resource mutations,
@@ -209,14 +210,14 @@ func writeResourceError(
 	resource, id, conflictCode string,
 ) {
 	if preconditioned(r.Context()) && docker.IsOutOfSequence(err) {
-		writeErrorCode(w, r, "API013",
+		problem.Write(w, r, "API013",
 			"If-Match did not match the current state of the resource")
 		return
 	}
 	if cerrdefs.IsConflict(err) ||
 		cerrdefs.IsFailedPrecondition(err) ||
 		docker.IsOutOfSequence(err) {
-		writeErrorCode(w, r, conflictCode, err.Error())
+		problem.Write(w, r, conflictCode, err.Error())
 		return
 	}
 	writeDockerError(w, r, err, resource, id)
@@ -396,13 +397,13 @@ func structMergePatch(
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
+		problem.Write(w, r, "API007", "failed to read request body")
 		return nil, false
 	}
 
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+		problem.Write(w, r, "API008", "invalid JSON")
 		return nil, false
 	}
 
@@ -441,7 +442,7 @@ func writeServiceSpecPatch(
 	err error,
 ) {
 	if spe, ok := errors.AsType[*specPatchError](err); ok {
-		writeErrorCode(w, r, spe.code, spe.message)
+		problem.Write(w, r, spe.code, spe.message)
 		return
 	}
 
@@ -455,7 +456,7 @@ func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 		if r.Method == http.MethodPatch {
 			w.Header().Set("Accept-Patch", AcceptMergePatch)
 		}
-		writeErrorCode(w, r, "API004", "expected Content-Type: application/merge-patch+json")
+		problem.Write(w, r, "API004", "expected Content-Type: application/merge-patch+json")
 		return false
 	}
 	return true
@@ -488,7 +489,7 @@ func parsePatchMutator(
 
 	if !isJSONPatch && !isMergePatch {
 		w.Header().Set("Accept-Patch", AcceptPatch)
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			"API004",
@@ -499,14 +500,14 @@ func parsePatchMutator(
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
+		problem.Write(w, r, "API007", "failed to read request body")
 		return nil, false
 	}
 
 	if isJSONPatch {
 		var ops []PatchOp
 		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
+			problem.Write(w, r, "API006", "invalid request body")
 			return nil, false
 		}
 		return func(current map[string]string) (map[string]string, error) {
@@ -521,7 +522,7 @@ func parsePatchMutator(
 	// JSON surfaces as a 400 before the writer even runs an inspect.
 	var mergePatch map[string]*string
 	if err := json.Unmarshal(body, &mergePatch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+		problem.Write(w, r, "API006", "invalid request body")
 		return nil, false
 	}
 	return func(current map[string]string) (map[string]string, error) {
@@ -554,10 +555,10 @@ func isPatchApplyError(err error) bool {
 // writePatchError maps JSON Patch application errors to error codes.
 func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
 	if _, ok := errors.AsType[*testFailedError](err); ok {
-		writeErrorCode(w, r, "API010", err.Error())
+		problem.Write(w, r, "API010", err.Error())
 		return
 	}
-	writeErrorCode(w, r, "API011", err.Error())
+	problem.Write(w, r, "API011", err.Error())
 }
 
 type updateImageRequest struct {

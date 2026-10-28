@@ -11,6 +11,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 const (
@@ -136,7 +138,7 @@ func (h *Handlers) HandleDockerLatestVersion(w http.ResponseWriter, r *http.Requ
 	}
 
 	if v == nil {
-		writeErrorCode(w, r, "ENG002", "could not determine latest Docker version")
+		problem.Write(w, r, "ENG002", "could not determine latest Docker version")
 		return
 	}
 

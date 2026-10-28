@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/integrations"
 )
@@ -60,7 +61,7 @@ func representationOr404(
 	value, err := rep(r)
 	switch {
 	case errors.Is(err, errNoRepresentation):
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			notFoundCodes[resource],

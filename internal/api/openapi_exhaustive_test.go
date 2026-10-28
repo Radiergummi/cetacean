@@ -282,7 +282,7 @@ func TestSpecFixtureIDsResolve(t *testing.T) {
 	c := cache.New(nil)
 	populateSpecFixtures(c)
 
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
 
 	fixtures := map[string]http.Handler{

@@ -13,17 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
-type reqIDKey struct{}
-
 // RequestIDFrom extracts the request ID from a context.
 func RequestIDFrom(ctx context.Context) string {
-	if id, ok := ctx.Value(reqIDKey{}).(string); ok {
-		return id
-	}
-	return ""
+	return reqctx.RequestID(ctx)
 }
 
 // maxRequestIDLength bounds the request ID a proxy may forward.
@@ -58,7 +55,7 @@ func requestID(next http.Handler) http.Handler {
 			_, _ = rand.Read(buf[:])
 			id = hex.EncodeToString(buf[:])
 		}
-		ctx := context.WithValue(r.Context(), reqIDKey{}, id)
+		ctx := reqctx.WithRequestID(r.Context(), id)
 		w.Header().Set("Request-Id", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -225,7 +222,7 @@ func recovery(next http.Handler) http.Handler {
 				// Best-effort error response. If headers were already
 				// flushed (e.g. mid-SSE-stream), WriteHeader is a no-op
 				// and the partial write is harmless.
-				writeErrorCode(w, r, "API009", "internal server error")
+				problem.Write(w, r, "API009", "internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)

@@ -180,7 +180,7 @@ func (s *Server) filterRecommendations(
 	ctx context.Context,
 	items []recommendations.Recommendation,
 ) []recommendations.Recommendation {
-	return cluster.ReadableRecommendations(s.acl, auth.IdentityFromContext(ctx), items)
+	return recommendations.Readable(items, s.acl.Checker(auth.IdentityFromContext(ctx), "read"))
 }
 
 // readableEnrichedTasks filters tasks to the ones the caller may read, then

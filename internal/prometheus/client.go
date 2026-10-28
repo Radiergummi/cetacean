@@ -14,6 +14,7 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
 	"github.com/radiergummi/cetacean/internal/prom"
 )
 

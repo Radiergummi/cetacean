@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -74,10 +75,6 @@ const (
 // slot, and shutdown, for as long as the connection lives.
 var writeTimeout = 30 * time.Second
 
-// ErrorWriter is a callback for writing HTTP error responses.
-// This decouples the SSE package from the API error registry.
-type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
-
 type Broadcaster struct {
 	mu                sync.RWMutex
 	clients           map[*sseClient]struct{}
@@ -87,7 +84,6 @@ type Broadcaster struct {
 	stop              chan struct{}
 	batchInterval     time.Duration
 	keepaliveInterval time.Duration
-	writeError        ErrorWriter
 	replay            ReplaySource
 
 	// basePath prefixes the @id every event carries. It is configuration, not
@@ -107,7 +103,6 @@ type Broadcaster struct {
 
 func NewBroadcaster(
 	batchInterval time.Duration,
-	writeError ErrorWriter,
 	replay ReplaySource,
 ) *Broadcaster {
 	if batchInterval <= 0 {
@@ -120,7 +115,6 @@ func NewBroadcaster(
 		stop:              make(chan struct{}),
 		batchInterval:     batchInterval,
 		keepaliveInterval: 15 * time.Second,
-		writeError:        writeError,
 		replay:            replay,
 		epoch:             newEpoch(),
 	}
@@ -290,7 +284,7 @@ func (b *Broadcaster) ServeSSE(
 	replayType cache.EventType,
 ) {
 	if _, ok := w.(http.Flusher); !ok {
-		b.writeError(w, r, "API005", "streaming not supported")
+		problem.Write(w, r, "API005", "streaming not supported")
 		return
 	}
 
@@ -309,13 +303,13 @@ func (b *Broadcaster) ServeSSE(
 	if len(b.clients) >= MaxClients {
 		b.mu.Unlock()
 		w.Header().Set("Retry-After", RetryAfter())
-		b.writeError(w, r, "SSE001", "too many SSE connections")
+		problem.Write(w, r, "SSE001", "too many SSE connections")
 		return
 	}
 	if b.owners[client.owner] >= MaxClientsPerOwner {
 		b.mu.Unlock()
 		w.Header().Set("Retry-After", RetryAfter())
-		b.writeError(w, r, "SSE001", "too many SSE connections from this client")
+		problem.Write(w, r, "SSE001", "too many SSE connections from this client")
 		return
 	}
 	if r.Method == http.MethodHead {

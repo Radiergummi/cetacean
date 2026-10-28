@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
@@ -13,10 +12,9 @@ func (h *Handlers) HandleRecommendations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	results := cluster.ReadableRecommendations(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
+	results := recommendations.Readable(
 		h.recEngine.Results(),
+		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
 	)
 	if results == nil {
 		results = []recommendations.Recommendation{}

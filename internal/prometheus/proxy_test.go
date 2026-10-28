@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
-	http.Error(w, detail, http.StatusBadRequest)
-}
-
 func TestMetricsProxyHandler_InstantQuery(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/query" {
@@ -24,7 +20,7 @@ func TestMetricsProxyHandler_InstantQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
 	w := httptest.NewRecorder()
@@ -59,7 +55,7 @@ func TestMetricsProxyHandler_RangeQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up&start=100&end=200&step=15", nil)
 	w := httptest.NewRecorder()
@@ -71,7 +67,7 @@ func TestMetricsProxyHandler_RangeQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
-	proxy := NewProxy("http://localhost:9090", noopErrorWriter)
+	proxy := NewProxy("http://localhost:9090")
 
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	w := httptest.NewRecorder()
@@ -83,9 +79,6 @@ func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_NilProxy(t *testing.T) {
-	nilProxyErrorWriter.Store(nil)
-	defer SetNilProxyErrorWriter(noopErrorWriter)
-
 	var proxy *Proxy
 
 	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
@@ -107,7 +100,7 @@ func TestMetricsProxyHandler_Labels(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 	req := httptest.NewRequest("GET", "/metrics/labels", nil)
 	w := httptest.NewRecorder()
 	proxy.HandleMetricsLabels(w, req)
@@ -127,7 +120,7 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 	req := httptest.NewRequest("GET", "/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
 	w := httptest.NewRecorder()
@@ -139,9 +132,6 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
-	nilProxyErrorWriter.Store(nil)
-	defer SetNilProxyErrorWriter(noopErrorWriter)
-
 	var proxy *Proxy
 	req := httptest.NewRequest("GET", "/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
@@ -166,7 +156,7 @@ func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up%7B", nil)
 	w := httptest.NewRecorder()
@@ -200,17 +190,14 @@ func TestMetricsProxyHandler_RefusesAnOversizedBody(t *testing.T) {
 	for _, announce := range []bool{true, false} {
 		prom := oversizedProm(announce)
 
-		var code string
 		w := httptest.NewRecorder()
-		NewProxy(prom.URL, func(w http.ResponseWriter, _ *http.Request, c, detail string) {
-			code = c
-			http.Error(w, detail, http.StatusBadGateway)
-		}).HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		NewProxy(prom.URL).HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
 		prom.Close()
 
-		if w.Code != http.StatusBadGateway || code != "MTR008" {
-			t.Errorf("Content-Length announced = %v: status %d, code %q; want 502 MTR008",
-				announce, w.Code, code)
+		if w.Code != http.StatusBadGateway ||
+			!strings.Contains(w.Body.String(), "/api/errors/MTR008") {
+			t.Errorf("Content-Length announced = %v: status %d, body %s; want 502 MTR008",
+				announce, w.Code, w.Body.String())
 		}
 	}
 }
@@ -232,7 +219,7 @@ func TestMetricsProxyHandler_ForwardsTheUpstreamReasonOnlyFor4xx(t *testing.T) {
 		}))
 
 		w := httptest.NewRecorder()
-		NewProxy(prom.URL, noopErrorWriter).
+		NewProxy(prom.URL).
 			HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
 		prom.Close()
 

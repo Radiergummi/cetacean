@@ -524,7 +524,7 @@ func TestSSEStillStreamsUnderCompression(t *testing.T) {
 	// in sse/broadcaster.go, log_handlers.go and metricsstream.go keep working.
 	// The broadcaster is wired onto the handlers because streamList reads
 	// theirs, and a nil one panics before the stream opens.
-	broadcaster := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	broadcaster := sse.NewBroadcaster(0, nil)
 	t.Cleanup(broadcaster.Close)
 
 	router := newTestRouterWithCache(t, cache.New(nil), withBroadcaster(broadcaster))

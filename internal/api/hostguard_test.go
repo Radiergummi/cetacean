@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
@@ -48,7 +49,7 @@ func TestHostGuard_RefusesAForeignNameWith421(t *testing.T) {
 		t.Fatalf("status = %d, want 421", rec.Code)
 	}
 
-	var problem ProblemDetail
+	var problem problem.Detail
 	if err := json.NewDecoder(rec.Body).Decode(&problem); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

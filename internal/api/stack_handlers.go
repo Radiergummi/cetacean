@@ -9,7 +9,9 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -83,7 +85,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	body, err := json.Marshal(rep)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
-		writeErrorCode(w, r, "API009", "failed to serialize response")
+		problem.Write(w, r, "API009", "failed to serialize response")
 
 		return
 	}

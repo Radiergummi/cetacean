@@ -10,6 +10,8 @@ import (
 
 	json "github.com/goccy/go-json"
 	"gopkg.in/yaml.v3"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 const (
@@ -99,7 +101,7 @@ func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	serve := func(w http.ResponseWriter, r *http.Request, asYAML bool) {
 		body, err := render(r, asYAML)
 		if err != nil {
-			writeErrorCode(w, r, "API009", "failed to serialize response")
+			problem.Write(w, r, "API009", "failed to serialize response")
 
 			return
 		}

@@ -25,10 +25,6 @@ import (
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
-func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
-	http.Error(w, detail, http.StatusInternalServerError)
-}
-
 func closedReady() <-chan struct{} {
 	ch := make(chan struct{})
 	close(ch)

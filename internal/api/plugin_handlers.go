@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
@@ -24,7 +25,7 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 	plugins, err := h.pluginClient.PluginList(ctx)
 	if err != nil {
 		slog.Error("plugin list failed", "error", err)
-		writeErrorCode(w, r, "PLG001", "plugin list failed")
+		problem.Write(w, r, "PLG001", "plugin list failed")
 		return
 	}
 	if plugins == nil {
@@ -64,7 +65,7 @@ func (h *Handlers) HandleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "plugin:"+name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+		problem.Write(w, r, "ACL001", "access denied")
 		return
 	}
 
@@ -113,7 +114,7 @@ func (h *Handlers) HandleRemovePlugin(w http.ResponseWriter, r *http.Request) {
 	// precondition passed the request through to get. This one reaches the
 	// daemon, where a plugin installed since would make it a 204 instead.
 	if subjectAbsent(r.Context()) {
-		writeErrorCode(w, r, "PLG004", fmt.Sprintf("plugin %q not found", name))
+		problem.Write(w, r, "PLG004", fmt.Sprintf("plugin %q not found", name))
 		return
 	}
 
@@ -142,7 +143,7 @@ func decodePluginRemote(w http.ResponseWriter, r *http.Request) (pluginRemoteReq
 		return req, false
 	}
 	if req.Remote == "" {
-		writeErrorCode(w, r, "PLG002", "remote is required")
+		problem.Write(w, r, "PLG002", "remote is required")
 		return req, false
 	}
 
@@ -153,7 +154,7 @@ func decodePluginRemote(w http.ResponseWriter, r *http.Request) (pluginRemoteReq
 // and answers a plugin whose privileges changed since they were reviewed.
 func grantedPrivileges(w http.ResponseWriter, r *http.Request, req pluginRemoteRequest) bool {
 	if req.Privileges == nil {
-		writeErrorCode(w, r, "PLG005",
+		problem.Write(w, r, "PLG005",
 			"privileges is required: send what POST /plugins/privileges returned for this remote")
 
 		return false
@@ -166,7 +167,7 @@ func grantedPrivileges(w http.ResponseWriter, r *http.Request, req pluginRemoteR
 // that no longer match the review.
 func writePluginWriteError(w http.ResponseWriter, r *http.Request, err error, name string) {
 	if errors.Is(err, docker.ErrPluginPrivilegesChanged) {
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			"PLG006",
@@ -195,7 +196,7 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 	privileges, err := h.pluginClient.PluginPrivileges(ctx, req.Remote)
 	if err != nil {
 		slog.Error("plugin privileges check failed", "remote", req.Remote, "error", err)
-		writeErrorCode(w, r, "PLG003", "failed to check plugin privileges")
+		problem.Write(w, r, "PLG003", "failed to check plugin privileges")
 		return
 	}
 
@@ -283,7 +284,7 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := cluster.CheckPluginSettings(*plugin, settings, h.levelFor(r)); err != nil {
-		writeErrorCode(w, r, "OPS001", err.Error())
+		problem.Write(w, r, "OPS001", err.Error())
 		return
 	}
 

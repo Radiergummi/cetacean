@@ -49,7 +49,7 @@ func TestSSE_ReplaySendsSyncForAResyncSinceTheCursor(t *testing.T) {
 	h := cache.NewHistory(100)
 	appendEntries(h, 3)
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	b.Broadcast(syncEvent(h.Count()))
@@ -76,7 +76,7 @@ func TestSSE_ReplayKnowsAClientSawTheResync(t *testing.T) {
 	h := cache.NewHistory(100)
 	appendEntries(h, 3)
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -132,7 +132,7 @@ func TestSSE_ReplaySyncCoversAResyncThatRacesIt(t *testing.T) {
 	appendEntries(h, 3)
 
 	source := &racingSource{History: h}
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, source)
+	b := NewBroadcaster(10*time.Millisecond, source)
 	defer b.Close()
 	source.b = b
 
@@ -164,7 +164,6 @@ func TestSSE_ReplayCoversASyncStillInTheInbox(t *testing.T) {
 				stop:              make(chan struct{}),
 				batchInterval:     10 * time.Millisecond,
 				keepaliveInterval: time.Hour,
-				writeError:        noopErrorWriter,
 				replay:            h,
 				epoch:             newEpoch(),
 			}

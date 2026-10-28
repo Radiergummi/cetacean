@@ -9,6 +9,7 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -29,7 +30,7 @@ func (h *Handlers) updateSwarm(
 	failed swarmFailure,
 ) (swarm.Spec, bool) {
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
+		problem.Write(w, r, "SWM001", "swarm API not available")
 		return swarm.Spec{}, false
 	}
 
@@ -38,7 +39,7 @@ func (h *Handlers) updateSwarm(
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
+		problem.Write(w, r, "SWM002", "failed to inspect swarm")
 		return swarm.Spec{}, false
 	}
 
@@ -231,7 +232,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	case "manager":
 		flags.RotateManagerToken = true
 	default:
-		writeErrorCode(w, r, "SWM011", "target must be \"worker\" or \"manager\"")
+		problem.Write(w, r, "SWM011", "target must be \"worker\" or \"manager\"")
 		return
 	}
 
@@ -275,7 +276,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 	// ACL write check is handled by swarmACL middleware in the router.
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
+		problem.Write(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -306,7 +307,7 @@ func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
+		problem.Write(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -318,7 +319,7 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 	}
 
 	if body.UnlockKey == "" {
-		writeErrorCode(w, r, "SWM010", "unlockKey is required")
+		problem.Write(w, r, "SWM010", "unlockKey is required")
 		return
 	}
 
@@ -349,12 +350,12 @@ func writeSwarmErrorCode(
 	}
 
 	if cerrdefs.IsInvalidArgument(err) || cerrdefs.IsUnavailable(err) {
-		writeErrorCode(w, r, code, failed+": "+err.Error())
+		problem.Write(w, r, code, failed+": "+err.Error())
 		return
 	}
 
 	slog.Error(failed, "error", err)
-	writeErrorCode(w, r, code, failed)
+	problem.Write(w, r, code, failed)
 }
 
 // writeSwarmConflict answers a write that lost the race against another to the
@@ -364,7 +365,7 @@ func writeSwarmConflict(w http.ResponseWriter, r *http.Request, err error) bool 
 		return false
 	}
 
-	writeErrorCode(w, r, "SWM012", "the swarm changed while it was being updated")
+	problem.Write(w, r, "SWM012", "the swarm changed while it was being updated")
 
 	return true
 }

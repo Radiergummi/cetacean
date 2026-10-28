@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -108,7 +109,7 @@ func contentNegotiatedWithSSE(
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			if sseHandler == nil {
-				writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
+				problem.Write(w, r, "API001", "this endpoint does not support text/event-stream")
 				return
 			}
 

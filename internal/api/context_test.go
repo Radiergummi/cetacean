@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 // Resources use `type`, `status` and `detail` for values of their own, so the
@@ -25,7 +27,12 @@ func TestOnlyProblemDocumentsMapTheProblemMembers(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	writeProblem(w, httptest.NewRequest(http.MethodGet, "/nodes/x", nil), http.StatusNotFound, "")
+	problem.WriteStatus(
+		w,
+		httptest.NewRequest(http.MethodGet, "/nodes/x", nil),
+		http.StatusNotFound,
+		"",
+	)
 
 	var body struct {
 		Context []json.RawMessage `json:"@context"`

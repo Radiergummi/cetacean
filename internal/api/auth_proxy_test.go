@@ -30,7 +30,7 @@ func newProxyRouter(t *testing.T, provider auth.Provider, trusted []netip.Prefix
 
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	t.Cleanup(b.Close)
 
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 type PageParams struct {
@@ -201,7 +203,7 @@ func writeCollectionResponse[T any](
 			}
 
 			w.Header().Set("Content-Range", fmt.Sprintf("items */%d", resp.Total))
-			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable,
+			problem.WriteStatus(w, r, http.StatusRequestedRangeNotSatisfiable,
 				"range start is beyond the total number of items")
 			return
 		}

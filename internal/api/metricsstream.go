@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 )
 
@@ -21,12 +22,12 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query().Get("query")
 	if query == "" {
-		writeErrorCode(w, r, "MTR003", "missing required parameter: query")
+		problem.Write(w, r, "MTR003", "missing required parameter: query")
 		return
 	}
 
 	if h.promClient == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		problem.Write(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
@@ -34,7 +35,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	if s := r.URL.Query().Get("step"); s != "" {
 		v, err := strconv.Atoi(s)
 		if err != nil || v < 5 || v > 300 {
-			writeErrorCode(w, r, "MTR004", "step must be between 5 and 300 seconds")
+			problem.Write(w, r, "MTR004", "step must be between 5 and 300 seconds")
 			return
 		}
 		step = v
@@ -56,14 +57,14 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 
 	if full || !tryAcquire(&h.metricsStreamCount, maxMetricsStreamClients) {
 		w.Header().Set("Retry-After", sse.RetryAfter())
-		writeErrorCode(w, r, "MTR005", "too many metrics stream connections")
+		problem.Write(w, r, "MTR005", "too many metrics stream connections")
 		return
 	}
 	defer h.metricsStreamCount.Add(-1)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeErrorCode(w, r, "API005", "streaming not supported")
+		problem.Write(w, r, "API005", "streaming not supported")
 		return
 	}
 

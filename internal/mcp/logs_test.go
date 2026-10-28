@@ -19,6 +19,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
@@ -74,7 +75,7 @@ func newLogTestServer(t *testing.T, c *cache.Cache, logs LogStreamer) *Server {
 	t.Helper()
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		Logs:           logs,

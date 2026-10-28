@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -140,7 +141,7 @@ func TestRequireLevel_Denied(t *testing.T) {
 		t.Errorf("status=%d, want 403", w.Code)
 	}
 
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatalf("failed to decode problem: %v", err)
 	}
@@ -317,7 +318,7 @@ func TestRequireWriteACL_WithoutWriteGrant(t *testing.T) {
 		t.Errorf("status=%d, want 403", w.Code)
 	}
 
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatalf("failed to decode problem: %v", err)
 	}

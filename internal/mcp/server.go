@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,6 +27,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -252,7 +254,10 @@ type Server struct {
 	confirmations *stateSigner
 
 	secretEntries *cluster.SecretEntries
-	dashboardURL  string
+
+	// widgets are the MCP Apps bundles this server serves.
+	widgets      []uiResource
+	dashboardURL string
 
 	closeOnce sync.Once
 }
@@ -305,23 +310,13 @@ type Options struct {
 	// tracing costs nothing until CETACEAN_OTEL_ENDPOINT is set.
 	Tracer oteltrace.Tracer
 
-	// Streams ends open subscriptions/listen streams when it ends. Nil leaves
-	// them to their clients.
-	Streams *sse.Lifetime
+	// DashboardURL is the dashboard's external base, where create_secret
+	// sends a person to enter a secret. Unset turns that off.
+	DashboardURL string
 
-	// LogReads is the pool get_logs and the logs resource draw on, shared with
-	// REST's log reads. Nil gives this server a pool of its own.
-	LogReads *sse.Slots
-
-	// Versions groups configs and secrets, shared with REST so the index is
-	// rebuilt once per cache generation. Nil gives this server one of its own.
-	Versions *cluster.VersionIndex
-
-	// SecretEntries is where create_secret leaves a secret for a person to
-	// enter in the dashboard, shared with the API that completes it, and
-	// DashboardURL is the dashboard's external base. Either unset turns that off.
-	SecretEntries *cluster.SecretEntries
-	DashboardURL  string
+	// Widgets holds the built MCP Apps bundles, one directory per widget. Nil
+	// or empty serves none and leaves the UI extension unadvertised.
+	Widgets fs.FS
 }
 
 // Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
@@ -335,9 +330,9 @@ const (
 
 // New constructs an MCP server, registering its resources and tools once.
 // The returned *Server exposes Handler() for mounting on an http.ServeMux.
-func New(c *cache.Cache, opts Options) (*Server, error) {
-	if c == nil {
-		return nil, errors.New("mcp: cache is required")
+func New(shared *core.Core, opts Options) (*Server, error) {
+	if shared == nil || shared.Cache == nil {
+		return nil, errors.New("mcp: shared state with a cache is required")
 	}
 
 	guard, err := resolveGuard(opts)
@@ -347,11 +342,11 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 
 	srv := &Server{
 		confirmations:  newStateSigner(),
-		secretEntries:  opts.SecretEntries,
+		secretEntries:  shared.SecretEntries,
 		dashboardURL:   strings.TrimRight(opts.DashboardURL, "/"),
 		guard:          guard,
 		bypass:         resolveBypass(opts),
-		cache:          c,
+		cache:          shared.Cache,
 		writeClient:    opts.WriteClient,
 		logs:           opts.Logs,
 		acl:            opts.ACL,
@@ -368,17 +363,12 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		hosts:          opts.Hosts,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
-		versions:       opts.Versions,
+		versions:       shared.Versions,
 		watches:        make(chan struct{}, maxConcurrentWatches),
 		listens:        make(chan struct{}, maxListenStreams),
-		streams:        opts.Streams,
-		logReads:       opts.LogReads,
-	}
-	if srv.logReads == nil {
-		srv.logReads = new(sse.Slots)
-	}
-	if srv.versions == nil {
-		srv.versions = cluster.NewVersionIndex(c)
+		streams:        shared.Streams,
+		logReads:       shared.LogReads,
+		widgets:        uiResources(opts.Widgets),
 	}
 	srv.notifications.resolve = srv.subscriptionFor
 	srv.notifications.keys = srv.eventKeys
@@ -414,7 +404,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// are: an icon `src` must be an absolute https:// or data: URI per the
 		// spec, so without a canonical external base there is no icon to name.
 		mcpserver.WithIcons(srv.icon("server", "cetacean")...),
-		mcpserver.WithExtensions(serverExtensions()),
+		mcpserver.WithExtensions(serverExtensions(len(srv.widgets) > 0)),
 		// A tool result whose structuredContent does not conform to its
 		// declared outputSchema is rejected.
 		mcpserver.WithOutputSchemaValidation(),

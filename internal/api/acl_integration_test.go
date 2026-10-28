@@ -20,6 +20,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/jgf"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -319,7 +320,7 @@ func TestHandleCluster_ACL001_WithGrants(t *testing.T) {
 // type field contains the given error code.
 func assertACLErrorCode(t *testing.T, w *httptest.ResponseRecorder, code string) {
 	t.Helper()
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatalf("decode problem: %v", err)
 	}

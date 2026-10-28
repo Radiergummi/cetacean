@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -21,7 +22,7 @@ func TestBasePathFromContext(t *testing.T) {
 	})
 
 	t.Run("returns stored value", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), basePathKey, "/cetacean")
+		ctx := reqctx.WithBasePath(context.Background(), "/cetacean")
 		got := BasePathFromContext(ctx)
 		if got != "/cetacean" {
 			t.Errorf("expected %q, got %q", "/cetacean", got)
@@ -45,7 +46,7 @@ func TestAbsPath(t *testing.T) {
 	for _, tc := range cases {
 		ctx := context.Background()
 		if tc.basePath != "" {
-			ctx = context.WithValue(ctx, basePathKey, tc.basePath)
+			ctx = reqctx.WithBasePath(ctx, tc.basePath)
 		}
 		got := absPath(ctx, tc.path)
 		if got != tc.want {

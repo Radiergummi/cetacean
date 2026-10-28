@@ -119,7 +119,7 @@ func streamTestRouter(
 	c := cache.New(nil)
 	populateSpecFixtures(c)
 
-	broadcaster := sse.NewBroadcaster(batch, noopErrorWriter, c.History())
+	broadcaster := sse.NewBroadcaster(batch, c.History())
 	t.Cleanup(broadcaster.Close)
 
 	var frames bytes.Buffer

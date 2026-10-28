@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -96,7 +97,7 @@ func handleListOf[T, U any](
 	if spec.versions != nil {
 		var err error
 		if sel, err = versionSelection(r); err != nil {
-			writeErrorCode(w, r, "API016", err.Error())
+			problem.Write(w, r, "API016", err.Error())
 			return
 		}
 	}
@@ -220,7 +221,7 @@ func prepareList[T any](
 		err = fmt.Errorf(`invalid "sort" parameter: %q is not a sort key of this list`, p.Sort)
 	}
 	if err != nil {
-		writeErrorCode(w, r, "API016", err.Error())
+		problem.Write(w, r, "API016", err.Error())
 		return nil, versions, PageParams{}, false
 	}
 

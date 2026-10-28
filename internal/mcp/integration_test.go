@@ -15,6 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
@@ -101,7 +102,7 @@ func TestMCPEndToEnd(t *testing.T) {
 
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		AuthMode:       "none",
@@ -227,7 +228,7 @@ func newOAuthIntegrationServer(
 
 	oauthSrv := oauthServerFor(key)
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		OAuth:          oauthSrv,

@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -174,7 +175,7 @@ func TestCrossSiteRefusalIsProblemDetails(t *testing.T) {
 			ct, rec.Body.String())
 	}
 
-	var problem ProblemDetail
+	var problem problem.Detail
 	if err := json.NewDecoder(rec.Body).Decode(&problem); err != nil {
 		t.Fatalf("decode problem: %v", err)
 	}

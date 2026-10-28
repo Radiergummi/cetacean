@@ -11,6 +11,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -24,7 +26,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Replicas == nil {
-		writeErrorCode(w, r, "SVC004", "replicas is required")
+		problem.Write(w, r, "SVC004", "replicas is required")
 		return
 	}
 
@@ -33,7 +35,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if svc.Spec.Mode.Replicated == nil {
-		writeErrorCode(w, r, "SVC005", "cannot scale a global-mode service")
+		problem.Write(w, r, "SVC005", "cannot scale a global-mode service")
 		return
 	}
 
@@ -78,7 +80,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 	case "dnsrr":
 		mode = swarm.ResolutionModeDNSRR
 	default:
-		writeErrorCode(w, r, "SVC010", "mode must be one of: vip, dnsrr")
+		problem.Write(w, r, "SVC010", "mode must be one of: vip, dnsrr")
 		return
 	}
 
@@ -101,7 +103,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 	}
 	req.Image = cluster.ServiceImage(req.Image)
 	if req.Image == "" {
-		writeErrorCode(w, r, "SVC006", "image is required")
+		problem.Write(w, r, "SVC006", "image is required")
 		return
 	}
 
@@ -130,7 +132,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if svc.PreviousSpec == nil {
-		writeErrorCode(w, r, "SVC007", "service has no previous spec to rollback to")
+		problem.Write(w, r, "SVC007", "service has no previous spec to rollback to")
 		return
 	}
 
@@ -163,7 +165,7 @@ func (h *Handlers) checkHostAccessHeld(
 	}
 
 	if err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level); err != nil {
-		writeErrorCode(w, r, "OPS001", err.Error())
+		problem.Write(w, r, "OPS001", err.Error())
 		return nil, false
 	}
 
@@ -252,7 +254,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.serviceSpec.UpdateServiceEnv(ctx, id, guarded)
 	if refused != nil {
-		writeErrorCode(w, r, "OPS001", refused.Error())
+		problem.Write(w, r, "OPS001", refused.Error())
 		return
 	}
 	if err != nil {
@@ -481,7 +483,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 
 	if present {
 		if err := cluster.ValidatePorts(ports); err != nil {
-			writeErrorCode(w, r, "SVC020", err.Error())
+			problem.Write(w, r, "SVC020", err.Error())
 			return
 		}
 
@@ -932,7 +934,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 	configs := make([]*swarm.ConfigReference, len(refs))
 	for i, ref := range refs {
 		if ref.ConfigID == "" || ref.ConfigName == "" {
-			writeErrorCode(
+			problem.Write(
 				w,
 				r,
 				"SVC015",
@@ -993,12 +995,12 @@ func (h *Handlers) checkAttachable(
 	canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
 
 	if !found {
-		writeErrorCode(w, r, "SVC021", fmt.Sprintf("%s %q not found", kind, id))
+		problem.Write(w, r, "SVC021", fmt.Sprintf("%s %q not found", kind, id))
 		return false
 	}
 
 	if cluster.CheckAttachable(svc, canRead, kind, id, name) != nil {
-		writeErrorCode(w, r, "ACL001", "cannot attach "+string(kind)+" "+id)
+		problem.Write(w, r, "ACL001", "cannot attach "+string(kind)+" "+id)
 		return false
 	}
 
@@ -1040,7 +1042,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 	secrets := make([]*swarm.SecretReference, len(refs))
 	for i, ref := range refs {
 		if ref.SecretID == "" || ref.SecretName == "" {
-			writeErrorCode(
+			problem.Write(
 				w,
 				r,
 				"SVC016",
@@ -1123,7 +1125,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 	networks := make([]swarm.NetworkAttachmentConfig, len(refs))
 	for i, ref := range refs {
 		if ref.Target == "" {
-			writeErrorCode(w, r, "SVC017", "each network must have a target")
+			problem.Write(w, r, "SVC017", "each network must have a target")
 			return
 		}
 		target, found, resolveErr := h.cache.ResolveNetwork(ref.Target)
@@ -1207,12 +1209,12 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
 
 		if err := cluster.CheckVolumesAttachable(svc, canRead, mounts); err != nil {
-			writeErrorCode(w, r, "ACL001", err.Error())
+			problem.Write(w, r, "ACL001", err.Error())
 			return
 		}
 
 		if err := cluster.CheckMounts(svc, mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
-			writeErrorCode(w, r, "OPS001", err.Error())
+			problem.Write(w, r, "OPS001", err.Error())
 			return
 		}
 

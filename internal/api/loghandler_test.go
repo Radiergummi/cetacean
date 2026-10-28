@@ -20,6 +20,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
@@ -788,11 +789,9 @@ func occupy(t *testing.T, slots *sse.Slots, max, n int) {
 func TestHandleServiceLogs_DrawsOnTheSharedReadPool(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
-	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
-
-	shared := new(sse.Slots)
-	h.SetLogReads(shared)
-	occupy(t, shared, logs.MaxConcurrentReads, logs.MaxConcurrentReads)
+	shared := core.New(c, nil)
+	h := newTestHandlers(t, withCore(shared), withDockerClient(&mockLogStreamer{}))
+	occupy(t, shared.LogReads, logs.MaxConcurrentReads, logs.MaxConcurrentReads)
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")

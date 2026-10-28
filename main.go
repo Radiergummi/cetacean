@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
+	oteltrace "go.opentelemetry.io/otel/trace"
+	"tailscale.com/tsnet"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/api/sse"
@@ -30,6 +33,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/imagecheck"
 	"github.com/radiergummi/cetacean/internal/mcp"
@@ -39,8 +43,6 @@ import (
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
-	oteltrace "go.opentelemetry.io/otel/trace"
-	"tailscale.com/tsnet"
 )
 
 //go:embed frontend/dist/*
@@ -252,11 +254,7 @@ func main() {
 	stateCache := cache.New(nil)
 
 	// SSE broadcaster — needs history for Last-Event-ID replay
-	broadcaster := sse.NewBroadcaster(
-		cfg.SSEBatchInterval,
-		api.WriteErrorCode,
-		stateCache.History(),
-	)
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, stateCache.History())
 	defer broadcaster.Close()
 
 	// The metrics stream, log follows and MCP listens end with it at shutdown,
@@ -360,12 +358,11 @@ func main() {
 	}()
 
 	// API — pass ready channel so /-/ready reports sync status
-	promapi.SetNilProxyErrorWriter(api.WriteErrorCode)
 	var promClient *promapi.Client
 	var metricsProxy *promapi.Proxy
 	if cfg.PrometheusURL != "" {
 		promClient = promapi.NewClient(cfg.PrometheusURL)
-		metricsProxy = promapi.NewProxy(cfg.PrometheusURL, api.WriteErrorCode)
+		metricsProxy = promapi.NewProxy(cfg.PrometheusURL)
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
@@ -514,8 +511,9 @@ func main() {
 			"operations_level", cfg.OperationsLevel,
 		)
 	}
+	shared := core.New(stateCache, streams)
 	handlers := api.NewHandlers(
-		stateCache,
+		shared,
 		broadcaster,
 		dockerClient,
 		dockerClient,
@@ -531,20 +529,10 @@ func main() {
 	handlers.SetTokenOperationsLevel(
 		cfg.OAuth.EffectiveTokenOperationsLevel(cfg.OperationsLevel),
 	)
-	handlers.SetStreamLifetime(streams)
 
 	if imageChecker != nil {
 		handlers.SetImageDigests(imageChecker)
 	}
-
-	logReads := new(sse.Slots)
-	handlers.SetLogReads(logReads)
-
-	versionIndex := cluster.NewVersionIndex(stateCache)
-	handlers.SetVersionIndex(versionIndex)
-
-	secretEntries := cluster.NewSecretEntries()
-	handlers.SetSecretEntries(secretEntries)
 
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
@@ -646,7 +634,7 @@ func main() {
 		authProvider: authProvider,
 		issuer:       issuer,
 		dataDirReady: dataDirReady,
-		cache:        stateCache,
+		shared:       shared,
 		writeClient:  dockerClient,
 		logs:         dockerClient,
 		acl:          aclEval,
@@ -654,11 +642,6 @@ func main() {
 		prometheus:   promClient,
 		images:       imageChecker,
 		tracer:       mcpTracer,
-		streams:      streams,
-		logReads:     logReads,
-		versions:     versionIndex,
-
-		secretEntries: secretEntries,
 	}
 
 	oauthSrv := setupOAuth(deps)
@@ -1026,7 +1009,7 @@ type mcpDeps struct {
 	// than finding out by trying again.
 	dataDirReady bool
 
-	cache       *cache.Cache
+	shared      *core.Core
 	writeClient mcp.DockerWriteClient
 	logs        mcp.LogStreamer
 	acl         *acl.Evaluator
@@ -1034,11 +1017,6 @@ type mcpDeps struct {
 	prometheus  *promapi.Client
 	images      *imagecheck.Checker
 	tracer      oteltrace.Tracer
-	streams     *sse.Lifetime
-	logReads    *sse.Slots
-	versions    *cluster.VersionIndex
-
-	secretEntries *cluster.SecretEntries
 }
 
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
@@ -1151,10 +1129,9 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 	// widget at the root, which is how it derives widget names. A build that
 	// skipped `npm run build:widgets` yields an empty FS, and the server then
 	// advertises no UI extension rather than promising what it cannot serve.
-	if widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets"); err != nil {
+	widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets")
+	if err != nil {
 		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
-	} else {
-		mcp.SetWidgetFS(widgets)
 	}
 
 	// A nil *promapi.Client stored in the interface would be a non-nil
@@ -1170,7 +1147,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		imageDigests = d.images
 	}
 
-	mcpSrv, err := mcp.New(d.cache, mcp.Options{
+	mcpSrv, err := mcp.New(d.shared, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
 		ACL:             d.acl,
@@ -1188,10 +1165,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Hosts:           d.hosts,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
-		Streams:         d.streams,
-		LogReads:        d.logReads,
-		Versions:        d.versions,
-		SecretEntries:   d.secretEntries,
+		Widgets:         widgets,
 		DashboardURL:    d.issuer + d.cfg.BasePath,
 	})
 	if err != nil {

@@ -76,15 +76,6 @@ var widgetCatalog = map[string]struct {
 	},
 }
 
-// widgetFS holds the built widget bundles. main.go owns the //go:embed — the
-// directory is outside this package — and setupMCP passes it in.
-var widgetFS fs.FS
-
-// SetWidgetFS installs the built widget bundles. Called once from main before
-// the server is constructed; a nil or empty FS simply means no widgets, which
-// serverExtensions reports honestly by not advertising the UI extension.
-func SetWidgetFS(fsys fs.FS) { widgetFS = fsys }
-
 // uiResourceURI is the canonical address of a widget.
 func uiResourceURI(name string) string { return "ui://cetacean/" + name }
 
@@ -92,7 +83,7 @@ func uiResourceURI(name string) string { return "ui://cetacean/" + name }
 // Discovered rather than listed: the Vite target emits one directory per
 // widget, so there is no registry to keep in step. A malformed build yields no
 // resources, and the UI extension then goes unadvertised.
-func uiResources() []uiResource {
+func uiResources(widgetFS fs.FS) []uiResource {
 	if widgetFS == nil {
 		return nil
 	}
@@ -176,7 +167,7 @@ func toolUIMeta(widgetName string) *mcplib.Meta {
 // the FS per call. The listing's _meta.ui is a fallback; a host reading the
 // resource takes the content's copy.
 func (s *Server) registerUIResources() {
-	for _, resource := range uiResources() {
+	for _, resource := range s.widgets {
 		uri := uiResourceURI(resource.Name)
 
 		listed := mcplib.NewResource(uri, resource.Name,
@@ -207,8 +198,8 @@ func (s *Server) registerUIResources() {
 }
 
 // hasWidget reports whether the named widget was built into this binary.
-func hasWidget(name string) bool {
-	return slices.ContainsFunc(uiResources(), func(r uiResource) bool {
+func (s *Server) hasWidget(name string) bool {
+	return slices.ContainsFunc(s.widgets, func(r uiResource) bool {
 		return r.Name == name
 	})
 }
