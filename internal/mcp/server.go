@@ -140,7 +140,7 @@ const (
 )
 
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
-// tools invoke; docker.Client and api.DockerWriteClient both satisfy it. It
+// tools invoke; docker.Client satisfies it. It
 // composes one writer per operations tier, so a fake can implement only the
 // surface it exercises.
 type DockerWriteClient interface {

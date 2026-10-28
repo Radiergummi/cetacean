@@ -43,10 +43,11 @@ func TestAnEngineFailureIsReportedWithoutItsText(t *testing.T) {
 		{"unreachable", fmt.Errorf("error during connect: %w", dial), false},
 		{"no daemon", unreachableDaemon(t, internals), false},
 		{"invalid", fmt.Errorf("%w: %s", cerrdefs.ErrInvalidArgument, internals), true},
-		{"not found", fmt.Errorf("%w: %s", cerrdefs.ErrNotFound, internals), true},
+		{"not found", fmt.Errorf("%w: %s", cerrdefs.ErrNotFound, internals), false},
 		{"unavailable", fmt.Errorf("%w: %s", cerrdefs.ErrUnavailable, internals), true},
 		{"conflict", fmt.Errorf("%w: %s", cerrdefs.ErrConflict, internals), true},
-		{"out of sequence", errors.New("update out of sequence " + internals), true},
+		{"failed precondition", fmt.Errorf("%w: %s", cerrdefs.ErrFailedPrecondition, internals), false},
+		{"out of sequence", errors.New("update out of sequence " + internals), false},
 		{"cetacean's own", errors.New("section \"ports\": " + internals), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

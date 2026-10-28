@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
@@ -21,7 +20,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // lookupOr404 resolves a resource from the cache by key. Returns false (and
@@ -84,10 +82,6 @@ func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) [
 	return filtered
 }
 
-// writeDockerError handles Docker API errors that don't have a domain-specific
-// error code. Handlers should check for IsConflict/IsFailedPrecondition
-// themselves and call writeErrorCode with the appropriate code before falling
-// through to this function.
 var notFoundCodes = map[string]string{
 	"service": "SVC003",
 	"node":    "NOD003",
@@ -172,6 +166,8 @@ func decodeBody[T any](w http.ResponseWriter, r *http.Request, code, message str
 	return v, true
 }
 
+// writeDockerError is writeResourceError for a write with no conflict code,
+// whose conflicts answer as engine failures.
 func writeDockerError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -179,48 +175,90 @@ func writeDockerError(
 	resource string,
 	id string,
 ) {
-	if cerrdefs.IsNotFound(err) {
-		detail := fmt.Sprintf("%s %q not found", resource, id)
-		if code, ok := notFoundCodes[resource]; ok {
-			problem.Write(w, r, code, detail)
-		} else {
-			problem.WriteStatus(w, r, http.StatusNotFound, detail)
-		}
-		return
-	}
-	if cerrdefs.IsInvalidArgument(err) {
-		problem.Write(w, r, "ENG003", err.Error())
-		return
-	}
-	if cerrdefs.IsUnavailable(err) {
-		problem.Write(w, r, "ENG001", err.Error())
-		return
-	}
-	slog.ErrorContext(r.Context(), "failed to update "+resource, "error", err)
-	problem.Write(w, r, "ENG004", "failed to update "+resource)
+	writeResourceError(w, r, err, resource, id, "")
 }
 
-// writeResourceError handles Docker API errors for resource mutations,
-// mapping version conflicts to the given conflictCode, or to 412 when the
-// version was the one an If-Match precondition validated.
+// writeResourceError maps a refused write through cluster.ClassifyWrite,
+// answering a conflict with conflictCode, or with 412 when the version was the
+// one an If-Match precondition validated.
 func writeResourceError(
 	w http.ResponseWriter,
 	r *http.Request,
 	err error,
 	resource, id, conflictCode string,
 ) {
-	if preconditioned(r.Context()) && docker.IsOutOfSequence(err) {
-		problem.Write(w, r, "API013",
-			"If-Match did not match the current state of the resource")
-		return
+	refusal, ok := cluster.ClassifyWrite(err, resource, id)
+	if !ok {
+		refusal = &cluster.WriteError{Kind: cluster.Engine, Resource: resource, Err: err}
 	}
-	if cerrdefs.IsConflict(err) ||
-		cerrdefs.IsFailedPrecondition(err) ||
-		docker.IsOutOfSequence(err) {
-		problem.Write(w, r, conflictCode, err.Error())
+
+	writeRefusal(w, r, refusal, conflictCode)
+}
+
+// writeRefusal answers a classified refusal with its problem code; a conflict
+// without a conflictCode is an engine failure.
+func writeRefusal(
+	w http.ResponseWriter,
+	r *http.Request,
+	refusal *cluster.WriteError,
+	conflictCode string,
+) {
+	switch refusal.Kind {
+	case cluster.NotFound:
+		logWithheld(r, refusal)
+		if code, ok := notFoundCodes[refusal.Resource]; ok {
+			problem.Write(w, r, code, refusal.Detail)
+		} else {
+			problem.WriteStatus(w, r, http.StatusNotFound, refusal.Detail)
+		}
 		return
+	case cluster.Denied:
+		code := "ACL002"
+		if _, ok := errors.AsType[*cluster.AttachDeniedError](refusal.Err); ok {
+			code = "ACL001"
+		}
+		problem.Write(w, r, code, refusal.Detail)
+		return
+	case cluster.BelowTier, cluster.HostAccess:
+		problem.Write(w, r, "OPS001", refusal.Detail)
+		return
+	case cluster.Invalid:
+		problem.Write(w, r, "ENG003", refusal.Detail)
+		return
+	case cluster.Unavailable:
+		problem.Write(w, r, "ENG001", refusal.Detail)
+		return
+	case cluster.Stale:
+		if preconditioned(r.Context()) {
+			problem.Write(w, r, "API013",
+				"If-Match did not match the current state of the resource")
+			return
+		}
+		fallthrough
+	case cluster.Conflict:
+		if conflictCode != "" {
+			logWithheld(r, refusal)
+			problem.Write(w, r, conflictCode, refusal.Detail)
+			return
+		}
+	case cluster.Engine:
 	}
-	writeDockerError(w, r, err, resource, id)
+
+	slog.ErrorContext(r.Context(), "failed to update "+refusal.Resource, "error", refusal.Err)
+	problem.Write(w, r, "ENG004", "failed to update "+refusal.Resource)
+}
+
+func logWithheld(r *http.Request, refusal *cluster.WriteError) {
+	if refusal.Withheld() {
+		slog.InfoContext(
+			r.Context(),
+			"write refused",
+			"resource",
+			refusal.Resource,
+			"error",
+			refusal.Err,
+		)
+	}
 }
 
 // writeMutation calls a writer function and writes the standard detail

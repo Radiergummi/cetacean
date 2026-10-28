@@ -128,7 +128,7 @@ func (s *Server) toolUpdateServiceSecrets(
 
 	updated, err := writeClient.UpdateServiceSecrets(ctx, id, resolved)
 	if err != nil {
-		return "", fmt.Errorf("update service secrets: %w", s.refused(cond, err))
+		return "", fmt.Errorf("update service secrets: %w", s.refused(ctx, cond, err))
 	}
 
 	return marshalResult(serviceUpdate(sectionSecrets, updated))
@@ -205,7 +205,7 @@ func (s *Server) toolUpdateServiceConfigs(
 
 	updated, err := writeClient.UpdateServiceConfigs(ctx, id, resolved)
 	if err != nil {
-		return "", fmt.Errorf("update service configs: %w", s.refused(cond, err))
+		return "", fmt.Errorf("update service configs: %w", s.refused(ctx, cond, err))
 	}
 
 	return marshalResult(serviceUpdate(sectionConfigs, updated))
@@ -321,7 +321,7 @@ func (s *Server) toolUpdateServiceMounts(
 
 	updated, err := writeClient.UpdateServiceMounts(ctx, id, mounts)
 	if err != nil {
-		return "", fmt.Errorf("update service mounts: %w", s.refused(cond, err))
+		return "", fmt.Errorf("update service mounts: %w", s.refused(ctx, cond, err))
 	}
 
 	return marshalResult(serviceUpdate(sectionMounts, updated))

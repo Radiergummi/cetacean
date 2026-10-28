@@ -8,7 +8,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 type updateAvailabilityRequest struct {
@@ -104,11 +103,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	err := h.nodeWriter.RemoveNode(r.Context(), id, force)
 	if err != nil {
-		if cluster.IsRemovalConflict(err, "node") {
-			writeRemovalConflict(w, r, err, "NOD001", "node", id)
-			return
-		}
-		writeDockerError(w, r, err, "node", id)
+		writeRemovalError(w, r, err, "NOD001", "node", id)
 		return
 	}
 
