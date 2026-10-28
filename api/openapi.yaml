@@ -387,6 +387,8 @@ paths:
               schema:
                 type: object
                 description: Prometheus labels response (proxied as-is)
+        "400":
+          description: Prometheus refused the request (`MTR009`)
         "403":
           $ref: "#/components/responses/Forbidden"
         "406":
