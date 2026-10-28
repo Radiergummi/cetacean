@@ -162,7 +162,7 @@ export function useSwarmQuery<T>({
 
         // Another type's event on this stream moves what the rows were
         // derived from, so only the server can say what it changed.
-        if (event.type !== sseTypeRef.current) {
+        if (!sseTypeRef.current.split(",").includes(event.type)) {
           scheduleRefetch();
 
           return;

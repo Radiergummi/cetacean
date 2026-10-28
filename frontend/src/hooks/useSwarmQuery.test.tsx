@@ -614,6 +614,41 @@ describe("useSwarmQuery", () => {
     );
   });
 
+  it("SSE patches a row in place on a list following several types", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "n1", Name: "backend" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["networks"],
+          fetchFn,
+          sseType: "network,task",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+          derived: true,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("network", {
+        type: "network",
+        action: "update",
+        id: "n1",
+        resource: { ID: "n1", Name: "backend, renamed" },
+      }),
+    );
+
+    // The refetch answers the old name, so only the patch can show the new one.
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ ID: "n1", Name: "backend, renamed" }]),
+    );
+  });
+
   it("SSE updates keep the task counts the list computed for a service", async () => {
     const counted = { ID: "s1", Name: "web", RunningTasks: 2, DesiredTasks: 3 };
     const fetchFn = vi
