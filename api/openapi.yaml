@@ -7092,6 +7092,9 @@ components:
         older overflow is dropped. The cursor narrows that replay only: output
         the connection itself receives is delivered whatever its timestamp,
         since a task is stamped by the clock of the node running it.
+        For the same reason an event's id is the newest line of the task
+        furthest behind, at most a minute behind the newest line sent, so a
+        resume may repeat lines already delivered but skips none.
       schema:
         type: string
 

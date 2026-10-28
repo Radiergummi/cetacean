@@ -250,11 +250,7 @@ func (h *Handlers) serveLogsSSE(
 	// logs.BacklogFilter for why that distinction has to be made.
 	backlog := logs.NewBacklogFilter(since)
 
-	// The id clients resume from. Docker interleaves tasks, so a line can
-	// arrive carrying an older timestamp than one already sent; letting the id
-	// follow arrival order would move the cursor backwards and discard the
-	// lines in between on the next resume.
-	var cursor string
+	resume := logs.NewResumeCursor(since)
 
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
@@ -275,9 +271,8 @@ func (h *Handlers) serveLogsSSE(
 				continue
 			}
 			data, _ := json.Marshal(line)
-			if line.Timestamp != "" && logs.Newer(line.Timestamp, cursor) {
-				cursor = line.Timestamp
-				fmt.Fprintf(w, "id: %s\n", line.Timestamp)
+			if id, moved := resume.Observe(line); moved {
+				fmt.Fprintf(w, "id: %s\n", id)
 			}
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
