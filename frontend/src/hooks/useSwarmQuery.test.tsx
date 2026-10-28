@@ -649,6 +649,38 @@ describe("useSwarmQuery", () => {
     );
   });
 
+  it("SSE leaves a resource-less event on a filtered list to the debounced refetch", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "n1", Name: "backend" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["networks"],
+          fetchFn,
+          sseType: "network",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("network", {
+        type: "network",
+        action: "ref_changed",
+        id: "n1",
+      }),
+    );
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  });
+
   it("SSE updates keep the task counts the list computed for a service", async () => {
     const counted = { ID: "s1", Name: "web", RunningTasks: 2, DesiredTasks: 3 };
     const fetchFn = vi

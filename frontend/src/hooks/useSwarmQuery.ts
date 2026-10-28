@@ -64,6 +64,10 @@ type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 export interface SwarmQueryOptions<T> {
   queryKey: readonly unknown[];
   fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>;
+  /**
+   * The stream's types; an event of any is patched in as a row. Several types
+   * need `derived`, or one that is not the row's would be appended as a row.
+   */
   sseType: string;
   getId: (item: T) => string;
   /**
@@ -292,7 +296,7 @@ export function useSwarmQuery<T>({
               };
             });
           }
-        } else {
+        } else if (!filteredRef.current) {
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
