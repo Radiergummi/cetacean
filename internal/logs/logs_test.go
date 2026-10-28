@@ -558,3 +558,73 @@ func TestParseDetailsUnescapesLabelValues(t *testing.T) {
 		t.Errorf("attrs = %v, message = %q; want app.team %q", attrs, message, "platform team, ops")
 	}
 }
+
+func TestResumeCursor(t *testing.T) {
+	line := func(task, timestamp string) LogLine {
+		return LogLine{Timestamp: timestamp, Attrs: map[string]string{"taskId": task}}
+	}
+	observe := func(cursor *ResumeCursor, lines ...LogLine) string {
+		var id string
+		for _, l := range lines {
+			if next, changed := cursor.Observe(l); changed {
+				id = next
+			}
+		}
+
+		return id
+	}
+
+	t.Run("follows a single task", func(t *testing.T) {
+		id := observe(NewResumeCursor(""),
+			line("a", "2024-01-01T00:00:01.000000000Z"),
+			line("a", "2024-01-01T00:00:02.000000000Z"),
+		)
+		if id != "2024-01-01T00:00:02.000000000Z" {
+			t.Errorf("id = %q, want the task's newest line", id)
+		}
+	})
+
+	// A task whose node's clock trails must not have its next lines fall
+	// behind the cursor: the id is the task furthest behind.
+	t.Run("holds back for a task whose clock trails", func(t *testing.T) {
+		id := observe(NewResumeCursor(""),
+			line("a", "2024-01-01T00:00:10.000000000Z"),
+			line("b", "2024-01-01T00:00:02.000000000Z"),
+			line("a", "2024-01-01T00:00:11.000000000Z"),
+		)
+		if id != "2024-01-01T00:00:02.000000000Z" {
+			t.Errorf("id = %q, want task b's newest line", id)
+		}
+	})
+
+	t.Run(
+		"a quiet task holds it back no further than the clock skew it allows",
+		func(t *testing.T) {
+			id := observe(NewResumeCursor(""),
+				line("b", "2024-01-01T00:00:00.000000000Z"),
+				line("a", "2024-01-01T00:05:00.000000000Z"),
+			)
+			if id != "2024-01-01T00:04:00.000000000Z" {
+				t.Errorf("id = %q, want a minute behind the newest line", id)
+			}
+		},
+	)
+
+	// A task quiet for the whole connection still has lines the client was
+	// resumed for; the cursor it resumed from stays a floor.
+	t.Run("never passes the cursor it resumed from within the skew", func(t *testing.T) {
+		id := observe(NewResumeCursor("2024-01-01T00:00:05.000000000Z"),
+			line("a", "2024-01-01T00:00:30.000000000Z"),
+		)
+		if id != "2024-01-01T00:00:05.000000000Z" {
+			t.Errorf("id = %q, want the resumed cursor", id)
+		}
+	})
+
+	t.Run("ignores a line without a timestamp", func(t *testing.T) {
+		cursor := NewResumeCursor("")
+		if _, changed := cursor.Observe(line("a", "")); changed {
+			t.Error("a line without a timestamp moved the cursor")
+		}
+	})
+}

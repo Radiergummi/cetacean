@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
+- A log stream resumed after a dropped connection no longer loses the lines a node with a slower clock wrote meanwhile; resuming may now repeat lines, which the dashboard hides
 - Metric charts on the 7D range update live again instead of staying at the values they loaded with
 - Long bind mount paths on service pages wrap on narrow screens rather than widening the page
 - A query Prometheus refuses, through `GET /metrics` or the metrics console, answers `400 MTR009` with Prometheus' reason rather than `502` "Prometheus Unreachable"

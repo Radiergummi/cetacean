@@ -402,3 +402,63 @@ func (f *BacklogFilter) Keep(line LogLine) bool {
 
 	return true
 }
+
+// MaxClockSkew bounds how far a resume cursor holds back for one task's
+// clock: a task that has gone quiet would otherwise hold it back for good.
+const MaxClockSkew = time.Minute
+
+// ResumeCursor is the id a follow stream hands out. Each task's timestamps
+// come from its own node's clock, so the cursor is the task furthest behind,
+// not the newest line: a resume may replay what the client has, never skip
+// what it does not.
+type ResumeCursor struct {
+	floor  string
+	newest string
+	byTask map[string]string
+	id     string
+}
+
+// NewResumeCursor returns the cursor for a stream resuming from since, which
+// stays a floor; an empty or unparseable since starts without one.
+func NewResumeCursor(since string) *ResumeCursor {
+	floor, _ := ParseCursor(since)
+
+	return &ResumeCursor{floor: floor, newest: floor, byTask: make(map[string]string)}
+}
+
+// Observe records a delivered line and returns the id to send with it when it
+// moved the cursor.
+func (c *ResumeCursor) Observe(line LogLine) (string, bool) {
+	timestamp, ok := Canonical(line.Timestamp)
+	if !ok {
+		return "", false
+	}
+
+	task := line.Attrs["taskId"]
+	if timestamp > c.byTask[task] {
+		c.byTask[task] = timestamp
+	}
+	if timestamp > c.newest {
+		c.newest = timestamp
+	}
+
+	oldest := c.floor
+	for _, last := range c.byTask {
+		if oldest == "" || last < oldest {
+			oldest = last
+		}
+	}
+
+	if newest, err := time.Parse(dockerTimeFormat, c.newest); err == nil {
+		if bound := newest.Add(-MaxClockSkew).UTC().Format(dockerTimeFormat); oldest < bound {
+			oldest = bound
+		}
+	}
+
+	if oldest == c.id {
+		return "", false
+	}
+	c.id = oldest
+
+	return oldest, true
+}
