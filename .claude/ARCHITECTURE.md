@@ -139,8 +139,9 @@ Each of these looks like a simplification and is not.
   an edge only once both endpoints are measured, which jsdom never does, so edge
   assertions belong in the layout unit test.
 - **Attestation answers about content never expire; failures do.** Everything
-  under a digest is immutable, "no attestations" included, so only `private`,
-  `missing` (an hour) and `unavailable` (a minute) are retried. A nil
+  under a digest is immutable, "no attestations" and unparseable content
+  included, so only `private`, `missing` (an hour) and `unavailable` (a minute)
+  are retried. SBOMs have their own budget so they cannot evict images. A nil
   `attestations.Store` is the feature switched off and reports `disabled`.
 
 ## Details that bite

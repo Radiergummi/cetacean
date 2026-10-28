@@ -6949,7 +6949,7 @@ paths:
         The package table of the SPDX SBOM attached to one platform of the
         service's image. `application/spdx+json` (or the `.spdx` suffix)
         returns the SPDX document exactly as the image stores it. Errors are
-        `ATT001`–`ATT007`.
+        `ATT001`–`ATT008`.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/attestationPlatform"
@@ -6982,6 +6982,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "406":
           $ref: "#/components/responses/NotAcceptable"
+        "502":
+          $ref: "#/components/responses/AttestationUnreadable"
         "503":
           $ref: "#/components/responses/AttestationsUnavailable"
 
@@ -7025,6 +7027,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "406":
           $ref: "#/components/responses/NotAcceptable"
+        "502":
+          $ref: "#/components/responses/AttestationUnreadable"
         "503":
           $ref: "#/components/responses/AttestationsUnavailable"
 
@@ -7065,6 +7069,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "406":
           $ref: "#/components/responses/NotAcceptable"
+        "502":
+          $ref: "#/components/responses/AttestationUnreadable"
         "503":
           $ref: "#/components/responses/AttestationsUnavailable"
 
@@ -7102,6 +7108,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "406":
           $ref: "#/components/responses/NotAcceptable"
+        "502":
+          $ref: "#/components/responses/AttestationUnreadable"
         "503":
           $ref: "#/components/responses/AttestationsUnavailable"
 
@@ -7738,6 +7746,14 @@ components:
                 instance: /services/r8m2x5nk3p7q/image
                 requestId: req_a1b2c3d4e5f6
 
+    AttestationUnreadable:
+      description: >-
+        The registry served the SBOM or manifest intact, but it cannot be
+        parsed (`ATT008`); asking again gives the same answer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
     AttestationsUnavailable:
       description: The image's registry could not be read (`ATT001`); retry after Retry-After
       headers:
@@ -7993,6 +8009,10 @@ components:
             retryAfter:
               type: string
               format: date-time
+              description: >-
+                When to ask again: for an `unavailable` image, or an
+                `available` one with a platform whose `provenanceStatus` is
+                `unavailable`
             platforms:
               type: array
               items:
@@ -8012,6 +8032,12 @@ components:
           description: The service's running tasks on nodes of this platform; 0 for a task
         provenance:
           $ref: "#/components/schemas/ProvenanceSummary"
+        provenanceStatus:
+          type: string
+          enum: [private, missing, unavailable]
+          description: >-
+            Set when the image lists provenance for this platform that could
+            not be read, with the same meaning as the image's `status`
         sbom:
           type: object
           required: [digest, size, tooLarge]

@@ -20,6 +20,7 @@ type fakeFetcher struct {
 	blobs     map[string][]byte
 	failWith  map[string]error
 	calls     map[string]int
+	unbounded int           // fetches whose context had no deadline
 	gate      chan struct{} // when set, every fetch waits for it to close
 }
 
@@ -39,7 +40,7 @@ func (f *fakeFetcher) count(digest string) int {
 	return f.calls[digest]
 }
 
-func (f *fakeFetcher) enter(digest string) error {
+func (f *fakeFetcher) enter(ctx context.Context, digest string) error {
 	if f.gate != nil {
 		<-f.gate
 	}
@@ -49,15 +50,19 @@ func (f *fakeFetcher) enter(digest string) error {
 
 	f.calls[digest]++
 
+	if _, ok := ctx.Deadline(); !ok {
+		f.unbounded++
+	}
+
 	return f.failWith[digest]
 }
 
 func (f *fakeFetcher) Manifest(
-	_ context.Context,
+	ctx context.Context,
 	_ imagecheck.Reference,
 	digest string,
 ) ([]byte, string, error) {
-	if err := f.enter(digest); err != nil {
+	if err := f.enter(ctx, digest); err != nil {
 		return nil, "", err
 	}
 
@@ -75,12 +80,12 @@ func (f *fakeFetcher) Manifest(
 }
 
 func (f *fakeFetcher) Blob(
-	_ context.Context,
+	ctx context.Context,
 	_ imagecheck.Reference,
 	digest string,
 	limit int64,
 ) ([]byte, error) {
-	if err := f.enter(digest); err != nil {
+	if err := f.enter(ctx, digest); err != nil {
 		return nil, err
 	}
 
@@ -438,7 +443,7 @@ func TestEvictsByBytes(t *testing.T) {
 	withProbe(t, f)
 	withSynthetic(t, f, 100)
 	s, _ := newTestStore(f)
-	s.budget = 1 << 10
+	s.manifests.budget = 1 << 10
 
 	s.Image(context.Background(), syntheticImage)
 	s.Image(context.Background(), "registry.test/probe@"+probeIndex)
@@ -483,5 +488,164 @@ func TestNilStoreIsDisabled(t *testing.T) {
 
 	if got := s.Image(context.Background(), syntheticImage); got.Status != StatusDisabled {
 		t.Errorf("status = %s", got.Status)
+	}
+}
+
+// The client has no timeout of its own, so the store bounds every fetch.
+func TestEveryFetchHasADeadline(t *testing.T) {
+	f := newFakeFetcher()
+	image := withProbe(t, f)
+	withSynthetic(t, f, 100)
+	s, _ := newTestStore(f)
+	ctx := context.Background()
+	amd64 := Platform{OS: "linux", Architecture: "amd64"}
+
+	if _, _, err := s.SBOM(ctx, syntheticImage, amd64); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Dockerfile(
+		ctx,
+		image,
+		Platform{OS: "linux", Architecture: "arm64"},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.unbounded != 0 {
+		t.Errorf("%d fetches without a deadline", f.unbounded)
+	}
+}
+
+// An SBOM that does not parse never will; it is not the registry's fault,
+// and it is not downloaded again.
+func TestSBOMUnreadableIsCached(t *testing.T) {
+	f := newFakeFetcher()
+	withSynthetic(t, f, 100)
+	f.blobs[syntheticSBOM] = []byte(`{"predicateType":"https://spdx.dev/Document","predicate":[]}`)
+	s, c := newTestStore(f)
+	amd64 := Platform{OS: "linux", Architecture: "amd64"}
+
+	for range 2 {
+		_, _, err := s.SBOM(context.Background(), syntheticImage, amd64)
+
+		var unavailable *UnavailableError
+		if !errors.Is(err, ErrUnreadable) || errors.As(err, &unavailable) {
+			t.Fatalf("err = %v, want ErrUnreadable", err)
+		}
+
+		c.advance(time.Hour)
+	}
+
+	if n := f.count(syntheticSBOM); n != 1 {
+		t.Errorf("an unreadable SBOM was downloaded %d times", n)
+	}
+}
+
+func TestSBOMLargerThanItsDescriptorIsCached(t *testing.T) {
+	f := newFakeFetcher()
+	withSynthetic(t, f, 100)
+	f.failWith[syntheticSBOM] = imagecheck.ErrTooLarge
+	s, _ := newTestStore(f)
+	amd64 := Platform{OS: "linux", Architecture: "amd64"}
+
+	for range 2 {
+		_, _, err := s.SBOM(context.Background(), syntheticImage, amd64)
+
+		var tooLarge *TooLargeError
+		if !errors.As(err, &tooLarge) || tooLarge.Error() != "the SBOM is larger than 32 MiB" {
+			t.Fatalf("err = %v, want TooLargeError", err)
+		}
+	}
+
+	if n := f.count(syntheticSBOM); n != 1 {
+		t.Errorf("an SBOM over the cap was downloaded %d times", n)
+	}
+}
+
+func TestDockerfileManifestTooLarge(t *testing.T) {
+	f := newFakeFetcher()
+	image := withProbe(t, f)
+	f.failWith[probeManifest] = imagecheck.ErrTooLarge
+	s, _ := newTestStore(f)
+
+	_, err := s.Dockerfile(
+		context.Background(),
+		image,
+		Platform{OS: "linux", Architecture: "arm64"},
+	)
+
+	var tooLarge *TooLargeError
+	if !errors.As(err, &tooLarge) ||
+		tooLarge.Error() != "the platform manifest is larger than 4 MiB" {
+		t.Errorf("err = %v, want the manifest named", err)
+	}
+}
+
+// Re-reading an image costs manifest pulls, a blob costs none, so however
+// large an SBOM is it must not push images out.
+func TestBlobsDoNotEvictImages(t *testing.T) {
+	f := newFakeFetcher()
+	withSynthetic(t, f, 100)
+	s, _ := newTestStore(f)
+	s.blobs.budget = 1
+
+	s.Image(context.Background(), syntheticImage)
+
+	if _, _, err := s.SBOM(context.Background(), syntheticImage,
+		Platform{OS: "linux", Architecture: "amd64"}); err != nil {
+		t.Fatal(err)
+	}
+
+	s.Image(context.Background(), syntheticImage)
+
+	if n := f.count(syntheticIndex); n != 1 {
+		t.Errorf("%d index fetches; the SBOM evicted the image", n)
+	}
+}
+
+func TestOnePlatformsProvenanceFailing(t *testing.T) {
+	f := newFakeFetcher()
+	withSynthetic(t, f, 100)
+
+	armAttestation, armProvenance := digestFor("arm-att"), digestFor("arm-prov")
+	f.manifests[syntheticIndex] = strings.Replace(f.manifests[syntheticIndex], "]}", `,
+		{"digest":"`+armAttestation+`","platform":{"os":"unknown","architecture":"unknown"},
+		 "annotations":{"vnd.docker.reference.type":"attestation-manifest",
+		                "vnd.docker.reference.digest":"`+syntheticARM+`"}}]}`, 1)
+	f.manifests[armAttestation] = `{"layers":[{"digest":"` + armProvenance + `","size":10,
+		"annotations":{"in-toto.io/predicate-type":"https://slsa.dev/provenance/v1"}}]}`
+	f.failWith[armProvenance] = errors.New("registry answered 503")
+	s, c := newTestStore(f)
+
+	got := s.Image(context.Background(), syntheticImage)
+	if got.Status != StatusAvailable || len(got.Platforms) != 2 {
+		t.Fatalf("got %+v", got)
+	}
+
+	if amd := got.Platforms[0]; amd.Provenance == nil || amd.ProvenanceStatus != "" {
+		t.Errorf("amd64 = %+v", amd)
+	}
+
+	if arm := got.Platforms[1]; arm.Provenance != nil || arm.ProvenanceStatus != StatusUnavailable {
+		t.Errorf("arm64 = %+v", arm)
+	}
+
+	if !got.RetryAfter.Equal(c.now().Add(time.Minute)) {
+		t.Errorf("retryAfter = %v", got.RetryAfter)
+	}
+
+	_, err := s.Dockerfile(context.Background(), syntheticImage,
+		Platform{OS: "linux", Architecture: "arm64"})
+
+	if _, ok := errors.AsType[*UnavailableError](err); !ok {
+		t.Errorf("arm64 Dockerfile: err = %v, want UnavailableError", err)
+	}
+
+	c.advance(61 * time.Second)
+	s.Image(context.Background(), syntheticImage)
+
+	if n := f.count(armProvenance); n != 2 {
+		t.Errorf("%d fetches; a failed platform is retried after a minute", n)
 	}
 }

@@ -314,8 +314,11 @@ The `provenance` endpoint always answers `200` for a resource the caller can rea
 | `unavailable` | The registry couldn't be reached; `retryAfter` says when to ask again |
 | `disabled` | `server.image_attestations` is off |
 
+On an `available` image, a platform whose provenance couldn't be read carries `provenanceStatus`, with the same meaning
+as `status`; the other platforms are unaffected.
+
 `sbom` and `dockerfile` take a `platform` parameter, such as `linux/arm64`, needed when there is more than one
-platform to choose from. Their errors are [`ATT001`](api/errors#ATT001) to [`ATT007`](api/errors#ATT007).
+platform to choose from. Their errors are [`ATT001`](api/errors#ATT001) to [`ATT008`](api/errors#ATT008).
 
 ## Pagination
 

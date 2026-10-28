@@ -98,6 +98,18 @@ func TestTaskPlatformsArmVariantsAreAllCandidates(t *testing.T) {
 	}
 }
 
+func TestProvenanceReportsAPlatformItCouldNotRead(t *testing.T) {
+	img := imageWith(amd64, arm64)
+	img.Platforms[1].ProvenanceStatus = attestations.StatusUnavailable
+	svc := swarm.Service{Spec: swarm.ServiceSpec{TaskTemplate: taskOn("", "").Spec}}
+
+	got := ServiceProvenance(context.Background(), svc, nil, nil, &fakeAttestations{image: img})
+	if got.Platforms[0].ProvenanceStatus != "" ||
+		got.Platforms[1].ProvenanceStatus != attestations.StatusUnavailable {
+		t.Errorf("got %+v", got.Platforms)
+	}
+}
+
 func TestTaskPlatformsUnplacedGetsAll(t *testing.T) {
 	got := taskPlatforms(taskOn("", swarm.TaskStatePending), nil, imageWith(amd64, arm64))
 	if !slices.Equal(got, []attestations.Platform{amd64, arm64}) {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/imagecheck"
 )
 
 const attestedImage = "app:1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -297,7 +297,16 @@ func TestSBOMErrors(t *testing.T) {
 		code   string
 	}{
 		{attestations.ErrNoSBOM, http.StatusNotFound, "ATT002"},
-		{imagecheck.ErrTooLarge, http.StatusNotFound, "ATT005"},
+		{
+			&attestations.TooLargeError{Content: "SBOM", Limit: 32 << 20},
+			http.StatusNotFound,
+			"ATT005",
+		},
+		{
+			fmt.Errorf("%w: SPDX document: bad", attestations.ErrUnreadable),
+			http.StatusBadGateway,
+			"ATT008",
+		},
 		{
 			// Retry-After is defined for 503 (RFC 9110 §10.2.3), not for 502.
 			&attestations.UnavailableError{RetryAfter: time.Now().Add(time.Minute)},
@@ -364,6 +373,21 @@ func TestDockerfileNoSource(t *testing.T) {
 	w := getAttested(t, h, "/services/svc1/dockerfile?platform=linux/amd64", "application/json")
 	if w.Code != http.StatusNotFound || problemCode(t, w) != "ATT006" {
 		t.Errorf("%d %s", w.Code, problemCode(t, w))
+	}
+}
+
+// The Dockerfile view reads a manifest, not the SBOM; its size problem says so.
+func TestDockerfileManifestTooLarge(t *testing.T) {
+	src := &fakeAttestationSource{
+		image: twoPlatformImage(),
+		dfErr: &attestations.TooLargeError{Content: "platform manifest", Limit: 4 << 20},
+	}
+	h := newTestRouterWithCache(t, attestedCluster(), withAttestations(src))
+
+	w := getAttested(t, h, "/services/svc1/dockerfile?platform=linux/amd64", "application/json")
+	if w.Code != http.StatusNotFound || problemCode(t, w) != "ATT005" ||
+		!strings.Contains(w.Body.String(), "the platform manifest is larger than 4 MiB") {
+		t.Errorf("%d %s", w.Code, w.Body)
 	}
 }
 

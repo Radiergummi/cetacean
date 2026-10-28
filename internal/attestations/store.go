@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"slices"
 	"sync"
@@ -15,7 +16,10 @@ import (
 )
 
 const (
-	cacheBudget       = 64 << 20
+	// Every manifest fetch counts against Docker Hub's anonymous pull limit
+	// and blobs do not, so blobs are cached in a budget of their own.
+	manifestBudget    = 16 << 20
+	blobBudget        = 48 << 20
 	maxProvenanceSize = 4 << 20
 	maxSBOMSize       = 32 << 20
 	operationTimeout  = 30 * time.Second
@@ -28,7 +32,22 @@ const (
 var (
 	ErrNoSBOM          = errors.New("no SBOM for this platform")
 	ErrUnknownPlatform = errors.New("platform not in the image")
+
+	// ErrUnreadable is content the registry served intact that cannot be parsed.
+	ErrUnreadable = errors.New("unreadable attestation")
 )
+
+// TooLargeError is content over the size Cetacean reads.
+type TooLargeError struct {
+	Content string
+	Limit   int64
+}
+
+func (e *TooLargeError) Error() string {
+	return fmt.Sprintf("the %s is larger than %d MiB", e.Content, e.Limit>>20)
+}
+
+func (e *TooLargeError) Unwrap() error { return imagecheck.ErrTooLarge }
 
 // UnavailableError is a registry that could not be asked, until RetryAfter.
 type UnavailableError struct{ RetryAfter time.Time }
@@ -54,12 +73,14 @@ type Image struct {
 }
 
 // ImagePlatform is one platform of an image with its provenance parsed.
+// ProvenanceStatus says why a provenance the index lists was not read.
 type ImagePlatform struct {
-	Platform       Platform
-	ManifestDigest string
-	Provenance     *Provenance
-	SBOM           *Descriptor
-	SBOMTooLarge   bool
+	Platform         Platform
+	ManifestDigest   string
+	Provenance       *Provenance
+	ProvenanceStatus Status
+	SBOM             *Descriptor
+	SBOMTooLarge     bool
 }
 
 // Err is the image's status as an error when its attestations cannot be read.
@@ -80,20 +101,27 @@ func (img Image) Err() error {
 type Store struct {
 	fetch  Fetcher
 	now    func() time.Time
-	budget int64
 	flight singleflight.Group
 
-	mu      sync.Mutex
-	lru     *list.List
-	entries map[string]*list.Element
-	used    int64
+	mu        sync.Mutex
+	entries   map[string]*list.Element
+	manifests shelf
+	blobs     shelf
+}
+
+// shelf is one byte budget of the cache, evicting its own entries only.
+type shelf struct {
+	budget int64
+	used   int64
+	lru    *list.List
 }
 
 type cached struct {
 	key     string
-	value   any
+	value   any // an error for content that will never read
 	cost    int64
 	expires time.Time // zero for content, which never expires
+	shelf   *shelf
 }
 
 // imageEntry keeps the provenance blobs beside the parsed image, by platform
@@ -110,11 +138,11 @@ type sbomEntry struct {
 
 func NewStore(f Fetcher) *Store {
 	return &Store{
-		fetch:   f,
-		now:     time.Now,
-		budget:  cacheBudget,
-		lru:     list.New(),
-		entries: map[string]*list.Element{},
+		fetch:     f,
+		now:       time.Now,
+		entries:   map[string]*list.Element{},
+		manifests: shelf{budget: manifestBudget, lru: list.New()},
+		blobs:     shelf{budget: blobBudget, lru: list.New()},
 	}
 }
 
@@ -145,25 +173,34 @@ func (s *Store) SBOM(ctx context.Context, image string, p Platform) (*SBOM, []by
 	case platform.SBOM == nil:
 		return nil, nil, ErrNoSBOM
 	case platform.SBOMTooLarge:
-		return nil, nil, imagecheck.ErrTooLarge
+		return nil, nil, &TooLargeError{"SBOM", maxSBOMSize}
 	}
 
 	digest := platform.SBOM.Digest
 
-	value, err := s.cachedOrFetch(ctx, "sbom:"+digest, func(ctx context.Context) (cached, error) {
-		body, err := s.fetch.Blob(ctx, ref, digest, maxSBOMSize)
-		if err != nil {
-			return cached{}, err
-		}
+	value, err := s.cachedOrFetch(
+		ctx,
+		&s.blobs,
+		"sbom:"+digest,
+		func(ctx context.Context) (cached, error) {
+			body, err := s.fetch.Blob(ctx, ref, digest, maxSBOMSize)
+			if errors.Is(err, imagecheck.ErrTooLarge) {
+				err = &TooLargeError{"SBOM", maxSBOMSize}
+			}
 
-		sbom, raw, err := ParseSBOM(body)
-		if err != nil {
-			return cached{}, err
-		}
+			if err != nil {
+				return cached{}, err
+			}
 
-		// The table and the document are each about the size of the body.
-		return cached{value: sbomEntry{sbom, raw}, cost: 2 * int64(len(body))}, nil
-	})
+			sbom, raw, err := ParseSBOM(body)
+			if err != nil {
+				return cached{}, fmt.Errorf("%w: %w", ErrUnreadable, err)
+			}
+
+			// The table and the document are each about the size of the body.
+			return cached{value: sbomEntry{sbom, raw}, cost: 2 * int64(len(body))}, nil
+		},
+	)
 	if err != nil {
 		return nil, nil, s.fetchError(err)
 	}
@@ -186,6 +223,13 @@ func (s *Store) Dockerfile(ctx context.Context, image string, p Platform) (*Dock
 		return nil, err
 	}
 
+	if platform.ProvenanceStatus != "" {
+		return nil, Image{
+			Status:     platform.ProvenanceStatus,
+			RetryAfter: entry.image.RetryAfter,
+		}.Err()
+	}
+
 	statement, ok := entry.provenance[platform.ManifestDigest]
 	if !ok || platform.Provenance == nil || !platform.Provenance.HasSource {
 		return nil, ErrNoSource
@@ -197,19 +241,28 @@ func (s *Store) Dockerfile(ctx context.Context, image string, p Platform) (*Dock
 	// rather than the provenance being parsed again on every request.
 	value, err := s.cachedOrFetch(
 		ctx,
+		&s.manifests,
 		"dockerfile:"+digest,
 		func(ctx context.Context) (cached, error) {
 			body, _, err := s.fetch.Manifest(ctx, ref, digest)
+			if errors.Is(err, imagecheck.ErrTooLarge) {
+				err = &TooLargeError{"platform manifest", imagecheck.MaxManifestSize}
+			}
+
 			if err != nil {
 				return cached{}, err
 			}
 
 			m, err := parseManifest(body)
 			if err != nil {
-				return cached{}, err
+				return cached{}, fmt.Errorf("%w: platform manifest: %w", ErrUnreadable, err)
 			}
 
 			d, err := JoinDockerfile(statement, m.Layers)
+			if err != nil && !errors.Is(err, ErrNoSource) {
+				err = fmt.Errorf("%w: %w", ErrUnreadable, err)
+			}
+
 			if err != nil {
 				return cached{}, err
 			}
@@ -257,9 +310,14 @@ func (s *Store) lookup(ctx context.Context, image string) (imageEntry, imagechec
 	// public mirror of a private image must not inherit its answer.
 	key := "image:" + ref.Host + "/" + ref.Repository + "@" + digest
 
-	value, err := s.cachedOrFetch(ctx, key, func(ctx context.Context) (cached, error) {
-		return s.fetchImage(ctx, ref, digest), nil
-	})
+	value, err := s.cachedOrFetch(
+		ctx,
+		&s.manifests,
+		key,
+		func(ctx context.Context) (cached, error) {
+			return s.fetchImage(ctx, ref, digest), nil
+		},
+	)
 	if err != nil {
 		// Only the caller giving up gets here; the fetch carries on for others.
 		return imageEntry{image: Image{Status: StatusUnavailable, RetryAfter: s.now()}}, ref
@@ -303,6 +361,8 @@ func (s *Store) fetchImage(ctx context.Context, ref imagecheck.Reference, digest
 		provenance: map[string][]byte{},
 	}
 
+	var expires time.Time
+
 	for _, a := range attested {
 		platform := ImagePlatform{
 			Platform:       a.Platform,
@@ -313,12 +373,22 @@ func (s *Store) fetchImage(ctx context.Context, ref imagecheck.Reference, digest
 
 		if a.Provenance != nil && a.Provenance.Size <= maxProvenanceSize {
 			statement, err := s.fetch.Blob(ctx, ref, a.Provenance.Digest, maxProvenanceSize)
-			if err != nil {
-				return s.failure(err)
-			}
 
-			// Only a statement embedding a Dockerfile is kept, for the join.
-			if p, err := ParseProvenance(statement); err == nil {
+			// One platform's blob failing leaves the others readable; the
+			// entry expires with the earliest failure, to try it again.
+			if err != nil {
+				status, retry := classify(err)
+				platform.ProvenanceStatus = status
+
+				if until := s.now().Add(retry); expires.IsZero() || until.Before(expires) {
+					expires = until
+				}
+
+				if status == StatusUnavailable {
+					entry.image.RetryAfter = expires
+				}
+			} else if p, err := ParseProvenance(statement); err == nil {
+				// Only a statement embedding a Dockerfile is kept, for the join.
 				platform.Provenance = p
 
 				if p.HasSource {
@@ -333,21 +403,25 @@ func (s *Store) fetchImage(ctx context.Context, ref imagecheck.Reference, digest
 		entry.image.Platforms = append(entry.image.Platforms, platform)
 	}
 
-	return cached{value: entry, cost: cost}
+	return cached{value: entry, cost: cost, expires: expires}
+}
+
+// classify is the status a failed fetch leaves, and how long it holds.
+func classify(err error) (Status, time.Duration) {
+	switch {
+	case errors.Is(err, imagecheck.ErrUnauthorized):
+		return StatusPrivate, refusedRetry
+	case errors.Is(err, imagecheck.ErrNotFound):
+		return StatusMissing, refusedRetry
+	default:
+		slog.Warn("image attestations unavailable", "error", err)
+
+		return StatusUnavailable, failedRetry
+	}
 }
 
 func (s *Store) failure(err error) cached {
-	status, retry := StatusUnavailable, failedRetry
-
-	switch {
-	case errors.Is(err, imagecheck.ErrUnauthorized):
-		status, retry = StatusPrivate, refusedRetry
-	case errors.Is(err, imagecheck.ErrNotFound):
-		status, retry = StatusMissing, refusedRetry
-	default:
-		slog.Warn("image attestations unavailable", "error", err)
-	}
-
+	status, retry := classify(err)
 	expires := s.now().Add(retry)
 	image := Image{Status: status}
 
@@ -359,46 +433,66 @@ func (s *Store) failure(err error) cached {
 }
 
 func (s *Store) fetchError(err error) error {
-	if errors.Is(err, imagecheck.ErrTooLarge) {
+	if permanent(err) {
 		return err
 	}
 
 	return &UnavailableError{RetryAfter: s.now().Add(failedRetry)}
 }
 
-// cachedOrFetch returns key's live entry, or fetches it once however many
-// callers ask at the same time. The fetch is detached from any one caller, so
-// one that gives up does not fail the others.
+// permanent is a failure the content under a digest will always give.
+func permanent(err error) bool {
+	return errors.Is(err, ErrUnreadable) || errors.Is(err, ErrNoSource) ||
+		errors.Is(err, imagecheck.ErrTooLarge)
+}
+
+// cachedOrFetch returns key's live entry from sh, or fetches it once however
+// many callers ask at the same time. The fetch is detached from any one
+// caller, so one that gives up does not fail the others.
 func (s *Store) cachedOrFetch(
 	ctx context.Context,
+	sh *shelf,
 	key string,
 	fetch func(context.Context) (cached, error),
 ) (any, error) {
-	if value, ok := s.get(key); ok {
-		return value, nil
-	}
+	value, ok := s.get(key)
+	if !ok {
+		result := s.flight.DoChan(key, func() (any, error) {
+			detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationTimeout)
+			defer cancel()
 
-	result := s.flight.DoChan(key, func() (any, error) {
-		detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationTimeout)
-		defer cancel()
+			c, err := fetch(detached)
+			if permanent(err) {
+				c, err = cached{value: err, cost: 1}, nil
+			}
 
-		c, err := fetch(detached)
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
+
+			c.key = key
+			s.put(sh, c)
+
+			return c.value, nil
+		})
+
+		select {
+		case r := <-result:
+			if r.Err != nil {
+				return nil, r.Err
+			}
+
+			value = r.Val
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
-
-		c.key = key
-		s.put(c)
-
-		return c.value, nil
-	})
-
-	select {
-	case r := <-result:
-		return r.Val, r.Err
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
+
+	if err, failed := value.(error); failed {
+		return nil, err
+	}
+
+	return value, nil
 }
 
 func (s *Store) get(key string) (any, bool) {
@@ -417,14 +511,14 @@ func (s *Store) get(key string) (any, bool) {
 		return nil, false
 	}
 
-	s.lru.MoveToFront(element)
+	c.shelf.lru.MoveToFront(element)
 
 	return c.value, true
 }
 
-// put stores c and evicts the least recently used entries past the budget,
-// never c itself.
-func (s *Store) put(c cached) {
+// put stores c on sh and evicts sh's least recently used entries past its
+// budget, never c itself.
+func (s *Store) put(sh *shelf, c cached) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -432,16 +526,18 @@ func (s *Store) put(c cached) {
 		s.remove(old)
 	}
 
-	s.entries[c.key] = s.lru.PushFront(&c)
-	s.used += c.cost
+	c.shelf = sh
+	s.entries[c.key] = sh.lru.PushFront(&c)
+	sh.used += c.cost
 
-	for s.used > s.budget && s.lru.Len() > 1 {
-		s.remove(s.lru.Back())
+	for sh.used > sh.budget && sh.lru.Len() > 1 {
+		s.remove(sh.lru.Back())
 	}
 }
 
 func (s *Store) remove(element *list.Element) {
-	c := s.lru.Remove(element).(*cached)
+	c := element.Value.(*cached)
+	c.shelf.lru.Remove(element)
 	delete(s.entries, c.key)
-	s.used -= c.cost
+	c.shelf.used -= c.cost
 }

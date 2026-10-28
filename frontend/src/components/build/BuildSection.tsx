@@ -206,7 +206,15 @@ function Manifest({
   id: string;
   platform: PlatformProvenance;
 }) {
-  const { provenance, sbom, dockerfile } = platform;
+  const { provenance, provenanceStatus, sbom, dockerfile } = platform;
+
+  if (provenanceStatus) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        This platform's provenance couldn't be read: {statusLines[provenanceStatus]}
+      </p>
+    );
+  }
 
   if (!provenance) {
     return <p className="text-sm text-muted-foreground">No provenance for this platform.</p>;

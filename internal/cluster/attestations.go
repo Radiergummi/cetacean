@@ -45,12 +45,13 @@ type ImageProvenance struct {
 // PlatformProvenance is one platform of the image. RunningTasks counts a
 // service's running tasks on nodes of this platform, and is 0 for a task.
 type PlatformProvenance struct {
-	Platform       string             `json:"platform"`
-	ManifestDigest string             `json:"manifestDigest"`
-	RunningTasks   int                `json:"runningTasks"`
-	Provenance     *ProvenanceSummary `json:"provenance,omitempty"`
-	SBOM           *SBOMDescriptor    `json:"sbom,omitempty"`
-	Dockerfile     bool               `json:"dockerfile"`
+	Platform         string              `json:"platform"`
+	ManifestDigest   string              `json:"manifestDigest"`
+	RunningTasks     int                 `json:"runningTasks"`
+	Provenance       *ProvenanceSummary  `json:"provenance,omitempty"`
+	ProvenanceStatus attestations.Status `json:"provenanceStatus,omitempty"`
+	SBOM             *SBOMDescriptor     `json:"sbom,omitempty"`
+	Dockerfile       bool                `json:"dockerfile"`
 }
 
 type SBOMDescriptor struct {
@@ -343,10 +344,11 @@ func project(t AttestationTarget) ImageProvenance {
 		}
 
 		pp := PlatformProvenance{
-			Platform:       p.Platform.String(),
-			ManifestDigest: p.ManifestDigest,
-			Provenance:     summarise(p.Provenance),
-			Dockerfile:     p.Provenance != nil && p.Provenance.HasSource,
+			Platform:         p.Platform.String(),
+			ManifestDigest:   p.ManifestDigest,
+			Provenance:       summarise(p.Provenance),
+			ProvenanceStatus: p.ProvenanceStatus,
+			Dockerfile:       p.Provenance != nil && p.Provenance.HasSource,
 		}
 
 		if p.SBOM != nil {

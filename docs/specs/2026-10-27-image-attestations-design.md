@@ -112,10 +112,13 @@ costs 1 + platforms pulls once, for as long as it stays in the cache.
 - The cache is keyed by digest and holds parsed results, not raw bodies. The exception is the raw
   SPDX document, which the download needs. It is kept only while it is within the size cap.
 - It is bounded by bytes, evicting least recently used. 64 MiB by default is my call. It is not a
-  setting.
-- Answers about content never expire: "these attestations", "no attestations" and "SBOM too
-  large".
+  setting. Entries read from manifests get 16 MiB of it and SBOMs the other 48 MiB, so a large SBOM
+  cannot evict the images whose manifests cost pulls to read again.
+- Answers about content never expire: "these attestations", "no attestations", "SBOM too
+  large", and content that is intact but cannot be parsed.
 - Failures are cached for one minute, then retried: network errors, 5xx and 429.
+- When one platform's provenance blob fails, only that platform is marked with the failure's status,
+  and the image is fetched again once that status expires.
 - Two answers are cached for an hour, the same interval the update check uses:
   - "Private" (401 or 403), because a repository can become public.
   - "Missing" (404 on the pinned digest), because the registry may have deleted or garbage-collected
@@ -351,7 +354,8 @@ each state:
 - Failures are RFC 9457 problem details, each with its own registered type:
   - no SBOM for that platform;
   - an ambiguous or unknown platform;
-  - an SBOM over the size cap;
+  - an SBOM over the size cap, or a platform manifest over the manifest cap for the Dockerfile;
+  - content that is intact but cannot be parsed;
   - registry failure.
 
   Choosing status codes for these within RFC 9110 is the builder's call.

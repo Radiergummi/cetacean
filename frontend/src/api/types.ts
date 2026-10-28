@@ -1082,6 +1082,8 @@ export interface PlatformProvenance {
   manifestDigest: string;
   runningTasks: number;
   provenance?: ProvenanceSummary | undefined;
+  /** Why provenance the image lists for this platform could not be read. */
+  provenanceStatus?: "private" | "missing" | "unavailable" | undefined;
   sbom?: { digest: string; size: number; tooLarge: boolean } | undefined;
   dockerfile: boolean;
 }

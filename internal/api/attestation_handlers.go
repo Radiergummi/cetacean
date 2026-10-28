@@ -13,7 +13,6 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/imagecheck"
 )
 
 // A task never changes the image it runs, so a browser may keep its SBOM or
@@ -189,6 +188,8 @@ func writeAttestationError(w http.ResponseWriter, r *http.Request, err error) {
 
 	var status *attestations.ImageStatusError
 
+	var tooLarge *attestations.TooLargeError
+
 	switch {
 	case errors.As(err, &unavailable):
 		writeUnavailable(w, r, unavailable.RetryAfter)
@@ -196,8 +197,10 @@ func writeAttestationError(w http.ResponseWriter, r *http.Request, err error) {
 		writeErrorCode(w, r, "ATT007", "the image's attestations are "+string(status.Status))
 	case errors.Is(err, attestations.ErrNoSBOM):
 		writeErrorCode(w, r, "ATT002", "no SBOM for this platform")
-	case errors.Is(err, imagecheck.ErrTooLarge):
-		writeErrorCode(w, r, "ATT005", "the SBOM is larger than 32 MiB")
+	case errors.As(err, &tooLarge):
+		writeErrorCode(w, r, "ATT005", tooLarge.Error())
+	case errors.Is(err, attestations.ErrUnreadable):
+		writeErrorCode(w, r, "ATT008", err.Error())
 	case errors.Is(err, attestations.ErrNoSource):
 		writeErrorCode(w, r, "ATT006", "the provenance embeds no Dockerfile")
 	case errors.Is(err, cluster.ErrPlatformRequired):

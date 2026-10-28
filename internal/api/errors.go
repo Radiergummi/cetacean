@@ -631,10 +631,10 @@ var errorRegistry = map[string]ErrorDef{
 	},
 	"ATT005": {
 		Code:        "ATT005",
-		Title:       "SBOM Too Large",
+		Title:       "Attestation Too Large",
 		Status:      http.StatusNotFound,
-		Description: "The image's SBOM is larger than the 32 MiB Cetacean reads, so it is not available here.",
-		Suggestion:  "Read the SBOM from the registry directly, for example with `docker buildx imagetools inspect --format '{{json .SBOM}}'`.",
+		Description: "What the request needs is larger than Cetacean reads: an SBOM over 32 MiB, or, for the Dockerfile view, a platform manifest over 4 MiB. The detail names which.",
+		Suggestion:  "Read it from the registry directly, for example with `docker buildx imagetools inspect --format '{{json .SBOM}}'`.",
 	},
 	"ATT006": {
 		Code:        "ATT006",
@@ -649,6 +649,13 @@ var errorRegistry = map[string]ErrorDef{
 		Status:      http.StatusNotFound,
 		Description: "Nothing can be read about how this image was built: it has no attestations, is not pinned by digest, is private, is gone from its registry, or the feature is switched off.",
 		Suggestion:  "The detail names which. The provenance endpoint reports the same as a status.",
+	},
+	"ATT008": {
+		Code:        "ATT008",
+		Title:       "Unreadable Attestation",
+		Status:      http.StatusBadGateway,
+		Description: "The registry served the SBOM or manifest intact, but it cannot be parsed. Content under a digest never changes, so asking again gives the same answer.",
+		Suggestion:  "The detail names what failed to parse. Inspect it with `docker buildx imagetools inspect`, and rebuild the image if it is damaged.",
 	},
 
 	// ── VOL: volume operations ────────────────────────────────────────

@@ -146,6 +146,25 @@ describe("BuildSection", () => {
     await waitFor(() => expect(provenance).toHaveBeenCalledTimes(2));
   });
 
+  it("says when one platform's provenance couldn't be read", async () => {
+    await shown({
+      ...available,
+      platforms: [
+        {
+          platform: "linux/amd64",
+          manifestDigest: "sha256:amd",
+          runningTasks: 1,
+          dockerfile: false,
+          provenanceStatus: "unavailable",
+        },
+      ],
+    });
+
+    expect(
+      await screen.findByText(/provenance couldn't be read: The registry couldn't be reached/),
+    ).toBeInTheDocument();
+  });
+
   it("never says verified", async () => {
     const { container } = await shown(available);
 
