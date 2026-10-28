@@ -20,6 +20,7 @@ import {
 } from "../components/node-detail";
 import PageHeader from "../components/PageHeader";
 import TasksTable from "../components/TasksTable";
+import TaskTimeline from "../components/TaskTimeline";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { useEditVersion } from "../hooks/useEditVersion";
 import { useGaugeValue } from "../hooks/useGaugeValue";
@@ -262,6 +263,11 @@ export default function NodeDetail() {
         tasks={tasks ?? []}
         variant="node"
         metrics={hasCadvisor ? taskMetrics : undefined}
+      />
+
+      <TaskTimeline
+        tasks={tasks ?? []}
+        variant="node"
       />
 
       {hasPrometheus && (

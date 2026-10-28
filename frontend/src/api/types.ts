@@ -197,6 +197,7 @@ export interface Task {
   "@type"?: string;
   ID: string;
   Version: { Index: number };
+  CreatedAt: string;
   ServiceID: string;
   NodeID?: string | undefined;
   ServiceName?: string | undefined;

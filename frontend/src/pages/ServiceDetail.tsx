@@ -33,6 +33,7 @@ import { ServiceStatusCard } from "../components/service-detail/ServiceStatusCar
 import ServiceLinks from "../components/ServiceLinks";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
+import TaskTimeline from "../components/TaskTimeline";
 import { useEditVersion } from "../hooks/useEditVersion";
 import { useServiceDetail } from "../hooks/useServiceDetail";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
@@ -139,6 +140,11 @@ export default function ServiceDetail() {
         tasks={detail.tasks}
         variant="service"
         metrics={detail.hasCadvisor ? detail.taskMetrics : undefined}
+      />
+
+      <TaskTimeline
+        tasks={detail.tasks}
+        variant="service"
       />
 
       {detail.hasPrometheus && (
