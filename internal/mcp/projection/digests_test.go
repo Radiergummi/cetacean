@@ -1,4 +1,4 @@
-package cluster
+package projection
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
@@ -103,8 +104,8 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			row := RowsForTasks(
-				[]EnrichedTask{{Task: tc.task}},
+			row := cluster.RowsForTasks(
+				[]cluster.EnrichedTask{{Task: tc.task}},
 				[]swarm.Service{tc.service},
 			)[0]
 			digest := TaskDigest(tc.task, &tc.service, nil)
@@ -124,8 +125,8 @@ func TestRowsForTasksAgreesWithTaskDigest(t *testing.T) {
 // whole point of a list is telling them apart.
 func TestRowsForTasksDistinguishesReplicas(t *testing.T) {
 	svc := replicated("api", 2)
-	rows := RowsForTasks(
-		[]EnrichedTask{
+	rows := cluster.RowsForTasks(
+		[]cluster.EnrichedTask{
 			{ID: "t1", ServiceID: "svc-api", Slot: 1},
 			{ID: "t2", ServiceID: "svc-api", Slot: 2},
 		},
@@ -154,7 +155,7 @@ func TestRowsForNodesAgreesWithNodeDigest(t *testing.T) {
 	}
 
 	for _, node := range cases {
-		row := RowsForNodes([]swarm.Node{node})[0]
+		row := cluster.RowsForNodes([]swarm.Node{node})[0]
 		digest := NodeDigest(node, nil, nil)
 
 		if row.State != digest.State {

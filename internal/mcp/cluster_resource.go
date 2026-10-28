@@ -7,6 +7,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
@@ -28,7 +29,7 @@ type clusterOverview struct {
 	ServicesConverged int `json:"servicesConverged"`
 	ServicesDegraded  int `json:"servicesDegraded"`
 
-	cluster.ClusterCapacity
+	projection.ClusterCapacity
 
 	MaxNodeCPUCores    float64 `json:"maxNodeCPUCores"`
 	MaxNodeMemoryBytes int64   `json:"maxNodeMemoryBytes"`
@@ -62,7 +63,7 @@ func newClusterOverview(
 		ServicesConverged: converged,
 		ServicesDegraded:  degraded,
 
-		ClusterCapacity: cluster.CapacityOf(snap),
+		ClusterCapacity: projection.CapacityOf(snap),
 
 		MaxNodeCPUCores:    float64(snap.MaxNodeCPU),
 		MaxNodeMemoryBytes: snap.MaxNodeMemory,

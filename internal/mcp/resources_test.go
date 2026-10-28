@@ -11,9 +11,9 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/core"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
@@ -60,7 +60,7 @@ func TestReadServiceResource(t *testing.T) {
 
 	// A read of one resource serves the compact digest, not the raw
 	// swarm.Service it used to — the same shape the describe tool builds.
-	var digest cluster.Digest
+	var digest projection.Digest
 	if err := json.Unmarshal([]byte(body), &digest); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestReadTaskNamesItsParents(t *testing.T) {
 		t.Fatalf("readResource: %v", err)
 	}
 
-	var digest cluster.Digest
+	var digest projection.Digest
 	if err := json.Unmarshal([]byte(body), &digest); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
