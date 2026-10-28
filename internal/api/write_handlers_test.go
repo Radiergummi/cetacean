@@ -3882,6 +3882,26 @@ func TestHandleCreateConfig_NameConflict(t *testing.T) {
 	}
 }
 
+// A create the engine refuses is classified as every other write is, and
+// keeps the daemon's text to itself.
+func TestHandleCreateConfig_FailedPreconditionIsAConflict(t *testing.T) {
+	wc := &mockWriteClient{
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "", fmt.Errorf("%w: raft 10.0.0.9 not ready", cerrdefs.ErrFailedPrecondition)
+		},
+	}
+	h := newTestHandlers(t, withWriteClient(wc), withOpsLevel(config.OpsConfiguration))
+
+	body := `{"name":"existing","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusConflict || strings.Contains(w.Body.String(), "10.0.0.9") {
+		t.Errorf("status=%d, want 409 without the engine's text; body: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandleCreateConfig_InvalidJSON(t *testing.T) {
 	h := newTestHandlers(
 		t,
