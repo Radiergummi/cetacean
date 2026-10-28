@@ -662,6 +662,8 @@ func removalError(ctx context.Context, err error, resource, key string) error {
 	}
 	if refusal.Kind == cluster.Conflict {
 		slog.InfoContext(ctx, "removal refused", "resource", resource, "id", key, "error", err)
+
+		return refusal
 	}
 
 	return refusalError(ctx, refusal)

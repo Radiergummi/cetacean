@@ -47,6 +47,12 @@ func (e *WriteError) Unwrap() error {
 	return e.Err
 }
 
+// Withheld reports a Detail worded in place of the cause's text, which only
+// the log then keeps.
+func (e *WriteError) Withheld() bool {
+	return e.Err != nil && e.Detail != "" && e.Detail != e.Err.Error()
+}
+
 // ClassifyWrite turns the error a write returned into a WriteError, and is the
 // one place that decides which engine text a caller may see. It reports false
 // for an error that is Cetacean's own and none of the kinds: its text is ours.
@@ -58,14 +64,14 @@ func ClassifyWrite(err error, resource, key string) (*WriteError, bool) {
 	if classified, ok := errors.AsType[*WriteError](err); ok {
 		return classified, true
 	}
-	if _, ok := errors.AsType[*HostAccessError](err); ok {
-		return refusal(HostAccess, err.Error())
+	if refused, ok := errors.AsType[*HostAccessError](err); ok {
+		return refusal(HostAccess, refused.Error())
 	}
-	if _, ok := errors.AsType[*AttachDeniedError](err); ok {
-		return refusal(Denied, err.Error())
+	if denied, ok := errors.AsType[*AttachDeniedError](err); ok {
+		return refusal(Denied, denied.Error())
 	}
-	if _, ok := errors.AsType[*StackLabelDeniedError](err); ok {
-		return refusal(Denied, err.Error())
+	if denied, ok := errors.AsType[*StackLabelDeniedError](err); ok {
+		return refusal(Denied, denied.Error())
 	}
 	if docker.IsOutOfSequence(err) {
 		return refusal(Stale, fmt.Sprintf(

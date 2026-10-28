@@ -75,6 +75,9 @@ func TestClassifyWrite(t *testing.T) {
 			if tc.shown && !shown {
 				t.Errorf("Detail %q, want the error's own text", refusal.Detail)
 			}
+			if tc.kind != Engine && refusal.Withheld() == tc.shown {
+				t.Errorf("Withheld = %t, want %t", refusal.Withheld(), !tc.shown)
+			}
 		})
 	}
 }
@@ -99,12 +102,12 @@ func TestClassifyRemoval(t *testing.T) {
 		t.Errorf("Detail = %q, want the removal's own", refusal.Detail)
 	}
 
-	refusal, _ = ClassifyRemoval(
+	refusal, ok = ClassifyRemoval(
 		fmt.Errorf("%w: boom", cerrdefs.ErrInvalidArgument),
 		"network",
 		"abc",
 	)
-	if refusal.Kind != Invalid {
+	if !ok || refusal.Kind != Invalid {
 		t.Errorf("an unmarked removal error classified as %d, want Invalid", refusal.Kind)
 	}
 }

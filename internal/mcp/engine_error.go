@@ -31,6 +31,16 @@ func refusalError(ctx context.Context, refusal *cluster.WriteError) error {
 
 		return errEngineFailure
 	}
+	if refusal.Withheld() {
+		slog.InfoContext(
+			ctx,
+			"MCP write refused",
+			"resource",
+			refusal.Resource,
+			"error",
+			refusal.Err,
+		)
+	}
 
 	return refusal
 }

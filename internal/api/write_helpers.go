@@ -205,6 +205,7 @@ func writeRefusal(
 ) {
 	switch refusal.Kind {
 	case cluster.NotFound:
+		logWithheld(r, refusal)
 		if code, ok := notFoundCodes[refusal.Resource]; ok {
 			problem.Write(w, r, code, refusal.Detail)
 		} else {
@@ -236,6 +237,7 @@ func writeRefusal(
 		fallthrough
 	case cluster.Conflict:
 		if conflictCode != "" {
+			logWithheld(r, refusal)
 			problem.Write(w, r, conflictCode, refusal.Detail)
 			return
 		}
@@ -244,6 +246,19 @@ func writeRefusal(
 
 	slog.ErrorContext(r.Context(), "failed to update "+refusal.Resource, "error", refusal.Err)
 	problem.Write(w, r, "ENG004", "failed to update "+refusal.Resource)
+}
+
+func logWithheld(r *http.Request, refusal *cluster.WriteError) {
+	if refusal.Withheld() {
+		slog.InfoContext(
+			r.Context(),
+			"write refused",
+			"resource",
+			refusal.Resource,
+			"error",
+			refusal.Err,
+		)
+	}
 }
 
 // writeMutation calls a writer function and writes the standard detail
