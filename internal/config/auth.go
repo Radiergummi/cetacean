@@ -407,6 +407,29 @@ func (c *Config) ValidateTsnetMode(tlsEnabled bool) error {
 	return nil
 }
 
+// WildcardCORS reports whether origins is the single entry "*", meaning any
+// origin. Every reader asks here, so two cannot answer differently for one
+// configuration. A "*" alongside real origins is not a wildcard: the list is
+// matched literally and "*" matches nothing.
+func WildcardCORS(origins []string) bool {
+	return len(origins) == 1 && origins[0] == "*"
+}
+
+// RefuseWildcardCORS refuses server.cors.origins "*" where identity is the
+// network address: any page a visitor opens would read the API as them.
+func RefuseWildcardCORS(origins []string, authMode string) error {
+	if !WildcardCORS(origins) || authMode != "none" && authMode != "tailscale" {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"server.cors.origins cannot be \"*\" with auth.mode %q: identity comes from the "+
+			"network, so every site a visitor opens could read the API as them; "+
+			"list the origins instead",
+		authMode,
+	)
+}
+
 // RequireTrustedProxies refuses a headers-mode deployment with no list. Headers
 // mode cannot authenticate anyone without one: every claim arrives in a header
 // that any client could have sent, so the list is what separates a proxy

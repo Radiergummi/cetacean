@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -47,6 +48,13 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeCachedJSONTimed(w, r, rep, node.UpdatedAt)
+}
+
+// nodeModified is the Last-Modified of the node a request addresses.
+func (h *Handlers) nodeModified(r *http.Request) time.Time {
+	node, _ := h.cache.GetNode(r.PathValue("id"))
+
+	return node.UpdatedAt
 }
 
 // HandleNodeDrainImpact answers what draining a node would move and what it

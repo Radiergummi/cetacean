@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -80,14 +81,33 @@ func (p *Proxy) proxyTo(
 	defer resp.Body.Close()
 	metrics.RecordPrometheusRequest(resp.StatusCode, proxyDuration)
 
-	// Forward successful responses directly.
+	// Forward successful responses whole: read before the status is written,
+	// so an oversized or broken body is a problem rather than a cut-off 200.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var body []byte
+		if resp.ContentLength > maxResponseBytes {
+			err = &redactedError{
+				message: "prometheus response too large",
+				cause:   ErrResponseTooLarge,
+			}
+		} else {
+			body, err = readLimited(resp.Body)
+		}
+		if errors.Is(err, ErrResponseTooLarge) {
+			slog.Error("prometheus response too large", "url", targetURL, "limit", maxResponseBytes)
+			p.writeError(w, r, "MTR008", "the Prometheus response exceeds the proxy's size limit")
+			return
+		}
+		if err != nil {
+			slog.Error("prometheus proxy read error", "error", err)
+			p.writeError(w, r, "MTR002", err.Error())
+			return
+		}
+
 		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(resp.StatusCode)
-		if _, err := io.Copy(w, io.LimitReader(resp.Body, maxResponseBytes)); err != nil {
-			slog.Warn("prometheus proxy copy error", "error", err)
-		}
+		_, _ = w.Write(body)
 		return
 	}
 

@@ -13,6 +13,7 @@
 # version_check = true                      # Ask api.github.com for the latest Docker Engine release
 # image_check = true                        # Ask registries whether a service's image tag has moved
 # operations_level = 0                      # 0=read-only, 1=operational, 2=configuration, 3=impactful
+# allowed_hosts = []                        # Further host names Cetacean answers for
 # trusted_proxies = ""                      # Reverse proxy CIDRs/IPs (comma-separated)
 # forwarded_headers = "x-forwarded"         # Forwarding headers the proxy writes: "x-forwarded" or "forwarded"
 

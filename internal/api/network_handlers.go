@@ -59,6 +59,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 			"driver": func(n network.Summary) string { return n.Driver },
 			"scope":  func(n network.Summary) string { return n.Scope },
 		},
+		extraSorts: []string{"addresses"},
 	}
 
 	// The addresses come from the same cache, so the derived validator covers
@@ -68,7 +69,7 @@ func (h *Handlers) HandleListNetworks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r, validator = h.ifRange(r, validator)
+	r = ifRange(r, validator)
 	addresses = h.cache.NetworkAddresses()
 
 	networks, _, p, ok := prepareList(h, w, r, spec, cluster.VersionSelection{})

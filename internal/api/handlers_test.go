@@ -1221,13 +1221,12 @@ func TestHandleHistory_InvalidLimit(t *testing.T) {
 	)
 	h := newTestHandlers(t, withCache(c))
 
-	// invalid limit should fall back to default (50)
 	req := httptest.NewRequest("GET", "/history?limit=abc", nil)
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 

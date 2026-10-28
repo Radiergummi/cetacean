@@ -200,7 +200,7 @@ func isPrecondCall(n ast.Node) bool {
 	}
 
 	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != "precond" {
+	if !ok || sel.Sel.Name != "precond" && sel.Sel.Name != "precondTimed" {
 		return false
 	}
 

@@ -123,11 +123,13 @@ func contentNegotiatedWithSSE(
 				return
 			}
 
+			allowReads(w)
 			jsonHandler(w, r)
 		case ContentTypeYAML:
 			dispatchFeed(w, r, feeds.yaml, served)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
+			allowReads(w)
 			jsonHandler(w, r)
 		default:
 			notAcceptable(w, r, served)

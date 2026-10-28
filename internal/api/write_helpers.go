@@ -452,6 +452,9 @@ func writeServiceSpecPatch(
 // Returns false and writes a 415 error response if not satisfied.
 func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 	if requestMediaType(r) != "application/merge-patch+json" {
+		if r.Method == http.MethodPatch {
+			w.Header().Set("Accept-Patch", AcceptMergePatch)
+		}
 		writeErrorCode(w, r, "API004", "expected Content-Type: application/merge-patch+json")
 		return false
 	}
@@ -484,6 +487,7 @@ func parsePatchMutator(
 	isMergePatch := ct == "application/merge-patch+json"
 
 	if !isJSONPatch && !isMergePatch {
+		w.Header().Set("Accept-Patch", AcceptPatch)
 		writeErrorCode(
 			w,
 			r,

@@ -78,7 +78,7 @@ Prerequisites: a running Swarm cluster with at least 2 nodes, several stacks dep
 
 All resource list pages (Nodes, Services, Tasks, Configs, Secrets, Networks, Volumes, Stacks) use HTTP Range Request pagination with infinite scroll.
 
-- [ ] API requests include `Range: items 0-49` header (verify in browser DevTools Network tab)
+- [ ] API requests include `Range: items=0-49` header (verify in browser DevTools Network tab)
 - [ ] API responses include `Accept-Ranges: items` header
 - [ ] For partial responses: status is `206 Partial Content` with `Content-Range: items 0-49/N` header
 - [ ] For full responses (< 50 items): status is `200 OK`

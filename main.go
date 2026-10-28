@@ -143,6 +143,10 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if err := config.RefuseWildcardCORS(cfg.CORSOrigins, authCfg.Mode); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
 	tsnetMode := authCfg.Mode == "tailscale" && authCfg.Tailscale.Mode == "tsnet"
 	if tsnetMode {
 		if err := cfg.ValidateTsnetMode(tlsCfg.Enabled()); err != nil {
@@ -617,8 +621,26 @@ func main() {
 			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
 
+	var tsnetDomains []string
+	if tsnetServer != nil {
+		tsnetDomains = tsnetServer.CertDomains()
+	}
+
+	if warning := hostGuardWarning(
+		cfg.ListenAddr, cfg.PublicURL, cfg.AllowedHosts, tsnetDomains,
+	); warning != "" {
+		slog.Warn(warning)
+	}
+
+	// One set for both guards, so /mcp never answers a Host the API refuses.
+	hosts := auth.NewHostSet(
+		cfg.PublicURL,
+		append(allowedHosts(cfg.ListenAddr, tsnetDomains), cfg.AllowedHosts...)...,
+	)
+
 	deps := mcpDeps{
 		cfg:          cfg,
+		hosts:        hosts,
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
@@ -684,6 +706,7 @@ func main() {
 		AuthProvider:       authProvider,
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,
+		Hosts:              hosts,
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled() || tsnetMode,
 		TrustedProxies:     cfg.TrustedProxies,
@@ -988,6 +1011,7 @@ func serveDualListeners(
 // onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
+	hosts        auth.HostSet
 	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
@@ -1161,6 +1185,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		ImageDigests:    imageDigests,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
+		Hosts:           d.hosts,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
 		Streams:         d.streams,
@@ -1202,4 +1227,36 @@ func mcpInClear(mcpEnabled bool, authMode string, tlsEnabled bool, publicURL str
 	u, err := url.Parse(publicURL)
 
 	return err != nil || u.Scheme != "https"
+}
+
+// hostGuardWarning describes what Host the router admits when it listens
+// beyond loopback and nothing names it, or is empty when either is not so.
+func hostGuardWarning(listenAddr, publicURL string, allowed, tsnetDomains []string) string {
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil || publicURL != "" || len(allowed) > 0 || len(tsnetDomains) > 0 ||
+		host != "" && auth.IsLoopbackHost(host) {
+		return ""
+	}
+
+	admitted := "an IP address or localhost"
+	if names := allowedHosts(listenAddr, nil); len(names) > 0 {
+		admitted = "an IP address, localhost or " + strings.Join(names, ", ")
+	}
+
+	return "neither server.public_url nor server.allowed_hosts is set, so only requests whose " +
+		"Host is " + admitted + " are answered; any other name gets 421. " +
+		"Set them to every name Cetacean is reached by."
+}
+
+// allowedHosts are the names, beyond server.public_url's, the router answers
+// for: a listen host given by name, and the tailnet names a tsnet node serves.
+func allowedHosts(listenAddr string, tsnetDomains []string) []string {
+	hosts := slices.Clone(tsnetDomains)
+
+	if host, _, err := net.SplitHostPort(listenAddr); err == nil && host != "" &&
+		net.ParseIP(host) == nil {
+		hosts = append(hosts, host)
+	}
+
+	return hosts
 }

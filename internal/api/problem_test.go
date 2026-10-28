@@ -6,7 +6,40 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/spec"
 )
+
+func TestAboutBlankTitleIsTheRFC9110Phrase(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9457/about-blank-title-is-the-status-phrase")
+
+	for status, want := range map[int]string{
+		http.StatusRequestEntityTooLarge:        "Content Too Large",
+		http.StatusRequestedRangeNotSatisfiable: "Range Not Satisfiable",
+		http.StatusUnprocessableEntity:          "Unprocessable Content",
+		http.StatusNotFound:                     "Not Found",
+	} {
+		for name, write := range map[string]func(http.ResponseWriter, *http.Request){
+			"writeProblem": func(w http.ResponseWriter, r *http.Request) {
+				writeProblem(w, r, status, "detail")
+			},
+			"writeProblemTyped": func(w http.ResponseWriter, r *http.Request) {
+				writeProblemTyped(w, r, ProblemDetail{Status: status})
+			},
+		} {
+			w := httptest.NewRecorder()
+			write(w, httptest.NewRequest(http.MethodGet, "/x", nil))
+
+			var p ProblemDetail
+			if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+				t.Fatal(err)
+			}
+			if p.Title != want {
+				t.Errorf("%s(%d): title = %q, want %q", name, status, p.Title, want)
+			}
+		}
+	}
+}
 
 func TestWriteProblem(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nodes/missing", nil)
