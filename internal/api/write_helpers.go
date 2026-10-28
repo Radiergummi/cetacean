@@ -82,10 +82,6 @@ func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) [
 	return filtered
 }
 
-// writeDockerError handles Docker API errors that don't have a domain-specific
-// error code. Handlers should check for IsConflict/IsFailedPrecondition
-// themselves and call writeErrorCode with the appropriate code before falling
-// through to this function.
 var notFoundCodes = map[string]string{
 	"service": "SVC003",
 	"node":    "NOD003",
@@ -199,6 +195,8 @@ func writeResourceError(
 	writeRefusal(w, r, refusal, conflictCode)
 }
 
+// writeRefusal answers a classified refusal with its problem code; a conflict
+// without a conflictCode is an engine failure.
 func writeRefusal(
 	w http.ResponseWriter,
 	r *http.Request,

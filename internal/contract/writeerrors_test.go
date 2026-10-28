@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,19 +40,27 @@ func (f refusingMCPWriter) ScaleService(context.Context, string, uint64) (swarm.
 func TestEngineTextIsWithheldAlikeAcrossTransports(t *testing.T) {
 	const internals = "/var/run/docker.sock on node-7"
 
+	engine := func(class error) error { return fmt.Errorf("%w: %s", class, internals) }
+
 	for _, tc := range []struct {
 		name  string
-		class error
+		err   error
 		shown bool
 	}{
-		{"internal", cerrdefs.ErrInternal, false},
-		{"not found", cerrdefs.ErrNotFound, false},
-		{"failed precondition", cerrdefs.ErrFailedPrecondition, false},
-		{"invalid", cerrdefs.ErrInvalidArgument, true},
+		{"internal", engine(cerrdefs.ErrInternal), false},
+		{"not found", engine(cerrdefs.ErrNotFound), false},
+		{"failed precondition", engine(cerrdefs.ErrFailedPrecondition), false},
+		{"out of sequence", errors.New("update out of sequence " + internals), false},
+		{"invalid", engine(cerrdefs.ErrInvalidArgument), true},
+		{"unavailable", engine(cerrdefs.ErrUnavailable), true},
+		{"conflict", engine(cerrdefs.ErrConflict), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := fmt.Errorf("%w: %s", tc.class, internals)
-			w := NewWorldWithWriters(t, refusingRESTWriter{err: err}, refusingMCPWriter{err: err})
+			w := NewWorldWithWriters(
+				t,
+				refusingRESTWriter{err: tc.err},
+				refusingMCPWriter{err: tc.err},
+			)
 
 			overREST := scaleRefusalOverREST(t, w)
 			overMCP := scaleRefusalOverMCP(t, w)

@@ -102,8 +102,8 @@ func (s *Server) pinChecked(
 }
 
 // refused reports a write the engine turned away for being out of sequence as
-// the caller's version having gone stale. Any other error goes through
-// writeFailure.
+// the caller's version having gone stale. Any other error is reported as
+// writeFailure reports it.
 func (s *Server) refused(ctx context.Context, c condition, err error) error {
 	refusal, ok := cluster.ClassifyWrite(err, c.kind, c.id)
 	if !ok {
