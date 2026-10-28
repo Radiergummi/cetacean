@@ -231,12 +231,11 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ctx, ok := h.checkHostAccessHeld(w, r, svc, "")
+	ctx, check, ok := h.holdServiceMap(w, r, svc, cluster.EnvChange)
 	if !ok {
 		return
 	}
 
-	level := h.levelFor(r)
 	var refused error
 	guarded := func(current map[string]string) (map[string]string, error) {
 		updated, err := mutate(current)
@@ -244,8 +243,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 			return nil, err
 		}
 
-		change := cluster.EnvChange(current, updated)
-		refused = cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level)
+		refused = check(current, updated)
 
 		return updated, refused
 	}
@@ -297,12 +295,22 @@ func (h *Handlers) HandlePatchServiceLabels(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// holdServiceLabels refuses a label change to a service holding host access
-// below level 3, judged inside the write against Docker's labels.
 func (h *Handlers) holdServiceLabels(
 	w http.ResponseWriter,
 	r *http.Request,
 	svc swarm.Service,
+) (context.Context, func(before, after map[string]string) error, bool) {
+	return h.holdServiceMap(w, r, svc, cluster.LabelsChange)
+}
+
+// holdServiceMap refuses a change to one of a service's maps, as describe
+// names it, to a service holding host access below level 3; check judges it
+// inside the write, against Docker's copy of the map.
+func (h *Handlers) holdServiceMap(
+	w http.ResponseWriter,
+	r *http.Request,
+	svc swarm.Service,
+	describe func(before, after map[string]string) string,
 ) (context.Context, func(before, after map[string]string) error, bool) {
 	ctx, ok := h.checkHostAccessHeld(w, r, svc, "")
 	if !ok {
@@ -311,8 +319,7 @@ func (h *Handlers) holdServiceLabels(
 
 	level := h.levelFor(r)
 	check := func(before, after map[string]string) error {
-		change := cluster.LabelsChange(before, after)
-		return cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level)
+		return cluster.CheckHostAccessHeld(svc, describe(before, after), h.cache.GetVolume, level)
 	}
 
 	return ctx, check, true
