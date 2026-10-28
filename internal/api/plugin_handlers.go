@@ -284,7 +284,7 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := cluster.CheckPluginSettings(*plugin, settings, h.levelFor(r)); err != nil {
-		problem.Write(w, r, "OPS001", err.Error())
+		writeDockerError(w, r, err, "plugin", name)
 		return
 	}
 

@@ -136,17 +136,34 @@ func NewWorld(t *testing.T) *World {
 func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
 	t.Helper()
 
-	return newWorld(t, level, nil)
+	return newWorld(t, level, nil, nil, nil)
 }
 
 // NewWorldWithWidgets is NewWorld with MCP serving the widget bundles in widgets.
 func NewWorldWithWidgets(t *testing.T, widgets fs.FS) *World {
 	t.Helper()
 
-	return newWorld(t, config.OpsImpactful, widgets)
+	return newWorld(t, config.OpsImpactful, widgets, nil, nil)
 }
 
-func newWorld(t *testing.T, level config.OperationsLevel, widgets fs.FS) *World {
+// NewWorldWithWriters is NewWorld with a Docker writer behind each transport.
+func NewWorldWithWriters(
+	t *testing.T,
+	rest api.DockerWriteClient,
+	agent mcp.DockerWriteClient,
+) *World {
+	t.Helper()
+
+	return newWorld(t, config.OpsImpactful, nil, rest, agent)
+}
+
+func newWorld(
+	t *testing.T,
+	level config.OperationsLevel,
+	widgets fs.FS,
+	rest api.DockerWriteClient,
+	agent mcp.DockerWriteClient,
+) *World {
 	t.Helper()
 
 	c := cache.New(nil)
@@ -173,7 +190,7 @@ func newWorld(t *testing.T, level config.OperationsLevel, widgets fs.FS) *World 
 	shared := core.New(c, nil)
 	handlers := api.NewHandlers(
 		shared, broadcaster,
-		nil, nil, nil, nil,
+		nil, nil, rest, nil,
 		ready,
 		nil,
 		level,
@@ -188,8 +205,9 @@ func newWorld(t *testing.T, level config.OperationsLevel, widgets fs.FS) *World 
 	authProvider := headersProvider()
 
 	mcpServer, err := mcp.New(shared, mcp.Options{
-		ACL:     evaluator,
-		Widgets: widgets,
+		ACL:         evaluator,
+		Widgets:     widgets,
+		WriteClient: agent,
 		Config: config.MCPConfig{
 			Enabled:         true,
 			OperationsLevel: config.OpsInherit,

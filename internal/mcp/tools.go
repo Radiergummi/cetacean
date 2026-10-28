@@ -453,7 +453,7 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 	}
 	svc, err := wc.ScaleService(ctx, id, uint64(replicas))
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -494,7 +494,7 @@ func (s *Server) toolUpdateServiceImage(
 	}
 	svc, err := wc.UpdateServiceImage(ctx, id, image)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -527,7 +527,7 @@ func (s *Server) toolRollbackService(
 	}
 	svc, err := wc.RollbackService(ctx, id)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -607,7 +607,7 @@ func (s *Server) toolRestartService(
 	}
 	svc, err := wc.RestartService(ctx, id)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -646,7 +646,7 @@ func (s *Server) removeResolvedHandler(
 			return "", err
 		}
 		if err := remove(wc, ctx, id); err != nil {
-			return "", removalError(err, resource, id)
+			return "", removalError(ctx, err, resource, id)
 		}
 		logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
 		return marshalResult(removalResult{Removed: true})
@@ -655,14 +655,16 @@ func (s *Server) removeResolvedHandler(
 
 // removalError keeps the engine's text out of a refused removal, as the
 // caller may not be allowed to see what is in the way. The log keeps it.
-func removalError(err error, resource, key string) error {
-	if !cluster.IsRemovalConflict(err, resource) {
-		return engineFailure(err)
+func removalError(ctx context.Context, err error, resource, key string) error {
+	refusal, ok := cluster.ClassifyRemoval(err, resource, key)
+	if !ok {
+		return err
+	}
+	if refusal.Kind == cluster.Conflict {
+		slog.InfoContext(ctx, "removal refused", "resource", resource, "id", key, "error", err)
 	}
 
-	slog.Info("removal refused", "resource", resource, "id", key, "error", err)
-
-	return errors.New(cluster.RemovalConflictDetail(resource, key))
+	return refusalError(ctx, refusal)
 }
 
 func (s *Server) toolUpdateNodeLabels(
@@ -692,7 +694,7 @@ func (s *Server) toolUpdateNodeLabels(
 	}
 	updated, err := wc.UpdateNodeLabels(ctx, id, mergePatchMutator(patch))
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	return marshalResult(nodeUpdate(sectionLabels, updated))
 }
@@ -717,7 +719,7 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 		return "", err
 	}
 	if err := wc.RemoveVolume(ctx, name, force); err != nil {
-		return "", removalError(err, "volume", name)
+		return "", removalError(ctx, err, "volume", name)
 	}
 	logConfirmableWrite(ctx, req.Params.Name, "volume:"+name, confirmed)
 	return marshalResult(removalResult{Removed: true})

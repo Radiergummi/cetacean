@@ -48,7 +48,7 @@ func (s *Server) pinVersion(
 ) (context.Context, string, condition, error) {
 	raw, present := req.GetArguments()["version"]
 	if !present || raw == nil {
-		return ctx, arg, condition{}, nil
+		return ctx, arg, condition{kind: kind, id: arg}, nil
 	}
 
 	number, ok := raw.(float64)
@@ -103,10 +103,14 @@ func (s *Server) pinChecked(
 
 // refused reports a write the engine turned away for being out of sequence as
 // the caller's version having gone stale. Any other error goes through
-// engineFailure.
-func (s *Server) refused(c condition, err error) error {
-	if !c.set || !docker.IsOutOfSequence(err) {
-		return engineFailure(err)
+// writeFailure.
+func (s *Server) refused(ctx context.Context, c condition, err error) error {
+	refusal, ok := cluster.ClassifyWrite(err, c.kind, c.id)
+	if !ok {
+		return err
+	}
+	if !c.set || refusal.Kind != cluster.Stale {
+		return refusalError(ctx, refusal)
 	}
 
 	if stale, ok := errors.AsType[*docker.StaleVersionError](err); ok {

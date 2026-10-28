@@ -450,7 +450,7 @@ func (s *Server) toolUpdateService(
 
 	updated, err := write(writeClient, ctx, id, req, section)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 
 	return marshalResult(serviceUpdate(section, updated))
@@ -551,7 +551,7 @@ func (s *Server) toolUpdateNode(
 	}
 
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 
 	logConfirmableWrite(ctx, req.Params.Name, "node:"+id, confirmed)

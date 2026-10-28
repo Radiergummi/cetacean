@@ -56,6 +56,9 @@ liability — it is the only part of the previous version of this file that rott
   MCP wants it below its transport, not because REST calls it. Putting a
   one-sided projection there invites the next reader to assume a sharing that
   does not exist, which is how the topology builders drifted.
+- A refused write is classified once, by `cluster.ClassifyWrite`, which also
+  decides what of the engine's text a caller sees. A transport maps the
+  `WriteError` it returns and never renders the engine's error itself.
 - Dashboard affordances gate on what the server computed, never on a client-side
   reading of the policy: a resource's own writes on its `Allow`, a sub-resource's
   on the parent's `rel="edit"` link to it.

@@ -165,7 +165,7 @@ func (h *Handlers) checkHostAccessHeld(
 	}
 
 	if err := cluster.CheckHostAccessHeld(svc, change, h.cache.GetVolume, level); err != nil {
-		problem.Write(w, r, "OPS001", err.Error())
+		writeResourceError(w, r, err, "service", svc.ID, "SVC001")
 		return nil, false
 	}
 
@@ -254,7 +254,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.serviceSpec.UpdateServiceEnv(ctx, id, guarded)
 	if refused != nil {
-		problem.Write(w, r, "OPS001", refused.Error())
+		writeResourceError(w, r, refused, "service", id, "SVC001")
 		return
 	}
 	if err != nil {
@@ -415,7 +415,7 @@ func patchServiceSpecField[T any](
 					h.cache.GetVolume,
 					level,
 				); err != nil {
-					return &specPatchError{"OPS001", err.Error()}
+					return err
 				}
 			}
 
@@ -786,7 +786,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 
 			current := swarm.Service{Spec: *spec}
 			if err := cluster.CheckCapabilities(current, merged.CapabilityAdd, level); err != nil {
-				return &specPatchError{"OPS001", err.Error()}
+				return err
 			}
 
 			change := cluster.CommandChange(cs, &swarm.ContainerSpec{
@@ -802,7 +802,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 				h.cache.GetVolume,
 				level,
 			); err != nil {
-				return &specPatchError{"OPS001", err.Error()}
+				return err
 			}
 
 			cs.Command = merged.Command
@@ -1209,12 +1209,12 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 		canRead := func(resource string) bool { return h.acl.Can(identity, "read", resource) }
 
 		if err := cluster.CheckVolumesAttachable(svc, canRead, mounts); err != nil {
-			problem.Write(w, r, "ACL001", err.Error())
+			writeResourceError(w, r, err, "service", id, "SVC001")
 			return
 		}
 
 		if err := cluster.CheckMounts(svc, mounts, h.cache.GetVolume, h.levelFor(r)); err != nil {
-			problem.Write(w, r, "OPS001", err.Error())
+			writeResourceError(w, r, err, "service", id, "SVC001")
 			return
 		}
 

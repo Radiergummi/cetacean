@@ -204,7 +204,11 @@ func (s *Server) createHandler(
 
 		id, err := spec.create(writeClient, ctx, name, labels, data)
 		if err != nil {
-			return "", fmt.Errorf("create %s: %w", spec.kind, engineFailure(err))
+			return "", fmt.Errorf(
+				"create %s: %w",
+				spec.kind,
+				writeFailure(ctx, err, spec.kind, name),
+			)
 		}
 
 		spec.seed(ctx, writeClient, s.cache, id, name, labels)

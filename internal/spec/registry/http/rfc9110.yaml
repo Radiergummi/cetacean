@@ -127,8 +127,8 @@ requirements:
         replace: "return docker.WithPinnedVersion(ctx, subject.kind, id, version)"
         with: "return docker.WithPinnedVersion(ctx, subject.kind, id, swarm.Version{Index: version.Index + 1})"
       - file: internal/api/write_helpers.go
-        replace: "if preconditioned(r.Context()) && docker.IsOutOfSequence(err) {"
-        with: "if false && docker.IsOutOfSequence(err) {"
+        replace: "if preconditioned(r.Context()) {"
+        with: "if false {"
       - file: internal/api/precondition.go
         replace: "\t\t\tif !represented {"
         with: "\t\t\tif false {"

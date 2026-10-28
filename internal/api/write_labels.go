@@ -2,12 +2,10 @@ package api
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/radiergummi/cetacean/internal/acl"
-	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -141,14 +139,10 @@ func handlePatchLabels[T any](
 
 	result, err := spec.update(ctx, key, mutate)
 	if refused != nil {
-		problem.Write(w, r, "OPS001", refused.Error())
+		writeResourceError(w, r, refused, spec.resource, key, spec.conflictCode)
 		return
 	}
 	if err != nil {
-		if denied, ok := errors.AsType[*cluster.StackLabelDeniedError](err); ok {
-			problem.Write(w, r, "ACL002", denied.Error())
-			return
-		}
 		if isPatchApplyError(err) {
 			writePatchError(w, r, err)
 			return

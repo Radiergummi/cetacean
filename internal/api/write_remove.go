@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // removeSpec describes how to remove a resource addressed by the "id" path
@@ -31,12 +29,7 @@ func handleRemove[T any](
 	slog.InfoContext(r.Context(), "removing "+spec.resource, spec.resource, key)
 
 	if err := spec.remove(r.Context(), key); err != nil {
-		if cluster.IsRemovalConflict(err, spec.resource) {
-			writeRemovalConflict(w, r, err, spec.conflictCode, spec.resource, key)
-			return
-		}
-
-		writeDockerError(w, r, err, spec.resource, key)
+		writeRemovalError(w, r, err, spec.conflictCode, spec.resource, key)
 		return
 	}
 
