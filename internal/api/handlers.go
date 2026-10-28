@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -360,7 +361,7 @@ func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool 
 	if h.acl.HasAnyGrant(id) {
 		return true
 	}
-	writeErrorCode(w, r, "ACL001", "no grants found for this identity")
+	problem.Write(w, r, "ACL001", "no grants found for this identity")
 	return false
 }
 
@@ -382,7 +383,7 @@ func (h *Handlers) requireReadEverything(w http.ResponseWriter, r *http.Request)
 	if h.acl.CanReadEverything(auth.IdentityFromContext(r.Context())) {
 		return true
 	}
-	writeErrorCode(w, r, "ACL001", `metrics require read access on "*"`)
+	problem.Write(w, r, "ACL001", `metrics require read access on "*"`)
 	return false
 }
 
@@ -427,12 +428,12 @@ func exprFilter[T any](
 		return items, true
 	}
 	if len(expr) > maxFilterLen {
-		writeErrorCode(w, r, "FLT001", "filter expression too long")
+		problem.Write(w, r, "FLT001", "filter expression too long")
 		return nil, false
 	}
 	prog, err := filter.Compile(expr, env)
 	if err != nil {
-		writeErrorCode(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
+		problem.Write(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
 	}
 	// Filtered in place. prepareList is the only caller and items is the copy
@@ -446,7 +447,7 @@ func exprFilter[T any](
 		m = env.Build(item, m)
 		ok, err := filter.EvaluateContext(ctx, prog, m)
 		if errors.Is(err, filter.ErrBudget) {
-			writeErrorCode(
+			problem.Write(
 				w,
 				r,
 				"FLT004",
@@ -455,7 +456,7 @@ func exprFilter[T any](
 			return nil, false
 		}
 		if err != nil {
-			writeErrorCode(w, r, "FLT003", fmt.Sprintf("filter evaluation error: %s", err))
+			problem.Write(w, r, "FLT003", fmt.Sprintf("filter evaluation error: %s", err))
 			return nil, false
 		}
 		if ok {

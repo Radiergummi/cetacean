@@ -12,6 +12,7 @@ import (
 	"time"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -104,7 +105,7 @@ func TestFeedID(t *testing.T) {
 	t.Run("includes base path", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
 		req.Host = "swarm.example.com"
-		ctx := context.WithValue(req.Context(), basePathKey, "/cetacean")
+		ctx := reqctx.WithBasePath(req.Context(), "/cetacean")
 		req = req.WithContext(ctx)
 
 		got := feedID(req)

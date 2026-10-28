@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -146,7 +147,7 @@ func (h *Handlers) reportAmbiguousName(
 		return false
 	}
 
-	writeErrorCode(w, r, "API015", (&cache.AmbiguousNameError{
+	problem.Write(w, r, "API015", (&cache.AmbiguousNameError{
 		Name: ambiguous.Name,
 		IDs:  readable,
 	}).Error())

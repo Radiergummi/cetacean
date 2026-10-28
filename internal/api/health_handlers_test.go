@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 type cancelledResyncer struct{}
@@ -54,7 +56,7 @@ func TestHandleResyncAnswersAFailedSweepWithProblemDetails(t *testing.T) {
 
 		HandleResync(failingResyncer{tc.err})(rec, req)
 
-		var problem ProblemDetail
+		var problem problem.Detail
 		if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
 			t.Fatalf("%s: body is not JSON: %v", tc.name, err)
 		}

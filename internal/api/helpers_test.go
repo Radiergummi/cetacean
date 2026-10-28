@@ -268,7 +268,7 @@ func testRouterConfig(
 	t.Helper()
 
 	h := newTestHandlers(t, opts...)
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	t.Cleanup(b.Close)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")

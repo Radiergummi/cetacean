@@ -48,7 +48,7 @@ func TestMetricsProxyRequiresReadOnEverything(t *testing.T) {
 			t,
 			[]routerOption{
 				func(cfg *RouterConfig) {
-					cfg.MetricsProxy = promapi.NewProxy(prom.URL, noopErrorWriter)
+					cfg.MetricsProxy = promapi.NewProxy(prom.URL)
 				},
 			},
 			withCache(cache.New(nil)),

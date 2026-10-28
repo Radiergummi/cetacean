@@ -3,6 +3,8 @@ package api
 import (
 	"log/slog"
 	"net/http"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 // crossOriginProtection refuses non-safe cross-origin browser requests. Not
@@ -48,7 +50,7 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 			// plain-text 403, and its error names which branch refused the
 			// request, which is what an operator needs to fix the deployment.
 			if err := protection.Check(r); err != nil {
-				writeErrorCode(w, r, "CSR001", err.Error())
+				problem.Write(w, r, "CSR001", err.Error())
 				return
 			}
 

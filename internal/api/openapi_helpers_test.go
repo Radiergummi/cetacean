@@ -297,7 +297,7 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 		t.Fatal(err)
 	}
 
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	t.Cleanup(b.Close)
 
 	return newTestRouter(t, h, b, specBytes), map[string]string{

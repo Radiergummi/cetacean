@@ -8,6 +8,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 // computeETag returns a quoted ETag string from the SHA-256 of body,
@@ -183,7 +185,7 @@ func writeCachedJSONStatusValidated(
 	body, err := json.Marshal(v)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
-		writeErrorCode(w, r, "API009", "failed to serialize response")
+		problem.Write(w, r, "API009", "failed to serialize response")
 		return
 	}
 
@@ -296,7 +298,7 @@ func refusedByPrecondition(
 	}
 
 	w.Header().Del("Content-Encoding")
-	writeErrorCode(w, r, "API013", reason)
+	problem.Write(w, r, "API013", reason)
 
 	return true
 }
@@ -355,7 +357,7 @@ func writeCachedJSONTimed(w http.ResponseWriter, r *http.Request, v any, lastMod
 	body, err := json.Marshal(v)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
-		writeErrorCode(w, r, "API009", "failed to serialize response")
+		problem.Write(w, r, "API009", "failed to serialize response")
 		return
 	}
 

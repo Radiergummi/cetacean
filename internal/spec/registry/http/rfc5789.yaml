@@ -71,8 +71,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc5789#section-2.2
     mutants:
       - file: internal/api/write_helpers.go
-        replace: "\t\tw.Header().Set(\"Accept-Patch\", AcceptPatch)\n\t\twriteErrorCode("
-        with: "\t\twriteErrorCode("
+        replace: "\t\tw.Header().Set(\"Accept-Patch\", AcceptPatch)\n\t\tproblem.Write("
+        with: "\t\tproblem.Write("
       - file: internal/api/write_helpers.go
         replace: "\t\t\tw.Header().Set(\"Accept-Patch\", AcceptMergePatch)"
         with: "\t\t\t_ = AcceptMergePatch"

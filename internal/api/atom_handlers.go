@@ -7,6 +7,7 @@ import (
 	"time"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 // renderAtom converts format-agnostic feedData to an Atom feed and writes it.
@@ -71,7 +72,7 @@ func writeCachedAtom(w http.ResponseWriter, r *http.Request, feed atomxml.Feed) 
 
 	var buf bytes.Buffer
 	if err := atomxml.Render(&buf, feed); err != nil {
-		writeErrorCode(w, r, "API009", "failed to serialize Atom feed")
+		problem.Write(w, r, "API009", "failed to serialize Atom feed")
 		return
 	}
 

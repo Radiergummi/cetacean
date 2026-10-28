@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -30,7 +31,7 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 	case "pause":
 		availability = swarm.NodeAvailabilityPause
 	default:
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			"NOD004",
@@ -68,7 +69,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 	case "manager":
 		role = swarm.NodeRoleManager
 	default:
-		writeErrorCode(w, r, "NOD005", "role must be one of: worker, manager")
+		problem.Write(w, r, "NOD005", "role must be one of: worker, manager")
 		return
 	}
 
@@ -115,7 +116,7 @@ func (h *Handlers) HandleGetNodeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", nodeResource(node)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+		problem.Write(w, r, "ACL001", "access denied")
 		return
 	}
 

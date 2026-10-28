@@ -1,12 +1,13 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
@@ -21,16 +22,16 @@ func TestAboutBlankTitleIsTheRFC9110Phrase(t *testing.T) {
 	} {
 		for name, write := range map[string]func(http.ResponseWriter, *http.Request){
 			"writeProblem": func(w http.ResponseWriter, r *http.Request) {
-				writeProblem(w, r, status, "detail")
+				problem.WriteStatus(w, r, status, "detail")
 			},
 			"writeProblemTyped": func(w http.ResponseWriter, r *http.Request) {
-				writeProblemTyped(w, r, ProblemDetail{Status: status})
+				problem.WriteTyped(w, r, problem.Detail{Status: status})
 			},
 		} {
 			w := httptest.NewRecorder()
 			write(w, httptest.NewRequest(http.MethodGet, "/x", nil))
 
-			var p ProblemDetail
+			var p problem.Detail
 			if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
 				t.Fatal(err)
 			}
@@ -43,11 +44,11 @@ func TestAboutBlankTitleIsTheRFC9110Phrase(t *testing.T) {
 
 func TestWriteProblem(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nodes/missing", nil)
-	ctx := context.WithValue(req.Context(), reqIDKey{}, "test-req-123")
+	ctx := reqctx.WithRequestID(req.Context(), "test-req-123")
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
-	writeProblem(w, req, http.StatusNotFound, "node \"missing\" not found")
+	problem.WriteStatus(w, req, http.StatusNotFound, "node \"missing\" not found")
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", w.Code)
@@ -56,7 +57,7 @@ func TestWriteProblem(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want application/problem+json", ct)
 	}
 
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatal(err)
 	}
@@ -86,9 +87,9 @@ func TestWriteProblem(t *testing.T) {
 func TestWriteProblem_NoRequestID(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
-	writeProblem(w, req, http.StatusBadRequest, "bad input")
+	problem.WriteStatus(w, req, http.StatusBadRequest, "bad input")
 
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatal(err)
 	}
@@ -99,11 +100,11 @@ func TestWriteProblem_NoRequestID(t *testing.T) {
 
 func TestWriteProblemTyped(t *testing.T) {
 	req := httptest.NewRequest("GET", "/nodes?filter=bad", nil)
-	ctx := context.WithValue(req.Context(), reqIDKey{}, "typed-req-456")
+	ctx := reqctx.WithRequestID(req.Context(), "typed-req-456")
 	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
-	writeProblemTyped(w, req, ProblemDetail{
+	problem.WriteTyped(w, req, problem.Detail{
 		Type:   "urn:cetacean:error:filter-invalid",
 		Title:  "Invalid Filter Expression",
 		Status: http.StatusBadRequest,
@@ -114,7 +115,7 @@ func TestWriteProblemTyped(t *testing.T) {
 		t.Fatalf("status = %d, want 400", w.Code)
 	}
 
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatal(err)
 	}
@@ -138,11 +139,11 @@ func TestWriteProblemTyped(t *testing.T) {
 func TestWriteProblemTyped_DefaultsFilled(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
-	writeProblemTyped(w, req, ProblemDetail{
+	problem.WriteTyped(w, req, problem.Detail{
 		Status: http.StatusInternalServerError,
 	})
 
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatal(err)
 	}

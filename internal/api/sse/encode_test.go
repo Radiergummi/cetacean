@@ -15,7 +15,7 @@ import (
 
 // Every client is handed the same encoded payload, not one encoding each.
 func TestFanOutEncodesEachEventOnce(t *testing.T) {
-	b := NewBroadcaster(time.Hour, noopErrorWriter, nil)
+	b := NewBroadcaster(time.Hour, nil)
 	defer b.Close()
 	b.SetBasePath("/cetacean")
 

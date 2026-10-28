@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -35,7 +36,7 @@ func (h *Handlers) requireLevel(required config.OperationsLevel) Constructor {
 				return
 			}
 
-			writeErrorCode(w, r, "OPS001",
+			problem.Write(w, r, "OPS001",
 				"this operation requires operations level "+strconv.Itoa(int(required))+
 					", but the caller is at level "+strconv.Itoa(int(h.levelFor(r))))
 		})
@@ -70,7 +71,7 @@ func (h *Handlers) requireWriteACL(
 			resource := resourceFunc(r)
 			id := auth.IdentityFromContext(r.Context())
 			if !h.acl.Can(id, "write", resource) {
-				writeErrorCode(w, r, "ACL002", "write access denied")
+				problem.Write(w, r, "ACL002", "write access denied")
 				return
 			}
 			next.ServeHTTP(w, r)

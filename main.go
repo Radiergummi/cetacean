@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
+	oteltrace "go.opentelemetry.io/otel/trace"
+	"tailscale.com/tsnet"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/api/sse"
@@ -39,8 +42,6 @@ import (
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
-	oteltrace "go.opentelemetry.io/otel/trace"
-	"tailscale.com/tsnet"
 )
 
 //go:embed frontend/dist/*
@@ -252,11 +253,7 @@ func main() {
 	stateCache := cache.New(nil)
 
 	// SSE broadcaster — needs history for Last-Event-ID replay
-	broadcaster := sse.NewBroadcaster(
-		cfg.SSEBatchInterval,
-		api.WriteErrorCode,
-		stateCache.History(),
-	)
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, stateCache.History())
 	defer broadcaster.Close()
 
 	// The metrics stream, log follows and MCP listens end with it at shutdown,
@@ -360,12 +357,11 @@ func main() {
 	}()
 
 	// API — pass ready channel so /-/ready reports sync status
-	promapi.SetNilProxyErrorWriter(api.WriteErrorCode)
 	var promClient *promapi.Client
 	var metricsProxy *promapi.Proxy
 	if cfg.PrometheusURL != "" {
 		promClient = promapi.NewClient(cfg.PrometheusURL)
-		metricsProxy = promapi.NewProxy(cfg.PrometheusURL, api.WriteErrorCode)
+		metricsProxy = promapi.NewProxy(cfg.PrometheusURL)
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")

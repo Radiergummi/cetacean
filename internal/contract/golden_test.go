@@ -18,7 +18,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
@@ -307,7 +307,7 @@ func TestGoldenConfiguration(t *testing.T) {
 }
 
 func TestGoldenErrorCodes(t *testing.T) {
-	defs := api.ErrorDefs()
+	defs := problem.Defs()
 	lines := make([]string, len(defs))
 
 	for i, def := range defs {

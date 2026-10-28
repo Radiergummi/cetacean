@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -139,7 +140,7 @@ func (h *Handlers) queryHistoryFeed(
 ) ([]cache.HistoryEntry, uint64, int, bool) {
 	beforeID, limit, err := parseFeedPagination(r)
 	if err != nil {
-		writeErrorCode(w, r, "API016", err.Error())
+		problem.Write(w, r, "API016", err.Error())
 		return nil, 0, 0, false
 	}
 

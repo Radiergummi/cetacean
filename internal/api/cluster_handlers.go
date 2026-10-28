@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -119,7 +120,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if h.promClient == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		problem.Write(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
@@ -322,7 +323,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm inspect not available")
+		problem.Write(w, r, "SWM001", "swarm inspect not available")
 		return
 	}
 
@@ -332,7 +333,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
 		slog.Error("swarm inspect failed", "error", err)
-		writeErrorCode(w, r, "SWM002", "swarm inspect failed")
+		problem.Write(w, r, "SWM002", "swarm inspect failed")
 		return
 	}
 
@@ -420,14 +421,14 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM004", "disk usage not available")
+		problem.Write(w, r, "SWM004", "disk usage not available")
 		return
 	}
 
 	du, err := h.diskUsage.get(r.Context(), h.systemClient.DiskUsage)
 	if err != nil {
 		slog.Error("disk usage failed", "error", err)
-		writeErrorCode(w, r, "SWM005", "disk usage failed")
+		problem.Write(w, r, "SWM005", "disk usage failed")
 		return
 	}
 

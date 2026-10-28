@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sbom"
 )
 
@@ -29,7 +30,7 @@ func HandleLicenseText(w http.ResponseWriter, r *http.Request) {
 
 	text, ok := sbom.Text(id)
 	if !ok {
-		writeProblem(w, r, http.StatusNotFound, "no license text with that identifier")
+		problem.WriteStatus(w, r, http.StatusNotFound, "no license text with that identifier")
 
 		return
 	}

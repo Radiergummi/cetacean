@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
@@ -583,7 +584,7 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := parsePagination(r)
 		if err != nil {
-			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+			problem.WriteStatus(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
 			return
 		}
 
@@ -697,7 +698,7 @@ func TestWriteLinkTemplate(t *testing.T) {
 
 	t.Run("respects base path", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/services", nil)
-		r = r.WithContext(context.WithValue(r.Context(), basePathKey, "/cetacean"))
+		r = r.WithContext(reqctx.WithBasePath(r.Context(), "/cetacean"))
 		w := httptest.NewRecorder()
 
 		writeLinkTemplate(w, r, "/services/{id}")

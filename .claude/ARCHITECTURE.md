@@ -20,7 +20,8 @@ liability — it is the only part of the previous version of this file that rott
 | `cache/` | The in-memory swarm state, its change-history ring, the restart counter, and the disk snapshot |
 | `docker/` | Engine API client and the watcher that keeps the cache current |
 | `logs/` | Docker log-frame parsing shared by the REST and MCP transports |
-| `api/` | The REST transport: router, handlers, content negotiation, SSE, feeds, CSV, problem details |
+| `api/` | The REST transport: router, handlers, content negotiation, SSE, feeds, CSV |
+| `api/problem/`, `api/reqctx/` | RFC 9457 problem details and the error registry; the request values (base path, request ID) they read. Leaves, so `auth`, `sse` and `prometheus` write problems without the transport |
 | `api/sse/` | The broadcaster behind every stream |
 | `api/sbom/` | The embedded CycloneDX SBOM, projected into the licenses document and notices |
 | `api/jgf/`, `api/dot/`, `api/graphml/`, `api/atom/`, `api/jsonfeed/`, `api/linkset/` | Pure serialization, no HTTP |

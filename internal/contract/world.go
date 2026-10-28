@@ -147,10 +147,7 @@ func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
 	evaluator.SetResolver(c)
 	evaluator.SetPolicy(policy)
 
-	broadcaster := sse.NewBroadcaster(0, func(
-		http.ResponseWriter, *http.Request, string, string,
-	) {
-	}, nil)
+	broadcaster := sse.NewBroadcaster(0, nil)
 	t.Cleanup(broadcaster.Close)
 
 	ready := make(chan struct{})

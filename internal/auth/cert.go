@@ -74,7 +74,7 @@ func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
 // 1.3 dropped renegotiation, and IANA registers no auth-scheme for a
 // certificate, so a challenge would name one no client implements.
 func certRejected(msg string) *AuthError {
-	return &AuthError{Msg: msg, Status: http.StatusForbidden, Code: "AUT005"}
+	return &AuthError{Msg: msg, Code: "AUT005"}
 }
 
 // clientCertificate returns the certificate identifying the client: the one

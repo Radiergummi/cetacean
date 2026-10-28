@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -28,7 +29,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 {
-			writeErrorCode(w, r, "API016", errInvalidLimit.Error())
+			problem.Write(w, r, "API016", errInvalidLimit.Error())
 			return
 		}
 		if n <= 200 {
@@ -52,7 +53,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	var beforeID uint64
 	if v := q.Get("before"); v != "" {
 		if beforeID, err = strconv.ParseUint(v, 10, 64); err != nil {
-			writeErrorCode(w, r, "API016", errInvalidBefore.Error())
+			problem.Write(w, r, "API016", errInvalidBefore.Error())
 			return
 		}
 	}

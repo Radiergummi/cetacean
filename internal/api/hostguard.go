@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
@@ -21,7 +22,7 @@ func hostGuard(hosts auth.HostSet) Constructor {
 			}
 
 			host := auth.HostName(r.Host)
-			writeErrorCode(w, r, "CSR002", fmt.Sprintf(
+			problem.Write(w, r, "CSR002", fmt.Sprintf(
 				"this server does not answer for host %q; add it to server.allowed_hosts, "+
 					"or set server.public_url to the URL it is reached at",
 				host,

@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -17,5 +18,5 @@ func writeRemovalConflict(
 	code, resource, key string,
 ) {
 	slog.Info("removal refused", "resource", resource, "id", key, "error", err)
-	writeErrorCode(w, r, code, cluster.RemovalConflictDetail(resource, key))
+	problem.Write(w, r, code, cluster.RemovalConflictDetail(resource, key))
 }

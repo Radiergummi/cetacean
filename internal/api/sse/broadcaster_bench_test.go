@@ -46,7 +46,7 @@ func setupClients(br *Broadcaster, n int, matchFn func(int) func(cache.Event) bo
 func BenchmarkBroadcast(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, nil)
 
@@ -62,7 +62,7 @@ func BenchmarkBroadcast(b *testing.B) {
 func BenchmarkBroadcastWithPayload(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, nil)
 
@@ -88,7 +88,7 @@ func BenchmarkBroadcastWithPayload(b *testing.B) {
 func BenchmarkBroadcastWithFiltering(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, func(i int) func(cache.Event) bool {
 				if i%2 == 0 {
@@ -109,7 +109,7 @@ func BenchmarkBroadcastWithFiltering(b *testing.B) {
 func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, func(i int) func(cache.Event) bool {
 				return ResourceMatcher("service", fmt.Sprintf("svc-%d", i))
@@ -128,7 +128,7 @@ func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
 }
 
 func BenchmarkClientRegistration(b *testing.B) {
-	br := NewBroadcaster(0, noopErrorWriter, nil)
+	br := NewBroadcaster(0, nil)
 	defer br.Close()
 
 	steady := &sseClient{
@@ -189,7 +189,7 @@ func (r *benchRecorder) Flush()                      { r.flushes.Add(1) }
 func serveOneClient(b *testing.B, target string) (*Broadcaster, *benchRecorder, func()) {
 	b.Helper()
 
-	br := NewBroadcaster(time.Microsecond, noopErrorWriter, nil)
+	br := NewBroadcaster(time.Microsecond, nil)
 	ctx, cancel := context.WithCancel(b.Context())
 	req := httptest.NewRequestWithContext(ctx, "GET", target, nil)
 	w := &benchRecorder{ResponseRecorder: httptest.NewRecorder()}
