@@ -4,7 +4,7 @@ import type { Edge, Node } from "@xyflow/react";
 import { describe, it, expect } from "vitest";
 
 function makeIntegration(overrides: Partial<TraefikIntegration> = {}): TraefikIntegration {
-  return { name: "traefik", enabled: true, ...overrides };
+  return { name: "traefik", enabled: true, labels: [], ...overrides };
 }
 
 function nodeById(nodes: Node[], id: string): Node {

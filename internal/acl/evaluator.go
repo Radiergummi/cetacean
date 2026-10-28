@@ -164,10 +164,8 @@ func (e *Evaluator) grantSetOf(id *auth.Identity, p *Policy, permission string) 
 }
 
 // Filter returns only items the identity can access with the given permission.
-//
-// items is left untouched. A caller that owns the slice outright — one holding
-// a copy the cache just handed it — and whose items are all one resource type
-// should use FilterInPlaceNamed, which is the same walk without a second slice.
+// items is left untouched; a caller that owns the slice and whose items are all
+// one resource type should use FilterInPlaceNamed, which avoids a second slice.
 func Filter[T any](
 	e *Evaluator,
 	id *auth.Identity,
@@ -410,21 +408,15 @@ type TypeAccess struct {
 	// Can is a lookup rather than a rule. The "*" type means every type.
 	granted map[typeKey]bool
 
-	// allowAll mirrors Can's allow-all: a nil evaluator or no policy loaded.
+	// allowAll mirrors Can's allow-all: a nil evaluator or no policy loaded,
+	// which PermissionsFor's nil return conflates with a caller matching nothing.
 	allowAll bool
-
-	// anyGrant separates that from "policy loaded, this caller matched
-	// nothing" — the two cases PermissionsFor's nil return conflates.
-	anyGrant bool
 }
 
 type typeKey struct{ permission, resourceType string }
 
 // AllowAll reports that no policy is in force, so every type is permitted.
 func (t TypeAccess) AllowAll() bool { return t.allowAll }
-
-// HasAnyGrant reports whether the identity matched at least one grant.
-func (t TypeAccess) HasAnyGrant() bool { return t.anyGrant }
 
 // Can reports whether the identity may exercise permission on some resource of
 // resourceType.
@@ -443,11 +435,11 @@ func (t TypeAccess) Can(permission, resourceType string) bool {
 // answer each from a different policy.
 func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 	if e == nil {
-		return TypeAccess{allowAll: true, anyGrant: true}
+		return TypeAccess{allowAll: true}
 	}
 	p := e.policy.Load()
 	if p == nil {
-		return TypeAccess{allowAll: true, anyGrant: true}
+		return TypeAccess{allowAll: true}
 	}
 
 	grants := e.collectGrants(id, p)
@@ -455,7 +447,7 @@ func (e *Evaluator) TypeGrants(id *auth.Identity) TypeAccess {
 		return TypeAccess{}
 	}
 
-	access := TypeAccess{granted: make(map[typeKey]bool), anyGrant: true}
+	access := TypeAccess{granted: make(map[typeKey]bool)}
 	for _, g := range grants {
 		for _, expr := range g.Resources {
 			resType, ok := grantResourceType(expr)

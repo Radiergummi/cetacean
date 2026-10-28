@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -73,6 +74,15 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		)
 	}
 
+	// Checked for every type, so a bad value is refused whatever it is given with.
+	label := strings.TrimSpace(req.GetString("label", ""))
+	sel, err := cluster.ParseVersionSelection(
+		req.GetString("versions", ""), "", cluster.Narrowing{Search: query, Label: label},
+	)
+	if err != nil {
+		return "", err
+	}
+
 	// Reuse the resource dispatch rather than the cache directly: it is where
 	// ACL filtering and redaction live, and duplicating it here would be a
 	// second path to keep in step.
@@ -92,7 +102,17 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 		stack: strings.TrimSpace(req.GetString("stack", "")),
 		node:  strings.TrimSpace(req.GetString("node", "")),
 		image: strings.TrimSpace(req.GetString("image", "")),
-		label: strings.TrimSpace(req.GetString("label", "")),
+		label: label,
+	}
+
+	view, versioned := s.versionView(ctx, listed)
+	if versioned {
+		rows = cluster.SelectVersions(
+			rows,
+			func(r cluster.Row) string { return r.ID },
+			view.Groups,
+			sel,
+		)
 	}
 
 	// Only the label filter reads the labels, and it is the rarest of the six;
@@ -107,6 +127,10 @@ func (s *Server) toolFind(ctx context.Context, req mcplib.CallToolRequest) (stri
 
 	total := len(rows)
 	rows = paginate(rows, req)
+
+	if versioned {
+		cluster.AnnotateVersionRows(rows, view)
+	}
 
 	attachResourceLinks(ctx, resourceLinksForRows(rows))
 
@@ -139,7 +163,7 @@ func (s *Server) findAcrossTypes(
 	query string,
 ) (string, error) {
 	if query == "" {
-		return "", fmt.Errorf("`query` is required when `type` is omitted")
+		return "", errors.New("`query` is required when `type` is omitted")
 	}
 
 	limit := req.GetInt("limit", 3)
@@ -200,6 +224,7 @@ func (s *Server) rowsFor(
 			items,
 			c.RunningTaskCounts(),
 			c.CompletedJobTaskCounts(),
+			c.EligibleNodeCounts(items...),
 			c.FlappingServices(),
 		), nil
 
@@ -222,8 +247,13 @@ func (s *Server) rowsFor(
 	case []swarm.Secret:
 		return cluster.RowsForSecrets(items), nil
 
-	case []network.Summary:
-		return cluster.RowsForNetworks(items), nil
+	case []cluster.NetworkListItem:
+		networks := make([]network.Summary, len(items))
+		for i, item := range items {
+			networks[i] = item.Summary
+		}
+
+		return cluster.RowsForNetworks(networks), nil
 
 	case []volume.Volume:
 		return cluster.RowsForVolumes(items), nil
@@ -235,6 +265,19 @@ func (s *Server) rowsFor(
 		return nil, fmt.Errorf(
 			"resource type %q has no row builder for %T", resourceType, listed,
 		)
+	}
+}
+
+// versionView groups a config or secret listing, which holds only what the
+// caller may read; any other listing has no versions.
+func (s *Server) versionView(ctx context.Context, listed any) (cluster.VersionView, bool) {
+	switch items := listed.(type) {
+	case []swarm.Config:
+		return cluster.ConfigVersionView(s.cache, items, s.readPredicate(ctx)), true
+	case []swarm.Secret:
+		return cluster.SecretVersionView(s.cache, items, s.readPredicate(ctx)), true
+	default:
+		return cluster.VersionView{}, false
 	}
 }
 
@@ -369,8 +412,8 @@ func listedRecords(listed any) []listedRecord {
 		return recordsOf(items, func(sec swarm.Secret) listedRecord {
 			return listedRecord{sec.ID, sec.Spec.Labels, sec}
 		})
-	case []network.Summary:
-		return recordsOf(items, func(n network.Summary) listedRecord {
+	case []cluster.NetworkListItem:
+		return recordsOf(items, func(n cluster.NetworkListItem) listedRecord {
 			return listedRecord{n.ID, n.Labels, n}
 		})
 	case []volume.Volume:

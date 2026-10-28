@@ -14,6 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 type entryFixture struct {
@@ -26,7 +27,8 @@ type entryFixture struct {
 func newEntryFixture(t *testing.T) *entryFixture {
 	t.Helper()
 
-	f := &entryFixture{entries: cluster.NewSecretEntries()}
+	shared := core.New(cache.New(nil), nil)
+	f := &entryFixture{entries: shared.SecretEntries}
 
 	wc := &mockWriteClient{
 		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
@@ -34,9 +36,8 @@ func newEntryFixture(t *testing.T) *entryFixture {
 			return "new-sec-id", nil
 		},
 	}
-	f.h = newTestHandlers(t, withCache(cache.New(nil)), withWriteClient(wc),
+	f.h = newTestHandlers(t, withCore(shared), withWriteClient(wc),
 		withOpsLevel(config.OpsConfiguration))
-	f.h.SetSecretEntries(f.entries)
 
 	entry, err := f.entries.Open("alice", "db_password",
 		map[string]string{"team": "shop"}, "utf8")

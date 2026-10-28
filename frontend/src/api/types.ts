@@ -50,21 +50,25 @@ export interface Service {
         TTY?: boolean | undefined;
         Groups?: string[] | null | undefined;
         Hosts?: string[] | null | undefined;
-        DNSConfig?: {
-          Nameservers?: string[] | null | undefined;
-          Search?: string[] | null | undefined;
-          Options?: string[] | null | undefined;
-        };
+        DNSConfig?:
+          | {
+              Nameservers?: string[] | null | undefined;
+              Search?: string[] | null | undefined;
+              Options?: string[] | null | undefined;
+            }
+          | undefined;
         CapabilityAdd?: string[] | null | undefined;
         CapabilityDrop?: string[] | null | undefined;
-        Healthcheck?: {
-          Test?: string[] | null | undefined;
-          Interval?: number | undefined;
-          Timeout?: number | undefined;
-          Retries?: number | undefined;
-          StartPeriod?: number | undefined;
-          StartInterval?: number | undefined;
-        };
+        Healthcheck?:
+          | {
+              Test?: string[] | null | undefined;
+              Interval?: number | undefined;
+              Timeout?: number | undefined;
+              Retries?: number | undefined;
+              StartPeriod?: number | undefined;
+              StartInterval?: number | undefined;
+            }
+          | undefined;
         Configs?: Array<{
           ConfigID: string;
           ConfigName: string;
@@ -154,6 +158,13 @@ export interface Service {
     CompletedAt?: string | undefined;
     Message?: string | undefined;
   };
+  /** A job's run counter: bumped each time the job is executed again. */
+  JobStatus?:
+    | {
+        JobIteration: { Index?: number | undefined };
+        LastExecution?: string | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -172,6 +183,12 @@ export interface ServiceListItem extends Service {
   "@id"?: string;
   "@type"?: string;
   RunningTasks: number;
+  /** Replicas, a global service's eligible nodes, or a job's completion target. */
+  DesiredTasks: number;
+  /** A job's current run only. */
+  CompletedTasks?: number | undefined;
+  /** A job's current run only; a rejected task counts. */
+  FailedTasks?: number | undefined;
   ImageUpdate?: ImageUpdate | undefined;
 }
 
@@ -185,6 +202,8 @@ export interface Task {
   ServiceName?: string | undefined;
   NodeHostname?: string | undefined;
   Slot?: number | undefined;
+  /** The service's JobStatus.JobIteration when this task was created; jobs only. */
+  JobIteration?: { Index?: number | undefined } | undefined;
   Status: {
     Timestamp: string;
     State: string;
@@ -194,6 +213,9 @@ export interface Task {
       ContainerID: string;
       ExitCode: number;
     };
+    PortStatus?: {
+      Ports?: { PublishMode?: string | undefined }[] | undefined;
+    };
   };
   DesiredState: string;
   Spec: {
@@ -201,6 +223,7 @@ export interface Task {
       Image?: string | undefined;
     } | null;
   };
+  NetworksAttachments?: { Network: { ID: string } }[] | undefined;
 }
 
 export interface Config {
@@ -230,6 +253,29 @@ export interface Secret {
   };
 }
 
+/**
+ * What a config or secret list item adds: the logical resource it is one
+ * version of, when other versions are readable, whether it is the newest of
+ * them and how many older ones there are, and how many services use it.
+ */
+export interface VersionedListItem {
+  VersionOf?: string | undefined;
+  VersionInferred?: boolean | undefined;
+  NewestVersion?: boolean | undefined;
+  /**
+   * An older version a service's current spec uses, which a listing shows by default.
+   */
+  InUse?: boolean | undefined;
+  /**
+   * On the newest version, how many older ones no current spec uses.
+   */
+  OlderVersions?: number | undefined;
+  UsedBy: number;
+}
+
+export type ConfigListItem = Config & VersionedListItem;
+export type SecretListItem = Secret & VersionedListItem;
+
 export interface Network {
   "@id"?: string;
   "@type"?: string;
@@ -248,6 +294,23 @@ export interface Network {
   };
   Options: Record<string, string> | null;
   Labels: Record<string, string> | null;
+  /**
+   * Present on list items only, for a network with an address figure.
+   */
+  Addresses?: NetworkAddresses | undefined;
+}
+
+/**
+ * How much of a network's IPv4 address pool is in use. `used` is `vips`,
+ * `taskAddresses` and `loadBalancers` together.
+ */
+export interface NetworkAddresses {
+  usable: number;
+  used: number;
+  vips: number;
+  taskAddresses: number;
+  loadBalancers: number;
+  excludesAttachedContainers: boolean;
 }
 
 export interface Volume {
@@ -271,11 +334,6 @@ export interface Stack {
   secrets: string[];
   networks: string[];
   volumes: string[];
-}
-
-export interface PagedResponse<T> {
-  items: T[];
-  total: number;
 }
 
 export interface CollectionResponse<T> {
@@ -337,6 +395,11 @@ export interface StackDetail {
   volumes: Volume[];
 }
 
+export interface StackResponse {
+  stack: StackDetail;
+  links?: ServiceLink[] | undefined;
+}
+
 export interface SpecChange {
   field: string;
   old?: string | undefined;
@@ -346,6 +409,10 @@ export interface SpecChange {
 export interface ServiceRef {
   id: string;
   name: string;
+  /**
+   * Only the service's previous spec names the config or secret: a rollback needs it.
+   */
+  rollback?: boolean | undefined;
 }
 
 export interface TraefikTLSDomain {
@@ -382,6 +449,7 @@ export interface TraefikMiddleware {
 export interface TraefikIntegration {
   name: "traefik";
   enabled: boolean;
+  labels: string[];
   routers?: TraefikRouter[] | undefined;
   services?: TraefikService[] | undefined;
   middlewares?: TraefikMiddleware[] | undefined;
@@ -390,12 +458,14 @@ export interface TraefikIntegration {
 export interface ShepherdIntegration {
   name: "shepherd";
   enabled: boolean;
+  labels: string[];
   authConfig?: string | undefined;
 }
 
 export interface CronjobIntegration {
   name: "swarm-cronjob";
   enabled: boolean;
+  labels: string[];
   schedule?: string | undefined;
   skipRunning?: boolean | undefined;
   replicas?: number | undefined;
@@ -406,6 +476,7 @@ export interface CronjobIntegration {
 export interface DiunIntegration {
   name: "diun";
   enabled: boolean;
+  labels: string[];
   watchRepo?: boolean | undefined;
   notifyOn?: string | undefined;
   maxTags?: number | undefined;
@@ -418,27 +489,125 @@ export interface DiunIntegration {
   metadata?: Record<string, string> | undefined;
 }
 
+export interface CaddyIntegration {
+  name: "caddy";
+  enabled: boolean;
+  labels: string[];
+  caddyfile: string;
+}
+
+export interface DocoCDJob {
+  enabled: boolean;
+  schedule?: string | undefined;
+  executionMode?: string | undefined;
+  skipRunning?: boolean | undefined;
+  lastRun?: string | undefined;
+  nextRun?: string | undefined;
+}
+
+export interface DocoCDIntegration {
+  name: "doco-cd";
+  enabled: boolean;
+  labels: string[];
+  deployment?: string | undefined;
+  source?: string | undefined;
+  repository?: string | undefined;
+  sourceUrl?: string | undefined;
+  ref?: string | undefined;
+  commit?: string | undefined;
+  commitUrl?: string | undefined;
+  trigger?: string | undefined;
+  deployedAt?: string | undefined;
+  version?: string | undefined;
+  certExpiry?: string | undefined;
+  job?: DocoCDJob | undefined;
+}
+
+export interface GantryIntegration {
+  name: "gantry";
+  enabled: boolean;
+  labels: string[];
+  authConfig?: string | undefined;
+  manifestCmd?: string | undefined;
+  manifestOptions?: string | undefined;
+  rollbackOnFailure?: boolean | undefined;
+  rollbackOptions?: string | undefined;
+  updateJobs?: boolean | undefined;
+  updateOptions?: string | undefined;
+  updateTimeoutSeconds?: number | undefined;
+}
+
+export interface DeploymentActionIntegration {
+  name: "docker-swarm-deployment-action";
+  enabled: boolean;
+  labels: string[];
+  version?: string | undefined;
+  repository?: string | undefined;
+  repositoryUrl?: string | undefined;
+  ref?: string | undefined;
+  commit?: string | undefined;
+  commitUrl?: string | undefined;
+  runUrl?: string | undefined;
+  actor?: string | undefined;
+  monitor?: boolean | undefined;
+  monitorTimeoutSeconds?: number | undefined;
+  healthCheckWarnings?: boolean | undefined;
+}
+
 export type Integration =
   | TraefikIntegration
   | ShepherdIntegration
   | CronjobIntegration
-  | DiunIntegration;
+  | DiunIntegration
+  | CaddyIntegration
+  | DocoCDIntegration
+  | GantryIntegration
+  | DeploymentActionIntegration;
+
+/**
+ * A custom link from a `cetacean.link.<id>` service label. Exactly one of
+ * `href` and `text` is set: `href` only for an http(s) URL.
+ */
+export interface ServiceLink {
+  id: string;
+  title: string;
+  href?: string | undefined;
+  text?: string | undefined;
+
+  /**
+   * The member services declaring the link, on a stack's links only.
+   */
+  services?: string[] | undefined;
+}
 
 export interface ServiceDetail {
   service: Service;
   changes?: SpecChange[] | undefined;
   integrations?: Integration[] | undefined;
+  links?: ServiceLink[] | undefined;
   imageUpdate?: ImageUpdate | undefined;
 }
 
 export interface ConfigDetail {
   config: Config;
   services: ServiceRef[] | null;
+  versionOf?: string | undefined;
+  versionInferred?: boolean | undefined;
+  newestVersion?: boolean | undefined;
+  inUse?: boolean | undefined;
+  olderVersions?: number | undefined;
+  usedBy: number;
 }
 
 export interface SecretDetail {
   secret: Secret;
   services: ServiceRef[] | null;
+  versionOf?: string | undefined;
+  versionInferred?: boolean | undefined;
+  newestVersion?: boolean | undefined;
+  inUse?: boolean | undefined;
+  olderVersions?: number | undefined;
+  usedBy: number;
 }
 
 /**
@@ -455,6 +624,7 @@ export interface SecretEntry {
 export interface NetworkDetail {
   network: Network;
   services: ServiceRef[] | null;
+  addresses?: NetworkAddresses | undefined;
 }
 
 export interface VolumeDetail {
@@ -791,15 +961,20 @@ export type RecommendationCategory =
   | "no-healthcheck"
   | "no-restart-policy"
   | "newer-image"
+  | "unused-version"
   | "flaky-service"
   | "node-disk-full"
   | "node-memory-pressure"
   | "single-replica"
   | "manager-has-workloads"
-  | "uneven-distribution";
+  | "uneven-distribution"
+  | "single-manager"
+  | "even-managers"
+  | "quorum-at-risk"
+  | "network-addresses-low";
 
 export type RecommendationSeverity = "info" | "warning" | "critical";
-export type RecommendationScope = "service" | "node" | "cluster";
+export type RecommendationScope = "service" | "node" | "network" | "cluster" | "secret" | "config";
 
 export interface Recommendation {
   category: RecommendationCategory;
@@ -882,4 +1057,16 @@ export interface LicenseComponent {
 export interface LicensesResponse {
   generatedAt?: string | undefined;
   components: LicenseComponent[];
+}
+
+export interface PublishedPort {
+  Name?: string | undefined;
+  Protocol: "tcp" | "udp" | "sctp";
+  TargetPort: number;
+  PublishedPort: number;
+  PublishMode: "ingress" | "host";
+  ServiceID: string;
+  ServiceName: string;
+  Stack?: string | undefined;
+  Nodes?: string[] | undefined;
 }

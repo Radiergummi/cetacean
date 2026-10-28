@@ -1,7 +1,11 @@
 import type { Integration } from "../../api/types";
 import { rawLabelsForIntegration } from "../../lib/integrationLabels";
+import { CaddyPanel } from "./CaddyPanel";
 import { CronjobPanel } from "./CronjobPanel";
+import { DeploymentActionPanel } from "./DeploymentActionPanel";
 import { DiunPanel } from "./DiunPanel";
+import { DocoCDPanel } from "./DocoCDPanel";
+import { GantryPanel } from "./GantryPanel";
 import { ShepherdPanel } from "./ShepherdPanel";
 import { TraefikPanel } from "./TraefikPanel";
 
@@ -27,7 +31,7 @@ export function IntegrationPanels({
   return (
     <>
       {integrations.map((integration) => {
-        const rawLabels = rawLabelsForIntegration(serviceLabels, integration.name);
+        const rawLabels = rawLabelsForIntegration(serviceLabels, integration.labels);
 
         const panelProps = {
           rawLabels,
@@ -64,6 +68,38 @@ export function IntegrationPanels({
           case "diun":
             return (
               <DiunPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "caddy":
+            return (
+              <CaddyPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "doco-cd":
+            return (
+              <DocoCDPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "gantry":
+            return (
+              <GantryPanel
+                key={integration.name}
+                integration={integration}
+                {...panelProps}
+              />
+            );
+          case "docker-swarm-deployment-action":
+            return (
+              <DeploymentActionPanel
                 key={integration.name}
                 integration={integration}
                 {...panelProps}

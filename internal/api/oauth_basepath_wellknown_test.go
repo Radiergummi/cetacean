@@ -9,12 +9,9 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// RFC 9728 §3.1 builds the metadata URL by inserting the well-known segment
-// after the authority, so under a base path a conformant client asks the
-// authority root for a path that carries the prefix inside it. The base-path
-// middleware used to refuse anything without the prefix, which made that
-// derived URL unreachable through the real router however the routes were
-// registered.
+// RFC 9728 §3.1 inserts the well-known segment after the authority, so under a
+// base path a conformant client asks the authority root for a path carrying the
+// prefix inside it; the base-path middleware must not refuse it.
 func TestDerivedDiscoveryURLResolvesUnderABasePath(t *testing.T) {
 	router := newTestRouterWithConfig(
 		t,

@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
-	"os"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -15,11 +12,11 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
-	"gopkg.in/yaml.v3"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 // fakeWriteClient is a no-op implementation of DockerWriteClient used as a base
@@ -70,6 +67,8 @@ type fakeWriteClient struct {
 	) (swarm.Service, error)
 	createSecretFn         func(ctx context.Context, spec swarm.SecretSpec) (string, error)
 	createConfigFn         func(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	inspectSecretFn        func(ctx context.Context, id string) (swarm.Secret, error)
+	inspectConfigFn        func(ctx context.Context, id string) (swarm.Config, error)
 	updateServiceSecretsFn func(
 		ctx context.Context,
 		id string,
@@ -132,6 +131,22 @@ func (f *fakeWriteClient) CreateSecret(
 	}
 
 	return f.createSecretFn(ctx, spec)
+}
+
+func (f *fakeWriteClient) InspectSecret(ctx context.Context, id string) (swarm.Secret, error) {
+	if f.inspectSecretFn == nil {
+		return swarm.Secret{}, errNotImplemented
+	}
+
+	return f.inspectSecretFn(ctx, id)
+}
+
+func (f *fakeWriteClient) InspectConfig(ctx context.Context, id string) (swarm.Config, error) {
+	if f.inspectConfigFn == nil {
+		return swarm.Config{}, errNotImplemented
+	}
+
+	return f.inspectConfigFn(ctx, id)
 }
 
 func (f *fakeWriteClient) CreateConfig(
@@ -400,11 +415,12 @@ func newToolTestServer(
 		GlobalOpsLevel: opsLevel,
 		WriteClient:    wc,
 		AuthMode:       "none",
+		Widgets:        testWidgets,
 	}
 	for _, fn := range overrides {
 		fn(&o)
 	}
-	srv, err := New(c, o)
+	srv, err := New(core.New(c, nil), o)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -455,7 +471,7 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 
 	readOnly := map[string]bool{
 		"get_logs": true, "find": true, "describe": true, "get_topology": true,
-		"get_metrics": true, "get_recommendations": true,
+		"get_metrics": true, "get_recommendations": true, "get_published_ports": true,
 		"get_events": true, "get_cluster_status": true, "watch": true,
 	}
 	destructive := map[string]bool{
@@ -515,154 +531,15 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 	}
 }
 
-// restOperations names, for every write tool, the REST operations that make the
-// same change. Their tier is read from the operations-level badges in
-// api/openapi.yaml, which internal/api holds to the tier the router enforces —
-// so a REST tier change reaches this comparison without an edit here.
-var restOperations = map[string][]string{
-	"scale_service":        {"PUT /services/{id}/scale"},
-	"update_service_image": {"PUT /services/{id}/image"},
-	"rollback_service":     {"POST /services/{id}/rollback"},
-	"restart_service":      {"POST /services/{id}/restart"},
-	"create_secret":        {"POST /secrets"},
-	"create_config":        {"POST /configs"},
-	"update_service": {
-		"PATCH /services/{id}/env",
-		"PATCH /services/{id}/labels",
-		"PATCH /services/{id}/resources",
-		"PUT /services/{id}/placement",
-		"PATCH /services/{id}/ports",
-		"PATCH /services/{id}/update-policy",
-		"PATCH /services/{id}/rollback-policy",
-		"PATCH /services/{id}/log-driver",
-		"PUT /services/{id}/healthcheck",
-		"PATCH /services/{id}/healthcheck",
-		"PATCH /services/{id}/container-config",
-	},
-	"update_service_secrets": {"PATCH /services/{id}/secrets"},
-	"update_service_configs": {"PATCH /services/{id}/configs"},
-	"update_service_mounts":  {"PATCH /services/{id}/mounts"},
-	"update_node_labels":     {"PATCH /nodes/{id}/labels"},
-	"update_node":            {"PUT /nodes/{id}/availability", "PUT /nodes/{id}/role"},
-	"remove_service":         {"DELETE /services/{id}"},
-	"remove_task":            {"DELETE /tasks/{id}"},
-	"remove_config":          {"DELETE /configs/{id}"},
-	"remove_secret":          {"DELETE /secrets/{id}"},
-	"remove_network":         {"DELETE /networks/{id}"},
-	"remove_volume":          {"DELETE /volumes/{name}"},
-}
-
-// restTierMismatches records a tool whose tier is known to differ from REST's
-// for the same operation. Listed rather than left out of restOperations so the
-// debt stays visible: the mismatch is asserted to still exist, so whichever way
-// it is resolved the entry fails as stale and closing the gap is a deletion.
-var restTierMismatches = map[string]bool{}
-
-// restOperationTiers reads the operations-level badge of every operation in
-// api/openapi.yaml, keyed "METHOD /path". An operation without one is tier 0.
-func restOperationTiers(t *testing.T) map[string]config.OperationsLevel {
-	t.Helper()
-
-	raw, err := os.ReadFile("../../api/openapi.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var doc struct {
-		Paths map[string]map[string]yaml.Node `yaml:"paths"`
-	}
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		t.Fatal(err)
-	}
-
-	tiers := make(map[string]config.OperationsLevel)
-	for path, item := range doc.Paths {
-		for method, node := range item {
-			var op struct {
-				Badges []struct {
-					Name string `yaml:"name"`
-				} `yaml:"x-badges"`
-			}
-			if node.Kind != yaml.MappingNode || node.Decode(&op) != nil {
-				continue
-			}
-
-			key := strings.ToUpper(method) + " " + path
-			tiers[key] = config.OpsReadOnly
-			for _, badge := range op.Badges {
-				if level, ok := strings.CutPrefix(badge.Name, "operations-level:"); ok {
-					n, err := strconv.Atoi(level)
-					if err != nil {
-						t.Fatalf("%s: badge %q: %v", key, badge.Name, err)
-					}
-					tiers[key] = config.OperationsLevel(n)
-				}
-			}
-		}
-	}
-
-	return tiers
-}
-
-// Fails when a tool drifts from the tier its REST equivalents are gated at. A
-// tool in restTierMismatches is held to the opposite assertion, so closing the
-// gap deletes the entry rather than drifting past it.
-func TestToolTiersMatchTheRESTRoutes(t *testing.T) {
+// A tool that writes takes its tier from a shared operation; without one it
+// would register at tier 0. internal/contract holds both transports to that tier.
+func TestEveryWriteToolCarriesAnOperation(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
-	tiers := restOperationTiers(t)
-
-	unseen := maps.Clone(restOperations)
 
 	for _, def := range srv.toolCatalog() {
-		operations, checked := restOperations[def.tool.Name]
-		if !checked {
-			// Every write tool has a REST equivalent, so one without a row is
-			// a tier nothing compares.
-			if def.tier > config.OpsReadOnly {
-				t.Errorf("%s is a write tool with no restOperations row", def.tool.Name)
-			}
-
-			continue
-		}
-
-		delete(unseen, def.tool.Name)
-
-		for _, operation := range operations {
-			rest, ok := tiers[operation]
-			if !ok {
-				t.Errorf("%s: %s is not in api/openapi.yaml", def.tool.Name, operation)
-
-				continue
-			}
-
-			if restTierMismatches[def.tool.Name] {
-				if def.tier == rest {
-					t.Errorf(
-						"%s now matches %s (tier %v) — remove its "+
-							"restTierMismatches entry",
-						def.tool.Name, operation, rest,
-					)
-				}
-
-				continue
-			}
-
-			if def.tier != rest {
-				t.Errorf(
-					"%s tier = %v, want %v to match %s",
-					def.tool.Name, def.tier, rest, operation,
-				)
-			}
-		}
-	}
-
-	for name := range unseen {
-		t.Errorf("%s is named in restOperations but is not registered", name)
-	}
-
-	for name := range restTierMismatches {
-		if _, ok := restOperations[name]; !ok {
-			t.Errorf("%s is named in restTierMismatches but has no restOperations row", name)
+		hint := def.tool.Annotations.ReadOnlyHint
+		if writes := hint != nil && !*hint; writes != (def.op != "") {
+			t.Errorf("%s: writes = %t, but op = %q", def.tool.Name, writes, def.op)
 		}
 	}
 }

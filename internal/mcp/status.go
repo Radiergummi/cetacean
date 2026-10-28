@@ -5,7 +5,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // toolGetClusterStatus is the landing call. It reads through the same
@@ -24,15 +24,14 @@ func (s *Server) toolGetClusterStatus(
 	nodes := s.filterNodes(ctx, s.cache.ListNodes())
 
 	// The running counts come off the snapshot rather than from a second
-	// RunningTaskCounts call: Snapshot builds the identical map to decide
-	// converged versus degraded, so asking again walked the whole task table a
-	// third time, under a third lock, for the landing call.
+	// RunningTaskCounts call, which would walk the whole task table again.
 	snap := s.cache.Snapshot()
 
-	return marshalResult(cluster.BuildClusterStatus(
+	return marshalResult(projection.BuildClusterStatus(
 		snap,
 		services,
 		nodes,
 		snap.RunningByService,
+		s.cache.EligibleNodeCounts(services...),
 	))
 }

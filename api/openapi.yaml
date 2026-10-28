@@ -18,6 +18,10 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
+    A request whose `Host` is not one of the
+    [names Cetacean answers for](/configuration#server.public_url) is answered
+    `421 Misdirected Request` (`CSR002`). It is not repeated under each operation.
+
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —
@@ -66,6 +70,8 @@ tags:
     description: Swarm tasks (enriched with ServiceName and NodeHostname)
   - name: Stacks
     description: Derived stacks (from com.docker.stack.namespace labels)
+  - name: Ports
+    description: The ports services publish, across the cluster
   - name: Configs
     description: Swarm configs
   - name: Secrets
@@ -381,8 +387,14 @@ paths:
               schema:
                 type: object
                 description: Prometheus labels response (proxied as-is)
+        "400":
+          description: Prometheus refused the request (`MTR009`)
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -422,6 +434,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -607,6 +623,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -2374,7 +2392,8 @@ paths:
       tags: [Plugins]
       summary: Configure plugin settings
       description: |
-        Updates plugin args and environment variables. Requires operations level 2.
+        Updates plugin args and environment variables. Requires operations level 2, and level 3 for a
+        setting that names one of the plugin's mounts or devices, which sets a host path.
         Returns the updated plugin detail, or 204 with `Prefer: return=minimal`.
       parameters:
         - name: name
@@ -3091,6 +3110,7 @@ paths:
                           Mode:
                             Replicated: { Replicas: 3 }
                         RunningTasks: 3
+                        DesiredTasks: 3
                     total: 12
                     limit: 50
                     offset: 0
@@ -3396,7 +3416,7 @@ paths:
           color: green
       tags: [Services]
       summary: Update service image
-      description: Updates the container image for a service.
+      description: Updates the container image for a service. Requires level 3 when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
@@ -3446,7 +3466,7 @@ paths:
           color: green
       tags: [Services]
       summary: Rollback a service
-      description: Rolls back the service to its previous specification.
+      description: Rolls back the service to its previous specification. Requires level 3 when the current or the previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
@@ -3585,7 +3605,7 @@ paths:
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service
         environment variables. Requires `Content-Type: application/json-patch+json` or
-        `application/merge-patch+json`.
+        `application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3736,7 +3756,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Update service placement constraints
-      description: Replaces the placement constraints and preferences for the service.
+      description: Replaces the placement constraints and preferences for the service. Requires level 3 when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3803,7 +3823,7 @@ paths:
       summary: Patch service port bindings
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service port bindings.
-        Requires `Content-Type: application/merge-patch+json`.
+        Requires `Content-Type: application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4086,7 +4106,7 @@ paths:
       summary: Patch service labels
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service labels.
-        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
         Requires operations level 2. Setting `com.docker.stack.namespace` to a stack the service
         is not in also requires `write` on that stack (`403 ACL002` otherwise).
       parameters:
@@ -4173,7 +4193,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Replace service healthcheck config
-      description: Replaces the healthcheck configuration for the service. Requires operations level 2.
+      description: Replaces the healthcheck configuration for the service. Requires operations level 2, and level 3 to change `Test` when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4225,7 +4245,8 @@ paths:
       summary: Patch service healthcheck config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service healthcheck configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3
+        to change `Test` when the service has host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4309,7 +4330,7 @@ paths:
       description: >-
         Replaces the config references for the service. Requires operations level 2, and read access to
         each config the service does not already carry. A config ID that is not known answers
-        `400 SVC021`.
+        `400 SVC021`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4418,7 +4439,7 @@ paths:
       description: >-
         Replaces the secret references for the service. Requires operations level 2, and read access to
         each secret the service does not already carry. A secret ID that is not known answers
-        `400 SVC021`.
+        `400 SVC021`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4527,7 +4548,7 @@ paths:
       description: >-
         Replaces the network attachments for the service. Requires operations level 2, and read access to
         each network the service does not already join. A network that is not known answers
-        `400 SVC021`; a name several networks share answers `409 API015`.
+        `400 SVC021`; a name several networks share answers `409 API015`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4624,7 +4645,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service mount configuration
-      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have.
+      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have, or to change the mounts of a service with host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4732,7 +4753,7 @@ paths:
       summary: Patch service container config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service container configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`, or to change `command`, `args`, `dir`, `user`, or `groups` of a service with host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -5230,8 +5251,88 @@ paths:
                 $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   # ── Stacks ───────────────────────────────────────────────────────────
+
+  /ports:
+    get:
+      operationId: listPorts
+      tags: [Ports]
+      summary: List published ports
+      description: |
+        Every port a service publishes, by published port then protocol. An
+        ingress port is bound on every node; a host-mode port is read off the
+        running tasks, and names the nodes binding it. A port is listed with
+        the service publishing it, so a caller sees the ports of the services
+        they may read. `search` matches the service name.
+      parameters:
+        - $ref: "#/components/parameters/search"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
+        - name: sort
+          in: query
+          description: Field to sort the result list by
+          schema:
+            type: string
+            enum: [published, target, protocol, mode, service, stack]
+          example: published
+        - $ref: "#/components/parameters/dir"
+      responses:
+        "200":
+          description: Paginated port list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedPortCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - "@id": /services/r8m2x5nk3p7q#port-8080-tcp-80
+                    "@type": PublishedPort
+                    Protocol: tcp
+                    TargetPort: 80
+                    PublishedPort: 8080
+                    PublishMode: ingress
+                    ServiceID: r8m2x5nk3p7q
+                    ServiceName: myapp_web
+                    Stack: myapp
+                total: 1
+                limit: 50
+                offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedPortCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
 
   /stacks:
     get:
@@ -5402,6 +5503,14 @@ paths:
                     properties:
                       stack:
                         $ref: "#/components/schemas/StackDetail"
+                      links:
+                        type: array
+                        description: >
+                          The custom links of every member service, with exact
+                          duplicates merged into one link naming each service
+                          that declares it. Absent when no member declares one.
+                        items:
+                          $ref: "#/components/schemas/ServiceLink"
               example:
                 "@context": /api/context.jsonld
                 "@id": /stacks/myapp
@@ -5525,6 +5634,8 @@ paths:
             enum: [name, created, updated]
           example: name
         - $ref: "#/components/parameters/dir"
+        - $ref: "#/components/parameters/versions"
+        - $ref: "#/components/parameters/versionsOf"
       responses:
         "200":
           description: Paginated config list
@@ -5554,6 +5665,7 @@ paths:
                       Labels:
                         com.docker.stack.namespace: myapp
                       Data: YXBwX2tleT12YWx1ZQ==
+                    UsedBy: 1
                 total: 5
                 limit: 50
                 offset: 0
@@ -5675,6 +5787,33 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      versionOf:
+                        type: string
+                        description: >-
+                          The logical name this config is a version of, when other versions of
+                          it are readable. Absent when it has no other version.
+                      versionInferred:
+                        type: boolean
+                        description: >-
+                          True when the group was matched by name rather than declared by the
+                          cetacean.version-of or com.matchory.deployment.name label on every
+                          version. Absent when false.
+                      newestVersion:
+                        type: boolean
+                        description: >-
+                          True for the newest version of its group that the caller may read, and for one with no other.
+                      inUse:
+                        type: boolean
+                        description: >-
+                          True for an older version a readable service's current spec uses.
+                      olderVersions:
+                        type: integer
+                        description: >-
+                          On the newest version, how many older readable versions its group has
+                          that no current spec uses.
+                      usedBy:
+                        type: integer
+                        description: Number of services the caller may read whose spec or previous spec uses this config
               example:
                 "@context": /api/context.jsonld
                 "@id": /configs/cfg_abc123
@@ -5839,6 +5978,8 @@ paths:
             enum: [name, created, updated]
           example: name
         - $ref: "#/components/parameters/dir"
+        - $ref: "#/components/parameters/versions"
+        - $ref: "#/components/parameters/versionsOf"
       responses:
         "200":
           description: Paginated secret list
@@ -5867,6 +6008,7 @@ paths:
                       Name: db_password
                       Labels:
                         com.docker.stack.namespace: myapp
+                    UsedBy: 1
                 total: 3
                 limit: 50
                 offset: 0
@@ -6050,6 +6192,33 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      versionOf:
+                        type: string
+                        description: >-
+                          The logical name this secret is a version of, when other versions of
+                          it are readable. Absent when it has no other version.
+                      versionInferred:
+                        type: boolean
+                        description: >-
+                          True when the group was matched by name rather than declared by the
+                          cetacean.version-of or com.matchory.deployment.name label on every
+                          version. Absent when false.
+                      newestVersion:
+                        type: boolean
+                        description: >-
+                          True for the newest version of its group that the caller may read, and for one with no other.
+                      inUse:
+                        type: boolean
+                        description: >-
+                          True for an older version a readable service's current spec uses.
+                      olderVersions:
+                        type: integer
+                        description: >-
+                          On the newest version, how many older readable versions its group has
+                          that no current spec uses.
+                      usedBy:
+                        type: integer
+                        description: Number of services the caller may read whose spec or previous spec uses this secret
               example:
                 "@context": /api/context.jsonld
                 "@id": /secrets/sec_def456
@@ -6210,7 +6379,7 @@ paths:
           description: Field to sort the result list by
           schema:
             type: string
-            enum: [name, driver, scope]
+            enum: [name, driver, scope, addresses]
           example: name
         - $ref: "#/components/parameters/dir"
       responses:
@@ -6242,6 +6411,13 @@ paths:
                         - Subnet: 10.0.1.0/24
                     Labels:
                       com.docker.stack.namespace: myapp
+                    Addresses:
+                      usable: 253
+                      used: 9
+                      vips: 2
+                      taskAddresses: 4
+                      loadBalancers: 3
+                      excludesAttachedContainers: false
                 total: 6
                 limit: 50
                 offset: 0
@@ -6306,6 +6482,8 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/ServiceRef"
+                      addresses:
+                        $ref: "#/components/schemas/NetworkAddresses"
               example:
                 "@context": /api/context.jsonld
                 "@id": /networks/net_ghi789
@@ -6325,6 +6503,13 @@ paths:
                   - "@id": /services/r8m2x5nk3p7q
                     id: r8m2x5nk3p7q
                     name: webapp
+                addresses:
+                  usable: 253
+                  used: 9
+                  vips: 2
+                  taskAddresses: 4
+                  loadBalancers: 3
+                  excludesAttachedContainers: false
             application/atom+xml:
               schema:
                 $ref: "#/components/schemas/AtomFeed"
@@ -6762,7 +6947,8 @@ components:
       description: >
         Optional RFC 9110 precondition. Supply the ETag from a GET on this
         same path; the write is refused with 412 if the resource has
-        changed since. Omitting the header skips the check.
+        changed since. Omitting the header skips the check. If-None-Match
+        and If-Unmodified-Since are evaluated too, in RFC 9110 §13.2.2 order.
       example: '"a1b2c3d4e5f6a1b2"'
 
     IfMatchUnrepresented:
@@ -6819,7 +7005,7 @@ components:
     limit:
       name: limit
       in: query
-      description: Page size
+      description: Page size; a larger value is clamped to 200, and one that is not a positive integer is refused with `API016`
       schema:
         type: integer
         minimum: 1
@@ -6829,7 +7015,7 @@ components:
     offset:
       name: offset
       in: query
-      description: Starting offset for pagination
+      description: Starting offset for pagination; one that is not a non-negative integer is refused with `API016`
       schema:
         type: integer
         minimum: 0
@@ -6840,20 +7026,44 @@ components:
       in: header
       required: false
       description: >
-        Pagination by item range, an alternative to `limit` and `offset`:
-        `items <first>-<last>`, both zero-based and inclusive, with the same
-        200-item cap. Ignored when either query parameter is present. A range
-        that is less than the whole list answers 206 with `Content-Range`; one
-        that starts past the end, or names several ranges, answers 416. JSON
+        Pagination by item range (RFC 9110 §14.2), an alternative to `limit`
+        and `offset`: `items=<first>-<last>`, both zero-based and inclusive,
+        with the same 200-item cap. `items <first>-<last>` is accepted as a
+        deprecated spelling. Ignored when either query parameter is present, and
+        when it is malformed or names several ranges. A range that is less than
+        the whole list answers 206 with `Content-Range`; one that starts past
+        the end answers 416. The 200 and 206 answers carry the collection's
+        ETag, so `If-Range` holds across pages until the list changes. JSON
         only: a CSV download answers 200 with every row.
       schema:
         type: string
-      example: items 0-49
+      example: items=0-49
 
+    versions:
+      name: versions
+      in: query
+      description: >-
+        Which versions of a config or secret to list. `newest`, the default, lists the newest
+        readable version of each group of versions and every older one a service's current
+        spec uses, counting the rest in `OlderVersions`; `all` lists every version. When it is
+        absent, a `search` or `filter` matches every version and a CSV export holds every
+        version; `newest` narrows both. Any other value is refused with `API016`.
+      schema:
+        type: string
+        enum: [newest, all]
+        default: newest
+    versionsOf:
+      name: versionsOf
+      in: query
+      description: >-
+        List only the readable versions grouped with the config or secret with this ID,
+        newest first unless `sort` says otherwise. An ID the caller cannot read lists nothing.
+      schema:
+        type: string
     dir:
       name: dir
       in: query
-      description: Sort direction
+      description: Sort direction, in any case; any other value is refused with `API016`, as is a `sort` the list does not name
       schema:
         type: string
         enum: [asc, desc]
@@ -6882,6 +7092,9 @@ components:
         older overflow is dropped. The cursor narrows that replay only: output
         the connection itself receives is delivered whatever its timestamp,
         since a task is stamped by the clock of the node running it.
+        For the same reason an event's id is the newest line of the task
+        furthest behind, at most a minute behind the newest line sent, so a
+        resume may repeat lines already delivered but skips none.
       schema:
         type: string
 
@@ -7162,7 +7375,9 @@ components:
             requestId: req_a1b2c3d4e5f6
 
     PreconditionFailed:
-      description: The If-Match precondition failed — the resource has changed since the supplied ETag was read
+      description: >-
+        A precondition failed — If-Match or If-Unmodified-Since, or on a write
+        If-None-Match — so the resource has changed since the supplied validator was read
       content:
         application/problem+json:
           schema:
@@ -7184,8 +7399,7 @@ components:
 
     RangeNotSatisfiable:
       description: >
-        The `Range` starts past the last item, with `Content-Range: items */<total>`,
-        or names more than one range, with no `Content-Range`
+        The `Range` starts past the last item, with `Content-Range: items */<total>`
       headers:
         Content-Range:
           $ref: "#/components/headers/Content-Range"
@@ -7202,7 +7416,7 @@ components:
                 detail: urn:ietf:rfc:9457#detail
                 instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: about:blank
-            title: Requested Range Not Satisfiable
+            title: Range Not Satisfiable
             status: 416
             detail: range start is beyond the total number of items
             instance: /tasks
@@ -7606,6 +7820,52 @@ components:
               items:
                 $ref: "#/components/schemas/EnrichedTask"
 
+    PublishedPortCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublishedPort"
+
+    PublishedPort:
+      type: object
+      description: >
+        One port a service publishes: Docker's PortConfig, with the service
+        publishing it. A host-mode port names the nodes binding it, where the
+        caller may read them.
+      required: [Protocol, TargetPort, PublishedPort, PublishMode, ServiceID, ServiceName]
+      properties:
+        Name:
+          type: string
+        Protocol:
+          type: string
+          enum: [tcp, udp, sctp]
+        TargetPort:
+          type: integer
+          description: The port inside the container
+        PublishedPort:
+          type: integer
+          description: The port bound on the nodes
+        PublishMode:
+          type: string
+          enum: [ingress, host]
+        ServiceID:
+          type: string
+        ServiceName:
+          type: string
+        Stack:
+          type: string
+        Nodes:
+          type: array
+          description: >
+            The IDs of the nodes binding a host-mode port, leaving out those the
+            caller may not read; absent for an ingress port, which every node binds
+          items:
+            type: string
+
     StackCollection:
       allOf:
         - $ref: "#/components/schemas/CollectionEnvelope"
@@ -7633,6 +7893,38 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Config)
+                  VersionOf:
+                    type: string
+                    description: >-
+                      The logical name this config is a version of, when other versions of it
+                      are readable: its cetacean.version-of or com.matchory.deployment.name
+                      label, or its name without a version suffix. Absent when it has no other
+                      version.
+                  VersionInferred:
+                    type: boolean
+                    description: >-
+                      True when the group was matched by name rather than declared by the
+                      cetacean.version-of or com.matchory.deployment.name label on every
+                      version. Absent when false.
+                  NewestVersion:
+                    type: boolean
+                    description: >-
+                      True for the newest version of its group that the caller may read.
+                      Also true for a config with no other version; absent for older versions.
+                  InUse:
+                    type: boolean
+                    description: >-
+                      True for an older version a service the caller may read uses in its
+                      current spec, which a listing shows by default. Absent otherwise.
+                  OlderVersions:
+                    type: integer
+                    description: >-
+                      On the newest version, how many older versions of its group the caller
+                      may read that no current spec uses: those a default listing hides.
+                      Absent otherwise.
+                  UsedBy:
+                    type: integer
+                    description: Number of services the caller may read whose spec or previous spec uses this config
 
     SecretCollection:
       allOf:
@@ -7651,6 +7943,38 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Secret)
+                  VersionOf:
+                    type: string
+                    description: >-
+                      The logical name this secret is a version of, when other versions of it
+                      are readable: its cetacean.version-of or com.matchory.deployment.name
+                      label, or its name without a version suffix. Absent when it has no other
+                      version.
+                  VersionInferred:
+                    type: boolean
+                    description: >-
+                      True when the group was matched by name rather than declared by the
+                      cetacean.version-of or com.matchory.deployment.name label on every
+                      version. Absent when false.
+                  NewestVersion:
+                    type: boolean
+                    description: >-
+                      True for the newest version of its group that the caller may read.
+                      Also true for a secret with no other version; absent for older versions.
+                  InUse:
+                    type: boolean
+                    description: >-
+                      True for an older version a service the caller may read uses in its
+                      current spec, which a listing shows by default. Absent otherwise.
+                  OlderVersions:
+                    type: integer
+                    description: >-
+                      On the newest version, how many older versions of its group the caller
+                      may read that no current spec uses: those a default listing hides.
+                      Absent otherwise.
+                  UsedBy:
+                    type: integer
+                    description: Number of services the caller may read whose spec or previous spec uses this secret
 
     NetworkCollection:
       allOf:
@@ -7669,6 +7993,49 @@ components:
                   "@type":
                     type: string
                     description: JSON-LD type name (Network)
+                  Addresses:
+                    $ref: "#/components/schemas/NetworkAddresses"
+
+    NetworkAddresses:
+      type: object
+      description: >
+        How much of a network's IPv4 address pool is in use. Present only for
+        swarm-scoped networks on the default IPAM driver with an IPv4 subnet.
+        Counted over every service and task on the network, including those
+        the caller may not read.
+      required: [usable, used, vips, taskAddresses, loadBalancers, excludesAttachedContainers]
+      properties:
+        usable:
+          type: integer
+          description: >
+            Addresses the subnets (or their IP ranges) can hand out, less the
+            network, broadcast and gateway addresses
+        used:
+          type: integer
+          description: The sum of `vips`, `taskAddresses` and `loadBalancers`
+        vips:
+          type: integer
+          description: Service virtual IPs on the network
+        taskAddresses:
+          type: integer
+          description: Addresses held by tasks that have not stopped
+        loadBalancers:
+          type: integer
+          description: >
+            One per node with such a task on the network; on the ingress
+            network, one per node in the swarm
+        excludesAttachedContainers:
+          type: boolean
+          description: >
+            Whether the network is attachable, so containers attached outside
+            a service may hold addresses not counted here
+      example:
+        usable: 253
+        used: 9
+        vips: 2
+        taskAddresses: 4
+        loadBalancers: 3
+        excludesAttachedContainers: false
 
     VolumeCollection:
       allOf:
@@ -7750,10 +8117,15 @@ components:
           type: string
         name:
           type: string
+        rollback:
+          type: boolean
+          description: >-
+            For a config or secret, true when only the service's previous spec names it,
+            which a rollback would restore. Absent otherwise.
 
     ServiceListItem:
       type: object
-      description: Service with running task count (extends Docker swarm.Service)
+      description: Service with its task counts (extends Docker swarm.Service)
       properties:
         "@id":
           type: string
@@ -7769,6 +8141,22 @@ components:
         RunningTasks:
           type: integer
           description: Number of currently running tasks
+        DesiredTasks:
+          type: integer
+          description: >-
+            How many tasks the service asks for: its replicas; for a global service, the
+            ready, active nodes its placement constraints admit; for a job, the completions
+            its run needs (TotalCompletions, else MaxConcurrent, else 1; 1 for a global job).
+        CompletedTasks:
+          type: integer
+          description: >-
+            For a job only, how many tasks of its current run (JobStatus.JobIteration)
+            completed. Absent for any other mode.
+        FailedTasks:
+          type: integer
+          description: >-
+            For a job only, how many tasks of its current run failed or were rejected.
+            Absent for any other mode.
         ImageUpdate:
           $ref: "#/components/schemas/ImageUpdate"
       example:
@@ -7784,6 +8172,7 @@ components:
           Mode:
             Replicated: { Replicas: 3 }
         RunningTasks: 3
+        DesiredTasks: 3
 
     EnrichedTask:
       type: object
@@ -7975,12 +8364,17 @@ components:
             - no-healthcheck
             - no-restart-policy
             - newer-image
+            - unused-version
             - flaky-service
             - node-disk-full
             - node-memory-pressure
             - single-replica
             - manager-has-workloads
             - uneven-distribution
+            - single-manager
+            - even-managers
+            - quorum-at-risk
+            - network-addresses-low
           x-enum-descriptions:
             - Service consistently uses far less than its reserved resources
             - Service usage is nearing its configured resource limit
@@ -7990,12 +8384,17 @@ components:
             - Service has no healthcheck defined
             - Service has no restart policy defined
             - Service image tag names a newer image than the service runs
+            - An older version of a config or secret that no service uses
             - Service is restarting frequently or failing tasks
             - Node's disk is nearly full
             - Node is under sustained memory pressure
             - Service has only one replica (no redundancy)
             - Manager node is running non-system workloads
             - Tasks for a service are unevenly distributed across nodes
+            - The swarm has one manager although it has the nodes for three
+            - An even number of managers tolerates no more failures than one fewer
+            - A manager is unreachable; critical once one more loss would break quorum, or it is already lost
+            - An overlay network has used 80% of its addresses; critical from 95%
         severity:
           type: string
           enum: [info, warning, critical]
@@ -8005,11 +8404,14 @@ components:
             - Urgent, should be addressed immediately
         scope:
           type: string
-          enum: [service, node, cluster]
+          enum: [service, node, network, cluster, secret, config]
           x-enum-descriptions:
             - Recommendation targets a specific service
             - Recommendation targets a specific node
+            - Recommendation targets a specific network
             - Recommendation applies to the cluster as a whole
+            - Recommendation targets a specific secret
+            - Recommendation targets a specific config
         targetId:
           type: string
         targetName:
@@ -8089,8 +8491,12 @@ components:
           format: int64
         servicesConverged:
           type: integer
+          description: >-
+            Services whose state is running, or a job whose run completed. A
+            service mid-update counts in neither this nor servicesDegraded.
         servicesDegraded:
           type: integer
+          description: Services whose state is failed, pending or flapping.
         reservedCPU:
           type: integer
           format: int64
@@ -8107,6 +8513,8 @@ components:
         lastSync:
           type: string
           format: date-time
+        quorum:
+          $ref: "#/components/schemas/ManagerQuorum"
         prometheusConfigured:
           type: boolean
         localNodeID:
@@ -8129,8 +8537,40 @@ components:
         maxNodeCPU: 4
         maxNodeMemory: 8589934592
         lastSync: "2026-04-13T12:00:00Z"
+        quorum: { managers: 3, reachable: 3, size: 2, held: true, canLose: 1 }
         prometheusConfigured: true
         localNodeID: qz7k3v9xm2p4
+
+    ManagerQuorum:
+      type: object
+      description: >
+        The swarm's Raft quorum, counted over every manager whatever the
+        caller's grants, like the node counts beside it.
+      required: [managers, reachable, size, held, canLose]
+      properties:
+        managers:
+          type: integer
+          description: Raft members, nodes carrying a manager status, whatever role they were asked to take
+        reachable:
+          type: integer
+          description: Managers their peers have not found unreachable; one whose reachability is still unknown counts
+        size:
+          type: integer
+          description: Reachable managers needed to accept changes, a majority of `managers`; 0 when there are none
+        held:
+          type: boolean
+          description: Whether enough managers are reachable to accept changes; false when there are none
+        canLose:
+          type: integer
+          description: >
+            Reachable managers the swarm can lose and still accept changes;
+            0 when quorum is lost or one more loss would lose it
+      example:
+        managers: 3
+        reachable: 3
+        size: 2
+        held: true
+        canLose: 1
 
     ClusterCapacity:
       type: object
@@ -8860,8 +9300,57 @@ components:
               description: Detected third-party integrations (e.g. Traefik)
               items:
                 $ref: "#/components/schemas/Integration"
+            links:
+              type: array
+              description: >
+                Custom links from the service's `cetacean.link.*` labels, sorted
+                by id. Absent when the service declares none.
+              items:
+                $ref: "#/components/schemas/ServiceLink"
             imageUpdate:
               $ref: "#/components/schemas/ImageUpdate"
+
+    ServiceLink:
+      type: object
+      description: >
+        One custom link declared by a `cetacean.link.<id>` service label.
+        Exactly one of `href` and `text` is present: `href` for an http(s) URL,
+        `text` for any other value, which is not safe to render as a link.
+      required: [id, title]
+      properties:
+        id:
+          type: string
+          description: The `<id>` segment of the label
+          example: grafana
+        title:
+          type: string
+          description: The `cetacean.link.<id>.title` label, or the id when unset
+          example: Dashboard
+        href:
+          type: string
+          format: uri
+          description: >
+            The label's value, when it is an http or https URL, with any
+            character a URI can't hold percent-encoded and an internationalized
+            host converted to punycode
+          example: https://grafana.example.com/d/web
+        text:
+          type: string
+          description: >
+            The label's value, when it is not an http or https URL followed by
+            `://`, or is one without a valid host: none, one that is neither a
+            host name nor a bracketed IPv6 address, an internationalized name
+            IDNA rejects, one with a `%` in it, a user name or password, or a
+            port that is not a number up to 65535
+          example: pager:web-team
+        services:
+          type: array
+          description: >
+            The member services declaring the link, sorted. Present on a
+            stack's links only.
+          items:
+            type: string
+          example: [myapp_api, myapp_worker]
 
     ImageUpdate:
       type: object
@@ -8922,16 +9411,24 @@ components:
           shepherd: "#/components/schemas/ShepherdIntegration"
           swarm-cronjob: "#/components/schemas/CronjobIntegration"
           diun: "#/components/schemas/DiunIntegration"
+          caddy: "#/components/schemas/CaddyIntegration"
+          doco-cd: "#/components/schemas/DocoCDIntegration"
+          gantry: "#/components/schemas/GantryIntegration"
+          docker-swarm-deployment-action: "#/components/schemas/DeploymentActionIntegration"
       oneOf:
         - $ref: "#/components/schemas/TraefikIntegration"
         - $ref: "#/components/schemas/ShepherdIntegration"
         - $ref: "#/components/schemas/CronjobIntegration"
         - $ref: "#/components/schemas/DiunIntegration"
+        - $ref: "#/components/schemas/CaddyIntegration"
+        - $ref: "#/components/schemas/DocoCDIntegration"
+        - $ref: "#/components/schemas/GantryIntegration"
+        - $ref: "#/components/schemas/DeploymentActionIntegration"
 
     TraefikIntegration:
       type: object
       description: Traefik reverse proxy integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
@@ -8940,6 +9437,11 @@ components:
         enabled:
           type: boolean
           description: Whether the Traefik integration is enabled
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         routers:
           type: array
           items:
@@ -8955,6 +9457,7 @@ components:
       example:
         name: traefik
         enabled: true
+        labels: [traefik.enable, traefik.http.routers.web.rule]
         routers:
           - name: webapp
             rule: "Host(`app.example.com`)"
@@ -9062,30 +9565,41 @@ components:
     ShepherdIntegration:
       type: object
       description: Shepherd auto-update integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [shepherd]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         authConfig:
           type: string
           description: Registry auth configuration ID
       example:
         name: shepherd
         enabled: true
+        labels: [shepherd.enable]
 
     CronjobIntegration:
       type: object
       description: Swarm Cronjob integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [swarm-cronjob]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         schedule:
           type: string
           description: Cron expression
@@ -9100,6 +9614,7 @@ components:
       example:
         name: swarm-cronjob
         enabled: true
+        labels: [swarm.cronjob.enable, swarm.cronjob.schedule]
         schedule: "0 3 * * *"
         skipRunning: true
         replicas: 1
@@ -9109,13 +9624,18 @@ components:
     DiunIntegration:
       type: object
       description: Diun image update notifier integration detected from service labels
-      required: [name]
+      required: [name, labels]
       properties:
         name:
           type: string
           enum: [diun]
         enabled:
           type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
         regopt:
           type: string
           description: Registry options name
@@ -9146,9 +9666,233 @@ components:
       example:
         name: diun
         enabled: true
+        labels: [diun.enable, diun.watch_repo]
         watchRepo: true
         notifyOn: new;update
         sortTags: semver
         maxTags: 5
         includeTags: '^\d+\.\d+\.\d+$'
         platform: linux/amd64
+
+    CaddyIntegration:
+      type: object
+      description: >
+        caddy-docker-proxy configuration detected from service labels, as the
+        Caddyfile it builds from them. Label values are Go templates, and are
+        kept as written rather than evaluated.
+      required: [name, enabled, caddyfile, labels]
+      properties:
+        name:
+          type: string
+          enum: [caddy]
+        enabled:
+          type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        caddyfile:
+          type: string
+      example:
+        name: caddy
+        enabled: true
+        labels: [caddy, caddy.reverse_proxy]
+        caddyfile: "example.com {\n\treverse_proxy {{upstreams 8080}}\n}\n"
+
+    DocoCDIntegration:
+      type: object
+      description: The deployment provenance doco-cd writes onto the services it deploys
+      required: [name, enabled, labels]
+      properties:
+        name:
+          type: string
+          enum: [doco-cd]
+        enabled:
+          type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        deployment:
+          type: string
+          description: The doco-cd deployment name
+        source:
+          type: string
+          description: Where the deployment came from
+          example: git
+        repository:
+          type: string
+          example: acme/shop
+        sourceUrl:
+          type: string
+          description: The source URL, without any credentials it carried
+        ref:
+          type: string
+          description: The branch or tag deployed
+        commit:
+          type: string
+          description: The commit deployed
+        commitUrl:
+          type: string
+          format: uri
+          description: >
+            The commit on its forge. Absent unless the source URL's host
+            names GitHub, GitLab, Gitea, Forgejo or Codeberg.
+        trigger:
+          type: string
+          description: "`poll`, or the commit or digest that triggered the deployment"
+        deployedAt:
+          type: string
+          format: date-time
+        version:
+          type: string
+          description: The doco-cd version that deployed the service
+        certExpiry:
+          type: string
+          format: date-time
+          description: The earliest expiry among the certificates doco-cd rotates for the service
+        job:
+          type: object
+          description: The service's doco-cd scheduled job
+          required: [enabled]
+          properties:
+            enabled:
+              type: boolean
+            schedule:
+              type: string
+            executionMode:
+              type: string
+              example: one_off
+            skipRunning:
+              type: boolean
+            lastRun:
+              type: string
+              format: date-time
+            nextRun:
+              type: string
+              format: date-time
+      example:
+        name: doco-cd
+        enabled: true
+        labels: [cd.doco.deployment.name, cd.doco.deployment.target.sha]
+        deployment: shop
+        source: git
+        repository: acme/shop
+        sourceUrl: https://github.com/acme/shop.git
+        ref: main
+        commit: 0123456789abcdef0123456789abcdef01234567
+        commitUrl: https://github.com/acme/shop/commit/0123456789abcdef0123456789abcdef01234567
+        trigger: poll
+        deployedAt: "2026-10-27T09:30:00Z"
+
+    GantryIntegration:
+      type: object
+      description: >
+        Gantry service update configuration detected from service labels. A
+        field that is absent leaves Gantry's own default in place.
+      required: [name, enabled, labels]
+      properties:
+        name:
+          type: string
+          enum: [gantry]
+        enabled:
+          type: boolean
+          description: False when `gantry.services.excluded` is `true`
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        authConfig:
+          type: string
+        manifestCmd:
+          type: string
+          description: "The label as written; Gantry accepts `buildx`, `manifest` and `none`"
+        manifestOptions:
+          type: string
+        rollbackOnFailure:
+          type: boolean
+        rollbackOptions:
+          type: string
+        updateJobs:
+          type: boolean
+        updateOptions:
+          type: string
+        updateTimeoutSeconds:
+          type: integer
+          description: 0 for no timeout
+      example:
+        name: gantry
+        enabled: true
+        labels: [gantry.manifest.cmd, gantry.update.timeout_seconds]
+        manifestCmd: manifest
+        rollbackOnFailure: true
+        updateTimeoutSeconds: 300
+
+    DeploymentActionIntegration:
+      type: object
+      description: >
+        The deployment provenance matchory/docker-swarm-deployment-action
+        writes onto the services it deploys, and the settings a service's
+        labels override. An absent override leaves the action's input in place.
+      required: [name, enabled, labels]
+      properties:
+        name:
+          type: string
+          enum: [docker-swarm-deployment-action]
+        enabled:
+          type: boolean
+        labels:
+          type: array
+          description: The service labels this integration was read from
+          items:
+            type: string
+        version:
+          type: string
+          description: The deployed version
+        repository:
+          type: string
+          description: The repository, read from the workflow run URL
+          example: acme/shop
+        repositoryUrl:
+          type: string
+          format: uri
+          description: The repository on the GitHub server that ran the workflow
+        ref:
+          type: string
+          description: The branch or tag that triggered the workflow
+          example: refs/heads/main
+        commit:
+          type: string
+        commitUrl:
+          type: string
+          format: uri
+          description: The commit on the GitHub server that ran the workflow
+        runUrl:
+          type: string
+          format: uri
+          description: The workflow run that deployed the service; absent unless the label is a GitHub Actions run URL
+        actor:
+          type: string
+          description: The user that triggered the workflow run
+        monitor:
+          type: boolean
+        monitorTimeoutSeconds:
+          type: integer
+          minimum: 1
+        healthCheckWarnings:
+          type: boolean
+      example:
+        name: docker-swarm-deployment-action
+        enabled: true
+        labels: [com.matchory.deployment.commit, com.matchory.deployment.run-url]
+        version: 1.4.0
+        repository: acme/shop
+        repositoryUrl: https://github.com/acme/shop
+        ref: refs/heads/main
+        commit: 0123456789abcdef0123456789abcdef01234567
+        commitUrl: https://github.com/acme/shop/commit/0123456789abcdef0123456789abcdef01234567
+        runUrl: https://github.com/acme/shop/actions/runs/123
+        actor: octocat

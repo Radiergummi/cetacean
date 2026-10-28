@@ -212,7 +212,7 @@ func TestAclMatchWrap_ReplayedTaskRemoveInheritsServiceGrant(t *testing.T) {
 	}})
 	h := newTestHandlers(t, withCache(c), withACL(e))
 
-	b := sse.NewBroadcaster(0, noopErrorWriter, c.History())
+	b := sse.NewBroadcaster(0, c.History())
 	t.Cleanup(b.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -284,7 +284,7 @@ func TestAclMatchWrap_ReplayedStackRemovesInheritStackGrant(t *testing.T) {
 	}})
 	h := newTestHandlers(t, withCache(c), withACL(e))
 
-	b := sse.NewBroadcaster(0, noopErrorWriter, c.History())
+	b := sse.NewBroadcaster(0, c.History())
 	t.Cleanup(b.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)

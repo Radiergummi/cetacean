@@ -4,18 +4,29 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// writeRemovalConflict answers a refused removal with its code and a detail of
-// our own, as the caller may not be allowed to see what is in the way. The log
-// keeps the engine's text.
-func writeRemovalConflict(
+// writeRemovalError answers a refused removal with code and cluster's detail
+// when the resource's state refused it, and otherwise as writeDockerError.
+// The log keeps the engine's text.
+func writeRemovalError(
 	w http.ResponseWriter,
 	r *http.Request,
 	err error,
 	code, resource, key string,
 ) {
-	slog.Info("removal refused", "resource", resource, "id", key, "error", err)
-	writeErrorCode(w, r, code, cluster.RemovalConflictDetail(resource, key))
+	refusal, ok := cluster.ClassifyRemoval(err, resource, key)
+	if !ok {
+		refusal = &cluster.WriteError{Kind: cluster.Engine, Resource: resource, Err: err}
+	}
+
+	if refusal.Kind != cluster.Conflict {
+		writeRefusal(w, r, refusal, "")
+		return
+	}
+
+	slog.InfoContext(r.Context(), "removal refused", "resource", resource, "id", key, "error", err)
+	problem.Write(w, r, code, refusal.Detail)
 }

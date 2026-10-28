@@ -33,7 +33,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 	})
 
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
 	router := newTestRouter(t, h, b, specBytes)
 
@@ -130,7 +130,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 			method:     "GET",
 			path:       "/nodes",
 			accept:     "application/json",
-			rangeSpec:  "items 0-0",
+			rangeSpec:  "items=0-0",
 			wantStatus: 206,
 		},
 		{
@@ -138,7 +138,7 @@ func TestResponsesMatchOpenAPISpec(t *testing.T) {
 			method:     "GET",
 			path:       "/nodes",
 			accept:     "application/json",
-			rangeSpec:  "items 50-99",
+			rangeSpec:  "items=50-99",
 			wantStatus: 416,
 		},
 		{

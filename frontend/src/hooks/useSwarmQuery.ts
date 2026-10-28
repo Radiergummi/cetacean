@@ -1,11 +1,11 @@
 import type { FetchResult } from "../api/client";
 import type { CollectionResponse } from "../api/types";
 import { useLatestRef } from "./useLatestRef";
-import { useResourceStream } from "./useResourceStream";
+import { type SSEEvent, useResourceStream } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ssePathMap: Record<string, string> = {
   node: "/nodes",
@@ -22,7 +22,22 @@ const ssePathMap: Record<string, string> = {
  * Fields the list endpoints resolve onto a row but the stream's raw resource
  * lacks; an update keeps them from the row it replaces.
  */
-const enrichedFields = ["ServiceName", "NodeHostname"] as const;
+const enrichedFields = [
+  "ServiceName",
+  "NodeHostname",
+  "Addresses",
+  "UsedBy",
+  "VersionOf",
+  "VersionInferred",
+  "NewestVersion",
+  "InUse",
+  "OlderVersions",
+  "RunningTasks",
+  "DesiredTasks",
+  "CompletedTasks",
+  "FailedTasks",
+  "ImageUpdate",
+] as const;
 
 function keepEnrichment<T>(cached: T, incoming: T): T {
   const kept: Record<string, unknown> = {};
@@ -39,25 +54,56 @@ function keepEnrichment<T>(cached: T, incoming: T): T {
 }
 
 /**
- * How long a filtered list gathers stream events before refetching. Timed from
+ * How long a list gathers stream events before refetching. Timed from
  * the first event, so a cluster that never goes quiet still refreshes.
  */
-const filteredRefetchDelay = 750;
+const refetchDelay = 750;
 
 type PageData<T> = FetchResult<CollectionResponse<T>>;
 type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 
-export function useSwarmQuery<T>(
-  queryKey: readonly unknown[],
-  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
-  sseType: string,
-  getId: (item: T) => string,
+export interface SwarmQueryOptions<T> {
+  queryKey: readonly unknown[];
+  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>;
+  /**
+   * The stream's types; an event of any is patched in as a row. Several types
+   * need `derived`, or one that is not the row's would be appended as a row.
+   */
+  sseType: string;
+  getId: (item: T) => string;
+  /**
+   * The server selects the rows, so an event can only prompt a refetch.
+   */
+  filtered?: boolean | undefined;
+  /**
+   * Events this rejects leave the list alone; a sync always refetches.
+   */
+  relevant?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
+  /**
+   * The rows are derived from the streamed resources, so a held remove refetches too.
+   */
+  derived?: boolean | undefined;
+  onEvent?: ((event: SSEEvent) => void) | undefined;
+}
+
+export function useSwarmQuery<T>({
+  queryKey,
+  fetchFn,
+  sseType,
+  getId,
   filtered = false,
-) {
+  relevant,
+  derived = false,
+  onEvent,
+}: SwarmQueryOptions<T>) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
   const filteredRef = useLatestRef(filtered);
+  const derivedRef = useLatestRef(derived);
+  const relevantRef = useLatestRef(relevant);
+  const onEventRef = useLatestRef(onEvent);
+  const sseTypeRef = useLatestRef(sseType);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
@@ -94,14 +140,38 @@ export function useSwarmQuery<T>(
     useCallback(
       (event) => {
         const key = [...queryKeyRef.current];
+        const scheduleRefetch = () => {
+          refetchTimer.current ??= setTimeout(() => {
+            refetchTimer.current = undefined;
+            void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
+          }, refetchDelay);
+        };
 
         if (event.type === "sync") {
+          onEventRef.current?.(event);
           void queryClient.invalidateQueries({ queryKey: key });
 
           return;
         }
 
         const currentData = queryClient.getQueryData<InfinitePages<T>>(key);
+
+        if (
+          relevantRef.current &&
+          !relevantRef.current(event, currentData?.pages.flatMap(({ data }) => data.items) ?? [])
+        ) {
+          return;
+        }
+
+        onEventRef.current?.(event);
+
+        // Another type's event on this stream moves what the rows were
+        // derived from, so only the server can say what it changed.
+        if (!sseTypeRef.current.split(",").includes(event.type)) {
+          scheduleRefetch();
+
+          return;
+        }
 
         if (!currentData?.pages) {
           return;
@@ -112,13 +182,11 @@ export function useSwarmQuery<T>(
         );
 
         // Only the server can say whether a change moves a resource into or
-        // out of a filtered collection, so ask it again — once per burst, and
-        // for whole pages, keeping the total and the loaded rows in step.
-        if (filteredRef.current && !(held && event.action === "remove")) {
-          refetchTimer.current ??= setTimeout(() => {
-            refetchTimer.current = undefined;
-            void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
-          }, filteredRefetchDelay);
+        // out of a filtered collection, so ask it again — once per burst, for
+        // whole pages. A derived list asks on a held remove too: what replaces
+        // the row may be one it does not hold yet.
+        if (filteredRef.current && !(held && event.action === "remove" && !derivedRef.current)) {
+          scheduleRefetch();
         }
 
         if (event.action === "remove") {
@@ -229,13 +297,26 @@ export function useSwarmQuery<T>(
               };
             });
           }
-        } else {
+        } else if (!filteredRef.current) {
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      [queryClient, queryKeyRef, getIdRef, filteredRef],
+      [queryClient, queryKeyRef, getIdRef, filteredRef, derivedRef, sseTypeRef],
     ),
   );
+
+  // Counts the fetches that finished, so a reader can tell a list the server
+  // answered from one only a stream event has edited.
+  const [fetches, setFetches] = useState(0);
+  const wasFetching = useRef(false);
+
+  useEffect(() => {
+    if (wasFetching.current && !query.isFetching) {
+      setFetches((count) => count + 1);
+    }
+
+    wasFetching.current = query.isFetching;
+  }, [query.isFetching]);
 
   const loading = query.isLoading;
   const loadingMore = query.isFetchingNextPage;
@@ -253,5 +334,16 @@ export function useSwarmQuery<T>(
     void queryClient.invalidateQueries({ queryKey: [...queryKey] });
   }, [queryClient, queryKey]);
 
-  return { data, total, loading, loadingMore, error, retry, hasMore, loadMore, allowedMethods };
+  return {
+    data,
+    total,
+    loading,
+    loadingMore,
+    error,
+    retry,
+    hasMore,
+    loadMore,
+    allowedMethods,
+    fetches,
+  };
 }

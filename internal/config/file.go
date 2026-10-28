@@ -129,6 +129,7 @@ type fileServer struct {
 	OperationsLevel  *int      `toml:"operations_level"`
 	BasePath         *string   `toml:"base_path"`
 	PublicURL        *string   `toml:"public_url"`
+	AllowedHosts     []string  `toml:"allowed_hosts"`
 	TrustedProxies   *string   `toml:"trusted_proxies"`
 	ForwardedHeaders *string   `toml:"forwarded_headers"`
 }
@@ -220,13 +221,9 @@ type fileACL struct {
 	OIDCUserClaims      []string `toml:"oidc_user_claims"`
 }
 
-// LoadFile reads and parses the TOML config file at path.
-// Returns nil config (not an error) if path is empty.
-//
-// A key the schema does not know is an error, not a silent no-op: half of these
-// settings exist to *remove* capability, so a typo or a setting that moved
-// between releases would otherwise hand the operator the permissive default
-// while their file says the opposite.
+// LoadFile reads and parses the TOML config file at path, returning nil config
+// (not an error) if path is empty. An unknown key is an error: many settings
+// remove capability, so a typo would silently grant the permissive default.
 func LoadFile(path string) (*fileConfig, error) {
 	if path == "" {
 		return nil, nil

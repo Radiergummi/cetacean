@@ -319,8 +319,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9700#section-4.5.3.2
     mutants:
       - file: internal/auth/oidc.go
-        replace: "\t\tslog.Error(\"oidc nonce mismatch\")\n\t\twriteError(w, r, http.StatusBadRequest, \"AUT003\", \"nonce mismatch\")\n\t\treturn"
-        with: "\t\tslog.Error(\"oidc nonce mismatch\")\n\t\twriteError(w, r, http.StatusBadRequest, \"AUT003\", \"nonce mismatch\")"
+        replace: "\t\tslog.ErrorContext(r.Context(), \"oidc nonce mismatch\")\n\t\tproblem.Write(w, r, \"AUT003\", \"nonce mismatch\")\n\t\treturn"
+        with: "\t\tslog.ErrorContext(r.Context(), \"oidc nonce mismatch\")\n\t\tproblem.Write(w, r, \"AUT003\", \"nonce mismatch\")"
 
   - id: state-or-nonce-when-pkce-is-absent
     level: MUST

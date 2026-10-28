@@ -15,7 +15,7 @@ export default function ServiceRefList({ services, label, emptyMessage }: Props)
     <CollapsibleSection title={label}>
       {services.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {services.map(({ id, name }) => (
+          {services.map(({ id, name, rollback }) => (
             <Badge
               key={id}
               variant="outline"
@@ -23,6 +23,7 @@ export default function ServiceRefList({ services, label, emptyMessage }: Props)
               render={<Link to={`/services/${id}`} />}
             >
               <ResourceName name={name || id.slice(0, 12)} />
+              {rollback && <span className="text-xs text-muted-foreground">for a rollback</span>}
             </Badge>
           ))}
         </div>

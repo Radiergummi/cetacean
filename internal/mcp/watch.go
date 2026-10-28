@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -44,7 +45,7 @@ func (s *Server) toolWatch(
 ) (string, error) {
 	name := req.GetString("service", "")
 	if name == "" {
-		return "", fmt.Errorf("service: required")
+		return "", errors.New("service: required")
 	}
 
 	svc, found, err := s.cache.ResolveService(name)

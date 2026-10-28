@@ -25,6 +25,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/mcp"
 )
 
@@ -122,10 +123,47 @@ type World struct {
 }
 
 // NewWorld seeds a cluster and mounts the real REST router and the real MCP
-// handler over it. Both read the same cache, which is what makes a
+// handler over it. Both share one core.Core, which is what makes a
 // cross-transport invariant meaningful: a divergence is the transports
 // disagreeing, never two fixtures disagreeing.
 func NewWorld(t *testing.T) *World {
+	t.Helper()
+
+	return NewWorldAt(t, config.OpsImpactful)
+}
+
+// NewWorldAt is NewWorld with both transports at one operations level.
+func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
+	t.Helper()
+
+	return newWorld(t, level, nil, nil, nil)
+}
+
+// NewWorldWithWidgets is NewWorld with MCP serving the widget bundles in widgets.
+func NewWorldWithWidgets(t *testing.T, widgets fs.FS) *World {
+	t.Helper()
+
+	return newWorld(t, config.OpsImpactful, widgets, nil, nil)
+}
+
+// NewWorldWithWriters is NewWorld with a Docker writer behind each transport.
+func NewWorldWithWriters(
+	t *testing.T,
+	rest api.DockerWriteClient,
+	agent mcp.DockerWriteClient,
+) *World {
+	t.Helper()
+
+	return newWorld(t, config.OpsImpactful, nil, rest, agent)
+}
+
+func newWorld(
+	t *testing.T,
+	level config.OperationsLevel,
+	widgets fs.FS,
+	rest api.DockerWriteClient,
+	agent mcp.DockerWriteClient,
+) *World {
 	t.Helper()
 
 	c := cache.New(nil)
@@ -140,10 +178,7 @@ func NewWorld(t *testing.T) *World {
 	evaluator.SetResolver(c)
 	evaluator.SetPolicy(policy)
 
-	broadcaster := sse.NewBroadcaster(0, func(
-		http.ResponseWriter, *http.Request, string, string,
-	) {
-	}, nil)
+	broadcaster := sse.NewBroadcaster(0, nil)
 	t.Cleanup(broadcaster.Close)
 
 	ready := make(chan struct{})
@@ -152,12 +187,13 @@ func NewWorld(t *testing.T) *World {
 	// Docker clients are nil: every read answers from the cache. A read
 	// endpoint that needs a live daemon is an e2e-only route and is excused as
 	// one, rather than stubbed into looking covered here.
+	shared := core.New(c, nil)
 	handlers := api.NewHandlers(
-		c, broadcaster,
-		nil, nil, nil, nil,
+		shared, broadcaster,
+		nil, nil, rest, nil,
 		ready,
 		nil,
-		config.OpsImpactful,
+		level,
 		nil,
 		evaluator,
 	)
@@ -168,14 +204,16 @@ func NewWorld(t *testing.T) *World {
 	// what a bypassed mode runs in production.
 	authProvider := headersProvider()
 
-	mcpServer, err := mcp.New(c, mcp.Options{
-		ACL: evaluator,
+	mcpServer, err := mcp.New(shared, mcp.Options{
+		ACL:         evaluator,
+		Widgets:     widgets,
+		WriteClient: agent,
 		Config: config.MCPConfig{
 			Enabled:         true,
 			OperationsLevel: config.OpsInherit,
 			AuthBypass:      []string{"headers"},
 		},
-		GlobalOpsLevel: config.OpsImpactful,
+		GlobalOpsLevel: level,
 		AuthMode:       "headers",
 		AuthProvider:   authProvider,
 	})
@@ -190,6 +228,7 @@ func NewWorld(t *testing.T) *World {
 	}), "")
 
 	router := api.NewRouter(api.RouterConfig{
+		Hosts:          auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:       handlers,
 		Broadcaster:    broadcaster,
 		SPA:            spa,

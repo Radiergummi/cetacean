@@ -5,35 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync/atomic"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
-
-// ErrorWriter writes a structured error response. The code and detail
-// parameters map to the API error registry (e.g. "AUT001"). This type
-// decouples the auth package from the API error-response implementation,
-// avoiding a circular dependency.
-type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
-
-// globalErrorWriter is set once during initialization via SetErrorWriter.
-var globalErrorWriter atomic.Pointer[ErrorWriter]
-
-// SetErrorWriter registers the structured error writer used by the auth
-// middleware and providers. Must be called during initialization, before
-// any requests are served.
-func SetErrorWriter(ew ErrorWriter) {
-	globalErrorWriter.Store(&ew)
-}
-
-// writeError writes a structured error response if an ErrorWriter has been
-// registered, otherwise falls back to http.Error.
-func writeError(w http.ResponseWriter, r *http.Request, status int, code, detail string) {
-	if ew := globalErrorWriter.Load(); ew != nil {
-		(*ew)(w, r, code, detail)
-		return
-	}
-
-	http.Error(w, detail, status)
-}
 
 // AuthError is an authentication error that carries a WWW-Authenticate
 // header value per RFC 9110. The challenge is what earns a 401; Code names a
@@ -42,7 +16,6 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code, detail
 type AuthError struct {
 	Msg             string
 	WWWAuthenticate string
-	Status          int
 	Code            string
 }
 
@@ -51,22 +24,19 @@ func (e *AuthError) Error() string { return e.Msg }
 // writeAuthFailure answers a failed Authenticate, for both callers that answer
 // one — MCP's bypass falls through to its own bearer challenge. RFC 9110
 // §15.5.2 admits no 401 without a challenge, so a refusal that produced none
-// is 403; a Code names a refusal of its own. Status is the fallback's only.
+// is 403 (AUT006); a Code names a refusal of its own.
 func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error, extra ...string) {
-	status, code, detail := http.StatusForbidden, "AUT006", "authentication refused"
+	code, detail := "AUT006", "authentication refused"
 
 	var named bool
 
 	if authErr, ok := errors.AsType[*AuthError](err); ok {
 		if authErr.WWWAuthenticate != "" {
 			w.Header().Set("WWW-Authenticate", authErr.WWWAuthenticate)
-			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
+			code, detail = "AUT001", "authentication required"
 		}
 		if authErr.Code != "" {
 			code, detail, named = authErr.Code, authErr.Msg, true
-			if authErr.Status != 0 {
-				status = authErr.Status
-			}
 		}
 	}
 
@@ -80,22 +50,18 @@ func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error, extra .
 		}
 
 		w.Header().Add("WWW-Authenticate", challenge)
-		if !named && status == http.StatusForbidden {
-			status, code, detail = http.StatusUnauthorized, "AUT001", "authentication required"
+		if !named && code == "AUT006" {
+			code, detail = "AUT001", "authentication required"
 		}
 	}
 
-	writeError(w, r, status, code, detail)
+	problem.Write(w, r, code, detail)
 }
 
 // Middleware returns HTTP middleware that authenticates requests using the
-// given provider. Exempt paths (meta endpoints, API docs, static assets,
-// auth callbacks) bypass authentication entirely.
-//
-// A token this deployment issued is consulted before the provider, so an
-// explicit credential outranks the ambient session cookie a browser may also be
-// carrying. tokens may be its zero value, which is every deployment without an
-// authorization server.
+// given provider; exempt paths bypass authentication entirely. A token this
+// deployment issued is consulted first, so an explicit credential outranks an
+// ambient session cookie. tokens may be its zero value (no authorization server).
 func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,15 +78,13 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 			}
 
 			if err != nil {
-				slog.Warn("authentication failed",
+				slog.WarnContext(r.Context(), "authentication failed",
 					"path", r.URL.Path,
 					"error", err,
 				)
-				// A request that presented no credential gets the resource's
-				// own challenge too, or a client cannot do what RFC 9728 exists
-				// for: call the resource cold, read the 401, follow
-				// resource_metadata to the token endpoint. Not on /oauth/*,
-				// which refuses a token this server issued.
+				// A request with no credential gets the resource's own challenge too, so a
+				// client can follow RFC 9728 cold: read the 401, follow resource_metadata.
+				// Not on /oauth/*, which refuses a token this server issued.
 				resourceChallenge := ""
 				if ExtractBearerToken(r) == "" && isProtectedResource(r.URL.Path) {
 					resourceChallenge = tokens.Challenge("")

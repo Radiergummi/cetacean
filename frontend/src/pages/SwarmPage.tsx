@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { KVTable, MetadataGrid, ResourceId, Timestamp } from "../components/data";
-import FetchError from "../components/FetchError";
+import DetailError from "../components/DetailError";
 import InfoCard from "../components/InfoCard";
 import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
@@ -99,7 +99,13 @@ export default function SwarmPage() {
   const [installOpen, setInstallOpen] = useState(false);
 
   if (page.error) {
-    return <FetchError message="Failed to load swarm info" />;
+    return (
+      <DetailError
+        error={page.error}
+        fallback="Failed to load swarm info"
+        onRetry={page.fetchSwarmInfo}
+      />
+    );
   }
 
   if (!page.data) {

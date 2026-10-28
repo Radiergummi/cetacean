@@ -249,7 +249,7 @@ func TestImpactfulToolsAllElicit(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
 	for _, td := range srv.registeredTools {
-		if td.tier == config.OpsImpactful && !td.elicits {
+		if td.tier() == config.OpsImpactful && !td.elicits {
 			t.Errorf("%s is impactful but does not ask for a confirmation", td.tool.Name)
 		}
 	}

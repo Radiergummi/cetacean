@@ -1,8 +1,6 @@
 package api
 
 import (
-	"context"
-	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +10,8 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
@@ -228,7 +228,7 @@ func TestParsePagination_RangeBasic(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/range-is-an-optional-feature")
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Range", "items 0-24")
+	r.Header.Set("Range", "items=0-24")
 
 	p, err := parsePagination(r)
 	if err != nil {
@@ -248,7 +248,7 @@ func TestParsePagination_RangeBasic(t *testing.T) {
 
 func TestParsePagination_RangeMaxClamp(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Range", "items 0-999")
+	r.Header.Set("Range", "items=0-999")
 
 	p, err := parsePagination(r)
 	if err != nil {
@@ -270,7 +270,7 @@ func TestParsePagination_RangeAtMaxIntClamps(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/large-range-numerals-do-not-overflow")
 
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Range", "items 0-"+strconv.Itoa(math.MaxInt))
+	r.Header.Set("Range", "items=0-"+strconv.Itoa(math.MaxInt))
 
 	p, err := parsePagination(r)
 	if err != nil {
@@ -284,7 +284,7 @@ func TestParsePagination_RangeAtMaxIntClamps(t *testing.T) {
 
 func TestParsePagination_QueryParamsOverrideRange(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/?limit=5&offset=10", nil)
-	r.Header.Set("Range", "items 0-24")
+	r.Header.Set("Range", "items=0-24")
 
 	p, err := parsePagination(r)
 	if err != nil {
@@ -324,35 +324,96 @@ func TestParsePagination_RangeNonItemsUnitIgnored(t *testing.T) {
 	}
 }
 
-func TestParsePagination_RangeMultipartError(t *testing.T) {
+func TestParsePagination_RangeMultipartIgnored(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/an-invalid-ranges-specifier-may-be-refused")
 
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.Header.Set("Range", "items 0-9, 50-59")
+	for _, header := range []string{"items=0-9, 50-59", "items 0-9,50-59"} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Range", header)
 
-	_, err := parsePagination(r)
-	if err == nil {
-		t.Fatal("expected error for multipart range")
-	}
-	if !errors.Is(err, errMultipartRange) {
-		t.Errorf("expected errMultipartRange, got %v", err)
+		p, err := parsePagination(r)
+		if err != nil {
+			t.Fatalf("%q: unexpected error: %v", header, err)
+		}
+		if p.RangeReq || p.Limit != 50 || p.Offset != 0 {
+			t.Errorf("%q: got %+v, want the default page with no range", header, p)
+		}
 	}
 }
 
-func TestParsePagination_InvalidQueryParamsFallBackToRange(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/?limit=abc", nil)
-	r.Header.Set("Range", "items 0-24")
+func TestParsePagination_RangeRFCForm(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/a-satisfiable-range-answers-206")
 
-	p, err := parsePagination(r)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for _, header := range []string{"items=10-34", "ITEMS=10-34", "items 10-34"} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Range", header)
+
+		p, err := parsePagination(r)
+		if err != nil {
+			t.Fatalf("%q: unexpected error: %v", header, err)
+		}
+		if !p.RangeReq || p.Limit != 25 || p.Offset != 10 {
+			t.Errorf("%q: got %+v, want offset 10 limit 25 by range", header, p)
+		}
+	}
+}
+
+func TestParsePagination_MalformedParametersAreRefused(t *testing.T) {
+	for _, query := range []string{
+		"limit=abc", "limit=0", "limit=-3", "offset=x", "offset=-1", "dir=sideways",
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/?"+query, nil)
+		r.Header.Set("Range", "items=0-24")
+
+		if _, err := parsePagination(r); err == nil {
+			t.Errorf("%s: no error, want one naming the parameter", query)
+		}
 	}
 
-	if !p.RangeReq {
-		t.Error("expected RangeReq true when query param is invalid")
+	r := httptest.NewRequest(http.MethodGet, "/?dir=DESC", nil)
+	if p, err := parsePagination(r); err != nil || p.Dir != "desc" {
+		t.Errorf("dir=DESC: dir=%q err=%v, want desc", p.Dir, err)
 	}
-	if p.Limit != 25 {
-		t.Errorf("expected limit 25 from Range header, got %d", p.Limit)
+}
+
+func TestMalformedPageParametersAnswerAPI016(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "s1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "s1"}},
+	})
+	router := newTestRouterWithCache(t, c)
+
+	for _, target := range []string{
+		"/services?limit=abc",
+		"/services?limit=0",
+		"/services?offset=-1",
+		"/services?dir=up",
+		"/services?sort=nope",
+		"/networks?sort=nope",
+		"/history?limit=x",
+		"/history?before=yesterday",
+		"/history.atom?before=yesterday",
+		"/services.atom?limit=-1",
+		"/search?q=s&limit=many",
+	} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", target, w.Code)
+			continue
+		}
+		assertACLErrorCode(t, w, "API016")
+	}
+
+	for _, target := range []string{"/networks?sort=addresses", "/services?dir=DESC"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: status %d, want 200", target, w.Code)
+		}
 	}
 }
 
@@ -363,7 +424,7 @@ func TestWriteCollectionResponse_RangePartial(t *testing.T) {
 	)
 
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
-	r.Header.Set("Range", "items 0-9")
+	r.Header.Set("Range", "items=0-9")
 	w := httptest.NewRecorder()
 
 	p := PageParams{Limit: 10, Offset: 0, RangeReq: true}
@@ -395,7 +456,7 @@ func TestWriteCollectionResponse_RangePartial(t *testing.T) {
 
 func TestWriteCollectionResponse_RangeFullCollection(t *testing.T) {
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
-	r.Header.Set("Range", "items 0-4")
+	r.Header.Set("Range", "items=0-4")
 	w := httptest.NewRecorder()
 
 	p := PageParams{Limit: 10, Offset: 0, RangeReq: true}
@@ -431,7 +492,7 @@ func TestWriteCollectionResponse_RangeBeyondTotal(t *testing.T) {
 	)
 
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
-	r.Header.Set("Range", "items 50-59")
+	r.Header.Set("Range", "items=50-59")
 	w := httptest.NewRecorder()
 
 	p := PageParams{Limit: 10, Offset: 50, RangeReq: true}
@@ -458,7 +519,7 @@ func TestWriteCollectionResponse_RangeBeyondTotal(t *testing.T) {
 
 func TestWriteCollectionResponse_RangeEmptyCollection(t *testing.T) {
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nodes", nil)
-	r.Header.Set("Range", "items 0-9")
+	r.Header.Set("Range", "items=0-9")
 	w := httptest.NewRecorder()
 
 	p := PageParams{Limit: 10, Offset: 0, RangeReq: true}
@@ -523,7 +584,7 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := parsePagination(r)
 		if err != nil {
-			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+			problem.WriteStatus(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
 			return
 		}
 
@@ -533,7 +594,7 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 
 	t.Run("range returns 206 with Content-Range", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/items", nil)
-		r.Header.Set("Range", "items 0-9")
+		r.Header.Set("Range", "items=0-9")
 		w := httptest.NewRecorder()
 
 		handler.ServeHTTP(w, r)
@@ -555,7 +616,7 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 
 	t.Run("query params override range", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/items?limit=5&offset=10", nil)
-		r.Header.Set("Range", "items 0-9")
+		r.Header.Set("Range", "items=0-9")
 		w := httptest.NewRecorder()
 
 		handler.ServeHTTP(w, r)
@@ -570,21 +631,22 @@ func TestRangeRequest_EndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("multipart range returns 416", func(t *testing.T) {
+	t.Run("multipart range is ignored", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/items", nil)
-		r.Header.Set("Range", "items 0-9, 20-29")
+		r.Header.Set("Range", "items=0-9, 20-29")
 		w := httptest.NewRecorder()
 
 		handler.ServeHTTP(w, r)
 
-		if w.Code != http.StatusRequestedRangeNotSatisfiable {
-			t.Errorf("expected 416, got %d", w.Code)
+		if w.Code != http.StatusOK || w.Header().Get("Content-Range") != "" {
+			t.Errorf("got %d with Content-Range %q, want 200 and none",
+				w.Code, w.Header().Get("Content-Range"))
 		}
 	})
 
 	t.Run("range beyond total returns 416", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/items", nil)
-		r.Header.Set("Range", "items 200-209")
+		r.Header.Set("Range", "items=200-209")
 		w := httptest.NewRecorder()
 
 		handler.ServeHTTP(w, r)
@@ -636,7 +698,7 @@ func TestWriteLinkTemplate(t *testing.T) {
 
 	t.Run("respects base path", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/services", nil)
-		r = r.WithContext(context.WithValue(r.Context(), basePathKey, "/cetacean"))
+		r = r.WithContext(reqctx.WithBasePath(r.Context(), "/cetacean"))
 		w := httptest.NewRecorder()
 
 		writeLinkTemplate(w, r, "/services/{id}")
@@ -656,13 +718,10 @@ func TestParsePagination_RangeOverflowIsIgnored(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9110/large-range-numerals-do-not-overflow")
 
 	for _, header := range []string{
-		"items 99999999999999999999-99999999999999999999",
-		"items 0-99999999999999999999",
+		"items=99999999999999999999-99999999999999999999",
+		"items=0-99999999999999999999",
 	} {
-		limit, offset, matched, err := parseItemsRange(header)
-		if err != nil {
-			t.Errorf("%q: err = %v, want none", header, err)
-		}
+		limit, offset, matched := parseItemsRange(header)
 		if matched {
 			t.Errorf("%q: parsed as limit=%d offset=%d, want no range at all",
 				header, limit, offset)
@@ -688,9 +747,9 @@ func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
 	}
 	router := newTestRouterWithCache(t, c)
 
-	get := func(ifRange string) *httptest.ResponseRecorder {
+	get := func(ifRange, rangeHeader string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/services", nil)
-		req.Header.Set("Range", "items 0-0")
+		req.Header.Set("Range", rangeHeader)
 		if ifRange != "" {
 			req.Header.Set("If-Range", ifRange)
 		}
@@ -700,14 +759,21 @@ func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
 		return w
 	}
 
-	first := get("")
+	first := get("", "items=0-0")
 	etag := first.Header().Get("ETag")
 	if first.Code != http.StatusPartialContent || etag == "" {
 		t.Fatalf("Range alone answered %d with ETag %q, want 206 with one", first.Code, etag)
 	}
 
-	if w := get(etag); w.Code != http.StatusPartialContent {
+	if w := get(etag, "items=0-0"); w.Code != http.StatusPartialContent {
 		t.Errorf("If-Range: %s (current) answered %d, want 206", etag, w.Code)
+	}
+
+	// The validator is the collection's, so it continues to the next page.
+	if w := get(etag, "items=1-1"); w.Code != http.StatusPartialContent ||
+		w.Header().Get("Content-Range") != "items 1-1/2" {
+		t.Errorf("If-Range on the next page answered %d, Content-Range %q; want 206 items 1-1/2",
+			w.Code, w.Header().Get("Content-Range"))
 	}
 
 	for _, stale := range []string{
@@ -715,7 +781,7 @@ func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
 		"W/" + etag,
 		"Mon, 15 Jun 2026 10:30:00 GMT",
 	} {
-		w := get(stale)
+		w := get(stale, "items=0-0")
 		if w.Code != http.StatusOK || w.Header().Get("Content-Range") != "" {
 			t.Errorf("If-Range: %s answered %d, Content-Range %q; want 200 and none",
 				stale, w.Code, w.Header().Get("Content-Range"))
@@ -724,19 +790,20 @@ func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
 			strings.Count(w.Body.String(), `"@type":"Service"`) != 2 {
 			t.Errorf("If-Range: %s did not send the whole list: %s", stale, w.Body.String())
 		}
-		if w.Header().Get("ETag") == etag {
-			t.Errorf("If-Range: %s sent the whole list under the ranged answer's ETag", stale)
+		if w.Header().Get("ETag") != etag {
+			t.Errorf("If-Range: %s sent the whole list under ETag %q, want the collection's %q",
+				stale, w.Header().Get("ETag"), etag)
 		}
 	}
 }
 
 // RFC 9110 §14.1: range unit names are case-insensitive.
 func TestParseItemsRangeUnitIsCaseInsensitive(t *testing.T) {
-	for _, header := range []string{"Items 0-49", "ITEMS 0-49"} {
-		limit, offset, matched, err := parseItemsRange(header)
-		if err != nil || !matched || limit != 50 || offset != 0 {
-			t.Errorf("%q: limit=%d offset=%d matched=%v err=%v, want 50 0 true nil",
-				header, limit, offset, matched, err)
+	for _, header := range []string{"Items=0-49", "ITEMS=0-49", "Items 0-49"} {
+		limit, offset, matched := parseItemsRange(header)
+		if !matched || limit != 50 || offset != 0 {
+			t.Errorf("%q: limit=%d offset=%d matched=%v, want 50 0 true",
+				header, limit, offset, matched)
 		}
 	}
 }

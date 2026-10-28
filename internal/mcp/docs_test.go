@@ -130,10 +130,10 @@ func TestEveryToolHasACardAtItsTier(t *testing.T) {
 			continue
 		}
 
-		if config.OperationsLevel(c.level) != def.tier {
+		if config.OperationsLevel(c.level) != def.tier() {
 			t.Errorf(
 				"tool %q: card says level %d, catalog registers it at %d",
-				def.tool.Name, c.level, def.tier,
+				def.tool.Name, c.level, def.tier(),
 			)
 		}
 	}
@@ -405,7 +405,7 @@ func TestPromptsTableMatchesTheCatalog(t *testing.T) {
 // registry the server serves from — a widget whose bundle did not emit is not
 // one a host can render, and the page documents what a host can reach.
 func TestAppsTableMatchesTheWidgets(t *testing.T) {
-	served := uiResources()
+	served := uiResources(testWidgets)
 	if len(served) == 0 {
 		t.Fatal("no widget resources: did `npm run build:widgets` run before `go test`?")
 	}
@@ -447,7 +447,7 @@ func TestCatalogCountsAreCurrent(t *testing.T) {
 		{"resources", match[1], len(staticResources) + len(resourceTemplates)},
 		{"tools", match[2], len(srv.toolCatalog())},
 		{"prompts", match[3], len(promptCatalog())},
-		{"widgets", match[4], len(uiResources())},
+		{"widgets", match[4], len(uiResources(testWidgets))},
 	} {
 		if count.documented != strconv.Itoa(count.actual) {
 			t.Errorf(

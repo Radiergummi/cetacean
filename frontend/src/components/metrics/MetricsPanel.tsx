@@ -41,9 +41,6 @@ const quickPresets = [
   { label: "Last 3d", seconds: 259200 },
 ];
 
-export { useMetricsPanelContext } from "./MetricsPanelContext";
-export type { MetricsPanelContextValue } from "./MetricsPanelContext";
-
 interface ChartDef {
   title: string;
   query: string;

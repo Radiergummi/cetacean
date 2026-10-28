@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 )
 
 func TestNewDetailResponse(t *testing.T) {
@@ -243,7 +245,7 @@ func TestWrapItems(t *testing.T) {
 		{"at the root", context.Background(), ""},
 		{
 			"under a base path",
-			context.WithValue(context.Background(), basePathKey, "/cetacean"),
+			reqctx.WithBasePath(context.Background(), "/cetacean"),
 			"/cetacean",
 		},
 	} {

@@ -28,7 +28,7 @@ afterAll(() => server.close());
 describe("demo handler coverage", () => {
   it.each(buildDemoEndpoints(dataset))("GET %s returns a response", async (path) => {
     const response = await fetch(`http://localhost${path}`, {
-      headers: { Accept: "application/json", Range: "items 0-49" },
+      headers: { Accept: "application/json", Range: "items=0-49" },
     });
 
     expect(response.status).toBeLessThan(500);
@@ -37,7 +37,7 @@ describe("demo handler coverage", () => {
 
 async function fetchJSON(path: string) {
   const response = await fetch(`http://localhost${path}`, {
-    headers: { Accept: "application/json", Range: "items 0-49" },
+    headers: { Accept: "application/json", Range: "items=0-49" },
   });
   if (!response.ok) {
     throw new Error(`${path} returned ${response.status}`);
@@ -52,12 +52,22 @@ describe("collection response shapes", () => {
     expect(data.total).toBe(3);
   });
 
-  it("GET /services returns 11 services with RunningTasks", async () => {
+  it("GET /services returns 11 services with their task counts", async () => {
     const data = await fetchJSON("/services");
     expect(data.total).toBe(11);
     for (const item of data.items) {
       expect(item).toHaveProperty("RunningTasks");
+      expect(typeof item.DesiredTasks).toBe("number");
     }
+  });
+
+  it("GET /services counts a global service against its eligible nodes", async () => {
+    const data = await fetchJSON("/services");
+    const global = data.items.find(
+      ({ Spec }: { Spec: { Mode: { Global?: object } } }) => Spec.Mode.Global,
+    );
+
+    expect(global?.DesiredTasks).toBeGreaterThan(0);
   });
 
   it("GET /tasks returns items array", async () => {
@@ -126,6 +136,25 @@ describe("detail response shapes", () => {
     expect(Array.isArray(data.services)).toBe(true);
   });
 
+  it("GET /networks/:id counts a swarm network's addresses", async () => {
+    const ingress = dataset.networks.find(({ Ingress }) => Ingress)!;
+    const data = await fetchJSON(`/networks/${ingress.Id}`);
+    const addresses = data.addresses as Record<string, number>;
+
+    expect(addresses.usable).toBe(253);
+    expect(addresses.loadBalancers).toBe(dataset.nodes.length);
+    expect(addresses.used).toBe(
+      addresses.vips! + addresses.taskAddresses! + addresses.loadBalancers!,
+    );
+  });
+
+  it("GET /networks/:id leaves the figure off a local network", async () => {
+    const local = dataset.networks.find(({ Scope }) => Scope === "local")!;
+    const data = await fetchJSON(`/networks/${local.Id}`);
+
+    expect(data).not.toHaveProperty("addresses");
+  });
+
   it("GET /volumes/:name has volume and services", async () => {
     const data = await fetchJSON(`/volumes/${dataset.volumes[0]?.Name}`);
     expect(data).toHaveProperty("volume");
@@ -140,6 +169,28 @@ describe("detail response shapes", () => {
     expect(Array.isArray(data.stack.secrets)).toBe(true);
     expect(Array.isArray(data.stack.networks)).toBe(true);
     expect(Array.isArray(data.stack.volumes)).toBe(true);
+  });
+
+  it("shows custom links on webshop_api and its stack", async () => {
+    const api = dataset.services.find(({ Spec: { Name } }) => Name === "webshop_api");
+    const service = await fetchJSON(`/services/${api?.ID}`);
+    const stack = await fetchJSON("/stacks/webshop");
+    const expected = [
+      { id: "grafana", title: "Dashboard", href: "https://grafana.example.com/d/webshop-api" },
+      { id: "oncall", title: "On call", text: "pager:webshop-team" },
+    ];
+
+    expect(service.links).toEqual(expected);
+    expect(stack.links).toEqual(expected.map((link) => ({ ...link, services: ["webshop_api"] })));
+  });
+
+  it("omits links where none are declared, as the server does", async () => {
+    const frontend = dataset.services.find(({ Spec: { Name } }) => Name === "webshop_frontend");
+    const service = await fetchJSON(`/services/${frontend?.ID}`);
+    const stack = await fetchJSON("/stacks/monitoring");
+
+    expect(service).not.toHaveProperty("links");
+    expect(stack).not.toHaveProperty("links");
   });
 });
 
@@ -264,6 +315,25 @@ describe("topology endpoint shapes", () => {
         expect(hyperedge.nodes).toContain(task.node);
       }
     }
+  });
+
+  it("the placement graph names the networks each service is on", async () => {
+    const data = await fetchJSON("/topology");
+    const placement = (data.graphs as Record<string, unknown>[]).find(
+      ({ id }) => id === "placement",
+    );
+
+    expect(placement).toBeDefined();
+
+    const nodes = Object.values(
+      placement?.nodes as Record<string, { metadata: Record<string, unknown> }>,
+    );
+    const networks = nodes
+      .filter(({ metadata }) => metadata.kind === "service")
+      .flatMap(({ metadata }) => metadata.networks as { id: string; name: string }[]);
+
+    expect(networks.length).toBeGreaterThan(0);
+    expect(networks[0]?.id).toMatch(/^urn:cetacean:network:/);
   });
 });
 

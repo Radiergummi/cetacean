@@ -1,7 +1,7 @@
 import { randomHex, type Dataset } from "./dataset";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
-import type { ClusterSnapshot, HealthInfo, LogResponse } from "@/api/client";
+import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
 import type {
   ClusterCapacity,
   CollectionResponse,
@@ -14,6 +14,7 @@ import type {
   LogDriver,
   MonitoringStatus,
   Network,
+  NetworkAddresses,
   NetworkDetail,
   Node,
   Placement,
@@ -29,15 +30,18 @@ import type {
   Service,
   ServiceConfigRef,
   ServiceDetail,
+  ServiceLink,
+  ServiceListItem,
   ServiceMount,
   ServiceNetworkRef,
   ServiceRef,
   ServiceSecretRef,
-  StackDetail,
+  StackResponse,
   StackSummary,
   SwarmInfo,
   Task,
   UpdateConfig,
+  VersionedListItem,
   Volume,
   VolumeDetail,
   JGFNode,
@@ -47,6 +51,54 @@ import type {
 import { http, HttpResponse, type JsonBodyType, type PathParams } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
+
+/**
+ * What the server would read from the dataset's `cetacean.link.*` labels,
+ * written out rather than parsed.
+ */
+const demoServiceLinks: Record<string, ServiceLink[]> = {
+  webshop_api: [
+    { id: "grafana", title: "Dashboard", href: "https://grafana.example.com/d/webshop-api" },
+    { id: "oncall", title: "On call", text: "pager:webshop-team" },
+  ],
+};
+
+/**
+ * The server's merge: exact duplicates become one link naming every service
+ * that declares it, ordered by id, then value, then title.
+ */
+function stackLinks(services: Service[]): ServiceLink[] {
+  const merged = new Map<string, ServiceLink & { services: string[] }>();
+
+  for (const {
+    Spec: { Name },
+  } of services) {
+    for (const link of demoServiceLinks[Name] ?? []) {
+      const key = JSON.stringify([link.id, link.title, link.href, link.text]);
+      const existing = merged.get(key);
+
+      if (existing) {
+        existing.services.push(Name);
+      } else {
+        merged.set(key, { ...link, services: [Name] });
+      }
+    }
+  }
+
+  const compare = (a = "", b = "") => (a < b ? -1 : a > b ? 1 : 0);
+  const links: ServiceLink[] = [...merged.values()].map(({ services: names, ...link }) => ({
+    ...link,
+    services: names.sort(compare),
+  }));
+
+  return links.sort(
+    (a, b) =>
+      compare(a.id, b.id) ||
+      compare(a.href, b.href) ||
+      compare(a.text, b.text) ||
+      compare(a.title, b.title),
+  );
+}
 
 function jsonResponse<T extends JsonBodyType>(data: T, status = 200) {
   return HttpResponse.json(data, { status });
@@ -179,13 +231,24 @@ function createTask(service: Service, slot: number, node: Node): Task {
 }
 
 /**
- * Parse the Range header (e.g. "items 0-49") into offset and limit.
+ * Plain string comparison, the order the Go handler sorts in.
+ */
+function compareStrings(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+
+  return a < b ? -1 : 1;
+}
+
+/**
+ * Parse the Range header (e.g. "items=0-49", or the deprecated "items 0-49") into offset and limit.
  */
 function parseRange(request: Request): { offset: number; limit: number } {
   const range = request.headers.get("Range");
 
   if (range) {
-    const match = range.match(/^items\s+(\d+)-(\d+)$/);
+    const match = range.match(/^items(?:=|\s+)(\d+)-(\d+)$/i);
 
     if (match) {
       const start = parseInt(match[1] ?? "", 10);
@@ -228,6 +291,255 @@ function findServicesUsing(
   return dataset.services
     .filter(predicate)
     .map((service) => ({ id: service.ID, name: service.Spec.Name }));
+}
+
+/**
+ * The services whose spec or previous spec names a config or secret, as the
+ * server lists them: one only its previous spec names is marked `rollback`.
+ */
+function servicesReferencing(
+  dataset: Dataset,
+  names: (spec: Service["Spec"] | undefined) => boolean,
+): ServiceRef[] {
+  return dataset.services.flatMap((service) => {
+    if (names(service.Spec)) {
+      return [{ id: service.ID, name: service.Spec.Name }];
+    }
+
+    if (names(service.PreviousSpec)) {
+      return [{ id: service.ID, name: service.Spec.Name, rollback: true }];
+    }
+
+    return [];
+  });
+}
+
+function servicesUsingConfig(dataset: Dataset, id: string): ServiceRef[] {
+  return servicesReferencing(
+    dataset,
+    (spec) =>
+      spec?.TaskTemplate?.ContainerSpec?.Configs?.some(({ ConfigID }) => ConfigID === id) ?? false,
+  );
+}
+
+function servicesUsingSecret(dataset: Dataset, id: string): ServiceRef[] {
+  return servicesReferencing(
+    dataset,
+    (spec) =>
+      spec?.TaskTemplate?.ContainerSpec?.Secrets?.some(({ SecretID }) => SecretID === id) ?? false,
+  );
+}
+
+const versionLabel = "cetacean.version-of";
+const versionSuffix = /[_-](?:([0-9a-f]{8,})|v[0-9]+)$/i;
+
+/**
+ * A name less its version suffix, where a hash must hold a letter, as on the server.
+ */
+function stripVersionSuffix(name: string): string {
+  const match = versionSuffix.exec(name);
+
+  if (!match || (match[1] !== undefined && !/[a-f]/i.test(match[1]))) {
+    return name;
+  }
+
+  return name.slice(0, match.index);
+}
+
+interface Versionable {
+  ID: string;
+  CreatedAt: string;
+  Spec: { Name: string; Labels: Record<string, string> | null };
+}
+
+/**
+ * The server's grouping of config and secret versions, as much of it as the
+ * demo's data needs: a label as written, else the name less its version
+ * suffix, either way less its stack prefix, within one stack.
+ */
+function versionKey({ Spec: { Name, Labels } }: Versionable): { stack: string; name: string } {
+  const stack = Labels?.[stackLabel] ?? "";
+  const name = Labels?.[versionLabel] || stripVersionSuffix(Name);
+  const prefix = [`${stack}_`, `${stack}-`].find(
+    (candidate) => stack && name.startsWith(candidate) && name.length > candidate.length,
+  );
+
+  return { stack, name: prefix ? name.slice(prefix.length) : name };
+}
+
+/**
+ * Annotates every item with its place among its versions and its users.
+ */
+function annotateVersions<T extends Versionable>(
+  items: T[],
+  users: (id: string) => ServiceRef[],
+): Array<T & VersionedListItem & { groupKey: string; rank: number }> {
+  // An older version a current spec uses is shown; only the rest are counted.
+  const inUse = (id: string) => users(id).some(({ rollback }) => !rollback);
+  const groups = new Map<string, T[]>();
+
+  for (const item of items) {
+    const { stack, name } = versionKey(item);
+    const key = `${stack}\u0000${name}`;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+
+  return items.map((item) => {
+    const { stack, name } = versionKey(item);
+    const key = `${stack}\u0000${name}`;
+    const members = [...(groups.get(key) ?? [])].sort(
+      (left, right) =>
+        Date.parse(right.CreatedAt) - Date.parse(left.CreatedAt) || right.ID.localeCompare(left.ID),
+    );
+    const rank = members.findIndex(({ ID }) => ID === item.ID);
+    const grouped = members.length > 1;
+    const hidden = members.filter(({ ID }, index) => index > 0 && !inUse(ID)).length;
+
+    return {
+      ...item,
+      groupKey: grouped ? key : item.ID,
+      rank,
+      UsedBy: users(item.ID).length,
+      // An ungrouped item is its own newest version, as on the server.
+      NewestVersion: rank === 0,
+      ...(grouped && {
+        VersionOf: name,
+        VersionInferred: members.some(({ Spec: { Labels } }) => !Labels?.[versionLabel]),
+        ...(rank > 0 && inUse(item.ID) && { InUse: true }),
+        ...(rank === 0 && hidden > 0 && { OlderVersions: hidden }),
+      }),
+    };
+  });
+}
+
+/**
+ * Applies `?versions` and `?versionsOf` the way the server does.
+ */
+function selectVersions<T extends Versionable>(
+  items: T[],
+  users: (id: string) => ServiceRef[],
+  request: Request,
+): Array<T & VersionedListItem> {
+  const params = new URL(request.url).searchParams;
+  const annotated = annotateVersions(items, users);
+  const of = params.get("versionsOf");
+  const versions = params.get("versions");
+  const searching = Boolean(params.get("search")) || Boolean(params.get("filter"));
+  const all = versions === "all" || (!versions && searching);
+  let selected = annotated.filter(({ rank, InUse }) => all || rank === 0 || InUse);
+
+  if (of) {
+    const target = annotated.find(({ ID }) => ID === of);
+    selected = annotated
+      .filter(({ groupKey }) => groupKey === target?.groupKey)
+      .sort((left, right) => left.rank - right.rank);
+  }
+
+  return selected.map(
+    ({ groupKey: _groupKey, rank: _rank, ...item }) => item as T & VersionedListItem,
+  );
+}
+
+/**
+ * One item's version fields as a detail spells them.
+ */
+function versionDetail<T extends Versionable>(
+  items: T[],
+  id: string,
+  users: (id: string) => ServiceRef[],
+) {
+  const item = annotateVersions(items, users).find(({ ID }) => ID === id);
+
+  return {
+    usedBy: item?.UsedBy ?? 0,
+    ...(item?.NewestVersion && { newestVersion: true }),
+    ...(item?.InUse && { inUse: true }),
+    ...(item?.VersionOf && {
+      versionOf: item.VersionOf,
+      versionInferred: item.VersionInferred,
+      olderVersions: item.OlderVersions,
+    }),
+  };
+}
+
+/**
+ * Task states that still hold their addresses; past running they are freed.
+ */
+const addressHoldingStates = new Set([
+  "new",
+  "allocated",
+  "pending",
+  "assigned",
+  "accepted",
+  "preparing",
+  "ready",
+  "starting",
+  "running",
+]);
+
+/**
+ * The usable addresses of an IPv4 subnet, as the server counts them: less the
+ * network and broadcast addresses up to a /30, and the gateway. The dataset
+ * sets no IP range, and its gateways sit in the subnet.
+ */
+function usableAddresses(subnet: string): number | undefined {
+  const [address, prefix] = subnet.split("/");
+  const bits = Number(prefix);
+
+  if (!address?.includes(".") || !Number.isInteger(bits) || bits < 0 || bits > 32) {
+    return undefined;
+  }
+
+  const size = 2 ** (32 - bits);
+
+  return bits <= 30 ? size - 3 : size - 1;
+}
+
+/**
+ * A demo network's address figure, under the server's rules: only a swarm
+ * network on the default IPAM driver with an IPv4 subnet has one. The dataset
+ * records no VIPs or attachments, so a VIP-mode service stands in for its VIP
+ * and a service's tasks for the addresses they hold.
+ */
+function demoAddresses(dataset: Dataset, network: Network): NetworkAddresses | undefined {
+  const driver = network.IPAM.Driver;
+
+  if (network.Scope !== "swarm" || (driver && driver !== "default")) {
+    return undefined;
+  }
+
+  const pools = (network.IPAM.Config ?? []).flatMap(({ Subnet }) => {
+    const usable = Subnet ? usableAddresses(Subnet) : undefined;
+
+    return usable === undefined ? [] : [usable];
+  });
+
+  if (pools.length === 0) {
+    return undefined;
+  }
+
+  const services = dataset.services.filter((service) =>
+    network.Ingress
+      ? (service.Endpoint?.Ports ?? []).some(({ PublishMode }) => PublishMode === "ingress")
+      : (service.Spec.TaskTemplate?.Networks ?? []).some(({ Target }) => Target === network.Id),
+  );
+  const serviceIDs = new Set(services.map(({ ID }) => ID));
+  const tasks = dataset.tasks.filter(
+    ({ ServiceID, Status }) => serviceIDs.has(ServiceID) && addressHoldingStates.has(Status.State),
+  );
+  const vips = services.filter(({ Spec }) => Spec.EndpointSpec?.Mode !== "dnsrr").length;
+  const loadBalancers = network.Ingress
+    ? dataset.nodes.length
+    : new Set(tasks.flatMap(({ NodeID }) => (NodeID ? [NodeID] : []))).size;
+
+  return {
+    usable: pools.reduce((total, usable) => total + usable, 0),
+    used: vips + tasks.length + loadBalancers,
+    vips,
+    taskAddresses: tasks.length,
+    loadBalancers,
+    excludesAttachedContainers: network.Attachable,
+  };
 }
 
 function deriveStacks(dataset: Dataset) {
@@ -293,7 +605,7 @@ function deriveStacks(dataset: Dataset) {
   return stacks;
 }
 
-function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
+export function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   const tasksByState: Record<string, number> = {};
 
   for (const task of dataset.tasks) {
@@ -307,8 +619,18 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let nodesReady = 0;
   let nodesDown = 0;
   let nodesDraining = 0;
+  let managers = 0;
+  let reachableManagers = 0;
 
   for (const node of dataset.nodes) {
+    if (node.ManagerStatus) {
+      managers++;
+
+      if (node.ManagerStatus.Reachability !== "unreachable") {
+        reachableManagers++;
+      }
+    }
+
     totalCPU += node.Description.Resources.NanoCPUs ?? 0;
     totalMemory += node.Description.Resources.MemoryBytes ?? 0;
 
@@ -323,6 +645,15 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     }
   }
 
+  // A global service keeps its tasks on every ready node that is active or
+  // paused, and starts new ones only on active nodes; the demo's services carry
+  // no placement constraints.
+  const readyNodes = dataset.nodes.filter(({ Status }) => Status.State === "ready");
+  const eligibleNodes = readyNodes.filter(({ Spec }) => Spec.Availability === "active").length;
+  const schedulableNodes = readyNodes.filter(
+    ({ Spec }) => Spec.Availability === "active" || Spec.Availability === "pause",
+  ).length;
+
   let reservedCPU = 0;
   let reservedMemory = 0;
 
@@ -333,12 +664,12 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
       continue;
     }
 
-    let replicas = 1;
+    let replicas = 0;
 
     if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
       replicas = service.Spec.Mode.Replicated.Replicas;
     } else if (service.Spec.Mode.Global) {
-      replicas = dataset.nodes.length;
+      replicas = schedulableNodes;
     }
 
     reservedCPU += (reservations.NanoCPUs ?? 0) * replicas;
@@ -349,21 +680,13 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let servicesDegraded = 0;
 
   for (const service of dataset.services) {
-    let desired = 0;
+    const state = demoServiceState(service, dataset.tasks, eligibleNodes);
 
-    if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
-      desired = service.Spec.Mode.Replicated.Replicas;
-    } else if (service.Spec.Mode.Global) {
-      desired = dataset.nodes.length;
+    if (state === "converged") {
+      servicesConverged++;
     }
 
-    const running = dataset.tasks.filter(
-      (t) => t.ServiceID === service.ID && t.Status.State === "running",
-    ).length;
-
-    if (running >= desired) {
-      servicesConverged++;
-    } else {
+    if (state === "degraded") {
       servicesDegraded++;
     }
   }
@@ -383,7 +706,64 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     reservedMemory,
     totalCPU,
     totalMemory,
+    quorum: quorumOf(managers, reachableManagers),
     prometheusConfigured: true,
+  };
+}
+
+const updatingStates = new Set(["updating", "rollback_started", "rollback_paused"]);
+
+/**
+ * The server's overview rule, without restart tracking: a service mid-update
+ * counts in neither bucket, a job converges once its run met its completion
+ * target, and a global service with nowhere to run has nothing outstanding.
+ * Running counts only tasks the orchestrator still means to run.
+ */
+function demoServiceState(
+  service: Service,
+  tasks: Task[],
+  eligibleNodes: number,
+): "converged" | "degraded" | "updating" {
+  if (service.UpdateStatus && updatingStates.has(service.UpdateStatus.State ?? "")) {
+    return "updating";
+  }
+
+  const own = tasks.filter(({ ServiceID }) => ServiceID === service.ID);
+  const running = own.filter(
+    ({ Status, DesiredState }) =>
+      Status.State === "running" && DesiredState !== "shutdown" && DesiredState !== "remove",
+  ).length;
+  const { Mode } = service.Spec;
+
+  if (Mode.ReplicatedJob || Mode.GlobalJob) {
+    const completed = own.filter(({ Status }) => Status.State === "complete").length;
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
+
+    return running > 0 || completed >= Math.max(target, 1) ? "converged" : "degraded";
+  }
+
+  if (Mode.Global) {
+    return running > 0 || eligibleNodes === 0 ? "converged" : "degraded";
+  }
+
+  const desired = Mode.Replicated?.Replicas ?? 0;
+
+  return running >= desired ? "converged" : "degraded";
+}
+
+function quorumOf(managers: number, reachable: number): ManagerQuorum {
+  if (managers === 0) {
+    return { managers, reachable, size: 0, held: false, canLose: 0 };
+  }
+
+  const size = Math.floor(managers / 2) + 1;
+
+  return {
+    managers,
+    reachable,
+    size,
+    held: reachable >= size,
+    canLose: Math.max(reachable - size, 0),
   };
 }
 
@@ -559,13 +939,53 @@ function countRunningTasks(dataset: Dataset, serviceID: string): number {
   ).length;
 }
 
+/**
+ * A service as the list serves it: its desired count is the server's rule, and
+ * a job's outcome counts only its current run. The demo's services carry no
+ * placement constraints, so a global service is eligible on every ready, active node.
+ */
+function serviceListItem(dataset: Dataset, service: Service): ServiceListItem {
+  const { Mode } = service.Spec;
+  const RunningTasks = countRunningTasks(dataset, service.ID);
+
+  if (Mode.ReplicatedJob || Mode.GlobalJob) {
+    const iteration = service.JobStatus?.JobIteration.Index;
+    const run = dataset.tasks.filter(
+      ({ ServiceID, JobIteration }) =>
+        ServiceID === service.ID &&
+        (iteration === undefined ||
+          JobIteration?.Index === undefined ||
+          JobIteration.Index === iteration),
+    );
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
+
+    return {
+      ...service,
+      RunningTasks,
+      DesiredTasks: Math.max(target, 1),
+      CompletedTasks: run.filter(({ Status }) => Status.State === "complete").length,
+      FailedTasks: run.filter(
+        ({ Status }) => Status.State === "failed" || Status.State === "rejected",
+      ).length,
+    };
+  }
+
+  const DesiredTasks = Mode.Global
+    ? dataset.nodes.filter(
+        ({ Status, Spec }) => Status.State === "ready" && Spec.Availability === "active",
+      ).length
+    : (Mode.Replicated?.Replicas ?? 0);
+
+  return { ...service, RunningTasks, DesiredTasks };
+}
+
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
   function broadcastServiceUpdate(service: Service) {
     broadcast(clients, "service", "services", service.ID, {
       type: "service",
       action: "update",
       id: service.ID,
-      resource: { ...service, RunningTasks: countRunningTasks(dataset, service.ID) },
+      resource: serviceListItem(dataset, service),
     });
   }
 
@@ -764,6 +1184,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             role: node.Spec.Role,
             state: node.Status.State,
             availability: node.Spec.Availability,
+            address: node.Status.Addr,
           },
         };
 
@@ -808,6 +1229,9 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
             "@context": context,
             kind: "service",
             image: (service?.Spec.TaskTemplate?.ContainerSpec?.Image ?? "").split("@")[0],
+            networks: (serviceNetworks.get(serviceId) ?? [])
+              .map((id) => ({ id: urn("network", id), name: overlays.get(id)?.Name ?? id }))
+              .sort((a, b) => compareStrings(a.name, b.name) || compareStrings(a.id, b.id)),
           },
         };
 
@@ -1126,15 +1550,15 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
           service,
           changes: [],
           integrations: [],
+          ...(demoServiceLinks[service.Spec.Name] && {
+            links: demoServiceLinks[service.Spec.Name],
+          }),
         } satisfies ServiceDetail),
       );
     }),
 
     get("*/services", ({ request }) => {
-      const items = dataset.services.map((service) => ({
-        ...service,
-        RunningTasks: countRunningTasks(dataset, service.ID),
-      }));
+      const items = dataset.services.map((service) => serviceListItem(dataset, service));
       return jsonResponse(paginateWrapped(items, request, "Service", (s) => `/services/${s.ID}`));
     }),
 
@@ -1177,13 +1601,16 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = stack.services
+        .map((id) => dataset.servicesByID.get(id))
+        .filter(Boolean) as Service[];
+      const links = stackLinks(services);
+
       return jsonResponse(
         detailEnvelope(`/stacks/${stackName}`, "Stack", {
           stack: {
             name: stackName,
-            services: stack.services
-              .map((id) => dataset.servicesByID.get(id))
-              .filter(Boolean) as Service[],
+            services,
             configs: stack.configs
               .map((id) => dataset.configsByID.get(id))
               .filter(Boolean) as Config[],
@@ -1197,7 +1624,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
               .map((name) => dataset.volumesByName.get(name))
               .filter(Boolean) as Volume[],
           },
-        } satisfies { stack: StackDetail }),
+          ...(links.length > 0 && { links }),
+        } satisfies StackResponse),
       );
     }),
 
@@ -1222,24 +1650,25 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = servicesUsingConfig(dataset, config.ID);
+
       return jsonResponse(
         detailEnvelope(`/configs/${config.ID}`, "Config", {
           config,
-          services: findServicesUsing(
-            dataset,
-            (service) =>
-              service.Spec.TaskTemplate!.ContainerSpec?.Configs?.some(
-                ({ ConfigID }) => ConfigID === config.ID,
-              ) ?? false,
-          ),
+          services,
+          ...versionDetail(dataset.configs, config.ID, (id) => servicesUsingConfig(dataset, id)),
         } satisfies ConfigDetail),
       );
     }),
 
     get("*/configs", ({ request }) => {
-      return jsonResponse(
-        paginateWrapped(dataset.configs, request, "Config", (c) => `/configs/${c.ID}`),
+      const items = selectVersions(
+        dataset.configs,
+        (id) => servicesUsingConfig(dataset, id),
+        request,
       );
+
+      return jsonResponse(paginateWrapped(items, request, "Config", (c) => `/configs/${c.ID}`));
     }),
 
     // ---- Secrets ----
@@ -1250,24 +1679,25 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         return HttpResponse.json({ title: "Not Found", status: 404 }, { status: 404 });
       }
 
+      const services = servicesUsingSecret(dataset, secret.ID);
+
       return jsonResponse(
         detailEnvelope(`/secrets/${secret.ID}`, "Secret", {
           secret,
-          services: findServicesUsing(
-            dataset,
-            (service) =>
-              service.Spec.TaskTemplate!.ContainerSpec?.Secrets?.some(
-                ({ SecretID }) => SecretID === secret.ID,
-              ) ?? false,
-          ),
+          services,
+          ...versionDetail(dataset.secrets, secret.ID, (id) => servicesUsingSecret(dataset, id)),
         } satisfies SecretDetail),
       );
     }),
 
     get("*/secrets", ({ request }) => {
-      return jsonResponse(
-        paginateWrapped(dataset.secrets, request, "Secret", (s) => `/secrets/${s.ID}`),
+      const items = selectVersions(
+        dataset.secrets,
+        (id) => servicesUsingSecret(dataset, id),
+        request,
       );
+
+      return jsonResponse(paginateWrapped(items, request, "Secret", (s) => `/secrets/${s.ID}`));
     }),
 
     // ---- Networks ----
@@ -1287,13 +1717,22 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
               service.Spec.TaskTemplate!.Networks?.some(({ Target }) => Target === network.Id) ??
               false,
           ),
+          addresses: demoAddresses(dataset, network),
         } satisfies NetworkDetail),
       );
     }),
 
     get("*/networks", ({ request }) => {
       return jsonResponse(
-        paginateWrapped(dataset.networks, request, "Network", (n) => `/networks/${n.Id}`),
+        paginateWrapped(
+          dataset.networks.map((network) => ({
+            ...network,
+            Addresses: demoAddresses(dataset, network),
+          })),
+          request,
+          "Network",
+          (n) => `/networks/${n.Id}`,
+        ),
       );
     }),
 

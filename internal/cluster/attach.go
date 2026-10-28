@@ -119,3 +119,45 @@ func attached(svc swarm.Service, kind AttachmentKind, id string) bool {
 
 	return false
 }
+
+// attachmentMode is the mode Swarm gives a mounted secret or config: readable
+// by everyone in the container, writable by no one.
+const attachmentMode = 0o444
+
+// SecretReference mounts sec at target, or at /run/secrets/<name> as Docker's
+// CLI does when target is empty.
+func SecretReference(sec swarm.Secret, target string) *swarm.SecretReference {
+	if target == "" {
+		target = "/run/secrets/" + sec.Spec.Name
+	}
+
+	return &swarm.SecretReference{
+		SecretID:   sec.ID,
+		SecretName: sec.Spec.Name,
+		File: &swarm.SecretReferenceFileTarget{
+			Name: target,
+			UID:  "0",
+			GID:  "0",
+			Mode: attachmentMode,
+		},
+	}
+}
+
+// ConfigReference mounts cfg at target, or at /<name> when target is empty:
+// Swarm reads a bare name as relative to the container's working directory.
+func ConfigReference(cfg swarm.Config, target string) *swarm.ConfigReference {
+	if target == "" {
+		target = "/" + cfg.Spec.Name
+	}
+
+	return &swarm.ConfigReference{
+		ConfigID:   cfg.ID,
+		ConfigName: cfg.Spec.Name,
+		File: &swarm.ConfigReferenceFileTarget{
+			Name: target,
+			UID:  "0",
+			GID:  "0",
+			Mode: attachmentMode,
+		},
+	}
+}

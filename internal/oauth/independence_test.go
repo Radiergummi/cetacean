@@ -11,12 +11,10 @@ import (
 // than being recognised by the scan below.
 const selfName = "independence_test.go"
 
-// The authorization server is a standalone concern: MCP is one consumer of it,
-// and a second protected resource is planned. A mention of the first consumer
-// anywhere in here — an identifier, a comment, a log line, a fixture — is the
-// beginning of the coupling this package was extracted to remove, so the rule
-// is enforced rather than remembered, and carries no exceptions. The needle is
-// assembled at runtime: spelled as a literal, this test would fail on itself.
+// The authorization server is a standalone concern, so no identifier, comment,
+// log line or fixture in this package names its first consumer, MCP, with no
+// exceptions. The needle is assembled at runtime: spelled as a literal, this
+// test would fail on itself.
 func TestThePackageDoesNotNameItsConsumer(t *testing.T) {
 	needle := "m" + "c" + "p"
 

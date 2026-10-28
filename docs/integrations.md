@@ -1,8 +1,8 @@
 ---
 title: Integrations
-description: Structured panels for Traefik, Shepherd, swarm-cronjob, and Diun on the service detail page.
+description: Structured panels for Traefik, Caddy, Shepherd, Gantry, swarm-cronjob, Diun, doco-cd, and Docker Swarm Deployment Action on the service detail page, and custom links from labels.
 category: guide
-tags: [integrations, traefik, shepherd, swarm-cronjob, diun]
+tags: [integrations, traefik, caddy, shepherd, gantry, swarm-cronjob, diun, doco-cd, docker-swarm-deployment-action]
 ---
 
 # Integrations
@@ -16,14 +16,33 @@ rendered when no matching labels are present.
 A tool is detected when the service carries at least one label with its prefix.
 
 <!-- cards -->
-| Tool                                                        | Label prefix     | Panel shows                                                                       |
-|-------------------------------------------------------------|------------------|-----------------------------------------------------------------------------------|
-| [Traefik](https://traefik.io/)                              | `traefik.`       | HTTP routers, services, and middlewares parsed from `traefik.http.*`              |
-| [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.`      | Enable state and `shepherd.auth.config`                                           |
-| [swarm-cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.` | Schedule, replicas, skip-running, and the two registry options                    |
-| [Diun](https://github.com/crazy-max/diun)                   | `diun.`          | Watch settings, tag include/exclude/sort filters, platform, and `diun.metadata.*` |
+| Tool                                                        | Label prefix               | Panel shows                                                                                   |
+|-------------------------------------------------------------|----------------------------|-----------------------------------------------------------------------------------------------|
+| [Traefik](https://traefik.io/)                              | `traefik.`                 | HTTP routers, services, and middlewares parsed from `traefik.http.*`                          |
+| [Caddy](https://github.com/lucaslorentz/caddy-docker-proxy) | `caddy`                    | The Caddyfile that caddy-docker-proxy builds from the labels                                  |
+| [Shepherd](https://github.com/djmaze/shepherd)              | `shepherd.`                | Enable state and `shepherd.auth.config`                                                       |
+| [Gantry](https://github.com/shizunge/gantry)                | `gantry.`                  | Update, rollback, and manifest settings that override Gantry's defaults                       |
+| [swarm-cronjob](https://github.com/crazy-max/swarm-cronjob) | `swarm.cronjob.`           | Schedule, replicas, skip-running, and the two registry options                                |
+| [Diun](https://github.com/crazy-max/diun)                   | `diun.`                    | Watch settings, tag include/exclude/sort filters, platform, and `diun.metadata.*`             |
+| [doco-cd](https://github.com/kimdre/doco-cd)                | `cd.doco.`                 | The repository, ref, and commit the service was deployed from, and its schedule               |
+| [Docker Swarm Deployment Action][deployment-action]         | `com.matchory.deployment.` | The version, commit, and workflow run that deployed the service, and its monitoring overrides |
 
-A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise.
+A panel shows the tool as enabled unless a `<prefix>enable` label says otherwise. Gantry has no such label, and
+shows as disabled when `gantry.services.excluded` is `true`.
+
+The Caddy panel matches the labels caddy-docker-proxy itself reads: `caddy`, `caddy_0`, `caddy.reverse_proxy`, but
+not `caddy_ingress_network`. Template expressions such as `{{upstreams 8080}}` are shown as written, not evaluated.
+A label prefix changed through `CADDY_DOCKER_LABEL_PREFIX` isn't recognized.
+
+The doco-cd panel links the deployed commit when the source URL is on `github.com`, `gitlab.com`, `gitea.com`, or
+`codeberg.org`, or on a host whose first label names the forge, such as `gitlab.example.com`. Otherwise it shows the
+commit as text. The structured view leaves credentials out of the source URL, and omits a URL it can't parse; the
+raw label still holds it as written.
+
+Docker Swarm Deployment Action has a **GitHub Deployment** panel. It links the repository, the commit, and the
+workflow run when the run URL is a GitHub Actions run, on `github.com` or a GitHub Enterprise Server. Its monitoring
+overrides take effect at the next deploy, as the action reads them from the Compose file rather than from the
+running service.
 
 Traefik's TCP and UDP labels are left to the raw label view; only the HTTP routers, services, and middlewares are
 parsed into structure.
@@ -38,14 +57,56 @@ when the service's detail response links its labels with `rel="edit"`, which req
 [operations level][operations-level] 2 and a write grant on the service. Saving writes the labels back through `PATCH /services/{id}/labels`; every field maps to one Docker
 service label.
 
+The Caddy, doco-cd, and GitHub Deployment panels have no form: doco-cd and the deployment action
+rewrite their labels on every deploy, and Caddy's labels are a configuration language of their own. Editing any of
+them opens the raw label view.
+
 The structured Traefik editor changes only the labels its fields show. Labels it doesn't model, such as TCP
 routers or `tls.options`, are kept when you save it.
+
+## Custom links
+
+A service can link to its dashboard, runbook, or repository through its own labels, so the links live in the stack
+file next to the service:
+
+```yaml
+services:
+  web:
+    deploy:
+      labels:
+        cetacean.link.grafana: https://grafana.example.com/d/web
+        cetacean.link.grafana.title: Dashboard
+        cetacean.link.runbook: https://wiki.example.com/runbooks/web
+```
+
+Each `cetacean.link.<id>` label adds one link, and the optional `cetacean.link.<id>.title` names it; without one,
+the link reads as `<id>`. Links are sorted by `<id>`, and a title without a matching link is ignored, as is a value
+that is empty or only whitespace. The labels belong under `deploy.labels`, on the service rather than its containers.
+
+The service detail page shows the links under its title, and the stack detail page the links of all its services,
+with exact duplicates merged. Links that share a title also show their `<id>`, and on a stack, where the `<id>` is
+shared too, the services that declare them.
+
+A value that is an `http` or `https` URL becomes a link, opening in a new tab. Any character a URL can't hold is
+percent-encoded, and an internationalized host name is converted to its ASCII form. Any other value is shown as plain
+text, and so is a URL that has:
+
+- no `://` after the scheme
+- no host, or a host that isn't a valid host name or a bracketed IPv6 address, such as an IPv6 address without
+  brackets, or an internationalized name with an underscore or a leading hyphen
+- a user name or password
+- a `%` in its host
+- a port that isn't a number, or is above 65535
 
 ## API
 
 Detected integrations appear as an `integrations` array on `GET /services/{id}`, omitted when nothing was detected.
-See the [API reference][api] for the full schema.
+Each one names the service `labels` it was read from, which the dashboard leaves out of the generic labels section.
+Custom links appear as a `links` array on `GET /services/{id}` and `GET /stacks/{name}`, each with an `id`, a
+`title`, and either an `href` for an `http` or `https` URL or a `text` for anything else. A stack's links also name
+the `services` declaring each one. See the [API reference][api] for the full schema.
 
 [api]: api
+[deployment-action]: https://github.com/matchory/docker-swarm-deployment-action
 [detail-pages]: dashboard#detail-pages
 [operations-level]: configuration#operations-level

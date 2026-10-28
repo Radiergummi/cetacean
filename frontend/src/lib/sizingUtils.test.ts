@@ -95,6 +95,15 @@ describe("recommendationLink", () => {
     expect(recommendationLink(hint({ scope: "node", targetId: "node1" }))).toBe("/nodes/node1");
   });
 
+  it("returns secret and config paths for their scopes", () => {
+    expect(recommendationLink(hint({ scope: "secret", targetId: "s1" }))).toBe("/secrets/s1");
+    expect(recommendationLink(hint({ scope: "config", targetId: "c1" }))).toBe("/configs/c1");
+  });
+
+  it("returns network path for network scope", () => {
+    expect(recommendationLink(hint({ scope: "network", targetId: "net1" }))).toBe("/networks/net1");
+  });
+
   it("returns null for cluster scope", () => {
     expect(recommendationLink(hint({ scope: "cluster" as Recommendation["scope"] }))).toBeNull();
   });

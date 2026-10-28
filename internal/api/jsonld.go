@@ -5,9 +5,11 @@ import (
 	"slices"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
-const jsonLDContext = "/api/context.jsonld"
+const jsonLDContext = problem.ContextPath
 
 // DetailResponse is a JSON-LD wrapped detail response. @context, @id and @type
 // serialize first, then extra -- a map (sorted) or a struct (declaration

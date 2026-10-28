@@ -9,17 +9,29 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
-func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.Request) {
-	if !requireMergePatch(w, r) {
-		return
-	}
+// swarmFailure is the error code and message a failed swarm update answers with.
+type swarmFailure struct {
+	code, message string
+}
 
+var swarmUpdateFailed = swarmFailure{"SWM003", "failed to update swarm"}
+
+// updateSwarm applies apply to the current swarm spec and writes it back at the
+// version it was read at, answering any failure itself. Callers decode their
+// input first, so a bad request never costs an engine call.
+func (h *Handlers) updateSwarm(
+	w http.ResponseWriter,
+	r *http.Request,
+	apply func(spec *swarm.Spec) swarm.UpdateFlags,
+	failed swarmFailure,
+) (swarm.Spec, bool) {
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
+		problem.Write(w, r, "SWM001", "swarm API not available")
+		return swarm.Spec{}, false
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -27,7 +39,23 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 
 	current, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
+		problem.Write(w, r, "SWM002", "failed to inspect swarm")
+		return swarm.Spec{}, false
+	}
+
+	spec := current.Spec
+	flags := apply(&spec)
+
+	if err := h.systemClient.UpdateSwarm(ctx, spec, current.Version, flags); err != nil {
+		writeSwarmErrorCode(w, r, err, failed.code, failed.message)
+		return swarm.Spec{}, false
+	}
+
+	return spec, true
+}
+
+func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.Request) {
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -36,20 +64,16 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 		return
 	}
 
-	spec := current.Spec
-	if patch.TaskHistoryRetentionLimit != nil {
-		spec.Orchestration.TaskHistoryRetentionLimit = patch.TaskHistoryRetentionLimit
-	}
+	spec, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
+		if patch.TaskHistoryRetentionLimit != nil {
+			spec.Orchestration.TaskHistoryRetentionLimit = patch.TaskHistoryRetentionLimit
+		}
 
-	slog.Info("updating swarm orchestration config")
+		slog.InfoContext(r.Context(), "updating swarm orchestration config")
 
-	if err := h.systemClient.UpdateSwarm(
-		ctx,
-		spec,
-		current.Version,
-		swarm.UpdateFlags{},
-	); err != nil {
-		writeSwarmError(w, r, err, "failed to update swarm")
+		return swarm.UpdateFlags{}
+	}, swarmUpdateFailed)
+	if !ok {
 		return
 	}
 
@@ -66,45 +90,27 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
 	patch, ok := decodeJSON[swarm.RaftConfig](w, r)
 	if !ok {
 		return
 	}
 
-	spec := current.Spec
-	if patch.SnapshotInterval != 0 {
-		spec.Raft.SnapshotInterval = patch.SnapshotInterval
-	}
-	if patch.KeepOldSnapshots != nil {
-		spec.Raft.KeepOldSnapshots = patch.KeepOldSnapshots
-	}
-	if patch.LogEntriesForSlowFollowers != 0 {
-		spec.Raft.LogEntriesForSlowFollowers = patch.LogEntriesForSlowFollowers
-	}
+	spec, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
+		if patch.SnapshotInterval != 0 {
+			spec.Raft.SnapshotInterval = patch.SnapshotInterval
+		}
+		if patch.KeepOldSnapshots != nil {
+			spec.Raft.KeepOldSnapshots = patch.KeepOldSnapshots
+		}
+		if patch.LogEntriesForSlowFollowers != 0 {
+			spec.Raft.LogEntriesForSlowFollowers = patch.LogEntriesForSlowFollowers
+		}
 
-	slog.Info("updating swarm raft config")
+		slog.InfoContext(r.Context(), "updating swarm raft config")
 
-	if err := h.systemClient.UpdateSwarm(
-		ctx,
-		spec,
-		current.Version,
-		swarm.UpdateFlags{},
-	); err != nil {
-		writeSwarmError(w, r, err, "failed to update swarm")
+		return swarm.UpdateFlags{}
+	}, swarmUpdateFailed)
+	if !ok {
 		return
 	}
 
@@ -121,39 +127,21 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
 	patch, ok := decodeJSON[swarm.DispatcherConfig](w, r)
 	if !ok {
 		return
 	}
 
-	spec := current.Spec
-	if patch.HeartbeatPeriod != 0 {
-		spec.Dispatcher.HeartbeatPeriod = patch.HeartbeatPeriod
-	}
+	spec, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
+		if patch.HeartbeatPeriod != 0 {
+			spec.Dispatcher.HeartbeatPeriod = patch.HeartbeatPeriod
+		}
 
-	slog.Info("updating swarm dispatcher config")
+		slog.InfoContext(r.Context(), "updating swarm dispatcher config")
 
-	if err := h.systemClient.UpdateSwarm(
-		ctx,
-		spec,
-		current.Version,
-		swarm.UpdateFlags{},
-	); err != nil {
-		writeSwarmError(w, r, err, "failed to update swarm")
+		return swarm.UpdateFlags{}
+	}, swarmUpdateFailed)
+	if !ok {
 		return
 	}
 
@@ -170,39 +158,21 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
 	patch, ok := decodeJSON[swarm.CAConfig](w, r)
 	if !ok {
 		return
 	}
 
-	spec := current.Spec
-	if patch.NodeCertExpiry != 0 {
-		spec.CAConfig.NodeCertExpiry = patch.NodeCertExpiry
-	}
+	spec, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
+		if patch.NodeCertExpiry != 0 {
+			spec.CAConfig.NodeCertExpiry = patch.NodeCertExpiry
+		}
 
-	slog.Info("updating swarm CA config")
+		slog.InfoContext(r.Context(), "updating swarm CA config")
 
-	if err := h.systemClient.UpdateSwarm(
-		ctx,
-		spec,
-		current.Version,
-		swarm.UpdateFlags{},
-	); err != nil {
-		writeSwarmError(w, r, err, "failed to update swarm")
+		return swarm.UpdateFlags{}
+	}, swarmUpdateFailed)
+	if !ok {
 		return
 	}
 
@@ -219,20 +189,6 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
 	patch, ok := decodeJSON[struct {
 		AutoLockManagers *bool `json:"AutoLockManagers"`
 	}](w, r)
@@ -240,20 +196,16 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	spec := current.Spec
-	if patch.AutoLockManagers != nil {
-		spec.EncryptionConfig.AutoLockManagers = *patch.AutoLockManagers
-	}
+	spec, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
+		if patch.AutoLockManagers != nil {
+			spec.EncryptionConfig.AutoLockManagers = *patch.AutoLockManagers
+		}
 
-	slog.Info("updating swarm encryption config")
+		slog.InfoContext(r.Context(), "updating swarm encryption config")
 
-	if err := h.systemClient.UpdateSwarm(
-		ctx,
-		spec,
-		current.Version,
-		swarm.UpdateFlags{},
-	); err != nil {
-		writeSwarmError(w, r, err, "failed to update swarm")
+		return swarm.UpdateFlags{}
+	}, swarmUpdateFailed)
+	if !ok {
 		return
 	}
 
@@ -266,11 +218,6 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 }
 
 func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request) {
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
-
 	req, ok := decodeJSON[struct {
 		Target string `json:"target"`
 	}](w, r)
@@ -285,23 +232,15 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	case "manager":
 		flags.RotateManagerToken = true
 	default:
-		writeErrorCode(w, r, "SWM011", "target must be \"worker\" or \"manager\"")
+		problem.Write(w, r, "SWM011", "target must be \"worker\" or \"manager\"")
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+	if _, ok := h.updateSwarm(w, r, func(*swarm.Spec) swarm.UpdateFlags {
+		slog.InfoContext(r.Context(), "rotating swarm join token", "target", req.Target)
 
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
-	slog.Info("rotating swarm join token", "target", req.Target)
-
-	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeSwarmErrorCode(w, r, err, "SWM006", "failed to rotate token")
+		return flags
+	}, swarmFailure{"SWM006", "failed to rotate token"}); !ok {
 		return
 	}
 
@@ -309,25 +248,11 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Request) {
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
+	if _, ok := h.updateSwarm(w, r, func(*swarm.Spec) swarm.UpdateFlags {
+		slog.InfoContext(r.Context(), "rotating swarm unlock key")
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
-	slog.Info("rotating swarm unlock key")
-
-	flags := swarm.UpdateFlags{RotateManagerUnlockKey: true}
-	if err := h.systemClient.UpdateSwarm(ctx, current.Spec, current.Version, flags); err != nil {
-		writeSwarmErrorCode(w, r, err, "SWM007", "failed to rotate unlock key")
+		return swarm.UpdateFlags{RotateManagerUnlockKey: true}
+	}, swarmFailure{"SWM007", "failed to rotate unlock key"}); !ok {
 		return
 	}
 
@@ -335,32 +260,18 @@ func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Request) {
-	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
-		return
-	}
+	if _, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
+		spec.CAConfig.ForceRotate++
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+		slog.InfoContext(
+			r.Context(),
+			"forcing CA certificate rotation",
+			"force_rotate",
+			spec.CAConfig.ForceRotate,
+		)
 
-	current, err := h.systemClient.SwarmInspect(ctx)
-	if err != nil {
-		writeErrorCode(w, r, "SWM002", "failed to inspect swarm")
-		return
-	}
-
-	spec := current.Spec
-	spec.CAConfig.ForceRotate++
-
-	slog.Info("forcing CA certificate rotation", "forceRotate", spec.CAConfig.ForceRotate)
-
-	if err := h.systemClient.UpdateSwarm(
-		ctx,
-		spec,
-		current.Version,
-		swarm.UpdateFlags{},
-	); err != nil {
-		writeSwarmError(w, r, err, "failed to force CA rotation")
+		return swarm.UpdateFlags{}
+	}, swarmFailure{"SWM003", "failed to force CA rotation"}); !ok {
 		return
 	}
 
@@ -370,7 +281,7 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 	// ACL write check is handled by swarmACL middleware in the router.
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
+		problem.Write(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -401,7 +312,7 @@ func (h *Handlers) HandleGetUnlockKey(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request) {
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm API not available")
+		problem.Write(w, r, "SWM001", "swarm API not available")
 		return
 	}
 
@@ -413,14 +324,14 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 	}
 
 	if body.UnlockKey == "" {
-		writeErrorCode(w, r, "SWM010", "unlockKey is required")
+		problem.Write(w, r, "SWM010", "unlockKey is required")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	slog.Info("unlocking swarm")
+	slog.InfoContext(ctx, "unlocking swarm")
 
 	if err := h.systemClient.UnlockSwarm(ctx, body.UnlockKey); err != nil {
 		writeSwarmErrorCode(w, r, err, "SWM008", "failed to unlock swarm")
@@ -430,14 +341,9 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// writeSwarmError answers a failed swarm update. Only a refusal the caller can
-// act on keeps the daemon's text; anything else may name hosts and internals,
-// so it is logged and the response says only what failed.
-func writeSwarmError(w http.ResponseWriter, r *http.Request, err error, failed string) {
-	writeSwarmErrorCode(w, r, err, "SWM003", failed)
-}
-
-// writeSwarmErrorCode is writeSwarmError for a write with an error code of its own.
+// writeSwarmErrorCode answers a failed swarm update. Only a refusal the caller
+// can act on keeps the daemon's text; anything else may name hosts and
+// internals, so it is logged and the response says only what failed.
 func writeSwarmErrorCode(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -449,12 +355,12 @@ func writeSwarmErrorCode(
 	}
 
 	if cerrdefs.IsInvalidArgument(err) || cerrdefs.IsUnavailable(err) {
-		writeErrorCode(w, r, code, failed+": "+err.Error())
+		problem.Write(w, r, code, failed+": "+err.Error())
 		return
 	}
 
-	slog.Error(failed, "error", err)
-	writeErrorCode(w, r, code, failed)
+	slog.ErrorContext(r.Context(), failed, "error", err)
+	problem.Write(w, r, code, failed)
 }
 
 // writeSwarmConflict answers a write that lost the race against another to the
@@ -464,7 +370,7 @@ func writeSwarmConflict(w http.ResponseWriter, r *http.Request, err error) bool 
 		return false
 	}
 
-	writeErrorCode(w, r, "SWM012", "the swarm changed while it was being updated")
+	problem.Write(w, r, "SWM012", "the swarm changed while it was being updated")
 
 	return true
 }

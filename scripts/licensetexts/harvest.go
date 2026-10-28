@@ -71,6 +71,10 @@ var licenseSurrogates = map[string]string{
 	// Likewise tailwindlabs/headlessui, whose Tailwind package ships the text
 	// its Vue package leaves out.
 	"@headlessui/vue": "@headlessui/tailwindcss",
+
+	// And vercel/ai, whose provider package ships the Apache-2.0 text that
+	// provider-utils stopped publishing.
+	"@ai-sdk/provider-utils": "@ai-sdk/provider",
 }
 
 // licenseTextless supplies the attribution for a package that publishes no

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/jgf"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -318,7 +320,7 @@ func TestHandleCluster_ACL001_WithGrants(t *testing.T) {
 // type field contains the given error code.
 func assertACLErrorCode(t *testing.T, w *httptest.ResponseRecorder, code string) {
 	t.Helper()
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatalf("decode problem: %v", err)
 	}
@@ -1093,13 +1095,7 @@ func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 	wc := &mockWriteClient{}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
-	)(
+	handler := h.requireWriteACL(h.writeResource("service"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(
 			http.HandlerFunc(h.HandleScaleService),
 		),
@@ -1147,13 +1143,7 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
-	)(
+	handler := h.requireWriteACL(h.writeResource("service"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(
 			http.HandlerFunc(h.HandleScaleService),
 		),
@@ -1195,7 +1185,7 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(h.taskServiceResource)(
+	handler := h.requireWriteACL(h.writeResource("task"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(
 			http.HandlerFunc(h.HandleRemoveTask),
 		),
@@ -1209,6 +1199,46 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 
 	if w.Code == http.StatusForbidden {
 		t.Fatalf("expected non-403, got 403; body: %s", w.Body.String())
+	}
+}
+
+// A task's rendered name is its service's, so the write key resolves through
+// it only for a caller who can read that service.
+func TestTaskWriteResourceResolvesANameThroughAReadableService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetTask(swarm.Task{
+		ID: "task1", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	for resources, want := range map[string]string{
+		"service:webapp": "service:webapp",
+		"task:*":         "task:webapp.1",
+	} {
+		e := acl.NewEvaluator()
+		e.SetResolver(c)
+		e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+			Resources:   []string{resources},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		}}})
+
+		h := newTestHandlers(t, withCache(c), withACL(e))
+
+		req := httptest.NewRequest("DELETE", "/tasks/webapp.1", nil)
+		req.SetPathValue("id", "webapp.1")
+		req = req.WithContext(
+			auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}),
+		)
+
+		if got := h.writeResource("task")(req); got != want {
+			t.Errorf("reading %s: write resource = %q, want %q", resources, got, want)
+		}
 	}
 }
 
@@ -1232,7 +1262,7 @@ func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 	wc := &mockWriteClient{}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(h.taskServiceResource)(
+	handler := h.requireWriteACL(h.writeResource("task"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(
 			http.HandlerFunc(h.HandleRemoveTask),
 		),
@@ -1726,6 +1756,26 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 			TargetName: "worker-1",
 			Message:    "worker-1 disk pressure",
 		},
+		{
+			Scope:      recommendations.ScopeSecret,
+			TargetID:   "sec1",
+			TargetName: "webapp_v1",
+			Message:    "an older version of webapp",
+		},
+		{
+			// Readable itself, but it reveals a newer version the caller may not read.
+			Scope:      recommendations.ScopeSecret,
+			TargetID:   "sec1",
+			TargetName: "webapp_v1",
+			Message:    "an older version of webapp",
+			Reveals:    []string{"secret:webapp_v2"},
+		},
+		{
+			Scope:      recommendations.ScopeConfig,
+			TargetID:   "cfg1",
+			TargetName: "billing_v1",
+			Message:    "an older version of billing",
+		},
 	}
 
 	engine := recommendations.NewEngine(&stubChecker{results: recs})
@@ -1738,9 +1788,9 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 
 	e := acl.NewEvaluator()
 	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
-		// Only grant read on service:webapp — billing and node recs should be filtered out.
+		// Only service:webapp and secret:webapp_v1 — the rest should be filtered out.
 		{
-			Resources:   []string{"service:webapp"},
+			Resources:   []string{"service:webapp", "secret:webapp_v1"},
 			Audience:    []string{"*"},
 			Permissions: []string{"read"},
 		},
@@ -1762,8 +1812,8 @@ func TestHandleRecommendations_ACLFiltering(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Total != 1 {
-		t.Fatalf("expected 1 recommendation (webapp only), got %d", resp.Total)
+	if resp.Total != 2 {
+		t.Fatalf("expected 2 recommendations (webapp and its secret), got %d", resp.Total)
 	}
 }
 
@@ -1822,6 +1872,67 @@ func TestHandleTopology_ACLFiltering(t *testing.T) {
 	}
 	if _, ok := networkGraph.Nodes[jgf.URN("service", "svc1")]; !ok {
 		t.Error("expected webapp (svc1) in network graph")
+	}
+}
+
+func TestHandleTopology_PlacementServiceNetworksACLFiltered(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net1", Name: "frontend", Driver: "overlay"})
+	c.SetNetwork(network.Summary{ID: "net2", Name: "billing", Driver: "overlay"})
+	c.SetNetwork(network.Summary{ID: "net3", Name: "bridge", Driver: "bridge"})
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+		Endpoint: swarm.Endpoint{VirtualIPs: []swarm.EndpointVirtualIP{
+			{NetworkID: "net1"}, {NetworkID: "net2"}, {NetworkID: "net3"},
+		}},
+	})
+	c.SetNode(swarm.Node{
+		ID:          "node1",
+		Description: swarm.NodeDescription{Hostname: "worker-1"},
+		Status:      swarm.NodeStatus{State: swarm.NodeStateReady, Addr: "10.0.0.5"},
+	})
+	c.SetTask(swarm.Task{
+		ID:           "t1",
+		ServiceID:    "svc1",
+		NodeID:       "node1",
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources:   []string{"service:webapp", "node:*", "network:frontend", "network:bridge"},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		},
+	}})
+
+	h := newTestHandlers(t, withCache(c), withACL(e))
+	req := httptest.NewRequest("GET", "/topology", nil)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}))
+	w := httptest.NewRecorder()
+	h.HandleTopology(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200", w.Code)
+	}
+
+	var doc jgf.Document
+	if err := json.NewDecoder(w.Body).Decode(&doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	placement := doc.Graphs[1]
+	networks, _ := placement.Nodes[jgf.URN("service", "svc1")].Metadata["networks"].([]any)
+	want := []any{map[string]any{"id": jgf.URN("network", "net1"), "name": "frontend"}}
+	if !reflect.DeepEqual(networks, want) {
+		t.Errorf("networks=%v, want only the readable overlay %v", networks, want)
+	}
+
+	if addr := placement.Nodes[jgf.URN("node", "node1")].Metadata["address"]; addr != "10.0.0.5" {
+		t.Errorf("address=%v, want 10.0.0.5", addr)
 	}
 }
 

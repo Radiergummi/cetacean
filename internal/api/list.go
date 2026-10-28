@@ -1,9 +1,12 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -13,27 +16,26 @@ import (
 // and prepareList use it to drive the standard filter → search → expr-filter →
 // sort → paginate → respond pipeline.
 type listSpec[T any] struct {
-	resourceType string                    // for setAllowList / Allow header
-	linkTemplate string                    // for Link-Template header (e.g. "/services/{id}")
-	list         func() []T                // cache list method
-	aclName      func(T) string            // maps item → its ACL name; resourceType supplies the type
-	searchName   func(T) string            // nil = no search support
-	filterEnv    filter.Env[T]             // filter.Nodes, filter.Tasks, …
-	sortKeys     map[string]func(T) string // sort field accessors
-	prepare      func([]T) []T             // optional pre-filter transform (e.g. strip secret data)
-	itemType     string                    // JSON-LD @type for each item (e.g. "Node")
-	idFunc       func(T) string            // extracts JSON-LD @id path for each item
-	rows         func([]T) []cluster.Row   // builds the CSV rendering; required
+	resourceType string                                        // for setAllowList / Allow header
+	linkTemplate string                                        // for Link-Template header (e.g. "/services/{id}")
+	list         func() []T                                    // cache list method
+	aclName      func(T) string                                // maps item → its ACL name; resourceType supplies the type
+	searchName   func(T) string                                // nil = no search support
+	filterEnv    filter.Env[T]                                 // filter.Nodes, filter.Tasks, …
+	sortKeys     map[string]func(T) string                     // sort field accessors
+	extraSorts   []string                                      // sort keys the handler applies itself
+	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
+	versions     *versionedSpec[T]                             // optional: groups a config or secret list into versions
+	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
+	idFunc       func(T) string                                // extracts JSON-LD @id path for each item
+	rows         func([]T) []cluster.Row                       // builds the CSV rendering; required unless csv is set
+	csv          func(http.ResponseWriter, *http.Request, []T) // writes a CSV whose columns a Row can't carry
 }
 
 // listNotModified answers a matching conditional request with 304, and reports
-// whether it did.
-//
-// A 304 carries what a client still reads off it — the ETag, the validators'
-// Vary, and the Allow header the dashboard gates its controls on, which costs
-// nothing to compute. It does not carry the pagination Link headers or
-// Content-Range: those need the totals, and producing them is exactly the work
-// being skipped. RFC 9110 §15.4.5 asks for neither.
+// whether it did. The 304 carries the ETag, the validators' Vary and Allow, but
+// not Link or Content-Range: those need the totals the 304 exists to skip, and
+// RFC 9110 §15.4.5 asks for neither.
 func listNotModified[T any](
 	h *Handlers,
 	w http.ResponseWriter,
@@ -41,6 +43,11 @@ func listNotModified[T any](
 	spec listSpec[T],
 	validator string,
 ) bool {
+	// If-Match comes first (RFC 9110 §13.2.2), and only the writer can say
+	// whether it holds.
+	if r.Header.Get("If-Match") != "" {
+		return false
+	}
 
 	tagged := matchedValidator(r, validator)
 	if tagged == "" {
@@ -59,31 +66,76 @@ func listNotModified[T any](
 // Use this for resources that need no post-pagination transformation.
 // Each item is wrapped with JSON-LD @id and @type fields.
 func handleList[T any](h *Handlers, w http.ResponseWriter, r *http.Request, spec listSpec[T]) {
+	handleListOf(
+		h,
+		w,
+		r,
+		spec,
+		spec.idFunc,
+		func(page []T, _ cluster.VersionView) []T { return page },
+	)
+}
+
+// handleListOf is handleList for a list whose page renders into another shape.
+// What render adds must come from the cache and the caller's grants, or the
+// derived validator no longer covers it.
+func handleListOf[T, U any](
+	h *Handlers,
+	w http.ResponseWriter,
+	r *http.Request,
+	spec listSpec[T],
+	idFunc func(U) string,
+	render func(page []T, versions cluster.VersionView) []U,
+) {
+	// A query the list refuses is refused before any 304: no validator vouches
+	// for a request that has no answer.
+	var sel cluster.VersionSelection
+	if spec.versions != nil {
+		var err error
+		if sel, err = versionSelection(r); err != nil {
+			problem.Write(w, r, "API016", err.Error())
+			return
+		}
+	}
+
 	// A list is a pure function of the cache, the caller's grants and the
-	// request, so the validator is knowable before any of the work. Answering
-	// here skips the cache read, the filtering, the sort and the marshal that
-	// a 304 would otherwise pay for in full.
+	// request, so the validator is knowable before any of the work, and a 304
+	// skips the cache read, filtering, sort and marshal it would otherwise pay.
 	validator := h.derivedETag(r)
 	if listNotModified(h, w, r, spec, validator) {
 		return
 	}
 
-	r, validator = h.ifRange(r, validator)
+	r = ifRange(r, validator)
 
-	items, p, ok := prepareList(h, w, r, spec)
+	items, versions, p, ok := prepareList(h, w, r, spec, sel)
 	if !ok {
 		return
 	}
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		writeListCSV(w, r, spec.resourceType, items, p, spec.rows)
+		rows := spec.rows
+		if spec.versions != nil {
+			rows = func(page []T) []cluster.Row {
+				out := spec.rows(page)
+				cluster.AnnotateVersionRows(out, versions)
+
+				return out
+			}
+		}
+
+		if spec.csv != nil {
+			spec.csv(w, r, csvPage(items, p))
+		} else {
+			writeListCSV(w, r, spec.resourceType, items, p, rows)
+		}
+
 		return
 	}
 
 	writeLinkTemplate(w, r, spec.linkTemplate)
-	writeListPage(w, r, items, p, validator, spec.itemType, spec.idFunc, func(page []T) []T {
-		return page
-	})
+	writeListPage(w, r, items, p, validator, spec.itemType, idFunc,
+		func(page []T) []U { return render(page, versions) })
 }
 
 // writeListPage writes the page of items p names as the JSON collection, each
@@ -122,7 +174,8 @@ func prepareList[T any](
 	w http.ResponseWriter,
 	r *http.Request,
 	spec listSpec[T],
-) ([]T, PageParams, bool) {
+	sel cluster.VersionSelection,
+) ([]T, cluster.VersionView, PageParams, bool) {
 	h.setAllowList(w, r, spec.resourceType)
 	items := spec.list()
 
@@ -142,22 +195,33 @@ func prepareList[T any](
 		spec.aclName,
 	)
 
+	// Grouped over every readable item, before a search narrows them.
+	var versions cluster.VersionView
+	if spec.versions != nil {
+		versions = spec.versions.view(items, h.readChecker(r))
+		items = cluster.SelectVersions(items, spec.versions.id, versions.Groups, sel)
+	}
+
 	if spec.searchName != nil {
 		items = searchFilter(items, r.URL.Query().Get("search"), spec.searchName)
 	}
 
 	var ok bool
 	if items, ok = exprFilter(items, r.URL.Query().Get("filter"), spec.filterEnv, w, r); !ok {
-		return nil, PageParams{}, false
+		return nil, versions, PageParams{}, false
 	}
 
 	p, err := parsePagination(r)
+	if err == nil && p.Sort != "" && spec.sortKeys[p.Sort] == nil &&
+		!slices.Contains(spec.extraSorts, p.Sort) {
+		err = fmt.Errorf(`invalid "sort" parameter: %q is not a sort key of this list`, p.Sort)
+	}
 	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
-		return nil, PageParams{}, false
+		problem.Write(w, r, "API016", err.Error())
+		return nil, versions, PageParams{}, false
 	}
 
 	items = sortItems(items, p.Sort, p.Dir, spec.sortKeys)
 
-	return items, p, true
+	return items, versions, p, true
 }

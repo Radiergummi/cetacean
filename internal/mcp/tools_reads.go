@@ -4,7 +4,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // readTools returns the tier 0 tools: parameterized reads, ungated by operations
@@ -70,7 +70,7 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
+			gate:    toolGate{"service", "read"},
 			handler: s.toolGetLogs,
 			widget:  "logs",
 		},
@@ -79,7 +79,7 @@ func (s *Server) readTools() []toolDef {
 				"find",
 				mcplib.WithToolTitle("Find cluster resources"),
 				mcplib.WithDescription(
-					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type; there `limit` caps the matches per type and there is no paging, so `total` counts every match across the cluster and `counts` breaks it down per type — narrow with `type` to page through one of them. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type.",
+					"Locate cluster resources. Give `type` (nodes, services, tasks, stacks, configs, secrets, networks, or volumes) to enumerate that type, paged, optionally narrowed by query/state/stack/node/image/label; the returned records are the same ones the cetacean:// resources expose, filtered to what the caller may see. Omit `type` and give `query` to search by name, label, or image reference across every type at once, returned as one list sorted by name, each row carrying its own type; there `limit` caps the matches per type and there is no paging, so `total` counts every match across the cluster and `counts` breaks it down per type — narrow with `type` to page through one of them. Use the cross-type search to locate a resource before fetching its details or applying a write; use a typed listing to browse or tabulate a whole type. Configs and secrets list the newest version of each group rotation left behind and any older one still in use, unless `versions` is `all` or a `query` or `label` is given.",
 				),
 				mcplib.WithOutputSchema[findResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -124,6 +124,12 @@ func (s *Server) readTools() []toolDef {
 						"With `type`, keep only rows carrying this label: `key` for presence, `key=value` for an exact value.",
 					),
 				),
+				mcplib.WithString("versions",
+					mcplib.Enum("newest", "all"),
+					mcplib.Description(
+						"With `type: configs` or `secrets`: `newest` lists the newest readable version of each group of versions and every older one a service's current spec uses (`inUse`), with `olderVersions` counting the rest; `all` lists every version. The default is `newest`, or `all` when `query` or `label` is given, so an older version can be found by name; `stack`, `state`, `node` and `image` keep `newest`.",
+					),
+				),
 				mcplib.WithNumber("limit",
 					mcplib.Description(
 						"With `type`, the maximum records to return (default and maximum 200). Without `type`, the maximum matches per resource type in the cross-type search (default 3).",
@@ -140,7 +146,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolFind,
 			widget:  "table",
 		},
@@ -149,7 +154,7 @@ func (s *Server) readTools() []toolDef {
 				"describe",
 				mcplib.WithToolTitle("Describe one cluster resource"),
 				mcplib.WithDescription(
-					"Return everything needed to act on one resource: its derived state, the reason Swarm gave for that state when it is not healthy, how long the state has held, the type-specific facts (a service's image, replica counts, reserved CPU in cores and memory in bytes, ports, placement constraints and environment variable *names*; a node's role, availability, capacity; a network's driver and subnets), the resources it references or is referenced by, and the recent task failures behind a failing state. A service, node, config or secret also carries its `version`; pass a service's or node's as the `version` argument of a following edit to have that edit refused, rather than applied, if the resource changes in between. Name the type in the singular (service, node, task, stack, config, secret, network, volume) and give an ID or a name. Use this instead of a resource read when following up on a finding from find or get_recommendations; secret payloads and environment variable values are never returned.",
+					"Return everything needed to act on one resource: its derived state, the reason Swarm gave for that state when it is not healthy, how long the state has held, the type-specific facts (a service's image, replica counts, reserved CPU in cores and memory in bytes, ports, placement constraints and environment variable *names*; a node's role, availability, capacity; a network's driver, subnets and address use), the resources it references or is referenced by, and the recent task failures behind a failing state. A service, node, config or secret also carries its `version`; pass a service's or node's as the `version` argument of a following edit to have that edit refused, rather than applied, if the resource changes in between. Name the type in the singular (service, node, task, stack, config, secret, network, volume) and give an ID or a name. Use this instead of a resource read when following up on a finding from find or get_recommendations; secret payloads and environment variable values are never returned.",
 				),
 				mcplib.WithOutputSchema[describeResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -175,7 +180,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolDescribe,
 		},
 		{
@@ -208,7 +212,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			elicits: true,
 			handler: s.toolGetTopology,
 			widget:  "topology",
@@ -261,7 +264,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			elicits: true,
 			handler: s.toolGetMetrics,
 			widget:  "metrics",
@@ -271,7 +273,7 @@ func (s *Server) readTools() []toolDef {
 				"get_recommendations",
 				mcplib.WithToolTitle("Get cluster recommendations"),
 				mcplib.WithDescription(
-					"Return what Cetacean's recommendation engine currently finds: over- and under-provisioned resources, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance and uneven node distribution. Each entry carries a severity, the resource it concerns and why it was raised. Only findings about resources the caller may read are returned.",
+					"Return what Cetacean's recommendation engine currently finds: over- and under-provisioned resources, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, overlay networks running out of addresses, uneven node distribution and old config or secret versions nothing uses. Each entry carries a severity, the resource it concerns and why it was raised. Only findings about resources the caller may read are returned.",
 				),
 				mcplib.WithOutputSchema[recommendationsResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -284,9 +286,26 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetRecommendations,
 			widget:  "recommendations",
+		},
+		{
+			tool: mcplib.NewTool(
+				"get_published_ports",
+				mcplib.WithToolTitle("List published ports"),
+				mcplib.WithDescription(
+					"Return every port the cluster's services publish, by port: the published and target port, protocol, publish mode, and the service and stack publishing it. An ingress port is bound on every node; a host-mode port names the node IDs binding it. Use it to answer which service owns a port, or whether one is free. Only ports of services the caller may read are returned.",
+				),
+				mcplib.WithOutputSchema[portsResult](),
+				mcplib.WithReadOnlyHintAnnotation(true),
+				mcplib.WithDestructiveHintAnnotation(false),
+				mcplib.WithIdempotentHintAnnotation(true),
+				mcplib.WithOpenWorldHintAnnotation(false),
+				mcplib.WithNumber("port",
+					mcplib.Description("Return only this published port. Omit for all of them."),
+				),
+			),
+			handler: s.toolGetPublishedPorts,
 		},
 		{
 			tool: mcplib.NewTool(
@@ -330,7 +349,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetEvents,
 		},
 		{
@@ -338,15 +356,14 @@ func (s *Server) readTools() []toolDef {
 				"get_cluster_status",
 				mcplib.WithToolTitle("Check overall cluster health"),
 				mcplib.WithDescription(
-					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state or restarting in a loop, the nodes that are down or draining, the rollouts in flight, and how much CPU and memory is reserved against what the cluster has. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
+					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state or restarting in a loop, the nodes that are down or draining, the rollouts in flight, how much CPU and memory is reserved against what the cluster has, and the manager quorum: how many managers are reachable and how many more failures it survives. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
 				),
-				mcplib.WithOutputSchema[cluster.ClusterStatus](),
+				mcplib.WithOutputSchema[projection.ClusterStatus](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetClusterStatus,
 		},
 		{
@@ -371,7 +388,7 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
+			gate:    toolGate{"service", "read"},
 			handler: s.toolWatch,
 		},
 	}

@@ -110,8 +110,8 @@ func TestCertProvider_NoTLS(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *AuthError, got %T: %v", err, err)
 	}
-	if authErr.Status != http.StatusForbidden || authErr.Code != "AUT005" {
-		t.Errorf("refusal = %d %s, want 403 AUT005", authErr.Status, authErr.Code)
+	if authErr.Code != "AUT005" {
+		t.Errorf("refusal code = %s, want AUT005", authErr.Code)
 	}
 	if authErr.WWWAuthenticate != "" {
 		t.Errorf("WWWAuthenticate = %q, want none: no scheme can ask for a certificate",
@@ -504,17 +504,8 @@ func TestCertProvider_ResourceChallengeDoesNotRewriteTheRefusal(t *testing.T) {
 		t.Error("403 with no challenge naming the resource's metadata")
 	}
 
-	// The registry code reaches a registered writer only; the fallback the
-	// assertions above read carries the status and detail instead.
-	prev := globalErrorWriter.Load()
-	t.Cleanup(func() { globalErrorWriter.Store(prev) })
-
-	var code string
-	SetErrorWriter(func(_ http.ResponseWriter, _ *http.Request, c, _ string) { code = c })
-	serve(&CertProvider{}, tokens, httptest.NewRequest("GET", "/nodes", nil))
-
-	if code != "AUT005" {
-		t.Errorf("code = %q, want AUT005", code)
+	if body := w.Body.String(); !strings.Contains(body, "/api/errors/AUT005") {
+		t.Errorf("body = %s, want an AUT005 problem", body)
 	}
 }
 

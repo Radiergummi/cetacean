@@ -1,9 +1,11 @@
 import * as schema from "./schemas";
 import type {
+  PublishedPort,
   ClusterCapacity,
   CollectionResponse,
   Config,
   ConfigDetail,
+  ConfigListItem,
   ContainerConfig,
   DiskUsageSummary,
   DrainImpact,
@@ -26,6 +28,7 @@ import type {
   RecommendationsResponse,
   SearchResponse,
   Secret,
+  SecretListItem,
   SecretDetail,
   SecretEntry,
   ServiceConfigRef,
@@ -35,7 +38,7 @@ import type {
   ServiceNetworkRef,
   ServiceSecretRef,
   Stack,
-  StackDetail,
+  StackResponse,
   StackSummary,
   SwarmInfo,
   Task,
@@ -434,20 +437,6 @@ export function del(path: string): Promise<void> {
 
 export const emptyMethods: Set<string> = new Set();
 
-export function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) {
-    return false;
-  }
-
-  for (const item of a) {
-    if (!b.has(item)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 export interface Capabilities {
   /** The resource's own methods, from `Allow`. */
   methods: Set<string>;
@@ -495,8 +484,17 @@ export interface ClusterSnapshot {
   reservedMemory: number;
   totalCPU: number;
   totalMemory: number;
+  quorum: ManagerQuorum;
   prometheusConfigured: boolean;
   localNodeID?: string | undefined;
+}
+
+export interface ManagerQuorum {
+  managers: number;
+  reachable: number;
+  size: number;
+  held: boolean;
+  canLose: number;
 }
 
 export interface ClusterMetrics {
@@ -555,6 +553,14 @@ export interface ListParams {
   dir?: "asc" | "desc" | undefined;
   search?: string | undefined;
   filter?: string | undefined;
+  /**
+   * Configs and secrets: `all` lists every version, not only each group's newest.
+   */
+  versions?: "newest" | "all" | undefined;
+  /**
+   * Configs and secrets: only the versions grouped with this ID, newest first.
+   */
+  versionsOf?: string | undefined;
 }
 
 /** Items per Range request page. Backend default is also 50; the max is 200. */
@@ -579,6 +585,14 @@ function buildListQueryString(params?: ListParams): string {
     queryParams.set("filter", params.filter);
   }
 
+  if (params?.versions) {
+    queryParams.set("versions", params.versions);
+  }
+
+  if (params?.versionsOf) {
+    queryParams.set("versionsOf", params.versionsOf);
+  }
+
   const query = queryParams.toString();
 
   return query ? `?${query}` : "";
@@ -598,7 +612,7 @@ async function fetchRange<T>(
   const response = await fetch(apiPath(url), {
     headers: {
       Accept: "application/json",
-      Range: `items ${offset}-${end}`,
+      Range: `items=${offset}-${end}`,
     },
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });
@@ -646,6 +660,7 @@ async function fetchAll<T>(
   path: string,
   signal: AbortSignal | undefined,
   itemSchema: z.ZodType,
+  params?: ListParams,
 ): Promise<T[]> {
   const items: T[] = [];
 
@@ -653,7 +668,7 @@ async function fetchAll<T>(
     // eslint-disable-next-line no-await-in-loop
     const { data } = await fetchRange<T>(
       path,
-      { offset: items.length },
+      { ...params, offset: items.length },
       signal,
       itemSchema,
       maximumPageSize,
@@ -840,6 +855,8 @@ export const api = {
     ),
   services: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<ServiceListItem>("/services", params, signal, schema.serviceListSchema),
+  allServices: (params?: ListParams, signal?: AbortSignal) =>
+    fetchAll<ServiceListItem>("/services", signal, schema.serviceListSchema, params),
   recommendations: () =>
     fetchJSON<RecommendationsResponse>(
       "/recommendations",
@@ -852,6 +869,8 @@ export const api = {
     fetchText(`/services/${encodeURIComponent(id)}`, signal, "application/yaml"),
   tasks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Task>("/tasks", params, signal, schema.taskSchema),
+  ports: (params?: ListParams, signal?: AbortSignal) =>
+    fetchRange<PublishedPort>("/ports", params, signal, schema.publishedPortSchema),
   stacks: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<Stack>("/stacks", params, signal, schema.stackListSchema),
   stacksSummary: () =>
@@ -861,21 +880,27 @@ export const api = {
       schema.collectionOf(schema.stackSummarySchema),
     ).then(({ data }) => data.items),
   stack: (name: string, signal?: AbortSignal) =>
-    fetchJSON<{ stack: StackDetail }>(
-      `/stacks/${name}`,
+    fetchJSON<StackResponse>(
+      `/stacks/${encodeURIComponent(name)}`,
       signal,
       schema.stackDetailResponseSchema,
-    ).then(({ data, ...rest }) => ({ data: data.stack, ...rest })),
+    ),
   stackCompose: (name: string, signal?: AbortSignal) =>
     fetchText(`/stacks/${encodeURIComponent(name)}`, signal, "application/yaml"),
   configs: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Config>("/configs", params, signal, schema.configSchema),
-  allConfigs: (signal?: AbortSignal) => fetchAll<Config>("/configs", signal, schema.configSchema),
+    fetchRange<ConfigListItem>("/configs", params, signal, schema.configListSchema),
+  configVersions: (id: string, signal?: AbortSignal) =>
+    fetchAll<ConfigListItem>("/configs", signal, schema.configListSchema, { versionsOf: id }),
+  allConfigs: (signal?: AbortSignal) =>
+    fetchAll<Config>("/configs", signal, schema.configSchema, { versions: "all" }),
   config: (id: string, signal?: AbortSignal) =>
     fetchJSON<ConfigDetail>(`/configs/${id}`, signal, schema.configDetailSchema),
   secrets: (params?: ListParams, signal?: AbortSignal) =>
-    fetchRange<Secret>("/secrets", params, signal, schema.secretSchema),
-  allSecrets: (signal?: AbortSignal) => fetchAll<Secret>("/secrets", signal, schema.secretSchema),
+    fetchRange<SecretListItem>("/secrets", params, signal, schema.secretListSchema),
+  secretVersions: (id: string, signal?: AbortSignal) =>
+    fetchAll<SecretListItem>("/secrets", signal, schema.secretListSchema, { versionsOf: id }),
+  allSecrets: (signal?: AbortSignal) =>
+    fetchAll<Secret>("/secrets", signal, schema.secretSchema, { versions: "all" }),
   secret: (id: string, signal?: AbortSignal) =>
     fetchJSON<SecretDetail>(`/secrets/${id}`, signal, schema.secretDetailSchema),
   secretEntry: (id: string, signal?: AbortSignal) =>

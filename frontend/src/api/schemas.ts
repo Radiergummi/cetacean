@@ -66,12 +66,25 @@ export const secretSchema = z.looseObject({
   Spec: z.looseObject({ Name: z.string() }),
 });
 
+export const configListSchema = configSchema.extend({ UsedBy: z.number() });
+export const secretListSchema = secretSchema.extend({ UsedBy: z.number() });
+
+const networkAddresses = z.looseObject({
+  usable: z.number(),
+  used: z.number(),
+  vips: z.number(),
+  taskAddresses: z.number(),
+  loadBalancers: z.number(),
+  excludesAttachedContainers: z.boolean(),
+});
+
 /** Docker's network summary keys the id as `Id`, not `ID`. */
 export const networkSchema = z.looseObject({
   Id: z.string(),
   Name: z.string(),
   Driver: z.string(),
   Scope: z.string(),
+  Addresses: networkAddresses.optional(),
 });
 
 export const volumeSchema = z.looseObject({
@@ -92,7 +105,22 @@ export const pluginSchema = z.looseObject({
 
 const serviceRefs = z.array(z.looseObject({ id: z.string(), name: z.string() })).nullable();
 
-export const serviceDetailSchema = z.looseObject({ service: serviceSchema });
+/**
+ * Exactly one of `href` and `text` is set; `services` only on a stack's links.
+ */
+const serviceLinks = z
+  .array(
+    z.looseObject({
+      id: z.string(),
+      title: z.string(),
+      href: z.string().optional(),
+      text: z.string().optional(),
+      services: z.array(z.string()).optional(),
+    }),
+  )
+  .optional();
+
+export const serviceDetailSchema = z.looseObject({ service: serviceSchema, links: serviceLinks });
 export const configDetailSchema = z.looseObject({ config: configSchema, services: serviceRefs });
 export const secretDetailSchema = z.looseObject({ secret: secretSchema, services: serviceRefs });
 
@@ -103,7 +131,11 @@ export const secretEntrySchema = z.looseObject({
   encoding: z.enum(["utf8", "base64"]),
   expiresAt: z.string(),
 });
-export const networkDetailSchema = z.looseObject({ network: networkSchema, services: serviceRefs });
+export const networkDetailSchema = z.looseObject({
+  network: networkSchema,
+  services: serviceRefs,
+  addresses: networkAddresses.optional(),
+});
 export const volumeDetailSchema = z.looseObject({ volume: volumeSchema, services: serviceRefs });
 export const nodeDetailSchema = z.looseObject({ node: nodeSchema });
 export const taskDetailSchema = z.looseObject({ task: taskSchema });
@@ -118,6 +150,15 @@ export const stackDetailSchema = z.looseObject({
   volumes: z.array(volumeSchema),
 });
 
+export const publishedPortSchema = z.looseObject({
+  PublishedPort: z.number(),
+  TargetPort: z.number(),
+  Protocol: z.string(),
+  PublishMode: z.string(),
+  ServiceID: z.string(),
+  ServiceName: z.string(),
+});
+
 /** The list item, which is the summary a stack list shows, not the detail. */
 export const stackListSchema = z.looseObject({
   name: z.string(),
@@ -128,10 +169,18 @@ export const stackListSchema = z.looseObject({
   volumes: z.array(z.string()),
 });
 
-/** A service row carries the running count the list column shows. */
-export const serviceListSchema = serviceSchema.extend({ RunningTasks: z.number() });
+/** A service row carries the task counts its health is judged on. */
+export const serviceListSchema = serviceSchema.extend({
+  RunningTasks: z.number(),
+  DesiredTasks: z.number(),
+  CompletedTasks: z.number().optional(),
+  FailedTasks: z.number().optional(),
+});
 
-export const stackDetailResponseSchema = z.looseObject({ stack: stackDetailSchema });
+export const stackDetailResponseSchema = z.looseObject({
+  stack: stackDetailSchema,
+  links: serviceLinks,
+});
 
 export const stackSummarySchema = z.looseObject({
   name: z.string(),
@@ -262,6 +311,13 @@ export const clusterSchema = z.looseObject({
   taskCount: z.number(),
   stackCount: z.number(),
   tasksByState: z.record(z.string(), z.number()),
+  quorum: z.looseObject({
+    managers: z.number(),
+    reachable: z.number(),
+    size: z.number(),
+    held: z.boolean(),
+    canLose: z.number(),
+  }),
 });
 
 export const clusterCapacitySchema = z.looseObject({

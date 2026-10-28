@@ -13,6 +13,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 )
@@ -346,7 +347,7 @@ func refusesForOperationsLevel(
 		return false
 	}
 
-	var problem ProblemDetail
+	var problem problem.Detail
 	if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
 		return false
 	}

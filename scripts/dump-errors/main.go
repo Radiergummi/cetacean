@@ -9,18 +9,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 type catalog struct {
-	Domains []api.ErrorDomain `json:"domains"`
-	Errors  []api.ErrorDef    `json:"errors"`
+	Domains []problem.Domain `json:"domains"`
+	Errors  []problem.Def    `json:"errors"`
 }
 
 func encode() ([]byte, error) {
 	return json.MarshalIndent(catalog{
-		Domains: api.ErrorDomains,
-		Errors:  api.ErrorDefs(),
+		Domains: problem.Domains,
+		Errors:  problem.Defs(),
 	}, "", "  ")
 }
 

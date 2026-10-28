@@ -2,6 +2,7 @@ package cluster_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -34,6 +35,37 @@ func TestResolveTaskPrefersTheLiveTaskInASlot(t *testing.T) {
 
 	if task.ID != "zzz-live" {
 		t.Errorf("ResolveTask(web.1) = %q, want %q", task.ID, "zzz-live")
+	}
+}
+
+// A start-first update keeps the outgoing task live until its successor runs;
+// the name means the successor, as it does once the update settles.
+func TestResolveTaskPrefersTheNewestLiveTaskInASlot(t *testing.T) {
+	c := newTestCache()
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetTask(swarm.Task{
+		ID: "aaa-outgoing", ServiceID: "svc1", Slot: 1,
+		CreatedAt:    time.Unix(100, 0),
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+	c.SetTask(swarm.Task{
+		ID: "zzz-incoming", ServiceID: "svc1", Slot: 1,
+		CreatedAt:    time.Unix(200, 0),
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateStarting},
+	})
+
+	task, ok, err := cluster.ResolveTask(c, "web.1")
+	if err != nil || !ok {
+		t.Fatalf("ResolveTask(web.1) = (_, %v, %v), want a task", ok, err)
+	}
+
+	if task.ID != "zzz-incoming" {
+		t.Errorf("ResolveTask(web.1) = %q, want %q", task.ID, "zzz-incoming")
 	}
 }
 
@@ -234,7 +266,7 @@ func TestResolveIdentifierTurnsANameIntoTheIDTheRingKeysBy(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_web"}},
 	})
 
-	id, err := cluster.ResolveIdentifier(c, "service", "shop_web")
+	id, err := cluster.ResolveIdentifier(c, "service", "shop_web", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(service, shop_web) = %v", err)
 	}
@@ -251,7 +283,7 @@ func TestResolveIdentifierPassesAnUnmatchedIdentifierThrough(t *testing.T) {
 	c := newTestCache()
 
 	for _, resourceType := range []string{"service", "volume", "nonsense", ""} {
-		id, err := cluster.ResolveIdentifier(c, resourceType, "gone")
+		id, err := cluster.ResolveIdentifier(c, resourceType, "gone", nil)
 		if err != nil {
 			t.Fatalf("ResolveIdentifier(%q, gone) = %v", resourceType, err)
 		}
@@ -267,7 +299,7 @@ func TestResolveIdentifierPassesAnUnmatchedIdentifierThrough(t *testing.T) {
 func TestResolveIdentifierLeavesANameKeyedTypeAlone(t *testing.T) {
 	c := newTestCache()
 
-	id, err := cluster.ResolveIdentifier(c, "volume", "pgdata")
+	id, err := cluster.ResolveIdentifier(c, "volume", "pgdata", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(volume, pgdata) = %v", err)
 	}
@@ -294,7 +326,7 @@ func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
 		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "shared"}},
 	})
 
-	id, err := cluster.ResolveIdentifier(c, "", "unique")
+	id, err := cluster.ResolveIdentifier(c, "", "unique", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(, unique) = %v", err)
 	}
@@ -305,7 +337,7 @@ func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
 
 	// A config and a secret both named "shared" answer different questions,
 	// and picking either would be picking whichever map ranged first.
-	id, err = cluster.ResolveIdentifier(c, "", "shared")
+	id, err = cluster.ResolveIdentifier(c, "", "shared", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(, shared) = %v", err)
 	}
@@ -315,7 +347,7 @@ func TestResolveIdentifierWithoutATypeResolvesOnlyAUniqueMatch(t *testing.T) {
 	}
 
 	// Naming the type is what makes it answerable.
-	id, err = cluster.ResolveIdentifier(c, "secret", "shared")
+	id, err = cluster.ResolveIdentifier(c, "secret", "shared", nil)
 	if err != nil {
 		t.Fatalf("ResolveIdentifier(secret, shared) = %v", err)
 	}

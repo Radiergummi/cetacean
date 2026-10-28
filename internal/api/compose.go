@@ -6,6 +6,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/compose"
@@ -28,7 +29,7 @@ func (h *Handlers) HandleStackCompose(w http.ResponseWriter, r *http.Request) {
 
 	detail, ok := h.cache.GetStackDetail(name)
 	if !ok {
-		writeErrorCode(w, r, "STK001", "stack not found")
+		problem.Write(w, r, "STK001", "stack not found")
 		return
 	}
 
@@ -74,13 +75,18 @@ func (h *Handlers) writeCompose(
 	// is not a compose service, and the projection emits nothing for it. An
 	// empty document is not a smaller answer, it is one no loader accepts.
 	if len(file.Services) == 0 {
-		writeErrorCode(w, r, "API014", "this resource has nothing a compose file can describe")
+		problem.Write(w, r, "API014", "this resource has nothing a compose file can describe")
 		return
 	}
 
 	body, err := compose.Render(file, warnings)
 	if err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "could not render compose document")
+		problem.WriteStatus(
+			w,
+			r,
+			http.StatusInternalServerError,
+			"could not render compose document",
+		)
 		return
 	}
 

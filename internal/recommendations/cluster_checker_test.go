@@ -4,8 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 func TestClusterChecker_SingleReplica(t *testing.T) {
@@ -350,4 +352,208 @@ func TestClusterChecker_UnevenDistribution(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestClusterChecker_Quorum(t *testing.T) {
+	node := func(id string, role swarm.NodeRole, reachability swarm.Reachability) swarm.Node {
+		n := swarm.Node{
+			ID:     id,
+			Spec:   swarm.NodeSpec{Role: role},
+			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
+		}
+		if role == swarm.NodeRoleManager {
+			n.ManagerStatus = &swarm.ManagerStatus{Reachability: reachability}
+		}
+
+		return n
+	}
+	up, down := swarm.ReachabilityReachable, swarm.ReachabilityUnreachable
+	downNode := func(id string) swarm.Node {
+		n := node(id, swarm.NodeRoleWorker, "")
+		n.Status.State = swarm.NodeStateDown
+
+		return n
+	}
+	manager, worker := swarm.NodeRoleManager, swarm.NodeRoleWorker
+
+	tests := []struct {
+		name  string
+		nodes []swarm.Node
+		want  map[Category]Severity
+	}{
+		{
+			name:  "a single-node swarm has nothing to promote",
+			nodes: []swarm.Node{node("m1", manager, up)},
+			want:  map[Category]Severity{},
+		},
+		{
+			name: "one manager beside two workers could have three",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("w1", worker, ""),
+				node("w2", worker, ""),
+			},
+			want: map[Category]Severity{CategorySingleManager: SeverityWarning},
+		},
+		{
+			name:  "two managers tolerate no more failures than one",
+			nodes: []swarm.Node{node("m1", manager, up), node("m2", manager, up)},
+			want:  map[Category]Severity{CategoryEvenManagers: SeverityWarning},
+		},
+		{
+			name: "three healthy managers raise nothing",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("m2", manager, up),
+				node("m3", manager, up),
+			},
+			want: map[Category]Severity{},
+		},
+		{
+			name: "one more loss breaks quorum",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("m2", manager, up),
+				node("m3", manager, down),
+			},
+			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+		{
+			name: "quorum lost",
+			nodes: []swarm.Node{
+				node("m1", manager, up),
+				node("m2", manager, down),
+				node("m3", manager, down),
+			},
+			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+		{
+			name: "an unreachable manager with tolerance left is a warning",
+			nodes: []swarm.Node{
+				node("m1", manager, up), node("m2", manager, up), node("m3", manager, up),
+				node("m4", manager, up), node("m5", manager, down),
+			},
+			want: map[Category]Severity{CategoryQuorumAtRisk: SeverityWarning},
+		},
+		{
+			name:  "a lone unreachable manager has lost quorum",
+			nodes: []swarm.Node{node("m1", manager, down)},
+			want:  map[Category]Severity{CategoryQuorumAtRisk: SeverityCritical},
+		},
+		{
+			name:  "down workers are no nodes to promote",
+			nodes: []swarm.Node{node("m1", manager, up), downNode("w1"), downNode("w2")},
+			want:  map[Category]Severity{},
+		},
+	}
+
+	quorumCategories := map[Category]bool{
+		CategorySingleManager: true,
+		CategoryEvenManagers:  true,
+		CategoryQuorumAtRisk:  true,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := cache.New(nil)
+			for _, n := range tt.nodes {
+				c.SetNode(n)
+			}
+
+			got := map[Category]Severity{}
+
+			for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+				if quorumCategories[rec.Category] {
+					if rec.Scope != ScopeCluster {
+						t.Errorf("%s scope = %s, want cluster", rec.Category, rec.Scope)
+					}
+
+					got[rec.Category] = rec.Severity
+				}
+			}
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+
+			for category, severity := range tt.want {
+				if got[category] != severity {
+					t.Errorf("%s severity = %q, want %q", category, got[category], severity)
+				}
+			}
+		})
+	}
+}
+
+func TestAddressRecommendations(t *testing.T) {
+	networks := []network.Summary{{ID: "net1", Name: "backend"}}
+
+	tests := []struct {
+		name   string
+		counts map[string]ipam.Addresses
+		want   Severity
+	}{
+		{"no figure", map[string]ipam.Addresses{}, ""},
+		{"below 80%", map[string]ipam.Addresses{"net1": {Usable: 100, Used: 79}}, ""},
+		{"at 80%", map[string]ipam.Addresses{"net1": {Usable: 100, Used: 80}}, SeverityWarning},
+		{"below 95%", map[string]ipam.Addresses{"net1": {Usable: 253, Used: 240}}, SeverityWarning},
+		{"at 95%", map[string]ipam.Addresses{"net1": {Usable: 100, Used: 95}}, SeverityCritical},
+		{"over", map[string]ipam.Addresses{"net1": {Usable: 5, Used: 7}}, SeverityCritical},
+		{"nothing usable", map[string]ipam.Addresses{"net1": {Usable: 0, Used: 0}}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recs := addressRecommendations(networks, tt.counts)
+
+			if tt.want == "" {
+				if len(recs) != 0 {
+					t.Errorf("got %+v, want none", recs)
+				}
+
+				return
+			}
+
+			if len(recs) != 1 {
+				t.Fatalf("got %d recommendations, want 1", len(recs))
+			}
+
+			rec := recs[0]
+			if rec.Severity != tt.want || rec.Category != CategoryNetworkAddressesLow ||
+				rec.Scope != ScopeNetwork || rec.TargetID != "net1" || rec.TargetName != "backend" {
+				t.Errorf("got %+v, want a %s network-addresses-low on net1", rec, tt.want)
+			}
+		})
+	}
+}
+
+func TestClusterChecker_NetworkAddresses(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:    "net1",
+		Name:  "backend",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/29"}}},
+	})
+	c.SetTask(swarm.Task{
+		ID:     "t1",
+		NodeID: "n1",
+		Status: swarm.TaskStatus{State: swarm.TaskStateRunning},
+		NetworksAttachments: []swarm.NetworkAttachment{{
+			Network:   swarm.Network{ID: "net1"},
+			Addresses: []string{"10.0.1.2/29", "10.0.1.3/29", "10.0.1.4/29"},
+		}},
+	})
+
+	for _, rec := range NewClusterChecker(c).Check(context.Background()) {
+		if rec.Category == CategoryNetworkAddressesLow {
+			if rec.Severity != SeverityWarning {
+				t.Errorf("4 of 5 addresses: severity %s, want warning", rec.Severity)
+			}
+
+			return
+		}
+	}
+
+	t.Error("no network-addresses-low for a network with 4 of 5 addresses in use")
 }

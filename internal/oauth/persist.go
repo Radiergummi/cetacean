@@ -12,12 +12,9 @@ import (
 	json "github.com/goccy/go-json"
 )
 
-// oauthStateVersion is the on-disk format version. Bump it whenever the shape
-// below changes incompatibly; readState accepts this version and no other.
-// Refusing an older file costs every client one re-authorization, and costs this
-// package no compatibility branch that outlives the release it bridged.
-//
-// An additive key needs no bump: an older build reads it as absent, where a
+// oauthStateVersion is the on-disk format version, and readState accepts no
+// other. Bump it on an incompatible change (clients re-authorize once); an
+// additive key needs no bump, since an older build reads it as absent and a
 // bump would make a rollback discard the whole file.
 const oauthStateVersion = 2
 
@@ -116,7 +113,7 @@ func (s *RefreshTokenStore) Snapshot() RefreshTokenSnapshot {
 // with none can never rotate again, and carrying its consumed hashes forward
 // would only grow the file.
 func (s *RefreshTokenStore) Restore(snap RefreshTokenSnapshot) {
-	now := time.Now()
+	now := s.now()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

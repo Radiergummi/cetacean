@@ -5,7 +5,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // impactfulTools returns the tier 3 tools: removals, and the node changes
@@ -43,7 +43,8 @@ func (s *Server) impactfulTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpUpdateNode,
+			gate:    toolGate{"node", "write"},
 			elicits: true,
 			handler: s.toolUpdateNode,
 		},
@@ -63,12 +64,12 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Service ID or name."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveService,
+			gate:    toolGate{"service", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
-				"id",
 				"service",
-				s.resolveServiceWrite,
+				s.resolveWrite("service"),
 				s.serviceRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveService(ctx, id)
@@ -91,9 +92,10 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Task ID, or `<service>.<slot>` naming a live replica."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveTask,
+			gate:    toolGate{"task", "write"},
 			elicits: true,
-			handler: s.removeResolvedHandler("id", "task", s.resolveTaskWrite, s.taskRemoval,
+			handler: s.removeResolvedHandler("task", s.resolveTaskWrite, s.taskRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveTask(ctx, id)
 				}),
@@ -114,12 +116,17 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Config ID."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveConfig,
+			gate:    toolGate{"config", "write"},
 			elicits: true,
-			handler: s.removeResolvedHandler("id", "config", s.resolveConfigWrite, s.configRemoval,
+			handler: s.removeResolvedHandler(
+				"config",
+				s.resolveWrite("config"),
+				s.configRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveConfig(ctx, id)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool("remove_secret",
@@ -137,12 +144,17 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Secret ID."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveSecret,
+			gate:    toolGate{"secret", "write"},
 			elicits: true,
-			handler: s.removeResolvedHandler("id", "secret", s.resolveSecretWrite, s.secretRemoval,
+			handler: s.removeResolvedHandler(
+				"secret",
+				s.resolveWrite("secret"),
+				s.secretRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveSecret(ctx, id)
-				}),
+				},
+			),
 		},
 		{
 			tool: mcplib.NewTool("remove_network",
@@ -160,12 +172,12 @@ func (s *Server) impactfulTools() []toolDef {
 					mcplib.Description("Network ID."),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveNetwork,
+			gate:    toolGate{"network", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler(
-				"id",
 				"network",
-				s.resolveNetworkWrite,
+				s.resolveWrite("network"),
 				s.networkRemoval,
 				func(wc DockerWriteClient, ctx context.Context, id string) error {
 					return wc.RemoveNetwork(ctx, id)
@@ -194,7 +206,8 @@ func (s *Server) impactfulTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsImpactful,
+			op:      cluster.OpRemoveVolume,
+			gate:    toolGate{"volume", "write"},
 			elicits: true,
 			handler: s.toolRemoveVolume,
 		},

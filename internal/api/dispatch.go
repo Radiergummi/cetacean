@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -108,7 +109,7 @@ func contentNegotiatedWithSSE(
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			if sseHandler == nil {
-				writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
+				problem.Write(w, r, "API001", "this endpoint does not support text/event-stream")
 				return
 			}
 
@@ -123,11 +124,13 @@ func contentNegotiatedWithSSE(
 				return
 			}
 
+			allowReads(w)
 			jsonHandler(w, r)
 		case ContentTypeYAML:
 			dispatchFeed(w, r, feeds.yaml, served)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
+			allowReads(w)
 			jsonHandler(w, r)
 		default:
 			notAcceptable(w, r, served)
@@ -155,13 +158,28 @@ func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, typMatch), typ)
 }
 
+// streamServices is streamList for services, whose stream replays every type
+// its matcher admits.
+func (h *Handlers) streamServices(w http.ResponseWriter, r *http.Request) {
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, sse.ServiceListMatcher), sse.ReplayAll)
+}
+
 func (h *Handlers) streamResource(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
-	resMatch := sse.ResourceMatcher(typ, id)
 	// No replay for per-resource streams: cross-resource matchers can't be
 	// reconstructed from history, so reconnects fall back to a sync event.
+	resMatch := sse.ResourceMatcher(typ, id)
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
+}
+
+// streamVersioned is streamResource for a config or secret, whose stream also
+// hears its other versions come, go or move.
+func (h *Handlers) streamVersioned(
+	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
+) {
+	match := sse.VersionMatcher(h.versions, typ, id)
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, match), "")
 }
 
 // aclMatchWrap wraps an SSE match function with an ACL authorization check.

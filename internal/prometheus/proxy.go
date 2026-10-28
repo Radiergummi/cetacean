@@ -1,47 +1,30 @@
 package prometheus
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
-// ErrorWriter is a callback for writing HTTP error responses.
-// This decouples the Prometheus package from the API error registry.
-type ErrorWriter func(w http.ResponseWriter, r *http.Request, code, detail string)
-
-// nilProxyErrorWriter is used by nil-receiver handlers to produce structured
-// error responses matching the rest of the API. Must be set during
-// initialization (before serving requests) via SetNilProxyErrorWriter.
-var nilProxyErrorWriter atomic.Pointer[ErrorWriter]
-
-// SetNilProxyErrorWriter registers the error writer used when a nil *Proxy
-// receives a request (i.e., Prometheus is not configured). Must be called
-// during initialization, before any requests are served.
-func SetNilProxyErrorWriter(w ErrorWriter) {
-	nilProxyErrorWriter.Store(&w)
-}
-
 type Proxy struct {
-	baseURL    string
-	client     *http.Client
-	writeError ErrorWriter
+	baseURL string
+	client  *http.Client
 }
 
-func NewProxy(baseURL string, writeError ErrorWriter) *Proxy {
-	SetNilProxyErrorWriter(writeError)
+func NewProxy(baseURL string) *Proxy {
 	return &Proxy{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		client:     &http.Client{Timeout: 30 * time.Second},
-		writeError: writeError,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		client:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -63,8 +46,8 @@ func (p *Proxy) proxyTo(
 
 	outReq, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
-		slog.Error("failed to create prometheus request", "error", err)
-		p.writeError(w, r, "MTR007", "failed to create prometheus request")
+		slog.ErrorContext(r.Context(), "failed to create prometheus request", "error", err)
+		problem.Write(w, r, "MTR007", "failed to create prometheus request")
 		return
 	}
 
@@ -73,33 +56,64 @@ func (p *Proxy) proxyTo(
 	proxyDuration := time.Since(proxyStart).Seconds()
 	if err != nil {
 		metrics.RecordPrometheusRequest(0, proxyDuration)
-		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
-		p.writeError(w, r, "MTR002", "prometheus unreachable")
+		slog.ErrorContext(r.Context(), "prometheus unreachable", "url", p.baseURL, "error", err)
+		problem.Write(w, r, "MTR002", "prometheus unreachable")
 		return
 	}
 	defer resp.Body.Close()
 	metrics.RecordPrometheusRequest(resp.StatusCode, proxyDuration)
 
-	// Forward successful responses directly.
+	// Forward successful responses whole: read before the status is written,
+	// so an oversized or broken body is a problem rather than a cut-off 200.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var body []byte
+		if resp.ContentLength > maxResponseBytes {
+			err = &redactedError{
+				message: "prometheus response too large",
+				cause:   ErrResponseTooLarge,
+			}
+		} else {
+			body, err = readLimited(resp.Body)
+		}
+		if errors.Is(err, ErrResponseTooLarge) {
+			slog.ErrorContext(
+				r.Context(),
+				"prometheus response too large",
+				"url",
+				targetURL,
+				"limit",
+				maxResponseBytes,
+			)
+			problem.Write(w, r, "MTR008", "the Prometheus response exceeds the proxy's size limit")
+			return
+		}
+		if err != nil {
+			slog.ErrorContext(r.Context(), "prometheus proxy read error", "error", err)
+			problem.Write(w, r, "MTR002", err.Error())
+			return
+		}
+
 		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(resp.StatusCode)
-		if _, err := io.Copy(w, io.LimitReader(resp.Body, maxResponseBytes)); err != nil {
-			slog.Warn("prometheus proxy copy error", "error", err)
-		}
+		_, _ = w.Write(body)
 		return
 	}
 
 	// Non-2xx: return a structured error instead of forwarding the raw
 	// Prometheus response (which may be HTML or an opaque error page).
 	preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	slog.Error("prometheus returned error",
+	slog.ErrorContext(r.Context(), "prometheus returned error",
 		"url", targetURL,
 		"status", resp.StatusCode,
 		"body", string(preview),
 	)
-	p.writeError(w, r, "MTR002", prometheusErrorDetail(resp.StatusCode, preview))
+	code := "MTR002"
+	if resp.StatusCode == http.StatusBadRequest ||
+		resp.StatusCode == http.StatusUnprocessableEntity {
+		code = "MTR009"
+	}
+	problem.Write(w, r, code, prometheusErrorDetail(resp.StatusCode, preview))
 }
 
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.
@@ -128,7 +142,7 @@ func (p *Proxy) HandleMetricsLabelValues(w http.ResponseWriter, r *http.Request)
 	}
 	name := r.PathValue("name")
 	if name == "" {
-		p.writeError(w, r, "MTR006", "missing label name")
+		problem.Write(w, r, "MTR006", "missing label name")
 		return
 	}
 	allowed := url.Values{}
@@ -149,7 +163,7 @@ func (p *Proxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	query := q.Get("query")
 	if query == "" {
-		p.writeError(w, r, "MTR003", "missing required parameter: query")
+		problem.Write(w, r, "MTR003", "missing required parameter: query")
 		return
 	}
 
@@ -169,12 +183,7 @@ func (p *Proxy) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeNilProxyError(w http.ResponseWriter, r *http.Request) {
-	if ew := nilProxyErrorWriter.Load(); ew != nil {
-		(*ew)(w, r, "MTR001", "prometheus not configured")
-		return
-	}
-
-	http.Error(w, "prometheus not configured", http.StatusServiceUnavailable)
+	problem.Write(w, r, "MTR001", "prometheus not configured")
 }
 
 // prometheusErrorDetail is what a client sees of a Prometheus error: its own

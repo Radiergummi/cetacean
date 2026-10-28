@@ -10,9 +10,7 @@ import (
 
 // The first configured resource is the default, so the order a deployment lists
 // them in decides which audience an unindicated grant is bound to and which
-// document a refusal points at. Nothing but this pins it: swapping the two
-// appends that build the set would compile, pass every other test, and quietly
-// move every such grant to the other resource.
+// document a refusal points at.
 func TestTheFirstResourceIsTheDefault(t *testing.T) {
 	const issuer = "https://cetacean.test"
 
@@ -85,9 +83,7 @@ func TestNewServerLeavesTheCallersResourcesAlone(t *testing.T) {
 
 // The property resource indicators exist for: an identifier is matched whole,
 // so a token minted for one resource is refused at another even when one path
-// sits beneath the other. Nothing else pins it — every other Identify test
-// presents a token at the resource it was minted for, which passes whether
-// identifiers are compared whole or by prefix.
+// sits beneath the other.
 func TestATokenDoesNotReachAResourceItWasNotMintedFor(t *testing.T) {
 	spec.Satisfies(t, "oauth/rfc9700/tokens-audience-restricted")
 

@@ -151,8 +151,11 @@ func (c *Cache) LoadFromDisk(path string) error {
 	}
 
 	// Set lastSync to the snapshot timestamp so SnapshotAge reflects staleness.
+	// A snapshot is not a sync from Docker: the first live one still back-fills
+	// the failures Swarm retained, those from while we were down included.
 	c.mu.Lock()
 	c.lastSync = snap.Timestamp
+	c.tasksSynced = false
 	c.mu.Unlock()
 
 	return nil

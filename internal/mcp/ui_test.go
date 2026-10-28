@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 // loads from a relative path is unreachable in the host's sandbox — a bundle
 // emitting a <script src> renders blank with nothing in any log to say why.
 func TestUIResourcesAreSelfContained(t *testing.T) {
-	resources := uiResources()
+	resources := uiResources(testWidgets)
 	if len(resources) == 0 {
 		t.Fatal("no widget resources: did `npm run build:widgets` run before `go build`?")
 	}
@@ -38,7 +39,7 @@ func TestUIResourcesAreSelfContained(t *testing.T) {
 // are how a host tells a widget from an ordinary resource. Get either wrong and
 // the resource is simply ignored.
 func TestUIResourceURIsUseTheAppsScheme(t *testing.T) {
-	for _, resource := range uiResources() {
+	for _, resource := range uiResources(testWidgets) {
 		if uri := uiResourceURI(resource.Name); !strings.HasPrefix(uri, "ui://cetacean/") {
 			t.Errorf("%s: URI %q must use the ui://cetacean/ scheme", resource.Name, uri)
 		}
@@ -104,12 +105,15 @@ func TestUIResourceMetaDeclaresEmptyCSP(t *testing.T) {
 	}
 }
 
+// testWidgets is the build output every test server serves.
+var testWidgets fs.FS
+
 // TestMain points the widget resources at the real build output. The tests
 // above assert properties of the actual bundle — that it inlines its assets,
 // that it is non-empty — which a synthetic fixture could not tell us. Requiring
 // the build mirrors what `go build` already needs for frontend/dist.
 func TestMain(m *testing.M) {
-	SetWidgetFS(os.DirFS(filepath.Join("..", "..", "frontend", "dist-widgets")))
+	testWidgets = os.DirFS(filepath.Join("..", "..", "frontend", "dist-widgets"))
 
 	os.Exit(m.Run())
 }

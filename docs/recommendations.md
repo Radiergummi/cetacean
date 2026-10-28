@@ -15,8 +15,8 @@ It's on by default. Turn it off with [`server.recommendations`][server.recommend
 
 ## What gets flagged
 
-Each finding names a service, a node or the cluster, and carries a severity of `info`, `warning` or
-`critical`.
+Each finding names a service, a node, a network, a config, a secret or the cluster, and carries a severity of
+`info`, `warning` or `critical`.
 
 | Finding | Meaning |
 |---|---|
@@ -24,8 +24,13 @@ Each finding names a service, a node or the cluster, and carries a severity of `
 | `no-restart-policy` | Restart policy is `none`, so a failed task is never replaced |
 | `newer-image` | The service's image tag names a newer image in its registry than the one the service runs. Needs [`server.image_check`][server.image_check] |
 | `single-replica` | One replica, so any node problem is an outage |
+| `unused-version` | An older [version][versions] of a config or secret that no service uses, counting a previous spec a rollback would restore. Never raised for the newest version |
 | `manager-has-workloads` | A manager node is `active`, so Swarm may schedule ordinary tasks on it alongside cluster management. Not raised unless a ready, active worker could take those tasks |
 | `uneven-distribution` | The busiest node runs more than three times the tasks of the quietest |
+| `single-manager` | One manager, so losing it leaves the swarm unable to schedule or update anything. Not raised unless at least three nodes are ready, enough for three managers |
+| `even-managers` | An even number of managers, which tolerates no more failures than one fewer |
+| `quorum-at-risk` | A manager is unreachable. A warning while quorum survives more losses, critical once one more loss would break it or it's already lost |
+| `network-addresses-low` | An overlay network has 80% of its addresses in use, critical from 95%. A start-first rolling update needs one more address per task it starts. See [network addresses][network-addresses] |
 | `flaky-service` | More than 5 involuntary task failures within the lookback window |
 | `node-disk-full` | Node disk above 90% |
 | `node-memory-pressure` | Node memory above 90% |
@@ -77,6 +82,7 @@ how far back Cetacean looks, which is also the window `flaky-service` counts fai
 [dashboard]: dashboard
 [mcp-tools]: mcp-tools
 [monitoring]: monitoring
+[network-addresses]: dashboard#network-addresses
 [operations-level]: configuration#operations-level
 [server.image_check]: configuration#server.image_check
 [server.recommendations]: configuration#server.recommendations
@@ -85,3 +91,4 @@ how far back Cetacean looks, which is also the window `flaky-service` counts fai
 [sizing.thresholds.at_limit]: configuration#sizing.thresholds.at_limit
 [sizing.thresholds.lookback]: configuration#sizing.thresholds.lookback
 [sizing.thresholds.over_provisioned]: configuration#sizing.thresholds.over_provisioned
+[versions]: dashboard#versions

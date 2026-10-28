@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -29,7 +30,7 @@ type createResult struct {
 func decodePayload(req mcplib.CallToolRequest) ([]byte, error) {
 	raw := req.GetString("data", "")
 	if raw == "" {
-		return nil, fmt.Errorf("data: required, and may not be empty")
+		return nil, errors.New("data: required, and may not be empty")
 	}
 
 	switch encoding := req.GetString("encoding", "utf8"); encoding {
@@ -88,7 +89,13 @@ type dataResourceSpec struct {
 	// the watcher fills only a few hundred milliseconds later — otherwise the
 	// documented rotation sequence fails its second step with "no such secret".
 	// Neither seed carries the payload: the cache backs every listing.
-	seed func(c *cache.Cache, id, name string, labels map[string]string)
+	seed func(
+		ctx context.Context,
+		wc DockerWriteClient,
+		c *cache.Cache,
+		id, name string,
+		labels map[string]string,
+	)
 }
 
 // Swarm secrets and configs are immutable, so "rotate this password" is three
@@ -111,11 +118,14 @@ var (
 				Data: data,
 			})
 		},
-		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
-			c.SetSecret(swarm.Secret{
-				ID:   id,
-				Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
-			})
+		seed: func(
+			ctx context.Context,
+			wc DockerWriteClient,
+			c *cache.Cache,
+			id, name string,
+			labels map[string]string,
+		) {
+			cluster.SeedCreatedSecret(ctx, c, wc.InspectSecret, id, name, labels)
 		},
 	}
 
@@ -133,11 +143,14 @@ var (
 				Data: data,
 			})
 		},
-		seed: func(c *cache.Cache, id, name string, labels map[string]string) {
-			c.SetConfig(swarm.Config{
-				ID:   id,
-				Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name, Labels: labels}},
-			})
+		seed: func(
+			ctx context.Context,
+			wc DockerWriteClient,
+			c *cache.Cache,
+			id, name string,
+			labels map[string]string,
+		) {
+			cluster.SeedCreatedConfig(ctx, c, wc.InspectConfig, id, name, labels)
 		},
 	}
 )
@@ -191,10 +204,14 @@ func (s *Server) createHandler(
 
 		id, err := spec.create(writeClient, ctx, name, labels, data)
 		if err != nil {
-			return "", fmt.Errorf("create %s: %w", spec.kind, err)
+			return "", fmt.Errorf(
+				"create %s: %w",
+				spec.kind,
+				writeFailure(ctx, err, spec.kind, name),
+			)
 		}
 
-		spec.seed(s.cache, id, name, labels)
+		spec.seed(ctx, writeClient, s.cache, id, name, labels)
 
 		return marshalResult(createResult{ID: id, Name: name, Type: spec.kind})
 	}

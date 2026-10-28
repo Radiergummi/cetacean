@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { Recommendation, Service, ServiceListItem } from "../api/types";
+import type { Recommendation, Service, ServiceListItem, Task } from "../api/types";
 import { NewerImageBadge } from "../components/data";
 import type { Column } from "../components/DataTable";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -11,8 +11,10 @@ import ResourceName from "../components/ResourceName";
 import { SizingBadge } from "../components/SizingBadge";
 import { isCadvisorReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
 import { useRecommendations } from "../hooks/useRecommendations";
+import type { SSEEvent } from "../hooks/useResourceStream";
 import { useServiceMetrics } from "../hooks/useServiceMetrics";
 import { rolloutToneClass, serviceModeLabel, serviceUpdateStatus } from "../lib/deriveServiceState";
+import { serviceTaskCount } from "../lib/serviceHealth";
 import { sizingCategories } from "../lib/sizingUtils";
 import { sortColumn } from "../lib/sortColumn";
 import { cn } from "../lib/utils";
@@ -95,17 +97,15 @@ export default function ServiceList() {
         },
         {
           header: "Replicas",
-          cell: ({ RunningTasks, Spec }) => {
-            const desired = Spec.Mode.Replicated?.Replicas;
-
-            if (desired == null) {
+          cell: ({ RunningTasks, DesiredTasks, Spec: { Mode } }) => {
+            if (!Mode.Replicated && !Mode.Global) {
               return "\u2014";
             }
 
             return (
               <ReplicaHealth
                 running={RunningTasks}
-                desired={desired}
+                desired={DesiredTasks}
               />
             );
           },
@@ -174,6 +174,8 @@ export default function ServiceList() {
       viewModeKey="services"
       fetchFn={(params, signal) => api.services(params, signal)}
       keyFn={({ ID }) => ID}
+      derived
+      relevantEvent={relevantEvent}
       itemPath={({ ID }) => `/services/${ID}`}
       columns={columns}
       skeletonColumns={6}
@@ -209,10 +211,7 @@ export default function ServiceList() {
           <ResourceCard
             title={
               <span className="flex items-center gap-2">
-                <HealthDot
-                  running={service.RunningTasks}
-                  desired={desired ?? service.RunningTasks}
-                />
+                <HealthDot {...serviceTaskCount(service)} />
                 <ResourceName name={service.Spec.Name} />
               </span>
             }
@@ -248,6 +247,24 @@ export default function ServiceList() {
       }
     />
   );
+}
+
+/**
+ * Whether a stream event can move a loaded row: a task of a listed service, or
+ * a node, which moves a global service's eligible nodes. A replay carries no task.
+ */
+function relevantEvent({ type, resource }: SSEEvent, loaded: readonly ServiceListItem[]) {
+  if (type === "task") {
+    const serviceId = (resource as Task | undefined)?.ServiceID;
+
+    return serviceId === undefined || loaded.some(({ ID }) => ID === serviceId);
+  }
+
+  if (type === "node") {
+    return loaded.some(({ Spec: { Mode } }) => Mode.Global);
+  }
+
+  return true;
 }
 
 /** A service's rollout state — Docker's `UpdateStatus`, and nothing about health. */

@@ -9,9 +9,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-)
+	"time"
 
-var errMultipartRange = errors.New("multipart range not supported")
+	"github.com/radiergummi/cetacean/internal/api/problem"
+)
 
 type PageParams struct {
 	Limit    int
@@ -27,6 +28,14 @@ type PageParams struct {
 	Explicit bool
 }
 
+var (
+	errInvalidLimit  = errors.New(`invalid "limit" parameter: must be a positive integer`)
+	errInvalidBefore = errors.New(`invalid "before" parameter: must be a history entry ID`)
+)
+
+// parsePagination reads a list's page and order. A malformed value is an error
+// naming the parameter, not a reason to fall back to a default; a malformed
+// Range is ignored instead, as RFC 9110 §14.2 permits.
 func parsePagination(r *http.Request) (PageParams, error) {
 	p := PageParams{
 		Limit:  50,
@@ -34,108 +43,106 @@ func parsePagination(r *http.Request) (PageParams, error) {
 		Dir:    "asc",
 	}
 
-	var hasLimit, hasQueryPagination bool
+	q := r.URL.Query()
+	var hasQueryPagination bool
 
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			p.Limit = n
-			hasLimit = true
-			hasQueryPagination = true
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return p, errInvalidLimit
 		}
+		p.Limit = n
+		p.Explicit = true
+		hasQueryPagination = true
 	}
 
-	if v := r.URL.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			p.Offset = n
-			hasQueryPagination = true
+	if v := q.Get("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return p, errors.New(`invalid "offset" parameter: must be a non-negative integer`)
 		}
+		p.Offset = n
+		hasQueryPagination = true
 	}
 
-	// Range header is only used when no valid query pagination params are present.
+	switch dir := strings.ToLower(q.Get("dir")); dir {
+	case "", "asc", "desc":
+		p.Dir = cmp.Or(dir, "asc")
+	default:
+		return p, errors.New(`invalid "dir" parameter: must be "asc" or "desc"`)
+	}
+
+	// Range header is only used when no query pagination params are present.
 	if !hasQueryPagination {
-		if rangeLimit, rangeOffset, ok, err := parseItemsRange(r.Header.Get("Range")); err != nil {
-			return p, err
-		} else if ok {
+		if rangeLimit, rangeOffset, ok := parseItemsRange(r.Header.Get("Range")); ok {
 			p.Limit = rangeLimit
 			p.Offset = rangeOffset
 			p.RangeReq = true
 		}
 	}
 
-	p.Explicit = hasLimit
-
 	if p.Limit > 200 {
 		p.Limit = 200
 	}
 
-	p.Sort = r.URL.Query().Get("sort")
-	if v := r.URL.Query().Get("dir"); v != "" {
-		p.Dir = v
-	}
-	if p.Dir != "desc" {
-		p.Dir = "asc"
-	}
+	p.Sort = q.Get("sort")
 
 	return p, nil
 }
 
-// parseItemsRange parses a Range header with the "items" unit.
-// Format: "items <start>-<end>" where start and end are inclusive, zero-based.
-// Returns (limit, offset, matched, error).
-func parseItemsRange(header string) (int, int, bool, error) {
-	if header == "" {
-		return 0, 0, false, nil
-	}
-
+// parseItemsRange parses a Range header with the "items" unit: "items=a-b",
+// inclusive and zero-based, or the "items a-b" spelling it once required.
+// Anything else, a set of several ranges included, is no range at all.
+func parseItemsRange(header string) (limit, offset int, matched bool) {
 	// Range units are case-insensitive (RFC 9110 §14.1).
-	const unit = "items "
-	if len(header) < len(unit) || !strings.EqualFold(header[:len(unit)], unit) {
-		return 0, 0, false, nil
+	const unit = "items"
+	if len(header) <= len(unit) || !strings.EqualFold(header[:len(unit)], unit) ||
+		header[len(unit)] != '=' && header[len(unit)] != ' ' {
+		return 0, 0, false
 	}
-	spec := header[len(unit):]
+	spec := header[len(unit)+1:]
 
 	if strings.Contains(spec, ",") {
-		return 0, 0, false, errMultipartRange
+		return 0, 0, false
 	}
 
 	start, end, ok := strings.Cut(spec, "-")
 	if !ok {
-		return 0, 0, false, nil
+		return 0, 0, false
 	}
 
 	startN, err := strconv.Atoi(strings.TrimSpace(start))
 	if err != nil {
-		return 0, 0, false, nil //nolint:nilerr // malformed range is not an error
+		return 0, 0, false
 	}
 
 	endN, err := strconv.Atoi(strings.TrimSpace(end))
 	if err != nil {
-		return 0, 0, false, nil //nolint:nilerr // malformed range is not an error
+		return 0, 0, false
 	}
 
 	if startN < 0 || endN < startN {
-		return 0, 0, false, nil
+		return 0, 0, false
 	}
 
 	// The span cannot overflow, but adding one to it can; the caller clamps.
-	limit := min(endN-startN, math.MaxInt-1) + 1
-	return limit, startN, true, nil
+	return min(endN-startN, math.MaxInt-1) + 1, startN, true
 }
 
 // ifRange evaluates If-Range on a Range request (RFC 9110 §13.1.5) against the
-// validator the ranged answer carries. When it does not hold, the Range is
-// dropped and the whole list goes out under the validator of that request.
-func (h *Handlers) ifRange(r *http.Request, validator string) (*http.Request, string) {
+// collection's validator. When it does not hold, the Range is dropped and the
+// whole list goes out; the validator is the same either way.
+func ifRange(r *http.Request, validator string) *http.Request {
 	cond := r.Header.Get("If-Range")
 	if cond == "" || r.Header.Get("Range") == "" || ifRangeHolds(r, cond, validator) {
-		return r, validator
+		return r
 	}
 
 	r = r.Clone(r.Context())
 	r.Header.Del("Range")
 	r.Header.Del("If-Range")
 
-	return r, h.derivedETag(r)
+	return r
 }
 
 // ifRangeHolds is the strong comparison against the tag this answer would
@@ -161,13 +168,10 @@ func pageOf[T any](items []T, p PageParams) []T {
 	return items[start:end]
 }
 
-// writeCollectionResponse writes a CollectionResponse, choosing its status from
-// whether the request used Range: 206 with Content-Range for a partial answer,
-// 416 for an offset beyond the total, 200 otherwise. A query-param request gets
-// 200 with Link headers, and Accept-Ranges: items is always set.
-//
-// validator is the tag the caller already offered on the conditional path, or
-// empty to hash the body.
+// writeCollectionResponse writes a CollectionResponse: 206 with Content-Range
+// for a partial Range answer, 416 for an offset beyond the total, else 200 —
+// with Link headers for a query-param request. Accept-Ranges: items always.
+// validator is the tag already offered on the conditional path, or "" to hash.
 func writeCollectionResponse[T any](
 	w http.ResponseWriter,
 	r *http.Request,
@@ -184,8 +188,19 @@ func writeCollectionResponse[T any](
 		}
 
 		if resp.Offset >= resp.Total {
+			// The preconditions come before the Range (RFC 9110 §13.2.2).
+			if validator != "" {
+				if refusedByPrecondition(w, r, validator, time.Time{}) {
+					return
+				}
+				if tagged := matchedValidator(r, validator); tagged != "" {
+					writeNotModified(w, tagged)
+					return
+				}
+			}
+
 			w.Header().Set("Content-Range", fmt.Sprintf("items */%d", resp.Total))
-			writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable,
+			problem.WriteStatus(w, r, http.StatusRequestedRangeNotSatisfiable,
 				"range start is beyond the total number of items")
 			return
 		}

@@ -4,6 +4,8 @@ import (
 	"os"
 	"regexp"
 	"testing"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 // The dashboard carries its own dictionary of friendly titles, keyed by the
@@ -28,9 +30,9 @@ func TestFrontendErrorDictionaryOnlyNamesCodesWeEmit(t *testing.T) {
 
 	for _, match := range matches {
 		code := string(match[1])
-		if _, ok := errorRegistry[code]; !ok {
+		if _, ok := problem.Lookup(code); !ok {
 			t.Errorf(
-				"%s maps %s, which no longer exists in errorRegistry — "+
+				"%s maps %s, which the problem registry no longer has — "+
 					"remove or repoint the dashboard entry",
 				path, code,
 			)

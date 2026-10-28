@@ -11,6 +11,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 // Drives arbitrary bytes at the MCP streamable HTTP transport as a JSON-RPC
@@ -18,7 +19,7 @@ import (
 // client's fault and must come back as a JSON-RPC error, never a 5xx, and a 200
 // carrying JSON must be a JSON-RPC envelope. SSE framing is tolerated.
 func FuzzMCPEnvelope(f *testing.F) {
-	srv, err := New(cache.New(nil), Options{
+	srv, err := New(core.New(cache.New(nil), nil), Options{
 		Config:         config.MCPConfig{Enabled: true, OperationsLevel: config.OpsInherit},
 		GlobalOpsLevel: config.OpsReadOnly,
 		AuthMode:       "none",

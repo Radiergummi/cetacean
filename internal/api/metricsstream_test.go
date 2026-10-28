@@ -54,6 +54,37 @@ func TestMetricsStream_ConnectionLimit(t *testing.T) {
 	assertRetryAfter(t, w.Header().Get("Retry-After"))
 }
 
+func TestMetricsStream_HeadAsksPrometheusNothing(t *testing.T) {
+	var queries atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		queries.Add(1)
+	}))
+	defer srv.Close()
+
+	h := &Handlers{promClient: promapi.NewClient(srv.URL)}
+	w := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		h.HandleMetricsStream(w, httptest.NewRequest(http.MethodHead, "/metrics?query=up", nil))
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HEAD on the metrics stream did not return")
+	}
+
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("HEAD answered %d with Content-Type %q, want 200 text/event-stream",
+			w.Code, w.Header().Get("Content-Type"))
+	}
+	if n := queries.Load(); n != 0 || h.metricsStreamCount.Load() != 0 {
+		t.Errorf("HEAD made %d queries and left %d streams counted",
+			n, h.metricsStreamCount.Load())
+	}
+}
+
 func TestMetricsStream_StreamsEvents(t *testing.T) {
 	queryCount := atomic.Int32{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

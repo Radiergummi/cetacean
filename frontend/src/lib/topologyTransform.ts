@@ -33,7 +33,7 @@ export function stackColors(graph: JGFGraph): Map<string, string> {
 }
 
 /** Extract the bare resource ID from a URN like `urn:cetacean:service:abc123`. */
-function urnToId(urn: string): string {
+export function urnToId(urn: string): string {
   const lastColon = urn.lastIndexOf(":");
 
   return lastColon >= 0 ? urn.slice(lastColon + 1) : urn;
@@ -195,6 +195,57 @@ export function networkGraphToReactFlow(graph: JGFGraph): { nodes: Node[]; edges
   return { nodes, edges };
 }
 
+type PlacementNetwork = { id: string; name: string };
+
+function serviceNetworks(graph: JGFGraph, serviceUrn: string): PlacementNetwork[] {
+  const networks = (graph.nodes[serviceUrn]?.metadata.networks ?? []) as PlacementNetwork[];
+
+  return networks.map(({ id, name }) => ({ id: urnToId(id), name }));
+}
+
+/**
+ * Every network a placed service is attached to, once each, sorted by name. Two
+ * overlays may share a name, so a shared name is labelled with its short ID.
+ */
+export function placementNetworks(graph: JGFGraph): (PlacementNetwork & { label: string })[] {
+  const byId = new Map<string, PlacementNetwork>();
+
+  for (const [urn, { metadata }] of Object.entries(graph.nodes)) {
+    if (metadata.kind !== "service") {
+      continue;
+    }
+
+    for (const network of serviceNetworks(graph, urn)) {
+      byId.set(network.id, network);
+    }
+  }
+
+  const networks = [...byId.values()];
+  const shared = new Set(
+    networks
+      .filter(
+        ({ name }, index) => networks.findIndex(({ name: other }) => other === name) !== index,
+      )
+      .map(({ name }) => name),
+  );
+
+  return networks
+    .sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1))
+    .map((network) => ({
+      ...network,
+      label: shared.has(network.name)
+        ? `${network.name} (${network.id.slice(0, 12)})`
+        : network.name,
+    }));
+}
+
+/**
+ * Whether a service's box steps back because a network is selected that it is not on.
+ */
+export function dimmedByNetwork(networks: readonly string[], selected: string | null): boolean {
+  return selected !== null && !networks.includes(selected);
+}
+
 export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
   const nodes: Node[] = [];
   const columns = 3;
@@ -281,7 +332,14 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
     const serviceEntries = tasksByNode.get(urn) ?? [];
     const serviceMap = new Map<
       string,
-      { serviceName: string; image: string; running: number; total: number; states: string[] }
+      {
+        serviceName: string;
+        image: string;
+        running: number;
+        total: number;
+        states: string[];
+        networks: string[];
+      }
     >();
 
     for (const { serviceUrn, serviceName, tasks } of serviceEntries) {
@@ -294,6 +352,7 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
           running: 0,
           total: 0,
           states: [],
+          networks: serviceNetworks(graph, serviceUrn).map(({ id }) => id),
         };
 
         serviceMap.set(serviceUrn, entry);
@@ -323,6 +382,7 @@ export function placementGraphToReactFlow(graph: JGFGraph): { nodes: Node[] } {
       position: { x: 0, y },
       data: {
         label,
+        address: metadata.address as string | undefined,
         role: metadata.role as string,
         state: metadata.state as string,
         availability: metadata.availability as string,

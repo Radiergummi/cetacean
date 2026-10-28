@@ -23,6 +23,14 @@ export const properties: Property[] = [
     usedOn: ["HistoryEntry"],
   },
   {
+    name: "addresses",
+    iri: "urn:cetacean:addresses",
+    description:
+      "How much of a network's IPv4 address pool is in use: usable, used, and the virtual IPs, tasks and load balancers holding them.",
+    expectedType: "Object",
+    usedOn: ["Network"],
+  },
+  {
     name: "aliases",
     iri: "urn:cetacean:aliases",
     description: "DNS aliases for a service on a given network.",
@@ -153,6 +161,14 @@ export const properties: Property[] = [
     container: "@set",
   },
   {
+    name: "inUse",
+    iri: "urn:cetacean:inUse",
+    description:
+      "Whether a service's current spec uses this older config or secret version, which a listing shows by default.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "kind",
     iri: "urn:cetacean:kind",
     description: "The resource kind for history and SSE events (e.g., `service`, `node`).",
@@ -254,6 +270,13 @@ export const properties: Property[] = [
     usedOn: ["Node"],
   },
   {
+    name: "newestVersion",
+    iri: "urn:cetacean:newestVersion",
+    description: "Whether this is the newest readable version of its config or secret group.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "nodeCount",
     iri: "urn:cetacean:nodeCount",
     description: "Number of nodes in the cluster.",
@@ -324,6 +347,22 @@ export const properties: Property[] = [
     description: "Whether a Prometheus instance is configured.",
     expectedType: "Boolean",
     usedOn: ["Cluster"],
+  },
+  {
+    name: "quorum",
+    iri: "urn:cetacean:quorum",
+    description:
+      "The manager quorum: managers, how many are reachable, how many must be, whether they are, and how many more can be lost.",
+    expectedType: "Object",
+    usedOn: ["Cluster"],
+  },
+  {
+    name: "olderVersions",
+    iri: "urn:cetacean:olderVersions",
+    description:
+      "On the newest version of a config or secret, how many older readable versions it has.",
+    expectedType: "Integer",
+    usedOn: ["Config", "Secret"],
   },
   {
     name: "query",
@@ -442,14 +481,16 @@ export const properties: Property[] = [
   {
     name: "servicesConverged",
     iri: "urn:cetacean:servicesConverged",
-    description: "Number of services with all tasks running.",
+    description:
+      "Number of services running as desired, counting a job whose run completed. A service mid-update is in neither this count nor servicesDegraded.",
     expectedType: "Integer",
     usedOn: ["Cluster"],
   },
   {
     name: "servicesDegraded",
     iri: "urn:cetacean:servicesDegraded",
-    description: "Number of services with fewer tasks than desired.",
+    description:
+      "Number of failed, pending or flapping services, as the service state reports them.",
     expectedType: "Integer",
     usedOn: ["Cluster"],
   },
@@ -562,11 +603,33 @@ export const properties: Property[] = [
     usedOn: ["Service"],
   },
   {
+    name: "usedBy",
+    iri: "urn:cetacean:usedBy",
+    description: "Number of services the caller may read that use this config or secret.",
+    expectedType: "Integer",
+    usedOn: ["Config", "Secret"],
+  },
+  {
     name: "version",
     iri: "urn:cetacean:version",
     description: "Software version string.",
     expectedType: "String",
     usedOn: ["Health"],
+  },
+  {
+    name: "versionInferred",
+    iri: "urn:cetacean:versionInferred",
+    description:
+      "Whether the version group was matched by name rather than declared by the `cetacean.version-of` or `com.matchory.deployment.name` label.",
+    expectedType: "Boolean",
+    usedOn: ["Config", "Secret"],
+  },
+  {
+    name: "versionOf",
+    iri: "urn:cetacean:versionOf",
+    description: "The logical config or secret this one is a version of, when others are readable.",
+    expectedType: "String",
+    usedOn: ["Config", "Secret"],
   },
   {
     name: "volume",
@@ -665,19 +728,46 @@ export const types: ResourceType[] = [
     name: "Config",
     description: "A Docker Swarm config object.",
     endpoint: "/configs/{id}",
-    properties: ["config", "name", "services"],
+    properties: [
+      "config",
+      "name",
+      "services",
+      "usedBy",
+      "versionOf",
+      "versionInferred",
+      "newestVersion",
+      "inUse",
+      "olderVersions",
+    ],
   },
   {
     name: "Secret",
     description: "A Docker Swarm secret (data always redacted).",
     endpoint: "/secrets/{id}",
-    properties: ["secret", "name", "services"],
+    properties: [
+      "secret",
+      "name",
+      "services",
+      "usedBy",
+      "versionOf",
+      "versionInferred",
+      "newestVersion",
+      "inUse",
+      "olderVersions",
+    ],
+  },
+  {
+    name: "PublishedPort",
+    description:
+      "One port a service publishes: Docker's `PortConfig`, with the service and stack publishing it and, for a host-mode port, the nodes binding it. Its `@id` is a fragment of the service.",
+    endpoint: "/ports",
+    properties: [],
   },
   {
     name: "Network",
     description: "A Docker network.",
     endpoint: "/networks/{id}",
-    properties: ["network", "name", "driver", "scope", "services"],
+    properties: ["network", "name", "driver", "scope", "services", "addresses"],
   },
   {
     name: "Volume",
@@ -710,6 +800,7 @@ export const types: ResourceType[] = [
       "totalCPU",
       "totalMemory",
       "tasksByState",
+      "quorum",
       "prometheusConfigured",
     ],
   },

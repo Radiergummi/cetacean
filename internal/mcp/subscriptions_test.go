@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // drainUpdated empties the session's notification channel, returning the URIs
@@ -74,6 +76,102 @@ func TestSubscriptionStackFollowsMembers(t *testing.T) {
 
 	c.SetService(stackService("svc-stack-2", "blog_web", "blog"))
 	assertUpdated(t, drainUpdated(t, name))
+}
+
+// A secret's digest counts its other versions and the services using it, so a
+// subscriber hears when either changes.
+func TestSubscriptionSecretFollowsVersionsAndUsers(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-v1",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "db_v1"}},
+	})
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://secrets/sec-v1", nil)
+
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-v2",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "db_v2"}},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://secrets/sec-v1")
+
+	c.SetSecret(swarm.Secret{
+		ID:   "sec-other",
+		Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: "other"}},
+	})
+	assertUpdated(t, drainUpdated(t, name))
+
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+				Secrets: []*swarm.SecretReference{{SecretID: "sec-v1", SecretName: "db_v1"}},
+			}},
+		},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://secrets/sec-v1")
+}
+
+// Repointing a service between older versions changes which is in use, which
+// the newest version's digest reports, so its subscriber hears of it.
+func TestSubscriptionSecretFollowsItsSiblingsUse(t *testing.T) {
+	c := cache.New(nil)
+	for _, name := range []string{"db_v1", "db_v2", "db_v3"} {
+		c.SetSecret(swarm.Secret{
+			ID:   name,
+			Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+
+	using := func(id string) swarm.Service {
+		return swarm.Service{
+			ID: "svc",
+			Spec: swarm.ServiceSpec{
+				Annotations: swarm.Annotations{Name: "api"},
+				TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: id, SecretName: id}},
+				}},
+			},
+		}
+	}
+	c.SetService(using("db_v1"))
+
+	srv := newResourceTestServer(t, c)
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://secrets/db_v3", nil)
+	drainUpdated(t, name)
+
+	c.SetService(using("db_v2"))
+
+	if updated := drainUpdated(t, name); !slices.Contains(updated, "cetacean://secrets/db_v3") {
+		t.Errorf("updated = %v, want db_v3 among them", updated)
+	}
+}
+
+// The other versions of a config or secret are looked up only while someone
+// subscribes to one.
+func TestVersionSubscriptionsAreCounted(t *testing.T) {
+	srv := newResourceTestServer(t, cache.New(nil))
+	name := t.Name()
+
+	srv.notifications.Subscribe(session(name), "cetacean://services/web", nil)
+	if srv.notifications.watchesVersions() {
+		t.Error("a service subscription counts as watching versions")
+	}
+
+	srv.notifications.Subscribe(session(name), "cetacean://configs/app", nil)
+	srv.notifications.Subscribe(session(name), "cetacean://configs/app", nil)
+	if !srv.notifications.watchesVersions() {
+		t.Error("a config subscription does not count")
+	}
+
+	srv.notifications.Unsubscribe(session(name), "cetacean://configs/app")
+	if srv.notifications.watchesVersions() {
+		t.Error("an unsubscribed config still counts")
+	}
 }
 
 func TestSubscriptionByNameResolvesToID(t *testing.T) {
@@ -209,6 +307,92 @@ func TestSubscriptionServiceAndNodeFollowTheirTasks(t *testing.T) {
 	}
 }
 
+func TestSubscriptionNetworkFollowsWhatMovesItsAddresses(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:    "net-follow",
+		Name:  "backend",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.1.0/24"}}},
+	})
+	c.SetNetwork(network.Summary{
+		ID:      "net-ingress",
+		Name:    "ingress",
+		Scope:   "swarm",
+		Ingress: true,
+		IPAM:    network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.0.0/24"}}},
+	})
+	srv := newResourceTestServer(t, c)
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://networks/backend", nil)
+	srv.notifications.Subscribe(session(name), "cetacean://networks/ingress", nil)
+
+	c.SetTask(swarm.Task{ID: "task-elsewhere"})
+	c.SetTask(swarm.Task{
+		ID: "task-attached",
+		NetworksAttachments: []swarm.NetworkAttachment{{
+			Network: swarm.Network{ID: "net-follow"},
+		}},
+	})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/backend")
+
+	c.SetNode(swarm.Node{ID: "node-joined"})
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/ingress")
+
+	c.SetService(swarm.Service{ID: "svc-any"})
+	got := drainUpdated(t, name)
+	slices.Sort(got)
+	assertUpdated(t, got, "cetacean://networks/backend", "cetacean://networks/ingress")
+}
+
+func TestSubscriptionWithoutNetworkWatchersAsksNoNetworks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{ID: "net-ingress", Name: "ingress", Ingress: true})
+	c.SetService(stackService("svc-watched", "watched", ""))
+	srv := newResourceTestServer(t, c)
+
+	asked := 0
+	srv.addressNetworks = func(c *cache.Cache, ev cache.Event) []string {
+		asked++
+
+		return cluster.AddressNetworks(c, ev)
+	}
+
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://services/watched", nil)
+
+	c.SetNode(swarm.Node{ID: "node-quiet"})
+	c.SetService(stackService("svc-watched", "watched", ""))
+	c.SetTask(swarm.Task{
+		ID:                  "task-quiet",
+		NetworksAttachments: []swarm.NetworkAttachment{{Network: swarm.Network{ID: "net-ingress"}}},
+	})
+
+	if asked != 0 {
+		t.Errorf("worked out the networks of %d events with no network watched", asked)
+	}
+
+	srv.notifications.Subscribe(session(name), "cetacean://networks/ingress", nil)
+	drainUpdated(t, name)
+
+	c.SetNode(swarm.Node{ID: "node-loud"})
+
+	if asked == 0 {
+		t.Error("a watched network did not ask which networks an event reaches")
+	}
+
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/ingress")
+
+	srv.notifications.Unsubscribe(session(name), "cetacean://networks/ingress")
+	asked = 0
+	c.SetNode(swarm.Node{ID: "node-quiet-again"})
+
+	if asked != 0 {
+		t.Error("an unsubscribed network still made events ask")
+	}
+}
+
 func TestSubscriptionLogsFollowServiceTasks(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-logs", "logger", ""))
@@ -252,6 +436,32 @@ func TestClusterResourceDoesNotPromisePush(t *testing.T) {
 
 // A task reaches its service's subscribers only where the service itself is
 // readable, or the timing of its tasks would confirm a guessed name.
+// The notification names only the watched network, so a subscriber who may
+// read it hears of a change to a service it may not.
+func TestSubscriptionNetworkHearsOfUnreadableService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNetwork(network.Summary{
+		ID:    "net-open",
+		Name:  "open",
+		Scope: "swarm",
+		IPAM:  network.IPAM{Config: []network.IPAMConfig{{Subnet: "10.0.7.0/24"}}},
+	})
+	c.SetService(stackService("svc-hidden", "hidden", ""))
+
+	e := acl.NewEvaluator()
+	e.SetResolver(c)
+	e.SetPolicy(readOnlyPolicy("network:open"))
+	srv := newResourceTestServer(t, c, func(o *Options) { o.ACL = e })
+
+	id := &auth.Identity{Subject: "alice"}
+	name := t.Name()
+	srv.notifications.Subscribe(session(name), "cetacean://networks/open", id)
+	srv.notifications.Subscribe(session(name), "cetacean://services/hidden", id)
+
+	c.SetService(stackService("svc-hidden", "hidden", ""))
+	assertUpdated(t, drainUpdated(t, name), "cetacean://networks/open")
+}
+
 func TestSubscriptionParentMustBeReadable(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(stackService("svc-hidden", "hidden", "shop"))

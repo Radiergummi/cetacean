@@ -69,6 +69,7 @@ type Flags struct {
 	OperationsLevel  *int
 	SSEBatchInterval *string
 	CORSOrigins      *string
+	AllowedHosts     *string
 	TrustedProxies   *string
 	ForwardedHeaders *string
 }
@@ -220,6 +221,11 @@ func ParseFlags(args []string) (*Flags, error) {
 		"",
 		"Canonical external URL, e.g. https://cetacean.example.com (env: CETACEAN_PUBLIC_URL)",
 	)
+	allowedHosts := fs.String(
+		"allowed-hosts",
+		"",
+		"Further host names the server answers for (env: CETACEAN_ALLOWED_HOSTS)",
+	)
 	trustedProxies := fs.String(
 		"trusted-proxies",
 		"",
@@ -325,6 +331,8 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.CORSOrigins = corsOrigins
 		case "public-url":
 			f.PublicURL = publicURL
+		case "allowed-hosts":
+			f.AllowedHosts = allowedHosts
 		case "trusted-proxies":
 			f.TrustedProxies = trustedProxies
 		case "forwarded-headers":

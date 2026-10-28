@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -174,7 +175,7 @@ func TestCrossSiteRefusalIsProblemDetails(t *testing.T) {
 			ct, rec.Body.String())
 	}
 
-	var problem ProblemDetail
+	var problem problem.Detail
 	if err := json.NewDecoder(rec.Body).Decode(&problem); err != nil {
 		t.Fatalf("decode problem: %v", err)
 	}
@@ -231,9 +232,8 @@ func TestPublicURLIsTrusted(t *testing.T) {
 }
 
 // TestMachineEndpointsAreNotCrossOriginChecked: the OAuth machine endpoints
-// and the MCP transport authenticate from the request body, so there is no
-// ambient credential for a cross-origin page to borrow — and refusing them
-// breaks the browser-based MCP client the authorization profile expects.
+// and the MCP transport authenticate from the request body, so a cross-origin
+// page has no ambient credential to borrow, and browser MCP clients need them.
 // /oauth/authorize is the opposite case and has to stay checked.
 func TestMachineEndpointsAreNotCrossOriginChecked(t *testing.T) {
 	for _, path := range []string{"/mcp", "/oauth/token", "/oauth/revoke", "/oauth/register"} {

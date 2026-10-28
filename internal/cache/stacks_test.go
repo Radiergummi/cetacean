@@ -164,11 +164,16 @@ func TestStackSummaryAppliesAGlobalServicesConstraints(t *testing.T) {
 	c := New(nil)
 
 	node := func(id string, role swarm.NodeRole) swarm.Node {
-		return swarm.Node{
+		n := swarm.Node{
 			ID:     id,
 			Spec:   swarm.NodeSpec{Role: role, Availability: swarm.NodeAvailabilityActive},
 			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 		}
+		if role == swarm.NodeRoleManager {
+			n.ManagerStatus = &swarm.ManagerStatus{Reachability: swarm.ReachabilityReachable}
+		}
+
+		return n
 	}
 	c.SetNode(node("manager-1", swarm.NodeRoleManager))
 	c.SetNode(node("worker-1", swarm.NodeRoleWorker))
@@ -225,5 +230,53 @@ func TestCompletedJobTaskCountFollowsTheCurrentIteration(t *testing.T) {
 
 	if got := c.Snapshot().CompletedJobsByService["job-1"]; got != 1 {
 		t.Errorf("Snapshot().CompletedJobsByService = %d, want 1", got)
+	}
+}
+
+// A job's failures count over its current run as its completions do, and a
+// rejection is a failure; nothing but a job has either. Only the services asked
+// about are tallied.
+func TestTaskTallies(t *testing.T) {
+	c := New(nil)
+
+	job := stackService("job-1", "app")
+	job.Spec.Mode = swarm.ServiceMode{ReplicatedJob: &swarm.ReplicatedJob{}}
+	job.JobStatus = &swarm.JobStatus{JobIteration: swarm.Version{Index: 7}}
+	c.SetService(job)
+	c.SetService(stackService("web", "app"))
+
+	task := func(id, service string, iteration *swarm.Version, state swarm.TaskState) swarm.Task {
+		return swarm.Task{
+			ID:           id,
+			ServiceID:    service,
+			JobIteration: iteration,
+			DesiredState: swarm.TaskStateRunning,
+			Status:       swarm.TaskStatus{State: state},
+		}
+	}
+
+	previous, current := &swarm.Version{Index: 3}, &swarm.Version{Index: 7}
+	c.SetTask(task("old-done", "job-1", previous, swarm.TaskStateComplete))
+	c.SetTask(task("old-failed", "job-1", previous, swarm.TaskStateFailed))
+	c.SetTask(task("done", "job-1", current, swarm.TaskStateComplete))
+	c.SetTask(task("failed", "job-1", current, swarm.TaskStateFailed))
+	c.SetTask(task("rejected", "job-1", nil, swarm.TaskStateRejected))
+	c.SetTask(task("busy", "job-1", current, swarm.TaskStateRunning))
+	c.SetTask(task("up", "web", nil, swarm.TaskStateRunning))
+	c.SetTask(task("crashed", "web", nil, swarm.TaskStateFailed))
+
+	web, _ := c.GetService("web")
+	tallies := c.TaskTallies(job, web)
+
+	if got, want := tallies["job-1"], (TaskTally{Running: 1, Completed: 1, Failed: 2}); got != want {
+		t.Errorf("job tally = %+v, want %+v", got, want)
+	}
+
+	if got, want := tallies["web"], (TaskTally{Running: 1}); got != want {
+		t.Errorf("service tally = %+v, want %+v", got, want)
+	}
+
+	if _, ok := c.TaskTallies(web)["job-1"]; ok {
+		t.Error("TaskTallies(web) tallied job-1, a service it was not asked about")
 	}
 }

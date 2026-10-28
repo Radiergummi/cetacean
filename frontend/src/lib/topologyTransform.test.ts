@@ -1,7 +1,9 @@
 import type { JGFGraph, JGFMetadata } from "../api/types";
 import {
+  dimmedByNetwork,
   networkGraphToReactFlow,
   placementGraphToReactFlow,
+  placementNetworks,
   stackColors,
 } from "./topologyTransform";
 import { describe, it, expect } from "vitest";
@@ -263,6 +265,103 @@ describe("placementGraphToReactFlow", () => {
     const n2Data = nodes[1]?.data as { services: { total: number }[] };
     expect(n2Data.services.length).toBe(1);
     expect(n2Data.services[0]?.total).toBe(1);
+  });
+});
+
+describe("networks on the physical view", () => {
+  const graph = makePlacementGraph({
+    nodes: {
+      "urn:cetacean:node:n1": {
+        label: "worker-01",
+        metadata: { ...baseMetadata, kind: "node", address: "10.0.0.5" },
+      },
+      "urn:cetacean:service:svc1": {
+        label: "web",
+        metadata: {
+          ...baseMetadata,
+          kind: "service",
+          networks: [
+            { id: "urn:cetacean:network:net2", name: "frontend" },
+            { id: "urn:cetacean:network:net1", name: "backend" },
+          ],
+        },
+      },
+      "urn:cetacean:service:svc2": {
+        label: "worker",
+        metadata: {
+          ...baseMetadata,
+          kind: "service",
+          networks: [{ id: "urn:cetacean:network:net1", name: "backend" }],
+        },
+      },
+      "urn:cetacean:service:svc3": {
+        label: "cron",
+        metadata: { ...baseMetadata, kind: "service" },
+      },
+    },
+    hyperedges: ["svc1", "svc2", "svc3"].map((service) => ({
+      nodes: [`urn:cetacean:service:${service}`, "urn:cetacean:node:n1"],
+      metadata: {
+        ...baseMetadata,
+        kind: "placement",
+        tasks: [{ id: `t-${service}`, node: "urn:cetacean:node:n1", state: "running", slot: 1 }],
+      },
+    })),
+  });
+
+  it("passes each service's networks and the node's address through to its box", () => {
+    const { nodes } = placementGraphToReactFlow(graph);
+    const data = nodes[0]?.data as {
+      address: string | undefined;
+      services: { serviceId: string; networks: string[] }[];
+    };
+
+    expect(data.address).toBe("10.0.0.5");
+    expect(data.services.map(({ serviceId, networks }) => [serviceId, networks])).toEqual([
+      ["svc1", ["net2", "net1"]],
+      ["svc2", ["net1"]],
+      ["svc3", []],
+    ]);
+  });
+
+  it("offers each network once, by name", () => {
+    expect(placementNetworks(graph)).toEqual([
+      { id: "net1", name: "backend", label: "backend" },
+      { id: "net2", name: "frontend", label: "frontend" },
+    ]);
+  });
+
+  it("tells overlays sharing a name apart by their short ID", () => {
+    const shared = makePlacementGraph({
+      nodes: {
+        "urn:cetacean:service:svc1": {
+          label: "web",
+          metadata: {
+            ...baseMetadata,
+            kind: "service",
+            networks: [
+              { id: "urn:cetacean:network:aaaaaaaaaaaa1111", name: "default" },
+              { id: "urn:cetacean:network:bbbbbbbbbbbb2222", name: "default" },
+              { id: "urn:cetacean:network:cccc", name: "edge" },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(placementNetworks(shared).map(({ label }) => label)).toEqual([
+      "default (aaaaaaaaaaaa)",
+      "default (bbbbbbbbbbbb)",
+      "edge",
+    ]);
+  });
+
+  it("dims only the services off the selected network", () => {
+    expect(dimmedByNetwork(["net1"], null)).toBe(false);
+    expect(dimmedByNetwork([], null)).toBe(false);
+    expect(dimmedByNetwork(["net1", "net2"], "net2")).toBe(false);
+    expect(dimmedByNetwork(["net1"], "net2")).toBe(true);
+    expect(dimmedByNetwork([], "net2")).toBe(true);
   });
 });
 

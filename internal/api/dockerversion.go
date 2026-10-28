@@ -11,6 +11,8 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 const (
@@ -132,11 +134,11 @@ func (c *dockerVersionCache) fetch(ctx context.Context) (*DockerLatestVersion, e
 func (h *Handlers) HandleDockerLatestVersion(w http.ResponseWriter, r *http.Request) {
 	v, err := h.dockerVersionCache.get(r.Context())
 	if err != nil {
-		slog.Warn("failed to fetch latest Docker version", "error", err)
+		slog.WarnContext(r.Context(), "failed to fetch latest Docker version", "error", err)
 	}
 
 	if v == nil {
-		writeErrorCode(w, r, "ENG002", "could not determine latest Docker version")
+		problem.Write(w, r, "ENG002", "could not determine latest Docker version")
 		return
 	}
 

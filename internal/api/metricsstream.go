@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 )
 
@@ -21,12 +22,12 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query().Get("query")
 	if query == "" {
-		writeErrorCode(w, r, "MTR003", "missing required parameter: query")
+		problem.Write(w, r, "MTR003", "missing required parameter: query")
 		return
 	}
 
 	if h.promClient == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		problem.Write(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
@@ -34,7 +35,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	if s := r.URL.Query().Get("step"); s != "" {
 		v, err := strconv.Atoi(s)
 		if err != nil || v < 5 || v > 300 {
-			writeErrorCode(w, r, "MTR004", "step must be between 5 and 300 seconds")
+			problem.Write(w, r, "MTR004", "step must be between 5 and 300 seconds")
 			return
 		}
 		step = v
@@ -48,16 +49,22 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !tryAcquire(&h.metricsStreamCount, maxMetricsStreamClients) {
+	full := h.metricsStreamCount.Load() >= maxMetricsStreamClients
+	if r.Method == http.MethodHead && !full {
+		sse.ServeHead(w, r)
+		return
+	}
+
+	if full || !tryAcquire(&h.metricsStreamCount, maxMetricsStreamClients) {
 		w.Header().Set("Retry-After", sse.RetryAfter())
-		writeErrorCode(w, r, "MTR005", "too many metrics stream connections")
+		problem.Write(w, r, "MTR005", "too many metrics stream connections")
 		return
 	}
 	defer h.metricsStreamCount.Add(-1)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeErrorCode(w, r, "API005", "streaming not supported")
+		problem.Write(w, r, "API005", "streaming not supported")
 		return
 	}
 
@@ -79,7 +86,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	failing := false
 	writeQueryError := func(err error) {
 		if !failing && ctx.Err() == nil {
-			slog.Warn("metrics stream query failed", "query", query, "error", err)
+			slog.WarnContext(ctx, "metrics stream query failed", "query", query, "error", err)
 		}
 		failing = true
 		fmt.Fprintf(w, "event: query_error\ndata: %s\n\n", marshalErrorEvent(err))

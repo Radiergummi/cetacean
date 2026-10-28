@@ -24,7 +24,10 @@ export class MockEventSource {
   closed = false;
   readyState: number = MockEventSource.CONNECTING;
 
-  constructor(_url: string) {
+  readonly url: string;
+
+  constructor(url: string) {
+    this.url = url;
     MockEventSource.instances.push(this);
   }
 

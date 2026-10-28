@@ -12,6 +12,7 @@ import (
 	"time"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -104,7 +105,7 @@ func TestFeedID(t *testing.T) {
 	t.Run("includes base path", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
 		req.Host = "swarm.example.com"
-		ctx := context.WithValue(req.Context(), basePathKey, "/cetacean")
+		ctx := reqctx.WithBasePath(req.Context(), "/cetacean")
 		req = req.WithContext(ctx)
 
 		got := feedID(req)
@@ -298,7 +299,7 @@ func TestHistoryToEntries(t *testing.T) {
 func TestParseAtomPagination(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history", nil)
-		beforeID, limit := parseFeedPagination(req)
+		beforeID, limit, _ := parseFeedPagination(req)
 
 		if beforeID != 0 {
 			t.Errorf("beforeID = %d, want 0", beforeID)
@@ -311,7 +312,7 @@ func TestParseAtomPagination(t *testing.T) {
 
 	t.Run("parses values", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?before=100&limit=25", nil)
-		beforeID, limit := parseFeedPagination(req)
+		beforeID, limit, _ := parseFeedPagination(req)
 
 		if beforeID != 100 {
 			t.Errorf("beforeID = %d, want 100", beforeID)
@@ -324,37 +325,12 @@ func TestParseAtomPagination(t *testing.T) {
 
 	t.Run("caps limit at 200", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/history?limit=500", nil)
-		_, limit := parseFeedPagination(req)
+		_, limit, _ := parseFeedPagination(req)
 
 		if limit != 200 {
 			t.Errorf("limit = %d, want 200", limit)
 		}
 	})
-}
-
-func TestResourcePath(t *testing.T) {
-	cases := []struct {
-		typ  cache.EventType
-		id   string
-		want string
-	}{
-		{cache.EventNode, "abc", "/nodes/abc"},
-		{cache.EventService, "svc1", "/services/svc1"},
-		{cache.EventTask, "t1", "/tasks/t1"},
-		{cache.EventConfig, "c1", "/configs/c1"},
-		{cache.EventSecret, "s1", "/secrets/s1"},
-		{cache.EventNetwork, "n1", "/networks/n1"},
-		{cache.EventVolume, "v1", "/volumes/v1"},
-		{cache.EventStack, "mystack", "/stacks/mystack"},
-		{"unknown", "x", ""},
-	}
-
-	for _, tc := range cases {
-		got := resourcePath(tc.typ, tc.id)
-		if got != tc.want {
-			t.Errorf("resourcePath(%q, %q) = %q, want %q", tc.typ, tc.id, got, tc.want)
-		}
-	}
 }
 
 // testFeedData builds a feedData for pagination tests from cache history entries.

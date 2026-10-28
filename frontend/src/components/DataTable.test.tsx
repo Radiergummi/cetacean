@@ -185,10 +185,13 @@ describe("DataTable", () => {
       name: `Row ${index}`,
     }));
 
-    // The virtualizer sizes its window from the scroll element's offset box,
-    // which jsdom reports as zero — it would render no rows at all.
-    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
-    const width = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800);
+    // The virtualizer sizes its window from the scroll element's box, which
+    // jsdom reports as zero — it would render no rows at all. Which box it
+    // reads differs between virtual-core releases, so both are faked.
+    const sizes = (["offset", "client"] as const).flatMap((box) => [
+      vi.spyOn(HTMLElement.prototype, `${box}Height`, "get").mockReturnValue(600),
+      vi.spyOn(HTMLElement.prototype, `${box}Width`, "get").mockReturnValue(800),
+    ]);
 
     const table = () => (
       <DataTable
@@ -218,8 +221,9 @@ describe("DataTable", () => {
       expect(row.hasAttribute("data-virtual-row")).toBe(true);
     }
 
-    height.mockRestore();
-    width.mockRestore();
+    for (const size of sizes) {
+      size.mockRestore();
+    }
   });
 
   it("drops a selection that the data no longer holds", () => {
@@ -253,5 +257,65 @@ describe("DataTable", () => {
 
     fireEvent.click(screen.getByText("clear"));
     expect(container.querySelectorAll("[data-selected]")).toHaveLength(0);
+  });
+
+  it("leaves Enter on a link inside a cell to the link", () => {
+    const onClick = vi.fn<(item: Item) => void>();
+    const linked: Column<Item>[] = [
+      { header: "Name", cell: ({ name }) => <a href="#x">{name}</a> },
+    ];
+
+    render(
+      <DataTable
+        columns={linked}
+        data={data}
+        keyFn={({ id }) => id}
+        onRowClick={onClick}
+      />,
+    );
+
+    const grid = screen.getByRole("grid");
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.keyDown(screen.getByText("Beta"), { key: "Enter" });
+    fireEvent.keyDown(screen.getByText("Beta"), { key: "ArrowDown" });
+
+    expect(onClick).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(grid, { key: "Enter" });
+    expect(onClick).toHaveBeenCalledWith(data[0]);
+  });
+
+  it("keeps the cursor on the same row when a row is inserted above it", () => {
+    const onClick = vi.fn<(item: Item) => void>();
+
+    function Harness() {
+      const [rows, setRows] = useState(data);
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setRows([{ id: "0", name: "Zero" }, ...data])}
+          >
+            insert
+          </button>
+          <DataTable
+            columns={columns}
+            data={rows}
+            keyFn={({ id }) => id}
+            onRowClick={onClick}
+          />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    const grid = screen.getByRole("grid");
+
+    fireEvent.keyDown(grid, { key: "ArrowDown" });
+    fireEvent.click(screen.getByText("insert"));
+    fireEvent.keyDown(grid, { key: "Enter" });
+
+    expect(onClick).toHaveBeenCalledWith(data[0]);
   });
 });

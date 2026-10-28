@@ -17,11 +17,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
 type testHandlersConfig struct {
+	core                 *core.Core
 	cache                *cache.Cache
 	broadcaster          *sse.Broadcaster
 	dockerClient         DockerLogStreamer
@@ -76,6 +78,12 @@ func withDockerClient(dc DockerLogStreamer) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.dockerClient = dc }
 }
 
+// withCore shares state with the caller, which reads what the handlers wrote to
+// it; it overrides withCache.
+func withCore(shared *core.Core) testHandlersOption {
+	return func(cfg *testHandlersConfig) { cfg.core = shared }
+}
+
 func withACL(e *acl.Evaluator) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.aclEval = e }
 }
@@ -104,8 +112,13 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		opt(&cfg)
 	}
 
+	shared := cfg.core
+	if shared == nil {
+		shared = core.New(cfg.cache, nil)
+	}
+
 	handlers := NewHandlers(
-		cfg.cache,
+		shared,
 		cfg.broadcaster,
 		cfg.dockerClient,
 		cfg.systemClient,
@@ -268,12 +281,13 @@ func testRouterConfig(
 	t.Helper()
 
 	h := newTestHandlers(t, opts...)
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	t.Cleanup(b.Close)
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	cfg := RouterConfig{
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           h,
 		Broadcaster:        b,
 		SPA:                spa,

@@ -9,7 +9,7 @@ import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
-This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 27 tools, 6 prompts, and 5
+This page is the catalog an agent sees over Cetacean's MCP server: 14 resources, 28 tools, 6 prompts, and 5
 widgets. For enabling the server, authorization, and configuration, see [MCP server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] isn't
@@ -60,13 +60,14 @@ resources they returned, so a host can offer somewhere to go next.
     <Fragment slot="arguments">none</Fragment>
 
     Answers whether the cluster is healthy and, when it's not, names the services not in their desired state or
-    restarting in a loop, the nodes down or draining, the rollouts in flight, and reserved against total CPU and memory. Start here.
+    restarting in a loop, the nodes down or draining, the rollouts in flight, reserved against total CPU and memory, and
+    how many managers are reachable and how many more failures quorum survives. Start here.
 </McpTool>
 
 <McpTool name="find" level={0}>
     <Fragment slot="arguments">`type` (plural: `nodes`, `services`, `tasks`, `stacks`, `configs`, `secrets`, `networks`,
-        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `limit` (200 typed, 3 per type otherwise),
-        `offset`, `raw`</Fragment>
+        `volumes`), `query`, `state`, `stack`, `node`, `image`, `label`, `versions` (`newest`, `all`), `limit` (200
+        typed, 3 per type otherwise), `offset`, `raw`</Fragment>
 
     Locates resources. With `type` it enumerates that type, paged by `offset` and capped at the same 200 the default
     sets. Without `type` it searches every type at once: `offset` is ignored, and the result carries `counts`, the
@@ -140,6 +141,15 @@ What the cluster is doing now, and what it did recently.
     tool says metrics are unavailable rather than returning empty series.
 </McpTool>
 
+<McpTool name="get_published_ports" level={0}>
+    <Fragment slot="arguments">`port`</Fragment>
+
+    Every port the services publish, by port, with the service and stack behind it. An ingress port is bound on every
+    node; a host-mode port names the IDs of the nodes binding it that the caller may read. Answers which service owns
+    a port, or whether one is free.
+    Only ports of services the caller may read are listed, as on [`GET /ports`][api].
+</McpTool>
+
 <McpTool name="get_recommendations" level={0}>
     <Fragment slot="arguments">`severity`</Fragment>
 
@@ -187,13 +197,15 @@ writes](#conditional-writes) for when it moves on by itself). `replicas` is omit
 <McpTool name="update_service_image" level={1}>
     <Fragment slot="arguments">`id`, `image`, `version`</Fragment>
 
-    Sets the container image, triggering a rolling deploy per the service's update policy.
+    Sets the container image, triggering a rolling deploy per the service's update policy. On a service with host
+    access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added capability—it needs level 3.
 </McpTool>
 
 <McpTool name="rollback_service" level={1}>
     <Fragment slot="arguments">`id`, `version`</Fragment>
 
-    Reverts to the previous spec. Only one previous spec is retained, so calling twice doesn't unwind further.
+    Reverts to the previous spec. Only one previous spec is retained, so calling twice doesn't unwind further. On a
+    service with host access in either spec it needs level 3, so it can't restore a bind a level-3 caller removed.
 </McpTool>
 
 <McpTool name="restart_service" level={1}>
@@ -259,6 +271,9 @@ than read as empty.
     | `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
 
     Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
+    On a service with host access, `placement`, and an `env`, `labels`, `ports`, `command`, or `healthcheck` value
+    that changes the section, need level 3, as `update_service_image` does; so do `update_service_secrets`,
+    `update_service_configs`, and `update_service_mounts` when they change the set attached.
     A `null` value is refused for every section.
 
     Secrets, configs, and mounts aren't sections here. Each takes a list rather than a spec fragment, and
@@ -296,9 +311,10 @@ than read as empty.
 ### Cluster resources
 
 Configs, secrets, networks, and volumes. Swarm secrets and configs are immutable, so rotating one is three
-calls in order: `create_secret` for the replacement, [`update_service_secrets`](#update_service_secrets) to
-repoint each service that uses it (`describe` the secret first, its `related` array names them), then
-`remove_secret` once nothing references it. Configs follow the same sequence, and unlike a secret a config's
+calls in order: `create_secret` for the replacement, labeled `cetacean.version-of=<logical name>` and with the old
+version's `com.docker.stack.namespace` label so it [groups with the versions it replaces](dashboard#versions), [`update_service_secrets`](#update_service_secrets) to
+repoint each service that uses it (`describe` the secret first: its `related` array names them as `used-by`, and a service only a rollback needs as `used-by-rollback`, which stays), then
+`remove_secret` once no `used-by` service is left. Configs follow the same sequence, and unlike a secret a config's
 content can be read back, so use a secret for anything sensitive.
 
 <McpTool name="create_secret" level={2}>
@@ -318,13 +334,15 @@ content can be read back, so use a secret for anything sensitive.
 <McpTool name="remove_secret" level={3}>
     <Fragment slot="arguments">`id`</Fragment>
 
-    Deletes a secret. Fails if any service still references it.
+    Deletes a secret. Fails while a service's current spec references it; one only a previous spec names is removed,
+    and the confirmation names the rollbacks it breaks.
 </McpTool>
 
 <McpTool name="remove_config" level={3}>
     <Fragment slot="arguments">`id`</Fragment>
 
-    Deletes a config. Fails if any service still references it.
+    Deletes a config. Fails while a service's current spec references it; one only a previous spec names is removed,
+    and the confirmation names the rollbacks it breaks.
 </McpTool>
 
 <McpTool name="remove_network" level={3}>
@@ -368,7 +386,7 @@ Resources are read-only views returned as `application/json`. Three are static, 
 
 | URI                          | Contents                                                                                                                                                                                                                  |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `cetacean://cluster`         | Node, service, task, and stack counts, node readiness, task counts by state, total and reserved CPU and memory, the largest node's capacity, converged and degraded service counts, last sync time                        |
+| `cetacean://cluster`         | Node, service, task, and stack counts, node readiness, task counts by state, total and reserved CPU and memory, the largest node's capacity, converged and degraded service counts, manager quorum, last sync time        |
 | `cetacean://recommendations` | Current [recommendation][recommendations] engine findings, each with severity, category, target resource, and rationale                                                                                                   |
 | `cetacean://history`         | The most recent create, update, and delete events across every resource type, newest first, up to 100. A task event is named after its service (`demo_flaky.3`) rather than by task ID; `resourceId` still carries the ID |
 
@@ -390,7 +408,7 @@ Templated resources return the same compact digest the `describe` tool builds. T
 | `cetacean://stacks/{name}/compose` | The stack as a Compose file; secrets and configs are referenced, never exported |
 | `cetacean://configs/{id}`          | Config digest; the payload's size in bytes, never the payload                   |
 | `cetacean://secrets/{id}`          | Secret digest; the payload is never read, not even its length                   |
-| `cetacean://networks/{id}`         | Network digest, with the attached services                                      |
+| `cetacean://networks/{id}`         | Network digest, with the attached services and how many addresses are in use    |
 | `cetacean://volumes/{name}`        | Volume digest, keyed by name                                                    |
 
 ### Subscriptions
@@ -400,15 +418,17 @@ wants and the resource URIs to watch, and the server sends nothing the stream di
 gone from that revision. A `2025-11-25` client gets no subscriptions at all, since it has no stream to receive them on.
 
 A watched URI may name its resource by ID or by name. The server sends `notifications/resources/updated` for it when
-the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, and
-after a full resync, and the client re-reads. A name keeps following whatever holds it: a service removed and created
-again under the same name, a node that rejoins with the same hostname, the replica that takes over a
-`<service>.<slot>`, and a resource created after the stream opened. A service's logs URI is notified on the same
-changes as the service, not on every new line; read new lines with `get_logs` and the previous cursor. The cluster
-overview, `cetacean://history`, `cetacean://recommendations`, and the listing URIs are never notified.
-`notifications/resources/list_changed` fires when resources are created or removed. Both are filtered by grants per
-notification: a client is only notified about resources its identity can read, and through a service, node, or stack
-only when it can read that too.
+the resource changes, when one of its tasks changes for a service or a node, when any member changes for a stack, when
+a task attached to it, any service, or for `ingress` a node changes for a network, and after a full resync, and the
+client re-reads. A name keeps following whatever holds it: a service removed and created again under the same name, a
+node that rejoins with the same hostname, the replica that takes over a `<service>.<slot>`, and a resource created
+after the stream opened. A service's logs URI is notified on the same changes as the service, not on every new line;
+read new lines with `get_logs` and the previous cursor. The cluster overview, `cetacean://history`,
+`cetacean://recommendations`, and the listing URIs are never notified. `notifications/resources/list_changed` fires
+when resources are created or removed. Both are filtered by grants per notification: a client is only notified about
+resources its identity can read, and through a service, node, or stack only when it can read that too. A network is
+the exception: what moves its address count is notified to anyone who can read the network, since the notification
+names nothing else.
 
 One stream watches at most 256 resource URIs. A `subscriptions/listen` naming more is refused with an
 `Invalid params` error; open a second stream, or watch the stack rather than each of its services.
@@ -433,6 +453,16 @@ such as a service's image, a node's role, or a network's driver) are omitted whe
 - stacks set `desired` alone, counting member services rather than replicas
 - nodes, tasks, configs, secrets, networks, and volumes set neither
 
+A config or secret listing, from `find` or a read of `cetacean://configs` or `cetacean://secrets`, shows the newest
+version of each group of [versions](dashboard#versions) and every older one a service's current spec uses, unless
+`versions` is `all`; a `find` given `query` or `label` matches every version, while `stack`, `state`, `node` and
+`image` keep the default. Config and secret rows carry `usedBy`, the number of services whose spec or previous spec
+uses them, and, when they're one of several versions, `versionOf` naming the group, `versionInferred` when it was
+matched by name, `inUse` on an older one still in use, and on the newest `newestVersion` and `olderVersions`, the
+number of older ones the listing hides. A config or secret digest carries the
+same in `details`, and a subscription to one hears when another version in its group comes or goes. All of them
+count only what the caller may read.
+
 **Digest** is the detail view of one resource, returned by `describe` and by every templated
 `cetacean://<type>/{id}` read. Alongside `id`, `name`, `type`, and `state` it adds:
 
@@ -455,6 +485,9 @@ A service's `details` carries `imageUpdate` when its image tag names a newer ima
 digest the service runs, with the same fields as the [API][api] reports. `suggestedImage`, the tag pinned to
 the newer digest, is what to pass to `update_service_image`. It's absent with
 [`server.image_check`][server.image_check] off.
+
+A service's `details` carries `links` when it declares [custom links][custom-links], and a stack's `details` the
+links of all its services, each naming the `services` that declare it, in the same shape as the API reports.
 
 Every numeric field in `details` names its unit, such as `cpuLimitCores` (a float, in cores) and
 `memoryLimitBytes`, or is reported as a duration string like `"10s"` (`healthcheckInterval`, an update
@@ -538,6 +571,7 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 [api.compatibility]:  api#compatibility
 [api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
+[custom-links]:  integrations#custom-links
 [dashboard]:  dashboard
 [mcp]:  mcp
 [mcp.operations_level]:  configuration#mcp.operations_level

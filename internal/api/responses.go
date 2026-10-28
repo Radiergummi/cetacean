@@ -11,6 +11,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/ipam"
+	"github.com/radiergummi/cetacean/internal/quorum"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
 )
@@ -23,11 +25,12 @@ type NodeResponse struct {
 }
 
 // ServiceResponse is the extra payload for GET /services/{id}.
-// Changes and Integrations are populated only when present.
+// Changes, Integrations and Links are populated only when present.
 type ServiceResponse struct {
-	Service      swarm.Service `json:"service"`
-	Changes      []SpecChange  `json:"changes,omitempty"`
-	Integrations []any         `json:"integrations,omitempty"`
+	Service      swarm.Service         `json:"service"`
+	Changes      []SpecChange          `json:"changes,omitempty"`
+	Integrations []any                 `json:"integrations,omitempty"`
+	Links        []cluster.ServiceLink `json:"links,omitempty"`
 
 	ImageUpdate *cluster.ImageUpdate `json:"imageUpdate,omitempty"`
 }
@@ -64,18 +67,21 @@ type TaskNodeRef struct {
 type ConfigResponse struct {
 	Config   swarm.Config       `json:"config"`
 	Services []cache.ServiceRef `json:"services"`
+	cluster.VersionDetail
 }
 
 // SecretResponse is the extra payload for GET /secrets/{id}.
 type SecretResponse struct {
 	Secret   swarm.Secret       `json:"secret"`
 	Services []cache.ServiceRef `json:"services"`
+	cluster.VersionDetail
 }
 
 // NetworkResponse is the extra payload for GET /networks/{id}.
 type NetworkResponse struct {
-	Network  network.Summary    `json:"network"`
-	Services []cache.ServiceRef `json:"services"`
+	Network   network.Summary    `json:"network"`
+	Services  []cache.ServiceRef `json:"services"`
+	Addresses *ipam.Addresses    `json:"addresses,omitempty"`
 }
 
 // VolumeResponse is the extra payload for GET /volumes/{name}.
@@ -86,7 +92,8 @@ type VolumeResponse struct {
 
 // StackResponse is the extra payload for GET /stacks/{name}.
 type StackResponse struct {
-	Stack cache.StackDetail `json:"stack"`
+	Stack cache.StackDetail     `json:"stack"`
+	Links []cluster.ServiceLink `json:"links,omitempty"`
 }
 
 // PluginResponse is the extra payload for GET /plugins/{name}.
@@ -118,6 +125,7 @@ type ClusterOverviewResponse struct {
 	ReservedMemory       int64          `json:"reservedMemory"`
 	TotalCPU             int            `json:"totalCPU"`
 	TotalMemory          int64          `json:"totalMemory"`
+	Quorum               quorum.Quorum  `json:"quorum"`
 	PrometheusConfigured bool           `json:"prometheusConfigured"`
 	LocalNodeID          string         `json:"localNodeID,omitempty"`
 }

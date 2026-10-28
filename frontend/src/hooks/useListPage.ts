@@ -1,5 +1,6 @@
 import type { FetchResult, ListParams } from "../api/client";
 import type { CollectionResponse } from "../api/types";
+import type { SSEEvent } from "./useResourceStream";
 import { useSearchParam } from "./useSearchParam";
 import { useSortParams, type SortDir } from "./useSort";
 import { useSwarmQuery } from "./useSwarmQuery";
@@ -15,6 +16,20 @@ export interface UseListPageConfig<T> {
   keyFn: (item: T) => string;
   /** An expr-lang `?filter=` the server applies before paging. */
   filter?: string | undefined;
+  /**
+   * The rows are derived from the streamed resources rather than being them,
+   * so an event can't patch a row in place and every one refetches instead.
+   */
+  derived?: boolean | undefined;
+  /**
+   * Events this rejects leave the list alone; a sync always refetches. It is
+   * handed the rows loaded so far.
+   */
+  relevantEvent?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
+  /**
+   * Told of each stream event the list acts on, so a view of it can follow too.
+   */
+  onEvent?: ((event: SSEEvent) => void) | undefined;
 }
 
 interface UseListPageResult<T> {
@@ -26,6 +41,10 @@ interface UseListPageResult<T> {
   hasMore: boolean;
   loadMore: () => void;
   allowedMethods: Set<string>;
+  /**
+   * How many fetches have finished, as useSwarmQuery counts them.
+   */
+  fetches: number;
   search: string;
   setSearch: (value: string) => void;
   sortKey: string | undefined;
@@ -48,20 +67,27 @@ export function useListPage<T>({
   fetchFn,
   keyFn,
   filter,
+  derived,
+  relevantEvent,
+  onEvent,
 }: UseListPageConfig<T>): UseListPageResult<T> {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { sortKey, sortDir, toggle } = useSortParams(defaultSort);
-  const { data, total, loading, error, retry, hasMore, loadMore, allowedMethods } = useSwarmQuery(
-    [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
-    useCallback(
-      (offset: number, signal: AbortSignal) =>
-        fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, filter, offset }, signal),
-      [debouncedSearch, sortKey, sortDir, filter, fetchFn],
-    ),
-    sseType,
-    keyFn,
-    debouncedSearch !== "" || Boolean(filter),
-  );
+  const { data, total, loading, error, retry, hasMore, loadMore, allowedMethods, fetches } =
+    useSwarmQuery({
+      queryKey: [path, { search: debouncedSearch, sort: sortKey, dir: sortDir, filter }],
+      fetchFn: useCallback(
+        (offset: number, signal: AbortSignal) =>
+          fetchFn({ search: debouncedSearch, sort: sortKey, dir: sortDir, filter, offset }, signal),
+        [debouncedSearch, sortKey, sortDir, filter, fetchFn],
+      ),
+      sseType,
+      getId: keyFn,
+      filtered: debouncedSearch !== "" || Boolean(filter) || Boolean(derived),
+      relevant: relevantEvent,
+      derived: Boolean(derived),
+      onEvent,
+    });
   const [viewMode, setViewMode] = useViewMode(viewModeKey);
 
   return {
@@ -73,6 +99,7 @@ export function useListPage<T>({
     hasMore,
     loadMore,
     allowedMethods,
+    fetches,
     search,
     setSearch,
     sortKey,

@@ -13,7 +13,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../api/client", () => ({
   pageSize: 50,
   emptyMethods: new Set(),
-  setsEqual: (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x)),
   api: {
     services: vi.fn<() => void>(),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue(null),
@@ -33,6 +32,7 @@ const fakeService = (id: string, name: string, replicas = 3, running = 3): Servi
     Mode: { Replicated: { Replicas: replicas } },
   },
   RunningTasks: running,
+  DesiredTasks: replicas,
 });
 
 let testQueryClient: QueryClient;
@@ -153,4 +153,131 @@ describe("ServiceList", () => {
       expect(screen.getByText("Server error")).toBeInTheDocument();
     });
   });
+
+  it("judges a global service against its eligible nodes", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeGlobal("g1", "agent", 3, 2)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByRole("img", { name: "warning" })).toBeInTheDocument();
+  });
+
+  it("shows a global service's running count against its eligible nodes", async () => {
+    mockServices.mockResolvedValue({
+      data: { items: [fakeGlobal("g1", "agent", 3, 2)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByText("2/3")).toBeInTheDocument();
+  });
+
+  it("marks the card of a job whose tasks all failed as critical", async () => {
+    showCards();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeJob("job1", "migrate", 0, 3)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByRole("img", { name: "critical" })).toBeInTheDocument();
+  });
+
+  // The services stream carries task events, so no second stream is opened.
+  it("refetches when a task of a listed service changes", async () => {
+    mockServices.mockResolvedValue({
+      data: { items: [fakeService("s1", "web", 3, 1)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    expect(await screen.findByText("1/3")).toBeInTheDocument();
+
+    mockServices.mockResolvedValue({
+      data: { items: [fakeService("s1", "web", 3, 3)], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+    act(() =>
+      servicesStream()?.simulateEvent("task", {
+        type: "task",
+        action: "update",
+        id: "t1",
+        resource: { ID: "t1", ServiceID: "s1", Status: { State: "running" } },
+      }),
+    );
+
+    expect(await screen.findByText("3/3", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("t1")).not.toBeInTheDocument();
+    expect(MockEventSource.instances.filter(({ url }) => url.includes("/tasks"))).toHaveLength(0);
+  });
+
+  it("leaves the list alone when a task of another service changes", async () => {
+    vi.useFakeTimers();
+    mockServices.mockResolvedValue({
+      data: { items: [fakeService("s1", "web")], total: 1, limit: 50, offset: 0 },
+      allowedMethods: new Set(),
+    });
+
+    render(<ServiceList />, { wrapper });
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("web")).toBeInTheDocument();
+    });
+
+    const calls = mockServices.mock.calls.length;
+
+    act(() =>
+      servicesStream()?.simulateEvent("task", {
+        type: "task",
+        action: "create",
+        id: "t9",
+        resource: { ID: "t9", ServiceID: "elsewhere", Status: { State: "running" } },
+      }),
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(mockServices.mock.calls.length).toBe(calls);
+    vi.useRealTimers();
+  });
 });
+
+function servicesStream() {
+  return [...MockEventSource.instances].reverse().find(({ url }) => url.endsWith("/services"));
+}
+
+function showCards() {
+  vi.stubGlobal("localStorage", {
+    ...localStorageStub,
+    getItem: (key: string) => (key === "viewMode:services" ? "grid" : null),
+  });
+}
+
+function fakeJob(id: string, name: string, completed = 0, failed = 0): ServiceListItem {
+  const job = fakeService(id, name, 0, 0);
+
+  job.Spec.Mode = { ReplicatedJob: {} };
+  job.DesiredTasks = 1;
+  job.CompletedTasks = completed;
+  job.FailedTasks = failed;
+
+  return job;
+}
+
+function fakeGlobal(id: string, name: string, eligible: number, running: number): ServiceListItem {
+  const service = fakeService(id, name, 0, running);
+
+  service.Spec.Mode = { Global: {} };
+  service.DesiredTasks = eligible;
+
+  return service;
+}

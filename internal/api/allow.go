@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
@@ -23,20 +24,45 @@ const AcceptMergePatch = "application/merge-patch+json"
 // handlers carry that level, so the router records what each write route needs
 // and Allow is read off the routes instead of a list kept beside them.
 type tieredChain struct {
+	gates       Chain // the authorization gates, which run first
 	chain       Chain
 	level       config.OperationsLevel
+	permits     func(*http.Request) bool // whether the caller holds the write grant
 	acceptPatch string
+	noContent   bool
+	bodyAlways  bool
 }
 
-func (h *Handlers) tiered(acl Constructor, level config.OperationsLevel) tieredChain {
+func (h *Handlers) tiered(
+	resource func(*http.Request) string,
+	level config.OperationsLevel,
+) tieredChain {
 	return tieredChain{
-		chain: NewChain(acl, h.requireLevel(level), attributeWrite),
+		gates: NewChain(h.requireWriteACL(resource), h.requireLevel(level), attributeWrite),
 		level: level,
+		permits: func(r *http.Request) bool {
+			return h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resource(r))
+		},
 	}
+}
+
+// operation is tiered at the level the shared table gives each operation.
+func (h *Handlers) operation(
+	resource func(*http.Request) string,
+) func(cluster.Operation) tieredChain {
+	return func(op cluster.Operation) tieredChain { return h.tiered(resource, op.Tier()) }
 }
 
 func (c tieredChain) Append(constructors ...Constructor) tieredChain {
 	c.chain = c.chain.Append(constructors...)
+
+	return c
+}
+
+// AnswersWithABody marks a write that sends its body whatever the Prefer
+// header asks, so return=minimal does not lift its Accept check.
+func (c tieredChain) AnswersWithABody() tieredChain {
+	c.bodyAlways = true
 
 	return c
 }
@@ -49,20 +75,71 @@ func (c tieredChain) TakesJSONPatch() tieredChain {
 	return c
 }
 
+// AnswersNoContent marks a write that only ever answers 204, which has no
+// representation for Accept to refuse.
+func (c tieredChain) AnswersNoContent() tieredChain {
+	c.noContent = true
+
+	return c
+}
+
+// ThenFunc runs the gates, then the Accept check, then the rest, so a caller
+// the gates refuse hears that first and nothing runs on a refused Accept.
 func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
-	return tieredHandler{c.chain.ThenFunc(fn), c.level, c.acceptPatch}
+	chain := c.gates
+	if !c.noContent {
+		chain = chain.Append(acceptsJSONAnswer(c.bodyAlways))
+	}
+
+	return tieredHandler{
+		chain.Append(c.chain.constructors...).ThenFunc(fn), c.level, c.acceptPatch, c.permits,
+	}
+}
+
+// acceptsJSONAnswer refuses a write whose JSON answer the client would not
+// accept, unless it asked for no body and this write then sends none: one
+// that waits or answers asynchronously may still send a 202 with a body.
+func acceptsJSONAnswer(bodyAlways bool) Constructor {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, waits := preferWait(r)
+			bodiless := !bodyAlways && preferMinimal(r) && !waits && !preferRespondAsync(r)
+
+			if !bodiless && !acceptable(r, ContentTypeJSON) && !acceptsProblem(r) {
+				notAcceptable(w, r, "application/json")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// acceptsProblem reports whether Accept names application/problem+json, which
+// a write's JSON answer is close enough to serve a client asking only for it.
+func acceptsProblem(r *http.Request) bool {
+	for _, accepted := range parseAcceptRanges(r.Header.Get("Accept")) {
+		if accepted.q > 0 && strings.EqualFold(accepted.typ, "application") &&
+			strings.EqualFold(accepted.subtype, "problem+json") {
+			return true
+		}
+	}
+
+	return false
 }
 
 type tieredHandler struct {
 	http.Handler
 	level       config.OperationsLevel
 	acceptPatch string
+	permits     func(*http.Request) bool
 }
 
 type tieredRoute struct {
 	method, path string
 	level        config.OperationsLevel
 	acceptPatch  string
+	permits      func(*http.Request) bool
 }
 
 // routeTable is a router built without dependencies, for its routes alone.
@@ -139,11 +216,10 @@ type offeredWrites struct {
 
 const varyIdentity = "Authorization, Cookie"
 
-// varyByIdentity marks a response as per-caller. Every ACL-filtered response
-// owes it: the setAllow* seams cover the ones reporting a per-identity Allow,
-// requireAnyGrant covers the ones gated on having any, and the feed renderers
-// cover themselves. Add rather than Set, to extend a Vary another layer already
-// wrote — but only once, since those three overlap.
+// varyByIdentity marks a response as per-caller; every ACL-filtered response
+// owes it. Add rather than Set, to extend a Vary another layer already wrote —
+// but only once, since the setAllow* seams, requireAnyGrant and the feed
+// renderers all call it and overlap.
 func varyByIdentity(w http.ResponseWriter) {
 	if slices.Contains(w.Header().Values("Vary"), varyIdentity) {
 		return
@@ -192,6 +268,25 @@ func (h *Handlers) setAllowSubResource(
 
 var readOnly = offeredWrites{methods: []string{"GET", "HEAD"}}
 
+// allowReads is the Allow of an endpoint no write is routed at. It does not
+// vary by caller, so it adds no Vary; a handler with writes overwrites it.
+func allowReads(w http.ResponseWriter) {
+	w.Header().Set("Allow", "GET, HEAD")
+}
+
+// jsonOnly serves next, a read that sends only JSON, to a client that takes it.
+func jsonOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !acceptable(r, ContentTypeJSON) {
+			notAcceptable(w, r, "application/json")
+			return
+		}
+
+		allowReads(w)
+		next(w, r)
+	}
+}
+
 // writeAllow writes Allow, and Accept-Patch when the methods take a PATCH.
 func writeAllow(w http.ResponseWriter, offer offeredWrites) {
 	w.Header().Set("Allow", strings.Join(offer.methods, ", "))
@@ -210,12 +305,25 @@ var createsByName = map[string]bool{"config": true, "secret": true}
 // setAllowList sets the Allow header for list endpoints.
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	offer := readOnly
-	id := auth.IdentityFromContext(r.Context())
-	if h.acl.Can(id, "write", resourceType+":*") ||
-		createsByName[resourceType] && grantsWriteOnType(h.acl.PermissionsFor(id), resourceType) {
+	if h.grantsCreate(r, resourceType) {
 		offer = h.routedWrites(r, false)
 	}
 	writeAllow(w, offer)
+}
+
+// mayCreate is the write grant a create of a config or secret takes, as the
+// list's Allow reads it; the type is the path's first segment.
+func (h *Handlers) mayCreate(r *http.Request) bool {
+	root, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
+
+	return h.grantsCreate(r, strings.TrimSuffix(root, "s"))
+}
+
+func (h *Handlers) grantsCreate(r *http.Request, resourceType string) bool {
+	id := auth.IdentityFromContext(r.Context())
+
+	return h.acl.Can(id, "write", resourceType+":*") ||
+		createsByName[resourceType] && grantsWriteOnType(h.acl.PermissionsFor(id), resourceType)
 }
 
 // grantsWriteOnType reports whether a grant pattern names the type itself. A

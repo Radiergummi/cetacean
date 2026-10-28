@@ -17,8 +17,9 @@ info:
     - The sixteen resource channels and `/events` write an opaque history
       cursor, valid only against the process that wrote it. Reconnecting with
       one replays the events in between from a 10,000-entry ring. A cursor the
-      ring no longer holds, or one from before a restart, gets a `sync` message
-      instead, and so does every detail channel, always — they are ineligible
+      ring no longer holds, one from before a restart, or one from before a
+      `sync` the client did not receive gets a `sync` message instead, and so
+      does every detail channel, always — they are ineligible
       for replay because a cross-resource matcher cannot be reconstructed from
       history.
     - The two log channels write an RFC 3339 timestamp, and only ever move it
@@ -86,10 +87,17 @@ channels:
   services:
     address: /services
     title: Service list stream
-    description: Every service event in the cluster.
+    description: |
+      Every service event in the cluster, plus every task and node event: the
+      list's rows carry task counts and a global service's eligible nodes,
+      which those move. Task and node events replay like service events.
     messages:
       service:
         $ref: "#/components/messages/service"
+      task:
+        $ref: "#/components/messages/task"
+      node:
+        $ref: "#/components/messages/node"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -272,13 +280,21 @@ channels:
   networkDetail:
     address: /networks/{id}
     title: Network detail stream
-    description: One network.
+    description: >
+      One network, plus what may move its address count: the tasks attached
+      to it, every service, and, on the ingress network, every node.
     parameters:
       id:
         description: Network ID.
     messages:
       network:
         $ref: "#/components/messages/network"
+      task:
+        $ref: "#/components/messages/task"
+      service:
+        $ref: "#/components/messages/service"
+      node:
+        $ref: "#/components/messages/node"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -555,13 +571,14 @@ components:
       title: Resynchronize
       summary: The stream cannot account for every change since your cursor. Refetch.
       description: |
-        Sent when a reconnecting client's `Last-Event-ID` is older than the
-        change-history ring still holds or was written before a restart, and
-        unconditionally on every detail channel, which is ineligible for
-        replay. Also sent mid-stream, in place of the next frame, when the
-        client fell behind and events it matched were dropped. The frame's `id`
-        is the current history position, so the next reconnect resumes from
-        there. The
+        Sent mid-stream whenever Cetacean re-reads the whole cluster. Sent to a
+        reconnecting client when its `Last-Event-ID` is older than the
+        change-history ring still holds, was written before a restart, or
+        precedes such a re-read it did not receive, and unconditionally on
+        every detail channel, which is ineligible for replay. Also sent
+        mid-stream, in place of the next frame, when the client fell behind and
+        events it matched were dropped. The frame's `id` is the current history
+        position, so the next reconnect resumes from there. The
         payload carries no `@id`, no `@type`, an empty `id` and no `resource`.
       payload:
         type: object

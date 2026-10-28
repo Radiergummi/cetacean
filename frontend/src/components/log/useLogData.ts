@@ -6,6 +6,7 @@ import type { LogLine, TimeRange } from "./log-utils";
 import { maxLiveLines, toLogLine } from "./log-utils";
 import type { LogStreamFailure } from "./logStream";
 import { maxReconnectAttempts, streamLogsWithRetry } from "./logStream";
+import { TaskPositions } from "./taskPositions";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
@@ -57,6 +58,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
   const limit = 500;
   const oldestRef = useRef<string | undefined>(undefined);
   const newestRef = useRef<string | undefined>(undefined);
+  const positionsRef = useRef(new TaskPositions());
   const containerRef = useRef<HTMLDivElement>(null);
   const fetchAbortRef = useRef<AbortController | null>(null);
   const scrollRafRef = useRef(0);
@@ -77,6 +79,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     setHasNewerLogs(false);
     oldestRef.current = undefined;
     newestRef.current = undefined;
+    positionsRef.current.clear();
 
     const controller = new AbortController();
     fetchAbortRef.current = controller;
@@ -104,6 +107,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
         }
 
         const newLines = response.lines?.map(toLogLine) ?? [];
+        newLines.forEach((line) => positionsRef.current.record(line));
         setLines(newLines);
         oldestRef.current = response.oldest;
         newestRef.current = response.newest;
@@ -151,7 +155,16 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     const flush = () => {
       animationFrameId = 0;
       if (buffer.length === 0) return;
-      const batch = buffer.splice(0);
+      // A resume starts from the task furthest behind, so the others replay
+      // lines already shown.
+      const batch = buffer.splice(0).filter((line) => {
+        const replayed = positionsRef.current.isReplayed(line);
+
+        positionsRef.current.record(line);
+
+        return !replayed;
+      });
+      if (batch.length === 0) return;
 
       // Advance the live cursor only for lines that reach the view. Teardown
       // cancels a pending flush, so a cursor advanced on arrival could move
@@ -198,7 +211,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
       // laptop a couple of minutes ahead blanked the tail for as long as the
       // skew lasted. With no cursor the stream simply starts at the present,
       // which is exactly what an empty log has to do anyway.
-      newestRef.current ?? "",
+      positionsRef.current.resumeCursor() ?? "",
       {
         onLine: (line) => {
           buffer.push(line);
@@ -326,6 +339,7 @@ export function useLogData({ logId, isTask, timeRange, streamFilter }: UseLogDat
     request
       .then((response) => {
         const newerLines = response.lines?.map(toLogLine) ?? [];
+        newerLines.forEach((line) => positionsRef.current.record(line));
         if (newerLines.length > 0) {
           newestRef.current = response.newest;
           setLines((current) =>

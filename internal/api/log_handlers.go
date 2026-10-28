@@ -13,6 +13,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
@@ -52,12 +53,12 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	until := q.Get("before")
 	streamFilter := q.Get("stream") // "", "stdout", or "stderr"
 	if streamFilter != "" && streamFilter != "stdout" && streamFilter != "stderr" {
-		writeErrorCode(w, r, "LOG002", `invalid "stream" parameter: must be "stdout" or "stderr"`)
+		problem.Write(w, r, "LOG002", `invalid "stream" parameter: must be "stdout" or "stderr"`)
 		return
 	}
 
 	if !validLogTimestamp(since) {
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			"LOG003",
@@ -66,7 +67,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 		return
 	}
 	if !validLogTimestamp(until) {
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			"LOG004",
@@ -77,7 +78,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeSSE {
 		if until != "" {
-			writeErrorCode(
+			problem.Write(
 				w,
 				r,
 				"LOG005",
@@ -110,7 +111,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	release, callerFull, ok := h.logReads.Acquire(r, logs.MaxConcurrentReads)
 	if !ok {
 		w.Header().Set("Retry-After", sse.RetryAfter())
-		writeErrorCode(w, r, "LOG009", tooMany("log reads in flight", callerFull))
+		problem.Write(w, r, "LOG009", tooMany("log reads in flight", callerFull))
 		return
 	}
 	defer release()
@@ -120,20 +121,18 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 
 	stream, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
-		slog.Error("failed to get logs", "error", err)
-		writeErrorCode(w, r, "LOG006", "failed to get logs")
+		slog.ErrorContext(ctx, "failed to get logs", "error", err)
+		problem.Write(w, r, "LOG006", "failed to get logs")
 		return
 	}
 	defer stream.Close() //nolint:errcheck
 
 	// Docker's ServiceLogs with Follow=false may not close the stream
-	// after sending all data. Use an idle cancel: once we've received
-	// some data, if no new data arrives within 2s, cancel the context
-	// so the blocked read unblocks immediately.
-	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, 2*time.Second)
+	// after sending all data, so the read ends once it goes idle instead.
+	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, logs.IdleCancelAfter)
 	if err != nil {
-		slog.Error("failed to parse logs", "error", err)
-		writeErrorCode(w, r, "LOG007", "failed to parse logs")
+		slog.ErrorContext(ctx, "failed to parse logs", "error", err)
+		problem.Write(w, r, "LOG007", "failed to parse logs")
 		return
 	}
 	if lines == nil {
@@ -185,10 +184,20 @@ func (h *Handlers) serveLogsSSE(
 	fetch logFetcher,
 	since, streamFilter string,
 ) {
+	if r.Method == http.MethodHead {
+		if callerFull, full := h.logStreams.Full(r, maxLogSSEConns); full {
+			w.Header().Set("Retry-After", sse.RetryAfter())
+			problem.Write(w, r, "LOG001", tooMany("active log streams", callerFull))
+			return
+		}
+		sse.ServeHead(w, r)
+		return
+	}
+
 	release, callerFull, ok := h.logStreams.Acquire(r, maxLogSSEConns)
 	if !ok {
 		w.Header().Set("Retry-After", sse.RetryAfter())
-		writeErrorCode(w, r, "LOG001", tooMany("active log streams", callerFull))
+		problem.Write(w, r, "LOG001", tooMany("active log streams", callerFull))
 		return
 	}
 	defer release()
@@ -204,7 +213,7 @@ func (h *Handlers) serveLogsSSE(
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeErrorCode(w, r, "API005", "streaming not supported")
+		problem.Write(w, r, "API005", "streaming not supported")
 		return
 	}
 
@@ -218,8 +227,8 @@ func (h *Handlers) serveLogsSSE(
 
 	stream, err := fetch(r.Context(), tail, true, since, "")
 	if err != nil {
-		slog.Error("failed to stream logs", "error", err)
-		writeErrorCode(w, r, "LOG008", "failed to stream logs")
+		slog.ErrorContext(r.Context(), "failed to stream logs", "error", err)
+		problem.Write(w, r, "LOG008", "failed to stream logs")
 		return
 	}
 	defer stream.Close() //nolint:errcheck
@@ -241,11 +250,7 @@ func (h *Handlers) serveLogsSSE(
 	// logs.BacklogFilter for why that distinction has to be made.
 	backlog := logs.NewBacklogFilter(since)
 
-	// The id clients resume from. Docker interleaves tasks, so a line can
-	// arrive carrying an older timestamp than one already sent; letting the id
-	// follow arrival order would move the cursor backwards and discard the
-	// lines in between on the next resume.
-	var cursor string
+	resume := logs.NewResumeCursor(since)
 
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
@@ -255,7 +260,7 @@ func (h *Handlers) serveLogsSSE(
 		case line, ok := <-ch:
 			if !ok {
 				if err := <-done; err != nil {
-					slog.Warn("log stream ended with an error", "error", err)
+					slog.WarnContext(r.Context(), "log stream ended with an error", "error", err)
 				}
 				return
 			}
@@ -266,9 +271,8 @@ func (h *Handlers) serveLogsSSE(
 				continue
 			}
 			data, _ := json.Marshal(line)
-			if line.Timestamp != "" && logs.Newer(line.Timestamp, cursor) {
-				cursor = line.Timestamp
-				fmt.Fprintf(w, "id: %s\n", line.Timestamp)
+			if id, moved := resume.Observe(line); moved {
+				fmt.Fprintf(w, "id: %s\n", id)
 			}
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
@@ -280,7 +284,12 @@ func (h *Handlers) serveLogsSSE(
 			for range ch {
 			}
 			if err := <-done; err != nil {
-				slog.Debug("log stream closed after the client left", "error", err)
+				slog.DebugContext(
+					r.Context(),
+					"log stream closed after the client left",
+					"error",
+					err,
+				)
 			}
 			return
 		}

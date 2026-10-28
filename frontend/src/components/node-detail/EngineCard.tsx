@@ -1,7 +1,7 @@
 import { api } from "@/api/client";
 import InfoCard from "@/components/InfoCard";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
-import { useEffect, useState } from "react";
 
 function isNewer(latest: string, current: string): boolean {
   const parse = (version: string) => version.split(".").map(Number);
@@ -25,11 +25,12 @@ function isNewer(latest: string, current: string): boolean {
 }
 
 export function EngineCard({ version }: { version: string }) {
-  const [latest, setLatest] = useState<{ version: string; url: string } | null>(null);
-
-  useEffect(() => {
-    api.dockerLatestVersion().then(setLatest).catch(console.warn);
-  }, []);
+  const { data: latest } = useQuery({
+    queryKey: ["docker-latest-version"],
+    queryFn: () => api.dockerLatestVersion(),
+    // Offline installs answer 503 every time, and each retry is an outbound check.
+    retry: false,
+  });
 
   const updateAvailable = latest && isNewer(latest.version, version);
 

@@ -3,16 +3,16 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
-	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Secret]{
 		resource:     "secret",
-		pathKey:      "id",
 		getter:       h.cache.GetSecret,
 		remove:       h.secretWriter.RemoveSecret,
 		conflictCode: "SEC001",
@@ -39,25 +39,27 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 				Data: data,
 			})
 			if err == nil {
-				// Attaching resolves through the cache, which the watcher fills later.
-				h.cache.SetSecret(swarm.Secret{
-					ID: id,
-					Spec: swarm.SecretSpec{
-						Annotations: swarm.Annotations{Name: name, Labels: labels},
-					},
-				})
+				cluster.SeedCreatedSecret(
+					ctx,
+					h.cache,
+					h.secretWriter.InspectSecret,
+					id,
+					name,
+					labels,
+				)
 			}
 
 			return id, err
 		},
-		buildFallback: func(id string, name string) any {
-			return SecretResponse{
-				Secret: swarm.Secret{
-					ID:   id,
-					Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
-				},
-				Services: []cache.ServiceRef{},
-			}
+		// Created now and labelled as asked; see the config's.
+		buildFallback: func(id, name string, labels map[string]string) any {
+			now := time.Now()
+
+			return h.secretBody(r, swarm.Secret{
+				ID:        id,
+				CreatedAt: now, UpdatedAt: now,
+				Spec: swarm.SecretSpec{Name: name, Labels: labels},
+			})
 		},
 		buildResponse: func(id string) (any, bool) {
 			sec, ok := h.cache.GetSecret(id)
@@ -73,7 +75,6 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) secretLabelsSpec() getLabelsSpec[swarm.Secret] {
 	return getLabelsSpec[swarm.Secret]{
 		resource:    "secret",
-		pathKey:     "id",
 		typeName:    "SecretLabels",
 		getter:      h.cache.GetSecret,
 		aclResource: func(s swarm.Secret) string { return "secret:" + s.Spec.Name },

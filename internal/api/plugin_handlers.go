@@ -11,7 +11,9 @@ import (
 	"github.com/docker/docker/api/types"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -22,8 +24,8 @@ func (h *Handlers) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
 
 	plugins, err := h.pluginClient.PluginList(ctx)
 	if err != nil {
-		slog.Error("plugin list failed", "error", err)
-		writeErrorCode(w, r, "PLG001", "plugin list failed")
+		slog.ErrorContext(ctx, "plugin list failed", "error", err)
+		problem.Write(w, r, "PLG001", "plugin list failed")
 		return
 	}
 	if plugins == nil {
@@ -63,7 +65,7 @@ func (h *Handlers) HandleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", "plugin:"+name) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+		problem.Write(w, r, "ACL001", "access denied")
 		return
 	}
 
@@ -82,7 +84,7 @@ func (h *Handlers) HandleGetPlugin(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleEnablePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	slog.Info("enabling plugin", "plugin", name)
+	slog.InfoContext(r.Context(), "enabling plugin", "plugin", name)
 
 	if err := h.pluginClient.PluginEnable(r.Context(), name); err != nil {
 		writeDockerError(w, r, err, "plugin", name)
@@ -94,7 +96,7 @@ func (h *Handlers) HandleEnablePlugin(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleDisablePlugin(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	slog.Info("disabling plugin", "plugin", name)
+	slog.InfoContext(r.Context(), "disabling plugin", "plugin", name)
 
 	if err := h.pluginClient.PluginDisable(r.Context(), name); err != nil {
 		writeDockerError(w, r, err, "plugin", name)
@@ -112,11 +114,11 @@ func (h *Handlers) HandleRemovePlugin(w http.ResponseWriter, r *http.Request) {
 	// precondition passed the request through to get. This one reaches the
 	// daemon, where a plugin installed since would make it a 204 instead.
 	if subjectAbsent(r.Context()) {
-		writeErrorCode(w, r, "PLG004", fmt.Sprintf("plugin %q not found", name))
+		problem.Write(w, r, "PLG004", fmt.Sprintf("plugin %q not found", name))
 		return
 	}
 
-	slog.Info("removing plugin", "plugin", name, "force", force)
+	slog.InfoContext(r.Context(), "removing plugin", "plugin", name, "force", force)
 
 	if err := h.pluginClient.PluginRemove(r.Context(), name, force); err != nil {
 		writeDockerError(w, r, err, "plugin", name)
@@ -141,7 +143,7 @@ func decodePluginRemote(w http.ResponseWriter, r *http.Request) (pluginRemoteReq
 		return req, false
 	}
 	if req.Remote == "" {
-		writeErrorCode(w, r, "PLG002", "remote is required")
+		problem.Write(w, r, "PLG002", "remote is required")
 		return req, false
 	}
 
@@ -152,7 +154,7 @@ func decodePluginRemote(w http.ResponseWriter, r *http.Request) (pluginRemoteReq
 // and answers a plugin whose privileges changed since they were reviewed.
 func grantedPrivileges(w http.ResponseWriter, r *http.Request, req pluginRemoteRequest) bool {
 	if req.Privileges == nil {
-		writeErrorCode(w, r, "PLG005",
+		problem.Write(w, r, "PLG005",
 			"privileges is required: send what POST /plugins/privileges returned for this remote")
 
 		return false
@@ -165,7 +167,7 @@ func grantedPrivileges(w http.ResponseWriter, r *http.Request, req pluginRemoteR
 // that no longer match the review.
 func writePluginWriteError(w http.ResponseWriter, r *http.Request, err error, name string) {
 	if errors.Is(err, docker.ErrPluginPrivilegesChanged) {
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			"PLG006",
@@ -193,8 +195,8 @@ func (h *Handlers) HandlePluginPrivileges(w http.ResponseWriter, r *http.Request
 
 	privileges, err := h.pluginClient.PluginPrivileges(ctx, req.Remote)
 	if err != nil {
-		slog.Error("plugin privileges check failed", "remote", req.Remote, "error", err)
-		writeErrorCode(w, r, "PLG003", "failed to check plugin privileges")
+		slog.ErrorContext(ctx, "plugin privileges check failed", "remote", req.Remote, "error", err)
+		problem.Write(w, r, "PLG003", "failed to check plugin privileges")
 		return
 	}
 
@@ -219,7 +221,7 @@ func (h *Handlers) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("installing plugin", "remote", req.Remote)
+	slog.InfoContext(r.Context(), "installing plugin", "remote", req.Remote)
 
 	plugin, err := h.pluginClient.PluginInstall(r.Context(), req.Remote, *req.Privileges)
 	if err != nil {
@@ -248,7 +250,7 @@ func (h *Handlers) HandleUpgradePlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("upgrading plugin", "plugin", name, "remote", req.Remote)
+	slog.InfoContext(r.Context(), "upgrading plugin", "plugin", name, "remote", req.Remote)
 
 	if err := h.pluginClient.PluginUpgrade(
 		r.Context(),
@@ -274,7 +276,19 @@ func (h *Handlers) HandleConfigurePlugin(w http.ResponseWriter, r *http.Request)
 	settings := make([]string, 0, len(req.Args)+len(req.Env))
 	settings = append(settings, req.Args...)
 	settings = append(settings, req.Env...)
-	slog.Info("configuring plugin", "plugin", name, "count", len(settings))
+
+	plugin, err := h.pluginClient.PluginInspect(r.Context(), name)
+	if err != nil {
+		writeDockerError(w, r, err, "plugin", name)
+		return
+	}
+
+	if err := cluster.CheckPluginSettings(*plugin, settings, h.levelFor(r)); err != nil {
+		writeDockerError(w, r, err, "plugin", name)
+		return
+	}
+
+	slog.InfoContext(r.Context(), "configuring plugin", "plugin", name, "count", len(settings))
 
 	if err := h.pluginClient.PluginConfigure(r.Context(), name, settings); err != nil {
 		writeDockerError(w, r, err, "plugin", name)

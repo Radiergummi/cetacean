@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/integrations"
 )
@@ -60,7 +61,7 @@ func representationOr404(
 	value, err := rep(r)
 	switch {
 	case errors.Is(err, errNoRepresentation):
-		writeErrorCode(
+		problem.Write(
 			w,
 			r,
 			notFoundCodes[resource],
@@ -356,6 +357,7 @@ func (h *Handlers) serviceRepresentation(r *http.Request) (any, error) {
 	if detected := integrations.Detect(svc.Spec.Labels); len(detected) > 0 {
 		detail.Integrations = detected
 	}
+	detail.Links = cluster.ServiceLinks(svc.Spec.Labels)
 	detail.ImageUpdate = h.imageUpdate(svc)
 
 	return NewDetailResponse(r.Context(), "/services/"+id, "Service", detail), nil
@@ -387,9 +389,13 @@ func (h *Handlers) configRepresentation(r *http.Request) (any, error) {
 
 // configBody is the body the config GET and the create response share.
 func (h *Handlers) configBody(r *http.Request, cfg swarm.Config) ConfigResponse {
+	users := h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID))
+	version := h.versions.ConfigVersion(cfg, h.readChecker(r))
+
 	return ConfigResponse{
-		Config:   cfg,
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingConfig(cfg.ID)),
+		Config:        cfg,
+		Services:      users,
+		VersionDetail: version.Detail(len(users)),
 	}
 }
 
@@ -407,9 +413,13 @@ func (h *Handlers) secretRepresentation(r *http.Request) (any, error) {
 // secretBody is the body the secret GET and the create response share. It
 // clears the secret data: never expose it.
 func (h *Handlers) secretBody(r *http.Request, sec swarm.Secret) SecretResponse {
+	users := h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID))
+	version := h.versions.SecretVersion(sec, h.readChecker(r))
+
 	return SecretResponse{
-		Secret:   cluster.RedactSecret(sec),
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingSecret(sec.ID)),
+		Secret:        cluster.RedactSecret(sec),
+		Services:      users,
+		VersionDetail: version.Detail(len(users)),
 	}
 }
 
@@ -422,8 +432,9 @@ func (h *Handlers) networkRepresentation(r *http.Request) (any, error) {
 	}
 
 	return NewDetailResponse(r.Context(), "/networks/"+id, "Network", NetworkResponse{
-		Network:  net,
-		Services: h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
+		Network:   net,
+		Services:  h.filterServiceRefs(r, h.cache.ServicesUsingNetwork(id)),
+		Addresses: h.cache.NetworkAddressesOf(id),
 	}), nil
 }
 
@@ -474,6 +485,7 @@ func (h *Handlers) stackRepresentation(r *http.Request) (any, error) {
 
 	return NewDetailResponse(r.Context(), "/stacks/"+name, "Stack", StackResponse{
 		Stack: detail,
+		Links: cluster.StackLinks(detail.Services),
 	}), nil
 }
 

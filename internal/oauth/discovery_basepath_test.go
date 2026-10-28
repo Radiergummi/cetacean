@@ -17,11 +17,10 @@ import (
 // Cetacean is mounted under a base path: Issuer + BasePath.
 const wantBasePathIssuer = "https://cetacean.test/cetacean"
 
-// TestDiscoveryIssuerIncludesBasePath reproduces E-5: when CETACEAN_BASE_PATH
-// is non-empty, every advertised/claimed issuer identifier must be the URL the
-// well-known documents are actually served from (Issuer + BasePath), so a
-// client that derives the metadata location from the issuer resolves it
-// instead of hitting a base-path-less 404.
+// TestDiscoveryIssuerIncludesBasePath: with a base path, every advertised or
+// claimed issuer must be the URL the well-known documents are served from
+// (Issuer + BasePath), so a client deriving the metadata location from the
+// issuer does not hit a base-path-less 404.
 func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc8414/well-known-segment-precedes-the-path-component",
@@ -70,15 +69,10 @@ func TestDiscoveryIssuerIncludesBasePath(t *testing.T) {
 		}
 	}
 
-	// One document per resource, each at the location RFC 9728 §3.1 derives from
-	// its identifier's path — with the base path ahead of the well-known segment,
-	// where this deployment is actually mounted. Both are asserted because the
-	// root document describing the wrong resource is the confusion that makes a
-	// token for one reach the other.
 	// Each resource is reachable at both spellings: the location RFC 9728 §3.1
-	// derives from the identifier — well-known after the authority, base path
-	// inside it — and the one beneath this deployment's own prefix, which is what
-	// a proxy forwarding only that prefix can deliver.
+	// derives from its identifier, and the one beneath this deployment's prefix,
+	// which is all a proxy forwarding only that prefix can deliver. Each document
+	// must name its own resource, or a token for one reaches the other.
 	for _, want := range []struct{ path, resource string }{
 		{"/.well-known/oauth-protected-resource/cetacean", wantBasePathIssuer},
 		{

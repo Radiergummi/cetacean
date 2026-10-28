@@ -1,8 +1,6 @@
 import { formatDateTime, formatRelativeDate } from "../lib/format";
 import { useEffect, useState } from "react";
 
-export { formatRelativeDate as timeAgo };
-
 export default function TimeAgo({ date }: { date: string }) {
   const [, setTick] = useState(0);
 

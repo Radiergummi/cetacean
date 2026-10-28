@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -412,7 +413,7 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	for range fetchers {
 		r := <-ch
 		if r.err != nil {
-			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
+			slog.WarnContext(ctx, "full sync resource failed", "resource", r.name, "error", r.err)
 			failed[r.name] = r.err
 		}
 	}
@@ -514,7 +515,7 @@ func (c *Client) ScaleService(
 ) (swarm.Service, error) {
 	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
 		if spec.Mode.Replicated == nil {
-			return errdefs.InvalidParameter(fmt.Errorf("cannot scale a global-mode service"))
+			return errdefs.InvalidParameter(errors.New("cannot scale a global-mode service"))
 		}
 		spec.Mode.Replicated.Replicas = &replicas
 		return nil
@@ -540,7 +541,7 @@ func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service,
 		func(svc *swarm.Service) error {
 			if svc.PreviousSpec == nil {
 				return errdefs.InvalidParameter(
-					fmt.Errorf("service has no previous spec to rollback to"),
+					errors.New("service has no previous spec to rollback to"),
 				)
 			}
 			return nil
@@ -621,7 +622,7 @@ func (c *Client) RemoveTask(ctx context.Context, id string) error {
 		return err
 	}
 	if task.Status.ContainerStatus == nil || task.Status.ContainerStatus.ContainerID == "" {
-		return errdefs.NotFound(fmt.Errorf("task has no running container"))
+		return errdefs.NotFound(errors.New("task has no running container"))
 	}
 
 	// The task outlives its container; what changes is its state.
@@ -931,7 +932,7 @@ func (c *Client) updateContainerSpec(
 ) (swarm.Service, error) {
 	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
 		if spec.TaskTemplate.ContainerSpec == nil {
-			return errdefs.InvalidParameter(fmt.Errorf("service has no container spec"))
+			return errdefs.InvalidParameter(errors.New("service has no container spec"))
 		}
 		return mutate(spec.TaskTemplate.ContainerSpec)
 	})

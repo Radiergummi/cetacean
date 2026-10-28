@@ -9,7 +9,9 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -57,13 +59,10 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setAllow(w, r, "stack", name)
 
-	// Building a stack detail walks every service, task, config, secret,
-	// network and volume in it, and then marshals the lot. None of that depends
-	// on the request, so it is kept until the cache changes.
-	//
-	// The validator stays a hash of the body rather than something derived from
-	// the generation: this document is also what precond compares an If-Match
-	// against, and the two have to agree.
+	// A stack detail walks every service, task, config, secret, network and
+	// volume in it and is request-independent, so it is kept until the cache
+	// changes. The validator stays a body hash: precond compares If-Match
+	// against this same document, and the two have to agree.
 	key := projectionKey{
 		generation:  h.cache.Generation(),
 		fingerprint: h.acl.Fingerprint(auth.IdentityFromContext(r.Context())),
@@ -83,7 +82,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	body, err := json.Marshal(rep)
 	if err != nil {
 		w.Header().Set("Cache-Control", "no-store")
-		writeErrorCode(w, r, "API009", "failed to serialize response")
+		problem.Write(w, r, "API009", "failed to serialize response")
 
 		return
 	}
@@ -163,7 +162,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {
 	results, err := h.promClient.InstantQuery(ctx, query)
 	if err != nil {
-		slog.Warn("prometheus stack metric query failed", "error", err)
+		slog.WarnContext(ctx, "prometheus stack metric query failed", "error", err)
 		return nil
 	}
 	out := make(map[string]float64, len(results))

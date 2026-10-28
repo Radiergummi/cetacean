@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
 	"github.com/radiergummi/cetacean/internal/auth"

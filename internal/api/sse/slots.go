@@ -46,6 +46,20 @@ func (s *Slots) Acquire(r *http.Request, max int) (release func(), callerFull, o
 	}, false, true
 }
 
+// Full reports what Acquire would refuse for r's caller, without taking a slot.
+func (s *Slots) Full(r *http.Request, max int) (callerFull, full bool) {
+	owner := ownerOf(r)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.total >= max {
+		return false, true
+	}
+
+	return s.owners[owner] >= max/4, s.owners[owner] >= max/4
+}
+
 // InUse is how many slots are taken.
 func (s *Slots) InUse() int {
 	s.mu.Lock()

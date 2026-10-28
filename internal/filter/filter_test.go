@@ -243,35 +243,6 @@ func TestStackEnv(t *testing.T) {
 	}
 }
 
-func TestResourceEnv_Dispatch(t *testing.T) {
-	tests := []struct {
-		name     string
-		resource any
-		wantNil  bool
-	}{
-		{"node", swarm.Node{ID: "n1"}, false},
-		{"service", swarm.Service{ID: "s1"}, false},
-		{"task", swarm.Task{ID: "t1"}, false},
-		{"config", swarm.Config{ID: "c1"}, false},
-		{"secret", swarm.Secret{ID: "s1"}, false},
-		{"network", network.Summary{ID: "n1"}, false},
-		{"volume", volume.Volume{Name: "v1"}, false},
-		{"nil", nil, true},
-		{"unknown", "string", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := ResourceEnv(tt.resource)
-			if tt.wantNil && env != nil {
-				t.Errorf("expected nil env for %s", tt.name)
-			}
-			if !tt.wantNil && env == nil {
-				t.Errorf("expected non-nil env for %s", tt.name)
-			}
-		})
-	}
-}
-
 func TestConfigEnv(t *testing.T) {
 	c := swarm.Config{
 		ID:   "c1",
@@ -508,5 +479,42 @@ func TestExitCodeOrdersAcrossStates(t *testing.T) {
 		if err != nil || got != tc.want {
 			t.Errorf("%s: got %v, %v; want %v", tc.task.Status.State, got, err, tc.want)
 		}
+	}
+}
+
+func TestPortEnv(t *testing.T) {
+	port := cache.PublishedPort{
+		PublishedPort: 8080,
+		TargetPort:    80,
+		Protocol:      swarm.PortConfigProtocolTCP,
+		PublishMode:   swarm.PortConfigPublishModeIngress,
+		ServiceName:   "shop_web",
+		Stack:         "shop",
+	}
+
+	for expression, want := range map[string]bool{
+		`published == 8080`:                        true,
+		`published > 1024 && protocol == "tcp"`:    true,
+		`mode == "host"`:                           false,
+		`service == "shop_web" && stack == "shop"`: true,
+		`nodes == 0`:                               true,
+	} {
+		prog, err := Compile(expression, Ports)
+		if err != nil {
+			t.Fatalf("Compile(%q): %v", expression, err)
+		}
+
+		got, err := Evaluate(prog, PortEnv(port, nil))
+		if err != nil {
+			t.Fatalf("Evaluate(%q): %v", expression, err)
+		}
+
+		if got != want {
+			t.Errorf("%s = %v, want %v", expression, got, want)
+		}
+	}
+
+	if _, err := Compile(`published == "8080"`, Ports); err == nil {
+		t.Error("comparing the port to a string should be refused")
 	}
 }

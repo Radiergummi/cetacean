@@ -3,7 +3,7 @@ package mcp
 import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // operationalTools returns the tier 1 tools: changes to how much of a
@@ -35,7 +35,8 @@ func (s *Server) operationalTools() []toolDef {
 					mcplib.Description("Target replica count. Must be >= 0."),
 				),
 			),
-			tier:    config.OpsOperational,
+			op:      cluster.OpScaleService,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolScaleService,
 		},
 		{
@@ -64,7 +65,8 @@ func (s *Server) operationalTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsOperational,
+			op:      cluster.OpUpdateServiceImage,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolUpdateServiceImage,
 		},
 		{
@@ -85,7 +87,8 @@ func (s *Server) operationalTools() []toolDef {
 				),
 				versionArg("service"),
 			),
-			tier:    config.OpsOperational,
+			op:      cluster.OpRollbackService,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolRollbackService,
 		},
 		{
@@ -106,7 +109,8 @@ func (s *Server) operationalTools() []toolDef {
 				),
 				versionArg("service"),
 			),
-			tier:    config.OpsOperational,
+			op:      cluster.OpRestartService,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolRestartService,
 		},
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cache"
 
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -408,7 +409,7 @@ func TestNegotiate_JGFSuffix(t *testing.T) {
 // returning the problem body so a caller can read what the endpoint offered
 // instead. The code matters as much as the status: API001 is also a 406, and
 // asserting the status alone would let the SSE refusal stand in for this one.
-func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetail {
+func refuse(t *testing.T, router http.Handler, path, accept string) problem.Detail {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -424,7 +425,7 @@ func refuse(t *testing.T, router http.Handler, path, accept string) ProblemDetai
 		t.Errorf("content-type=%q, want application/problem+json", ct)
 	}
 
-	var problem ProblemDetail
+	var problem problem.Detail
 	if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
 		t.Fatalf("parse problem body: %v", err)
 	}

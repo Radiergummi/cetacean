@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -26,6 +27,14 @@ type NotificationManager struct {
 	// index finds the subscriptions a key names, so an event touches only
 	// those that could match it rather than every subscribed URI.
 	index map[subscriptionTarget]map[*subscriptionEntry]struct{}
+
+	// versioned counts the subscriptions to a config or secret, so the write
+	// path looks for an event's other versions only while someone listens.
+	versioned atomic.Int64
+
+	// networks counts the index's network targets, so an event can skip
+	// working out which networks it reaches when nobody watches one.
+	networks map[subscriptionTarget]int
 
 	// resolve turns a subscribed URI into what it matches, and keys an event
 	// by everything it reaches. Nil for either matches literally, by the ID
@@ -58,6 +67,7 @@ func NewNotificationManager() *NotificationManager {
 	return &NotificationManager{
 		sessions: make(map[mcpserver.ClientSession]*sessionState),
 		index:    make(map[subscriptionTarget]map[*subscriptionEntry]struct{}),
+		networks: make(map[subscriptionTarget]int),
 	}
 }
 
@@ -101,8 +111,24 @@ func (nm *NotificationManager) Subscribe(
 		}
 
 		entries[entry] = struct{}{}
+
+		if key.typ == cache.EventNetwork {
+			nm.networks[key]++
+		}
+	}
+
+	if isVersioned(sub) {
+		nm.versioned.Add(1)
 	}
 }
+
+func isVersioned(sub subscription) bool {
+	t := sub.target
+	return t.id != "" && (t.typ == cache.EventConfig || t.typ == cache.EventSecret)
+}
+
+// watchesVersions reports whether any session subscribes to a config or secret.
+func (nm *NotificationManager) watchesVersions() bool { return nm.versioned.Load() > 0 }
 
 func (nm *NotificationManager) stateLocked(session mcpserver.ClientSession) *sessionState {
 	st := nm.sessions[session]
@@ -115,10 +141,20 @@ func (nm *NotificationManager) stateLocked(session mcpserver.ClientSession) *ses
 }
 
 func (nm *NotificationManager) unindexLocked(entry *subscriptionEntry) {
+	if isVersioned(entry.sub) {
+		nm.versioned.Add(-1)
+	}
+
 	for _, key := range entry.sub.keys() {
 		delete(nm.index[key], entry)
 		if len(nm.index[key]) == 0 {
 			delete(nm.index, key)
+		}
+
+		if key.typ == cache.EventNetwork {
+			if nm.networks[key]--; nm.networks[key] <= 0 {
+				delete(nm.networks, key)
+			}
 		}
 	}
 }
@@ -235,6 +271,23 @@ func (nm *NotificationManager) listChangedTargets() []delivery {
 	return out
 }
 
+// networkTargets is every network target a subscription is indexed under.
+func (nm *NotificationManager) networkTargets() []subscriptionTarget {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+
+	if len(nm.networks) == 0 {
+		return nil
+	}
+
+	targets := make([]subscriptionTarget, 0, len(nm.networks))
+	for target := range nm.networks {
+		targets = append(targets, target)
+	}
+
+	return targets
+}
+
 // matchingDeliveries returns the tuples needing notification for this event,
 // found through the index: a resync reaches every indexed subscription, any
 // other event only the keys it names. The lock is released before dispatch, so
@@ -252,13 +305,14 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 	defer nm.mu.RUnlock()
 
 	var out []delivery
-	add := func(entry *subscriptionEntry, via string) {
+	add := func(entry *subscriptionEntry, key eventKey) {
 		out = append(out, delivery{
-			session:  entry.session,
-			uri:      entry.uri,
-			target:   entry.sub.target,
-			via:      via,
-			identity: entry.state.identity,
+			session:   entry.session,
+			uri:       entry.uri,
+			target:    entry.sub.target,
+			via:       key.via,
+			ownTarget: key.ownTarget,
+			identity:  entry.state.identity,
 		})
 	}
 
@@ -266,7 +320,7 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 		for _, st := range nm.sessions {
 			for _, entry := range st.uris {
 				if entry.sub.target.id != "" {
-					add(entry, "")
+					add(entry, eventKey{})
 				}
 			}
 		}
@@ -282,7 +336,7 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 			}
 
 			seen[entry] = struct{}{}
-			add(entry, key.via)
+			add(entry, key)
 		}
 	}
 
@@ -290,11 +344,12 @@ func (nm *NotificationManager) matchingDeliveries(event cache.Event) []delivery 
 }
 
 type delivery struct {
-	session  mcpserver.ClientSession
-	uri      string
-	target   subscriptionTarget
-	via      string
-	identity *auth.Identity
+	session   mcpserver.ClientSession
+	uri       string
+	target    subscriptionTarget
+	via       string
+	ownTarget bool
+	identity  *auth.Identity
 }
 
 // isResourceEvent reports whether an event type names a kind of resource, as
@@ -342,6 +397,12 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 		// A resync names no resource, so the subscribed one is checked instead:
 		// any of them may have changed, and the client must re-read.
 		if event.Type == cache.EventSync {
+			if !s.targetReadable(d.identity, d.target) {
+				continue
+			}
+		} else if d.ownTarget {
+			// The notification names only the watched resource, so reading it
+			// is all the subscriber needs, whatever the event was about.
 			if !s.targetReadable(d.identity, d.target) {
 				continue
 			}

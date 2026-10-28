@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -25,6 +27,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
@@ -137,9 +140,8 @@ const (
 )
 
 // DockerWriteClient is the narrow surface of Docker write operations the MCP
-// tools invoke; docker.Client and api.DockerWriteClient both satisfy it. It
-// composes one writer per operations tier, so a fake can implement only the
-// surface it exercises.
+// tools invoke; docker.Client satisfies it. It composes one writer per
+// operations tier, so a fake can implement only the surface it exercises.
 type DockerWriteClient interface {
 	ServiceLifecycleWriter
 	ServiceSpecWriter
@@ -163,6 +165,7 @@ const MountPath = "/mcp"
 // Server is the Cetacean MCP server.
 type Server struct {
 	cache          *cache.Cache
+	versions       *cluster.VersionIndex
 	writeClient    DockerWriteClient
 	logs           LogStreamer
 	acl            *acl.Evaluator
@@ -194,16 +197,21 @@ type Server struct {
 	// 403 (DNS-rebinding defense).
 	allowedOrigins []string
 
+	// hosts are the names hostGuard admits on a loopback connection.
+	hosts auth.HostSet
+
 	// iconBaseURL is the canonical external base (issuer + base path) that tool
 	// icon `src` values are built from, e.g. "https://cetacean.example.com".
 	// Icons live under the un-authed /assets/ prefix. Empty disables icons.
 	iconBaseURL string
 
 	// registeredTools is the subset of toolCatalog() the server actually wired
-	// into mcp-go after applying the operations-level tier filter. The
-	// per-identity tools/list filter (filterToolsForIdentity) inspects this
-	// slice to know which tools may need further hiding from a given caller.
+	// into mcp-go after applying the operations-level tier filter.
 	registeredTools []toolDef
+
+	// toolGates holds every catalogued tool's gate by name, registered or
+	// not, for the per-identity tools/list and prompts/list filters.
+	toolGates map[string]toolGate
 
 	// registeredPrompts holds the prompts that passed the tier gate, so the
 	// per-identity prompts/list filter (filterPromptsForIdentity) can read
@@ -215,6 +223,10 @@ type Server struct {
 	// detach returned by cache.AddOnChangeListener.
 	notifications       *NotificationManager
 	cancelNotifications func()
+
+	// addressNetworks names the networks an event may move the address figure
+	// of; nil is cluster.AddressNetworks.
+	addressNetworks func(*cache.Cache, cache.Event) []string
 
 	// taskOwners binds each task to the identity that created it.
 	taskOwners taskOwners
@@ -241,7 +253,10 @@ type Server struct {
 	confirmations *stateSigner
 
 	secretEntries *cluster.SecretEntries
-	dashboardURL  string
+
+	// widgets are the MCP Apps bundles this server serves.
+	widgets      []uiResource
+	dashboardURL string
 
 	closeOnce sync.Once
 }
@@ -271,6 +286,10 @@ type Options struct {
 	// AllowedOrigins, as the API's cross-origin guard admits it.
 	PublicURL string
 
+	// Hosts are the names the REST edge answers for, which hostGuard admits
+	// on a loopback connection as well.
+	Hosts auth.HostSet
+
 	// Prometheus backs the get_metrics tool. Nil when CETACEAN_PROMETHEUS_URL
 	// is unset, and the tool then says metrics are unavailable rather than
 	// charting nothing.
@@ -290,19 +309,13 @@ type Options struct {
 	// tracing costs nothing until CETACEAN_OTEL_ENDPOINT is set.
 	Tracer oteltrace.Tracer
 
-	// Streams ends open subscriptions/listen streams when it ends. Nil leaves
-	// them to their clients.
-	Streams *sse.Lifetime
+	// DashboardURL is the dashboard's external base, where create_secret
+	// sends a person to enter a secret. Unset turns that off.
+	DashboardURL string
 
-	// LogReads is the pool get_logs and the logs resource draw on, shared with
-	// REST's log reads. Nil gives this server a pool of its own.
-	LogReads *sse.Slots
-
-	// SecretEntries is where create_secret leaves a secret for a person to
-	// enter in the dashboard, shared with the API that completes it, and
-	// DashboardURL is the dashboard's external base. Either unset turns that off.
-	SecretEntries *cluster.SecretEntries
-	DashboardURL  string
+	// Widgets holds the built MCP Apps bundles, one directory per widget. Nil
+	// or empty serves none and leaves the UI extension unadvertised.
+	Widgets fs.FS
 }
 
 // Cache TTLs advertised on cacheable results: freshness hints, not guarantees.
@@ -316,9 +329,9 @@ const (
 
 // New constructs an MCP server, registering its resources and tools once.
 // The returned *Server exposes Handler() for mounting on an http.ServeMux.
-func New(c *cache.Cache, opts Options) (*Server, error) {
-	if c == nil {
-		return nil, errors.New("mcp: cache is required")
+func New(shared *core.Core, opts Options) (*Server, error) {
+	if shared == nil || shared.Cache == nil {
+		return nil, errors.New("mcp: shared state with a cache is required")
 	}
 
 	guard, err := resolveGuard(opts)
@@ -326,18 +339,13 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		return nil, err
 	}
 
-	confirmations, err := newStateSigner()
-	if err != nil {
-		return nil, fmt.Errorf("mcp: confirmation key: %w", err)
-	}
-
 	srv := &Server{
-		confirmations:  confirmations,
-		secretEntries:  opts.SecretEntries,
+		confirmations:  newStateSigner(),
+		secretEntries:  shared.SecretEntries,
 		dashboardURL:   strings.TrimRight(opts.DashboardURL, "/"),
 		guard:          guard,
 		bypass:         resolveBypass(opts),
-		cache:          c,
+		cache:          shared.Cache,
 		writeClient:    opts.WriteClient,
 		logs:           opts.Logs,
 		acl:            opts.ACL,
@@ -351,15 +359,15 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		prom:           opts.Prometheus,
 		images:         opts.ImageDigests,
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
+		hosts:          opts.Hosts,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),
 		notifications:  NewNotificationManager(),
+		versions:       shared.Versions,
 		watches:        make(chan struct{}, maxConcurrentWatches),
 		listens:        make(chan struct{}, maxListenStreams),
-		streams:        opts.Streams,
-		logReads:       opts.LogReads,
-	}
-	if srv.logReads == nil {
-		srv.logReads = new(sse.Slots)
+		streams:        shared.Streams,
+		logReads:       shared.LogReads,
+		widgets:        uiResources(opts.Widgets),
 	}
 	srv.notifications.resolve = srv.subscriptionFor
 	srv.notifications.keys = srv.eventKeys
@@ -395,7 +403,7 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// are: an icon `src` must be an absolute https:// or data: URI per the
 		// spec, so without a canonical external base there is no icon to name.
 		mcpserver.WithIcons(srv.icon("server", "cetacean")...),
-		mcpserver.WithExtensions(serverExtensions()),
+		mcpserver.WithExtensions(serverExtensions(len(srv.widgets) > 0)),
 		// A tool result whose structuredContent does not conform to its
 		// declared outputSchema is rejected.
 		mcpserver.WithOutputSchemaValidation(),
@@ -460,6 +468,9 @@ func New(c *cache.Cache, opts Options) (*Server, error) {
 		// state to keep: each request is served by its own ephemeral session.
 		// WithStateful(false) would not do: it leaves mcp-go minting IDs.
 		mcpserver.WithStateLess(true),
+		// hostGuard replaces this check: it also admits server.public_url's
+		// host, which a same-host proxy that keeps the public Host sends.
+		mcpserver.WithDisableLocalhostProtection(true),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			// The bearer-validating middleware (see Handler) stamps an
 			// auth.Identity on r.Context() before mcp-go sees the request.
@@ -514,13 +525,29 @@ func (s *Server) Handler() http.Handler {
 	case guardNone:
 	}
 
-	return s.originGuard(h)
+	return s.originGuard(s.hostGuard(h))
+}
+
+// hostGuard refuses, on a loopback connection, a Host the REST edge would
+// refuse too, as mcp-go's own DNS-rebinding check does: a same-host reverse
+// proxy dials loopback and may keep the public Host.
+func (s *Server) hostGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+		if local == nil || !auth.IsLoopbackHost(auth.HostName(local.String())) ||
+			s.hosts.Admits(r.Host) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		http.Error(w, "forbidden host", http.StatusForbidden)
+	})
 }
 
 // originGuard is the DNS-rebinding defense the Streamable HTTP transport
-// requires and mcp-go does not enforce. A request with no Origin passes
-// through. Origins match as RFC 6454 serialises them, so "*" admits nothing:
-// every call is a POST that may write, and a wildcard is not trusted for that.
+// requires. It reads Origin, not Host, so it holds behind a proxy. A request
+// with no Origin passes. Origins match as RFC 6454 serialises them, so "*"
+// admits nothing: a wildcard is not trusted with POSTs that may write.
 func (s *Server) originGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -608,13 +635,10 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	})
 }
 
-// writeUnauthorized answers a missing or unusable bearer token. JSON-RPC has no
-// envelope for a transport-level refusal, so this is a bare 401 carrying the
-// challenge that names where a token for this resource comes from.
-//
-// An empty errorCode omits the error parameter, which is what RFC 6750 §3.1 asks
-// for when the request carried no credential: there is nothing wrong with a token
-// that was never sent.
+// writeUnauthorized answers a missing or unusable bearer token with a bare 401
+// carrying the challenge, since JSON-RPC has no envelope for a transport-level
+// refusal. An empty errorCode omits the error parameter, as RFC 6750 §3.1 asks
+// when the request carried no credential.
 func (s *Server) writeUnauthorized(w http.ResponseWriter, errorCode string) {
 	w.Header().Set("WWW-Authenticate", s.oauth.UnauthorizedHeader(s.resource, errorCode))
 	w.WriteHeader(http.StatusUnauthorized)
@@ -695,16 +719,12 @@ func (s *Server) toolVisibilityFor(ctx context.Context) toolVisibility {
 
 	return toolVisibility{
 		allow: func(name string) bool {
-			spec, gated := toolACLSpecs[name]
-			if !gated {
+			gate := s.toolGates[name]
+			if gate == (toolGate{}) {
 				return true
 			}
-			if spec.resourceType == "*" {
-				// Tool acts across all types — visible if any grant exists.
-				return access.HasAnyGrant()
-			}
 
-			return access.Can(spec.permission, spec.resourceType)
+			return access.Can(gate.permission, gate.resourceType)
 		},
 		readable: func(resourceType string) bool {
 			return access.Can("read", resourceType)
@@ -722,7 +742,7 @@ func (s *Server) filterToolsForIdentity(ctx context.Context, tools []mcplib.Tool
 		return tools
 	}
 
-	return filterToolsByACLSpec(tools, visibility.allow)
+	return filterToolsByGate(tools, visibility.allow)
 }
 
 // filterPromptsForIdentity gates prompts/list, and prompts/get through the
@@ -788,45 +808,7 @@ func allTypesReadable(types []string, readable func(resourceType string) bool) b
 	return true
 }
 
-// toolACLSpec describes the resource type and permission required to call a
-// tool. Used by filterToolsForIdentity to decide whether to surface the tool
-// in tools/list. Tools not present in toolACLSpecs are always visible.
-type toolACLSpec struct {
-	resourceType string
-	permission   string
-}
-
-// toolACLSpecs maps tool names to the ACL key they evaluate at call time.
-// Keep aligned with the handlers in tools.go — adding a tool without an
-// entry here defaults to "always visible", which is safe (call-time ACL still
-// enforces) but means tools/list may advertise tools the caller cannot use.
-var toolACLSpecs = map[string]toolACLSpec{
-	"get_logs":               {"service", "read"},
-	"watch":                  {"service", "read"},
-	"scale_service":          {"service", "write"},
-	"update_service_image":   {"service", "write"},
-	"rollback_service":       {"service", "write"},
-	"restart_service":        {"service", "write"},
-	"remove_task":            {"service", "write"}, // task ACL delegates to parent service
-	"update_service":         {"service", "write"},
-	"update_node_labels":     {"node", "write"},
-	"update_node":            {"node", "write"},
-	"remove_service":         {"service", "write"},
-	"update_service_secrets": {"service", "write"},
-	"update_service_configs": {"service", "write"},
-	"update_service_mounts":  {"service", "write"},
-	"create_config":          {"config", "write"},
-	"create_secret":          {"secret", "write"},
-	"remove_config":          {"config", "write"},
-	"remove_secret":          {"secret", "write"},
-	"remove_network":         {"network", "write"},
-	"remove_volume":          {"volume", "write"},
-	// "find" is intentionally absent — it returns hits across many types,
-	// each individually ACL-filtered, so it should remain visible even to
-	// callers with grants on only a subset.
-}
-
-func filterToolsByACLSpec(tools []mcplib.Tool, allow func(name string) bool) []mcplib.Tool {
+func filterToolsByGate(tools []mcplib.Tool, allow func(name string) bool) []mcplib.Tool {
 	out := make([]mcplib.Tool, 0, len(tools))
 	for _, t := range tools {
 		if allow(t.Name) {

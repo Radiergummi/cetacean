@@ -144,15 +144,8 @@ export function formatBytesPerSecond(bytes: number): string {
 /**
  * Locale-aware date string (e.g. "3/18/2026" or "18.03.2026").
  */
-export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
+function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   return new Date(date).toLocaleDateString(undefined, options);
-}
-
-/**
- * Locale-aware time string (e.g. "2:30:00 PM" or "14:30:00").
- */
-export function formatTime(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(date).toLocaleTimeString(undefined, options);
 }
 
 /**
@@ -219,4 +212,11 @@ function formatUnit(value: number, unit: string, maximumFractionDigits = 0): str
     unitDisplay: "narrow",
     maximumFractionDigits,
   }).format(value);
+}
+
+/**
+ * Format an optional boolean as "Yes" or "No", leaving an unset value unset.
+ */
+export function formatYesNo(value: boolean | undefined): string | undefined {
+  return value === undefined ? undefined : value ? "Yes" : "No";
 }

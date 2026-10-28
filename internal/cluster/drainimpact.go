@@ -8,18 +8,18 @@ import (
 
 // The condition of a service on the node being drained.
 const (
-	// drainStateMovable means at least one remaining node satisfies the
+	// DrainStateMovable means at least one remaining node satisfies the
 	// service's placement constraints.
-	drainStateMovable = "movable"
+	DrainStateMovable = "movable"
 
-	// drainStateStranded means none does. This is the answer the view exists
+	// DrainStateStranded means none does. This is the answer the view exists
 	// to give, and the vertex carries the blocking constraint as its detail.
-	drainStateStranded = "stranded"
+	DrainStateStranded = "stranded"
 
-	// drainStateGlobal means the service runs one task per node, so a drain
+	// DrainStateGlobal means the service runs one task per node, so a drain
 	// does not relocate its task — it simply stops running there. Neither
 	// "movable" nor "stranded" is true of it, and saying either would mislead.
-	drainStateGlobal = "global"
+	DrainStateGlobal = "global"
 )
 
 // DrainImpactGraph answers "if I drain this node, what moves — and what
@@ -97,7 +97,7 @@ func DrainImpactGraph(
 			Label:  n.Description.Hostname,
 			Type:   "node",
 			Detail: string(n.Spec.Role),
-			State:  deriveNodeState(n),
+			State:  DeriveNodeState(n),
 		})
 	}
 
@@ -151,7 +151,7 @@ func placementFor(
 	placed map[string]int,
 ) (state, detail string, accepted []string) {
 	if svc.Spec.Mode.Global != nil {
-		return drainStateGlobal, "one task per node; draining stops it here rather than moving it", nil
+		return DrainStateGlobal, "one task per node; draining stops it here rather than moving it", nil
 	}
 
 	placement := svc.Spec.TaskTemplate.Placement
@@ -183,7 +183,7 @@ func placementFor(
 			}
 
 			if free < uint64(running) {
-				return drainStateStranded, fmt.Sprintf(
+				return DrainStateStranded, fmt.Sprintf(
 					"%d task(s) here, but the %d candidate node(s) have room for %d "+
 						"between them: at most %d replica(s) per node",
 					running, len(accepted), free, placement.MaxReplicas,
@@ -191,15 +191,15 @@ func placementFor(
 			}
 		}
 
-		return drainStateMovable, fmt.Sprintf(
+		return DrainStateMovable, fmt.Sprintf(
 			"%d task(s) here; %d node(s) can take them",
 			running, len(accepted),
 		), accepted
 	}
 
 	if blocked != "" {
-		return drainStateStranded, blocked, nil
+		return DrainStateStranded, blocked, nil
 	}
 
-	return drainStateStranded, "no other node is ready and active", nil
+	return DrainStateStranded, "no other node is ready and active", nil
 }

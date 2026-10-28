@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -26,7 +27,12 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		limit = h.cache.History().Size()
 	}
 	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			problem.Write(w, r, "API016", errInvalidLimit.Error())
+			return
+		}
+		if n <= 200 {
 			limit = n
 		}
 	}
@@ -34,13 +40,23 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	// reaches it and a caller holding a name would read an empty timeline.
 	resourceType := q.Get("type")
 
-	resourceID, err := cluster.ResolveIdentifier(h.cache, resourceType, q.Get("resourceId"))
+	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+
+	resourceID, err := cluster.ResolveIdentifier(
+		h.cache, resourceType, q.Get("resourceId"), canRead,
+	)
 	if h.reportAmbiguousName(w, r, resourceType, err) {
 		return
 	}
 
 	// Paged by cursor, as the feeds are: the ring moves under an offset.
-	beforeID, _ := strconv.ParseUint(q.Get("before"), 10, 64)
+	var beforeID uint64
+	if v := q.Get("before"); v != "" {
+		if beforeID, err = strconv.ParseUint(v, 10, 64); err != nil {
+			problem.Write(w, r, "API016", errInvalidBefore.Error())
+			return
+		}
+	}
 
 	query := cache.HistoryQuery{
 		Type:         cache.EventType(resourceType),
@@ -63,11 +79,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		entries = []cache.HistoryEntry{}
 	}
 
-	entries = cluster.NameHistoryTasks(
-		h.cache,
-		entries,
-		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
-	)
+	entries = cluster.NameHistoryTasks(h.cache, entries, canRead)
 
 	if wantCSV {
 		writeCSV(w, r, "history", csvTableForHistory(entries))

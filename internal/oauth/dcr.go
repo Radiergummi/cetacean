@@ -331,11 +331,9 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validate token_endpoint_auth_method. Only "none" is supported, and the
-	// check is against that rather than against the methods we refuse: an
-	// unrecognised one was being stored verbatim and then treated as public,
-	// which both leaves the client believing it authenticates and puts an
-	// unbounded string in the state file.
+	// Only "none" is supported. Check for it rather than against the refused
+	// methods, or an unrecognised one is stored verbatim (unbounded, in the
+	// state file) and treated as public while the client thinks it authenticates.
 	authMethod := req.TokenEndpointAuthMethod
 	if authMethod == "" {
 		authMethod = "none"

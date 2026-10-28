@@ -2,7 +2,10 @@ package recommendations
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
@@ -197,6 +200,92 @@ func TestConfigChecker_AllRecsHaveScopeService(t *testing.T) {
 
 		if r.FixAction != nil {
 			t.Errorf("expected nil FixAction, got %v", r.FixAction)
+		}
+	}
+}
+
+func TestConfigChecker_UnusedVersion(t *testing.T) {
+	day := func(n int) swarm.Meta {
+		return swarm.Meta{CreatedAt: time.Date(2026, 1, n, 0, 0, 0, 0, time.UTC)}
+	}
+
+	c := cache.New(nil)
+	for i, name := range []string{"db_v1", "db_v2", "db_v3", "lone_v1"} {
+		c.SetSecret(swarm.Secret{
+			ID:   fmt.Sprint("s", i+1),
+			Meta: day(i + 1),
+			Spec: swarm.SecretSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+	for i, name := range []string{"app_0a1b2c3d", "app_4e5f6a7b"} {
+		c.SetConfig(swarm.Config{
+			ID:   fmt.Sprint("c", i+1),
+			Meta: day(i + 1),
+			Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: name}},
+		})
+	}
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: "s2"}},
+				},
+			},
+		},
+	})
+
+	got := map[string]Recommendation{}
+	for _, r := range NewConfigChecker(c).Check(context.Background()) {
+		if r.Category == CategoryUnusedVersion {
+			got[r.TargetID] = r
+		}
+	}
+
+	// Neither the newest nor a version a service still uses is flagged.
+	if len(got) != 2 {
+		t.Fatalf("expected findings for db_v1 and app_0a1b2c3d, got %+v", got)
+	}
+
+	sec := got["s1"]
+	if sec.Scope != ScopeSecret || sec.Severity != SeverityInfo || sec.TargetName != "db_v1" {
+		t.Errorf("unexpected secret finding %+v", sec)
+	}
+
+	// The finding discloses that db_v3 exists, so reading it takes db_v3 too.
+	if !slices.Equal(sec.Reveals, []string{"secret:db_v3"}) {
+		t.Errorf("Reveals = %v, want the newest version", sec.Reveals)
+	}
+
+	cfg := got["c1"]
+	if cfg.Scope != ScopeConfig || cfg.TargetName != "app_0a1b2c3d" {
+		t.Errorf("unexpected config finding %+v", cfg)
+	}
+
+	// A version a service's previous spec names is what a rollback restores.
+	c.SetService(swarm.Service{
+		ID: "svc",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "api"},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: "s2"}},
+				},
+			},
+		},
+		PreviousSpec: &swarm.ServiceSpec{
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Secrets: []*swarm.SecretReference{{SecretID: "s1"}},
+				},
+			},
+		},
+	})
+
+	for _, r := range NewConfigChecker(c).Check(context.Background()) {
+		if r.Category == CategoryUnusedVersion && r.TargetID == "s1" {
+			t.Errorf("flagged the rollback target db_v1: %+v", r)
 		}
 	}
 }

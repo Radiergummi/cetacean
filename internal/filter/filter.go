@@ -45,6 +45,7 @@ var (
 	Networks = newEnv(NetworkEnv)
 	Volumes  = newEnv(VolumeEnv)
 	Stacks   = newEnv(StackEnv)
+	Ports    = newEnv(PortEnv)
 )
 
 // Compile parses and type-checks a filter expression against env. It returns
@@ -361,25 +362,17 @@ func StackEnv(s cache.Stack, m map[string]any) map[string]any {
 	return m
 }
 
-// ResourceEnv builds an expression environment from an interface{} resource,
-// as stored in cache.Event.Resource. Returns nil for unrecognized types.
-func ResourceEnv(resource any) map[string]any {
-	switch r := resource.(type) {
-	case swarm.Node:
-		return NodeEnv(r, nil)
-	case swarm.Service:
-		return ServiceEnv(r, nil)
-	case swarm.Task:
-		return TaskEnv(r, nil)
-	case swarm.Config:
-		return ConfigEnv(r, nil)
-	case swarm.Secret:
-		return SecretEnv(r, nil)
-	case network.Summary:
-		return NetworkEnv(r, nil)
-	case volume.Volume:
-		return VolumeEnv(r, nil)
-	default:
-		return nil
+// PortEnv builds an expression environment from a published port.
+func PortEnv(p cache.PublishedPort, m map[string]any) map[string]any {
+	if m == nil {
+		m = make(map[string]any, 7)
 	}
+	m["published"] = int(p.PublishedPort)
+	m["target"] = int(p.TargetPort)
+	m["protocol"] = string(p.Protocol)
+	m["mode"] = string(p.PublishMode)
+	m["service"] = p.ServiceName
+	m["stack"] = p.Stack
+	m["nodes"] = len(p.Nodes)
+	return m
 }

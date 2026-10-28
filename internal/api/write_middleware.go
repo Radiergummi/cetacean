@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -35,7 +36,7 @@ func (h *Handlers) requireLevel(required config.OperationsLevel) Constructor {
 				return
 			}
 
-			writeErrorCode(w, r, "OPS001",
+			problem.Write(w, r, "OPS001",
 				"this operation requires operations level "+strconv.Itoa(int(required))+
 					", but the caller is at level "+strconv.Itoa(int(h.levelFor(r))))
 		})
@@ -70,7 +71,7 @@ func (h *Handlers) requireWriteACL(
 			resource := resourceFunc(r)
 			id := auth.IdentityFromContext(r.Context())
 			if !h.acl.Can(id, "write", resource) {
-				writeErrorCode(w, r, "ACL002", "write access denied")
+				problem.Write(w, r, "ACL002", "write access denied")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -80,20 +81,29 @@ func (h *Handlers) requireWriteACL(
 
 // --- ACL resource resolvers ---
 
-// resolveResource returns a resolver that looks up a resource by the "id" path
-// value, extracts its name, and returns "type:name" (falling back to "type:id").
-func resolveResource[T any](
-	resourceType string,
-	get func(string) (T, bool),
-	name func(T) string,
-) func(*http.Request) string {
+// writeResource returns a resolver naming the resource a write to the kind
+// the "id" path value addresses is checked against, or "kind:id" for one the
+// cache does not hold.
+func (h *Handlers) writeResource(kind string) func(*http.Request) string {
 	return func(r *http.Request) string {
 		id := r.PathValue("id")
-		if obj, ok := get(id); ok {
-			return resourceType + ":" + name(obj)
+
+		// Only a task addressed by name consults the reader, so the caller's
+		// grants are collected for that alone.
+		var checker func(string) bool
+		canRead := func(resource string) bool {
+			if checker == nil {
+				checker = h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+			}
+
+			return checker(resource)
 		}
 
-		return resourceType + ":" + id
+		if record, found, _ := cluster.LookupAs(h.cache, kind, id, canRead); found {
+			return record.WriteResource()
+		}
+
+		return kind + ":" + id
 	}
 }
 
@@ -118,19 +128,4 @@ func swarmResource(_ *http.Request) string {
 // Prefers "node:<hostname>", falls back to "node:<id>" if hostname is empty.
 func nodeResource(n swarm.Node) string {
 	return "node:" + cluster.NodeACLName(n)
-}
-
-// taskServiceResource resolves a task to its parent service for ACL checks.
-func (h *Handlers) taskServiceResource(r *http.Request) string {
-	id := r.PathValue("id")
-	if t, ok := h.cache.GetTask(id); ok {
-		if svc, ok := h.cache.GetService(t.ServiceID); ok {
-			return "service:" + svc.Spec.Name
-		}
-		// Task found but service missing (orphaned): preserve service type
-		// so service:* grants still match via the evaluator.
-		return "service:" + t.ServiceID
-	}
-
-	return "task:" + id
 }

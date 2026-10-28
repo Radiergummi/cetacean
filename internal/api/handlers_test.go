@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -23,10 +24,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
-
-func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
-	http.Error(w, detail, http.StatusInternalServerError)
-}
 
 func closedReady() <-chan struct{} {
 	ch := make(chan struct{})
@@ -182,7 +179,11 @@ func TestHandleReady_Ready(t *testing.T) {
 
 func TestHandleCluster(t *testing.T) {
 	c := cache.New(nil)
-	c.SetNode(swarm.Node{ID: "n1"})
+	c.SetNode(swarm.Node{
+		ID:            "n1",
+		Spec:          swarm.NodeSpec{Role: swarm.NodeRoleManager},
+		ManagerStatus: &swarm.ManagerStatus{Reachability: swarm.ReachabilityReachable},
+	})
 	c.SetService(swarm.Service{ID: "s1"})
 	h := newTestHandlers(t, withCache(c))
 
@@ -210,6 +211,11 @@ func TestHandleCluster(t *testing.T) {
 			body["nodeCount"],
 			body["serviceCount"],
 		)
+	}
+
+	quorum, _ := body["quorum"].(map[string]any)
+	if quorum["managers"] != 1.0 || quorum["reachable"] != 1.0 || quorum["size"] != 1.0 {
+		t.Errorf("quorum = %v, want one reachable manager of quorum 1", body["quorum"])
 	}
 }
 
@@ -546,6 +552,7 @@ func TestHandleGetNode_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	assertDetailNames(t, w.Body.Bytes(), "/nodes/n1", "node", "n1")
 }
 
 func TestHandleServiceTasks(t *testing.T) {
@@ -832,6 +839,7 @@ func TestHandleGetService_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	assertDetailNames(t, w.Body.Bytes(), "/services/svc1", "service", "svc1")
 }
 
 func TestHandleGetTask_Found(t *testing.T) {
@@ -847,6 +855,7 @@ func TestHandleGetTask_Found(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
+	assertDetailNames(t, w.Body.Bytes(), "/tasks/t1", "task", "t1")
 }
 
 func TestHandleListTasks(t *testing.T) {
@@ -1085,6 +1094,9 @@ func TestHandleGetStack_Found(t *testing.T) {
 	if wrapper.Type != "Stack" {
 		t.Errorf("@type=%s, want Stack", wrapper.Type)
 	}
+	if wrapper.ID != "/stacks/mystack" {
+		t.Errorf("@id=%s, want /stacks/mystack", wrapper.ID)
+	}
 }
 
 func TestHandleListConfigs(t *testing.T) {
@@ -1205,13 +1217,12 @@ func TestHandleHistory_InvalidLimit(t *testing.T) {
 	)
 	h := newTestHandlers(t, withCache(c))
 
-	// invalid limit should fall back to default (50)
 	req := httptest.NewRequest("GET", "/history?limit=abc", nil)
 	w := httptest.NewRecorder()
 	h.HandleHistory(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 
@@ -2174,6 +2185,9 @@ func TestHandleGetConfig_Found(t *testing.T) {
 	if resp.Type != "Config" {
 		t.Errorf("@type=%s, want Config", resp.Type)
 	}
+	if resp.ID != "/configs/cfg1" {
+		t.Errorf("@id=%s, want /configs/cfg1", resp.ID)
+	}
 }
 
 func TestHandleGetSecret_Found(t *testing.T) {
@@ -2217,6 +2231,9 @@ func TestHandleGetSecret_Found(t *testing.T) {
 	if resp.Type != "Secret" {
 		t.Errorf("@type=%s, want Secret", resp.Type)
 	}
+	if resp.ID != "/secrets/sec1" {
+		t.Errorf("@id=%s, want /secrets/sec1", resp.ID)
+	}
 }
 
 func TestHandleGetNetwork_Found(t *testing.T) {
@@ -2255,6 +2272,9 @@ func TestHandleGetNetwork_Found(t *testing.T) {
 	}
 	if resp.Type != "Network" {
 		t.Errorf("@type=%s, want Network", resp.Type)
+	}
+	if resp.ID != "/networks/net1" {
+		t.Errorf("@id=%s, want /networks/net1", resp.ID)
 	}
 }
 
@@ -2296,6 +2316,9 @@ func TestHandleGetVolume_Found(t *testing.T) {
 	}
 	if resp.Type != "Volume" {
 		t.Errorf("@type=%s, want Volume", resp.Type)
+	}
+	if resp.ID != "/volumes/data-vol" {
+		t.Errorf("@id=%s, want /volumes/data-vol", resp.ID)
 	}
 }
 
@@ -2576,5 +2599,95 @@ func TestHandleGetService_NoIntegrationsField(t *testing.T) {
 	}
 	if _, ok := body["integrations"]; ok {
 		t.Error("expected no integrations field when none detected")
+	}
+}
+
+func TestHandleGetService_Links(t *testing.T) {
+	c := cache.New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	svc.Spec.Labels = map[string]string{
+		"cetacean.link.grafana":       "https://grafana.example.com/d/web",
+		"cetacean.link.grafana.title": "Dashboard",
+		"cetacean.link.oncall":        "pager:web-team",
+	}
+	c.SetService(svc)
+	h := newTestHandlers(t, withCache(c))
+
+	req := httptest.NewRequest("GET", "/services/svc1", nil)
+	req.SetPathValue("id", "svc1")
+	w := httptest.NewRecorder()
+	h.HandleGetService(w, req)
+
+	var body struct {
+		Links []cluster.ServiceLink `json:"links"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	want := []cluster.ServiceLink{
+		{ID: "grafana", Title: "Dashboard", Href: "https://grafana.example.com/d/web"},
+		{ID: "oncall", Title: "oncall", Text: "pager:web-team"},
+	}
+	if !reflect.DeepEqual(body.Links, want) {
+		t.Errorf("links = %+v, want %+v", body.Links, want)
+	}
+}
+
+func TestHandleGetStack_LinksAreTheUnionOfItsServices(t *testing.T) {
+	c := cache.New(nil)
+	for _, id := range []string{"svc1", "svc2"} {
+		svc := swarm.Service{ID: id}
+		svc.Spec.Name = id
+		svc.Spec.Labels = map[string]string{
+			"com.docker.stack.namespace": "mystack",
+			"cetacean.link.repo":         "https://git.example.com/mystack",
+		}
+		c.SetService(svc)
+	}
+	h := newTestHandlers(t, withCache(c))
+
+	req := httptest.NewRequest("GET", "/stacks/mystack", nil)
+	req.SetPathValue("name", "mystack")
+	w := httptest.NewRecorder()
+	h.HandleGetStack(w, req)
+
+	var body struct {
+		Links []cluster.ServiceLink `json:"links"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	want := []cluster.ServiceLink{
+		{
+			ID: "repo", Title: "repo", Href: "https://git.example.com/mystack",
+			Services: []string{"svc1", "svc2"},
+		},
+	}
+	if !reflect.DeepEqual(body.Links, want) {
+		t.Errorf("links = %+v, want %+v", body.Links, want)
+	}
+}
+
+// assertDetailNames checks that a detail body is about the resource the path
+// asked for: its @id, and the ID inside the embedded resource.
+func assertDetailNames(t *testing.T, body []byte, wantPath, member, wantID string) {
+	t.Helper()
+
+	var resp map[string]json.RawMessage
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+
+	var id string
+	if err := json.Unmarshal(resp["@id"], &id); err != nil || id != wantPath {
+		t.Errorf("@id=%s, want %s", resp["@id"], wantPath)
+	}
+
+	var resource struct{ ID string }
+	if err := json.Unmarshal(resp[member], &resource); err != nil || resource.ID != wantID {
+		t.Errorf("%s.ID=%q, want %q (err=%v)", member, resource.ID, wantID, err)
 	}
 }

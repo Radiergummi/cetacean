@@ -8,9 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	cerrdefs "github.com/containerd/errdefs"
-
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -37,7 +36,7 @@ type createDataResourceSpec struct {
 		labels map[string]string,
 		data []byte,
 	) (string, error)
-	buildFallback func(id string, name string) any
+	buildFallback func(id, name string, labels map[string]string) any
 	buildResponse func(id string) (any, bool)
 }
 
@@ -61,38 +60,33 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 	}
 
 	if strings.TrimSpace(req.Name) == "" {
-		writeErrorCode(w, r, spec.nameErrCode, "name is required")
+		problem.Write(w, r, spec.nameErrCode, "name is required")
 		return
 	}
 
 	if !spec.acl.Can(identity, "write", spec.resource+":"+req.Name) {
-		writeErrorCode(w, r, "ACL002", "write access denied")
+		problem.Write(w, r, "ACL002", "write access denied")
 		return
 	}
 
 	if err := cluster.CheckStackLabel(nil, labels, func(resource string) bool {
 		return spec.acl.Can(identity, "write", resource)
 	}); err != nil {
-		writeErrorCode(w, r, "ACL002", err.Error())
+		writeResourceError(w, r, err, spec.resource, req.Name, spec.conflictCode)
 		return
 	}
 
 	data, err := base64.StdEncoding.DecodeString(req.Data)
 	if err != nil {
-		writeErrorCode(w, r, spec.nameErrCode, "data must be valid base64")
+		problem.Write(w, r, spec.nameErrCode, "data must be valid base64")
 		return
 	}
 
-	slog.Info("creating "+spec.resource, "name", req.Name)
+	slog.InfoContext(r.Context(), "creating "+spec.resource, "name", req.Name)
 
 	id, err := spec.create(r.Context(), req.Name, labels, data)
 	if err != nil {
-		if cerrdefs.IsConflict(err) {
-			writeErrorCode(w, r, spec.conflictCode, err.Error())
-			return
-		}
-
-		writeDockerError(w, r, err, spec.resource, req.Name)
+		writeResourceError(w, r, err, spec.resource, req.Name, spec.conflictCode)
 		return
 	}
 
@@ -100,7 +94,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		// The secret exists either way; a failure here only leaves the agent
 		// asking again, so it is logged rather than turned into an error.
 		if err := spec.entries.Complete(req.Elicitation, entrySubject(identity), id); err != nil {
-			slog.Warn("secret created but its entry could not be completed",
+			slog.WarnContext(r.Context(), "secret created but its entry could not be completed",
 				"secret", req.Name, "error", err)
 		}
 	}
@@ -114,7 +108,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 
 	resp, ok := spec.buildResponse(id)
 	if !ok {
-		resp = spec.buildFallback(id, req.Name)
+		resp = spec.buildFallback(id, req.Name, labels)
 	}
 
 	writeJSONStatus(
@@ -134,7 +128,7 @@ func openEntry(
 	req createResourceRequest,
 ) (cluster.SecretEntry, bool) {
 	if spec.entries == nil {
-		writeErrorCode(w, r, spec.nameErrCode, "only a secret is created from an elicitation")
+		problem.Write(w, r, spec.nameErrCode, "only a secret is created from an elicitation")
 		return cluster.SecretEntry{}, false
 	}
 
@@ -144,7 +138,7 @@ func openEntry(
 	}
 
 	if req.Name != "" && req.Name != entry.Name {
-		writeErrorCode(w, r, spec.nameErrCode,
+		problem.Write(w, r, spec.nameErrCode,
 			"name must be the one the elicitation asked for, "+entry.Name)
 		return cluster.SecretEntry{}, false
 	}
@@ -161,7 +155,7 @@ func lookupEntry(
 	id string,
 ) (cluster.SecretEntry, bool) {
 	if entries == nil {
-		writeErrorCode(w, r, "SEC006", "no such secret entry")
+		problem.Write(w, r, "SEC006", "no such secret entry")
 		return cluster.SecretEntry{}, false
 	}
 
@@ -169,11 +163,11 @@ func lookupEntry(
 
 	switch {
 	case errors.Is(err, cluster.ErrSecretEntrySubject):
-		writeErrorCode(w, r, "SEC007",
+		problem.Write(w, r, "SEC007",
 			"this secret entry was opened by someone else's MCP client")
 		return cluster.SecretEntry{}, false
 	case err != nil:
-		writeErrorCode(w, r, "SEC006", "no such secret entry, or it has expired")
+		problem.Write(w, r, "SEC006", "no such secret entry, or it has expired")
 		return cluster.SecretEntry{}, false
 	}
 

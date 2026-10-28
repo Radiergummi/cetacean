@@ -11,12 +11,20 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
 func newResourceTestServer(t *testing.T, c *cache.Cache, opts ...func(*Options)) *Server {
+	t.Helper()
+
+	return newSharedTestServer(t, core.New(c, nil), opts...)
+}
+
+// newSharedTestServer is newResourceTestServer over state the test also holds.
+func newSharedTestServer(t *testing.T, shared *core.Core, opts ...func(*Options)) *Server {
 	t.Helper()
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
@@ -24,11 +32,12 @@ func newResourceTestServer(t *testing.T, c *cache.Cache, opts ...func(*Options))
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		AuthMode:       "none",
+		Widgets:        testWidgets,
 	}
 	for _, fn := range opts {
 		fn(&o)
 	}
-	srv, err := New(c, o)
+	srv, err := New(shared, o)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -51,7 +60,7 @@ func TestReadServiceResource(t *testing.T) {
 
 	// A read of one resource serves the compact digest, not the raw
 	// swarm.Service it used to — the same shape the describe tool builds.
-	var digest cluster.Digest
+	var digest projection.Digest
 	if err := json.Unmarshal([]byte(body), &digest); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -153,7 +162,7 @@ func TestReadTaskNamesItsParents(t *testing.T) {
 		t.Fatalf("readResource: %v", err)
 	}
 
-	var digest cluster.Digest
+	var digest projection.Digest
 	if err := json.Unmarshal([]byte(body), &digest); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

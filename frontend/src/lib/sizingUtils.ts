@@ -2,9 +2,11 @@ import type { Recommendation, RecommendationSeverity } from "@/api/types";
 import { formatBytes, formatCores } from "@/lib/format";
 import { toneBanner, toneText } from "@/lib/statusColor";
 import {
+  Archive,
   ArrowUp,
   CloudDownload,
   Copy,
+  Network,
   RefreshCw,
   Scale,
   Shield,
@@ -60,6 +62,10 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
     return CloudDownload;
   }
 
+  if (category === "unused-version") {
+    return Archive;
+  }
+
   if (category === "flaky-service") {
     return RefreshCw;
   }
@@ -72,12 +78,21 @@ export function hintIcon(category: Recommendation["category"]): LucideIcon {
     return Copy;
   }
 
-  if (category === "manager-has-workloads") {
+  if (
+    category === "manager-has-workloads" ||
+    category === "single-manager" ||
+    category === "even-managers" ||
+    category === "quorum-at-risk"
+  ) {
     return Shield;
   }
 
   if (category === "uneven-distribution") {
     return Scale;
+  }
+
+  if (category === "network-addresses-low") {
+    return Network;
   }
 
   return TrendingDown;
@@ -139,6 +154,18 @@ export function recommendationLink(hint: Recommendation): string | null {
 
   if (hint.scope === "node") {
     return `/nodes/${hint.targetId}`;
+  }
+
+  if (hint.scope === "secret") {
+    return `/secrets/${hint.targetId}`;
+  }
+
+  if (hint.scope === "config") {
+    return `/configs/${hint.targetId}`;
+  }
+
+  if (hint.scope === "network") {
+    return `/networks/${hint.targetId}`;
   }
 
   return null;

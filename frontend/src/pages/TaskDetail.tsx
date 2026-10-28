@@ -1,8 +1,8 @@
 import { api } from "../api/client";
-import type { Node, Service, Task } from "../api/types";
+import type { Task } from "../api/types";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
+import DetailError from "../components/DetailError";
 import ErrorBoundary from "../components/ErrorBoundary";
-import FetchError from "../components/FetchError";
 import InfoCard from "../components/InfoCard";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
@@ -24,7 +24,7 @@ import {
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { useDetailResource } from "../hooks/useDetailResource";
+import { detailQueryKey, useDetailResource } from "../hooks/useDetailResource";
 import {
   isCadvisorReady,
   isPrometheusReady,
@@ -38,8 +38,8 @@ import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
 import { cpuGaugePercent, memoryGaugePercent } from "../lib/resourceGauge";
 import { isTerminalTaskState } from "../lib/taskState";
 import { escapePromQL } from "../lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 export default function TaskDetail() {
@@ -49,39 +49,30 @@ export default function TaskDetail() {
   const {
     data: task,
     error,
+    retry,
     allowedMethods,
   } = useDetailResource<Task>(id, api.task, "/tasks", { history: false });
 
-  const [service, setService] = useState<Service | null>(null);
-  const [node, setNode] = useState<Node | null>(null);
   const canRemove = allowedMethods.has("DELETE");
   const removal = useAsyncAction({ toast: true });
 
-  // Fetch service data once when we learn the ServiceID (stable for a task's lifetime)
+  // Keyed as the detail pages key them, so stepping between them is one request.
   const serviceId = task?.ServiceID;
-  useEffect(() => {
-    if (!serviceId) {
-      return;
-    }
-
-    api
-      .service(serviceId)
-      .then(({ data: { service } }) => setService(service))
-      .catch(console.warn);
-  }, [serviceId]);
+  const serviceQuery = useQuery({
+    queryKey: detailQueryKey("/services", serviceId),
+    queryFn: ({ signal }) => api.service(serviceId!, signal),
+    enabled: !!serviceId,
+  });
+  const service = serviceQuery.data?.data.service ?? null;
 
   // Node capacity is used as the gauge denominator when no per-task limit is set.
   const nodeId = task?.NodeID;
-  useEffect(() => {
-    if (!nodeId) {
-      return;
-    }
-
-    api
-      .node(nodeId)
-      .then(({ data }) => setNode(data))
-      .catch(console.warn);
-  }, [nodeId]);
+  const nodeQuery = useQuery({
+    queryKey: detailQueryKey("/nodes", nodeId),
+    queryFn: ({ signal }) => api.node(nodeId!, signal),
+    enabled: !!nodeId,
+  });
+  const node = nodeQuery.data?.data ?? null;
 
   function executeRemove() {
     if (!id) {
@@ -104,7 +95,13 @@ export default function TaskDetail() {
   const myMetrics = id ? taskMetrics[id] : undefined;
 
   if (error) {
-    return <FetchError message="Failed to load task" />;
+    return (
+      <DetailError
+        error={error}
+        fallback="Failed to load task"
+        onRetry={retry}
+      />
+    );
   }
   if (!task) {
     return <LoadingDetail />;

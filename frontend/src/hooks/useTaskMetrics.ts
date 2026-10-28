@@ -1,4 +1,5 @@
-import { useMetricsMap, type MetricsMapSpec } from "./useMetricsMap";
+import { useMetricsMapsResult, type MetricsMapResult, type MetricsMapSpec } from "./useMetricsMap";
+import { useMemo } from "react";
 
 export interface TaskMetricsData {
   cpu: number[];
@@ -40,11 +41,25 @@ export function useTaskMetrics(
   enabled: boolean,
   refreshInterval = 30_000,
 ): Record<string, TaskMetricsData> {
-  return useMetricsMap(
-    "task-metrics-" + filter,
-    buildSpec(filter),
-    enabled && !!filter,
-    refreshInterval,
-    60,
+  const filters = useMemo(() => (filter ? [filter] : []), [filter]);
+
+  return useTaskMetricsResult(filters, enabled, refreshInterval).metrics;
+}
+
+/**
+ * Task metrics across several filters, each its own cached pair of queries,
+ * with the error of the first that failed.
+ */
+export function useTaskMetricsResult(
+  filters: readonly string[],
+  enabled: boolean,
+  refreshInterval = 30_000,
+): MetricsMapResult<TaskMetricsData> {
+  const entries = useMemo(
+    () =>
+      filters.map((filter) => ({ cacheKey: `task-metrics-${filter}`, spec: buildSpec(filter) })),
+    [filters],
   );
+
+  return useMetricsMapsResult(entries, enabled && filters.length > 0, refreshInterval, 60);
 }

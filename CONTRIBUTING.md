@@ -27,9 +27,9 @@ Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so 
 ## Running checks
 
 ```bash
-make check       # Full suite: lint + type check + format check + tests + spec registry
+make check       # Full suite: lint + type check + format check + Go and frontend tests + spec registry
 make test        # Go tests only
-make lint        # golangci-lint + actionlint + zizmor + oxlint + Vale
+make lint        # golangci-lint + comment cap + actionlint + zizmor + oxlint + Vale
 make fmt         # Auto-format Go + frontend code
 make build       # Frontend, MCP widgets, and the binary that embeds them
 ```
@@ -55,6 +55,18 @@ Playwright suite (`make test-e2e`) at the environment.
 5. Run `make check` and ensure everything passes
 6. Commit with a descriptive message (see [Commit messages](#commit-messages))
 7. Open a pull request against `main`
+
+## Releases
+
+Maintainers only. A release is cut from `main`, in this order:
+
+1. Merge to `main` and push `main`
+2. Create a signed tag on a commit already on `main`: `git tag -s vX.Y.Z <commit>`, never `-a`
+3. Push the tag
+
+The tag must carry a signature GitHub can verify against a key on the tagger's account. The release
+workflow's `verify-tag` job refuses a lightweight tag, a tag GitHub shows as unverified, a tag moved
+since it was pushed, and a tag on a commit not on `main`.
 
 ## Commit messages
 

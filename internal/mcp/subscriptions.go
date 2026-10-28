@@ -45,10 +45,12 @@ func (sub subscription) keys() []subscriptionTarget {
 }
 
 // eventKey is an index key an event looks up. via is the ACL resource the
-// subscriber must also read, when the event reaches it through a parent.
+// subscriber must also read, when the event reaches it through a parent;
+// ownTarget asks instead that the subscriber may read what it subscribed to.
 type eventKey struct {
-	target subscriptionTarget
-	via    string
+	target    subscriptionTarget
+	via       string
+	ownTarget bool
 }
 
 // subscribableTypes is every resource type a cetacean://<type>s/<id> URI names.
@@ -117,9 +119,9 @@ func (s *Server) subscriptionFor(uri string, identity *auth.Identity) subscripti
 
 // eventKeys is every key an event reaches, as the REST stream for the same
 // resource sees it: a service or node with its tasks, a task by its slot name,
-// a stack with its members. Each lookup is by key, never a scan.
+// a stack with its members, a network with what moves its address figure.
 func (s *Server) eventKeys(event cache.Event) []eventKey {
-	keys := directEventKeys(event)
+	keys := append(directEventKeys(event), s.addressNetworkKeys(event)...)
 
 	switch event.Type {
 	case cache.EventTask:
@@ -136,7 +138,28 @@ func (s *Server) eventKeys(event cache.Event) []eventKey {
 			keys = append(keys, stackKey(stack))
 		}
 
+		versionEvent := event.Type == cache.EventConfig || event.Type == cache.EventSecret
+		if versionEvent && s.notifications.watchesVersions() {
+			configs, secrets := s.versions.DigestsTouchedBy(event)
+			keys = append(keys, refKeys(cache.EventConfig, configs)...)
+			keys = append(keys, refKeys(cache.EventSecret, secrets)...)
+		}
+
 	case cache.EventNode, cache.EventStack, cache.EventSync:
+	}
+
+	return keys
+}
+
+// refKeys reaches each config or secret by its ID and its name. The event's own
+// read check covers them: a digest counts only what its reader may read.
+func refKeys(typ cache.EventType, refs []cluster.VersionRef) []eventKey {
+	var keys []eventKey
+	for _, ref := range refs {
+		keys = append(keys, eventKey{target: subscriptionTarget{typ: typ, id: ref.ID}})
+		if ref.Name != "" {
+			keys = append(keys, eventKey{target: subscriptionTarget{typ: typ, id: ref.Name}})
+		}
 	}
 
 	return keys
@@ -197,6 +220,39 @@ func (s *Server) taskParentKeys(event cache.Event, task swarm.Task) []eventKey {
 		}
 	} else {
 		keys = append(keys, eventKey{target: node(task.NodeID)})
+	}
+
+	return keys
+}
+
+// addressNetworkKeys reaches the watched networks whose address figure the
+// event may move. Nothing is worked out while no network is watched, which is
+// the common case on a path every cache write takes.
+func (s *Server) addressNetworkKeys(event cache.Event) []eventKey {
+	watched := s.notifications.networkTargets()
+	if len(watched) == 0 {
+		return nil
+	}
+
+	addressNetworks := s.addressNetworks
+	if addressNetworks == nil {
+		addressNetworks = cluster.AddressNetworks
+	}
+
+	var keys []eventKey
+
+	for _, id := range addressNetworks(s.cache, event) {
+		keys = append(keys, eventKey{
+			target:    subscriptionTarget{typ: cache.EventNetwork, id: id},
+			ownTarget: true,
+		})
+
+		if net, ok := s.cache.GetNetwork(id); ok && net.Name != "" {
+			keys = append(keys, eventKey{
+				target:    subscriptionTarget{typ: cache.EventNetwork, id: net.Name},
+				ownTarget: true,
+			})
+		}
 	}
 
 	return keys
@@ -271,36 +327,11 @@ func (s *Server) resolveTarget(
 	identity *auth.Identity,
 	target subscriptionTarget,
 ) (string, string, bool) {
-	prefix := string(target.typ) + ":"
+	record, found, _ := cluster.LookupAs(
+		s.cache, string(target.typ), target.id, s.readerFor(identity),
+	)
 
-	switch target.typ {
-	case cache.EventService:
-		svc, ok, _ := s.cache.ResolveService(target.id)
-		return svc.ID, prefix + svc.Spec.Name, ok
-	case cache.EventNode:
-		node, ok, _ := s.cache.ResolveNode(target.id)
-		return node.ID, prefix + cluster.NodeACLName(node), ok
-	case cache.EventTask:
-		task, ok, _ := s.resolveTaskAs(identity, target.id)
-		return task.ID, prefix + task.ID, ok
-	case cache.EventConfig:
-		cfg, ok, _ := s.cache.ResolveConfig(target.id)
-		return cfg.ID, prefix + cfg.Spec.Name, ok
-	case cache.EventSecret:
-		sec, ok, _ := s.cache.ResolveSecret(target.id)
-		return sec.ID, prefix + sec.Spec.Name, ok
-	case cache.EventNetwork:
-		net, ok, _ := s.cache.ResolveNetwork(target.id)
-		return net.ID, prefix + net.Name, ok
-	case cache.EventStack:
-		_, ok := s.cache.GetStack(target.id)
-		return target.id, prefix + target.id, ok
-	case cache.EventVolume:
-		_, ok := s.cache.GetVolume(target.id)
-		return target.id, prefix + target.id, ok
-	default:
-		return "", "", false
-	}
+	return record.ID, record.Resource(), found
 }
 
 // targetReadable reports whether identity may read the subscribed resource

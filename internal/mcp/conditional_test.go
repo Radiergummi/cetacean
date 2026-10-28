@@ -380,3 +380,29 @@ func TestAVersionOnAnUnknownRecordIsRefused(t *testing.T) {
 		t.Errorf("err = %v, want a refusal before the write", err)
 	}
 }
+
+// A node without a hostname is authorized under its ID, and a stale-write
+// refusal names it the same way rather than as an empty string.
+func TestAStaleVersionNamesANodeWithoutAHostnameByItsID(t *testing.T) {
+	c := attachmentTestCache(t)
+	c.SetNode(swarm.Node{ID: "node1", Version: swarm.Version{Index: 9}})
+
+	f := &fakeWriteClient{}
+	f.updateNodeLabelsFn = func(
+		_ context.Context, id string, _ map[string]string,
+	) (swarm.Node, error) {
+		return swarm.Node{}, &docker.StaleVersionError{
+			Kind: "node", ID: id, Pinned: 9, Current: 77,
+		}
+	}
+
+	srv := newToolTestServer(t, c, f, config.OpsImpactful)
+	td, _ := srv.findTool("update_node_labels")
+
+	_, err := td.handler(context.Background(), newCallToolRequest("update_node_labels",
+		map[string]any{"id": "node1", "labels": map[string]any{"zone": "a"}, "version": float64(9)},
+	))
+	if err == nil || !strings.Contains(err.Error(), `node "node1" changed`) {
+		t.Errorf("err = %v, want the node named by its ID", err)
+	}
+}

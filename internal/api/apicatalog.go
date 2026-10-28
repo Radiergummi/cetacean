@@ -6,6 +6,7 @@ import (
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 const apiCatalogPath = "/.well-known/api-catalog"
@@ -136,7 +137,7 @@ func HandleAPICatalog(mounts catalogMounts) http.HandlerFunc {
 
 		body, err := json.Marshal(linkset.Document{Contexts: contexts})
 		if err != nil {
-			writeErrorCode(w, r, "API009", "failed to serialize response")
+			problem.Write(w, r, "API009", "failed to serialize response")
 
 			return
 		}

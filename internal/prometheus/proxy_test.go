@@ -1,15 +1,12 @@
 package prometheus
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
-
-func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
-	http.Error(w, detail, http.StatusBadRequest)
-}
 
 func TestMetricsProxyHandler_InstantQuery(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +20,7 @@ func TestMetricsProxyHandler_InstantQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
 	w := httptest.NewRecorder()
@@ -58,7 +55,7 @@ func TestMetricsProxyHandler_RangeQuery(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up&start=100&end=200&step=15", nil)
 	w := httptest.NewRecorder()
@@ -70,7 +67,7 @@ func TestMetricsProxyHandler_RangeQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
-	proxy := NewProxy("http://localhost:9090", noopErrorWriter)
+	proxy := NewProxy("http://localhost:9090")
 
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	w := httptest.NewRecorder()
@@ -82,9 +79,6 @@ func TestMetricsProxyHandler_MissingQuery(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_NilProxy(t *testing.T) {
-	nilProxyErrorWriter.Store(nil)
-	defer SetNilProxyErrorWriter(noopErrorWriter)
-
 	var proxy *Proxy
 
 	req := httptest.NewRequest("GET", "/metrics?query=up", nil)
@@ -106,7 +100,7 @@ func TestMetricsProxyHandler_Labels(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 	req := httptest.NewRequest("GET", "/metrics/labels", nil)
 	w := httptest.NewRecorder()
 	proxy.HandleMetricsLabels(w, req)
@@ -126,7 +120,7 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 	req := httptest.NewRequest("GET", "/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
 	w := httptest.NewRecorder()
@@ -138,9 +132,6 @@ func TestMetricsProxyHandler_LabelValues(t *testing.T) {
 }
 
 func TestMetricsProxyHandler_LabelValues_NilProxy(t *testing.T) {
-	nilProxyErrorWriter.Store(nil)
-	defer SetNilProxyErrorWriter(noopErrorWriter)
-
 	var proxy *Proxy
 	req := httptest.NewRequest("GET", "/metrics/labels/job", nil)
 	req.SetPathValue("name", "job")
@@ -165,7 +156,7 @@ func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
 	}))
 	defer prom.Close()
 
-	proxy := NewProxy(prom.URL, noopErrorWriter)
+	proxy := NewProxy(prom.URL)
 
 	req := httptest.NewRequest("GET", "/metrics?query=up%7B", nil)
 	w := httptest.NewRecorder()
@@ -177,6 +168,65 @@ func TestMetricsProxyHandler_ErrorOmitsThePrometheusURL(t *testing.T) {
 	}
 	if !strings.Contains(body, "parse error: unexpected end of input") {
 		t.Errorf("the error drops Prometheus's reason: %s", body)
+	}
+}
+
+// oversizedProm answers every query with a body one byte over the limit, with
+// or without announcing its length.
+func oversizedProm(announce bool) *httptest.Server {
+	body := bytes.Repeat([]byte("x"), maxResponseBytes+1)
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if !announce {
+			w.(http.Flusher).Flush()
+		}
+		w.Write(body)
+	}))
+}
+
+// A body past the limit is refused whole, before any status is sent, rather
+// than cut short under a 200 the client would read as invalid JSON.
+func TestMetricsProxyHandler_RefusesAnOversizedBody(t *testing.T) {
+	for _, announce := range []bool{true, false} {
+		prom := oversizedProm(announce)
+
+		w := httptest.NewRecorder()
+		NewProxy(prom.URL).HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		prom.Close()
+
+		if w.Code != http.StatusBadGateway ||
+			!strings.Contains(w.Body.String(), "/api/errors/MTR008") {
+			t.Errorf("Content-Length announced = %v: status %d, body %s; want 502 MTR008",
+				announce, w.Code, w.Body.String())
+		}
+	}
+}
+
+// A query Prometheus refuses is the caller's to fix, not an outage.
+func TestMetricsProxyHandler_RejectedQueryIsNotAnOutage(t *testing.T) {
+	for status, want := range map[int]struct {
+		status int
+		code   string
+	}{
+		http.StatusBadRequest:          {http.StatusBadRequest, "MTR009"},
+		http.StatusUnprocessableEntity: {http.StatusBadRequest, "MTR009"},
+		http.StatusServiceUnavailable:  {http.StatusBadGateway, "MTR002"},
+		http.StatusInternalServerError: {http.StatusBadGateway, "MTR002"},
+	} {
+		prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"too many points"}`))
+		}))
+
+		w := httptest.NewRecorder()
+		NewProxy(prom.URL).
+			HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		prom.Close()
+
+		if w.Code != want.status || !strings.Contains(w.Body.String(), "/api/errors/"+want.code) {
+			t.Errorf("HTTP %d: got %d %s, want %d %s", status, w.Code, w.Body.String(),
+				want.status, want.code)
+		}
 	}
 }
 
@@ -197,7 +247,7 @@ func TestMetricsProxyHandler_ForwardsTheUpstreamReasonOnlyFor4xx(t *testing.T) {
 		}))
 
 		w := httptest.NewRecorder()
-		NewProxy(prom.URL, noopErrorWriter).
+		NewProxy(prom.URL).
 			HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
 		prom.Close()
 

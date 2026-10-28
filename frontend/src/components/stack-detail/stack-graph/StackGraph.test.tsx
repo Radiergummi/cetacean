@@ -1,6 +1,6 @@
 import StackGraph from "./StackGraph";
 import type { StackDetail } from "@/api/types";
-import type { TaskCount } from "@/lib/stackGraph";
+import type { TaskCount } from "@/lib/serviceHealth";
 import { fireEvent, render } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -85,7 +85,7 @@ describe("StackGraph", () => {
     const service = container.querySelector('.react-flow__node[data-id="service:svc-web"]');
 
     expect(service?.textContent).toContain("1/2 running");
-    expect(service?.querySelector("[data-healthy]")).toBeNull();
+    expect(service?.querySelector("[data-health=warning]")).not.toBeNull();
   });
 
   it("dims what the focused node does not touch, and names it in the URL", () => {

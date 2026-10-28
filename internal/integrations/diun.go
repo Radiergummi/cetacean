@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -9,6 +10,7 @@ import (
 type DiunIntegration struct {
 	Name        string            `json:"name"`
 	Enabled     bool              `json:"enabled"`
+	Labels      []string          `json:"labels"`
 	WatchRepo   bool              `json:"watchRepo,omitempty"`
 	NotifyOn    string            `json:"notifyOn,omitempty"`
 	MaxTags     int               `json:"maxTags,omitempty"`
@@ -22,8 +24,6 @@ type DiunIntegration struct {
 }
 
 func detectDiun(labels map[string]string) *DiunIntegration {
-	var found bool
-
 	integration := &DiunIntegration{Name: "diun"}
 
 	for k, v := range labels {
@@ -32,7 +32,7 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 			continue
 		}
 
-		found = true
+		integration.Labels = append(integration.Labels, k)
 
 		switch suffix {
 		case "watch_repo":
@@ -65,9 +65,11 @@ func detectDiun(labels map[string]string) *DiunIntegration {
 		}
 	}
 
-	if !found {
+	if len(integration.Labels) == 0 {
 		return nil
 	}
+
+	slices.Sort(integration.Labels)
 
 	integration.Enabled = enabled(labels, "diun.")
 

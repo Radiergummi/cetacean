@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
@@ -63,7 +64,7 @@ var (
 			uri:         "cetacean://recommendations",
 			name:        "recommendations",
 			title:       "Cluster recommendations",
-			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution. Each entry includes severity, category, target resource, and rationale.",
+			description: "Currently surfaced recommendations from the built-in engine: right-sizing, missing health checks or restart policies, flaky services, single-replica risks, manager workload imbalance, uneven node distribution, unused old config and secret versions. Each entry includes severity, category, target resource, and rationale.",
 		},
 		{
 			uri:         "cetacean://history",
@@ -134,7 +135,7 @@ var (
 			uri:         "cetacean://networks/{id}",
 			name:        "network",
 			title:       "Network detail",
-			description: "Compact digest of one network by ID: driver, scope, subnets, the internal/attachable/ingress/IPv6 flags that decide whether a service could attach at all, stack, labels, and the services currently attached. Same shape the describe tool returns; subscribe for updates.",
+			description: "Compact digest of one network by ID: driver, scope, subnets, the internal/attachable/ingress/IPv6 flags that decide whether a service could attach at all, stack, labels, the services currently attached, and for a swarm overlay how many of its IPv4 addresses are usable and in use. Same shape the describe tool returns; subscribe for updates.",
 		},
 		{
 			uri:         "cetacean://volumes/{name}",
@@ -219,6 +220,8 @@ func (s *Server) readResourceContents(
 		return string(doc), composeMIMEType, nil
 	}
 
+	data = s.versionedListing(ctx, data)
+
 	// A read of one resource serves the same digest describe builds, through
 	// the same function: a subscription payload and a tool result must not
 	// differ. The URIs stay because they carry the subscriptions, which a tool
@@ -238,6 +241,26 @@ func (s *Server) readResourceContents(
 	}
 
 	return string(b), mcpMIMEType, nil
+}
+
+// versionedListing is what cetacean://configs and cetacean://secrets list:
+// what find lists by default, each group's newest readable version, with the
+// version fields its rows carry. Any other listing passes through.
+func (s *Server) versionedListing(ctx context.Context, listed any) any {
+	newest := cluster.VersionSelection{}
+
+	switch items := listed.(type) {
+	case []swarm.Config:
+		view := cluster.ConfigVersionView(s.cache, items, s.readPredicate(ctx))
+		return cluster.VersionedConfigs(view, items, newest)
+
+	case []swarm.Secret:
+		view := cluster.SecretVersionView(s.cache, items, s.readPredicate(ctx))
+		return cluster.VersionedSecrets(view, items, newest)
+
+	default:
+		return listed
+	}
 }
 
 // composeDoc renders the document both compose resources return.
@@ -276,7 +299,13 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		if err := s.requireAnyGrant(ctx); err != nil {
 			return nil, err
 		}
-		return newClusterOverview(s.cache.Snapshot()), nil
+		services := s.cache.ListServices()
+
+		return newClusterOverview(
+			s.cache.Snapshot(),
+			services,
+			s.cache.EligibleNodeCounts(services...),
+		), nil
 
 	case "recommendations":
 		if s.recEngine == nil {
@@ -394,7 +423,10 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 
 	case "networks":
 		if resourceID == "" {
-			return s.filterNetworks(ctx, s.cache.ListNetworks()), nil
+			return cluster.NetworkListItems(
+				s.filterNetworks(ctx, s.cache.ListNetworks()),
+				s.cache.NetworkAddresses(),
+			), nil
 		}
 		net, found, err := s.cache.ResolveNetwork(resourceID)
 		net, err = resolved(net, found, s.visibleAmbiguity(ctx, "network", err))(uri)

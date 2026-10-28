@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/xml"
 	"net/http"
+
+	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
 const (
@@ -80,7 +82,7 @@ func HandleOpenSearch(w http.ResponseWriter, r *http.Request) {
 
 	body, err := xml.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to serialize response")
+		problem.Write(w, r, "API009", "failed to serialize response")
 
 		return
 	}

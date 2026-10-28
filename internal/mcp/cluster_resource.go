@@ -3,8 +3,12 @@ package mcp
 import (
 	"time"
 
+	"github.com/docker/docker/api/types/swarm"
+
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
+	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // clusterOverview is the shape cetacean://cluster serves. cache.ClusterSnapshot
@@ -25,20 +29,29 @@ type clusterOverview struct {
 	ServicesConverged int `json:"servicesConverged"`
 	ServicesDegraded  int `json:"servicesDegraded"`
 
-	cluster.ClusterCapacity
+	projection.ClusterCapacity
 
 	MaxNodeCPUCores    float64 `json:"maxNodeCPUCores"`
 	MaxNodeMemoryBytes int64   `json:"maxNodeMemoryBytes"`
+
+	Quorum quorum.Quorum `json:"quorum"`
 
 	LastSync time.Time `json:"lastSync"`
 }
 
 // newClusterOverview converts a snapshot into the served shape. The per-node
-// maxima the snapshot has already divided down, so they are only widened.
-func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
+// maxima the snapshot has already divided down, so they are only widened. The
+// service counts all come from services, so the parts never exceed the total.
+func newClusterOverview(
+	snap cache.ClusterSnapshot,
+	services []swarm.Service,
+	eligible map[string]int,
+) clusterOverview {
+	converged, degraded := cluster.CountServiceStates(snap, services, eligible)
+
 	return clusterOverview{
 		NodeCount:    snap.NodeCount,
-		ServiceCount: snap.ServiceCount,
+		ServiceCount: len(services),
 		TaskCount:    snap.TaskCount,
 		StackCount:   snap.StackCount,
 		TasksByState: snap.TasksByState,
@@ -47,13 +60,15 @@ func newClusterOverview(snap cache.ClusterSnapshot) clusterOverview {
 		NodesDown:     snap.NodesDown,
 		NodesDraining: snap.NodesDraining,
 
-		ServicesConverged: snap.ServicesConverged,
-		ServicesDegraded:  snap.ServicesDegraded,
+		ServicesConverged: converged,
+		ServicesDegraded:  degraded,
 
-		ClusterCapacity: cluster.CapacityOf(snap),
+		ClusterCapacity: projection.CapacityOf(snap),
 
 		MaxNodeCPUCores:    float64(snap.MaxNodeCPU),
 		MaxNodeMemoryBytes: snap.MaxNodeMemory,
+
+		Quorum: snap.Quorum,
 
 		LastSync: snap.LastSync,
 	}

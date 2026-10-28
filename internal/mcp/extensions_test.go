@@ -8,6 +8,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
@@ -21,7 +22,7 @@ func TestTasksExtensionMatchesWiring(t *testing.T) {
 	_, env := mcpModern(t, handler, 1, "tasks/get", `{"taskId":"probe"}`)
 	served := env.Error == nil || env.Error.Code != mcplib.METHOD_NOT_FOUND
 
-	if _, advertised := serverExtensions()[extensionTasks]; advertised != served {
+	if _, advertised := serverExtensions(len(uiResources(testWidgets)) > 0)[extensionTasks]; advertised != served {
 		if advertised {
 			t.Fatalf("%s is advertised but tasks/get is unsupported: "+
 				"pair it with mcpserver.WithTaskCapabilities", extensionTasks)
@@ -63,7 +64,7 @@ func TestUIExtensionMatchesWiring(t *testing.T) {
 		}
 	}
 
-	if _, advertised := serverExtensions()[extensionUI]; advertised != registered {
+	if _, advertised := serverExtensions(len(uiResources(testWidgets)) > 0)[extensionUI]; advertised != registered {
 		if advertised {
 			t.Fatalf("%s is advertised but no resource declares %q: "+
 				"register the widget resources first", extensionUI, uiMIMEType)
@@ -94,14 +95,14 @@ func TestDiscoverAdvertisesExtensions(t *testing.T) {
 		t.Fatalf("decode server/discover: %v", err)
 	}
 
-	for name := range serverExtensions() {
+	for name := range serverExtensions(len(uiResources(testWidgets)) > 0) {
 		if _, ok := result.Capabilities.Extensions[name]; !ok {
 			t.Errorf("serverExtensions declares %q but server/discover does not advertise it", name)
 		}
 	}
 
 	for name := range result.Capabilities.Extensions {
-		if _, ok := serverExtensions()[name]; !ok {
+		if _, ok := serverExtensions(len(uiResources(testWidgets)) > 0)[name]; !ok {
 			t.Errorf("server/discover advertises %q, which serverExtensions does not declare", name)
 		}
 	}
@@ -115,22 +116,20 @@ var metaKeyRE = regexp.MustCompile(
 		`[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`,
 )
 
-// withWidget installs one widget bundle for the test, so the UI extension is
+// newWidgetTestServer serves one widget bundle, so the UI extension is
 // declared the way a build with widgets declares it.
-func withWidget(t *testing.T) {
+func newWidgetTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	previous := widgetFS
-	SetWidgetFS(fstest.MapFS{"table/index.html": {Data: []byte("<!doctype html>")}})
-	t.Cleanup(func() { SetWidgetFS(previous) })
+	return newResourceTestServer(t, cache.New(nil), func(o *Options) {
+		o.Widgets = fstest.MapFS{"table/index.html": {Data: []byte("<!doctype html>")}}
+	})
 }
 
 func TestExtensionIdentifiersFollowTheMetaKeyRules(t *testing.T) {
 	spec.Satisfies(t, "mcp/sep-2133/identifiers-follow-meta-naming")
 
-	withWidget(t)
-
-	_, env := mcpModern(t, newTestServer(t).Handler(), 1, "server/discover", `{}`)
+	_, env := mcpModern(t, newWidgetTestServer(t).Handler(), 1, "server/discover", `{}`)
 	if env.Error != nil {
 		t.Fatalf("server/discover error: %+v", env.Error)
 	}
@@ -161,9 +160,7 @@ func TestExtensionIdentifiersFollowTheMetaKeyRules(t *testing.T) {
 func TestAToolWithAWidgetAnswersAHostWithoutOneInText(t *testing.T) {
 	spec.Satisfies(t, "mcp/sep-2133/unsupported-extension-falls-back")
 
-	withWidget(t)
-
-	_, env := mcpModern(t, newTestServer(t).Handler(), 1, "tools/call",
+	_, env := mcpModern(t, newWidgetTestServer(t).Handler(), 1, "tools/call",
 		`{"name":"find","arguments":{"query":"web"}}`)
 	if env.Error != nil {
 		t.Fatalf("tools/call find: %+v", env.Error)

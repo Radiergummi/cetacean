@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -216,4 +221,142 @@ func TestDrainImpactAgreesAcrossTransports(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A task whose service is gone has no service name for a grant to match, so
+// both transports authorize its removal under the one key left, task:<id> —
+// under the shared policy and under a grant on services alone.
+func TestOrphanedTaskRemovalAgreesAcrossTransports(t *testing.T) {
+	const orphanID = "task-orphaned"
+
+	policies := map[string]string{
+		"dev-auth": aclPolicy,
+		"service-only": `
+grants:
+  - resources: ["service:*"]
+    audience: ["group:oncall"]
+    permissions: ["read", "write"]
+`,
+	}
+
+	for label, text := range policies {
+		t.Run(label, func(t *testing.T) {
+			w := NewWorld(t)
+			w.Cache.SetTask(swarm.Task{
+				ID:        orphanID,
+				ServiceID: "svc-removed",
+				NodeID:    SeededNodeID,
+				Status:    swarm.TaskStatus{State: swarm.TaskStateShutdown},
+			})
+
+			policy, err := acl.ParsePolicy([]byte(text))
+			if err != nil {
+				t.Fatalf("parse policy: %v", err)
+			}
+			w.ACL.SetPolicy(policy)
+
+			for _, persona := range PersonaNames() {
+				t.Run(persona, func(t *testing.T) {
+					overREST := removableOverREST(t, w, persona, orphanID)
+					overMCP := removableOverMCP(t, w, persona, orphanID)
+
+					if overREST != overMCP {
+						t.Fatalf("REST admitted = %t, MCP admitted = %t", overREST, overMCP)
+					}
+					if label == "service-only" && overREST {
+						t.Fatal("a service grant admitted a write on a task with no service")
+					}
+				})
+			}
+		})
+	}
+}
+
+// removableOverREST reports whether DELETE /tasks/{id} gets past authorization.
+// A mismatched If-Match is answered 412 only once the ACL has admitted the
+// caller, and stops the request before it reaches the absent Docker client.
+func removableOverREST(t *testing.T, w *World, persona, id string) bool {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodDelete, w.Server.URL+"/tasks/"+id, nil,
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("If-Match", `"mismatch"`)
+	setPersonaHeaders(t, req, persona)
+
+	resp, err := w.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /tasks/%s: %v", id, err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusPreconditionFailed:
+		return true
+	case http.StatusForbidden, http.StatusNotFound:
+		return false
+	default:
+		t.Fatalf("DELETE /tasks/%s as %s = %d; want 412, 403 or 404",
+			id, persona, resp.StatusCode)
+
+		return false
+	}
+}
+
+// removableOverMCP reports whether remove_task gets past authorization. The
+// world has no Docker client, so an admitted call fails on its absence. A tool
+// tools/list hides from the caller is refused before it is called.
+func removableOverMCP(t *testing.T, w *World, persona, id string) bool {
+	t.Helper()
+
+	listed, rpcErr := w.MCP(t, persona, "tools/list", nil)
+	if rpcErr != nil {
+		t.Fatalf("tools/list as %s: %s", persona, rpcErr.Message)
+	}
+
+	var catalog struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(listed, &catalog); err != nil {
+		t.Fatalf("decode tools/list: %v", err)
+	}
+
+	if !slices.ContainsFunc(catalog.Tools, func(tool struct {
+		Name string `json:"name"`
+	}) bool {
+		return tool.Name == "remove_task"
+	}) {
+		return false
+	}
+
+	result, rpcErr := w.MCP(t, persona, "tools/call", map[string]any{
+		"name":      "remove_task",
+		"arguments": map[string]any{"id": id},
+	})
+	if rpcErr != nil {
+		return false
+	}
+
+	var call struct {
+		IsError bool `json:"isError"`
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(result, &call); err != nil {
+		t.Fatalf("decode tools/call remove_task: %v", err)
+	}
+
+	if !call.IsError || len(call.Content) == 0 {
+		t.Fatalf("remove_task as %s succeeded without a Docker client", persona)
+	}
+
+	return strings.Contains(call.Content[0].Text, "no write client")
 }

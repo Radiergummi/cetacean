@@ -79,7 +79,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 0-49" },
+        headers: { Accept: "application/json", Range: "items=0-49" },
       }),
     );
   });
@@ -90,7 +90,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes?sort=hostname&dir=desc&search=web",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 0-49" },
+        headers: { Accept: "application/json", Range: "items=0-49" },
       }),
     );
   });
@@ -101,9 +101,29 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 50-99" },
+        headers: { Accept: "application/json", Range: "items=50-99" },
       }),
     );
+  });
+
+  it("pages through every version of one secret group", async () => {
+    const versions = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `s${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `db_v${from + index}` },
+        UsedBy: 0,
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: versions(0, 200), total: 230, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: versions(200, 30), total: 230, limit: 200, offset: 200 }),
+      );
+
+    expect(await api.secretVersions("s0")).toHaveLength(230);
+    expect(mockFetch).toHaveBeenLastCalledWith("/secrets?versionsOf=s0", expect.anything());
   });
 
   it("pages through every secret for a picker", async () => {
@@ -125,11 +145,38 @@ describe("api client", () => {
 
     expect(all).toHaveLength(250);
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    // A picker offers every version, not only the newest of each group.
     expect(mockFetch).toHaveBeenLastCalledWith(
-      "/secrets",
+      "/secrets?versions=all",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 200-399" },
+        headers: { Accept: "application/json", Range: "items=200-399" },
       }),
+    );
+  });
+
+  it("pages through every service matching a filter", async () => {
+    const services = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `svc${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `web_${from + index}`, Mode: { Replicated: { Replicas: 1 } } },
+        RunningTasks: 1,
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: services(0, 200), total: 260, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: services(200, 60), total: 260, limit: 200, offset: 200 }),
+      );
+
+    const all = await api.allServices({ filter: 'stack == "web"' });
+
+    expect(all).toHaveLength(260);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      `/services?${new URLSearchParams({ filter: 'stack == "web"' })}`,
+      expect.anything(),
     );
   });
 
@@ -165,6 +212,18 @@ describe("api client", () => {
       "/nodes/n1",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
     );
+  });
+
+  it("encodes the stack name into its path", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({
+        stack: { name: "a#b", services: [], configs: [], secrets: [], networks: [], volumes: [] },
+      }),
+    );
+
+    await api.stack("a#b");
+
+    expect(mockFetch).toHaveBeenCalledWith("/stacks/a%23b", expect.anything());
   });
 
   it("fetches cluster snapshot", async () => {

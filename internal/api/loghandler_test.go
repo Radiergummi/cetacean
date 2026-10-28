@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
@@ -104,6 +106,26 @@ func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 
 func withContentType(r *http.Request, ct ContentType) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), contentTypeKey{}, ct))
+}
+
+// A HEAD on the tail answers with the stream's headers and never asks Docker,
+// whose follow stream would otherwise stay open behind a body nobody reads.
+func TestHandleServiceLogs_SSEHead(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := newTestHandlers(t, withCache(c),
+		withDockerClient(&mockLogStreamer{err: errors.New("Docker was asked")}))
+
+	req := httptest.NewRequest(http.MethodHead, "/services/svc1/logs", nil)
+	req.SetPathValue("id", "svc1")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("HEAD answered %d with Content-Type %q, want 200 text/event-stream; body %s",
+			w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
 }
 
 func TestHandleServiceLogs_SSE(t *testing.T) {
@@ -671,17 +693,20 @@ func TestHandleServiceLogs_SSE_DoesNotFilterLiveOutput(t *testing.T) {
 	}
 }
 
-// Docker interleaves the output of a service's tasks, so a line can arrive
-// carrying an older timestamp than one already sent. Letting the id follow
-// arrival order moved the resume cursor backwards, so the next connection
-// discarded everything between the two.
-func TestHandleServiceLogs_SSE_EventIDOnlyAdvances(t *testing.T) {
+// Each task's timestamps come from its own node's clock. The id is the task
+// furthest behind, so resuming from it cannot skip the lines a trailing
+// node writes while the client is away.
+func TestHandleServiceLogs_SSE_EventIDHoldsBackForATrailingTask(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
 
 	var frames bytes.Buffer
-	frames.Write(buildFrame(1, "2024-01-01T00:00:05.000000000Z from task a\n"))
-	frames.Write(buildFrame(1, "2024-01-01T00:00:03.000000000Z from task b\n"))
+	frames.Write(buildFrame(1,
+		"2024-01-01T00:00:05.000000000Z com.docker.swarm.task.id=a from task a\n"))
+	frames.Write(buildFrame(1,
+		"2024-01-01T00:00:03.000000000Z com.docker.swarm.task.id=b from task b\n"))
+	frames.Write(buildFrame(1,
+		"2024-01-01T00:00:06.000000000Z com.docker.swarm.task.id=a again from task a\n"))
 
 	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{data: frames.Bytes()}))
 
@@ -694,10 +719,12 @@ func TestHandleServiceLogs_SSE_EventIDOnlyAdvances(t *testing.T) {
 
 	body := w.Body.String()
 	if !strings.Contains(body, "from task b") {
-		t.Fatalf("the out-of-order line was not delivered:\n%s", body)
+		t.Fatalf("the trailing task's line was not delivered:\n%s", body)
 	}
-	if strings.Contains(body, "id: 2024-01-01T00:00:03.000000000Z") {
-		t.Errorf("the event id moved backwards:\n%s", body)
+	if last := body[strings.LastIndex(body, "id: "):]; !strings.HasPrefix(
+		last, "id: 2024-01-01T00:00:03.000000000Z",
+	) {
+		t.Errorf("the last id is not task b's newest line:\n%s", body)
 	}
 }
 
@@ -767,11 +794,9 @@ func occupy(t *testing.T, slots *sse.Slots, max, n int) {
 func TestHandleServiceLogs_DrawsOnTheSharedReadPool(t *testing.T) {
 	c := cache.New(nil)
 	c.SetService(swarm.Service{ID: "svc1"})
-	h := newTestHandlers(t, withCache(c), withDockerClient(&mockLogStreamer{}))
-
-	shared := new(sse.Slots)
-	h.SetLogReads(shared)
-	occupy(t, shared, logs.MaxConcurrentReads, logs.MaxConcurrentReads)
+	shared := core.New(c, nil)
+	h := newTestHandlers(t, withCore(shared), withDockerClient(&mockLogStreamer{}))
+	occupy(t, shared.LogReads, logs.MaxConcurrentReads, logs.MaxConcurrentReads)
 
 	req := httptest.NewRequest("GET", "/services/svc1/logs?limit=100", nil)
 	req.SetPathValue("id", "svc1")

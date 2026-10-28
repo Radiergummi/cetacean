@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // The section names the spec-editing tools report, and the keys of the
-// cluster.ServiceDetails / NodeDigest projection each covers. Answering from
+// projection.ServiceDetails / NodeDigest projection each covers. Answering from
 // the same projection describe builds keeps an edit and a description in step,
 // and keeps values out: it reports environment and log-driver option *names*.
 const (
@@ -34,7 +36,7 @@ const (
 	sectionRole           = "role"
 )
 
-// serviceSectionKeys maps a section to the cluster.ServiceDetails keys that
+// serviceSectionKeys maps a section to the projection.ServiceDetails keys that
 // answer it. A key absent from the projection — an unset resource limit, a
 // service with no ports — is simply absent from the result, which is the same
 // thing describe reports and is how "there is nothing set here" is said.
@@ -216,6 +218,86 @@ var serviceSectionWriters = map[string]sectionWriter{
 	},
 }
 
+// hostAccessSections are the sections that can change what runs in the
+// container. Each names the change a request makes for cluster.CheckHostAccessHeld,
+// or returns "" for one that leaves it alone.
+// A value that doesn't decode is the writer's to refuse, so it changes nothing.
+var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, string) string{
+	sectionCommand: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		value, err := decodeSection[commandValue](req, section)
+		if err != nil {
+			return ""
+		}
+
+		before := containerSpec(svc)
+		after := *before
+		value.applyTo(&after)
+
+		return cluster.CommandChange(before, &after)
+	},
+	sectionPlacement: func(swarm.Service, mcplib.CallToolRequest, string) string {
+		return "changing the placement of"
+	},
+	sectionEnv: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return ""
+		}
+
+		current := make(map[string]string)
+		for _, variable := range containerSpec(svc).Env {
+			name, value, _ := strings.Cut(variable, "=")
+			current[name] = value
+		}
+
+		updated, err := mergePatchMutator(patch)(current)
+		if err != nil {
+			return ""
+		}
+
+		return cluster.EnvChange(current, updated)
+	},
+	sectionLabels: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return ""
+		}
+
+		updated, err := mergePatchMutator(patch)(svc.Spec.Labels)
+		if err != nil {
+			return ""
+		}
+
+		return cluster.LabelsChange(svc.Spec.Labels, updated)
+	},
+	sectionPorts: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		ports, err := decodeSection[[]swarm.PortConfig](req, section)
+		if err != nil {
+			return ""
+		}
+
+		var current []swarm.PortConfig
+		if svc.Spec.EndpointSpec != nil {
+			current = svc.Spec.EndpointSpec.Ports
+		}
+
+		return cluster.PortsChange(current, ports)
+	},
+	sectionHealthcheck: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
+		value, err := decodeSection[healthcheckValue](req, section)
+		if err != nil {
+			return ""
+		}
+
+		hc, err := value.toHealthConfig()
+		if err != nil {
+			return ""
+		}
+
+		return cluster.HealthcheckChange(containerSpec(svc).Healthcheck, hc)
+	},
+}
+
 // updateServiceSections is the advertised enum and the error message's list:
 // the table's own keys, sorted so tools/list is byte-stable across runs.
 var updateServiceSections = slices.Sorted(maps.Keys(serviceSectionWriters))
@@ -260,7 +342,7 @@ func serviceUpdate(section string, svc swarm.Service) serviceUpdateResult {
 		Name:    svc.Spec.Name,
 		Version: svc.Version.Index,
 		Section: section,
-		Details: selectKeys(cluster.ServiceDetails(svc), serviceSectionKeys[section]),
+		Details: selectKeys(projection.ServiceDetails(svc), serviceSectionKeys[section]),
 	}
 }
 
@@ -268,7 +350,7 @@ func serviceUpdate(section string, svc swarm.Service) serviceUpdateResult {
 // digest projection rather than off the spec directly, for the same reason
 // serviceUpdate does: one description of a node, not two.
 func nodeUpdate(section string, node swarm.Node) nodeUpdateResult {
-	details := cluster.NodeDigest(node, nil, nil).Details
+	details := projection.NodeDigest(node, nil, nil).Details
 
 	return nodeUpdateResult{
 		ID:           node.ID,
@@ -351,6 +433,15 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
+	if changes, held := hostAccessSections[section]; held {
+		ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
+			return changes(svc, req, section)
+		})
+		if err != nil {
+			return "", err
+		}
+	}
+
 	writeClient, err := s.requireWriteClient()
 	if err != nil {
 		return "", err
@@ -360,7 +451,7 @@ func (s *Server) toolUpdateService(
 
 	updated, err := write(writeClient, ctx, id, req, section)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 
 	return marshalResult(serviceUpdate(section, updated))
@@ -461,7 +552,7 @@ func (s *Server) toolUpdateNode(
 	}
 
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 
 	logConfirmableWrite(ctx, req.Params.Name, "node:"+id, confirmed)

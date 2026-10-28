@@ -276,16 +276,16 @@ func TestEveryListEndpointRendersCSV(t *testing.T) {
 			{"shop", "1", "shop"},
 		},
 		"config": {
-			{"name", "stack", "id"},
-			{"shop_nginx", "shop", "c1"},
+			{"name", "stack", "version of", "newest", "used by", "id"},
+			{"shop_nginx", "shop", "", "true", "0", "c1"},
 		},
 		"secret": {
-			{"name", "stack", "id"},
-			{"shop_token", "shop", "sec1"},
+			{"name", "stack", "version of", "newest", "used by", "id"},
+			{"shop_token", "shop", "", "true", "0", "sec1"},
 		},
 		"network": {
-			{"name", "stack", "driver", "id"},
-			{"shop_default", "shop", "overlay", "net1"},
+			{"name", "stack", "driver", "used", "usable", "id"},
+			{"shop_default", "shop", "overlay", "", "", "net1"},
 		},
 		"volume": {
 			{"name", "stack", "driver", "id"},
@@ -426,7 +426,7 @@ func TestListCSVPagination(t *testing.T) {
 	// would be a lie. The header is ignored rather than half-honoured.
 	t.Run("a Range header renders every row", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/nodes.csv", nil)
-		req.Header.Set("Range", "items 0-9")
+		req.Header.Set("Range", "items=0-9")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

@@ -34,7 +34,7 @@ func setupClients(br *Broadcaster, n int, matchFn func(int) func(cache.Event) bo
 			match = matchFn(i)
 		}
 		client := &sseClient{
-			events: make(chan cache.Event, 64),
+			events: make(chan frameEvent, 64),
 			match:  match,
 			done:   make(chan struct{}),
 		}
@@ -46,7 +46,7 @@ func setupClients(br *Broadcaster, n int, matchFn func(int) func(cache.Event) bo
 func BenchmarkBroadcast(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, nil)
 
@@ -62,7 +62,7 @@ func BenchmarkBroadcast(b *testing.B) {
 func BenchmarkBroadcastWithPayload(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, nil)
 
@@ -88,7 +88,7 @@ func BenchmarkBroadcastWithPayload(b *testing.B) {
 func BenchmarkBroadcastWithFiltering(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, func(i int) func(cache.Event) bool {
 				if i%2 == 0 {
@@ -109,7 +109,7 @@ func BenchmarkBroadcastWithFiltering(b *testing.B) {
 func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
 	for _, nClients := range []int{10, 100} {
 		b.Run(fmt.Sprintf("clients=%d", nClients), func(b *testing.B) {
-			br := NewBroadcaster(0, noopErrorWriter, nil)
+			br := NewBroadcaster(0, nil)
 			defer br.Close()
 			setupClients(br, nClients, func(i int) func(cache.Event) bool {
 				return ResourceMatcher("service", fmt.Sprintf("svc-%d", i))
@@ -128,11 +128,11 @@ func BenchmarkBroadcastWithResourceMatcher(b *testing.B) {
 }
 
 func BenchmarkClientRegistration(b *testing.B) {
-	br := NewBroadcaster(0, noopErrorWriter, nil)
+	br := NewBroadcaster(0, nil)
 	defer br.Close()
 
 	steady := &sseClient{
-		events: make(chan cache.Event, 64),
+		events: make(chan frameEvent, 64),
 		done:   make(chan struct{}),
 	}
 	br.mu.Lock()
@@ -158,7 +158,7 @@ func BenchmarkClientRegistration(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		client := &sseClient{
-			events: make(chan cache.Event, 64),
+			events: make(chan frameEvent, 64),
 			match:  TypeMatcher("service"),
 			done:   make(chan struct{}),
 		}
@@ -189,13 +189,13 @@ func (r *benchRecorder) Flush()                      { r.flushes.Add(1) }
 func serveOneClient(b *testing.B, target string) (*Broadcaster, *benchRecorder, func()) {
 	b.Helper()
 
-	br := NewBroadcaster(time.Microsecond, noopErrorWriter, nil)
+	br := NewBroadcaster(time.Microsecond, nil)
 	ctx, cancel := context.WithCancel(b.Context())
 	req := httptest.NewRequestWithContext(ctx, "GET", target, nil)
 	w := &benchRecorder{ResponseRecorder: httptest.NewRecorder()}
 
 	var wg sync.WaitGroup
-	wg.Go(func() { br.ServeHTTP(w, req) })
+	wg.Go(func() { br.ServeSSE(w, req, TypesFilter(req), ReplayAll) })
 
 	for {
 		br.mu.RLock()
@@ -214,15 +214,10 @@ func serveOneClient(b *testing.B, target string) (*Broadcaster, *benchRecorder, 
 	}
 }
 
-// awaitFlush spins until every broadcast event has reached the client.
-//
-// Draining both queues first is what keeps the measurement honest: Broadcast
-// is non-blocking by design, so a loop that only waited for the next flush
-// would outrun the fan-out and measure a run that silently dropped events.
-//
-// That same non-blocking drop is why this gives up rather than spinning
-// forever: an iteration whose events were all dropped, or all filtered out,
-// drains to nothing without ever flushing.
+// awaitFlush spins until every broadcast event has reached the client. It
+// drains both queues first, since Broadcast is non-blocking and a bare flush
+// wait would outrun the fan-out; it gives up rather than spinning forever, as
+// an iteration whose events were all dropped or filtered never flushes.
 func awaitFlush(b *testing.B, br *Broadcaster, w *benchRecorder, since uint64) {
 	b.Helper()
 

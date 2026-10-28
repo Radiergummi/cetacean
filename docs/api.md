@@ -39,6 +39,12 @@ writes, so name every origin that should be allowed to make them.
 Requests that carry no browser headers, such as `curl` or a script, aren't affected. Neither are `/mcp` and the
 OAuth `token`, `revoke`, and `register` endpoints, which authenticate from the request itself.
 
+## Host names
+
+A page can point its own name at Cetacean's address and then read the API as if it came from the same origin. To
+stop that, a request whose `Host` isn't one of the [names Cetacean answers for][server.public_url] is refused with
+`421` and code [`CSR002`](api/errors#CSR002).
+
 ## Content negotiation
 
 Every resource URL serves JSON, HTML (the embedded [dashboard][dashboard]), SSE, or a feed format depending on what
@@ -229,7 +235,8 @@ Docker object is what the JSON representation is for.
 | `/tasks` | `name`, `state`, `node`, `id` |
 | `/stacks` | `name`, `services`, `id` |
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
-| `/networks`, `/volumes` | `name`, `stack`, `driver`, `id` |
+| `/networks` | `name`, `stack`, `driver`, `used`, `usable`, `id` (the addresses, empty without a figure) |
+| `/volumes` | `name`, `stack`, `driver`, `id` |
 | `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
@@ -297,6 +304,10 @@ List endpoints page by query parameter or by HTTP `Range` header.
 | `search`  | string | none    | Case-insensitive substring match on name                      |
 | `filter`  | string | none    | [expr-lang](https://expr-lang.org/) expression, max 512 chars |
 
+A `limit` or `offset` that isn't a whole number in range, a `dir` other than `asc` or `desc`, or a `sort` the
+list doesn't offer is refused with `400` ([`API016`](api/errors#API016)). The same goes for a malformed
+`before` or `limit` on `/history`, the feeds and `/search`.
+
 ```http tab
 GET /services?limit=10&offset=20 HTTP/1.1
 
@@ -313,10 +324,13 @@ curl "http://localhost:9000/configs?search=nginx"
 
 ### Range header pagination
 
-List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
+List endpoints accept `Range: items=0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
 Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
-*/142`. Query parameters take precedence when both are present. With `If-Range` naming the `ETag` of the page
-you hold, the range is served only if that page is unchanged; otherwise you get the first page with a `200`.
+*/142`. Query parameters take precedence when both are present, and a malformed `Range` or one naming several
+ranges is ignored. `Range: items 0-24`, without the `=`, is still accepted but deprecated.
+
+Every page of a list carries the collection's `ETag`, as does the full answer. With `If-Range` naming it, any
+page is served as long as the list is unchanged; otherwise you get the first page with a `200`.
 
 ### History pagination
 
@@ -368,7 +382,7 @@ Swarm settings and plugin changes have no history entries, so they carry no acto
 | Stacks   | `name`                                       |
 | Configs  | `name`, `created`, `updated`                 |
 | Secrets  | `name`, `created`, `updated`                 |
-| Networks | `name`, `driver`, `scope`                    |
+| Networks | `name`, `driver`, `scope`, `addresses`       |
 | Volumes  | `name`, `driver`, `scope`                    |
 
 ### Filter fields by resource
@@ -386,6 +400,7 @@ Filter expressions use [expr-lang](https://expr-lang.org/) syntax and must evalu
 | Secrets  | `id`, `name`                                                                                                                        |
 | Networks | `id`, `name`, `driver`, `scope` (`swarm`/`local`)                                                                                   |
 | Volumes  | `name`, `driver`, `scope`                                                                                                           |
+| Ports    | `published` (int), `target` (int), `protocol`, `mode` (`ingress`/`host`), `service` (name), `stack`, `nodes` (count, 0 for ingress) |
 
 Task `state` takes the Docker task states: `new`, `allocated`, `pending`, `assigned`, `accepted`, `preparing`,
 `ready`, `starting`, `running`, `complete`, `shutdown`, `failed`, `rejected`, `remove`, `orphaned`. `exit_code` is
@@ -432,8 +447,9 @@ curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
 `307` preserves the method and the body, so writes may be addressed by name too: `PUT /services/shop_web/scale`
 reaches the scale endpoint with its payload intact. Most clients follow the redirect on request (`curl -L`).
 
-Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
-task's `<service>.<slot>` name is derived from its parent rather than stored on it.
+Volumes and stacks are keyed by name already, so their paths never redirect. A task's name is its service's name and
+slot, `shop_web.1`, or node ID for a global service; it names the live task in that slot, and resolves only for a
+caller who may read the service.
 
 A name matching more than one resource is answered `409 Conflict` with [`API015`](api/errors#API015), whose
 detail lists every ID the request could have meant.
@@ -496,13 +512,14 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [Grants][authorization] deny read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
 | Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
+| `Host` names none of Cetacean's names | 421 | [`CSR002`](api/errors#CSR002) | Add the name to [`server.allowed_hosts`][server.allowed_hosts] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 | Name in the path identifies more than one resource | 409 | [`API015`](api/errors#API015) | Address the resource by ID; the detail lists the candidates |
 
 ## Caching
 
-JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. Use `If-None-Match` for conditional requests:
+JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. `GET /auth/whoami` sends `no-store` and no `ETag`: it describes the caller, and a validator on it would invite the sharing `no-store` forbids. Use `If-None-Match` for conditional requests:
 
 ```bash
 curl -v http://localhost:9000/services
@@ -515,6 +532,11 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 A service's and a node's detail also set `Last-Modified` from the resource's update timestamp, or for a service from
 when a newer image was found if that is later, and honor `If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
 volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
+
+A read honors `If-Match`, and `If-Unmodified-Since` where it sends `Last-Modified`, as well: when one doesn't hold, the
+answer is `412` ([`API013`](api/errors#API013)). They are evaluated in the order
+[RFC 9110 §13.2.2](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.2) gives: `If-Match`, or `If-Unmodified-Since`
+without it, then `If-None-Match`, or `If-Modified-Since` without it, and `If-Range` last.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
 SSE and streaming endpoints set no caching headers.
@@ -545,11 +567,21 @@ A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a m
 spelled exactly so; any other member answers `400`. A patch without the member changes nothing; `null` or `[]` empties
 the list.
 
-A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
+A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does. That
+includes a `GET` on a path only writes are routed at, such as `/services/{id}/scale`, from a client whose `Accept`
+rules out HTML; a browser there gets the dashboard. `OPTIONS` on any routed path answers `204` with that `Allow`, and
+with `Accept-Patch` where it offers a `PATCH`. Both list only the writes your operations level and grants open, as
+a `GET`'s `Allow` does. A `415` for a patch format the path doesn't take carries
+`Accept-Patch` too.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
 resource.
+
+A write answering with a body checks `Accept` once you're authorized and before it changes anything: an `Accept`
+that rules out both JSON and `application/problem+json` answers `406` ([`API003`](api/errors#API003)) and the write
+doesn't happen. The writes that always answer `204` skip the check, as does one sent with `Prefer: return=minimal`
+and no `wait` or `respond-async`, except `POST /plugins` and `POST /plugins/privileges`, which always send a body.
 
 Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
 is added when TLS is enabled.
@@ -601,9 +633,11 @@ Send `Accept: text/event-stream` to any resource list or detail URL to open a st
 
 ### Per-resource streams
 
-A list stream carries events for one resource type. A detail stream carries events for one resource plus the resources
-that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, and a stack
-stream includes its member services, tasks, configs, secrets, networks, and volumes.
+A list stream carries events for one resource type; the service list stream adds task and node events, which move
+the counts its items carry. A detail stream carries events for one resource plus the resources
+that belong to it: a node stream includes that node's tasks, a service stream includes that service's tasks, a network
+stream includes the tasks attached to it and every service event, plus node events on `ingress`, and a stack stream
+includes its member services, tasks, configs, secrets, networks, and volumes.
 
 ```http tab
 GET /nodes HTTP/1.1
@@ -691,8 +725,9 @@ EventSource clients ignore it.
 
 Each event carries an `id:`. Treat it as opaque: it names a position in the change history of one Cetacean process.
 EventSource clients send `Last-Event-ID` on reconnect and the server replays what they missed from the change history.
-Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer or one written
-before Cetacean restarted; all three send a `sync` event telling the client to refetch.
+Detail and stack streams can't be replayed, and neither can a cursor older than the history buffer, one written
+before Cetacean restarted, or one from before Cetacean last re-read the whole cluster; all four send a `sync` event
+telling the client to refetch.
 A client that reads too slowly to take every event gets a `sync` event in place of the ones it missed. One that stops
 reading altogether is disconnected once a write to it has been blocked for 30 seconds, and reconnects from its last
 cursor. Network buffers absorb writes first, so that can be well after the client stopped reading.
@@ -719,6 +754,11 @@ Append `point` events to the data you already hold to build a rolling window.
 
 Under an [ACL policy][authorization], the stream and the Prometheus proxy (`GET /metrics`, `GET /metrics/labels`,
 `GET /metrics/labels/{name}`) answer `403 ACL001` unless the caller holds `read` on the bare resource `*`.
+
+The proxy forwards a Prometheus answer of up to 10 MiB. A longer one is refused whole with `502`
+([`MTR008`](api/errors#MTR008)) rather than cut short; on a stream, the same answer is a `query_error` event. A query
+Prometheus refuses, because it doesn't parse or asks for too many points, is `400`
+([`MTR009`](api/errors#MTR009)) with Prometheus' reason, not a `502`.
 
 ### Stream contract
 
@@ -765,6 +805,7 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Stacks | `/stacks`, `/stacks/summary`, `/stacks/{name}` |
 | Configs and secrets | `/configs`, `/configs/{id}`, `/configs/{id}/labels`, `/secrets`, `/secrets/{id}`, `/secrets/{id}/labels`, `/secret-entries/{id}` |
 | Networks and volumes | `/networks`, `/networks/{id}`, `/volumes`, `/volumes/{name}` |
+| Ports | `/ports` |
 | Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
 | Cross-resource | `/search?q=`, `/history`, `/events`, `/recommendations`, `/topology`, `/profile` |
@@ -786,10 +827,48 @@ problem details: `504` ([`ENG005`](api/errors#ENG005)) when Docker didn't answer
 `movable`, with an edge to every node that could take it, `stranded`, with what blocked it in `detail`, or `global`.
 It's the same assessment as the MCP `get_topology` drain-impact view, and the dashboard shows it before a drain.
 
+`GET /topology` as JSON Graph Format holds two graphs. `network` has a vertex per service and an edge between two
+services sharing an overlay network. `placement` has a vertex per node and per service, and a placement entry per
+service listing the nodes its tasks run on. A node vertex carries `address`, and a service vertex `networks`, the
+overlays it's attached to as `id` and `name`, limited to the networks you may read.
+
+Each `GET /services` item carries `RunningTasks` and `DesiredTasks`: the replicas, the ready, active nodes a global
+service's constraints admit, or the completions a job's run needs. A job's item adds `CompletedTasks` and
+`FailedTasks`, counting only its current run; a rejected task counts as failed.
+
 `GET /services/{id}` carries `imageUpdate`, and each `GET /services` item `ImageUpdate`, when the service's image tag
 names a newer image in its registry than the digest the service runs: `image`, `currentDigest`, `latestDigest`,
 `checkedAt`, and `suggestedImage`, the tag pinned to the newer digest, ready for `PUT /services/{id}/image`. It's absent
 whenever there is nothing to report, including when [`server.image_check`](configuration#server.image_check) is off.
+
+`GET /configs` and `GET /secrets` list, by default, the newest version of each group of
+[versions](dashboard#versions) and every older one a service's current spec still uses; `?versions=all` lists
+every version, and `?versionsOf={id}` only those grouped with that ID, newest first unless `sort` orders them
+otherwise. A `search` or `filter` matches every version, and a CSV export holds every version with `version of`,
+`newest` and `used by` columns, both unless `?versions=newest` says otherwise; a config or secret with no other
+version is its own newest. Any other `versions` value answers `400`
+([`API016`](api/errors#API016)). The total, the pagination links and the ETag follow what is listed.
+
+`GET /configs/{id}` and `GET /secrets/{id}` list in `services` every service whose spec or previous spec uses it,
+marking with `rollback` one that only a rollback would need, and count them in `usedBy`; each list item counts them
+in `UsedBy`. For one of several versions, the detail carries `versionOf`, naming the group, and
+`versionInferred` when it was matched by name rather than declared with the `cetacean.version-of` or `com.matchory.deployment.name` label; the newest
+carries `newestVersion` and `olderVersions`, the number of older ones no current spec uses, which a default
+listing hides; an older one still in use carries `inUse`. A list item spells them `VersionOf`, `VersionInferred`,
+`NewestVersion`, `OlderVersions` and `InUse`. All of them count only the configs, secrets, and services
+the caller may read, so the newest version a caller can read is the newest it is shown.
+
+`GET /networks/{id}` carries `addresses`, and each `GET /networks` item `Addresses`, for a swarm network on the
+default IPAM driver with an IPv4 pool: `usable`, `used`, and what holds them—`vips`, `taskAddresses` and
+`loadBalancers`. `excludesAttachedContainers` is true on an attachable network, whose standalone containers aren't
+counted. Sorting by `addresses` orders by the share in use, with networks that have no figure last either way. The
+counts cover every service and task on the network, including ones the caller can't read. [Network
+addresses](dashboard#network-addresses) explains the figure.
+
+`GET /services/{id}` carries `links` when the service declares [custom links](integrations#custom-links), and
+`GET /stacks/{name}` the links of all its services, exact duplicates merged. Each has an `id`, a `title`, and either
+an `href`, for an `http` or `https` URL, or a `text`, for any other value. A stack's links also name the `services`
+declaring each one.
 
 `GET /-/health` carries `status`, `version`, `commit`, `buildDate`, and the configured `operationsLevel`, and a
 `watcher` object reporting whether Cetacean is still tracking the cluster: `connected` for the Docker event
@@ -863,9 +942,20 @@ now asks for a different set—a tag republished after the review—with `409` (
 One read is held to a tier as well: `GET /swarm` includes the join tokens only at level 3, and only
 to a caller with write on `swarm:cluster`. Below that, `JoinTokens` comes back empty.
 
-Two level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
+Three level-2 endpoints refuse part of a request below level 3: `PATCH /services/{id}/mounts` a mount the service
 doesn't already have that is a bind, a named pipe, a volume with driver options, or a named volume the manager doesn't
-hold as a plain `local` volume; and `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`.
+hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capability added to `capabilityAdd`; and
+`PATCH /plugins/{name}/settings` a setting that names one of the plugin's mounts or devices, since it sets a host path.
+
+A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
+capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
+a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
+`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `labels`, `ports`, `networks`,
+`secrets`, `configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change. Service
+labels count because a reverse proxy routes by them; the container labels in `container-config` don't.
+`POST /services/{id}/rollback` needs it when either the current or the previous spec has host access. Below that they
+answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so host access that comes
+only through one isn't held to this rule.
 
 ### Preconditions
 
@@ -874,6 +964,12 @@ header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.
 `ETag` a `GET` on that same path returned; if the resource has changed since, the write is
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
 is always optional—omit it and the write proceeds exactly as it did before this existed.
+
+The same endpoints evaluate `If-None-Match` and `If-Unmodified-Since`, in the RFC 9110 §13.2.2 order. `If-None-Match:
+*` refuses the write while the resource exists, and a tag refuses it while that tag is current, both with `412`.
+`If-Unmodified-Since` is compared with the `Last-Modified` a `GET` sends, so only `DELETE /services/{id}` and
+`DELETE /nodes/{id}` have a date to compare it with; elsewhere it's ignored, as is a value that isn't a single valid
+date, and it's ignored whenever `If-Match` is present.
 
 A `412` always means the resource moved. A resource that is gone answers `404`, the same as it
 would without the header—[RFC 9110 §13.2.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1)
@@ -901,7 +997,7 @@ change in that instant goes unnoticed.
 `DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
 
 19 refuse every `If-Match`, `*` included, with `412`: they are action-style endpoints with no `GET` at that exact
-path, so there is no `ETag` the header could match. They are `PUT /services/{id}/scale`,
+path, so there is no `ETag` the header could match, and `If-None-Match` finds none to refuse. They are `PUT /services/{id}/scale`,
 `PUT /services/{id}/image`, `POST /services/{id}/restart`, `POST /services/{id}/rollback`,
 `PUT /nodes/{id}/availability`, `POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`,
 `POST /plugins/{name}/upgrade`, `PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
@@ -998,7 +1094,7 @@ the changelog marks each one **Breaking**.
 - **Response bodies:** field names, types and meaning, the `@type` of each document, and every term
   `/api/context.jsonld` defines.
 - **Errors:** every problem code and the status it answers with, as the [error reference](api/errors) lists them.
-- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items` and
+- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items=` and
   `Content-Range`, the `?filter=` grammar and its fields, and the `?sort=` fields.
 - **Feeds and spreadsheets:** which endpoints serve them, and CSV column names and order.
 - **Event streams:** event names, payload shapes, `Last-Event-ID` replay and the `sync` and `full_sync` events, as
@@ -1061,6 +1157,7 @@ it.
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [requirements]: getting-started#requirements
+[server.allowed_hosts]: configuration#server.allowed_hosts
 [server.cors.origins]: configuration#server.cors.origins
 [server.public_url]: configuration#server.public_url
 [server.sse.batch_interval]: configuration#server.sse.batch_interval

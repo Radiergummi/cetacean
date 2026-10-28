@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // ContentType represents the resolved content type for a request.
@@ -179,7 +181,7 @@ func addressesMember(escapedPath string) bool {
 		return false
 	}
 
-	_, resolvable := canonicalResolvers[collection]
+	_, resolvable := canonicalKinds[collection]
 
 	return resolvable || collection == "volumes" || collection == "stacks" ||
 		collection == "plugins" && identifier != "privileges"
@@ -191,11 +193,12 @@ func addressesMember(escapedPath string) bool {
 func (h *Handlers) namesReadableMember(r *http.Request, collection, identifier string) bool {
 	var resource string
 
-	switch resolve, resolvable := canonicalResolvers[collection]; {
+	switch kind, resolvable := canonicalKinds[collection]; {
 	case resolvable:
-		_, named, found, err := resolve(h.cache, identifier)
+		record, found, err := cluster.LookupAs(h.cache, kind, identifier, h.readerFor(r))
+		named := record.Resource()
 		if err != nil {
-			named, found = singularType[collection]+":"+identifier, true
+			named, found = kind+":"+identifier, true
 		}
 		if !found {
 			return false
@@ -239,7 +242,7 @@ func (h *Handlers) namesReadablePlugin(r *http.Request, name string) bool {
 // notAcceptable refuses a type the endpoint does not serve, naming what it
 // does. Every dispatcher that chooses among representations ends here.
 func notAcceptable(w http.ResponseWriter, r *http.Request, serves string) {
-	writeErrorCode(w, r, "API003", "this endpoint supports "+serves)
+	problem.Write(w, r, "API003", "this endpoint supports "+serves)
 }
 
 // supportedTypes lists the names a client may ask for each ContentType by.

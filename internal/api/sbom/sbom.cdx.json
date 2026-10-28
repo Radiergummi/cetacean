@@ -2327,11 +2327,11 @@
       }
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/gateway@3.0.13",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/gateway@3.0.139",
       "type": "library",
       "group": "@ai-sdk",
       "name": "gateway",
-      "version": "3.0.13",
+      "version": "3.0.139",
       "licenses": [
         {
           "license": {
@@ -2339,14 +2339,14 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/gateway@3.0.13",
+      "purl": "pkg:npm/%40ai-sdk/gateway@3.0.139",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
           "type": "website"
         },
         {
-          "url": "git+https://github.com/vercel/ai.git",
+          "url": "https://github.com/vercel/ai",
           "type": "vcs"
         },
         {
@@ -2354,11 +2354,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/gateway/-/gateway-3.0.13.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/gateway/-/gateway-3.0.139.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "83b9c4e0f16d9e03993594b2d6538fa640be140887c6a0495eac913041bb354ac4559973e60a0176d1e0d58816449217efbe894d70266ce23926b78029502c54"
+              "content": "445a71ca1e63f60ed931f2b1862c02705edb194f3bda8dc9be8888a996c738ce2a911e110b378a245fa4fb31e899c25819e51a6c46de3174ca3404b3cf84e8c7"
             }
           ],
           "type": "distribution"
@@ -2366,11 +2366,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/provider-utils@4.0.5",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/provider-utils@4.0.33",
       "type": "library",
       "group": "@ai-sdk",
       "name": "provider-utils",
-      "version": "4.0.5",
+      "version": "4.0.33",
       "licenses": [
         {
           "license": {
@@ -2378,14 +2378,14 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.5",
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.33",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
           "type": "website"
         },
         {
-          "url": "git+https://github.com/vercel/ai.git",
+          "url": "https://github.com/vercel/ai",
           "type": "vcs"
         },
         {
@@ -2393,11 +2393,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-4.0.5.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-4.0.33.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3b0fd7fd2124784c534dcd71fa760b07d6472b659421df3ef539646a6031ed397dbf153e70acd6c767708e030778237ab70ae0c242ebaeda9c91078ee26c6054"
+              "content": "9c9d1b01f7a0300209b6bccc26d6f37abd5c4b79dbedcec3b325354b89eb3e6ed9534327e9204166fe481996464dba564c9c2a29348f7992535da95b031b7504"
             }
           ],
           "type": "distribution"
@@ -2405,11 +2405,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/provider@3.0.2",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/provider@3.0.12",
       "type": "library",
       "group": "@ai-sdk",
       "name": "provider",
-      "version": "3.0.2",
+      "version": "3.0.12",
       "licenses": [
         {
           "license": {
@@ -2417,14 +2417,14 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider@3.0.2",
+      "purl": "pkg:npm/%40ai-sdk/provider@3.0.12",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
           "type": "website"
         },
         {
-          "url": "git+https://github.com/vercel/ai.git",
+          "url": "https://github.com/vercel/ai",
           "type": "vcs"
         },
         {
@@ -2432,11 +2432,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/provider/-/provider-3.0.2.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/provider/-/provider-3.0.12.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "1eb12636dfc11ff86443bce98b6a3a377935651d504dbef3f39598858ca0893c4e42e6a697808cb4709645bae273958f53e44db1823baf5129c9540c28ed6963"
+              "content": "b23f4359327665ed1647daac88e3eaa2accdc773b12fa88cc472266e1be87bda8eb297a46f3c4d0cc889e132067d81d887dc383a6063cf7a6bbea8734e2f7af9"
             }
           ],
           "type": "distribution"
@@ -2444,11 +2444,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/vue@3.0.33",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/vue@3.0.214",
       "type": "library",
       "group": "@ai-sdk",
       "name": "vue",
-      "version": "3.0.33",
+      "version": "3.0.214",
       "licenses": [
         {
           "license": {
@@ -2456,14 +2456,14 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/vue@3.0.33",
+      "purl": "pkg:npm/%40ai-sdk/vue@3.0.214",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
           "type": "website"
         },
         {
-          "url": "git+https://github.com/vercel/ai.git",
+          "url": "https://github.com/vercel/ai",
           "type": "vcs"
         },
         {
@@ -2471,11 +2471,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/vue/-/vue-3.0.33.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/vue/-/vue-3.0.214.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "73333d26cddaedff84a37e608c4604789614a0fbcc8390df8b86ce2f20c18212ea9f481a560f324e64da4ae1c283edcaffed713e3c97778fb65dc408a2159689"
+              "content": "6000e27b37e141f8ea589b6d5e4c1e48b64d582507d15391bf75640aec1b003f9588e4d888efc89b735faf8f40814c2af8b6986460c5097b6b8390cda1b811de"
             }
           ],
           "type": "distribution"
@@ -4232,12 +4232,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/agent-chat@0.12.43",
+      "bom-ref": "frontend@0.0.0|@scalar/agent-chat@0.12.45",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "agent-chat",
-      "version": "0.12.43",
+      "version": "0.12.45",
       "description": "Agent chat components",
       "licenses": [
         {
@@ -4246,7 +4246,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/agent-chat@0.12.43",
+      "purl": "pkg:npm/%40scalar/agent-chat@0.12.45",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4261,11 +4261,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/agent-chat/-/agent-chat-0.12.43.tgz",
+          "url": "https://registry.npmjs.org/@scalar/agent-chat/-/agent-chat-0.12.45.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "0d1449971a32b7474ec2845b03c09efbe7f89435307e6ad308a4d1080a49bc027273770e46c642fae39b1b37a4b96f125f922fdf9712c270b1809bd6ca9f872b"
+              "content": "71c8f32fc682404239aeebf5b8e6f00a6c017abb84e8a65704874673c76170dbbae93a0bc19a0b1bd8862f893f457fd2099983f53ec23a40a5882668e553b457"
             }
           ],
           "type": "distribution"
@@ -4273,12 +4273,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/api-client@3.23.0",
+      "bom-ref": "frontend@0.0.0|@scalar/api-client@3.23.2",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "api-client",
-      "version": "3.23.0",
+      "version": "3.23.2",
       "description": "the open source API testing client",
       "licenses": [
         {
@@ -4287,7 +4287,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/api-client@3.23.0",
+      "purl": "pkg:npm/%40scalar/api-client@3.23.2",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4302,11 +4302,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/api-client/-/api-client-3.23.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/api-client/-/api-client-3.23.2.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d541bb8a5efe69801ab3be7d114347b52153a084988c6c3fe4e7318c6cc19e52fc5770e5c4a6163ccf0278b8f5883fc5b39c4c245a679f8b9063d1e680cb708d"
+              "content": "81cb23df01d4009ffd979e53827658927216885dae3f6c68d4ee62b0db1f02a7800bb5a084c941d9a6677d5e97ddea43406423bdf9b2f8a85262ba51155de02a"
             }
           ],
           "type": "distribution"
@@ -4314,12 +4314,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/api-reference@1.74.0",
+      "bom-ref": "frontend@0.0.0|@scalar/api-reference@1.75.1",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "api-reference",
-      "version": "1.74.0",
+      "version": "1.75.1",
       "description": "Generate beautiful API references from OpenAPI documents",
       "licenses": [
         {
@@ -4328,7 +4328,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/api-reference@1.74.0",
+      "purl": "pkg:npm/%40scalar/api-reference@1.75.1",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4343,11 +4343,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/api-reference/-/api-reference-1.74.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/api-reference/-/api-reference-1.75.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "539d308673a4d3ed9351b50a31272c3de99a8b46739184467a0e72ba51770387df7e84e3793a1a0a16a41a68e6f8d8c4fdeaa383331483dfbbb90a27f37b3e84"
+              "content": "f645a5b247c3cf3081eda5d320cf411d6627125cbad88f4867eb45ce573e928ab74f0fc7a12315d985981f090bf388b919093496b3e897347eb408a48a265578"
             }
           ],
           "type": "distribution"
@@ -4355,12 +4355,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/asyncapi-upgrader@0.1.17",
+      "bom-ref": "frontend@0.0.0|@scalar/asyncapi-upgrader@0.1.18",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "asyncapi-upgrader",
-      "version": "0.1.17",
+      "version": "0.1.18",
       "description": "Upgrade AsyncAPI documents to the latest and greatest version",
       "licenses": [
         {
@@ -4369,7 +4369,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/asyncapi-upgrader@0.1.17",
+      "purl": "pkg:npm/%40scalar/asyncapi-upgrader@0.1.18",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4384,11 +4384,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/asyncapi-upgrader/-/asyncapi-upgrader-0.1.17.tgz",
+          "url": "https://registry.npmjs.org/@scalar/asyncapi-upgrader/-/asyncapi-upgrader-0.1.18.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "6fd31930d600d5c65e3a02032c943e47a3df7935766dde931d879b6291e528a3c3adbf07273403eb4f35db50439633668b2bf870b229398344f3fa3fa9c5022e"
+              "content": "8ebf815b673d98cd8b35be963f6c668b5951a293a0df913bd40c8dc0f88c21bb9efb2a19a7e2b6ab6be00a30a296d285d2c2893058ddba3c8b5a00435ac6f59f"
             }
           ],
           "type": "distribution"
@@ -4396,12 +4396,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/blocks@0.5.2",
+      "bom-ref": "frontend@0.0.0|@scalar/blocks@0.5.4",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "blocks",
-      "version": "0.5.2",
+      "version": "0.5.4",
       "description": "Render blocks for your OpenAPI documentation",
       "licenses": [
         {
@@ -4410,7 +4410,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/blocks@0.5.2",
+      "purl": "pkg:npm/%40scalar/blocks@0.5.4",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4425,11 +4425,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/blocks/-/blocks-0.5.2.tgz",
+          "url": "https://registry.npmjs.org/@scalar/blocks/-/blocks-0.5.4.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b40ea95ff579d915735af47dee2600f7fff2ae329cc924c478fc3b2d5ec05e6237e064e94304923c6c01852e41419b2cf7abc38fd07cdb3568a0503eb8ffce3f"
+              "content": "ed3ce8f3ef6d7b946fcaff753c304fafef87122c5d037cb0ee5d84fc9606bd7bbc6b83452d42e426ba0a4b67103de039c6cfa9f4dfb8ffc18c84631e0abd9296"
             }
           ],
           "type": "distribution"
@@ -4437,12 +4437,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/code-highlight@0.4.9",
+      "bom-ref": "frontend@0.0.0|@scalar/code-highlight@0.4.10",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "code-highlight",
-      "version": "0.4.9",
+      "version": "0.4.10",
       "description": "Central methods and themes for code highlighting in Scalar projects",
       "licenses": [
         {
@@ -4451,7 +4451,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/code-highlight@0.4.9",
+      "purl": "pkg:npm/%40scalar/code-highlight@0.4.10",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4466,11 +4466,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/code-highlight/-/code-highlight-0.4.9.tgz",
+          "url": "https://registry.npmjs.org/@scalar/code-highlight/-/code-highlight-0.4.10.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "0a5a5cb94950ca1ade568232cdd68a5164a13b8b20494a4cc8269b65f95425d309b4763a3a01a418a29e51cebe89b52fae811d72a919f30296d6bc0f68178f7e"
+              "content": "acd47de68af2b7ae6b2bab160c29983873c7bf14f2b1b5c3b60a9f82908f96c000e7376c11669d5a3bd2eb4f1e8eda2ad0a2f2cee865b4ee8c32e323190b6344"
             }
           ],
           "type": "distribution"
@@ -4478,12 +4478,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/components@0.31.1",
+      "bom-ref": "frontend@0.0.0|@scalar/components@0.32.1",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "components",
-      "version": "0.31.1",
+      "version": "0.32.1",
       "description": "Scalars component library",
       "licenses": [
         {
@@ -4492,7 +4492,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/components@0.31.1",
+      "purl": "pkg:npm/%40scalar/components@0.32.1",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4507,11 +4507,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/components/-/components-0.31.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/components/-/components-0.32.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c30432b240b21607c81998f69bee4545b4ee318d9219a3762ff49240850d73c88a0ebe18cf7ab822e0aa120c417c05373625579c8d9541d2dee15ca434a57e7f"
+              "content": "4accd49006e89303d54d146ac0262c9e4a382b5bd746d7fe2e923680a829854595f7a3b1108df487aa084307b85b7f97bbbb3e5dc89d761c06ff47f34c4f955f"
             }
           ],
           "type": "distribution"
@@ -4519,12 +4519,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/helpers@0.16.3",
+      "bom-ref": "frontend@0.0.0|@scalar/helpers@0.16.4",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "helpers",
-      "version": "0.16.3",
+      "version": "0.16.4",
       "description": "A collection of dependency free helpers",
       "licenses": [
         {
@@ -4533,7 +4533,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/helpers@0.16.3",
+      "purl": "pkg:npm/%40scalar/helpers@0.16.4",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4548,11 +4548,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/helpers/-/helpers-0.16.3.tgz",
+          "url": "https://registry.npmjs.org/@scalar/helpers/-/helpers-0.16.4.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "1ded02c9253822fe03c32545e34128569bcf9de450d73a82fe0d5e05f4768b61bd444fc112afc5e40894ae32246ed4cf8d26c88882f50173245ef06f80755db0"
+              "content": "f5e20b5b351c0241c4b9830cbe28e9488cbaf6df9592af8db9d2c1ffb9600111535aa5df4292315b52f7547ee880ac9189ee7e13808d6773d2be5c3a2087cb1b"
             }
           ],
           "type": "distribution"
@@ -4560,12 +4560,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/icons@0.7.6",
+      "bom-ref": "frontend@0.0.0|@scalar/icons@0.7.7",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "icons",
-      "version": "0.7.6",
+      "version": "0.7.7",
       "description": "Scalar Icons",
       "licenses": [
         {
@@ -4574,7 +4574,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/icons@0.7.6",
+      "purl": "pkg:npm/%40scalar/icons@0.7.7",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4589,11 +4589,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/icons/-/icons-0.7.6.tgz",
+          "url": "https://registry.npmjs.org/@scalar/icons/-/icons-0.7.7.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "50843b2bfc4d0e8ecc81ecff67e02b1bb2599d2f1045934e97eb3d7eb752d53f2e10962e4ea4f59674bb474102c08c37cba767e8421f8da64a3e2863602efeab"
+              "content": "54a6ba7e05c82db3b13a1bf260bfad6a55c9115763ebc3217622ee17c7c0bf8def24c407eefa3a51c73230c8a0d23752681819c72dc0b3f6922ab60e6e4e168c"
             }
           ],
           "type": "distribution"
@@ -4601,12 +4601,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/json-magic@0.15.7",
+      "bom-ref": "frontend@0.0.0|@scalar/json-magic@0.16.1",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "json-magic",
-      "version": "0.15.7",
+      "version": "0.16.1",
       "description": "A collection of utilities for working with JSON objects, including diffing, conflict resolution, bundling and more.",
       "licenses": [
         {
@@ -4615,7 +4615,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/json-magic@0.15.7",
+      "purl": "pkg:npm/%40scalar/json-magic@0.16.1",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4630,11 +4630,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/json-magic/-/json-magic-0.15.7.tgz",
+          "url": "https://registry.npmjs.org/@scalar/json-magic/-/json-magic-0.16.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "567bbdc051f3baaa6cc750d1e9e3d3b1781c0459e94531011fc1d9012d4d8fb87b1df3acc5a26d5798a0ee974b94b4caf5b70923e6992e774366e779832b0a14"
+              "content": "c9640952b92e7d4b12862cc5fab18a3b806867f8a33299eb830463b42036718aa3c6440e61a40277e59517e6f78a199713b6a6afbebca4b22d142c79515fce6d"
             }
           ],
           "type": "distribution"
@@ -4642,12 +4642,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/localization@0.2.7",
+      "bom-ref": "frontend@0.0.0|@scalar/localization@0.2.8",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "localization",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "description": "Framework-agnostic localization engine for Scalar packages",
       "licenses": [
         {
@@ -4656,7 +4656,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/localization@0.2.7",
+      "purl": "pkg:npm/%40scalar/localization@0.2.8",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4671,11 +4671,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/localization/-/localization-0.2.7.tgz",
+          "url": "https://registry.npmjs.org/@scalar/localization/-/localization-0.2.8.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "6f8bc9e8632595bad3a4c554589f2ef63b618d0e6e8af369de9c670e91439bb53f5002f321afe4b785d688c67b218378d907317cb8c46096ed4ddc0a37cdd0d8"
+              "content": "d4cf9c1578221a195f8af6790ce1ffb082b5cfc16c58d22c179aec56bdd89152f4a7d7d47e0fc597f149074214c978448e166d4f042813be0b2df15002d3c465"
             }
           ],
           "type": "distribution"
@@ -4683,12 +4683,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/oas-utils@0.20.12",
+      "bom-ref": "frontend@0.0.0|@scalar/oas-utils@0.20.14",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "oas-utils",
-      "version": "0.20.12",
+      "version": "0.20.14",
       "description": "Open API spec and Yaml handling utilities",
       "licenses": [
         {
@@ -4697,7 +4697,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/oas-utils@0.20.12",
+      "purl": "pkg:npm/%40scalar/oas-utils@0.20.14",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4712,11 +4712,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/oas-utils/-/oas-utils-0.20.12.tgz",
+          "url": "https://registry.npmjs.org/@scalar/oas-utils/-/oas-utils-0.20.14.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b9f45544b7c1a6447cdb0455b4ff518c93e7aebeb73836874cb97fd0f316172fef28af64e2520929e0e64b153157e1854f7f273b0bb3f8f2aa725dec07ebb4ce"
+              "content": "b95c71510d764ed351dfb1fafbad8154c34bc2464995a425eb6bab0a5d61466de30d611022a29535a890758673168e1dd414c61034d1eb5a427118f089dc5c2d"
             }
           ],
           "type": "distribution"
@@ -4724,12 +4724,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/openapi-to-markdown@1.5.4",
+      "bom-ref": "frontend@0.0.0|@scalar/openapi-to-markdown@1.6.1",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "openapi-to-markdown",
-      "version": "1.5.4",
+      "version": "1.6.1",
       "description": "Create plain Markdown from OpenAPI documents (for LLMs)",
       "licenses": [
         {
@@ -4738,7 +4738,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/openapi-to-markdown@1.5.4",
+      "purl": "pkg:npm/%40scalar/openapi-to-markdown@1.6.1",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4753,11 +4753,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/openapi-to-markdown/-/openapi-to-markdown-1.5.4.tgz",
+          "url": "https://registry.npmjs.org/@scalar/openapi-to-markdown/-/openapi-to-markdown-1.6.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c24b64b1faab03aee558de2390e975a308937475ac5a27c48bf982b80b9f355b4735796f53a0a9291e49983c30ba05a566a29487254bc3cf0bef6bae574bccda"
+              "content": "7715f4f5f9260f149337ecbea61de4b85892da2eb52b6e43559f08b1dc35644b28d6d90e0aa3da30e1635c5b6ff12d2e94d57354261b7bd65ccf507f9d903f2d"
             }
           ],
           "type": "distribution"
@@ -4806,12 +4806,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/openapi-upgrader@0.4.4",
+      "bom-ref": "frontend@0.0.0|@scalar/openapi-upgrader@0.4.5",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "openapi-upgrader",
-      "version": "0.4.4",
+      "version": "0.4.5",
       "description": "Upgrade OpenAPI documents to the latest and greatest version",
       "licenses": [
         {
@@ -4820,7 +4820,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.4.4",
+      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.4.5",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4835,11 +4835,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/openapi-upgrader/-/openapi-upgrader-0.4.4.tgz",
+          "url": "https://registry.npmjs.org/@scalar/openapi-upgrader/-/openapi-upgrader-0.4.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "0208a8e5094a52c25f3157ba9f09318e8431236a3597304961b3de1e0f912ade6e03353fccb23e878c713e0c0d698d81f498b97a41c65a6564c2c3e74415e5f2"
+              "content": "3ddb13c9e3bc09ea553fb23c26fc28a23b73c99f91d4cad582ed42f27a6f56fcb92518b1a79137e19e09d6c2a88c9b3e6117b8dbf30ad971d754cfd7d6a8063c"
             }
           ],
           "type": "distribution"
@@ -4847,12 +4847,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/schemas@0.13.2",
+      "bom-ref": "frontend@0.0.0|@scalar/schemas@0.14.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "schemas",
-      "version": "0.13.2",
+      "version": "0.14.0",
       "description": "Schemas for Scalar packages",
       "licenses": [
         {
@@ -4861,7 +4861,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/schemas@0.13.2",
+      "purl": "pkg:npm/%40scalar/schemas@0.14.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4876,11 +4876,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/schemas/-/schemas-0.13.2.tgz",
+          "url": "https://registry.npmjs.org/@scalar/schemas/-/schemas-0.14.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4f87536e9a61a43547ba04b611377a7073a0174154072e7ca8307a23752f888af61cdb094111b6441d4c5f5f974024fd99dee2800cd7c3d941255d76870dcd54"
+              "content": "b5835f7883a4fc6e68fc3896d98736b4594dbc4e362ecd5a1d4390492785ba08c182fe77a77bb7b65bbb800e4de2e31a4bc9900ae99446eb1cfdc6f8466897da"
             }
           ],
           "type": "distribution"
@@ -4888,12 +4888,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/sidebar@0.12.0",
+      "bom-ref": "frontend@0.0.0|@scalar/sidebar@0.12.2",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "sidebar",
-      "version": "0.12.0",
+      "version": "0.12.2",
       "description": "Scalar sidebar component and sidebar state management",
       "licenses": [
         {
@@ -4902,7 +4902,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/sidebar@0.12.0",
+      "purl": "pkg:npm/%40scalar/sidebar@0.12.2",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4917,11 +4917,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/sidebar/-/sidebar-0.12.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/sidebar/-/sidebar-0.12.2.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "faadf1cd8afefdcfdeac12f636c1271464a2a61f9e59153ab11539c6b65e4f69cdade4b2242ee5b255d10e2c91a487c37232828438febb910770a0d688545cda"
+              "content": "d689fe722d6921f7029983e5a7042f8fa9e33d7b2215124eeb03a45d4d40c4e5b16e81206a9d05e848fc63e8374c75e468ee5b7f0e563b78876e3aea6d67e9f4"
             }
           ],
           "type": "distribution"
@@ -4929,12 +4929,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/snippetz@0.10.8",
+      "bom-ref": "frontend@0.0.0|@scalar/snippetz@0.10.10",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "snippetz",
-      "version": "0.10.8",
+      "version": "0.10.10",
       "licenses": [
         {
           "license": {
@@ -4942,7 +4942,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/snippetz@0.10.8",
+      "purl": "pkg:npm/%40scalar/snippetz@0.10.10",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4957,11 +4957,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/snippetz/-/snippetz-0.10.8.tgz",
+          "url": "https://registry.npmjs.org/@scalar/snippetz/-/snippetz-0.10.10.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ca7fab76bc1e61eba26be30c3ee921916728ae7a107e1f2e4d4f744cf880d289647ecb0dfced6811d148b55e371fb5133e73807ea6bfd5263487db6c5db37485"
+              "content": "64c1f4d6361c1b44cf22fae2b56402b6b5bba6f08db2d95d3b6c6b239687724099eb7a303d267a085fb6ee19e831e4e194017bf0c18834de3826aa9ebf425b19"
             }
           ],
           "type": "distribution"
@@ -4969,12 +4969,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/themes@0.19.1",
+      "bom-ref": "frontend@0.0.0|@scalar/themes@0.19.2",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "themes",
-      "version": "0.19.1",
+      "version": "0.19.2",
       "description": "the default CSS variables for all Scalar packages",
       "licenses": [
         {
@@ -4983,7 +4983,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/themes@0.19.1",
+      "purl": "pkg:npm/%40scalar/themes@0.19.2",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4998,11 +4998,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/themes/-/themes-0.19.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/themes/-/themes-0.19.2.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "2eb6ea5f2c941f8fe4907ca4cac95fdc235c737cbc5e3ce1b4bf24c3269a361cf932a4b74fb4393339e3188993bbe9db8145b388b371de7bff72236ac3d51f4d"
+              "content": "b6bdf7704e3f63ef2bc03b3d9397dc14ac21af570cb4aeab7eb172e50a64682d6c3788e31c4a2958ffa3fc4851d00d7d4bfbc55d1b7a2bae426cc9526858cd6a"
             }
           ],
           "type": "distribution"
@@ -5043,12 +5043,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/types@0.23.2",
+      "bom-ref": "frontend@0.0.0|@scalar/types@0.24.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "types",
-      "version": "0.23.2",
+      "version": "0.24.0",
       "description": "Types to work with Scalar packages",
       "licenses": [
         {
@@ -5057,7 +5057,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/types@0.23.2",
+      "purl": "pkg:npm/%40scalar/types@0.24.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5072,11 +5072,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/types/-/types-0.23.2.tgz",
+          "url": "https://registry.npmjs.org/@scalar/types/-/types-0.24.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b326be448a48383c1cbde9bb4984673c1d0e75566d435e664a955d3f0079aa5b58af2ef1832a7db2475cdcfbb14c36f21262ee6786669125726e968530809989"
+              "content": "c783bc75d0af87ee7dcf087d5dcf9b1b64000b160045c3c37c9058894cc3fe1cd2c5beafa5c9acf962a0324b017d858266778ee9ee4ab7a859141a04f43f580a"
             }
           ],
           "type": "distribution"
@@ -5125,12 +5125,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/use-hooks@0.4.20",
+      "bom-ref": "frontend@0.0.0|@scalar/use-hooks@0.4.21",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "use-hooks",
-      "version": "0.4.20",
+      "version": "0.4.21",
       "description": "Utility hooks for Scalar",
       "licenses": [
         {
@@ -5139,7 +5139,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/use-hooks@0.4.20",
+      "purl": "pkg:npm/%40scalar/use-hooks@0.4.21",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5154,11 +5154,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/use-hooks/-/use-hooks-0.4.20.tgz",
+          "url": "https://registry.npmjs.org/@scalar/use-hooks/-/use-hooks-0.4.21.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "6c7c98c87c26a2df77cddb8db44b24ec5a53bec5ccc37de2b0bd998a2ddbe6419d831350e1c03e171ae91a09665f34d5525d2fcb2fe68f7dfcce31aeb929359e"
+              "content": "5bd6599c75f4c07f6628c0843733c72ca2c77c1a38b3b9034fecd9b657f16043cf3ebd3bf0009c8772067f511981da337b57864dc768a9f7532d2208a177cbed"
             }
           ],
           "type": "distribution"
@@ -5248,12 +5248,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/workspace-store@0.68.3",
+      "bom-ref": "frontend@0.0.0|@scalar/workspace-store@0.68.5",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "workspace-store",
-      "version": "0.68.3",
+      "version": "0.68.5",
       "description": "Store interface for openapi documents",
       "licenses": [
         {
@@ -5262,7 +5262,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/workspace-store@0.68.3",
+      "purl": "pkg:npm/%40scalar/workspace-store@0.68.5",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5277,11 +5277,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/workspace-store/-/workspace-store-0.68.3.tgz",
+          "url": "https://registry.npmjs.org/@scalar/workspace-store/-/workspace-store-0.68.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ba562e1ed4d306b82ab036f0b8ca15ee008ccb25364dc6bed78997f150133b60b32a283ca30d9901e446f647a76087830c81442a7a762f9aa5d3c8b051a294e5"
+              "content": "dfeced628718d3b846fd6c1a1e9f16823d719bee696aac5aa27a755d9137730cb341e088e36d1a380928aab5815f23c2447d190030f4863042f6e9832031369d"
             }
           ],
           "type": "distribution"
@@ -5367,12 +5367,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.104.3",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.104.5",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "query-core",
-      "version": "5.104.3",
+      "version": "5.104.5",
       "description": "The framework agnostic core that powers TanStack Query",
       "licenses": [
         {
@@ -5381,7 +5381,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-core@5.104.3",
+      "purl": "pkg:npm/%40tanstack/query-core@5.104.5",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5392,11 +5392,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.104.3.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.104.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "0d963d4ee2403a05375321d48576f809c4d8107359b3397090f838555888c13c4e2b32e9acf514fab6da3d941ddecaea9063ada5a0dd2a95bdef6515fcb2a572"
+              "content": "43de2023c3a977e09b75534e763f190b257c5aa2d88adac3ab5b7de9773c5994fa958d2be6246724b5d80f131ec7b1047f6bfe997be7e05723681292c57650f4"
             }
           ],
           "type": "distribution"
@@ -5404,12 +5404,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.104.3",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.104.5",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "react-query",
-      "version": "5.104.3",
+      "version": "5.104.5",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "licenses": [
         {
@@ -5418,7 +5418,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.104.3",
+      "purl": "pkg:npm/%40tanstack/react-query@5.104.5",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5429,11 +5429,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.104.3.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.104.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "e53b35226c092aaa0980f90bc65f56acf432d49128126b62dcc69a38309f05a987506164e7b205adcf80224b0fabe0409b5d04b2ba17e7aaa6dfdf19e362c6ef"
+              "content": "44e46015ed39d94fbddf079a36eaa0eea1eaeef3553735cdfd5ad7a83e1b6c0b9009652a3a5da5579522f5f956939095bccc8bfc1876ed05a1cf01f469a3b1f6"
             }
           ],
           "type": "distribution"
@@ -5441,12 +5441,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/react-virtual@3.14.20",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-virtual@3.14.22",
       "type": "library",
       "author": "Tanner Linsley",
       "group": "@tanstack",
       "name": "react-virtual",
-      "version": "3.14.20",
+      "version": "3.14.22",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "licenses": [
         {
@@ -5455,7 +5455,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.20",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.22",
       "externalReferences": [
         {
           "url": "https://tanstack.com/virtual",
@@ -5466,11 +5466,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.14.20.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.14.22.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f616e11657349739e35e65980c1fca125ecf27110fcf44278f6173245b1ef7c9a21af5edc7b8f38c4e6395ab26b5cce667a4f15ecc88e2fecfbb21909b6ab59d"
+              "content": "ccd881f48177a6bc924df014ae3f6d3c78c3fe5a2705891fc6b3cfe2fe084d4c7eab01da8c9479718ff18ab8efc1cf8a5a4babd74197dd3a6c6ca87b2640fc2f"
             }
           ],
           "type": "distribution"
@@ -5515,12 +5515,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/virtual-core@3.19.5",
+      "bom-ref": "frontend@0.0.0|@tanstack/virtual-core@3.19.7",
       "type": "library",
       "author": "Tanner Linsley",
       "group": "@tanstack",
       "name": "virtual-core",
-      "version": "3.19.5",
+      "version": "3.19.7",
       "description": "Headless UI for virtualizing scrollable elements in TS/JS + Frameworks",
       "licenses": [
         {
@@ -5529,7 +5529,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/virtual-core@3.19.5",
+      "purl": "pkg:npm/%40tanstack/virtual-core@3.19.7",
       "externalReferences": [
         {
           "url": "https://tanstack.com/virtual",
@@ -5540,11 +5540,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.19.5.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.19.7.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "5ffc2ae83b522bf5c29739cc33e238244eb7cb22309b23e4e13b3cddb0f454a6886f01cd751b0ee508a908f5fedcea2fa98cabd29b903696e6a7cf923e1b2936"
+              "content": "831cb94af1f4985449d18ba3b6b7e507fd4702ef569f5286bcbd1b8d97d091855532c229422c1c7f5991d3afd588de0d8e59546f81cd0a3a84f451b0813bcc09"
             }
           ],
           "type": "distribution"
@@ -6360,11 +6360,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vercel/oidc@3.1.0",
+      "bom-ref": "frontend@0.0.0|@vercel/oidc@3.2.0",
       "type": "library",
       "group": "@vercel",
       "name": "oidc",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "description": "Runtime OIDC helpers intended for use with Vercel Functions",
       "licenses": [
         {
@@ -6373,7 +6373,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vercel/oidc@3.1.0",
+      "purl": "pkg:npm/%40vercel/oidc@3.2.0",
       "externalReferences": [
         {
           "url": "https://vercel.com",
@@ -6388,11 +6388,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vercel/oidc/-/oidc-3.1.0.tgz",
+          "url": "https://registry.npmjs.org/@vercel/oidc/-/oidc-3.2.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "170dbc619a519c0ddc0071c3964b7bc501e22747dc2fe351708aaca1c65051299bcde20a469c2db498e29396466a75cffaf940e126d383e01b0376cfdfade5fb"
+              "content": "532729ac7dd3ea7de31f4938e0d1cc6bba671471aefcdd39323a2362bf8c73a23ba1b9282c826e8d25b08a7d690af772fde3b1ac8fe5dee0cb42c99cace6f8ba"
             }
           ],
           "type": "distribution"
@@ -7126,11 +7126,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|ai@6.0.33",
+      "bom-ref": "frontend@0.0.0|ai@6.0.214",
       "type": "library",
       "name": "ai",
-      "version": "6.0.33",
-      "description": "AI SDK by Vercel - The AI Toolkit for TypeScript and JavaScript",
+      "version": "6.0.214",
+      "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "licenses": [
         {
           "license": {
@@ -7138,14 +7138,14 @@
           }
         }
       ],
-      "purl": "pkg:npm/ai@6.0.33",
+      "purl": "pkg:npm/ai@6.0.214",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
           "type": "website"
         },
         {
-          "url": "git+https://github.com/vercel/ai.git",
+          "url": "https://github.com/vercel/ai",
           "type": "vcs"
         },
         {
@@ -7153,11 +7153,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/ai/-/ai-6.0.33.tgz",
+          "url": "https://registry.npmjs.org/ai/-/ai-6.0.214.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "6d5a246e6cb6136405e847e5fb984e271e4c456a1a719fc2658ff2d44f9571ec249ef1a581a882cccbbc5e075dcfa02b1498e23053543c72b102121e3c4e2b9a"
+              "content": "f4c95e3c45d3e695ed42fe1f5ea9a2474446dc3654e036effa453d92d1090b608e8b6447d96bc8d868b21bd32e0aa80f208e9fd70fb9901e5f348880aea3f369"
             }
           ],
           "type": "distribution"
@@ -7412,10 +7412,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|chart.js@4.5.1",
+      "bom-ref": "frontend@0.0.0|chart.js@4.6.1",
       "type": "library",
       "name": "chart.js",
-      "version": "4.5.1",
+      "version": "4.6.1",
       "description": "Simple HTML5 charts using the canvas element.",
       "licenses": [
         {
@@ -7424,7 +7424,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/chart.js@4.5.1",
+      "purl": "pkg:npm/chart.js@4.6.1",
       "externalReferences": [
         {
           "url": "https://www.chartjs.org",
@@ -7439,11 +7439,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/chart.js/-/chart.js-4.5.1.tgz",
+          "url": "https://registry.npmjs.org/chart.js/-/chart.js-4.6.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "1888df893f5d6e61d18988ba365db2142abb924c1d929d56fe5a7627df6b5f4ca8f6d8091a7de5290013ced2236f9b55b5ebdc06d21d202356aa5ab9f84f3f3f"
+              "content": "849ca78ae72c166abffc4bd762f27a73a99a84fa08de46b1763547f1ac13689fdf0cd59e4aaaaa02b8b13095a458d37a7dc62f3d4dc79de480345358b518bad6"
             }
           ],
           "type": "distribution"
@@ -9976,11 +9976,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|lucide-react@1.58.0",
+      "bom-ref": "frontend@0.0.0|lucide-react@1.61.0",
       "type": "library",
       "author": "Eric Fennis",
       "name": "lucide-react",
-      "version": "1.58.0",
+      "version": "1.61.0",
       "description": "A Lucide icon library package for React applications.",
       "licenses": [
         {
@@ -9989,7 +9989,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.58.0",
+      "purl": "pkg:npm/lucide-react@1.61.0",
       "externalReferences": [
         {
           "url": "https://lucide.dev",
@@ -10004,11 +10004,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.58.0.tgz",
+          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.61.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "857685366ea693a415b419c31819f5600b3c8f6b46524d00e2cfc2a5c94871ccdfc5e5e25b5add38b568eb30aca088a1f575ec1af0ce0d07ab97be3d6b69fb6c"
+              "content": "bf64903cf3cd8e7afe06584bf52a6ece6a39c91fa12e47ed7ee1381378dac5d34f8121f484928f70b2413fbc80b5af3b8d034fb121114b9f4f263089fc2a2b04"
             }
           ],
           "type": "distribution"

@@ -324,7 +324,7 @@ func (s *Server) requireExporter(
 // wrapped, its LogValue no longer resolves and the cause is lost.
 func logQueryError(ctx context.Context, query string, err error) {
 	if ctx.Err() == nil {
-		slog.Warn("MCP metrics query failed", "query", query, "error", err)
+		slog.WarnContext(ctx, "MCP metrics query failed", "query", query, "error", err)
 	}
 }
 
