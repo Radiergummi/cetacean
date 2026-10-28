@@ -286,6 +286,13 @@ var registry = map[string]Def{
 		Description: "Prometheus answered with more than the 10 MiB the proxy forwards.",
 		Suggestion:  "Narrow the query: fewer series, a shorter range, or a larger step.",
 	},
+	"MTR009": {
+		Code:        "MTR009",
+		Title:       "Query Rejected by Prometheus",
+		Status:      http.StatusBadRequest,
+		Description: "Prometheus refused the query: it does not parse, cannot be evaluated, or asks for too many points.",
+		Suggestion:  "Correct the query, or narrow it with a shorter range or a larger step.",
+	},
 
 	// ── LOG: log streaming ────────────────────────────────────────────
 	"LOG001": {Code: "LOG001", Title: "Too Many Log Streams", Status: http.StatusTooManyRequests,

@@ -42,6 +42,10 @@ const errorDictionary: Record<string, ErrorInfo> = {
     title: "Prometheus unreachable",
     suggestion: "Check that Prometheus is running and reachable at the configured URL.",
   },
+  MTR009: {
+    title: "Query rejected by Prometheus",
+    suggestion: "Correct the query, or narrow it with a shorter range or a larger step.",
+  },
   MTR005: {
     title: "Too many metrics streams",
     suggestion: "Close an existing metrics stream connection before opening a new one.",
