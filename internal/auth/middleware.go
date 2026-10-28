@@ -59,13 +59,9 @@ func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error, extra .
 }
 
 // Middleware returns HTTP middleware that authenticates requests using the
-// given provider. Exempt paths (meta endpoints, API docs, static assets,
-// auth callbacks) bypass authentication entirely.
-//
-// A token this deployment issued is consulted before the provider, so an
-// explicit credential outranks the ambient session cookie a browser may also be
-// carrying. tokens may be its zero value, which is every deployment without an
-// authorization server.
+// given provider; exempt paths bypass authentication entirely. A token this
+// deployment issued is consulted first, so an explicit credential outranks an
+// ambient session cookie. tokens may be its zero value (no authorization server).
 func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -86,11 +82,9 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 					"path", r.URL.Path,
 					"error", err,
 				)
-				// A request that presented no credential gets the resource's
-				// own challenge too, or a client cannot do what RFC 9728 exists
-				// for: call the resource cold, read the 401, follow
-				// resource_metadata to the token endpoint. Not on /oauth/*,
-				// which refuses a token this server issued.
+				// A request with no credential gets the resource's own challenge too, so a
+				// client can follow RFC 9728 cold: read the 401, follow resource_metadata.
+				// Not on /oauth/*, which refuses a token this server issued.
 				resourceChallenge := ""
 				if ExtractBearerToken(r) == "" && isProtectedResource(r.URL.Path) {
 					resourceChallenge = tokens.Challenge("")

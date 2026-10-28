@@ -1223,12 +1223,10 @@ func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids ba
 		waitForServiceImage(t, env, serviceName, fixtureImageRef)
 	})
 
-	// remove_task: oncall genuinely holds write:task:* for real, so it drives
-	// the positive case (Docker reschedules the task, which is harmless for
-	// a replicated service) while every denied persona is checked against
-	// the same task ID without ever reaching Docker.
-	// A running task: after the rollback above the engine still lists the ones
-	// it shut down, which the cache does not keep, so the write tools refuse them.
+	// remove_task: oncall holds write:task:* for real, so it drives the positive
+	// case while every denied persona is checked against the same task. It must
+	// be a running one: after the rollback the engine still lists tasks it shut
+	// down, which the cache does not keep, so the write tools refuse them.
 	taskID := runningTaskOf(t, env, mustServiceInspectID(t, env, serviceName))
 	if taskID == "" {
 		t.Fatal("throwaway service has no running task to drive remove_task with")

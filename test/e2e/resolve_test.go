@@ -98,9 +98,6 @@ func awaitHistory(
 	return nil
 }
 
-// resourceIDs reduces entries to the IDs they carry, which is what two
-// timelines reached by different identifiers have to agree on. Comparing whole
-// entries would compare timestamps the two reads are not guaranteed to share.
 // serviceEntries drops the task entries a service's timeline also carries, so a
 // crash loop shows there, leaving the ones about the service itself.
 func serviceEntries(entries []historyEntry) []historyEntry {
@@ -114,6 +111,9 @@ func serviceEntries(entries []historyEntry) []historyEntry {
 	return own
 }
 
+// resourceIDs reduces entries to the IDs they carry, which is what two
+// timelines reached by different identifiers have to agree on; whole entries
+// carry timestamps the two reads need not share.
 func resourceIDs(entries []historyEntry) []string {
 	ids := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -176,9 +176,8 @@ func liveTaskOf(t *testing.T, proc *sut.Process, service string) (id, name strin
 
 // TestIdentifierResolutionAgainstALiveCluster drives the name resolution the
 // canonical redirect cannot reach — a query parameter and an MCP argument —
-// against services this SUT watched being created. The unit tests pin the
-// semantics against a hand-built cache; what only a real cluster can show is
-// that the names being split and compared are the ones Swarm actually renders.
+// against real services, showing the names split and compared are the ones
+// Swarm actually renders.
 func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 	env, proc := startMCP(t)
 
@@ -288,10 +287,9 @@ func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 
 	t.Run("a global service name resolves past its own task", func(t *testing.T) {
 		// A global service's task renders as "<service>.<node>" once assigned,
-		// so the name belongs to the service alone. This pins the converged
-		// state; the window before Swarm assigns the task, where TaskName
-		// renders the bare service name, is not reachable from here because
-		// DeployStack has already waited for convergence.
+		// so the name belongs to the service alone. The window before assignment,
+		// where TaskName renders the bare service name, is unreachable here:
+		// DeployStack waits for convergence.
 		var events struct {
 			StructuredContent struct {
 				Entries []struct {

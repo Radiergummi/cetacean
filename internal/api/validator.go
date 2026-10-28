@@ -14,30 +14,9 @@ import (
 var validatorSeed = maphash.MakeSeed()
 
 // derivedETag is a validator for a representation that is a pure function of
-// the cache contents, the caller's grants and the request — computed without
-// rendering the body, so a conditional GET can be answered before the work.
-//
-// Everything that varies the body has to be in here. A missing input does not
-// merely lose a cache hit: it hands one caller a 304 for a representation that
-// is not theirs. The inputs, and why each is one:
-//
-//   - the cache generation, which is what actually changes;
-//   - the flapping services, a state that lapses with time and no mutation;
-//   - the ACL fingerprint, because every list is filtered per identity and the
-//     policy behind it is reloaded at runtime;
-//   - the path and the raw query, which carry the route, the resource id and
-//     every search, filter, sort and pagination parameter. The query goes in
-//     unnormalised on purpose — two spellings of one query then miss rather
-//     than risk colliding;
-//   - the negotiated media type, since one resource is served as JSON, Atom,
-//     CSV or JSON Feed;
-//   - the base path, which absolute @id values are built from.
-//
-// The content coding is not here: codedETag suffixes it onto whatever this
-// returns, the same as it does for a hashed body.
-//
-// TestDerivedETagVaries enumerates these and fails if a component stops
-// mattering. Add an input to the response and it goes here first.
+// the cache, the caller's grants and the request, computed without rendering.
+// Every input that varies the body must be hashed here, or one caller gets a
+// 304 for another's representation. codedETag adds the content coding.
 func (h *Handlers) derivedETag(r *http.Request) string {
 	var hash maphash.Hash
 	hash.SetSeed(validatorSeed)
@@ -46,6 +25,7 @@ func (h *Handlers) derivedETag(r *http.Request) string {
 	binary.LittleEndian.PutUint64(num[:], h.cache.Generation())
 	_, _ = hash.Write(num[:])
 
+	// Flapping lapses with time, with no cache mutation behind it.
 	for _, id := range slices.Sorted(maps.Keys(h.cache.FlappingServices())) {
 		_, _ = hash.WriteString(id)
 		_, _ = hash.Write([]byte{0x1e})
@@ -71,6 +51,7 @@ func (h *Handlers) derivedETag(r *http.Request) string {
 	// different pair of the same characters.
 	for _, part := range []string{
 		r.URL.Path,
+		// Unnormalised: two spellings of one query miss rather than collide.
 		r.URL.RawQuery,
 		BasePathFromContext(r.Context()),
 	} {
@@ -96,18 +77,9 @@ func quoteETag(sum uint64) string {
 }
 
 // matchedValidator returns the coded tag the request's If-None-Match matches,
-// or "" if none does.
-//
-// The content coding is part of a validator, and resolving which one this
-// response would carry needs a body length that a caller answering before it
-// renders does not have. A body is identity under the threshold and otherwise
-// in the coding this request negotiated, so those two are the tags to try.
-//
-// A bare "*" is deliberately not honoured here. RFC 9110 §13.2.1 says a
-// precondition is ignored unless the unconditional response would have been a
-// 2xx, and nothing has yet parsed the query — so a malformed filter would be
-// answered 304 rather than 400. It still gets its 304 from the writer, once the
-// request has been found valid and the body rendered.
+// or "". Before rendering the body length is unknown, so both identity and the
+// negotiated coding are tried. A bare "*" waits for the writer: RFC 9110 §13.2.1
+// ignores it unless the response would be 2xx, and the query is not yet parsed.
 func matchedValidator(r *http.Request, validator string) string {
 	inm := r.Header.Get("If-None-Match")
 	if inm == "" || strings.TrimSpace(inm) == "*" {

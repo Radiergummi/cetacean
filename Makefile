@@ -20,6 +20,7 @@ PKG          ?= ./internal/oauth
 ## Lint all code and the published docs
 lint: lint-docs
 	golangci-lint run ./...
+	go run ./scripts/comment-cap
 	actionlint
 	zizmor --config .github/zizmor.yml .github/workflows/
 	pnpm --filter frontend exec oxlint

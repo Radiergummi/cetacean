@@ -366,14 +366,9 @@ func TestMCPIntegration_UnauthorizedHeaderUsesRFC9110Quoting(t *testing.T) {
 	}
 	www := rec.Header().Get("WWW-Authenticate")
 
-	// Spec-compliant quoting wraps each value in plain "..." with no
-	// Go-syntax escapes for legal characters. The PRM URL has no special
-	// characters, so the rendered form must contain the URL verbatim
-	// between double quotes.
-	//
-	// The URL is this transport's own document, not the one at the root: a
-	// client sent to the root would discover the API resource and come back
-	// with a token this endpoint refuses.
+	// Spec-compliant quoting puts the URL verbatim between plain double quotes.
+	// It is this transport's own document, not the root's: a client sent to the
+	// root would discover the API resource and bring back a token this refuses.
 	want := `resource_metadata="https://cetacean.example.com` +
 		`/.well-known/oauth-protected-resource` + MountPath + `"`
 	if !strings.Contains(www, want) {

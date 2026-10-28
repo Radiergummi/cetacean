@@ -17,11 +17,10 @@ type OAuthConfig struct {
 	// a deployment that does not ask for one issues no tokens at all.
 	Enabled bool
 
-	// Issuer is the canonical external URL of this Cetacean instance, used as
-	// the OAuth 2.1 issuer identifier and as the base for the resource
-	// audience. Empty means "derive from the listen address" — only correct
-	// when no reverse proxy sits in front. Behind a proxy, set this to the
-	// public URL (e.g. "https://cetacean.example.com").
+	// Issuer is the canonical external URL of this instance: the OAuth 2.1
+	// issuer identifier and the base for the resource audience. Empty derives
+	// it from the listen address, which is only correct with no reverse proxy
+	// in front; behind one, set the public URL.
 	Issuer string
 
 	// SigningKey is the root the token and CSRF keys derive from. Empty means
@@ -34,14 +33,10 @@ type OAuthConfig struct {
 	// RefreshTokenTTL is how long refresh tokens remain valid.
 	RefreshTokenTTL time.Duration
 
-	// ConsentTTL is how long a remembered approval keeps letting a client skip
-	// the consent screen. It must outlive RefreshTokenTTL to be useful at all —
-	// the point of remembering is that an expired refresh token does not cost
-	// the operator a second prompt — but it cannot be unbounded: an approval is
-	// only revocable by presenting a token from its grant family, so once that
-	// family lapses an unbounded record would keep authorizing silently with no
-	// way left to withdraw it. Zero or negative disables remembering entirely,
-	// so every authorization is prompted.
+	// ConsentTTL is how long a remembered approval lets a client skip consent.
+	// It must outlive RefreshTokenTTL to be useful, but cannot be unbounded: an
+	// approval is revocable only via a token from its grant family, so once that
+	// lapses it could never be withdrawn. Zero or negative disables remembering.
 	ConsentTTL time.Duration
 
 	// APITokens offers the REST API as a protected resource, so a client can
@@ -93,20 +88,16 @@ func DefaultOAuthConfig() OAuthConfig {
 }
 
 // ValidateOAuth settles whether the authorization server, MCP and the auth mode
-// make a coherent deployment. Both failures are refusals rather than warnings:
-// one would leave the cluster's write surface open, and the other describes a
-// server that cannot answer the question it exists to answer.
-//
-// A method rather than a function of both flags, because the two are booleans
-// and adjacent: transposed, they would compile and report the wrong conflict.
+// make a coherent deployment; each failure is a refusal, not a warning. A
+// method rather than a function of two adjacent booleans, which transposed
+// would compile and report the wrong conflict.
 func (c *Config) ValidateOAuth(authMode string) error {
 	anonymous := authMode == "none"
 
-	// /mcp is exempt from the auth middleware and authenticates itself, so it
-	// needs something of its own: a bearer check against an authorization
-	// server, or the upstream provider for a mode named in mcp.auth_bypass.
-	// With neither it would serve the cluster's write surface unauthenticated.
-	// internal/mcp refuses the same combination — this one names the settings.
+	// /mcp authenticates itself, so it needs a bearer check against an
+	// authorization server or an upstream mode named in mcp.auth_bypass; with
+	// neither it would serve the write surface unauthenticated. internal/mcp
+	// refuses the same combination — this one names the settings.
 	bypassed := slices.Contains(c.MCP.AuthBypass, authMode)
 	if c.MCP.Enabled && !anonymous && !c.OAuth.Enabled && !bypassed {
 		return fmt.Errorf(
@@ -361,14 +352,10 @@ func resolveOAuthIssuer(file *string) (string, error) {
 	return raw, nil
 }
 
-// OAuthIssuer returns the canonical external base URL clients reach this
-// deployment at: oauth.issuer, then server.public_url, then a derivation from
-// server.listen_addr and whether TLS terminates here.
-//
-// The second return is false when that derivation reaches nothing: the
-// default ":9000" has an empty host, and a wildcard bind ("0.0.0.0", "::")
-// parses but resolves nowhere. The string is returned either way, since only
-// the authorization server truly breaks on it, which is the caller's to decide.
+// OAuthIssuer returns the canonical external base URL: oauth.issuer, then
+// server.public_url, then a derivation from server.listen_addr and TLS. The
+// second return is false when the derivation reaches nothing (empty host, or a
+// wildcard bind); the string is returned anyway, for the caller to judge.
 func (c *Config) OAuthIssuer(tlsEnabled bool) (string, bool) {
 	if c.OAuth.Issuer != "" {
 		return c.OAuth.Issuer, true

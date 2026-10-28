@@ -636,13 +636,10 @@ func (s *Server) bearerAuth(next http.Handler) http.Handler {
 	})
 }
 
-// writeUnauthorized answers a missing or unusable bearer token. JSON-RPC has no
-// envelope for a transport-level refusal, so this is a bare 401 carrying the
-// challenge that names where a token for this resource comes from.
-//
-// An empty errorCode omits the error parameter, which is what RFC 6750 §3.1 asks
-// for when the request carried no credential: there is nothing wrong with a token
-// that was never sent.
+// writeUnauthorized answers a missing or unusable bearer token with a bare 401
+// carrying the challenge, since JSON-RPC has no envelope for a transport-level
+// refusal. An empty errorCode omits the error parameter, as RFC 6750 §3.1 asks
+// when the request carried no credential.
 func (s *Server) writeUnauthorized(w http.ResponseWriter, errorCode string) {
 	w.Header().Set("WWW-Authenticate", s.oauth.UnauthorizedHeader(s.resource, errorCode))
 	w.WriteHeader(http.StatusUnauthorized)

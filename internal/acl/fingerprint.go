@@ -12,21 +12,10 @@ import (
 // here may share a rendered response.
 var fingerprintSeed = maphash.MakeSeed()
 
-// Fingerprint identifies what an identity is allowed to see. Two identities
-// with the same fingerprint see the same rows from every ACL-filtered endpoint,
-// and may therefore share a cached response or a validator; two with different
-// fingerprints must never be given each other's.
-//
-// The policy generation is folded in, so a reload changes every fingerprint
-// without any cache mutation — a grant removed from the file has to invalidate
-// what the identity it covered was already holding.
-//
-// A nil Evaluator or absent policy filters nothing, which is one shared answer
-// rather than a per-identity one, and fingerprints accordingly.
-//
-// The grants are walked here rather than through collectGrants: this runs on
-// every conditional request, and summing as it goes costs nothing, where
-// gathering a slice first costs an allocation per call.
+// Fingerprint identifies what an identity is allowed to see: identities with
+// equal fingerprints see the same rows everywhere and may share a cached
+// response or validator. The policy generation is folded in, so a reload
+// changes every fingerprint. A nil Evaluator or absent policy is one answer.
 func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 	if e == nil {
 		return 0

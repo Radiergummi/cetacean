@@ -15,16 +15,8 @@ import (
 
 // TestEveryStreamRouteIsAChannel probes every registered GET route with
 // Accept: text/event-stream and requires anything that streams to appear in
-// the document.
-//
-// Task 2's walk runs the other way: it proves every channel is a stream. Only
-// this direction catches a stream route added after the document was written,
-// which is what makes the document worth trusting later.
-//
-// /metrics is walked but never asserted: it answers 400 for a missing query
-// parameter before setting a content type, so it cannot stream here. Its
-// channel declaration is covered by TestAsyncAPIChannelsAnswerAsStreams,
-// which probes addresses rather than routes and supplies the query.
+// the document. /metrics answers 400 for its missing query before streaming,
+// so it is walked but not asserted here.
 func TestEveryStreamRouteIsAChannel(t *testing.T) {
 	router, _, _ := streamTestRouter(t, 0)
 
@@ -80,19 +72,10 @@ func TestEveryStreamRouteIsAChannel(t *testing.T) {
 	}
 }
 
-// TestAsyncAPIPerTypeMessagesMatchEventTypes pins what actually varies across
-// the sixteen resource channels.
-//
-// Driving all sixteen behaviourally would run streamList and streamResource
-// eight times each for sixteen chances to flake, while the only thing that
-// differs between them is a type string. Comparing the declared per-type
-// messages against the cache.EventType constants pins that string for all of
-// them, and fails when a ninth resource type is added without anyone opening
-// a ninth stream.
-//
-// The constants are read out of the source rather than from a Go slice: a
-// slice would have to be kept in step by the same person who forgot the
-// document, which is the drift this is meant to catch.
+// TestAsyncAPIPerTypeMessagesMatchEventTypes pins the one thing that varies
+// across the resource channels: the per-type messages against the
+// cache.EventType constants. Those are read from source, not a Go slice, which
+// would drift alongside the document it is meant to check.
 func TestAsyncAPIPerTypeMessagesMatchEventTypes(t *testing.T) {
 	want := eventTypeConstants(t)
 

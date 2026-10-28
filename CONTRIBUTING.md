@@ -29,7 +29,7 @@ Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so 
 ```bash
 make check       # Full suite: lint + type check + format check + Go and frontend tests + spec registry
 make test        # Go tests only
-make lint        # golangci-lint + actionlint + zizmor + oxlint + Vale
+make lint        # golangci-lint + comment cap + actionlint + zizmor + oxlint + Vale
 make fmt         # Auto-format Go + frontend code
 make build       # Frontend, MCP widgets, and the binary that embeds them
 ```

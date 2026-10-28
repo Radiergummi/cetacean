@@ -13,14 +13,9 @@ import (
 )
 
 // This file is the OAuth lane's self-enforcing gate: every endpoint the server
-// advertises must be driven by a named case. It reads the server's own
-// discovery documents, so a path computed per resource is covered like a
-// literal one — the earlier version parsed RegisterRoutes for string literals
-// and went blind the moment a path stopped being one.
-//
-// A route mounted but advertised nowhere is outside what this can see. No
-// conformant client can reach one, so adding it deliberately means adding the
-// case that drives it here too.
+// advertises in its discovery documents must be driven by a named case. A route
+// mounted but advertised nowhere is invisible here, and to conformant clients,
+// so one added deliberately needs its case added here too.
 
 // drivenOAuthEndpoints maps "METHOD path" to the case that exercises it.
 var drivenOAuthEndpoints = map[string]string{

@@ -214,15 +214,10 @@ func serveOneClient(b *testing.B, target string) (*Broadcaster, *benchRecorder, 
 	}
 }
 
-// awaitFlush spins until every broadcast event has reached the client.
-//
-// Draining both queues first is what keeps the measurement honest: Broadcast
-// is non-blocking by design, so a loop that only waited for the next flush
-// would outrun the fan-out and measure a run that silently dropped events.
-//
-// That same non-blocking drop is why this gives up rather than spinning
-// forever: an iteration whose events were all dropped, or all filtered out,
-// drains to nothing without ever flushing.
+// awaitFlush spins until every broadcast event has reached the client. It
+// drains both queues first, since Broadcast is non-blocking and a bare flush
+// wait would outrun the fan-out; it gives up rather than spinning forever, as
+// an iteration whose events were all dropped or filtered never flushes.
 func awaitFlush(b *testing.B, br *Broadcaster, w *benchRecorder, since uint64) {
 	b.Helper()
 

@@ -168,13 +168,9 @@ func writeCachedJSONStatus(w http.ResponseWriter, r *http.Request, status int, v
 }
 
 // writeCachedJSONStatusValidated is writeCachedJSONStatus for a caller that
-// already knows the validator. It must be the same one that caller offered the
-// client when it answered a conditional request without rendering — a response
-// whose 304 and 200 disagree on the tag makes every subsequent revalidation
-// miss.
-//
-// An empty validator means hash the body, which is the only option when the
-// representation is not a pure function of the cache.
+// already knows the validator: the one it offered on the conditional path, or
+// a 304 and 200 that disagree make every revalidation miss. An empty validator
+// means hash the body, for a representation not a pure function of the cache.
 func writeCachedJSONStatusValidated(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -199,12 +195,7 @@ func writeCachedJSONStatusValidated(
 // writeRenderedJSON sends a JSON body whose validator is already known,
 // negotiating a coding and answering a matching precondition with 304. A
 // non-zero lastModified adds Last-Modified and evaluates If-Modified-Since.
-//
-// This is the tail of writeCachedJSONStatusValidated, split out for a memoised
-// document: a hit there has the bytes and the hash of them already, and the
-// only thing left is to negotiate and write. The write deadline lives here
-// rather than with the marshal, because it is the only place bytes reach a
-// socket — and the server sets no WriteTimeout of its own.
+// The write deadline lives here: the server sets no WriteTimeout of its own.
 func writeRenderedJSON(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -326,12 +317,9 @@ func notModified(r *http.Request, etag string, lastModified time.Time) bool {
 var jsonTerminator = []byte("\n")
 
 // writeEncodedJSON sends a JSON body and its trailing newline under coding.
-// The newline is compressed together with the body: written after it, a client
-// decoding the frame would find a stray byte past its end.
-//
-// Uncompressed it is written separately instead. json.Marshal returns a buffer
-// with no spare capacity, so appending to it copies the whole body to add one
-// byte — and uncompressed is the case where that copy buys nothing.
+// Compressed, the newline goes inside the frame, or a decoder finds a stray
+// byte past its end. Uncompressed it is written separately: appending to
+// json.Marshal's full-capacity buffer would copy the whole body.
 func writeEncodedJSON(w http.ResponseWriter, status int, body []byte, coding Encoding) {
 	if coding == EncodingIdentity {
 		w.WriteHeader(status)

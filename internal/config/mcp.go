@@ -34,11 +34,10 @@ type MCPConfig struct {
 	// ceiling, not refused. Zero disables the cap.
 	MaxTaskTTL time.Duration
 
-	// AuthBypass lists upstream Cetacean auth modes (e.g. "cert") whose
-	// authenticated identity is accepted at /mcp without a bearer token: the
-	// MCP server derives identity from the upstream provider instead of
-	// validating a JWT. Only bypassableAuthModes may appear, and a listed mode
-	// authenticates /mcp on its own, so no authorization server is required.
+	// AuthBypass lists upstream auth modes (e.g. "cert") whose identity is
+	// accepted at /mcp without a bearer token. Only bypassableAuthModes may
+	// appear, and a listed mode authenticates /mcp on its own, so no
+	// authorization server is required.
 	AuthBypass []string
 
 	// RequireConfirmation refuses the impactful tools to a client that cannot

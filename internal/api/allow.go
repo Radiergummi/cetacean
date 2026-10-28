@@ -216,11 +216,10 @@ type offeredWrites struct {
 
 const varyIdentity = "Authorization, Cookie"
 
-// varyByIdentity marks a response as per-caller. Every ACL-filtered response
-// owes it: the setAllow* seams cover the ones reporting a per-identity Allow,
-// requireAnyGrant covers the ones gated on having any, and the feed renderers
-// cover themselves. Add rather than Set, to extend a Vary another layer already
-// wrote — but only once, since those three overlap.
+// varyByIdentity marks a response as per-caller; every ACL-filtered response
+// owes it. Add rather than Set, to extend a Vary another layer already wrote —
+// but only once, since the setAllow* seams, requireAnyGrant and the feed
+// renderers all call it and overlap.
 func varyByIdentity(w http.ResponseWriter) {
 	if slices.Contains(w.Header().Values("Vary"), varyIdentity) {
 		return

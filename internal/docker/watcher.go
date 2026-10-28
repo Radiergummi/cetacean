@@ -1047,11 +1047,10 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 
 	done := make(chan error, 1)
 
-	// The loop can stop between that check and this send, and during an outage
-	// it is gone for a whole reconnect interval. A request context carries no
-	// deadline of its own, so an unbounded send would hold the write this
-	// refresh precedes until the client gave up. Unavailable is what the
-	// engine being out of reach already answers with.
+	// The loop can stop between that check and this send, and stays gone for a
+	// reconnect interval during an outage. A request context has no deadline, so
+	// an unbounded send would stall the write this refresh precedes; give up with
+	// Unavailable, as an unreachable engine already answers.
 	handoff := time.NewTimer(refreshHandoffTimeout)
 	defer handoff.Stop()
 

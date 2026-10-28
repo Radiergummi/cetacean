@@ -983,10 +983,8 @@ func detachTaskContext(
 	return context.WithTimeout(context.WithoutCancel(ctx), budget)
 }
 
-// detachedTaskBudget is how long detached work may run. It is derived from
-// what the work needs — the longest legitimate step is a service convergence,
-// and the budget has to cover the mutation preceding it too — and deliberately
-// not from mcp.task_ttl, which is how long a *finished* result is kept. A
-// deployment that discards results quickly would otherwise have its writes
-// abandoned mid-flight.
+// detachedTaskBudget is how long detached work may run: the mutation plus the
+// longest step, a service convergence. Deliberately not mcp.task_ttl, which is
+// how long a finished result is kept; tying them would abandon writes
+// mid-flight in a deployment that discards results quickly.
 const detachedTaskBudget = 2 * cluster.ConvergenceTimeout
