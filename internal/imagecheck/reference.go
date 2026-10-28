@@ -41,24 +41,12 @@ func (r Reference) Key() string {
 // Swarm stores once it has resolved the tag. A reference with no tag, or with
 // no digest to compare against, has nothing to check and reports false.
 func ParsePinned(image string) (ref Reference, pinned string, ok bool) {
-	name, pinned, found := strings.Cut(image, "@")
-	if !found || !digestGrammar.MatchString(pinned) {
+	ref, pinned, ok = ParseDigested(image)
+	if !ok || ref.Tag == "" {
 		return Reference{}, "", false
 	}
 
-	colon := strings.LastIndex(name, ":")
-	if colon <= strings.LastIndex(name, "/") {
-		return Reference{}, "", false
-	}
-
-	host, repository := splitHost(name[:colon])
-	tag := name[colon+1:]
-
-	if !nameGrammar.MatchString(repository) || !tagGrammar.MatchString(tag) {
-		return Reference{}, "", false
-	}
-
-	return Reference{Host: host, Repository: repository, Tag: tag}, pinned, true
+	return ref, pinned, true
 }
 
 // ParseDigested parses an image addressed by digest, with or without a tag:

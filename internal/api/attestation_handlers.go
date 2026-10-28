@@ -103,12 +103,7 @@ func (h *Handlers) attestationEndpoint(
 	write func(http.ResponseWriter, *http.Request, ContentType, imageTarget, attestations.Platform),
 	serves ...ContentType,
 ) http.HandlerFunc {
-	names := make([]string, len(serves))
-	for i, ct := range serves {
-		names[i] = servedMediaTypes[ct]
-	}
-
-	served := strings.Join(names, ", ")
+	served := servedList(serves)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		r, ct := choose(r, nil, serves...)

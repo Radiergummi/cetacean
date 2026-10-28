@@ -17,12 +17,16 @@ func JoinDockerfile(statement []byte, layers []Descriptor) (*Dockerfile, error) 
 	}
 
 	bk := p.buildkit
-	if bk == nil || bk.Source.dockerfileIndex() < 0 {
+	if bk == nil {
 		return nil, ErrNoSource
 	}
 
 	source := bk.Source
+
 	index := source.dockerfileIndex()
+	if index < 0 {
+		return nil, ErrNoSource
+	}
 
 	d := &Dockerfile{
 		Path:  p.provenance.DockerfilePath,

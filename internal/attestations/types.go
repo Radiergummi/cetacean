@@ -3,11 +3,7 @@
 // OCI, SLSA and SPDX, and nothing about Swarm.
 package attestations
 
-import (
-	"slices"
-	"strings"
-	"time"
-)
+import "time"
 
 // Platform is one platform of an image index, in OCI's names.
 type Platform struct {
@@ -21,21 +17,6 @@ func (p Platform) String() string {
 	}
 
 	return s
-}
-
-// ParsePlatform reads os/arch or os/arch/variant.
-func ParsePlatform(s string) (Platform, bool) {
-	parts := strings.Split(s, "/")
-	if len(parts) < 2 || len(parts) > 3 || slices.Contains(parts, "") {
-		return Platform{}, false
-	}
-
-	p := Platform{OS: parts[0], Architecture: parts[1]}
-	if len(parts) == 3 {
-		p.Variant = parts[2]
-	}
-
-	return p, true
 }
 
 // Status is what can be said about an image's attestations.

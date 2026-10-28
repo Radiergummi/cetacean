@@ -43,8 +43,7 @@ func spellings() []spelling {
 
 	for _, ext := range extensionTypes {
 		out = append(out, spelling{name: ext.ext, spell: func(m, p string) (string, string, bool) {
-			return m, p + ext.ext, suffixApplies(ext.under, ext.last, p) &&
-				!literalDocuments[p+ext.ext]
+			return m, p + ext.ext, scopedTo(ext.under, p) && !literalDocuments[p+ext.ext]
 		}})
 	}
 

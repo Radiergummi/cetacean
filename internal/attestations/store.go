@@ -62,6 +62,18 @@ type ImagePlatform struct {
 	SBOMTooLarge   bool
 }
 
+// Err is the image's status as an error when its attestations cannot be read.
+func (img Image) Err() error {
+	switch img.Status {
+	case StatusAvailable:
+		return nil
+	case StatusUnavailable:
+		return &UnavailableError{RetryAfter: img.RetryAfter}
+	default:
+		return &ImageStatusError{img.Status}
+	}
+}
+
 // Store fetches attestations on demand and keeps them by digest. Content
 // never changes under a digest, so answers about it never expire; failures
 // do. A nil Store is the feature switched off.
@@ -222,14 +234,7 @@ func (s *Store) available(
 
 	entry, ref := s.lookup(ctx, image)
 
-	switch entry.image.Status {
-	case StatusAvailable:
-		return entry, ref, nil
-	case StatusUnavailable:
-		return entry, ref, &UnavailableError{RetryAfter: entry.image.RetryAfter}
-	default:
-		return entry, ref, &ImageStatusError{entry.image.Status}
-	}
+	return entry, ref, entry.image.Err()
 }
 
 func find(image Image, p Platform) (ImagePlatform, error) {

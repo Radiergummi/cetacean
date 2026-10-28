@@ -79,7 +79,7 @@ func taskOn(nodeID string, state swarm.TaskState) swarm.Task {
 func TestTaskPlatformsNormalisesNodeArch(t *testing.T) {
 	node := nodeOn("n1", "aarch64")
 
-	got := TaskPlatforms(taskOn("n1", swarm.TaskStateRunning), &node, imageWith(amd64, arm64))
+	got := taskPlatforms(taskOn("n1", swarm.TaskStateRunning), &node, imageWith(amd64, arm64))
 	if !slices.Equal(got, []attestations.Platform{arm64}) {
 		t.Errorf("got %v", got)
 	}
@@ -88,7 +88,7 @@ func TestTaskPlatformsNormalisesNodeArch(t *testing.T) {
 func TestTaskPlatformsArmVariantsAreAllCandidates(t *testing.T) {
 	node := nodeOn("n1", "armv7l")
 
-	got := TaskPlatforms(
+	got := taskPlatforms(
 		taskOn("n1", swarm.TaskStateRunning),
 		&node,
 		imageWith(amd64, armv6, armv7),
@@ -99,28 +99,28 @@ func TestTaskPlatformsArmVariantsAreAllCandidates(t *testing.T) {
 }
 
 func TestTaskPlatformsUnplacedGetsAll(t *testing.T) {
-	got := TaskPlatforms(taskOn("", swarm.TaskStatePending), nil, imageWith(amd64, arm64))
+	got := taskPlatforms(taskOn("", swarm.TaskStatePending), nil, imageWith(amd64, arm64))
 	if !slices.Equal(got, []attestations.Platform{amd64, arm64}) {
 		t.Errorf("got %v", got)
 	}
 }
 
 func TestSelectPlatform(t *testing.T) {
-	if p, err := SelectPlatform([]attestations.Platform{amd64}, ""); err != nil || p != amd64 {
+	if p, err := selectPlatform([]attestations.Platform{amd64}, ""); err != nil || p != amd64 {
 		t.Errorf("one candidate: %v, %v", p, err)
 	}
 
-	if _, err := SelectPlatform([]attestations.Platform{amd64, arm64}, ""); !errors.Is(
+	if _, err := selectPlatform([]attestations.Platform{amd64, arm64}, ""); !errors.Is(
 		err, ErrPlatformRequired) {
 		t.Errorf("two candidates, none named: %v", err)
 	}
 
-	if p, err := SelectPlatform([]attestations.Platform{amd64, arm64}, "linux/arm64"); err != nil ||
+	if p, err := selectPlatform([]attestations.Platform{amd64, arm64}, "linux/arm64"); err != nil ||
 		p != arm64 {
 		t.Errorf("named: %v, %v", p, err)
 	}
 
-	if _, err := SelectPlatform([]attestations.Platform{amd64}, "linux/s390x"); !errors.Is(
+	if _, err := selectPlatform([]attestations.Platform{amd64}, "linux/s390x"); !errors.Is(
 		err, attestations.ErrUnknownPlatform) {
 		t.Errorf("unknown: %v", err)
 	}

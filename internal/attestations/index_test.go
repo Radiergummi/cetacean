@@ -64,18 +64,3 @@ func TestParseIndexIgnoresUnknownPredicates(t *testing.T) {
 		t.Errorf("a CycloneDX layer was taken for something: %+v", got[0])
 	}
 }
-
-func TestPlatformRoundTrips(t *testing.T) {
-	for _, s := range []string{"linux/amd64", "linux/arm/v7"} {
-		p, ok := ParsePlatform(s)
-		if !ok || p.String() != s {
-			t.Errorf("%q → %+v → %q", s, p, p.String())
-		}
-	}
-
-	for _, s := range []string{"", "linux", "linux/arm/v7/x", "/amd64"} {
-		if _, ok := ParsePlatform(s); ok {
-			t.Errorf("%q parsed", s)
-		}
-	}
-}

@@ -129,7 +129,7 @@ func ServiceProvenance(
 	src AttestationSource,
 ) ImageProvenance {
 	t := ServiceAttestationTarget(ctx, svc, src)
-	out := project(t.Image, t.Attested, t.Attested.Platforms)
+	out := project(t)
 
 	for _, task := range tasks {
 		if task.Status.State != swarm.TaskStateRunning || nodes == nil {
@@ -159,23 +159,13 @@ func TaskProvenance(
 	nodes NodeLookup,
 	src AttestationSource,
 ) ImageProvenance {
-	t := TaskAttestationTarget(ctx, task, nodes, src)
-
-	var platforms []attestations.ImagePlatform
-
-	for _, p := range t.Attested.Platforms {
-		if slices.Contains(t.Candidates, p.Platform) {
-			platforms = append(platforms, p)
-		}
-	}
-
-	return project(t.Image, t.Attested, platforms)
+	return project(TaskAttestationTarget(ctx, task, nodes, src))
 }
 
-// TaskPlatforms are the platforms of img a task's node can be running. The
+// taskPlatforms are the platforms of img a task's node can be running. The
 // node does not report an ARM variant, so every variant matches; a task not
 // placed yet could run any.
-func TaskPlatforms(
+func taskPlatforms(
 	task swarm.Task,
 	node *swarm.Node,
 	img attestations.Image,
@@ -191,9 +181,9 @@ func TaskPlatforms(
 	return out
 }
 
-// SelectPlatform picks the requested platform among candidates, or the only
+// selectPlatform picks the requested platform among candidates, or the only
 // one when none is requested. Its errors name the candidates.
-func SelectPlatform(
+func selectPlatform(
 	candidates []attestations.Platform,
 	requested string,
 ) (attestations.Platform, error) {
@@ -203,7 +193,7 @@ func SelectPlatform(
 		}
 
 		return attestations.Platform{}, fmt.Errorf("%w: this image has %s",
-			ErrPlatformRequired, PlatformNames(candidates))
+			ErrPlatformRequired, platformNames(candidates))
 	}
 
 	for _, c := range candidates {
@@ -213,11 +203,11 @@ func SelectPlatform(
 	}
 
 	return attestations.Platform{}, fmt.Errorf("%w: %q; this image has %s",
-		attestations.ErrUnknownPlatform, requested, PlatformNames(candidates))
+		attestations.ErrUnknownPlatform, requested, platformNames(candidates))
 }
 
-// PlatformNames lists platforms for a message.
-func PlatformNames(platforms []attestations.Platform) string {
+// platformNames lists platforms for a message.
+func platformNames(platforms []attestations.Platform) string {
 	if len(platforms) == 0 {
 		return "no platform"
 	}
@@ -242,16 +232,11 @@ type AttestationTarget struct {
 // Platform answers a request naming requested: the image's own status as an
 // error when its attestations cannot be read, otherwise a candidate.
 func (t AttestationTarget) Platform(requested string) (attestations.Platform, error) {
-	switch t.Attested.Status {
-	case attestations.StatusAvailable:
-		return SelectPlatform(t.Candidates, requested)
-	case attestations.StatusUnavailable:
-		return attestations.Platform{}, &attestations.UnavailableError{
-			RetryAfter: t.Attested.RetryAfter,
-		}
-	default:
-		return attestations.Platform{}, &attestations.ImageStatusError{Status: t.Attested.Status}
+	if err := t.Attested.Err(); err != nil {
+		return attestations.Platform{}, err
 	}
+
+	return selectPlatform(t.Candidates, requested)
 }
 
 // ServiceAttestationTarget offers every platform of the image svc's spec names.
@@ -287,7 +272,7 @@ func TaskAttestationTarget(
 
 	t := AttestationTarget{Image: containerImage(task.Spec.ContainerSpec)}
 	t.Attested = imageOf(ctx, src, t.Image)
-	t.Candidates = TaskPlatforms(task, node, t.Attested)
+	t.Candidates = taskPlatforms(task, node, t.Attested)
 
 	return t
 }
@@ -345,17 +330,18 @@ func nodeRuns(node swarm.Node, p attestations.Platform) bool {
 		normalizeArch(have.Architecture) == normalizeArch(p.Architecture)
 }
 
-func project(
-	image string,
-	img attestations.Image,
-	platforms []attestations.ImagePlatform,
-) ImageProvenance {
-	out := ImageProvenance{Image: image, Status: img.Status}
-	if !img.RetryAfter.IsZero() {
-		out.RetryAfter = new(img.RetryAfter)
+// project renders the candidate platforms of t's image.
+func project(t AttestationTarget) ImageProvenance {
+	out := ImageProvenance{Image: t.Image, Status: t.Attested.Status}
+	if !t.Attested.RetryAfter.IsZero() {
+		out.RetryAfter = new(t.Attested.RetryAfter)
 	}
 
-	for _, p := range platforms {
+	for _, p := range t.Attested.Platforms {
+		if !slices.Contains(t.Candidates, p.Platform) {
+			continue
+		}
+
 		pp := PlatformProvenance{
 			Platform:       p.Platform.String(),
 			ManifestDigest: p.ManifestDigest,

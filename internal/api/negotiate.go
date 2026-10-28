@@ -5,6 +5,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -345,11 +346,9 @@ var extensionTypes = []struct {
 	ext string
 	ct  ContentType
 	// under, when set, limits the suffix to these routes and what lies
-	// below them. Elsewhere it is part of the identifier.
+	// below them; a * stands for one segment. Elsewhere it is part of the
+	// identifier.
 	under []string
-
-	// last, when set, limits the suffix to a route whose final segment it is.
-	last string
 }{
 	{ext: ".json", ct: ContentTypeJSON},
 	{ext: ".html", ct: ContentTypeHTML},
@@ -361,25 +360,21 @@ var extensionTypes = []struct {
 	{ext: ".csv", ct: ContentTypeCSV},
 	{ext: ".yaml", ct: ContentTypeYAML, under: yamlPaths},
 	{ext: ".yml", ct: ContentTypeYAML, under: yamlPaths},
-	{ext: ".spdx", ct: ContentTypeSPDX, last: "sbom"},
-	{ext: ".txt", ct: ContentTypePlain, last: "dockerfile"},
-}
-
-// suffixApplies reports whether a suffix reads as a representation on path,
-// which is what it names with the suffix taken off.
-func suffixApplies(under []string, last, path string) bool {
-	return scopedTo(under, path) && (last == "" || strings.HasSuffix(path, "/"+last))
+	{ext: ".spdx", ct: ContentTypeSPDX, under: []string{"/services/*/sbom", "/tasks/*/sbom"}},
+	{ext: ".txt", ct: ContentTypePlain, under: []string{
+		"/services/*/dockerfile", "/tasks/*/dockerfile",
+	}},
 }
 
 // scopedTo reports whether path is one of the routes a suffix is limited to,
 // or below it. An unscoped suffix reads everywhere.
-func scopedTo(under []string, path string) bool {
+func scopedTo(under []string, p string) bool {
 	if under == nil {
 		return true
 	}
 
 	for _, route := range under {
-		if path == route || strings.HasPrefix(path, route+"/") {
+		if matched, _ := path.Match(route, p); matched || strings.HasPrefix(p, route+"/") {
 			return true
 		}
 	}
@@ -401,7 +396,7 @@ var literalDocuments = map[string]bool{
 // reading as a representation.
 func hasMidPathExtension(path string) bool {
 	for _, ext := range extensionTypes {
-		if ext.last == "" && strings.Contains(path, ext.ext+"/") && scopedTo(ext.under, path) {
+		if strings.Contains(path, ext.ext+"/") && scopedTo(ext.under, path) {
 			return true
 		}
 	}
@@ -421,7 +416,7 @@ func resolveExtension(r *http.Request) (ContentType, string) {
 
 	for _, ext := range extensionTypes {
 		if trimmed, ok := strings.CutSuffix(path, ext.ext); ok {
-			if !suffixApplies(ext.under, ext.last, trimmed) {
+			if !scopedTo(ext.under, trimmed) {
 				continue
 			}
 			r.URL.Path = trimmed

@@ -38,8 +38,8 @@ requirements:
     url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
     mutants:
       - file: internal/imagecheck/reference.go
-        replace: "\tif !nameGrammar.MatchString(repository) || !tagGrammar.MatchString(tag) {"
-        with: "\tif !tagGrammar.MatchString(tag) {"
+        replace: "\tif !nameGrammar.MatchString(repository) {"
+        with: "\tif false {"
 
   - id: tag-is-at-most-128-characters
     level: MUST
@@ -60,8 +60,8 @@ requirements:
     url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
     mutants:
       - file: internal/imagecheck/reference.go
-        replace: "\tif !nameGrammar.MatchString(repository) || !tagGrammar.MatchString(tag) {"
-        with: "\tif !nameGrammar.MatchString(repository) {"
+        replace: "\t\tif !tagGrammar.MatchString(tag) {"
+        with: "\t\tif false {"
 
   - id: client-sends-accept
     level: SHOULD
