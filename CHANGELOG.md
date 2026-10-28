@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
 - A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
+- A failure that stops Cetacean logs `cetacean stopped`, with the cause in `error`, after closing what it opened. Update log queries that matched the failure's own message, such as `server error`.
 - **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
