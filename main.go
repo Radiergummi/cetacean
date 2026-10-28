@@ -638,9 +638,22 @@ func run(s settings) error {
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
-		err := serveDualListeners(ctx, cfg, router, handlers, tsnetLn, closeStreams)
+		// The watcher stops when ctx does, which a failed listener does not cause:
+		// waiting on it then would hold the process until a signal.
+		if err := serveDualListeners(
+			ctx,
+			cfg,
+			router,
+			handlers,
+			tsnetLn,
+			closeStreams,
+		); err != nil {
+			return err
+		}
+
 		<-watcherDone
-		return err
+
+		return nil
 	}
 
 	server := &http.Server{

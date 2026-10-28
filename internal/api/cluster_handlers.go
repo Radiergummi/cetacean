@@ -16,7 +16,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-func (h *Handlers) getLocalNodeID() string {
+func (h *Handlers) getLocalNodeID(ctx context.Context) string {
 	h.localNodeMu.Lock()
 	defer h.localNodeMu.Unlock()
 	if h.localNodeID != "" {
@@ -30,11 +30,12 @@ func (h *Handlers) getLocalNodeID() string {
 	}
 
 	if h.systemClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Detached: the answer is cached for every request, not this one's.
+		lookupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		id, err := h.systemClient.LocalNodeID(ctx)
+		id, err := h.systemClient.LocalNodeID(lookupCtx)
 		if err != nil {
-			slog.Warn("failed to get local node ID", "error", err)
+			slog.WarnContext(ctx, "failed to get local node ID", "error", err)
 			retryAt := time.Now().Add(30 * time.Second)
 			h.localNodeRetryAfter = &retryAt
 		} else if id != "" {
@@ -74,7 +75,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		TotalMemory:          snap.TotalMemory,
 		Quorum:               snap.Quorum,
 		PrometheusConfigured: h.promClient != nil,
-		LocalNodeID:          h.getLocalNodeID(),
+		LocalNodeID:          h.getLocalNodeID(r.Context()),
 	}
 	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
 }
