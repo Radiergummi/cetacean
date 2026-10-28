@@ -36,7 +36,7 @@ func WhoamiHandler(p Provider, tokens APITokens, writeIdentity WriteIdentityFunc
 			// the middleware, so this handler is the only place a failure
 			// here is observable, and the refusal deliberately says nothing
 			// about the cause.
-			slog.Warn("authentication failed",
+			slog.WarnContext(r.Context(), "authentication failed",
 				"path", r.URL.Path,
 				"error", err,
 			)

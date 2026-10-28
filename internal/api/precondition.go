@@ -64,7 +64,7 @@ func (h *Handlers) conditional(
 				// Same reasoning as an unbuildable representation below: the
 				// condition could not be evaluated, and 412 would name the
 				// wrong problem.
-				slog.Error("failed to refresh a precondition subject",
+				slog.ErrorContext(r.Context(), "failed to refresh a precondition subject",
 					"path", r.URL.Path, "error", err)
 
 				if cerrdefs.IsUnavailable(err) {
@@ -97,7 +97,7 @@ func (h *Handlers) conditional(
 				// The condition could not be evaluated at all. Reporting 412
 				// here would tell the caller its validator is stale, which is
 				// a different problem with a different fix.
-				slog.Error("failed to build a precondition representation",
+				slog.ErrorContext(r.Context(), "failed to build a precondition representation",
 					"path", r.URL.Path, "error", err)
 
 				if cerrdefs.IsUnavailable(err) {

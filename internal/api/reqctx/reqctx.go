@@ -1,8 +1,11 @@
-// Package reqctx carries the request values every response writer reads, the
-// problem writer included, so none of them needs the transport package.
+// Package reqctx carries the request values every response writer and log line
+// reads, the problem writer included, so none of them needs the transport package.
 package reqctx
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 type basePathKey struct{}
 
@@ -33,4 +36,26 @@ func WithRequestID(ctx context.Context, id string) context.Context {
 func RequestID(ctx context.Context) string {
 	v, _ := ctx.Value(requestIDKey{}).(string)
 	return v
+}
+
+// LogHandler adds the request ID to every record logged with a context that
+// carries one, so a requestId a client was given finds its log lines.
+func LogHandler(next slog.Handler) slog.Handler { return logHandler{next} }
+
+type logHandler struct{ slog.Handler }
+
+func (h logHandler) Handle(ctx context.Context, record slog.Record) error {
+	if id := RequestID(ctx); id != "" {
+		record.AddAttrs(slog.String("req_id", id))
+	}
+
+	return h.Handler.Handle(ctx, record)
+}
+
+func (h logHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return logHandler{h.Handler.WithAttrs(attrs)}
+}
+
+func (h logHandler) WithGroup(name string) slog.Handler {
+	return logHandler{h.Handler.WithGroup(name)}
 }

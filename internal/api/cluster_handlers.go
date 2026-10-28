@@ -143,7 +143,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`,
 		)
 		if err != nil {
-			slog.Warn("cluster metrics: CPU query failed", "error", err)
+			slog.WarnContext(ctx, "cluster metrics: CPU query failed", "error", err)
 			return
 		}
 		if len(results) > 0 {
@@ -155,7 +155,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		results, err := h.promClient.InstantQuery(ctx,
 			`sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)`)
 		if err != nil {
-			slog.Warn("cluster metrics: memory query failed", "error", err)
+			slog.WarnContext(ctx, "cluster metrics: memory query failed", "error", err)
 			return
 		}
 		if len(results) > 0 {
@@ -279,7 +279,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `count by (instance) (node_uname_info)`)
 		if err != nil {
-			slog.Warn("monitoring status: node-exporter query failed", "error", err)
+			slog.WarnContext(ctx, "monitoring status: node-exporter query failed", "error", err)
 			return
 		}
 		nodeExporter = &TargetStatus{Targets: len(results), Nodes: nodeCount}
@@ -289,7 +289,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `up{job="cadvisor"}`)
 		if err != nil {
-			slog.Warn("monitoring status: cadvisor query failed", "error", err)
+			slog.WarnContext(ctx, "monitoring status: cadvisor query failed", "error", err)
 			return
 		}
 		cadvisor = &TargetStatus{Targets: len(results), Nodes: nodeCount}
@@ -332,7 +332,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		slog.Error("swarm inspect failed", "error", err)
+		slog.ErrorContext(ctx, "swarm inspect failed", "error", err)
 		problem.Write(w, r, "SWM002", "swarm inspect failed")
 		return
 	}
@@ -427,7 +427,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 
 	du, err := h.diskUsage.get(r.Context(), h.systemClient.DiskUsage)
 	if err != nil {
-		slog.Error("disk usage failed", "error", err)
+		slog.ErrorContext(r.Context(), "disk usage failed", "error", err)
 		problem.Write(w, r, "SWM005", "disk usage failed")
 		return
 	}

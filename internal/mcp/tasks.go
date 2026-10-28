@@ -108,7 +108,7 @@ func boundTaskTTL(task *mcplib.TaskParams, def, ceiling time.Duration) bool {
 // the client sent. This hook gets a pointer to the request handleToolCall
 // receives on the next line — an adjacency nothing documents.
 func (s *Server) installTaskTTLHook(h *mcpserver.Hooks) {
-	h.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcplib.CallToolRequest) {
+	h.AddBeforeCallTool(func(ctx context.Context, _ any, msg *mcplib.CallToolRequest) {
 		if !boundTaskTTL(msg.Params.Task, s.config.TaskTTL, s.config.MaxTaskTTL) {
 			return
 		}
@@ -117,7 +117,7 @@ func (s *Server) installTaskTTLHook(h *mcpserver.Hooks) {
 		// failing it over a retention preference would be the wrong trade. Debug
 		// rather than warn — a client naming a long TTL is being optimistic,
 		// not hostile.
-		slog.Debug("clamped MCP task TTL to the configured maximum",
+		slog.DebugContext(ctx, "clamped MCP task TTL to the configured maximum",
 			"tool", msg.Params.Name,
 			"max", s.config.MaxTaskTTL,
 		)

@@ -137,7 +137,7 @@ func handlePatchLabels[T any](
 		}
 	}
 
-	slog.Info("patching "+spec.resource+" labels", spec.resource, key)
+	slog.InfoContext(ctx, "patching "+spec.resource+" labels", spec.resource, key)
 
 	result, err := spec.update(ctx, key, mutate)
 	if refused != nil {

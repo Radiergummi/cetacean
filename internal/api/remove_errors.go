@@ -17,6 +17,6 @@ func writeRemovalConflict(
 	err error,
 	code, resource, key string,
 ) {
-	slog.Info("removal refused", "resource", resource, "id", key, "error", err)
+	slog.InfoContext(r.Context(), "removal refused", "resource", resource, "id", key, "error", err)
 	problem.Write(w, r, code, cluster.RemovalConflictDetail(resource, key))
 }

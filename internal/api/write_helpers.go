@@ -196,7 +196,7 @@ func writeDockerError(
 		problem.Write(w, r, "ENG001", err.Error())
 		return
 	}
-	slog.Error("failed to update "+resource, "error", err)
+	slog.ErrorContext(r.Context(), "failed to update "+resource, "error", err)
 	problem.Write(w, r, "ENG004", "failed to update "+resource)
 }
 

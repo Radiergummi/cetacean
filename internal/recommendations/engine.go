@@ -164,7 +164,14 @@ func (e *Engine) tick(ctx context.Context, force bool) {
 	}
 	metrics.SetRecommendationCounts(critical, warning, info)
 
-	slog.Debug("recommendations: tick complete", "checkers_run", len(toRun), "total", len(merged))
+	slog.DebugContext(
+		ctx,
+		"recommendations: tick complete",
+		"checkers_run",
+		len(toRun),
+		"total",
+		len(merged),
+	)
 }
 
 // LastTick returns the time of the most recent completed tick. Nil-safe.

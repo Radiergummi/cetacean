@@ -84,7 +84,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		return
 	}
 
-	slog.Info("creating "+spec.resource, "name", req.Name)
+	slog.InfoContext(r.Context(), "creating "+spec.resource, "name", req.Name)
 
 	id, err := spec.create(r.Context(), req.Name, labels, data)
 	if err != nil {
@@ -101,7 +101,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		// The secret exists either way; a failure here only leaves the agent
 		// asking again, so it is logged rather than turned into an error.
 		if err := spec.entries.Complete(req.Elicitation, entrySubject(identity), id); err != nil {
-			slog.Warn("secret created but its entry could not be completed",
+			slog.WarnContext(r.Context(), "secret created but its entry could not be completed",
 				"secret", req.Name, "error", err)
 		}
 	}

@@ -28,7 +28,7 @@ func handleRemove[T any](
 		return
 	}
 
-	slog.Info("removing "+spec.resource, spec.resource, key)
+	slog.InfoContext(r.Context(), "removing "+spec.resource, spec.resource, key)
 
 	if err := spec.remove(r.Context(), key); err != nil {
 		if cluster.IsRemovalConflict(err, spec.resource) {

@@ -37,7 +37,7 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	force := r.URL.Query().Get("force") == "true"
 
-	slog.Info("removing volume", "volume", name, "force", force)
+	slog.InfoContext(r.Context(), "removing volume", "volume", name, "force", force)
 
 	err := h.resourceRemover.RemoveVolume(r.Context(), name, force)
 	if err != nil {

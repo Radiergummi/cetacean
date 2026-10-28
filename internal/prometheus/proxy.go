@@ -46,7 +46,7 @@ func (p *Proxy) proxyTo(
 
 	outReq, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
-		slog.Error("failed to create prometheus request", "error", err)
+		slog.ErrorContext(r.Context(), "failed to create prometheus request", "error", err)
 		problem.Write(w, r, "MTR007", "failed to create prometheus request")
 		return
 	}
@@ -56,7 +56,7 @@ func (p *Proxy) proxyTo(
 	proxyDuration := time.Since(proxyStart).Seconds()
 	if err != nil {
 		metrics.RecordPrometheusRequest(0, proxyDuration)
-		slog.Error("prometheus unreachable", "url", p.baseURL, "error", err)
+		slog.ErrorContext(r.Context(), "prometheus unreachable", "url", p.baseURL, "error", err)
 		problem.Write(w, r, "MTR002", "prometheus unreachable")
 		return
 	}
@@ -76,12 +76,19 @@ func (p *Proxy) proxyTo(
 			body, err = readLimited(resp.Body)
 		}
 		if errors.Is(err, ErrResponseTooLarge) {
-			slog.Error("prometheus response too large", "url", targetURL, "limit", maxResponseBytes)
+			slog.ErrorContext(
+				r.Context(),
+				"prometheus response too large",
+				"url",
+				targetURL,
+				"limit",
+				maxResponseBytes,
+			)
 			problem.Write(w, r, "MTR008", "the Prometheus response exceeds the proxy's size limit")
 			return
 		}
 		if err != nil {
-			slog.Error("prometheus proxy read error", "error", err)
+			slog.ErrorContext(r.Context(), "prometheus proxy read error", "error", err)
 			problem.Write(w, r, "MTR002", err.Error())
 			return
 		}
@@ -96,7 +103,7 @@ func (p *Proxy) proxyTo(
 	// Non-2xx: return a structured error instead of forwarding the raw
 	// Prometheus response (which may be HTML or an opaque error page).
 	preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	slog.Error("prometheus returned error",
+	slog.ErrorContext(r.Context(), "prometheus returned error",
 		"url", targetURL,
 		"status", resp.StatusCode,
 		"body", string(preview),

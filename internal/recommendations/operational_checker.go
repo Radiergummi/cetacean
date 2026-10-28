@@ -53,11 +53,11 @@ func (oc *OperationalChecker) Check(ctx context.Context) []Recommendation {
 	diskResult, memResult := results[0], results[1]
 
 	if diskResult.err != nil {
-		slog.Warn("operational: disk usage query failed", "error", diskResult.err)
+		slog.WarnContext(ctx, "operational: disk usage query failed", "error", diskResult.err)
 	}
 
 	if memResult.err != nil {
-		slog.Warn("operational: memory pressure query failed", "error", memResult.err)
+		slog.WarnContext(ctx, "operational: memory pressure query failed", "error", memResult.err)
 	}
 
 	if diskResult.err == nil {

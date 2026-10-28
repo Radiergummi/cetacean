@@ -82,7 +82,7 @@ func Middleware(provider Provider, tokens APITokens) func(http.Handler) http.Han
 			}
 
 			if err != nil {
-				slog.Warn("authentication failed",
+				slog.WarnContext(r.Context(), "authentication failed",
 					"path", r.URL.Path,
 					"error", err,
 				)

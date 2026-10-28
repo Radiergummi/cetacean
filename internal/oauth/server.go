@@ -1145,7 +1145,7 @@ func (s *Server) resolveClientMeta(
 		// etc. Log the specifics for operators and show a generic message.
 		m, err := s.cimd.Fetch(r.Context(), clientID)
 		if err != nil {
-			slog.Warn("CIMD fetch failed",
+			slog.WarnContext(r.Context(), "CIMD fetch failed",
 				"client_id", clientID,
 				"error", err,
 			)

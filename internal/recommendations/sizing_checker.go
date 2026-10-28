@@ -70,19 +70,19 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 	cpuP95Result, memP95Result := results[2], results[3]
 
 	if cpuResult.err != nil {
-		slog.Warn("sizing: CPU query failed", "error", cpuResult.err)
+		slog.WarnContext(ctx, "sizing: CPU query failed", "error", cpuResult.err)
 	}
 
 	if memResult.err != nil {
-		slog.Warn("sizing: memory query failed", "error", memResult.err)
+		slog.WarnContext(ctx, "sizing: memory query failed", "error", memResult.err)
 	}
 
 	if cpuP95Result.err != nil {
-		slog.Warn("sizing: p95 CPU query failed", "error", cpuP95Result.err)
+		slog.WarnContext(ctx, "sizing: p95 CPU query failed", "error", cpuP95Result.err)
 	}
 
 	if memP95Result.err != nil {
-		slog.Warn("sizing: p95 memory query failed", "error", memP95Result.err)
+		slog.WarnContext(ctx, "sizing: p95 memory query failed", "error", memP95Result.err)
 	}
 
 	cpu, mem := byService(cpuResult.results), byService(memResult.results)

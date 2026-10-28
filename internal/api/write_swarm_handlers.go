@@ -69,7 +69,7 @@ func (h *Handlers) HandlePatchSwarmOrchestration(w http.ResponseWriter, r *http.
 			spec.Orchestration.TaskHistoryRetentionLimit = patch.TaskHistoryRetentionLimit
 		}
 
-		slog.Info("updating swarm orchestration config")
+		slog.InfoContext(r.Context(), "updating swarm orchestration config")
 
 		return swarm.UpdateFlags{}
 	}, swarmUpdateFailed)
@@ -106,7 +106,7 @@ func (h *Handlers) HandlePatchSwarmRaft(w http.ResponseWriter, r *http.Request) 
 			spec.Raft.LogEntriesForSlowFollowers = patch.LogEntriesForSlowFollowers
 		}
 
-		slog.Info("updating swarm raft config")
+		slog.InfoContext(r.Context(), "updating swarm raft config")
 
 		return swarm.UpdateFlags{}
 	}, swarmUpdateFailed)
@@ -137,7 +137,7 @@ func (h *Handlers) HandlePatchSwarmDispatcher(w http.ResponseWriter, r *http.Req
 			spec.Dispatcher.HeartbeatPeriod = patch.HeartbeatPeriod
 		}
 
-		slog.Info("updating swarm dispatcher config")
+		slog.InfoContext(r.Context(), "updating swarm dispatcher config")
 
 		return swarm.UpdateFlags{}
 	}, swarmUpdateFailed)
@@ -168,7 +168,7 @@ func (h *Handlers) HandlePatchSwarmCAConfig(w http.ResponseWriter, r *http.Reque
 			spec.CAConfig.NodeCertExpiry = patch.NodeCertExpiry
 		}
 
-		slog.Info("updating swarm CA config")
+		slog.InfoContext(r.Context(), "updating swarm CA config")
 
 		return swarm.UpdateFlags{}
 	}, swarmUpdateFailed)
@@ -201,7 +201,7 @@ func (h *Handlers) HandlePatchSwarmEncryption(w http.ResponseWriter, r *http.Req
 			spec.EncryptionConfig.AutoLockManagers = *patch.AutoLockManagers
 		}
 
-		slog.Info("updating swarm encryption config")
+		slog.InfoContext(r.Context(), "updating swarm encryption config")
 
 		return swarm.UpdateFlags{}
 	}, swarmUpdateFailed)
@@ -237,7 +237,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 	}
 
 	if _, ok := h.updateSwarm(w, r, func(*swarm.Spec) swarm.UpdateFlags {
-		slog.Info("rotating swarm join token", "target", req.Target)
+		slog.InfoContext(r.Context(), "rotating swarm join token", "target", req.Target)
 
 		return flags
 	}, swarmFailure{"SWM006", "failed to rotate token"}); !ok {
@@ -249,7 +249,7 @@ func (h *Handlers) HandlePostRotateToken(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandlePostRotateUnlockKey(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.updateSwarm(w, r, func(*swarm.Spec) swarm.UpdateFlags {
-		slog.Info("rotating swarm unlock key")
+		slog.InfoContext(r.Context(), "rotating swarm unlock key")
 
 		return swarm.UpdateFlags{RotateManagerUnlockKey: true}
 	}, swarmFailure{"SWM007", "failed to rotate unlock key"}); !ok {
@@ -263,7 +263,12 @@ func (h *Handlers) HandlePostForceRotateCA(w http.ResponseWriter, r *http.Reques
 	if _, ok := h.updateSwarm(w, r, func(spec *swarm.Spec) swarm.UpdateFlags {
 		spec.CAConfig.ForceRotate++
 
-		slog.Info("forcing CA certificate rotation", "force_rotate", spec.CAConfig.ForceRotate)
+		slog.InfoContext(
+			r.Context(),
+			"forcing CA certificate rotation",
+			"force_rotate",
+			spec.CAConfig.ForceRotate,
+		)
 
 		return swarm.UpdateFlags{}
 	}, swarmFailure{"SWM003", "failed to force CA rotation"}); !ok {
@@ -326,7 +331,7 @@ func (h *Handlers) HandlePostUnlockSwarm(w http.ResponseWriter, r *http.Request)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	slog.Info("unlocking swarm")
+	slog.InfoContext(ctx, "unlocking swarm")
 
 	if err := h.systemClient.UnlockSwarm(ctx, body.UnlockKey); err != nil {
 		writeSwarmErrorCode(w, r, err, "SWM008", "failed to unlock swarm")
@@ -354,7 +359,7 @@ func writeSwarmErrorCode(
 		return
 	}
 
-	slog.Error(failed, "error", err)
+	slog.ErrorContext(r.Context(), failed, "error", err)
 	problem.Write(w, r, code, failed)
 }
 

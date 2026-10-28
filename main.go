@@ -28,6 +28,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -116,7 +117,7 @@ func main() {
 	} else {
 		logHandler = slog.NewJSONHandler(os.Stdout, opts)
 	}
-	slog.SetDefault(slog.New(logHandler))
+	slog.SetDefault(slog.New(reqctx.LogHandler(logHandler)))
 
 	if configPath != "" {
 		slog.Info("loaded config file", "path", configPath, "discovered", flags.Config == "")
@@ -954,14 +955,14 @@ func serveDualListeners(
 		defer close(drained)
 
 		<-ctx.Done()
-		slog.Info("shutting down", "cause", context.Cause(ctx))
+		slog.InfoContext(ctx, "shutting down", "cause", context.Cause(ctx))
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := appServer.Shutdown(shutdownCtx); err != nil {
-			slog.Error("tsnet server shutdown error", "error", err)
+			slog.ErrorContext(ctx, "tsnet server shutdown error", "error", err)
 		}
 		if err := metaServer.Shutdown(shutdownCtx); err != nil {
-			slog.Error("meta server shutdown error", "error", err)
+			slog.ErrorContext(ctx, "meta server shutdown error", "error", err)
 		}
 	}()
 
@@ -970,22 +971,22 @@ func serveDualListeners(
 	// failing HEALTHCHECK takes the start period plus its retries, and outside
 	// Swarm nothing restarts a container for being unhealthy.
 	go func() {
-		slog.Info("meta server started", "listen_addr", cfg.ListenAddr)
+		slog.InfoContext(ctx, "meta server started", "listen_addr", cfg.ListenAddr)
 		if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
-			slog.Error("meta server error", "error", err)
+			slog.ErrorContext(ctx, "meta server error", "error", err)
 			os.Exit(1)
 		}
 	}()
 
 	// Serve full router on tsnet listener (blocking)
-	slog.Info("tsnet server started", "auth", "tailscale")
+	slog.InfoContext(ctx, "tsnet server started", "auth", "tailscale")
 	if err := appServer.Serve(tsnetLn); err != http.ErrServerClosed {
-		slog.Error("tsnet server error", "error", err)
+		slog.ErrorContext(ctx, "tsnet server error", "error", err)
 		os.Exit(1)
 	}
 
 	<-drained
-	slog.Info("shutdown complete")
+	slog.InfoContext(ctx, "shutdown complete")
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between
@@ -1101,14 +1102,14 @@ func startImageCheck(
 	ready <-chan struct{},
 ) *imagecheck.Checker {
 	if !cfg.ImageCheck {
-		slog.Info("image check disabled")
+		slog.InfoContext(ctx, "image check disabled")
 
 		return nil
 	}
 
 	checker := imagecheck.New(services)
 	go checker.RunAfter(ctx, ready)
-	slog.Info("image check enabled")
+	slog.InfoContext(ctx, "image check enabled")
 
 	return checker
 }
