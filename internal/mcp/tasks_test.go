@@ -12,20 +12,35 @@ import (
 
 // seedService puts a replicated service and the tasks backing it into the
 // cache, so a convergence predicate has something real to read.
+// updatable makes the cached service id one every lifecycle write applies to:
+// replicated, and updated at least once.
+func updatable(t *testing.T, c *cache.Cache, id string) {
+	t.Helper()
+
+	svc, ok := c.GetService(id)
+	if !ok {
+		t.Fatalf("service %q is not cached", id)
+	}
+
+	svc.Spec.Mode = swarm.ServiceMode{Replicated: &swarm.ReplicatedService{}}
+	previous := svc.Spec
+	svc.PreviousSpec = &previous
+	c.SetService(svc)
+}
+
 func seedService(t *testing.T, c *cache.Cache, id string, desired, running int) {
 	t.Helper()
 
 	replicas := uint64(desired)
 
-	c.SetService(swarm.Service{
-		ID: id,
-		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: id},
-			Mode: swarm.ServiceMode{
-				Replicated: &swarm.ReplicatedService{Replicas: &replicas},
-			},
+	spec := swarm.ServiceSpec{
+		Name: id,
+		Mode: swarm.ServiceMode{
+			Replicated: &swarm.ReplicatedService{Replicas: &replicas},
 		},
-	})
+	}
+	previous := spec
+	c.SetService(swarm.Service{ID: id, Spec: spec, PreviousSpec: &previous})
 
 	for index := range desired {
 		state := swarm.TaskStatePending

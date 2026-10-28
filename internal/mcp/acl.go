@@ -236,6 +236,25 @@ func (s *Server) checkWrite(ctx context.Context, resourceType, resourceName stri
 	return nil
 }
 
+// writeCaller is the caller as the write use cases take it, at the level the
+// tools were registered at.
+func (s *Server) writeCaller(ctx context.Context) cluster.Caller {
+	identity := auth.IdentityFromContext(ctx)
+	permitted := func(permission string) func(string) bool {
+		if s.acl == nil || identity == nil {
+			return func(string) bool { return true }
+		}
+
+		return s.acl.Checker(identity, permission)
+	}
+
+	return cluster.Caller{
+		CanRead:  permitted("read"),
+		CanWrite: permitted("write"),
+		Level:    s.config.EffectiveOperationsLevel(s.globalOpsLevel),
+	}
+}
+
 // writePredicate is checkWrite in the predicate form the shared rules in
 // internal/cluster take.
 func (s *Server) writePredicate(ctx context.Context) func(resource string) bool {

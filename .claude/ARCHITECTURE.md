@@ -61,6 +61,10 @@ liability — it is the only part of the previous version of this file that rott
   `cluster.ClassifyWrite`, which also decides what of the engine's text a caller
   sees; the transport maps the `WriteError` it returns. REST-only writes (swarm
   settings, stacks, the precondition read) still classify for themselves.
+- A write both transports offer is one `cluster.Writes` use case: target, ACL,
+  tier, domain rules, Docker, classification. The transports decode, pin a
+  version on the context and render. So far the service lifecycle; the sections,
+  nodes, removals, creates and labels follow (design 2026-10-28, steps 4–5).
 - Dashboard affordances gate on what the server computed, never on a client-side
   reading of the policy: a resource's own writes on its `Allow`, a sub-resource's
   on the parent's `rel="edit"` link to it.
