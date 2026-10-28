@@ -207,10 +207,9 @@ func (h *Handlers) handleFeedRecommendations(
 		return
 	}
 
-	results := cluster.ReadableRecommendations(
-		h.acl,
-		auth.IdentityFromContext(r.Context()),
+	results := recommendations.Readable(
 		h.recEngine.Results(),
+		h.acl.Checker(auth.IdentityFromContext(r.Context()), "read"),
 	)
 
 	lastTick := h.recEngine.LastTick()
