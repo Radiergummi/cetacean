@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,7 +10,9 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/errdefs"
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/problem"
@@ -384,5 +387,49 @@ func TestRequireWriteACL_NilEvaluator(t *testing.T) {
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("status=%d, want 200", w.Code)
+	}
+}
+
+// A plugin is not cached, so whether a readable one exists is the daemon's
+// answer: absent is not found, present is ACL002.
+func TestRequireWriteACL_ReadablePluginAsksTheDaemon(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{Resources: []string{"plugin:*"}, Audience: []string{"*"}, Permissions: []string{"read"}},
+	}})
+
+	for name, want := range map[string]int{
+		"installed": http.StatusForbidden,
+		"absent":    http.StatusNotFound,
+	} {
+		t.Run(name, func(t *testing.T) {
+			pc := &mockPluginClient{
+				pluginInspectFn: func(_ context.Context, n string) (*types.Plugin, error) {
+					if n == "absent" {
+						return nil, errdefs.NotFound(errors.New("no such plugin"))
+					}
+					return &types.Plugin{Name: n}, nil
+				},
+			}
+			h := newTestHandlers(t, withACL(e), withPluginClient(pc))
+			handler := h.requireWriteACL(pathResource("plugin", "name"))(
+				http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+					t.Error("inner handler called without a write grant")
+				}),
+			)
+
+			req := httptest.NewRequest("DELETE", "/plugins/"+name, nil)
+			req.Pattern = "DELETE /plugins/{name}"
+			req.SetPathValue("name", name)
+			req = req.WithContext(
+				auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "alice"}),
+			)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != want {
+				t.Errorf("status=%d, want %d; body: %s", w.Code, want, w.Body.String())
+			}
+		})
 	}
 }

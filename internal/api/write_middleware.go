@@ -2,6 +2,7 @@ package api
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -109,17 +110,39 @@ func (h *Handlers) hiddenTarget(r *http.Request) (kind, key string, hidden bool)
 	collection, _, _ := strings.Cut(path, "/")
 	kind = strings.TrimSuffix(collection, "s")
 
-	if _, ok := notFoundCodes[kind]; !ok || key == "" || !cluster.Resolvable(kind) {
+	if _, ok := notFoundCodes[kind]; !ok || key == "" {
 		return kind, key, false
 	}
 
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+	if kind == "plugin" {
+		return kind, key, h.pluginHidden(r, key, canRead)
+	}
+	if !cluster.Resolvable(kind) {
+		return kind, key, false
+	}
+
 	record, found, err := cluster.LookupAs(h.cache, kind, key, canRead)
 	if err != nil {
 		return kind, key, false
 	}
 
 	return kind, key, !found || !canRead(record.Resource())
+}
+
+// pluginHidden is hiddenTarget for a plugin, which the cache does not hold:
+// the daemon is asked only once the caller may read the name.
+func (h *Handlers) pluginHidden(r *http.Request, name string, canRead func(string) bool) bool {
+	if !canRead("plugin:" + name) {
+		return true
+	}
+	if h.pluginClient == nil {
+		return false
+	}
+
+	_, err := h.pluginRepresentation(r)
+
+	return errors.Is(err, errNoRepresentation)
 }
 
 // --- ACL resource resolvers ---

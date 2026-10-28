@@ -98,7 +98,6 @@ var excusedUncovered = map[string]string{
 	// POST /-/resync, a Resyncer it never sets — so router.go does not even
 	// register that route here. The /plugins* handlers call their nil client
 	// with no nil check, so driving them would panic the test binary.
-	"DELETE /plugins/{name}":         "reads the Docker daemon directly; covered by the e2e harness",
 	"GET /disk-usage":                "reads the Docker daemon directly; covered by the e2e harness",
 	"GET /plugins":                   "reads the Docker daemon directly; covered by the e2e harness",
 	"GET /plugins/{name}":            "reads the Docker daemon directly; covered by the e2e harness",
@@ -117,7 +116,6 @@ var excusedUncovered = map[string]string{
 
 	// Write endpoints: every one mutates through h.systemClient, h.pluginClient
 	// or the DockerWriteClient composite, all of which world.go leaves nil.
-	"DELETE /nodes/{id}":               "mutates through the Docker daemon; covered by the e2e write lane",
 	"DELETE /stacks/{name}":            "mutates through the Docker daemon; covered by the e2e write lane",
 	"PATCH /configs/{id}/labels":       "mutates through the Docker daemon; covered by the e2e write lane",
 	"PATCH /secrets/{id}/labels":       "mutates through the Docker daemon; covered by the e2e write lane",

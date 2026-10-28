@@ -172,3 +172,117 @@ grants:
 		)
 	}
 }
+
+// Every record route answers a write the caller cannot read with the record's
+// not-found, and one it can read but not write with ACL002.
+func TestAWriteToAnUnreadableRecordIsNotFound(t *testing.T) {
+	routes := []struct{ method, path, contentType, body, notFound string }{
+		{
+			http.MethodPut,
+			"/services/" + SeededServiceID + "/image",
+			"application/json",
+			`{"image":"nginx:2"}`,
+			"SVC003",
+		},
+		{http.MethodPost, "/services/" + SeededServiceID + "/rollback", "", "", "SVC003"},
+		{http.MethodPost, "/services/" + SeededServiceID + "/restart", "", "", "SVC003"},
+		{
+			http.MethodPut,
+			"/nodes/" + SeededNodeID + "/availability",
+			"application/json",
+			`{"availability":"drain"}`,
+			"NOD003",
+		},
+		{
+			http.MethodPatch,
+			"/nodes/" + SeededNodeID + "/labels",
+			"application/json-patch+json",
+			`[{"op":"add","path":"/a","value":"b"}]`,
+			"NOD003",
+		},
+		{
+			http.MethodPut,
+			"/nodes/" + SeededNodeID + "/role",
+			"application/json",
+			`{"role":"worker"}`,
+			"NOD003",
+		},
+		{http.MethodDelete, "/nodes/" + SeededNodeID, "", "", "NOD003"},
+		{http.MethodDelete, "/tasks/" + SeededTaskID, "", "", "TSK002"},
+		{http.MethodDelete, "/plugins/sshfs", "", "", "PLG004"},
+	}
+
+	for _, grant := range []struct{ name, permissions string }{
+		{"unreadable", ""},
+		{"readable", `
+  - resources: ["*"]
+    audience: ["group:frontend"]
+    permissions: ["read"]`},
+	} {
+		w := refusingWorld(t)
+		policy, err := acl.ParsePolicy([]byte(`
+grants:
+  - resources: ["stack:frontend-*"]
+    audience: ["group:frontend"]
+    permissions: ["read", "write"]` + grant.permissions + "\n"))
+		if err != nil {
+			t.Fatalf("parse policy: %v", err)
+		}
+		w.ACL.SetPolicy(policy)
+
+		for _, route := range routes {
+			t.Run(grant.name+" "+route.method+" "+route.path, func(t *testing.T) {
+				status, body := writeAs(
+					t,
+					w,
+					"frontend",
+					route.method,
+					route.path,
+					route.contentType,
+					route.body,
+				)
+
+				want, code := http.StatusNotFound, route.notFound
+				if grant.name == "readable" {
+					want, code = http.StatusForbidden, "ACL002"
+				}
+				if status != want || !strings.Contains(body, code) {
+					t.Errorf("= %d %s, want %d %s", status, body, want, code)
+				}
+			})
+		}
+	}
+}
+
+func writeAs(
+	t *testing.T,
+	w *World,
+	persona, method, path, contentType, body string,
+) (int, string) {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		t.Context(),
+		method,
+		w.Server.URL+path,
+		strings.NewReader(body),
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	setPersonaHeaders(t, req, persona)
+
+	resp, err := w.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+
+	answer, _ := io.ReadAll(resp.Body)
+
+	return resp.StatusCode, string(answer)
+}
