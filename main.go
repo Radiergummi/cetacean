@@ -980,14 +980,10 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 		statePath = filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
 	}
 
-	// The API comes first, so a client that sends no RFC 8707 resource
-	// indicator gets a token for the deployment it pointed at rather than for
-	// a transport it never asked about. With oauth.api_tokens off, MCP is both
-	// the only resource and the default, which is what shipped before the API
-	// became one.
-	//
-	// The two are separate audiences despite one path lying under the other:
-	// granting an agent MCP access is not granting it DELETE /services/{id}.
+	// The API comes first, so a client sending no RFC 8707 resource indicator
+	// gets a token for the deployment it pointed at; with oauth.api_tokens off,
+	// MCP is the only resource. The two are separate audiences even though one
+	// path lies under the other: MCP access does not grant DELETE /services/{id}.
 	var resources []oauth.Resource
 	if d.cfg.OAuth.APITokens {
 		resources = append(resources, oauth.Resource{
@@ -1047,13 +1043,10 @@ func startImageCheck(
 	return checker
 }
 
-// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
-// when MCP is disabled. The second return is a cleanup function the caller must
-// invoke at shutdown so the MCP server's cache change listener detaches before
-// the cache itself is torn down.
-//
-// The authorization server is built separately and arrives as the narrow
-// interface MCP consumes, so MCP is one of its consumers rather than its owner.
+// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, or nil when
+// disabled. The caller must invoke the returned cleanup at shutdown so the
+// cache change listener detaches before the cache is torn down. The
+// authorization server arrives as the narrow interface MCP consumes.
 func setupMCP(
 	d mcpDeps,
 	tokenVerifier mcp.TokenVerifier,

@@ -179,10 +179,8 @@ type Cache struct {
 	diskMu sync.Mutex
 
 	// generation counts every change to the cache's contents, including a full
-	// resync. It is deliberately not the history sequence: history answers
-	// "which changes have I missed", which a resync cannot, and so does not
-	// advance for one — see notify. A validator derived from that number would
-	// report a wholly replaced cache as unchanged.
+	// resync. It is not the history sequence, which does not advance on a resync
+	// (see notify); a validator derived from that would miss a replaced cache.
 	generation atomic.Uint64
 
 	// versionGeneration advances only when a config or secret is set or removed,
@@ -194,10 +192,8 @@ type Cache struct {
 }
 
 // Generation returns a counter that advances on every change to the cache's
-// contents. Equal values mean nothing has changed; it says nothing about what
-// did. Read without the lock, so a value taken alongside a concurrent write may
-// already be stale by the time a caller uses it — the same window a response
-// has between being rendered and being written.
+// contents; equal values mean nothing changed. Read without the lock, so it may
+// already be stale alongside a concurrent write.
 func (c *Cache) Generation() uint64 { return c.generation.Load() }
 
 // VersionGeneration is Generation counted over config and secret sets and

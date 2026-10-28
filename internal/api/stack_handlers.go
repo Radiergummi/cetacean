@@ -59,13 +59,10 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setAllow(w, r, "stack", name)
 
-	// Building a stack detail walks every service, task, config, secret,
-	// network and volume in it, and then marshals the lot. None of that depends
-	// on the request, so it is kept until the cache changes.
-	//
-	// The validator stays a hash of the body rather than something derived from
-	// the generation: this document is also what precond compares an If-Match
-	// against, and the two have to agree.
+	// A stack detail walks every service, task, config, secret, network and
+	// volume in it and is request-independent, so it is kept until the cache
+	// changes. The validator stays a body hash: precond compares If-Match
+	// against this same document, and the two have to agree.
 	key := projectionKey{
 		generation:  h.cache.Generation(),
 		fingerprint: h.acl.Fingerprint(auth.IdentityFromContext(r.Context())),

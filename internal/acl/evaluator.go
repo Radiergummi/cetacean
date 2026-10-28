@@ -164,10 +164,8 @@ func (e *Evaluator) grantSetOf(id *auth.Identity, p *Policy, permission string) 
 }
 
 // Filter returns only items the identity can access with the given permission.
-//
-// items is left untouched. A caller that owns the slice outright — one holding
-// a copy the cache just handed it — and whose items are all one resource type
-// should use FilterInPlaceNamed, which is the same walk without a second slice.
+// items is left untouched; a caller that owns the slice and whose items are all
+// one resource type should use FilterInPlaceNamed, which avoids a second slice.
 func Filter[T any](
 	e *Evaluator,
 	id *auth.Identity,

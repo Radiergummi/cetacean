@@ -39,15 +39,9 @@ type asyncAPIRendering struct {
 }
 
 // HandleAsyncAPI returns the negotiated handler and the one behind the .yaml
-// address. Anything that is not a YAML request gets JSON, text/html included:
-// there is no SPA route here.
-//
-// AsyncAPI 3.0 requires host on a server object, so the body varies by scheme,
-// host and base path and is retained under that key. One slot per
-// representation, not a map: origin falls back to r.Host, so the key is
-// caller-controlled and a map would grow without bound. A miss is what every
-// request with an unseen Host costs, so it renders only the representation
-// being served rather than both.
+// address; anything not YAML gets JSON, text/html included. AsyncAPI 3.0 needs
+// host on a server object, so the body varies by scheme, host and base path —
+// one slot per representation, as a caller-controlled host would grow a map.
 func HandleAsyncAPI(specYAML []byte) (negotiated, yamlOnly http.HandlerFunc) {
 	doc, err := yamlDocument(specYAML)
 	if err != nil {

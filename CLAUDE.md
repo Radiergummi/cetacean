@@ -110,6 +110,7 @@ These bite across the codebase; the per-component rules live in `.claude/ARCHITE
 
 - **A comment block caps at four lines.** If the explanation needs more room, it belongs in
   the commit message or a design doc under `docs/specs/` — not above the function.
+  `scripts/comment-cap` enforces it in `make lint` and CI.
 - A comment states what the code cannot: an invariant, a constraint, a trap, a reason a
   tempting simpler version is wrong. The *argument for* a change — what it used to be, what
   it cost, why it beat the alternative — is commit-message material, every time.

@@ -1165,11 +1165,8 @@ func BenchmarkMixedWorkloadParallel(b *testing.B) {
 }
 
 // =============================================================================
-// Content coding
-//
-// Every benchmark above negotiates identity, but compressionThreshold is 1KiB
-// and a browser asks for a coding, so the pass these measure is one production
-// pays on nearly every list response.
+// Content coding — compressionThreshold is 1KiB and browsers ask for a coding,
+// so production pays this pass on nearly every list response.
 // =============================================================================
 
 func BenchmarkHandleListNodes_Encoded(b *testing.B) {
@@ -1193,11 +1190,8 @@ func BenchmarkHandleListNodes_Encoded(b *testing.B) {
 }
 
 // =============================================================================
-// ACL filtering
-//
-// newTestHandlers leaves the evaluator nil, which acl.Filter short-circuits, so
-// every other handler benchmark measures the unguarded path. These carry a
-// policy so the per-item grant matching is visible.
+// ACL filtering — newTestHandlers leaves the evaluator nil, which acl.Filter
+// short-circuits; these carry a policy so per-item grant matching is visible.
 // =============================================================================
 
 // benchACL builds an evaluator over c, wired the way main.go wires it. The

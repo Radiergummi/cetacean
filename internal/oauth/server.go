@@ -72,11 +72,9 @@ type Server struct {
 }
 
 // issuerID is the external base URL clients discover this authorization server
-// at — Issuer plus any base path. It is the single source of truth for the
-// advertised `issuer` (AS metadata), the PRM `authorization_servers` entry, and
-// the token `iss` claim, so all three agree with the path the well-known
-// documents and OAuth endpoints are actually served under. With an empty base
-// path it is just Issuer.
+// at — Issuer plus any base path. It is the single source for the AS metadata
+// `issuer`, the PRM `authorization_servers` entry and the token `iss`, so all
+// three agree with the path the endpoints are served under.
 func (c ServerConfig) issuerID() string {
 	return c.Issuer + c.BasePath
 }
@@ -128,10 +126,9 @@ func NewServer(cfg ServerConfig) *Server {
 		sweepTempFiles(cfg.StatePath)
 
 		// A missing file is the normal first start. Anything else — corrupt
-		// JSON, bad permissions, a version this build does not write — costs every
-		// client a re-authorization, so it is worth an operator's attention.
-		// Neither is fatal: the server comes up empty and clients re-authorize,
-		// exactly as they did before the store existed.
+		// JSON, bad permissions, an unknown version — costs every client a
+		// re-authorization, so it is logged. Neither is fatal: the server comes up
+		// empty and clients re-authorize.
 		state, err := readState(cfg.StatePath)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -439,10 +436,8 @@ func (s *Server) handleAuthorizationCodeGrant(w http.ResponseWriter, r *http.Req
 	}
 
 	// Verify PKCE S256. RFC 7636 §4.1 requires 43–128 characters from the
-	// unreserved set (ALPHA / DIGIT / "-" / "." / "_" / "~"). Enforce the
-	// length and alphabet here — a 1-character verifier brute-forces in
-	// milliseconds against a 43-char base64url challenge, which defeats the
-	// point of PKCE.
+	// unreserved set; enforcing it here matters because a short verifier
+	// brute-forces against a 43-char challenge, which defeats the point of PKCE.
 	if err := validateCodeVerifier(codeVerifier); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", err.Error())
 		return
@@ -494,11 +489,9 @@ func (s *Server) handleRefreshTokenGrant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// RFC 8707 resource indicator validation against the server's resource.
-	// Run BEFORE consuming the refresh token: a malformed resource parameter
-	// (which is almost always a client typo) should not burn the grant family.
-	// Theft detection still works because a replay of an already-rotated token
-	// triggers Rotate's Theft branch on its second presentation.
+	// RFC 8707 resource indicator validation, BEFORE consuming the refresh token:
+	// a malformed resource (usually a client typo) must not burn the grant family.
+	// Theft detection survives: a replayed rotated token still hits Rotate's Theft.
 	if _, err := s.resources.effectiveResource(
 		resourceAll,
 		s.cfg.OAuth.RequireResourceIndicator,
@@ -660,15 +653,10 @@ func writeTokenResponse(w http.ResponseWriter, resp tokenResponse) {
 // Revocation endpoint (RFC 7009)
 // ---------------------------------------------------------------------------
 
-// HandleRevoke handles POST {base}/oauth/revoke (RFC 7009).
-//
-// Limitation: revocation only applies to refresh tokens. Access tokens are
-// stateless HMAC JWTs and continue to validate until their `exp` claim
-// (default 1h via CETACEAN_OAUTH_ACCESS_TOKEN_TTL). Per RFC 7009 §2.2 the
-// server still returns 200 OK regardless of token type so the client cannot
-// distinguish "unknown token" from "no-op". Adding real access-token
-// revocation would require a JTI denylist sized to AccessTokenTTL — not
-// implemented today because short-lived tokens make this acceptable.
+// HandleRevoke handles POST {base}/oauth/revoke (RFC 7009). Only refresh tokens
+// are revoked: access tokens are stateless JWTs valid until `exp`. RFC 7009 §2.2
+// still returns 200 for any token type, so "unknown" and "no-op" are
+// indistinguishable.
 func (s *Server) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, tokenEndpointMaxBytes)
 	if err := r.ParseForm(); err != nil {
@@ -703,12 +691,9 @@ func (s *Server) RevokeSubject(subject string) int {
 // ---------------------------------------------------------------------------
 
 // consentRefusal returns the status and message for an identity that may not
-// found a new authorization grant, or 0 when it may.
-//
-// The two refusals are different answers. No identity is 401 and carries a
-// challenge, per RFC 9110 §15.5.2. A token this server issued is 403: the request
-// was authenticated, and repeating it with the same credential will not help,
-// which is the one thing a 401 promises.
+// found a new authorization grant, or 0 when it may. No identity is 401 with a
+// challenge (RFC 9110 §15.5.2); a token this server issued is 403, since no
+// credential of that kind will help, which is the one thing a 401 promises.
 func consentRefusal(identity *auth.Identity) (int, string) {
 	switch {
 	case identity == nil:
@@ -733,11 +718,9 @@ func (s *Server) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 }
 
 // issueCodeAndRedirect mints an authorization code and redirects the browser
-// back to the client with it. Both the consent-page POST and the skipped-consent
-// GET path end here, so they cannot drift apart.
-//
-// state is separate from code because it is echoed back to the client rather
-// than bound into the code.
+// back to the client with it; the consent POST and the skipped-consent GET both
+// end here. state is separate from code because it is echoed back to the client
+// rather than bound into the code.
 func (s *Server) issueCodeAndRedirect(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -746,11 +729,8 @@ func (s *Server) issueCodeAndRedirect(
 	state string,
 ) {
 	// Re-check the target against the client's registered set, even though
-	// both callers already did. This is the sink for an open redirect on an
-	// authorization endpoint, and hoisting the redirect into a shared helper
-	// moved it away from the guard that made it safe — leaving the invariant
-	// resting on a comment, and on every future caller remembering to check.
-	// Keeping the guard adjacent to the redirect makes it local again.
+	// both callers already did: this is the open-redirect sink, and the guard
+	// belongs next to it rather than on every caller remembering to check.
 	if !meta.HasRedirectURI(code.RedirectURI) {
 		renderErrorPage(w, http.StatusBadRequest,
 			"redirect_uri is not registered for this client")
@@ -781,15 +761,10 @@ func (s *Server) issueCodeAndRedirect(
 	http.Redirect(w, r, redirectURI.String(), http.StatusSeeOther)
 }
 
-// renderConsentPage completes a partly-built consentData with the fields only
-// the server can supply — the action URL and a fresh CSRF nonce bound to this
-// page's state and fingerprint — and renders the form. Both the initial GET and
-// the POST that finds the client changed mid-decision go through it, so the
-// second prompt is built exactly like the first.
-//
-// The caller sets Fingerprint to the hash of the metadata it just rendered
-// from, rather than this recomputing it, so the value bound into the CSRF
-// token is provably the one the caller compared against.
+// renderConsentPage completes consentData with the action URL and a fresh CSRF
+// nonce bound to its state and fingerprint, and renders the form. The caller
+// sets Fingerprint rather than this recomputing it, so the value bound into the
+// CSRF token is provably the one the caller compared against.
 func (s *Server) renderConsentPage(w http.ResponseWriter, data consentData) {
 	data.ActionURL = s.cfg.BasePath + "/oauth/authorize"
 
@@ -895,29 +870,16 @@ func (s *Server) handleAuthorizeGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fingerprint the metadata exactly once, here, from the document the page
-	// is about to be rendered from. It travels to the POST in a hidden field
-	// covered by the CSRF HMAC, because a record must be bound to what the
-	// user was *shown*: resolving the client again on POST and fingerprinting
-	// that would record a document the user may never have seen, whenever the
-	// CIMD cache entry lapsed in between.
-	//
-	// Computed for unverified clients too. Nothing is remembered for them, but
-	// the fingerprint costs a hash, and covering it uniformly means the POST
-	// re-prompts whenever the name or redirect URI on screen went stale — for
-	// DCR that is an eviction and re-registration rather than a document
-	// edit, but the user is equally owed a page describing the client that is
-	// about to receive the code.
+	// Fingerprint once, from the document the page is rendered from; it travels
+	// to the POST under the CSRF HMAC so a record binds to what the user was
+	// *shown*, not a re-resolution. Unverified clients too, so the POST
+	// re-prompts whenever the name or redirect URI on screen went stale.
 	fingerprint := consentFingerprint(meta)
 
-	// A remembered approval skips the page. Only for verified clients, and only
-	// when the metadata still hashes to what the user was shown — a CIMD client
-	// controls its own document and could otherwise redirect an inherited
-	// approval somewhere the user never saw.
-	//
-	// Issuing a code from a GET is ordinary for an authorization endpoint, and
-	// redirect_uri was exact-matched against the client's registered set above,
-	// so a silently issued code still lands only where the client registered.
+	// A remembered approval skips the page, only for verified clients whose
+	// metadata still hashes to what the user was shown — a CIMD client controls
+	// its own document and could otherwise redirect an inherited approval. The
+	// redirect_uri was exact-matched above, so a silent code lands only there.
 	consentKey := ConsentKey{
 		Subject:  identity.Subject,
 		ClientID: clientID,
@@ -1053,14 +1015,9 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The client's metadata changed between rendering the page and this
-	// submission — a CIMD document edited, or its cache entry lapsed and the
-	// re-fetch returned something else. The user approved a name and a set of
-	// redirect URIs that no longer describe this client, so their approval
-	// does not cover this request: prompt again from the fresh metadata rather
-	// than issue a code or record anything against a document they never saw.
-	//
-	// The cookie is deliberately not cleared here; renderConsentPage replaces
+	// The client's metadata changed since the page was rendered, so the approval
+	// does not cover it: prompt again from the fresh metadata rather than issue
+	// or record anything. The cookie is not cleared; renderConsentPage replaces
 	// it with a nonce bound to the new fingerprint.
 	if fingerprint := consentFingerprint(meta); fingerprint != shownFingerprint {
 		s.renderConsentPage(w, consentData{
@@ -1086,13 +1043,10 @@ func (s *Server) handleAuthorizePOST(w http.ResponseWriter, r *http.Request) {
 	// Clear the CSRF cookie — the flow is complete.
 	clearCSRFCookie(w, secure, s.csrfCookiePath())
 
-	// Remembering is limited to verified clients. A DCR client's metadata is
-	// self-reported, so a record keyed on it would attest to nothing but what
-	// the client claimed about itself.
-	//
-	// The recorded fingerprint is the one the page displayed, proven current
-	// by the comparison above — not a fresh resolution, which could differ
-	// from what the user actually approved.
+	// Only verified clients: a DCR client's metadata is self-reported, so a
+	// record would attest to nothing. The fingerprint recorded is the one the
+	// page displayed, proven current above — not a fresh resolution, which could
+	// differ from what the user approved.
 	if verified {
 		s.consent.Remember(ConsentKey{
 			Subject:  identity.Subject,
@@ -1217,10 +1171,8 @@ func (s *Server) renderConsentRefusal(w http.ResponseWriter, status int, message
 }
 
 // UnauthorizedHeader is the WWW-Authenticate value for a 401 from resource,
-// naming that resource's own metadata document rather than a neighbouring one
-// whose token this resource would also reject. An empty errorCode omits the
-// error parameter per RFC 6750 §3.1; an unknown resource falls back to the
-// default.
+// naming that resource's own metadata document. An empty errorCode omits the
+// error parameter (RFC 6750 §3.1); an unknown resource falls back to the default.
 func (s *Server) UnauthorizedHeader(resource, errorCode string) string {
 	target := s.resources.resourceFor(resource)
 

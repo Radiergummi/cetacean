@@ -348,10 +348,9 @@ func TestPreconditionSweep(t *testing.T) {
 	for route, target := range preconditionTargets(fixture) {
 		t.Run(route, func(t *testing.T) {
 			// RFC 9110 §13.2.1: a precondition is ignored when the answer
-			// without it would be neither 2xx nor 412. Read as parity rather
-			// than as a status, because a route that refuses this bodyless
-			// request before it looks the resource up states the rule just as
-			// well as one that answers 404.
+			// without it would be neither 2xx nor 412. Read as parity, not a
+			// status: refusing this bodyless request before the lookup states
+			// the rule as well as a 404 does.
 			unconditional := precondRequest(
 				t, proc, target.method, target.missing, nil, "", "",
 			)

@@ -375,10 +375,8 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 }
 
 // Without an authorization server there is no bearer middleware, which is only
-// safe because auth mode "none" is the only configuration that reaches here.
-// Many tool tests depend on it incidentally; this one says so.
-// Unguarded is reachable only under an auth mode that establishes no identity
-// to begin with. Every other route to it is a refusal, below.
+// safe because auth mode "none", which establishes no identity, is the only
+// configuration that reaches here; every other route to it is a refusal, below.
 func TestHandlerWithoutOAuthServesUnguardedUnderNone(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
@@ -481,11 +479,9 @@ func TestHandlerWithoutOAuthAuthenticatesABypassedMode(t *testing.T) {
 	}
 }
 
-// With no authorization server there is no second chance: whatever the upstream
-// provider refuses is refused, including the identity it declines to establish
-// while writing a redirect nobody reads. The refusal is 403, not 401: no
-// challenge can ask for the credential these modes read, which is the same
-// ruling the API endpoints answer under.
+// With no authorization server, whatever the upstream provider refuses is
+// refused, including an identity it declines while writing an unread redirect.
+// It is 403, not 401: no challenge can ask for the credential these modes read.
 func TestHandlerWithoutOAuthRefusesWhatUpstreamRefuses(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
@@ -607,12 +603,10 @@ func TestServerDiscoverOmitsIconsWithoutABaseURL(t *testing.T) {
 	}
 }
 
-// The other half of the separation: a token minted for the deployment root — the
-// credential an ordinary API client holds — must not reach this transport, and
-// the refusal must send the client to this transport's own metadata document.
-//
-// The audiences differ by one path segment and one is a prefix of the other,
-// which is exactly the pair a containment reading would conflate.
+// A token minted for the deployment root — what an ordinary API client holds —
+// must not reach this transport, and the refusal must point at this transport's
+// own metadata. The audiences differ by one path segment, one a prefix of the
+// other: exactly the pair a containment check would conflate.
 func TestHandlerRefusesATokenForAnotherResource(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true

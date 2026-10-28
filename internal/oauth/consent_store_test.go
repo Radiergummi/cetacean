@@ -593,10 +593,9 @@ func TestConsentPageOmitsTheLeaseWhenDisabled(t *testing.T) {
 }
 
 // The wire format keeps tokens, consumed and grants at the top level, where
-// RefreshTokenSnapshot is embedded rather than named. An embedding that nested
-// them under a key would drop every operator's refresh tokens, and the
-// round-trip helpers cannot see it: they are symmetric, and would round-trip a
-// nested shape just as happily. So the fixture is spelled by hand.
+// RefreshTokenSnapshot is embedded; nesting them would drop every refresh token.
+// The fixture is spelled by hand because the symmetric round-trip helpers would
+// accept a nested shape just as happily.
 func TestStateFileKeepsTheSnapshotFlat(t *testing.T) {
 	path := t.TempDir() + "/oauth-tokens.json"
 

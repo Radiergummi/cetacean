@@ -5,16 +5,10 @@ import (
 	"net/http"
 )
 
-// ErrForeignToken marks a bearer token that this deployment's authorization
-// server did not issue. Two bearer dialects share the one header — ours, and in
-// oidc mode an IdP-issued ID token — so a token that is not ours must reach the
-// provider while one of ours that failed verification must not. Getting that
-// backwards either breaks bearer auth against the IdP or opens a fall-through
-// for forged tokens.
-//
-// The classification travels with the error rather than being asked for
-// separately, so the two cannot disagree. A verifier that forgets to mark a
-// foreign token fails closed: the token is treated as ours and refused.
+// ErrForeignToken marks a bearer token this deployment did not issue. In oidc
+// mode an IdP ID token shares the header, so a foreign token must reach the
+// provider while one of ours that failed verification must not. A verifier
+// that forgets to mark a foreign token fails closed.
 var ErrForeignToken = errors.New("auth: token was not issued by this deployment")
 
 // TokenVerifier verifies a bearer token this deployment's own authorization
@@ -54,12 +48,9 @@ func (t APITokens) Challenge(errorCode string) string {
 }
 
 // authenticate resolves an Authorization: Bearer credential against the
-// verifier. ok is false when the request belongs to the provider instead — no
-// bearer token, no verifier, or a token that is somebody else's.
-//
-// A refusal is returned as an AuthError so the middleware answers it the way it
-// answers every other one: a 401 carrying WWW-Authenticate, never the provider's
-// redirect-to-login branch, which a client holding a token cannot follow.
+// verifier. ok is false when the request belongs to the provider instead. A
+// refusal is an AuthError so the middleware answers 401 with WWW-Authenticate,
+// never the provider's login redirect, which a token-holding client can't follow.
 func (t APITokens) authenticate(r *http.Request) (id *Identity, err error, ok bool) {
 	if t.Verifier == nil {
 		return nil, nil, false

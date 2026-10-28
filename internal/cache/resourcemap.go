@@ -8,13 +8,9 @@ import (
 )
 
 // ResourceMap is a typed map for a single resource type that shares the
-// parent Cache's RWMutex. It provides the common Set/Get/Delete/List/Replace
-// operations that every cached Docker resource needs.
-//
-// The optional onSet and onDelete hooks run inside the write lock and are used
-// by the Cache to maintain derived state (stack membership, secret scrubbing).
-// The onSet hook receives a pointer to the new value so it can mutate it
-// before storage (e.g., clearing secret data).
+// parent Cache's RWMutex. The optional onSet and onDelete hooks run inside the
+// write lock to maintain derived state; onSet gets a pointer so it can mutate
+// the value before storage (e.g., clearing secret data).
 type ResourceMap[T any] struct {
 	mu       *sync.RWMutex
 	items    map[string]T
@@ -144,18 +140,10 @@ func (r *ResourceMap[T]) Delete(key string, eventType EventType) Event {
 	return event
 }
 
-// List returns all values as a slice, ordered by map key like list.
-//
-// The copy comes out under the read lock and is sorted after releasing it: the
-// sort is the expensive half of the call on a large cluster, and it does not
-// belong under the lock the watcher's writers are contending for. ListServices
-// and ListTasks split the work the same way.
-//
-// Keys and values are gathered into parallel slices rather than cloning the
-// map: Go stores map values larger than 128 bytes indirectly, so cloning one
-// allocates every value separately. Sorting an index permutation then keeps
-// the sort itself off the values, which are wide enough that swapping them
-// costs more than the index.
+// List returns all values as a slice, ordered by map key like list. The copy
+// is taken under the read lock and sorted after releasing it, keeping the sort
+// off the writers' lock. Keys and values go into parallel slices: cloning the
+// map would allocate each large value separately.
 func (r *ResourceMap[T]) List() []T {
 	r.mu.RLock()
 	keys := make([]string, 0, len(r.items))
@@ -201,17 +189,10 @@ func sortByIndex[T any](vals []T, compare func(a, b int) int) {
 	}
 }
 
-// Each calls yield for every value in the same order List returns them,
-// stopping early if yield returns false. Only the keys are copied, so a scan
-// that keeps few of the values — search — allocates a fraction of what listing
-// them costs.
-//
-// yield runs under the read lock and must not call back into the cache: Go's
-// RWMutex is not re-entrant for readers, so a writer arriving between the two
-// acquisitions deadlocks the second. Collect what matches and enrich after.
-//
-// The sort stays under the lock, where List's does not: the yield holds it
-// either way, and a scan that released it would no longer report one snapshot.
+// Each calls yield for every value in List's order, stopping early if yield
+// returns false. yield runs under the read lock and must not call back into the
+// cache: RWMutex readers are not re-entrant, so a waiting writer deadlocks it.
+// The sort stays under the lock so the scan reports one snapshot.
 func (r *ResourceMap[T]) Each(yield func(T) bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

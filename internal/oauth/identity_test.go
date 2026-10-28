@@ -26,11 +26,10 @@ func TestIdentifyCarriesTheClaimsAndNothingElse(t *testing.T) {
 		t.Fatalf("Identify: %v", err)
 	}
 
-	// Exact, because nothing may be invented: a claim the token does not carry
-	// must arrive empty rather than be guessed at from another one. The
-	// provider label is spelled out rather than taken from the constant: it
-	// reaches an auth.Identity that other code may compare, so changing it
-	// should be a visible decision.
+	// Exact, because a claim the token does not carry must arrive empty rather
+	// than be guessed from another. The provider label is spelled out, not taken
+	// from the constant: other code may compare it, so changing it should be a
+	// visible decision.
 	if lapse := time.Until(got.ExpiresAt); lapse <= 0 || lapse > s.cfg.OAuth.AccessTokenTTL {
 		t.Errorf("ExpiresAt = %v, want the token's exp, within its TTL", got.ExpiresAt)
 	}

@@ -33,13 +33,9 @@ type listSpec[T any] struct {
 }
 
 // listNotModified answers a matching conditional request with 304, and reports
-// whether it did.
-//
-// A 304 carries what a client still reads off it — the ETag, the validators'
-// Vary, and the Allow header the dashboard gates its controls on, which costs
-// nothing to compute. It does not carry the pagination Link headers or
-// Content-Range: those need the totals, and producing them is exactly the work
-// being skipped. RFC 9110 §15.4.5 asks for neither.
+// whether it did. The 304 carries the ETag, the validators' Vary and Allow, but
+// not Link or Content-Range: those need the totals the 304 exists to skip, and
+// RFC 9110 §15.4.5 asks for neither.
 func listNotModified[T any](
 	h *Handlers,
 	w http.ResponseWriter,

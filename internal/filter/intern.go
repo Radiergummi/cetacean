@@ -2,17 +2,10 @@ package filter
 
 import "github.com/docker/docker/api/types/swarm"
 
-// Putting a string into a map[string]any boxes it, and boxing allocates. A
-// filtered list does that for every field of every item, which was most of what
-// filtering a thousand resources cost.
-//
-// The fields whose values come from a closed set are boxed once, at startup,
-// and the environment is handed the same interface every time. The rest — ids,
-// names, images — are unique per item and have to be boxed as they come.
-//
-// A value outside the set still works; it is boxed on the spot, which is what
-// every value did before. That is the case for a Docker release adding a state
-// this list has not caught up with.
+// intern boxes each value of a closed set once, so the filter environment gets
+// the same interface every time instead of allocating per field per item. A
+// value outside the set (e.g. a state a newer Docker adds) still works; it is
+// boxed on the spot.
 func intern[T ~string](values ...T) map[T]any {
 	boxed := make(map[T]any, len(values))
 	for _, v := range values {

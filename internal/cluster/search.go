@@ -25,16 +25,10 @@ type SearchResult struct {
 	State  string `json:"state,omitempty"`
 }
 
-// SearchResults is the structured result of a global search.
-//
-// Hits is keyed by resource type plural ("services", "nodes", ...) and is
-// capped at `limit` per type. Counts is the pre-cap total of matches per type
-// — clients use Counts to render "X matches, showing N" affordances. Total is
-// the sum of Counts.
-// The JSON names match the REST search response (`results`/`counts`/`total`)
-// so the same search reads identically over both transports. Without tags
-// these marshalled as the Go field names, and an MCP client saw `Hits` where
-// an HTTP client saw `results`.
+// SearchResults is the structured result of a global search. Hits is keyed by
+// resource type plural and capped at `limit` per type; Counts is the pre-cap
+// total per type, Total their sum. The JSON names match the REST search
+// response so the same search reads identically over both transports.
 type SearchResults struct {
 	Hits   map[string][]SearchResult `json:"results"`
 	Counts map[string]int            `json:"counts"`
@@ -380,13 +374,10 @@ func ContainsFold(s, substrLower string) bool {
 	return SegmentPrefixMatch(strings.ToLower(s), substrLower)
 }
 
-// ContainsFoldNoAlloc reports whether s contains substr (which must be
-// lowercased) using case-insensitive comparison without allocating.
-// Only handles ASCII case folding; non-ASCII letters are compared as-is.
-//
-// Exported for internal/mcp's log grep, which needs plain case-insensitive
-// containment over a large body of text and specifically not ContainsFold's
-// segment-prefix matching — that rule is about names, not messages.
+// ContainsFoldNoAlloc reports whether s contains substrLower (already
+// lowercased), ASCII-case-insensitively and without allocating. Exported for
+// internal/mcp's log grep, which needs plain containment, not ContainsFold's
+// segment-prefix matching.
 func ContainsFoldNoAlloc(s, substrLower string) bool {
 	if len(substrLower) == 0 {
 		return true
@@ -422,21 +413,17 @@ func ContainsFoldNoAlloc(s, substrLower string) bool {
 func isSeparator(r rune) bool { return r == '_' || r == '-' }
 
 // SegmentPrefixMatch checks if query matches target using segment-prefix
-// matching. The target is split by '_' and '-' into segments, and each group
-// of query characters must match the prefix of a segment, in order, with
-// segments skippable. Uses memoized backtracking for ambiguous boundaries.
-//
-// Both arguments must already be lowercased.
+// matching: target splits on '_' and '-', and each group of query characters
+// must prefix a segment, in order, with segments skippable. Uses memoized
+// backtracking. Both arguments must already be lowercased.
 func SegmentPrefixMatch(targetLower, queryLower string) bool {
 	if len(queryLower) == 0 {
 		return true
 	}
 
-	// Both the stripped query and the segment offsets go in caller arrays, and
-	// the walk below is a function rather than a closure so they stay there.
-	// This runs against every label key and value of every resource: the query
-	// copy and the []string strings.FieldsFunc returned were together 96% of
-	// the allocations a search made.
+	// Both buffers are caller arrays, and the walk below is a function rather
+	// than a closure so they stay on the stack: this runs against every label
+	// key and value of every resource.
 	var qbuf [maxStackQuery]byte
 	var sbuf [32]int32
 
