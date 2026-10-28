@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
+- Node cards in the physical topology stay where they are dragged, until a node joins or leaves
 - The services page and stack pages judge a global service against the nodes it can run on, rather than showing it grey
 - The services page's running counts and job health update as tasks start, stop, and finish
 - The image check no longer follows a registry's redirect to plain HTTP or to a private address on another domain, nor asks another domain's token service

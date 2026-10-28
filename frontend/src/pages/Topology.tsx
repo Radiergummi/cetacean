@@ -19,6 +19,7 @@ import NetworkEdge from "../components/topology/NetworkEdge";
 import PhysicalNodeCard from "../components/topology/PhysicalNodeCard";
 import { PhysicalViewContext } from "../components/topology/PhysicalViewContext";
 import ServiceCardNode from "../components/topology/ServiceCardNode";
+import { usePhysicalNodes } from "../components/topology/usePhysicalNodes";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useMatchesBreakpoint } from "../hooks/useMatchesBreakpoint";
 import { isNodeExporterReady, useMonitoringStatus } from "../hooks/useMonitoringStatus";
@@ -205,7 +206,8 @@ function PhysicalView({
   isMobile: boolean;
   network: string | null;
 }) {
-  const { nodes } = useMemo(() => placementGraphToReactFlow(data), [data]);
+  const computed = useMemo(() => placementGraphToReactFlow(data).nodes, [data]);
+  const { nodes, onNodesChange } = usePhysicalNodes(computed);
   const usage = usePlacementMetrics();
   const { getForNode } = useNodeMetrics({
     instant: nodeUsageInstant,
@@ -239,6 +241,7 @@ function PhysicalView({
           className="bg-background"
           nodes={nodes}
           edges={[]}
+          onNodesChange={onNodesChange}
           nodeTypes={physicalNodeTypes}
           fitView
           fitViewOptions={{ padding: 0.2 }}
