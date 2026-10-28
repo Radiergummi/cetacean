@@ -95,7 +95,6 @@ func kindOf(t *testing.T, err error) WriteErrorKind {
 }
 
 func TestWritesResolvesTheTargetForTheCaller(t *testing.T) {
-	writes, writer := writesOver(t, writable("web"))
 	readOnly := Caller{CanRead: everything, CanWrite: nothing, Level: config.OpsImpactful}
 	blind := Caller{CanRead: nothing, CanWrite: nothing, Level: config.OpsImpactful}
 
@@ -111,6 +110,8 @@ func TestWritesResolvesTheTargetForTheCaller(t *testing.T) {
 		{"below the operation's tier", operator(config.OpsReadOnly), "web", BelowTier},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			writes, writer := writesOver(t, writable("web"))
+
 			_, err := writes.RestartService(t.Context(), tc.caller, tc.key)
 			if got := kindOf(t, err); got != tc.want {
 				t.Errorf("kind = %d, want %d", got, tc.want)
@@ -190,5 +191,20 @@ func TestWritesHoldsHostAccessBelowLevelThree(t *testing.T) {
 	}
 	if writer.called != "image" {
 		t.Errorf("called = %q, want image at level 3", writer.called)
+	}
+}
+
+func TestResolvableNamesWhatLookupFinds(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(writable("web"))
+
+	for _, kind := range []string{"service", "plugin", "swarm"} {
+		_, found, _ := Lookup(c, kind, "web")
+		if kind == "service" && (!Resolvable(kind) || !found) {
+			t.Errorf("%s: Resolvable = %t, found = %t", kind, Resolvable(kind), found)
+		}
+		if kind != "service" && Resolvable(kind) {
+			t.Errorf("%s: Resolvable, though Lookup cannot resolve it", kind)
+		}
 	}
 }

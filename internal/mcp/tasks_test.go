@@ -10,8 +10,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// seedService puts a replicated service and the tasks backing it into the
-// cache, so a convergence predicate has something real to read.
 // updatable makes the cached service id one every lifecycle write applies to:
 // replicated, and updated at least once.
 func updatable(t *testing.T, c *cache.Cache, id string) {
@@ -28,6 +26,8 @@ func updatable(t *testing.T, c *cache.Cache, id string) {
 	c.SetService(svc)
 }
 
+// seedService puts a replicated service and the tasks backing it into the
+// cache, so a convergence predicate has something real to read.
 func seedService(t *testing.T, c *cache.Cache, id string, desired, running int) {
 	t.Helper()
 

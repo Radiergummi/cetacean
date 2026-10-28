@@ -469,9 +469,6 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	if cluster.ServiceImage(image) == "" {
-		return "", errors.New("image must not be empty")
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err

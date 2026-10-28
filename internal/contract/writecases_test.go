@@ -130,3 +130,45 @@ grants:
 		t.Errorf("MCP = %q, want not found", overMCP)
 	}
 }
+
+// A route keyed by {name} hides a record the caller cannot read as one keyed
+// by {id} does.
+func TestAWriteToAnUnreadableVolumeIsNotFound(t *testing.T) {
+	w := refusingWorld(t)
+
+	policy, err := acl.ParsePolicy([]byte(`
+grants:
+  - resources: ["stack:frontend-*"]
+    audience: ["group:frontend"]
+    permissions: ["read", "write"]
+`))
+	if err != nil {
+		t.Fatalf("parse policy: %v", err)
+	}
+	w.ACL.SetPolicy(policy)
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodDelete, w.Server.URL+"/volumes/"+SeededVolumeName, nil,
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	setPersonaHeaders(t, req, "frontend")
+
+	resp, err := w.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("DELETE volume: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), "VOL002") {
+		t.Errorf(
+			"DELETE /volumes/%s = %d %s, want 404 VOL002",
+			SeededVolumeName,
+			resp.StatusCode,
+			body,
+		)
+	}
+}

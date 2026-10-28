@@ -30,8 +30,6 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.InfoContext(r.Context(), "scaling service", "service", id, "replicas", *req.Replicas)
-
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.writes.ScaleService(r.Context(), h.caller(r), id, *req.Replicas)
 	})
@@ -92,13 +90,6 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	if cluster.ServiceImage(req.Image) == "" {
-		problem.Write(w, r, "SVC006", "image is required")
-		return
-	}
-
-	slog.InfoContext(r.Context(), "updating service image", "service", id, "image", req.Image)
-
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.writes.UpdateServiceImage(r.Context(), h.caller(r), id, req.Image)
 	})
@@ -106,8 +97,6 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 
 func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-
-	slog.InfoContext(r.Context(), "rolling back service", "service", id)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.writes.RollbackService(r.Context(), h.caller(r), id)
@@ -149,8 +138,6 @@ func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-
-	slog.InfoContext(r.Context(), "restarting service", "service", id)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.writes.RestartService(r.Context(), h.caller(r), id)

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // Writer is the Docker surface the write use cases call.
@@ -38,11 +40,12 @@ func NewWrites(c *cache.Cache, docker Writer) *Writes {
 	return &Writes{cache: c, docker: docker}
 }
 
+// The domain rules a lifecycle write is refused by. The writer applies the
+// first two again against the live spec, so either path names the same rule.
 var (
-	// ErrScaleGlobal refuses scaling a service that runs one task per node.
-	ErrScaleGlobal = errors.New("cannot scale a global-mode service")
-	// ErrNoPreviousSpec refuses rolling back a service never updated.
-	ErrNoPreviousSpec = errors.New("service has no previous spec to roll back to")
+	ErrScaleGlobal    = docker.ErrScaleGlobal
+	ErrNoPreviousSpec = docker.ErrNoPreviousSpec
+	ErrImageRequired  = errors.New("image is required")
 )
 
 // ScaleService sets a replicated service's desired replica count.
@@ -60,7 +63,10 @@ func (w *Writes) ScaleService(
 		return swarm.Service{}, invalid("service", ErrScaleGlobal)
 	}
 
-	return refuse(w.docker.ScaleService(ctx, svc.ID, replicas))(key)
+	slog.InfoContext(ctx, "scaling service", "service", svc.ID, "replicas", replicas)
+	updated, err := w.docker.ScaleService(ctx, svc.ID, replicas)
+
+	return updated, classify(err, key)
 }
 
 // UpdateServiceImage points a service at another image.
@@ -71,7 +77,7 @@ func (w *Writes) UpdateServiceImage(
 ) (swarm.Service, error) {
 	image = ServiceImage(image)
 	if image == "" {
-		return swarm.Service{}, invalid("service", errors.New("image is required"))
+		return swarm.Service{}, invalid("service", ErrImageRequired)
 	}
 
 	svc, err := w.service(c, OpUpdateServiceImage, key)
@@ -85,10 +91,13 @@ func (w *Writes) UpdateServiceImage(
 		w.cache.GetVolume,
 		c.Level,
 	); err != nil {
-		return refuse(swarm.Service{}, err)(key)
+		return swarm.Service{}, classify(err, key)
 	}
 
-	return refuse(w.docker.UpdateServiceImage(ctx, svc.ID, image))(key)
+	slog.InfoContext(ctx, "updating service image", "service", svc.ID, "image", image)
+	updated, err := w.docker.UpdateServiceImage(ctx, svc.ID, image)
+
+	return updated, classify(err, key)
 }
 
 // RollbackService returns a service to its previous spec.
@@ -102,10 +111,13 @@ func (w *Writes) RollbackService(ctx context.Context, c Caller, key string) (swa
 	}
 
 	if err := CheckHostAccessHeld(svc, RollingBack, w.cache.GetVolume, c.Level); err != nil {
-		return refuse(swarm.Service{}, err)(key)
+		return swarm.Service{}, classify(err, key)
 	}
 
-	return refuse(w.docker.RollbackService(ctx, svc.ID))(key)
+	slog.InfoContext(ctx, "rolling back service", "service", svc.ID)
+	updated, err := w.docker.RollbackService(ctx, svc.ID)
+
+	return updated, classify(err, key)
 }
 
 // RestartService replaces every task of a service.
@@ -115,7 +127,10 @@ func (w *Writes) RestartService(ctx context.Context, c Caller, key string) (swar
 		return swarm.Service{}, err
 	}
 
-	return refuse(w.docker.RestartService(ctx, svc.ID))(key)
+	slog.InfoContext(ctx, "restarting service", "service", svc.ID)
+	updated, err := w.docker.RestartService(ctx, svc.ID)
+
+	return updated, classify(err, key)
 }
 
 // service resolves the service a write names. One the caller cannot read is
@@ -157,19 +172,17 @@ func (w *Writes) service(c Caller, op Operation, key string) (swarm.Service, err
 	return svc, nil
 }
 
-// refuse classifies what a write returned for the key the caller named. An
-// error that is none of the kinds is Cetacean's own and passes as it is.
-func refuse(svc swarm.Service, err error) func(key string) (swarm.Service, error) {
-	return func(key string) (swarm.Service, error) {
-		if err == nil {
-			return svc, nil
-		}
-		if refusal, ok := ClassifyWrite(err, "service", key); ok {
-			return swarm.Service{}, refusal
-		}
-
-		return swarm.Service{}, err
+// classify turns what a write returned into the refusal for the key the caller
+// named. An error that is none of the kinds is Cetacean's own and passes.
+func classify(err error, key string) error {
+	if err == nil {
+		return nil
 	}
+	if refusal, ok := ClassifyWrite(err, "service", key); ok {
+		return refusal
+	}
+
+	return err
 }
 
 func invalid(resource string, err error) *WriteError {

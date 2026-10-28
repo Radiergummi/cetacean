@@ -93,6 +93,16 @@ func LookupAs(
 	return record, true, nil
 }
 
+// Resolvable reports a kind Lookup resolves; it finds nothing of any other.
+func Resolvable(kind string) bool {
+	switch kind {
+	case "service", "node", "task", "config", "secret", "network", "stack", "volume":
+		return true
+	default:
+		return false
+	}
+}
+
 // NodeRecord is the record of a node already in hand.
 func NodeRecord(node swarm.Node) Record {
 	return Record{Kind: "node", ID: node.ID, Name: NodeACLName(node), Version: node.Version.Index}

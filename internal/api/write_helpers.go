@@ -99,6 +99,7 @@ var notFoundCodes = map[string]string{
 var invalidCodes = map[error]string{
 	cluster.ErrScaleGlobal:    "SVC005",
 	cluster.ErrNoPreviousSpec: "SVC007",
+	cluster.ErrImageRequired:  "SVC006",
 }
 
 // maxWriteBody caps every write request body.

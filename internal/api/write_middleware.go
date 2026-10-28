@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -99,20 +100,24 @@ func (h *Handlers) requireWriteACL(
 }
 
 // hiddenTarget reports a write to a record the caller cannot read, which is
-// answered as not found so a refusal never confirms it exists. The record is
-// the one the route addresses by {id}, whatever its write is checked against.
+// answered as not found so the refusal does not confirm it exists. The record
+// is the one the route addresses by {id} or {name}, whatever its write is
+// checked against; a key naming several is refused as it was.
 func (h *Handlers) hiddenTarget(r *http.Request) (kind, key string, hidden bool) {
-	key = r.PathValue("id")
+	key = cmp.Or(r.PathValue("id"), r.PathValue("name"))
 	_, path, _ := strings.Cut(r.Pattern, " /")
 	collection, _, _ := strings.Cut(path, "/")
 	kind = strings.TrimSuffix(collection, "s")
 
-	if _, ok := notFoundCodes[kind]; !ok || key == "" {
+	if _, ok := notFoundCodes[kind]; !ok || key == "" || !cluster.Resolvable(kind) {
 		return kind, key, false
 	}
 
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
-	record, found, _ := cluster.LookupAs(h.cache, kind, key, canRead)
+	record, found, err := cluster.LookupAs(h.cache, kind, key, canRead)
+	if err != nil {
+		return kind, key, false
+	}
 
 	return kind, key, !found || !canRead(record.Resource())
 }

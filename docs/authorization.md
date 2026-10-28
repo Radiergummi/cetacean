@@ -186,7 +186,7 @@ flowchart LR
 | Neither        | Allows or blocks | The resource's not-found answer (`404`) |
 | Grants `write` | Blocks           | Denied (`403 OPS001`)                   |
 
-A write to a resource you can't read is answered as if it didn't exist, so a refusal never confirms that it does.
+A write to a resource you can't read is answered as if it didn't exist. A read of one still answers `403 ACL001`.
 
 Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:
 
