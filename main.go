@@ -1132,7 +1132,6 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 	widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets")
 	if err != nil {
 		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
-		widgets = nil
 	}
 
 	// A nil *promapi.Client stored in the interface would be a non-nil

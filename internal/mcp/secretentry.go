@@ -17,7 +17,7 @@ import (
 // enter a secret for this caller. The dashboard completes an entry only for
 // the subject that opened it, so a caller without a token's subject can't.
 func (s *Server) canEnterSecrets(ctx context.Context) bool {
-	return s.secretEntries != nil && s.dashboardURL != "" &&
+	return s.dashboardURL != "" &&
 		auth.IdentityFromContext(ctx).FromToken() &&
 		clientElicits(ctx, mcplib.ElicitationModeURL)
 }
