@@ -426,7 +426,7 @@ func TestListCSVPagination(t *testing.T) {
 	// would be a lie. The header is ignored rather than half-honoured.
 	t.Run("a Range header renders every row", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/nodes.csv", nil)
-		req.Header.Set("Range", "items 0-9")
+		req.Header.Set("Range", "items=0-9")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 

@@ -446,7 +446,10 @@ func TestAllowOnPluginsOffersInstallOnlyAtTierThree(t *testing.T) {
 func TestEveryWriteRouteReachesAllow(t *testing.T) {
 	_, routes := newRouter(testRouterConfig(t, nil))
 
-	if !slices.Equal(routes.tiered, routeTable().tiered) {
+	if !slices.EqualFunc(routes.tiered, routeTable().tiered, func(a, b tieredRoute) bool {
+		return a.method == b.method && a.path == b.path && a.level == b.level &&
+			a.acceptPatch == b.acceptPatch
+	}) {
 		t.Errorf("a configured router's write routes differ from the table Allow reads")
 	}
 

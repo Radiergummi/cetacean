@@ -244,12 +244,9 @@ func TestAPICatalogCarriesItemLinks(t *testing.T) {
 }
 
 // TestAPICatalogOmitsUnmountedAPIs holds the catalog to what the process
-// serves. A catalog keyed on "is MCP on" alone would advertise a metadata
-// document that does not exist when auth.mode is "none".
-//
-// Each resource's document is asserted by its full URL, not by the shared
-// prefix: one is the other's prefix, so a substring check cannot tell whether a
-// client would be sent to the document describing the endpoint it asked about.
+// serves: with auth.mode "none" there is no MCP metadata document to advertise.
+// Documents are asserted by full URL: one is the other's prefix, so a substring
+// check cannot tell which endpoint a client would be sent to.
 func TestAPICatalogOmitsUnmountedAPIs(t *testing.T) {
 	const (
 		apiMeta = `"http://cetacean.example.com/.well-known/oauth-protected-resource"`

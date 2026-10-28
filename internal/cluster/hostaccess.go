@@ -57,6 +57,82 @@ func CheckMounts(
 	return nil
 }
 
+// RollingBack is the change a rollback makes, the one change that counts the
+// previous spec, since it makes that spec current.
+const RollingBack = "rolling back"
+
+// CheckHostAccessHeld refuses, below the impactful tier, a change to what runs in
+// a service whose spec reaches the host: the exemptions in CheckMounts and
+// CheckCapabilities would otherwise hand that access to new code. An empty
+// change, one the *Change functions found nothing in, passes.
+func CheckHostAccessHeld(
+	svc swarm.Service,
+	change string,
+	lookup func(name string) (volume.Volume, bool),
+	level config.OperationsLevel,
+) error {
+	if level >= config.OpsImpactful || change == "" {
+		return nil
+	}
+
+	if what := HeldHostAccess(svc, change == RollingBack, lookup); what != "" {
+		return &HostAccessError{What: change + " a service with " + what}
+	}
+
+	return nil
+}
+
+// HeldHostAccess names how svc reaches the host, or returns "" if it doesn't:
+// by its current spec, or by either spec for a rollback.
+func HeldHostAccess(
+	svc swarm.Service,
+	rollback bool,
+	lookup func(name string) (volume.Volume, bool),
+) string {
+	// A volume the manager doesn't hold most likely lives on a worker; unlike
+	// CheckMounts, a held mount of one is not presumed to reach the host.
+	known := func(name string) (volume.Volume, bool) {
+		if stored, ok := lookup(name); ok {
+			return stored, true
+		}
+
+		return volume.Volume{Name: name, Driver: "local"}, true
+	}
+
+	specs := []*swarm.ServiceSpec{&svc.Spec}
+	if rollback {
+		specs = append(specs, svc.PreviousSpec)
+	}
+
+	for _, spec := range specs {
+		if what := specHostAccess(spec, known); what != "" {
+			return what
+		}
+	}
+
+	return ""
+}
+
+// specHostAccess names the first way a spec's container reaches the host.
+func specHostAccess(spec *swarm.ServiceSpec, lookup func(string) (volume.Volume, bool)) string {
+	if spec == nil || spec.TaskTemplate.ContainerSpec == nil {
+		return ""
+	}
+
+	cs := spec.TaskTemplate.ContainerSpec
+	for _, m := range cs.Mounts {
+		if what := hostAccess(m, lookup); what != "" {
+			return what
+		}
+	}
+
+	if len(cs.CapabilityAdd) > 0 {
+		return "the added capability " + cs.CapabilityAdd[0]
+	}
+
+	return ""
+}
+
 // hostAccess names how a mount reaches the host, or returns "" if it does not.
 // It reads the type as Docker does: case-insensitively, empty meaning a bind.
 func hostAccess(m mount.Mount, lookup func(string) (volume.Volume, bool)) string {

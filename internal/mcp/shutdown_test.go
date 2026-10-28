@@ -6,12 +6,13 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 // A listen stream otherwise holds http.Server.Shutdown until its client leaves.
 func TestListenStreamEndsAtShutdown(t *testing.T) {
 	lifetime := sse.NewLifetime()
-	srv := newResourceTestServer(t, cache.New(nil), func(o *Options) { o.Streams = lifetime })
+	srv := newSharedTestServer(t, core.New(cache.New(nil), lifetime))
 	stream := startListenStream(t, srv.Handler(), "cetacean://services/svc1")
 
 	stream.await(t, "notifications/subscriptions/acknowledged")

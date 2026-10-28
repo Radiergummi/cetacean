@@ -71,6 +71,7 @@ function makeTask(dataset: Dataset, service: Service, slot: number): Task {
   return {
     ID: nextTaskID(),
     Version: { Index: Math.floor(Math.random() * 10000) },
+    CreatedAt: new Date().toISOString(),
     ServiceID: service.ID,
     NodeID: node.ID,
     Slot: slot,

@@ -22,7 +22,7 @@ func SeedCreatedConfig(
 ) {
 	cfg, err := inspect(ctx, id)
 	if err != nil {
-		slog.Warn(
+		slog.WarnContext(ctx,
 			"inspecting a created config failed; seeding a stand-in",
 			"config",
 			name,
@@ -51,7 +51,7 @@ func SeedCreatedSecret(
 ) {
 	sec, err := inspect(ctx, id)
 	if err != nil {
-		slog.Warn(
+		slog.WarnContext(ctx,
 			"inspecting a created secret failed; seeding a stand-in",
 			"secret",
 			name,

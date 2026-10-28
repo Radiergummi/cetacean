@@ -23,14 +23,19 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
+	oteltrace "go.opentelemetry.io/otel/trace"
+	"tailscale.com/tsnet"
+
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/imagecheck"
 	"github.com/radiergummi/cetacean/internal/mcp"
@@ -40,8 +45,6 @@ import (
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 	"github.com/radiergummi/cetacean/internal/version"
-	oteltrace "go.opentelemetry.io/otel/trace"
-	"tailscale.com/tsnet"
 )
 
 //go:embed frontend/dist/*
@@ -96,79 +99,100 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := config.CheckEnv(os.Environ()); err != nil {
-		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-		os.Exit(1)
-	}
-
-	cfg, fc, configPath, err := config.LoadFlagged(flags)
+	s, err := loadSettings(flags)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Set up structured logging
-	var logHandler slog.Handler
-	opts := &slog.HandlerOptions{Level: cfg.SlogLevel()}
-	if cfg.LogFormat == "text" {
-		logHandler = slog.NewTextHandler(os.Stdout, opts)
-	} else {
-		logHandler = slog.NewJSONHandler(os.Stdout, opts)
-	}
-	slog.SetDefault(slog.New(logHandler))
-
-	if configPath != "" {
-		slog.Info("loaded config file", "path", configPath, "discovered", flags.Config == "")
-	}
-
-	authCfg, err := config.LoadAuth(flags, fc, cfg.PublicURL, cfg.BasePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "auth configuration error: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := cfg.ValidateOAuth(authCfg.Mode); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	tlsCfg := config.LoadTLS(flags, fc)
-	if err := config.ValidateTLS(tlsCfg); err != nil {
-		fmt.Fprintf(os.Stderr, "TLS configuration error: %v\n", err)
+	var logHandler slog.Handler
+	opts := &slog.HandlerOptions{Level: s.cfg.SlogLevel()}
+	if s.cfg.LogFormat == "text" {
+		logHandler = slog.NewTextHandler(os.Stdout, opts)
+	} else {
+		logHandler = slog.NewJSONHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(reqctx.LogHandler(logHandler)))
+
+	if s.configPath != "" {
+		slog.Info("loaded config file", "path", s.configPath, "discovered", flags.Config == "")
+	}
+
+	if err := run(s); err != nil {
+		slog.Error("cetacean stopped", "error", err)
 		os.Exit(1)
 	}
-	if authCfg.Mode == "cert" {
-		err := config.ValidateCertMode(tlsCfg.Enabled(), authCfg.Cert.CA, cfg.TrustedProxies)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
+}
+
+// settings is the configuration startup loads and refuses before logging is
+// set up, so a misconfiguration reaches the terminal as one plain line.
+type settings struct {
+	cfg        *config.Config
+	authCfg    *config.AuthConfig
+	tlsCfg     config.TLSConfig
+	aclCfg     config.ACLConfig
+	sizing     *config.SizingConfig
+	configPath string
+}
+
+func loadSettings(flags *config.Flags) (settings, error) {
+	if err := config.CheckEnv(os.Environ()); err != nil {
+		return settings{}, fmt.Errorf("configuration error: %w", err)
 	}
-	tsnetMode := authCfg.Mode == "tailscale" && authCfg.Tailscale.Mode == "tsnet"
-	if tsnetMode {
-		if err := cfg.ValidateTsnetMode(tlsCfg.Enabled()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
+
+	cfg, fc, configPath, err := config.LoadFlagged(flags)
+	if err != nil {
+		return settings{}, fmt.Errorf("configuration error: %w", err)
+	}
+
+	authCfg, err := config.LoadAuth(flags, fc, cfg.PublicURL, cfg.BasePath)
+	if err != nil {
+		return settings{}, fmt.Errorf("auth configuration error: %w", err)
+	}
+
+	tlsCfg := config.LoadTLS(flags, fc)
+	if err := config.Validate(cfg, *authCfg, tlsCfg); err != nil {
+		return settings{}, err
+	}
+
+	if authCfg.Mode == "headers" {
+		// realIP reads the one, the provider the other; they must agree.
+		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
+	}
+
+	aclCfg, err := config.LoadACL(fc)
+	if err != nil {
+		return settings{}, err
+	}
+
+	var sizing *config.SizingConfig
+	if cfg.Recommendations {
+		if sizing, err = config.LoadSizing(fc); err != nil {
+			return settings{}, fmt.Errorf("failed to load sizing config: %w", err)
 		}
 	}
 
-	// Resolved before either setup so both read the same value, and adjudicated
-	// here because the answer depends only on configuration: the authorization
-	// server cannot work without a reachable issuer, while MCP alone only wants
-	// one for its tool icon URLs.
+	return settings{
+		cfg:        cfg,
+		authCfg:    authCfg,
+		tlsCfg:     tlsCfg,
+		aclCfg:     aclCfg,
+		sizing:     sizing,
+		configPath: configPath,
+	}, nil
+}
+
+// run serves until a signal, returning rather than exiting so every deferred
+// close, the tracing flush among them, runs on the way out.
+func run(s settings) error {
+	cfg, authCfg, tlsCfg := s.cfg, s.authCfg, s.tlsCfg
+	tsnetMode := authCfg.Mode == "tailscale" && authCfg.Tailscale.Mode == "tsnet"
+
+	// Resolved before either setup so both read the same value. config.Validate
+	// has already refused an unreachable one for the authorization server; MCP
+	// alone only wants it for its tool icon URLs.
 	issuer, reachable := cfg.OAuthIssuer(tlsCfg.Enabled())
-	switch {
-	case reachable:
-	case cfg.OAuth.Enabled:
-		slog.Error(
-			"the OAuth server needs an issuer clients can reach, and none could be derived from server.listen_addr. Set server.public_url to the URL clients reach from outside, or oauth.issuer to override it.",
-			"derived_issuer",
-			issuer,
-			"listen_addr",
-			cfg.ListenAddr,
-		)
-		os.Exit(1)
-	case cfg.MCP.Enabled:
+	if !reachable && cfg.MCP.Enabled {
 		slog.Warn(
 			"no reachable issuer could be derived from server.listen_addr; MCP tool icons will point at an unreachable URL. Set server.public_url to the URL clients reach from outside.",
 			"derived_issuer",
@@ -178,22 +202,7 @@ func main() {
 		)
 	}
 
-	if authCfg.Mode == "headers" {
-		if err := config.RequireTrustedProxies(cfg.TrustedProxies); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-
-		// realIP reads the one, the provider the other; they must agree.
-		authCfg.Headers.TrustedProxies = cfg.TrustedProxies
-	}
-
-	aclCfg, err := config.LoadACL(fc)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
+	var err error
 	var authProvider auth.Provider
 	var tsnetServer *tsnet.Server
 	var tsnetLn net.Listener
@@ -211,8 +220,7 @@ func main() {
 			BasePath:     cfg.BasePath,
 		})
 		if err != nil {
-			slog.Error("OIDC provider setup failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("OIDC provider setup failed: %w", err)
 		}
 	case "tailscale":
 		if tsnetMode {
@@ -223,8 +231,7 @@ func main() {
 				authCfg.Tailscale.Capability,
 			)
 			if err != nil {
-				slog.Error("tsnet setup failed", "error", err)
-				os.Exit(1)
+				return fmt.Errorf("tsnet setup failed: %w", err)
 			}
 			defer tsnetServer.Close()
 			defer tsnetLn.Close()
@@ -235,25 +242,19 @@ func main() {
 		authProvider = &auth.CertProvider{}
 	case "headers":
 		var extraHeaders []string
-		if aclCfg.HeadersACL != "" {
-			extraHeaders = append(extraHeaders, aclCfg.HeadersACL)
+		if s.aclCfg.HeadersACL != "" {
+			extraHeaders = append(extraHeaders, s.aclCfg.HeadersACL)
 		}
 		authProvider = auth.NewHeadersProvider(authCfg.Headers, extraHeaders...)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown auth mode %q\n", authCfg.Mode)
-		//nolint:gocritic // exitAfterDefer: tsnet defers only run in the tailscale case, not here
-		os.Exit(1)
+		return fmt.Errorf("unknown auth mode %q", authCfg.Mode)
 	}
 
 	// State cache — created first so its history can be passed to the broadcaster
 	stateCache := cache.New(nil)
 
 	// SSE broadcaster — needs history for Last-Event-ID replay
-	broadcaster := sse.NewBroadcaster(
-		cfg.SSEBatchInterval,
-		api.WriteErrorCode,
-		stateCache.History(),
-	)
+	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, stateCache.History())
 	defer broadcaster.Close()
 
 	// The metrics stream, log follows and MCP listens end with it at shutdown,
@@ -280,8 +281,7 @@ func main() {
 		Key:  cfg.DockerTLS.Key,
 	})
 	if err != nil {
-		slog.Error("docker client failed", "error", err)
-		os.Exit(1) //nolint:gocritic // defers are trivial cleanup; OS reclaims on exit
+		return fmt.Errorf("docker client failed: %w", err)
 	}
 	defer dockerClient.Close() //nolint:errcheck // best-effort shutdown close
 
@@ -295,8 +295,7 @@ func main() {
 	versionCancel()
 
 	if err != nil {
-		slog.Error("unsupported Docker Engine", "error", err, "host", cfg.DockerHost)
-		os.Exit(1)
+		return fmt.Errorf("unsupported Docker Engine at %s: %w", cfg.DockerHost, err)
 	}
 
 	// Created once, for whichever feature needs it: the cache snapshot, the
@@ -357,12 +356,11 @@ func main() {
 	}()
 
 	// API — pass ready channel so /-/ready reports sync status
-	promapi.SetNilProxyErrorWriter(api.WriteErrorCode)
 	var promClient *promapi.Client
 	var metricsProxy *promapi.Proxy
 	if cfg.PrometheusURL != "" {
 		promClient = promapi.NewClient(cfg.PrometheusURL)
-		metricsProxy = promapi.NewProxy(cfg.PrometheusURL, api.WriteErrorCode)
+		metricsProxy = promapi.NewProxy(cfg.PrometheusURL)
 		slog.Info("prometheus configured", "url", cfg.PrometheusURL)
 	} else {
 		slog.Warn("prometheus not configured, metrics disabled")
@@ -373,11 +371,7 @@ func main() {
 	// Recommendations engine
 	var recEngine *recommendations.Engine
 	if cfg.Recommendations {
-		sizingCfg, err := config.LoadSizing(fc)
-		if err != nil {
-			slog.Error("failed to load sizing config", "error", err)
-			os.Exit(1)
-		}
+		sizingCfg := s.sizing
 
 		var checkers []recommendations.Checker
 		// Always register cache-only checkers. The operational checker derives
@@ -421,88 +415,11 @@ func main() {
 		slog.Info("recommendation engine disabled")
 	}
 
-	// ACL
-	var aclEval *acl.Evaluator
-	var stopPolicyWatch func()
-
-	// Auth mode "none" resolves every caller to the same anonymous identity,
-	// so a configured policy is not applied at all.
-	if authCfg.Mode == "none" && (aclCfg.Policy != "" || aclCfg.PolicyFile != "") {
-		slog.Warn(
-			"an ACL policy is configured but auth.mode is none, so no grant will be enforced; "+
-				"set auth.mode to identify callers, or remove the policy",
-			"policy_file", aclCfg.PolicyFile,
-		)
+	aclEval, stopPolicyWatch, err := acl.FromConfig(authCfg.Mode, s.aclCfg, stateCache)
+	if err != nil {
+		return err
 	}
-
-	if authCfg.Mode != "none" {
-		aclEval = acl.NewEvaluator()
-		aclEval.SetResolver(stateCache)
-
-		// Load policy from inline or file.
-		if aclCfg.Policy != "" {
-			p, err := acl.ParsePolicy([]byte(aclCfg.Policy))
-			if err != nil {
-				slog.Error("failed to parse inline ACL policy", "error", err)
-				os.Exit(1)
-			}
-			if err := acl.Validate(p); err != nil {
-				slog.Error("invalid ACL policy", "error", err)
-				os.Exit(1)
-			}
-			aclEval.SetPolicy(p)
-			slog.Info("loaded inline ACL policy", "grants", len(p.Grants))
-		} else if aclCfg.PolicyFile != "" {
-			p, err := acl.ParsePolicyFile(aclCfg.PolicyFile)
-			if err != nil {
-				slog.Error(
-					"failed to load ACL policy file",
-					"path",
-					aclCfg.PolicyFile,
-					"error",
-					err,
-				)
-				os.Exit(1)
-			}
-			if err := acl.Validate(p); err != nil {
-				slog.Error("invalid ACL policy file", "path", aclCfg.PolicyFile, "error", err)
-				os.Exit(1)
-			}
-			aclEval.SetPolicy(p)
-			slog.Info("loaded ACL policy file", "path", aclCfg.PolicyFile, "grants", len(p.Grants))
-
-			stopPolicyWatch, err = acl.WatchPolicyFile(aclEval, aclCfg.PolicyFile)
-			if err != nil {
-				slog.Warn("failed to watch policy file for changes", "error", err)
-			}
-		}
-
-		// Provider grant source
-		switch authCfg.Mode {
-		case "tailscale":
-			if aclCfg.TailscaleCapability != "" {
-				aclEval.SetSource(&acl.TailscaleSource{Capability: aclCfg.TailscaleCapability})
-			}
-		case "oidc":
-			if aclCfg.OIDCClaim != "" {
-				aclEval.SetSource(&acl.OIDCSource{Claim: aclCfg.OIDCClaim})
-			}
-			if err := aclEval.SetOIDCUserClaims(aclCfg.OIDCUserClaims); err != nil {
-				slog.Error("invalid acl.oidc_user_claims", "error", err)
-				os.Exit(1)
-			}
-		case "headers":
-			if aclCfg.HeadersACL != "" {
-				aclEval.SetSource(&acl.HeadersSource{
-					Header:     aclCfg.HeadersACL,
-					Capability: aclCfg.HeadersCapability,
-				})
-			}
-		}
-	}
-	if stopPolicyWatch != nil {
-		defer stopPolicyWatch()
-	}
+	defer stopPolicyWatch()
 
 	slog.Info("operations level", "level", cfg.OperationsLevel)
 	if authCfg.Mode == "none" && cfg.OperationsLevel > config.OpsReadOnly {
@@ -512,8 +429,9 @@ func main() {
 			"operations_level", cfg.OperationsLevel,
 		)
 	}
+	shared := core.New(stateCache, streams)
 	handlers := api.NewHandlers(
-		stateCache,
+		shared,
 		broadcaster,
 		dockerClient,
 		dockerClient,
@@ -529,7 +447,6 @@ func main() {
 	handlers.SetTokenOperationsLevel(
 		cfg.OAuth.EffectiveTokenOperationsLevel(cfg.OperationsLevel),
 	)
-	handlers.SetStreamLifetime(streams)
 
 	if imageChecker != nil {
 		handlers.SetImageDigests(imageChecker)
@@ -539,20 +456,10 @@ func main() {
 		handlers.SetAttestations(imageAttestations)
 	}
 
-	logReads := new(sse.Slots)
-	handlers.SetLogReads(logReads)
-
-	versionIndex := cluster.NewVersionIndex(stateCache)
-	handlers.SetVersionIndex(versionIndex)
-
-	secretEntries := cluster.NewSecretEntries()
-	handlers.SetSecretEntries(secretEntries)
-
 	// SPA
 	distFS, err := fs.Sub(frontendDist, "frontend/dist")
 	if err != nil {
-		slog.Error("failed to create sub FS", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create sub FS: %w", err)
 	}
 	spa := api.NewSPAHandler(distFS, cfg.BasePath)
 
@@ -561,8 +468,7 @@ func main() {
 	// so the policy cannot drift from an edit to index.html.
 	inlineScriptHashes, err := api.InlineScriptHashes(distFS)
 	if err != nil {
-		slog.Error("failed to hash the SPA's inline scripts", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to hash the SPA's inline scripts: %w", err)
 	}
 
 	if cfg.Pprof {
@@ -601,8 +507,7 @@ func main() {
 	if cfg.OTelEndpoint != "" && cfg.MCP.Enabled {
 		traceProvider, err := tracing.NewProvider(ctx, cfg.OTelEndpoint, version.Version)
 		if err != nil {
-			slog.Error("tracing setup failed", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("tracing setup failed: %w", err)
 		}
 
 		defer func() {
@@ -623,14 +528,32 @@ func main() {
 			"Set tls.cert and tls.key, or server.public_url to the https URL of a terminating proxy.")
 	}
 
+	var tsnetDomains []string
+	if tsnetServer != nil {
+		tsnetDomains = tsnetServer.CertDomains()
+	}
+
+	if warning := hostGuardWarning(
+		cfg.ListenAddr, cfg.PublicURL, cfg.AllowedHosts, tsnetDomains,
+	); warning != "" {
+		slog.Warn(warning)
+	}
+
+	// One set for both guards, so /mcp never answers a Host the API refuses.
+	hosts := auth.NewHostSet(
+		cfg.PublicURL,
+		append(allowedHosts(cfg.ListenAddr, tsnetDomains), cfg.AllowedHosts...)...,
+	)
+
 	deps := mcpDeps{
 		cfg:          cfg,
+		hosts:        hosts,
 		cors:         corsConfig,
 		authMode:     authCfg.Mode,
 		authProvider: authProvider,
 		issuer:       issuer,
 		dataDirReady: dataDirReady,
-		cache:        stateCache,
+		shared:       shared,
 		writeClient:  dockerClient,
 		logs:         dockerClient,
 		acl:          aclEval,
@@ -639,11 +562,6 @@ func main() {
 		images:       imageChecker,
 		attestations: imageAttestations,
 		tracer:       mcpTracer,
-		streams:      streams,
-		logReads:     logReads,
-		versions:     versionIndex,
-
-		secretEntries: secretEntries,
 	}
 
 	oauthSrv := setupOAuth(deps)
@@ -673,7 +591,10 @@ func main() {
 		}
 	}
 
-	mcpHandler, closeMCP := setupMCP(deps, tokenVerifier, mcpResource)
+	mcpHandler, closeMCP, err := setupMCP(deps, tokenVerifier, mcpResource)
+	if err != nil {
+		return err
+	}
 	defer closeMCP()
 
 	router := api.NewRouter(api.RouterConfig{
@@ -691,6 +612,7 @@ func main() {
 		AuthProvider:       authProvider,
 		BasePath:           cfg.BasePath,
 		PublicURL:          cfg.PublicURL,
+		Hosts:              hosts,
 		CORS:               corsConfig,
 		TLSEnabled:         tlsCfg.Enabled() || tsnetMode,
 		TrustedProxies:     cfg.TrustedProxies,
@@ -712,22 +634,33 @@ func main() {
 		//nolint:gosec // G703: the CA path is operator-configured, not user input
 		caCert, err := os.ReadFile(filepath.Clean(authCfg.Cert.CA))
 		if err != nil {
-			slog.Error("failed to read CA cert", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to read CA cert: %w", err)
 		}
 		caPool := x509.NewCertPool()
 		if !caPool.AppendCertsFromPEM(caCert) {
-			slog.Error("failed to parse CA cert")
-			os.Exit(1)
+			return errors.New("failed to parse CA cert")
 		}
 		serverTLSConfig = clientCertTLS(caPool)
 	}
 
 	// tsnet mode: dual listeners (tailnet for app, regular for meta only)
 	if tsnetLn != nil {
-		serveDualListeners(ctx, cfg, router, handlers, tsnetLn, closeStreams)
+		// The watcher stops when ctx does, which a failed listener does not cause:
+		// waiting on it then would hold the process until a signal.
+		if err := serveDualListeners(
+			ctx,
+			cfg,
+			router,
+			handlers,
+			tsnetLn,
+			closeStreams,
+		); err != nil {
+			return err
+		}
+
 		<-watcherDone
-		return
+
+		return nil
 	}
 
 	server := &http.Server{
@@ -762,7 +695,7 @@ func main() {
 
 	slog.Info(
 		"server started",
-		"addr",
+		"listen_addr",
 		cfg.ListenAddr,
 		"base_path",
 		cfg.BasePath,
@@ -776,19 +709,19 @@ func main() {
 	if tlsCfg.Enabled() {
 		slog.Info("TLS enabled", "cert", tlsCfg.Cert, "key", tlsCfg.Key)
 		if err := server.ListenAndServeTLS(tlsCfg.Cert, tlsCfg.Key); err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("server error: %w", err)
 		}
 	} else {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("server error: %w", err)
 		}
 	}
 
 	<-drained
 	<-watcherDone
 	slog.Info("shutdown complete")
+
+	return nil
 }
 
 // dockerProbeTimeout bounds the startup version probe, so a socket that
@@ -927,7 +860,7 @@ func serveDualListeners(
 	h *api.Handlers,
 	tsnetLn net.Listener,
 	closeStreams func(),
-) {
+) error {
 	var selfMetrics http.Handler
 	if cfg.SelfMetrics {
 		selfMetrics = metrics.Handler()
@@ -955,38 +888,45 @@ func serveDualListeners(
 		defer close(drained)
 
 		<-ctx.Done()
-		slog.Info("shutting down", "cause", context.Cause(ctx))
+		slog.InfoContext(ctx, "shutting down", "cause", context.Cause(ctx))
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer shutdownCancel()
 		if err := appServer.Shutdown(shutdownCtx); err != nil {
-			slog.Error("tsnet server shutdown error", "error", err)
+			slog.ErrorContext(ctx, "tsnet server shutdown error", "error", err)
 		}
 		if err := metaServer.Shutdown(shutdownCtx); err != nil {
-			slog.Error("meta server shutdown error", "error", err)
+			slog.ErrorContext(ctx, "meta server shutdown error", "error", err)
 		}
 	}()
 
-	// Start meta server in background
-	// Exits like the main listener does: an exit fails the task at once, where a
-	// failing HEALTHCHECK takes the start period plus its retries, and outside
-	// Swarm nothing restarts a container for being unhealthy.
+	// A failing meta server ends the process as the main listener does: an
+	// exit fails the task at once, where a failing HEALTHCHECK takes the start
+	// period plus its retries, and outside Swarm nothing restarts a container
+	// for being unhealthy. Closing the app server is what ends Serve below.
+	metaFailed := make(chan error, 1)
 	go func() {
-		slog.Info("meta server started", "addr", cfg.ListenAddr)
+		slog.InfoContext(ctx, "meta server started", "listen_addr", cfg.ListenAddr)
 		if err := metaServer.ListenAndServe(); err != http.ErrServerClosed {
-			slog.Error("meta server error", "error", err)
-			os.Exit(1)
+			metaFailed <- err
+			_ = appServer.Close()
 		}
 	}()
 
 	// Serve full router on tsnet listener (blocking)
-	slog.Info("tsnet server started", "auth", "tailscale")
+	slog.InfoContext(ctx, "tsnet server started", "auth", "tailscale")
 	if err := appServer.Serve(tsnetLn); err != http.ErrServerClosed {
-		slog.Error("tsnet server error", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("tsnet server error: %w", err)
 	}
 
-	<-drained
-	slog.Info("shutdown complete")
+	select {
+	case err := <-metaFailed:
+		return fmt.Errorf("meta server error: %w", err)
+	case <-drained:
+	}
+
+	slog.InfoContext(ctx, "shutdown complete")
+
+	return nil
 }
 
 // mcpDeps bundles the runtime objects setupMCP needs. The split between
@@ -995,6 +935,7 @@ func serveDualListeners(
 // onto config structs.
 type mcpDeps struct {
 	cfg          *config.Config
+	hosts        auth.HostSet
 	cors         *api.CORSConfig
 	authMode     string
 	authProvider auth.Provider
@@ -1009,7 +950,7 @@ type mcpDeps struct {
 	// than finding out by trying again.
 	dataDirReady bool
 
-	cache        *cache.Cache
+	shared       *core.Core
 	writeClient  mcp.DockerWriteClient
 	logs         mcp.LogStreamer
 	acl          *acl.Evaluator
@@ -1018,11 +959,6 @@ type mcpDeps struct {
 	images       *imagecheck.Checker
 	attestations *attestations.Store
 	tracer       oteltrace.Tracer
-	streams      *sse.Lifetime
-	logReads     *sse.Slots
-	versions     *cluster.VersionIndex
-
-	secretEntries *cluster.SecretEntries
 }
 
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
@@ -1038,10 +974,7 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 	signingKey, _ := config.SigningKeyBytes(d.cfg.OAuth.SigningKey)
 	if len(signingKey) == 0 {
 		signingKey = make([]byte, 32)
-		if _, err := rand.Read(signingKey); err != nil {
-			slog.Error("OAuth signing key generation failed", "error", err)
-			os.Exit(1)
-		}
+		_, _ = rand.Read(signingKey)
 		slog.Warn(
 			"OAuth signing key auto-generated; tokens won't survive restarts. Set CETACEAN_OAUTH_SIGNING_KEY, or CETACEAN_OAUTH_SIGNING_KEY_FILE to read it from a file, for stable tokens.",
 		)
@@ -1055,14 +988,10 @@ func setupOAuth(d mcpDeps) *oauth.Server {
 		statePath = filepath.Join(d.cfg.DataDir, "oauth-tokens.json")
 	}
 
-	// The API comes first, so a client that sends no RFC 8707 resource
-	// indicator gets a token for the deployment it pointed at rather than for
-	// a transport it never asked about. With oauth.api_tokens off, MCP is both
-	// the only resource and the default, which is what shipped before the API
-	// became one.
-	//
-	// The two are separate audiences despite one path lying under the other:
-	// granting an agent MCP access is not granting it DELETE /services/{id}.
+	// The API comes first, so a client sending no RFC 8707 resource indicator
+	// gets a token for the deployment it pointed at; with oauth.api_tokens off,
+	// MCP is the only resource. The two are separate audiences even though one
+	// path lies under the other: MCP access does not grant DELETE /services/{id}.
 	var resources []oauth.Resource
 	if d.cfg.OAuth.APITokens {
 		resources = append(resources, oauth.Resource{
@@ -1110,14 +1039,14 @@ func startImageCheck(
 	ready <-chan struct{},
 ) *imagecheck.Checker {
 	if !cfg.ImageCheck {
-		slog.Info("image check disabled")
+		slog.InfoContext(ctx, "image check disabled")
 
 		return nil
 	}
 
 	checker := imagecheck.New(services)
 	go checker.RunAfter(ctx, ready)
-	slog.Info("image check enabled")
+	slog.InfoContext(ctx, "image check enabled")
 
 	return checker
 }
@@ -1135,32 +1064,32 @@ func startImageAttestations(cfg *config.Config) *attestations.Store {
 
 	// A client timeout would cut off a large SBOM mid-read; the store bounds
 	// the whole fetch, and a registry still has to start answering promptly.
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport := imagecheck.GuardedTransport()
 	transport.ResponseHeaderTimeout = 10 * time.Second
 
 	return attestations.NewStore(imagecheck.NewClient(&http.Client{Transport: transport}))
 }
 
-// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil
-// when MCP is disabled. The second return is a cleanup function the caller must
-// invoke at shutdown so the MCP server's cache change listener detaches before
-// the cache itself is torn down.
-//
-// The authorization server is built separately and arrives as the narrow
-// interface MCP consumes, so MCP is one of its consumers rather than its owner.
-func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http.Handler, func()) {
+// setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, or nil when
+// disabled. The caller must invoke the returned cleanup at shutdown so the
+// cache change listener detaches before the cache is torn down. The
+// authorization server arrives as the narrow interface MCP consumes.
+func setupMCP(
+	d mcpDeps,
+	tokenVerifier mcp.TokenVerifier,
+	resource string,
+) (http.Handler, func(), error) {
 	if !d.cfg.MCP.Enabled {
-		return nil, func() {}
+		return nil, func() {}, nil
 	}
 
 	// fs.Sub strips the embed prefix, so internal/mcp sees one directory per
 	// widget at the root, which is how it derives widget names. A build that
 	// skipped `npm run build:widgets` yields an empty FS, and the server then
 	// advertises no UI extension rather than promising what it cannot serve.
-	if widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets"); err != nil {
+	widgets, err := fs.Sub(widgetDist, "frontend/dist-widgets")
+	if err != nil {
 		slog.Warn("widget bundles unavailable; MCP Apps widgets disabled", "error", err)
-	} else {
-		mcp.SetWidgetFS(widgets)
 	}
 
 	// A nil *promapi.Client stored in the interface would be a non-nil
@@ -1181,7 +1110,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		imageAttestations = d.attestations
 	}
 
-	mcpSrv, err := mcp.New(d.cache, mcp.Options{
+	mcpSrv, err := mcp.New(d.shared, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
 		ACL:             d.acl,
@@ -1197,17 +1126,14 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		Attestations:    imageAttestations,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
+		Hosts:           d.hosts,
 		IconBaseURL:     d.issuer + d.cfg.BasePath,
 		Tracer:          d.tracer,
-		Streams:         d.streams,
-		LogReads:        d.logReads,
-		Versions:        d.versions,
-		SecretEntries:   d.secretEntries,
+		Widgets:         widgets,
 		DashboardURL:    d.issuer + d.cfg.BasePath,
 	})
 	if err != nil {
-		slog.Error("MCP server setup failed", "error", err)
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("MCP server setup failed: %w", err)
 	}
 	slog.Info("MCP server enabled",
 		"operations_level", d.cfg.MCP.EffectiveOperationsLevel(d.cfg.OperationsLevel),
@@ -1225,7 +1151,7 @@ func setupMCP(d mcpDeps, tokenVerifier mcp.TokenVerifier, resource string) (http
 		)
 	}
 
-	return mcpSrv.Handler(), mcpSrv.Close
+	return mcpSrv.Handler(), mcpSrv.Close, nil
 }
 
 // mcpInClear reports whether bearer tokens and upstream credentials reach /mcp
@@ -1238,4 +1164,36 @@ func mcpInClear(mcpEnabled bool, authMode string, tlsEnabled bool, publicURL str
 	u, err := url.Parse(publicURL)
 
 	return err != nil || u.Scheme != "https"
+}
+
+// hostGuardWarning describes what Host the router admits when it listens
+// beyond loopback and nothing names it, or is empty when either is not so.
+func hostGuardWarning(listenAddr, publicURL string, allowed, tsnetDomains []string) string {
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil || publicURL != "" || len(allowed) > 0 || len(tsnetDomains) > 0 ||
+		host != "" && auth.IsLoopbackHost(host) {
+		return ""
+	}
+
+	admitted := "an IP address or localhost"
+	if names := allowedHosts(listenAddr, nil); len(names) > 0 {
+		admitted = "an IP address, localhost or " + strings.Join(names, ", ")
+	}
+
+	return "neither server.public_url nor server.allowed_hosts is set, so only requests whose " +
+		"Host is " + admitted + " are answered; any other name gets 421. " +
+		"Set them to every name Cetacean is reached by."
+}
+
+// allowedHosts are the names, beyond server.public_url's, the router answers
+// for: a listen host given by name, and the tailnet names a tsnet node serves.
+func allowedHosts(listenAddr string, tsnetDomains []string) []string {
+	hosts := slices.Clone(tsnetDomains)
+
+	if host, _, err := net.SplitHostPort(listenAddr); err == nil && host != "" &&
+		net.ParseIP(host) == nil {
+		hosts = append(hosts, host)
+	}
+
+	return hosts
 }

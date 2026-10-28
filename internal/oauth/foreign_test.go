@@ -9,13 +9,9 @@ import (
 )
 
 // Every way verification can fail, classified as somebody else's token or as
-// ours failing to prove itself. The errors come out of real verification rather
-// than being constructed here: the mapping is only worth anything if it matches
-// what the verifier actually returns.
-//
-// Getting a row wrong is silent in both directions. A missing mark breaks bearer
-// auth against the upstream IdP; a spurious one lets a token that failed our
-// checks be re-judged by the provider on weaker evidence.
+// ours failing to prove itself, from real verification rather than constructed
+// errors. A missing mark breaks bearer auth against the upstream IdP; a spurious
+// one lets a token that failed our checks be re-judged on weaker evidence.
 func TestForeignSeparatesOtherIssuersFromFailedProofs(t *testing.T) {
 	s := newTestServer(t)
 	audience := s.resources.fallback

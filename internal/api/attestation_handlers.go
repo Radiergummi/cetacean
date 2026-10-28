@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -178,7 +179,7 @@ func (h *Handlers) lookupTaskACL(w http.ResponseWriter, r *http.Request) (swarm.
 func writeUnavailable(w http.ResponseWriter, r *http.Request, retryAfter time.Time) {
 	seconds := max(int(math.Ceil(time.Until(retryAfter).Seconds())), 1)
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
-	writeErrorCode(w, r, "ATT001", "the image's registry could not be read")
+	problem.Write(w, r, "ATT001", "the image's registry could not be read")
 }
 
 // writeAttestationError answers for a request whose platform or whose SBOM or
@@ -194,21 +195,21 @@ func writeAttestationError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.As(err, &unavailable):
 		writeUnavailable(w, r, unavailable.RetryAfter)
 	case errors.As(err, &status):
-		writeErrorCode(w, r, "ATT007", "the image's attestations are "+string(status.Status))
+		problem.Write(w, r, "ATT007", "the image's attestations are "+string(status.Status))
 	case errors.Is(err, attestations.ErrNoSBOM):
-		writeErrorCode(w, r, "ATT002", "no SBOM for this platform")
+		problem.Write(w, r, "ATT002", "no SBOM for this platform")
 	case errors.As(err, &tooLarge):
-		writeErrorCode(w, r, "ATT005", tooLarge.Error())
+		problem.Write(w, r, "ATT005", tooLarge.Error())
 	case errors.Is(err, attestations.ErrUnreadable):
-		writeErrorCode(w, r, "ATT008", err.Error())
+		problem.Write(w, r, "ATT008", err.Error())
 	case errors.Is(err, attestations.ErrNoSource):
-		writeErrorCode(w, r, "ATT006", "the provenance embeds no Dockerfile")
+		problem.Write(w, r, "ATT006", "the provenance embeds no Dockerfile")
 	case errors.Is(err, cluster.ErrPlatformRequired):
-		writeErrorCode(w, r, "ATT003", err.Error())
+		problem.Write(w, r, "ATT003", err.Error())
 	case errors.Is(err, attestations.ErrUnknownPlatform):
-		writeErrorCode(w, r, "ATT004", err.Error())
+		problem.Write(w, r, "ATT004", err.Error())
 	default:
-		writeErrorCode(w, r, "ATT001", err.Error())
+		problem.Write(w, r, "ATT001", err.Error())
 	}
 }
 

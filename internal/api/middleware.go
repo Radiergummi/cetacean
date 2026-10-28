@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -13,18 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
-
-type reqIDKey struct{}
-
-// RequestIDFrom extracts the request ID from a context.
-func RequestIDFrom(ctx context.Context) string {
-	if id, ok := ctx.Value(reqIDKey{}).(string); ok {
-		return id
-	}
-	return ""
-}
 
 // maxRequestIDLength bounds the request ID a proxy may forward.
 const maxRequestIDLength = 64
@@ -58,7 +49,7 @@ func requestID(next http.Handler) http.Handler {
 			_, _ = rand.Read(buf[:])
 			id = hex.EncodeToString(buf[:])
 		}
-		ctx := context.WithValue(r.Context(), reqIDKey{}, id)
+		ctx := reqctx.WithRequestID(r.Context(), id)
 		w.Header().Set("Request-Id", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -201,7 +192,6 @@ func requestLogger(next http.Handler) http.Handler {
 		}
 
 		slog.Log(r.Context(), level, "request",
-			"req_id", RequestIDFrom(r.Context()),
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
@@ -216,8 +206,7 @@ func recovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				slog.Error("panic recovered",
-					"req_id", RequestIDFrom(r.Context()),
+				slog.ErrorContext(r.Context(), "panic recovered",
 					"error", err,
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),
@@ -225,7 +214,7 @@ func recovery(next http.Handler) http.Handler {
 				// Best-effort error response. If headers were already
 				// flushed (e.g. mid-SSE-stream), WriteHeader is a no-op
 				// and the partial write is harmless.
-				writeErrorCode(w, r, "API009", "internal server error")
+				problem.Write(w, r, "API009", "internal server error")
 			}
 		}()
 		next.ServeHTTP(w, r)

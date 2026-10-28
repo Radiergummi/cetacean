@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // describableResourceTypes maps the singular type name describe takes to the
@@ -40,7 +42,7 @@ func describableTypeNames() []string {
 	return slices.Sorted(maps.Keys(describableResourceTypes))
 }
 
-// toolDescribe returns one resource as a cluster.Digest: its derived state,
+// toolDescribe returns one resource as a projection.Digest: its derived state,
 // the reason behind it, and the resources it references. Identity resolution
 // and the ACL check are delegated to lookupResource, the audited path the
 // cetacean:// resources and find use.
@@ -60,7 +62,7 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 
 	id := strings.TrimSpace(req.GetString("id", ""))
 	if id == "" {
-		return "", fmt.Errorf("`id` is required")
+		return "", errors.New("`id` is required")
 	}
 
 	// The identifier is spliced into a cetacean:// path, so a separator in it
@@ -98,7 +100,7 @@ func (s *Server) toolDescribe(ctx context.Context, req mcplib.CallToolRequest) (
 // nested, so the fields stay at the top level, and Raw is an addition rather
 // than a replacement: a tool advertising an output schema must conform to it.
 type describeResult struct {
-	cluster.Digest
+	projection.Digest
 
 	Raw any `json:"raw,omitempty"`
 }
@@ -111,25 +113,26 @@ func (s *Server) digestOf(
 	ctx context.Context,
 	resourceType string,
 	resolved any,
-) (cluster.Digest, error) {
+) (projection.Digest, error) {
 	switch resource := resolved.(type) {
 	case swarm.Service:
-		return cluster.ServiceDigest(
+		return projection.ServiceDigest(
 			resource,
 			s.filterRawTasks(ctx, s.cache.ListTasksByService(resource.ID)),
 			s.readableAttachedNetworks(ctx, resource),
 			s.serviceRestarts(resource.ID),
 			s.cache.IsFlapping(resource.ID),
+			cluster.EligibleIn(s.cache.EligibleNodeCounts(resource), resource.ID),
 			cluster.ServiceImageUpdate(resource, s.images),
 		), nil
 
 	case swarm.Node:
 		tasks := s.filterRawTasks(ctx, s.cache.ListTasksByNode(resource.ID))
 
-		return cluster.NodeDigest(resource, tasks, s.readableServicesOf(ctx, tasks)), nil
+		return projection.NodeDigest(resource, tasks, s.readableServicesOf(ctx, tasks)), nil
 
 	case cluster.EnrichedTask:
-		return cluster.TaskDigest(
+		return projection.TaskDigest(
 			resource.Task,
 			s.readableService(ctx, resource.ServiceID),
 			s.readableNode(ctx, resource.NodeID),
@@ -145,33 +148,34 @@ func (s *Server) digestOf(
 			tasks = append(tasks, s.cache.ListTasksByService(svc.ID)...)
 		}
 
-		return cluster.StackDigest(
+		return projection.StackDigest(
 			resource,
 			s.filterRawTasks(ctx, tasks),
 			s.cache.FlappingServices(),
+			s.cache.EligibleNodeCounts(resource.Services...),
 		), nil
 
 	case swarm.Config:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingConfig(resource.ID))
 		version := s.versions.ConfigVersion(resource, s.readPredicate(ctx))
 
-		return withVersion(cluster.ConfigDigest(resource, users), version, len(users)), nil
+		return withVersion(projection.ConfigDigest(resource, users), version, len(users)), nil
 
 	case swarm.Secret:
 		users := s.filterServiceRefs(ctx, s.cache.ServicesUsingSecret(resource.ID))
 		version := s.versions.SecretVersion(resource, s.readPredicate(ctx))
 
-		return withVersion(cluster.SecretDigest(resource, users), version, len(users)), nil
+		return withVersion(projection.SecretDigest(resource, users), version, len(users)), nil
 
 	case network.Summary:
-		return cluster.NetworkDigest(
+		return projection.NetworkDigest(
 			resource,
 			s.filterServiceRefs(ctx, s.cache.ServicesUsingNetwork(resource.ID)),
 			s.cache.NetworkAddressesOf(resource.ID),
 		), nil
 
 	case volume.Volume:
-		return cluster.VolumeDigest(
+		return projection.VolumeDigest(
 			resource,
 			s.filterServiceRefs(ctx, s.cache.ServicesUsingVolume(resource.Name)),
 		), nil
@@ -179,7 +183,7 @@ func (s *Server) digestOf(
 	default:
 		// Unreachable while describableResourceTypes and lookupResource agree,
 		// but named rather than returning an empty digest if they ever drift.
-		return cluster.Digest{}, fmt.Errorf(
+		return projection.Digest{}, fmt.Errorf(
 			"resource type %q resolved to %T, which has no digest builder",
 			resourceType, resolved,
 		)
@@ -312,7 +316,7 @@ func digestibleResourceType(uri string) (string, bool) {
 
 // withVersion adds to a config or secret digest its version group, found among
 // what the caller may read, and how many of the services it may read use it.
-func withVersion(d cluster.Digest, v cluster.Version, usedBy int) cluster.Digest {
+func withVersion(d projection.Digest, v cluster.Version, usedBy int) projection.Digest {
 	maps.Copy(d.Details, v.Detail(usedBy).Map())
 
 	return d

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -116,7 +117,7 @@ func contentNegotiatedWithSSE(
 			spa.ServeHTTP(w, r)
 		case ContentTypeSSE:
 			if sseHandler == nil {
-				writeErrorCode(w, r, "API001", "this endpoint does not support text/event-stream")
+				problem.Write(w, r, "API001", "this endpoint does not support text/event-stream")
 				return
 			}
 
@@ -131,11 +132,13 @@ func contentNegotiatedWithSSE(
 				return
 			}
 
+			allowReads(w)
 			jsonHandler(w, r)
 		case ContentTypeYAML:
 			dispatchFeed(w, r, feeds.yaml, served)
 		case ContentTypeJSON:
 			addFeedLinks(w, r, feeds)
+			allowReads(w)
 			jsonHandler(w, r)
 		default:
 			notAcceptable(w, r, served)
@@ -161,6 +164,12 @@ func dispatchFeed(
 func (h *Handlers) streamList(w http.ResponseWriter, r *http.Request, typ cache.EventType) {
 	typMatch := sse.TypeMatcher(typ)
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, typMatch), typ)
+}
+
+// streamServices is streamList for services, whose stream replays every type
+// its matcher admits.
+func (h *Handlers) streamServices(w http.ResponseWriter, r *http.Request) {
+	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, sse.ServiceListMatcher), sse.ReplayAll)
 }
 
 func (h *Handlers) streamResource(

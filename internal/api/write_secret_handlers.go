@@ -13,7 +13,6 @@ import (
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Secret]{
 		resource:     "secret",
-		pathKey:      "id",
 		getter:       h.cache.GetSecret,
 		remove:       h.secretWriter.RemoveSecret,
 		conflictCode: "SEC001",
@@ -76,7 +75,6 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) secretLabelsSpec() getLabelsSpec[swarm.Secret] {
 	return getLabelsSpec[swarm.Secret]{
 		resource:    "secret",
-		pathKey:     "id",
 		typeName:    "SecretLabels",
 		getter:      h.cache.GetSecret,
 		aclResource: func(s swarm.Secret) string { return "secret:" + s.Spec.Name },

@@ -1,0 +1,833 @@
+package problem
+
+import (
+	"net/http"
+	"sort"
+
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
+)
+
+// Def defines a well-known error type with a stable code, human-readable
+// description, and suggested resolution. Each error is served as documentation
+// at GET /api/errors/{code}.
+type Def struct {
+	Code        string `json:"code"`
+	Title       string `json:"title"`
+	Status      int    `json:"status"`
+	Description string `json:"description"`
+	Suggestion  string `json:"suggestion"`
+}
+
+// Domain names the domain a three-letter code prefix belongs to.
+type Domain struct {
+	Prefix string `json:"prefix"`
+	Label  string `json:"label"`
+}
+
+// Domains names every prefix registry uses, in the order a reference
+// presents them: protocol, identity, the cross-cutting subsystems, then one
+// entry per resource type. That is not the order they sort in, which is why
+// this is a slice rather than a map.
+var Domains = []Domain{
+	{Prefix: "API", Label: "Protocol and content negotiation"},
+	{Prefix: "AUT", Label: "Authentication"},
+	{Prefix: "ACL", Label: "Authorization"},
+	{Prefix: "OPS", Label: "Operations level"},
+	{Prefix: "CSR", Label: "Cross-origin protection"},
+	{Prefix: "FLT", Label: "Filter expressions"},
+	{Prefix: "SEA", Label: "Search"},
+	{Prefix: "MTR", Label: "Metrics and Prometheus"},
+	{Prefix: "LOG", Label: "Log streaming"},
+	{Prefix: "SSE", Label: "SSE connections"},
+	{Prefix: "ENG", Label: "Docker Engine"},
+	{Prefix: "SWM", Label: "Swarm operations"},
+	{Prefix: "PLG", Label: "Plugin operations"},
+	{Prefix: "NOD", Label: "Node operations"},
+	{Prefix: "SVC", Label: "Service operations"},
+	{Prefix: "TSK", Label: "Task operations"},
+	{Prefix: "ATT", Label: "Image attestations"},
+	{Prefix: "STK", Label: "Stack operations"},
+	{Prefix: "VOL", Label: "Volume operations"},
+	{Prefix: "NET", Label: "Network operations"},
+	{Prefix: "CFG", Label: "Config operations"},
+	{Prefix: "SEC", Label: "Secret operations"},
+}
+
+var registry = map[string]Def{
+	// ── API: protocol / content negotiation ────────────────────────────
+	"API001": {Code: "API001", Title: "SSE Not Supported", Status: http.StatusNotAcceptable,
+		Description: "This endpoint does not support Server-Sent Events.",
+		Suggestion:  "Use Accept: application/json instead of text/event-stream."},
+	"API002": {Code: "API002", Title: "SSE Required", Status: http.StatusNotAcceptable,
+		Description: "This endpoint only supports Server-Sent Events.",
+		Suggestion:  "Use Accept: text/event-stream."},
+	"API003": {
+		Code:        "API003",
+		Title:       "Not Acceptable",
+		Status:      http.StatusNotAcceptable,
+		Description: "The Accept header does not match any media type this endpoint can produce.",
+		Suggestion:  "Use Accept: application/json, application/atom+xml, text/event-stream, or text/html.",
+	},
+	"API004": {
+		Code:        "API004",
+		Title:       "Invalid Patch Content-Type",
+		Status:      http.StatusUnsupportedMediaType,
+		Description: "The Content-Type header does not match a supported patch format.",
+		Suggestion:  "Use Content-Type: application/merge-patch+json or application/json-patch+json.",
+	},
+	"API005": {
+		Code:        "API005",
+		Title:       "Streaming Not Supported",
+		Status:      http.StatusInternalServerError,
+		Description: "The server's response writer does not support streaming (no http.Flusher).",
+		Suggestion:  "This is a server configuration issue. Check that no middleware is buffering responses.",
+	},
+	"API006": {Code: "API006", Title: "Invalid Request Body", Status: http.StatusBadRequest,
+		Description: "The request body could not be decoded as valid JSON.",
+		Suggestion:  "Ensure the request body is well-formed JSON matching the expected schema."},
+	"API007": {Code: "API007", Title: "Unreadable Request Body", Status: http.StatusBadRequest,
+		Description: "The request body could not be read.",
+		Suggestion:  "Ensure the request includes a body and Content-Length is correct."},
+	"API008": {Code: "API008", Title: "Invalid JSON", Status: http.StatusBadRequest,
+		Description: "The request body is not valid JSON.",
+		Suggestion:  "Check for syntax errors in the JSON payload."},
+	"API009": {
+		Code:        "API009",
+		Title:       "Internal Serialization Error",
+		Status:      http.StatusInternalServerError,
+		Description: "The server failed to serialize or deserialize internal state.",
+		Suggestion:  "This is a server bug. Check the Cetacean logs for details.",
+	},
+	"API010": {
+		Code:        "API010",
+		Title:       "Patch Test Failed",
+		Status:      http.StatusConflict,
+		Description: "A JSON Patch test operation failed, indicating the resource state does not match the expected value.",
+		Suggestion:  "Reload the resource and retry the patch with updated test values.",
+	},
+	"API011": {Code: "API011", Title: "Patch Application Failed", Status: http.StatusBadRequest,
+		Description: "The JSON Patch could not be applied to the resource.",
+		Suggestion:  "Check the patch operations for correctness."},
+	"API012": {
+		Code:        "API012",
+		Title:       "Endpoint Removed",
+		Status:      http.StatusGone,
+		Description: "This endpoint was deprecated and has since been removed.",
+		Suggestion:  "See the endpoint named in the detail, or GET /api for the current surface.",
+	},
+	"API013": {
+		Code:        "API013",
+		Title:       "Precondition Failed",
+		Status:      http.StatusPreconditionFailed,
+		Description: "A precondition, such as If-Match, did not hold for the current state of the resource.",
+		Suggestion:  "Re-read the resource, take the ETag from that response, and retry with it.",
+	},
+	"API014": {
+		Code:        "API014",
+		Title:       "Not Representable as Compose",
+		Status:      http.StatusUnprocessableEntity,
+		Description: "The resource has nothing a compose file can describe. A service running a plugin or a network attachment has no container specification, which is all a compose service is.",
+		Suggestion:  "Read the resource as JSON instead; only container services have a compose projection.",
+	},
+	"API015": {
+		Code:   "API015",
+		Title:  "Ambiguous Identifier",
+		Status: http.StatusConflict,
+		Description: "The name in the path or request body identifies more than one resource, " +
+			"so the server cannot tell which one was meant. " +
+			"Swarm does not require node hostnames to be unique.",
+		Suggestion: "Address the resource by its ID. The detail names every " +
+			"ID the request could have meant.",
+	},
+	"API016": {
+		Code:        "API016",
+		Title:       "Invalid Query Parameter",
+		Status:      http.StatusBadRequest,
+		Description: "A query parameter has a value the endpoint does not accept.",
+		Suggestion:  "The detail names the parameter and the values it takes.",
+	},
+
+	// ── AUT: authentication ───────────────────────────────────────────
+	"AUT001": {Code: "AUT001", Title: "Not Authenticated", Status: http.StatusUnauthorized,
+		Description: "The request requires authentication but no valid credentials were provided.",
+		Suggestion:  "Log in or provide a valid authentication token."},
+	"AUT002": {Code: "AUT002", Title: "Authorization Denied", Status: http.StatusForbidden,
+		Description: "The identity provider denied authorization.",
+		Suggestion:  "Check your account permissions with the identity provider."},
+	"AUT003": {
+		Code:        "AUT003",
+		Title:       "Authentication Callback Error",
+		Status:      http.StatusBadRequest,
+		Description: "The authentication callback contained invalid or missing parameters.",
+		Suggestion:  "Retry the login flow from the beginning.",
+	},
+	"AUT004": {
+		Code:        "AUT004",
+		Title:       "Authentication Server Error",
+		Status:      http.StatusInternalServerError,
+		Description: "An internal error occurred during authentication.",
+		Suggestion:  "Retry the login flow. If the problem persists, check server logs.",
+	},
+	"AUT005": {
+		Code:        "AUT005",
+		Title:       "Client Certificate Rejected",
+		Status:      http.StatusForbidden,
+		Description: "The client certificate was absent, unreadable, or carried no usable identity.",
+		Suggestion:  "Present a certificate from a CA this deployment trusts, carrying a common name, email address or SPIFFE URI SAN.",
+	},
+	"AUT006": {
+		Code:        "AUT006",
+		Title:       "Authentication Refused",
+		Status:      http.StatusForbidden,
+		Description: "The credential this deployment authenticates with was missing or rejected, and no HTTP authentication scheme can ask for it.",
+		Suggestion:  "The credential comes from the network path — a trusted proxy's headers, or the peer's tailnet membership — not from the request. Check the server logs for which one failed.",
+	},
+
+	// ── ACL: access control ──────────────────────────────────────────
+	"ACL001": {Code: "ACL001", Title: "Access Denied", Status: http.StatusForbidden,
+		Description: "You do not have permission to access this resource.",
+		Suggestion:  "Check your ACL policy grants."},
+	"ACL002": {Code: "ACL002", Title: "Write Access Denied", Status: http.StatusForbidden,
+		Description: "You do not have write permission on this resource.",
+		Suggestion:  "Check your ACL policy grants for write permissions."},
+
+	// ── OPS: operations level ─────────────────────────────────────────
+	"OPS001": {
+		Code:        "OPS001",
+		Title:       "Operations Level Too Low",
+		Status:      http.StatusForbidden,
+		Description: "The requested operation requires a higher operations level than the server is configured for.",
+		Suggestion:  "Increase the server.operations_level setting and restart the server.",
+	},
+
+	// ── CSR: cross-origin protection ──────────────────────────────────
+	"CSR001": {
+		Code:        "CSR001",
+		Title:       "Cross-Origin Request Blocked",
+		Status:      http.StatusForbidden,
+		Description: "The request changes state and arrived from another origin, which cross-site request forgery protection refuses.",
+		Suggestion:  "Call the API from an allowed origin, or add yours to the server.cors.origins setting.",
+	},
+	"CSR002": {
+		Code:        "CSR002",
+		Title:       "Misdirected Request",
+		Status:      http.StatusMisdirectedRequest,
+		Description: "The request's Host names none of this server's names, an IP address or loopback, so it may come from a page that rebound its own name to this server.",
+		Suggestion:  "Add the host to the server.allowed_hosts setting, or set server.public_url to the URL the server is reached at.",
+	},
+
+	// ── FLT: filter expressions ───────────────────────────────────────
+	"FLT001": {Code: "FLT001", Title: "Filter Expression Too Long", Status: http.StatusBadRequest,
+		Description: "The filter expression exceeds the maximum allowed length.",
+		Suggestion:  "Shorten the filter expression."},
+	"FLT002": {
+		Code:        "FLT002",
+		Title:       "Invalid Filter Expression",
+		Status:      http.StatusBadRequest,
+		Description: "The filter expression could not be compiled, names a field the resource does not have, or compares values of different types.",
+		Suggestion:  "Check the expression syntax and the filter fields documented for this resource type. Filters use the expr-lang expression language.",
+	},
+	"FLT003": {Code: "FLT003", Title: "Filter Evaluation Error", Status: http.StatusBadRequest,
+		Description: "The filter expression compiled but failed during evaluation.",
+		Suggestion:  "Check the values the expression passes to each operator and function."},
+	"FLT004": {
+		Code:        "FLT004",
+		Title:       "Filter Too Expensive",
+		Status:      http.StatusBadRequest,
+		Description: "The filter expression was too expensive to evaluate over the list.",
+		Suggestion:  "Compare fields of the resource instead of building large collections in the expression.",
+	},
+
+	// ── SEA: search ───────────────────────────────────────────────────
+	"SEA001": {Code: "SEA001", Title: "Missing Search Query", Status: http.StatusBadRequest,
+		Description: "The required query parameter q is missing.",
+		Suggestion:  "Provide a search query: /search?q=term."},
+	"SEA002": {Code: "SEA002", Title: "Search Query Too Long", Status: http.StatusBadRequest,
+		Description: "The search query exceeds the maximum allowed length of 200 characters.",
+		Suggestion:  "Shorten the search query."},
+
+	// ── MTR: metrics / Prometheus ─────────────────────────────────────
+	"MTR001": {
+		Code:        "MTR001",
+		Title:       "Prometheus Not Configured",
+		Status:      http.StatusServiceUnavailable,
+		Description: "Prometheus metrics are not available because no Prometheus URL is configured.",
+		Suggestion:  "Set the prometheus.url setting and restart the server.",
+	},
+	"MTR002": {Code: "MTR002", Title: "Prometheus Unreachable", Status: http.StatusBadGateway,
+		Description: "The configured Prometheus server is not responding.",
+		Suggestion:  "Check that Prometheus is running and reachable at the configured URL."},
+	"MTR003": {Code: "MTR003", Title: "Missing Metrics Query", Status: http.StatusBadRequest,
+		Description: "The required query parameter is missing for the metrics endpoint.",
+		Suggestion:  "Provide a PromQL query parameter."},
+	"MTR004": {Code: "MTR004", Title: "Invalid Metrics Step", Status: http.StatusBadRequest,
+		Description: "The step parameter is outside the allowed range.",
+		Suggestion:  "Use a step value between 5 and 300 seconds."},
+	"MTR005": {
+		Code:        "MTR005",
+		Title:       "Too Many Metrics Streams",
+		Status:      http.StatusTooManyRequests,
+		Description: "The maximum number of concurrent metrics stream connections has been reached.",
+		Suggestion:  "Close an existing metrics stream connection before opening a new one.",
+	},
+	"MTR006": {Code: "MTR006", Title: "Missing Label Name", Status: http.StatusBadRequest,
+		Description: "The label name path parameter is missing.",
+		Suggestion:  "Provide a label name in the URL path."},
+	"MTR007": {
+		Code:        "MTR007",
+		Title:       "Prometheus Request Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to create the request to the Prometheus server.",
+		Suggestion:  "This is a server-side error. Check the Cetacean logs for details.",
+	},
+	"MTR008": {
+		Code:        "MTR008",
+		Title:       "Prometheus Response Too Large",
+		Status:      http.StatusBadGateway,
+		Description: "Prometheus answered with more than the 10 MiB the proxy forwards.",
+		Suggestion:  "Narrow the query: fewer series, a shorter range, or a larger step.",
+	},
+	"MTR009": {
+		Code:        "MTR009",
+		Title:       "Query Rejected by Prometheus",
+		Status:      http.StatusBadRequest,
+		Description: "Prometheus refused the query: it does not parse, cannot be evaluated, or asks for too many points.",
+		Suggestion:  "Correct the query, or narrow it with a shorter range or a larger step.",
+	},
+
+	// ── LOG: log streaming ────────────────────────────────────────────
+	"LOG001": {Code: "LOG001", Title: "Too Many Log Streams", Status: http.StatusTooManyRequests,
+		Description: "The maximum number of concurrent log stream connections has been reached.",
+		Suggestion:  "Close an existing log stream before opening a new one."},
+	"LOG002": {Code: "LOG002", Title: "Invalid Stream Parameter", Status: http.StatusBadRequest,
+		Description: "The stream parameter must be either stdout or stderr.",
+		Suggestion:  "Use stream=stdout or stream=stderr."},
+	"LOG003": {Code: "LOG003", Title: "Invalid After Parameter", Status: http.StatusBadRequest,
+		Description: "The after parameter must be an RFC 3339 timestamp or a Go duration string.",
+		Suggestion:  "Use a format like 2024-01-01T00:00:00Z or 1h30m."},
+	"LOG004": {Code: "LOG004", Title: "Invalid Before Parameter", Status: http.StatusBadRequest,
+		Description: "The before parameter must be an RFC 3339 timestamp or a Go duration string.",
+		Suggestion:  "Use a format like 2024-01-01T00:00:00Z or 1h30m."},
+	"LOG005": {
+		Code:        "LOG005",
+		Title:       "Before Not Supported For SSE",
+		Status:      http.StatusBadRequest,
+		Description: "The before parameter is not supported for SSE log streams because they are open-ended.",
+		Suggestion:  "Remove the before parameter when using SSE, or use a JSON request instead.",
+	},
+	"LOG006": {
+		Code:        "LOG006",
+		Title:       "Log Retrieval Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to retrieve logs from the Docker Engine.",
+		Suggestion:  "Check that the service or task still exists and the Docker Engine is reachable.",
+	},
+	"LOG007": {Code: "LOG007", Title: "Log Parse Failed", Status: http.StatusInternalServerError,
+		Description: "The logs were retrieved but could not be parsed.",
+		Suggestion:  "This is a server-side error. Check the Cetacean logs for details."},
+	"LOG008": {
+		Code:        "LOG008",
+		Title:       "Log Stream Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to open the log stream from the Docker Engine.",
+		Suggestion:  "Check that the service or task still exists and the Docker Engine is reachable.",
+	},
+	"LOG009": {Code: "LOG009", Title: "Too Many Log Reads", Status: http.StatusTooManyRequests,
+		Description: "The maximum number of concurrent log reads has been reached.",
+		Suggestion:  "Retry after the time the Retry-After header names."},
+
+	// ── SSE: SSE connections ──────────────────────────────────────────
+	"SSE001": {
+		Code:        "SSE001",
+		Title:       "Too Many SSE Connections",
+		Status:      http.StatusTooManyRequests,
+		Description: "The maximum number of concurrent SSE connections has been reached, for the server or for this caller.",
+		Suggestion:  "Close an existing SSE connection before opening a new one.",
+	},
+
+	// ── ENG: Docker Engine ────────────────────────────────────────────
+	"ENG001": {
+		Code:        "ENG001",
+		Title:       "Docker Engine Unavailable",
+		Status:      http.StatusServiceUnavailable,
+		Description: "The Docker Engine is not responding. The daemon may be stopped, restarting, or the socket may be unreachable.",
+		Suggestion:  "Check that the Docker daemon is running and that Cetacean has access to the Docker socket.",
+	},
+	"ENG002": {
+		Code:        "ENG002",
+		Title:       "Docker Version Check Failed",
+		Status:      http.StatusServiceUnavailable,
+		Description: "Could not determine the latest Docker Engine version from the GitHub API.",
+		Suggestion:  "This is a transient network error. Try again later.",
+	},
+	"ENG003": {Code: "ENG003", Title: "Docker Validation Error", Status: http.StatusBadRequest,
+		Description: "The Docker Engine rejected the request due to invalid arguments.",
+		Suggestion:  "Check the request parameters for correctness."},
+	"ENG004": {Code: "ENG004", Title: "Docker Engine Error", Status: http.StatusInternalServerError,
+		Description: "An unexpected error occurred while communicating with the Docker Engine.",
+		Suggestion:  "Check the Cetacean and Docker daemon logs for details."},
+	"ENG005": {
+		Code:        "ENG005",
+		Title:       "Docker Engine Timeout",
+		Status:      http.StatusGatewayTimeout,
+		Description: "The Docker Engine did not answer within the time Cetacean allows for the operation.",
+		Suggestion:  "Check the daemon's load and logs, then retry.",
+	},
+	"ENG006": {
+		Code:        "ENG006",
+		Title:       "Cluster Re-sync Failed",
+		Status:      http.StatusBadGateway,
+		Description: "Cetacean could not read the cluster from the Docker Engine. The detail names what each list answered.",
+		Suggestion:  "Check that docker.host points at a swarm manager and that the swarm has a leader.",
+	},
+	// ── SWM: swarm operations ─────────────────────────────────────────
+	"SWM001": {
+		Code:        "SWM001",
+		Title:       "Swarm API Not Available",
+		Status:      http.StatusNotImplemented,
+		Description: "The swarm API is not available. This node may not be a swarm manager, or the Docker Engine may not support swarm mode.",
+		Suggestion:  "Ensure Cetacean is connected to a swarm manager node.",
+	},
+	"SWM002": {
+		Code:        "SWM002",
+		Title:       "Swarm Inspect Failed",
+		Status:      http.StatusServiceUnavailable,
+		Description: "Failed to inspect the current swarm state. The swarm may be temporarily unavailable.",
+		Suggestion:  "Check that the swarm is healthy and retry the operation.",
+	},
+	"SWM003": {Code: "SWM003", Title: "Swarm Update Failed", Status: http.StatusInternalServerError,
+		Description: "The swarm configuration update failed.",
+		Suggestion:  "Check the Cetacean and Docker daemon logs for details."},
+	"SWM004": {
+		Code:        "SWM004",
+		Title:       "Disk Usage Not Available",
+		Status:      http.StatusNotImplemented,
+		Description: "Disk usage information is not available from the Docker Engine.",
+		Suggestion:  "Ensure Cetacean is connected to a Docker Engine that supports the disk usage API.",
+	},
+	"SWM005": {Code: "SWM005", Title: "Disk Usage Failed", Status: http.StatusInternalServerError,
+		Description: "Failed to retrieve disk usage information from the Docker Engine.",
+		Suggestion:  "Check the Docker daemon logs for details."},
+	"SWM006": {
+		Code:        "SWM006",
+		Title:       "Token Rotation Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to rotate the swarm join token.",
+		Suggestion:  "Check the Docker daemon logs for details.",
+	},
+	"SWM007": {
+		Code:        "SWM007",
+		Title:       "Unlock Key Rotation Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to rotate the swarm unlock key.",
+		Suggestion:  "Check the Docker daemon logs for details.",
+	},
+	"SWM008": {Code: "SWM008", Title: "Swarm Unlock Failed", Status: http.StatusInternalServerError,
+		Description: "Failed to unlock the swarm with the provided key.",
+		Suggestion:  "Verify the unlock key is correct and try again."},
+	"SWM009": {
+		Code:        "SWM009",
+		Title:       "Unlock Key Retrieval Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to retrieve the swarm unlock key.",
+		Suggestion:  "Check the Docker daemon logs for details.",
+	},
+	"SWM010": {Code: "SWM010", Title: "Unlock Key Required", Status: http.StatusBadRequest,
+		Description: "The unlock key is required to unlock the swarm.",
+		Suggestion:  "Provide the unlockKey field in the request body."},
+	"SWM011": {Code: "SWM011", Title: "Invalid Token Target", Status: http.StatusBadRequest,
+		Description: "The token rotation target must be either worker or manager.",
+		Suggestion:  "Use target=worker or target=manager."},
+	"SWM012": {
+		Code:        "SWM012",
+		Title:       "Swarm Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The swarm configuration changed between Cetacean reading it and applying the update.",
+		Suggestion:  "Retry the operation; it applies to the configuration as it now is.",
+	},
+
+	// ── PLG: plugin operations ────────────────────────────────────────
+	"PLG001": {Code: "PLG001", Title: "Plugin List Failed", Status: http.StatusInternalServerError,
+		Description: "Failed to list plugins from the Docker Engine.",
+		Suggestion:  "Check that the Docker daemon is running and reachable."},
+	"PLG002": {Code: "PLG002", Title: "Plugin Remote Required", Status: http.StatusBadRequest,
+		Description: "The remote field is required for plugin operations.",
+		Suggestion:  "Provide the remote field specifying the plugin image reference."},
+	"PLG003": {
+		Code:        "PLG003",
+		Title:       "Plugin Privilege Check Failed",
+		Status:      http.StatusInternalServerError,
+		Description: "Failed to check the required privileges for the plugin.",
+		Suggestion:  "Check the Docker daemon logs for details.",
+	},
+	"PLG004": {Code: "PLG004", Title: "Plugin Not Found", Status: http.StatusNotFound,
+		Description: "The requested plugin does not exist on this Docker host.",
+		Suggestion:  "Check the plugin name and verify it is installed."},
+	"PLG005": {Code: "PLG005", Title: "Plugin Privileges Required", Status: http.StatusBadRequest,
+		Description: "An install or upgrade must name the privileges it grants.",
+		Suggestion:  "Send the privileges POST /plugins/privileges returned for this remote."},
+	"PLG006": {
+		Code:        "PLG006",
+		Title:       "Plugin Privileges Changed",
+		Status:      http.StatusConflict,
+		Description: "The plugin now requires different privileges from the ones the request grants.",
+		Suggestion:  "Check the privileges again with POST /plugins/privileges and review the new set.",
+	},
+
+	// ── NOD: node operations ──────────────────────────────────────────
+	"NOD001": {
+		Code:        "NOD001",
+		Title:       "Node Not Down",
+		Status:      http.StatusConflict,
+		Description: "The node cannot be removed in its current state. A node must be down before it can be removed from the swarm, and a manager must first be demoted to worker.",
+		Suggestion:  "Demote the node if it is a manager. Then have the node leave the swarm or stop it so it goes down, or use force removal to remove a worker immediately. Draining a node does not take it down.",
+	},
+	"NOD002": {
+		Code:        "NOD002",
+		Title:       "Node Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The node was modified by another client between the time it was read and the time the update was submitted.",
+		Suggestion:  "Reload the node and retry the operation.",
+	},
+	"NOD003": {Code: "NOD003", Title: "Node Not Found", Status: http.StatusNotFound,
+		Description: "The specified node does not exist in the swarm.",
+		Suggestion:  "Check the node ID or hostname and try again."},
+	"NOD004": {Code: "NOD004", Title: "Invalid Availability Value", Status: http.StatusBadRequest,
+		Description: "The availability value must be one of: active, drain, pause.",
+		Suggestion:  "Use availability=active, availability=drain, or availability=pause."},
+	"NOD005": {Code: "NOD005", Title: "Invalid Role Value", Status: http.StatusBadRequest,
+		Description: "The role value must be one of: worker, manager.",
+		Suggestion:  "Use role=worker or role=manager."},
+
+	// ── SVC: service operations ───────────────────────────────────────
+	"SVC001": {
+		Code:        "SVC001",
+		Title:       "Service Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The service was modified by another client between the time it was read and the time the update was submitted.",
+		Suggestion:  "Reload the service and retry the operation.",
+	},
+	"SVC002": {
+		Code:        "SVC002",
+		Title:       "Service In Use",
+		Status:      http.StatusConflict,
+		Description: "The service cannot be removed because it is still referenced by other resources or managed by a stack.",
+		Suggestion:  "Remove the stack that manages this service, or detach the service from the stack first.",
+	},
+	"SVC003": {Code: "SVC003", Title: "Service Not Found", Status: http.StatusNotFound,
+		Description: "The specified service does not exist in the swarm.",
+		Suggestion:  "Check the service ID or name and try again."},
+	"SVC004": {Code: "SVC004", Title: "Replicas Required", Status: http.StatusBadRequest,
+		Description: "The replicas field is required for this operation.",
+		Suggestion:  "Provide the replicas field in the request body."},
+	"SVC005": {
+		Code:        "SVC005",
+		Title:       "Cannot Scale Global Service",
+		Status:      http.StatusBadRequest,
+		Description: "Global-mode services run exactly one task per node and cannot be scaled manually.",
+		Suggestion:  "To change the number of tasks, switch the service to replicated mode first.",
+	},
+	"SVC006": {Code: "SVC006", Title: "Image Required", Status: http.StatusBadRequest,
+		Description: "The image field is required for service image updates.",
+		Suggestion:  "Provide the image field in the request body."},
+	"SVC007": {
+		Code:        "SVC007",
+		Title:       "No Previous Spec",
+		Status:      http.StatusBadRequest,
+		Description: "The service has no previous specification to rollback to.",
+		Suggestion:  "Rollback is only available after at least one update has been applied to the service.",
+	},
+	"SVC010": {Code: "SVC010", Title: "Invalid Endpoint Mode", Status: http.StatusBadRequest,
+		Description: "The endpoint mode must be one of: vip, dnsrr.",
+		Suggestion:  "Use mode=vip or mode=dnsrr."},
+	"SVC011": {
+		Code:        "SVC011",
+		Title:       "Invalid Resource Specification",
+		Status:      http.StatusBadRequest,
+		Description: "The merged resource specification is not valid.",
+		Suggestion:  "Check the resource limits and reservations in the request body.",
+	},
+	"SVC012": {Code: "SVC012", Title: "Invalid Update Policy", Status: http.StatusBadRequest,
+		Description: "The merged update policy specification is not valid.",
+		Suggestion:  "Check the update policy fields in the request body."},
+	"SVC013": {Code: "SVC013", Title: "Invalid Rollback Policy", Status: http.StatusBadRequest,
+		Description: "The merged rollback policy specification is not valid.",
+		Suggestion:  "Check the rollback policy fields in the request body."},
+	"SVC014": {Code: "SVC014", Title: "Invalid Healthcheck", Status: http.StatusBadRequest,
+		Description: "The merged healthcheck specification is not valid.",
+		Suggestion:  "Check the healthcheck fields in the request body."},
+	"SVC015": {
+		Code:        "SVC015",
+		Title:       "Config Missing Required Fields",
+		Status:      http.StatusBadRequest,
+		Description: "Each config reference must include configID and configName.",
+		Suggestion:  "Provide both configID and configName for every config entry.",
+	},
+	"SVC016": {
+		Code:        "SVC016",
+		Title:       "Secret Missing Required Fields",
+		Status:      http.StatusBadRequest,
+		Description: "Each secret reference must include secretID and secretName.",
+		Suggestion:  "Provide both secretID and secretName for every secret entry.",
+	},
+	"SVC017": {Code: "SVC017", Title: "Network Missing Target", Status: http.StatusBadRequest,
+		Description: "Each network attachment must include a target network ID.",
+		Suggestion:  "Provide the target field for every network entry."},
+	"SVC018": {Code: "SVC018", Title: "Invalid Patch Result", Status: http.StatusBadRequest,
+		Description: "The JSON patch produced an invalid result that could not be applied.",
+		Suggestion:  "Check the patch operations for correctness."},
+	"SVC019": {
+		Code:        "SVC019",
+		Title:       "Invalid Log Driver Specification",
+		Status:      http.StatusBadRequest,
+		Description: "The merged log driver specification is not valid.",
+		Suggestion:  "Check the log driver name and options in the request body.",
+	},
+	"SVC020": {
+		Code:        "SVC020",
+		Title:       "Port Missing Target",
+		Status:      http.StatusBadRequest,
+		Description: "A published port must name the container port it forwards to.",
+		Suggestion:  "Set TargetPort to a non-zero container port for every port entry.",
+	},
+	"SVC021": {
+		Code:        "SVC021",
+		Title:       "Unknown Attachment",
+		Status:      http.StatusBadRequest,
+		Description: "A secret, config, or network the request attaches is not known to the cluster.",
+		Suggestion:  "Check the ID. A resource created outside Cetacean can take a moment to appear; retry shortly.",
+	},
+
+	// ── TSK: task operations ──────────────────────────────────────────
+	"TSK001": {
+		Code:        "TSK001",
+		Title:       "Task Already Removed",
+		Status:      http.StatusConflict,
+		Description: "The task could not be removed because the Docker Engine no longer tracks it.",
+		Suggestion:  "The task may have already been cleaned up. Refresh the page to see the current state.",
+	},
+	"TSK002": {
+		Code:        "TSK002",
+		Title:       "Task Not Found",
+		Status:      http.StatusNotFound,
+		Description: "The specified task does not exist.",
+		Suggestion:  "Check the task ID and try again. Tasks are ephemeral and may have been cleaned up.",
+	},
+
+	// ── STK: stack operations ─────────────────────────────────────────
+	"STK001": {
+		Code:        "STK001",
+		Title:       "Stack Not Found",
+		Status:      http.StatusNotFound,
+		Description: "The specified stack does not exist. Stacks are derived from service labels and may disappear when all services in the stack are removed.",
+		Suggestion:  "Check the stack name and try again.",
+	},
+
+	// ── ATT: image attestations ───────────────────────────────────────
+	"ATT001": {
+		Code:        "ATT001",
+		Title:       "Registry Unavailable",
+		Status:      http.StatusServiceUnavailable,
+		Description: "The image's registry could not be reached, or failed, while its attestations were being read.",
+		Suggestion:  "Try again after the time Retry-After names. The registry's own status page may say more.",
+	},
+	"ATT002": {
+		Code:        "ATT002",
+		Title:       "No SBOM",
+		Status:      http.StatusNotFound,
+		Description: "The image carries no SBOM for this platform. BuildKit attaches one only when the image is built with --sbom.",
+		Suggestion:  "Rebuild the image with `docker buildx build --sbom=true` to attach one.",
+	},
+	"ATT003": {
+		Code:        "ATT003",
+		Title:       "Platform Required",
+		Status:      http.StatusBadRequest,
+		Description: "The image has attestations for more than one platform, and the request did not name one.",
+		Suggestion:  "Name one of the platforms the detail lists in the platform query parameter, as os/architecture[/variant].",
+	},
+	"ATT004": {
+		Code:        "ATT004",
+		Title:       "Unknown Platform",
+		Status:      http.StatusNotFound,
+		Description: "The image has no platform by that name, or the task's node cannot run it.",
+		Suggestion:  "Use one of the platforms the provenance endpoint lists.",
+	},
+	"ATT005": {
+		Code:        "ATT005",
+		Title:       "Attestation Too Large",
+		Status:      http.StatusNotFound,
+		Description: "What the request needs is larger than Cetacean reads: an SBOM over 32 MiB, or, for the Dockerfile view, a platform manifest over 4 MiB. The detail names which.",
+		Suggestion:  "Read it from the registry directly, for example with `docker buildx imagetools inspect --format '{{json .SBOM}}'`.",
+	},
+	"ATT006": {
+		Code:        "ATT006",
+		Title:       "No Dockerfile",
+		Status:      http.StatusNotFound,
+		Description: "The image's provenance does not embed the Dockerfile it was built from. Only provenance recorded with mode=max does.",
+		Suggestion:  "Rebuild the image with `docker buildx build --provenance=mode=max` to record it.",
+	},
+	"ATT007": {
+		Code:        "ATT007",
+		Title:       "No Attestations",
+		Status:      http.StatusNotFound,
+		Description: "Nothing can be read about how this image was built: it has no attestations, is not pinned by digest, is private, is gone from its registry, or the feature is switched off.",
+		Suggestion:  "The detail names which. The provenance endpoint reports the same as a status.",
+	},
+	"ATT008": {
+		Code:        "ATT008",
+		Title:       "Unreadable Attestation",
+		Status:      http.StatusBadGateway,
+		Description: "The registry served the SBOM or manifest intact, but it cannot be parsed. Content under a digest never changes, so asking again gives the same answer.",
+		Suggestion:  "The detail names what failed to parse. Inspect it with `docker buildx imagetools inspect`, and rebuild the image if it is damaged.",
+	},
+
+	// ── VOL: volume operations ────────────────────────────────────────
+	"VOL001": {
+		Code:        "VOL001",
+		Title:       "Volume In Use",
+		Status:      http.StatusConflict,
+		Description: "The volume cannot be removed because it is in use: a local volume is mounted by one or more containers, or a cluster volume is still published to a node.",
+		Suggestion:  "Stop or remove the containers or services using this volume first. Force removal does not override a container using a local volume, but deletes a cluster volume even while it is in use.",
+	},
+	"VOL002": {Code: "VOL002", Title: "Volume Not Found", Status: http.StatusNotFound,
+		Description: "The specified volume does not exist.",
+		Suggestion:  "Check the volume name and try again."},
+
+	// ── NET: network operations ───────────────────────────────────────
+	"NET001": {
+		Code:        "NET001",
+		Title:       "Network Has Active Endpoints",
+		Status:      http.StatusConflict,
+		Description: "The network cannot be removed because it has active endpoints from running containers or services.",
+		Suggestion:  "Disconnect or remove the services and containers attached to this network first.",
+	},
+	"NET002": {Code: "NET002", Title: "Network Not Found", Status: http.StatusNotFound,
+		Description: "The specified network does not exist.",
+		Suggestion:  "Check the network ID and try again."},
+
+	// ── CFG: config operations ────────────────────────────────────────
+	"CFG001": {
+		Code:        "CFG001",
+		Title:       "Config In Use",
+		Status:      http.StatusConflict,
+		Description: "The config cannot be removed because it is referenced by one or more services.",
+		Suggestion:  "Remove the config reference from all services before deleting it.",
+	},
+	"CFG002": {Code: "CFG002", Title: "Config Not Found", Status: http.StatusNotFound,
+		Description: "The specified config does not exist.",
+		Suggestion:  "Check the config ID and try again."},
+	"CFG003": {
+		Code:        "CFG003",
+		Title:       "Config Name Conflict",
+		Status:      http.StatusConflict,
+		Description: "A config with this name already exists.",
+		Suggestion:  "Choose a different name or remove the existing config first.",
+	},
+	"CFG004": {
+		Code:        "CFG004",
+		Title:       "Invalid Config",
+		Status:      http.StatusBadRequest,
+		Description: "The config creation request is invalid.",
+		Suggestion:  "Provide a non-empty name and valid base64-encoded data.",
+	},
+	"CFG005": {
+		Code:        "CFG005",
+		Title:       "Config Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The config was modified concurrently.",
+		Suggestion:  "Retry the operation with the latest version.",
+	},
+
+	// ── SEC: secret operations ────────────────────────────────────────
+	"SEC001": {
+		Code:        "SEC001",
+		Title:       "Secret In Use",
+		Status:      http.StatusConflict,
+		Description: "The secret cannot be removed because it is referenced by one or more services.",
+		Suggestion:  "Remove the secret reference from all services before deleting it.",
+	},
+	"SEC002": {Code: "SEC002", Title: "Secret Not Found", Status: http.StatusNotFound,
+		Description: "The specified secret does not exist.",
+		Suggestion:  "Check the secret ID and try again."},
+	"SEC003": {
+		Code:        "SEC003",
+		Title:       "Secret Name Conflict",
+		Status:      http.StatusConflict,
+		Description: "A secret with this name already exists.",
+		Suggestion:  "Choose a different name or remove the existing secret first.",
+	},
+	"SEC004": {
+		Code:        "SEC004",
+		Title:       "Invalid Secret",
+		Status:      http.StatusBadRequest,
+		Description: "The secret creation request is invalid.",
+		Suggestion:  "Provide a non-empty name and valid base64-encoded data.",
+	},
+	"SEC005": {
+		Code:        "SEC005",
+		Title:       "Secret Version Conflict",
+		Status:      http.StatusConflict,
+		Description: "The secret was modified concurrently.",
+		Suggestion:  "Retry the operation with the latest version.",
+	},
+	"SEC006": {
+		Code:        "SEC006",
+		Title:       "Secret Entry Not Found",
+		Status:      http.StatusNotFound,
+		Description: "No secret is waiting to be entered under this ID, or it expired.",
+		Suggestion:  "Ask the agent to call create_secret again, which opens a new entry.",
+	},
+	"SEC007": {
+		Code:        "SEC007",
+		Title:       "Secret Entry Opened By Someone Else",
+		Status:      http.StatusForbidden,
+		Description: "The secret entry was opened by another person's MCP client, so it can't be completed from this session.",
+		Suggestion:  "Sign in as the person whose agent asked for the secret.",
+	},
+}
+
+// Write writes an RFC 9457 problem details response for a well-known error
+// code; an unknown one is a 500 carrying the detail.
+func Write(w http.ResponseWriter, r *http.Request, code string, detail string) {
+	def, ok := registry[code]
+	if !ok {
+		WriteStatus(w, r, http.StatusInternalServerError, detail)
+		return
+	}
+
+	WriteTyped(w, r, Detail{
+		Type:   reqctx.AbsPath(r.Context(), "/api/errors/"+code),
+		Title:  def.Title,
+		Status: def.Status,
+		Detail: detail,
+	})
+}
+
+func sortedCodes() []string {
+	codes := make([]string, 0, len(registry))
+	for code := range registry {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	return codes
+}
+
+// Defs returns every well-known error, ordered by code. The HTTP handler
+// and scripts/dump-errors both read this, so the catalog the server answers
+// with and the one the website publishes cannot come from two different loops.
+func Defs() []Def {
+	codes := sortedCodes()
+	defs := make([]Def, len(codes))
+
+	for i, code := range codes {
+		defs[i] = registry[code]
+	}
+
+	return defs
+}
+
+// Lookup is the well-known error a code names.
+func Lookup(code string) (Def, bool) {
+	def, ok := registry[code]
+	return def, ok
+}

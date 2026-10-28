@@ -26,7 +26,7 @@ type secretFixture struct {
 func newSecretFixture(t *testing.T, overrides ...func(*Options)) *secretFixture {
 	t.Helper()
 
-	f := &secretFixture{entries: cluster.NewSecretEntries()}
+	f := &secretFixture{}
 
 	wc := &fakeWriteClient{
 		createSecretFn: func(_ context.Context, spec swarm.SecretSpec) (string, error) {
@@ -36,10 +36,10 @@ func newSecretFixture(t *testing.T, overrides ...func(*Options)) *secretFixture 
 	}
 
 	opts := append([]func(*Options){func(o *Options) {
-		o.SecretEntries = f.entries
 		o.DashboardURL = "https://cetacean.example/"
 	}}, overrides...)
 	f.srv = newToolTestServer(t, cache.New(nil), wc, config.OpsConfiguration, opts...)
+	f.entries = f.srv.secretEntries
 
 	return f
 }

@@ -4,7 +4,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // configurationTools returns the tier 2 tools: edits to a service's or node's
@@ -49,7 +49,8 @@ func (s *Server) configurationTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpUpdateService,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolUpdateService,
 		},
 		{
@@ -76,7 +77,8 @@ func (s *Server) configurationTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpUpdateNodeLabels,
+			gate:    toolGate{"node", "write"},
 			elicits: true,
 			handler: s.toolUpdateNodeLabels,
 		},
@@ -118,7 +120,8 @@ func (s *Server) configurationTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpCreateSecret,
+			gate:    toolGate{"secret", "write"},
 			elicits: true,
 			handler: s.createHandler(secretResource),
 		},
@@ -159,7 +162,8 @@ func (s *Server) configurationTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpCreateConfig,
+			gate:    toolGate{"config", "write"},
 			handler: s.createHandler(configResource),
 		},
 		{
@@ -187,7 +191,8 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Items(attachmentItemSchema()),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpUpdateServiceSecrets,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolUpdateServiceSecrets,
 		},
 		{
@@ -215,7 +220,8 @@ func (s *Server) configurationTools() []toolDef {
 					mcplib.Items(attachmentItemSchema()),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpUpdateServiceConfigs,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolUpdateServiceConfigs,
 		},
 		{
@@ -259,7 +265,8 @@ func (s *Server) configurationTools() []toolDef {
 					}),
 				),
 			),
-			tier:    config.OpsConfiguration,
+			op:      cluster.OpUpdateServiceMounts,
+			gate:    toolGate{"service", "write"},
 			handler: s.toolUpdateServiceMounts,
 		},
 	}

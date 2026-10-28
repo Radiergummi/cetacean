@@ -142,11 +142,12 @@ type ResourceRemover interface {
 	RemoveVolume(ctx context.Context, name string, force bool) error
 }
 
-// toolDef bundles an mcp-go tool, the operations tier required to expose it,
-// and the handler invoked by mcp-go when the tool is called.
+// toolDef bundles an mcp-go tool, the write it carries out if any, the grant
+// it is listed for, and the handler invoked by mcp-go when the tool is called.
 type toolDef struct {
 	tool    mcplib.Tool
-	tier    config.OperationsLevel
+	op      cluster.Operation
+	gate    toolGate
 	handler func(ctx context.Context, req mcplib.CallToolRequest) (string, error)
 
 	// widget names the MCP Apps view that renders this tool's result, if any.
@@ -157,6 +158,24 @@ type toolDef struct {
 	// elicits marks a tool that may ask a person before it acts. Such a tool
 	// must not declare task support: mcp-go cannot pause a task for input.
 	elicits bool
+}
+
+// toolGate is the resource type and permission a caller needs a grant on for
+// tools/list to show the tool; the zero gate shows it to everyone. Call-time
+// ACL enforces regardless — the gate only keeps the list truthful.
+type toolGate struct {
+	resourceType string
+	permission   string
+}
+
+// tier is the operations level the tool is registered at: its operation's,
+// or none for a read.
+func (td toolDef) tier() config.OperationsLevel {
+	if td.op == "" {
+		return config.OpsReadOnly
+	}
+
+	return td.op.Tier()
 }
 
 // toolIconCategory maps each tool to one of six verb-category icons served
@@ -239,8 +258,11 @@ func (s *Server) registerTools() {
 	opsLevel := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
 
 	s.registeredTools = make([]toolDef, 0, len(tools))
+	s.toolGates = make(map[string]toolGate, len(tools))
 	for _, td := range tools {
-		if opsLevel < td.tier {
+		s.toolGates[td.tool.Name] = td.gate
+
+		if opsLevel < td.tier() {
 			continue
 		}
 
@@ -251,7 +273,7 @@ func (s *Server) registerTools() {
 		// actually produced it. A binary built without `npm run build:widgets`
 		// serves no ui:// resources, and a tool naming one anyway would send a
 		// host off to fetch a resource that does not exist.
-		if td.widget != "" && hasWidget(td.widget) {
+		if td.widget != "" && s.hasWidget(td.widget) {
 			td.tool.Meta = toolUIMeta(td.widget)
 		}
 		s.registeredTools = append(s.registeredTools, td)
@@ -320,7 +342,7 @@ func (s *Server) toolCatalog() []toolDef {
 // tests can omit a write client when exercising read tools.
 func (s *Server) requireWriteClient() (DockerWriteClient, error) {
 	if s.writeClient == nil {
-		return nil, fmt.Errorf("MCP server has no write client configured")
+		return nil, errors.New("MCP server has no write client configured")
 	}
 	return s.writeClient, nil
 }
@@ -354,7 +376,7 @@ func (s *Server) toolGetLogs(ctx context.Context, req mcplib.CallToolRequest) (s
 
 	switch {
 	case len(named) == 0:
-		return "", fmt.Errorf("one of `service`, `task`, `stack` or `cluster` is required")
+		return "", errors.New("one of `service`, `task`, `stack` or `cluster` is required")
 	case len(named) > 1:
 		return "", fmt.Errorf(
 			"%s are mutually exclusive; name exactly one scope",
@@ -416,22 +438,18 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 		return "", err
 	}
 	if replicas < 0 {
-		return "", fmt.Errorf("replicas must be >= 0")
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
+		return "", errors.New("replicas must be >= 0")
 	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	svc, err := wc.ScaleService(ctx, id, uint64(replicas))
+	svc, err := s.writes.ScaleService(ctx, s.writeCaller(ctx), id, uint64(replicas))
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -451,24 +469,16 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	image = strings.TrimSpace(image)
-	if image == "" {
-		return "", fmt.Errorf("image must not be empty")
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	svc, err := wc.UpdateServiceImage(ctx, id, image)
+	svc, err := s.writes.UpdateServiceImage(ctx, s.writeCaller(ctx), id, image)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -484,25 +494,67 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	svc, err := wc.RollbackService(ctx, id)
+	svc, err := s.writes.RollbackService(ctx, s.writeCaller(ctx), id)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
 	}
 	return marshalResult(s.serviceMutation(svc))
+}
+
+// guardHostAccess runs cluster.CheckHostAccessHeld on the change a write to the
+// service id names makes. Below level 3 the service must resolve and the write is
+// addressed by its full ID; if it holds host access, the write is also pinned to
+// the cached version judged, so a stale cache can't pass for "unchanged".
+func (s *Server) guardHostAccess(
+	ctx context.Context,
+	cond condition,
+	id string,
+	change func(swarm.Service) string,
+) (context.Context, string, error) {
+	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
+	if level >= config.OpsImpactful {
+		return ctx, id, nil
+	}
+
+	svc, found, err := s.cache.ResolveService(id)
+	if err != nil {
+		return ctx, id, err
+	}
+	if !found {
+		return ctx, id, fmt.Errorf("service %q not found", id)
+	}
+
+	what := change(svc)
+	if cluster.HeldHostAccess(svc, what == cluster.RollingBack, s.cache.GetVolume) == "" {
+		return ctx, svc.ID, nil
+	}
+
+	if err := cluster.CheckHostAccessHeld(svc, what, s.cache.GetVolume, level); err != nil {
+		return ctx, id, err
+	}
+
+	ctx, err = s.pinChecked(ctx, cond, svc)
+
+	return ctx, svc.ID, err
+}
+
+// containerSpec is svc's container spec, or an empty one.
+func containerSpec(svc swarm.Service) *swarm.ContainerSpec {
+	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
+		return cs
+	}
+
+	return &swarm.ContainerSpec{}
 }
 
 func (s *Server) toolRestartService(
@@ -513,20 +565,16 @@ func (s *Server) toolRestartService(
 	if err != nil {
 		return "", err
 	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	svc, err := wc.RestartService(ctx, id)
+	svc, err := s.writes.RestartService(ctx, s.writeCaller(ctx), id)
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	if err := s.awaitServiceConvergence(ctx, req, svc); err != nil {
 		return "", err
@@ -535,17 +583,16 @@ func (s *Server) toolRestartService(
 }
 
 // removeResolvedHandler builds a handler for the `{ id } → {"removed":true}`
-// shape the remove_* tools share. idKey is the schema property name (`name`
-// for volumes); resolve checks the ACL and returns what remove is passed;
-// impact, when set, builds the question put to a person.
+// shape the remove_* tools share. resolve checks the ACL and returns what
+// remove is passed; impact builds the question put to a person.
 func (s *Server) removeResolvedHandler(
-	idKey, resource string,
+	resource string,
 	resolve func(ctx context.Context, id string) (string, error),
 	impact func(ctx context.Context, id string) (confirmation, error),
 	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
-		arg, err := req.RequireString(idKey)
+		arg, err := req.RequireString("id")
 		if err != nil {
 			return "", err
 		}
@@ -554,14 +601,11 @@ func (s *Server) removeResolvedHandler(
 			return "", err
 		}
 
-		confirmed := false
-		if impact != nil {
-			confirmed, err = s.confirm(ctx, req, func() (confirmation, error) {
-				return impact(ctx, id)
-			})
-			if err != nil {
-				return "", err
-			}
+		confirmed, err := s.confirm(ctx, req, func() (confirmation, error) {
+			return impact(ctx, id)
+		})
+		if err != nil {
+			return "", err
 		}
 
 		wc, err := s.requireWriteClient()
@@ -569,25 +613,27 @@ func (s *Server) removeResolvedHandler(
 			return "", err
 		}
 		if err := remove(wc, ctx, id); err != nil {
-			return "", removalError(err, resource, id)
+			return "", removalError(ctx, err, resource, id)
 		}
-		if impact != nil {
-			logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
-		}
+		logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
 		return marshalResult(removalResult{Removed: true})
 	}
 }
 
 // removalError keeps the engine's text out of a refused removal, as the
 // caller may not be allowed to see what is in the way. The log keeps it.
-func removalError(err error, resource, key string) error {
-	if !cluster.IsRemovalConflict(err, resource) {
+func removalError(ctx context.Context, err error, resource, key string) error {
+	refusal, ok := cluster.ClassifyRemoval(err, resource, key)
+	if !ok {
 		return err
 	}
+	if refusal.Kind == cluster.Conflict {
+		slog.InfoContext(ctx, "removal refused", "resource", resource, "id", key, "error", err)
 
-	slog.Info("removal refused", "resource", resource, "id", key, "error", err)
+		return refusal
+	}
 
-	return errors.New(cluster.RemovalConflictDetail(resource, key))
+	return refusalError(ctx, refusal)
 }
 
 func (s *Server) toolUpdateNodeLabels(
@@ -617,7 +663,7 @@ func (s *Server) toolUpdateNodeLabels(
 	}
 	updated, err := wc.UpdateNodeLabels(ctx, id, mergePatchMutator(patch))
 	if err != nil {
-		return "", s.refused(cond, err)
+		return "", s.refused(ctx, cond, err)
 	}
 	return marshalResult(nodeUpdate(sectionLabels, updated))
 }
@@ -642,7 +688,7 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 		return "", err
 	}
 	if err := wc.RemoveVolume(ctx, name, force); err != nil {
-		return "", removalError(err, "volume", name)
+		return "", removalError(ctx, err, "volume", name)
 	}
 	logConfirmableWrite(ctx, req.Params.Name, "volume:"+name, confirmed)
 	return marshalResult(removalResult{Removed: true})
@@ -705,6 +751,7 @@ func (s *Server) serviceMutation(svc swarm.Service) serviceMutationResult {
 			svc,
 			running,
 			s.cache.CompletedJobTaskCount(svc.ID),
+			cluster.EligibleIn(s.cache.EligibleNodeCounts(svc), svc.ID),
 			s.cache.IsFlapping(svc.ID),
 		),
 		Version: svc.Version.Index,
@@ -907,10 +954,8 @@ func detachTaskContext(
 	return context.WithTimeout(context.WithoutCancel(ctx), budget)
 }
 
-// detachedTaskBudget is how long detached work may run. It is derived from
-// what the work needs — the longest legitimate step is a service convergence,
-// and the budget has to cover the mutation preceding it too — and deliberately
-// not from mcp.task_ttl, which is how long a *finished* result is kept. A
-// deployment that discards results quickly would otherwise have its writes
-// abandoned mid-flight.
+// detachedTaskBudget is how long detached work may run: the mutation plus the
+// longest step, a service convergence. Deliberately not mcp.task_ttl, which is
+// how long a finished result is kept; tying them would abandon writes
+// mid-flight in a deployment that discards results quickly.
 const detachedTaskBudget = 2 * cluster.ConvergenceTimeout

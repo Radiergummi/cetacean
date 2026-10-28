@@ -882,16 +882,18 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
     nodeID: string,
     image: string,
     versionIndex: number,
+    startedAt = ago2h,
   ): Task => {
     const id = nextTaskID();
     return {
       ID: id,
       Version: { Index: versionIndex },
+      CreatedAt: startedAt,
       ServiceID: serviceID,
       NodeID: nodeID,
       Slot: slot,
       Status: {
-        Timestamp: ago2h,
+        Timestamp: startedAt,
         State: "running",
         Message: "started",
         ContainerStatus: {
@@ -927,6 +929,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
   tasks.push({
     ID: failedTaskID,
     Version: { Index: 202 },
+    CreatedAt: ago3d,
     ServiceID: idSvcAPI,
     NodeID: idNodeWorker1,
     Slot: 2,
@@ -949,7 +952,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
   });
 
   // Slot 2: replacement running task (newer)
-  tasks.push(makeRunningTask(idSvcAPI, 2, idNodeWorker2, getImage(1), 203));
+  tasks.push(makeRunningTask(idSvcAPI, 2, idNodeWorker2, getImage(1), 203, ago30m));
 
   // Slot 3
   tasks.push(makeRunningTask(idSvcAPI, 3, nextWorker(), getImage(1), 204));
@@ -993,6 +996,7 @@ function buildTasks(services: Service[], nodesByID: Map<string, Node>): Task[] {
     tasks.push({
       ID: shutdownID,
       Version: { Index: 255 },
+      CreatedAt: ago3d,
       ServiceID: idSvcProxy,
       NodeID: workerNodes[(slot - 1) % workerNodes.length],
       Slot: slot,

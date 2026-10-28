@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"sync"
@@ -47,14 +48,14 @@ var (
 
 	// ErrTooLarge is content over the size its caller allowed.
 	ErrTooLarge = errors.New("registry content larger than allowed")
-)
 
-// maxRedirects is net/http's own default, which a CheckRedirect replaces.
-const maxRedirects = 10
+	errForeignRealm = errors.New("registry named a token realm on another site")
+)
 
 // Client resolves tags against registries over HTTPS, anonymously.
 type Client struct {
-	http *http.Client
+	http  *http.Client
+	proxy func(*http.Request) (*url.URL, error)
 
 	mu     sync.Mutex
 	tokens map[string]bearerToken
@@ -66,13 +67,22 @@ type bearerToken struct {
 }
 
 // NewClient returns a client sending its requests through a copy of
-// httpClient. net/http keeps Authorization across a redirect to the same host
-// on another port; a pull token is for the registry alone, so the copy drops it.
+// httpClient that follows only redirects redirectPolicy admits. net/http keeps
+// Authorization across a redirect to the same host on another port; a pull
+// token is for the registry alone, so the copy drops it.
 func NewClient(httpClient *http.Client) *Client {
-	own := *httpClient
-	own.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	guarded := *httpClient
+
+	transport := guarded.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+
+	proxy := proxyOf(transport)
+	policy := redirectPolicy(proxy)
+	guarded.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if err := policy(req, via); err != nil {
+			return err
 		}
 
 		if req.URL.Host != via[0].URL.Host {
@@ -82,7 +92,7 @@ func NewClient(httpClient *http.Client) *Client {
 		return nil
 	}
 
-	return &Client{http: &own, tokens: map[string]bearerToken{}}
+	return &Client{http: &guarded, proxy: proxy, tokens: map[string]bearerToken{}}
 }
 
 // Manifest fetches the manifest digest names, refusing a body that does not
@@ -128,7 +138,7 @@ func (c *Client) fetchDigested(
 		return nil, nil, fmt.Errorf("not a digest: %q", digest)
 	}
 
-	resp, err := c.send(ctx, http.MethodGet, target, ref)
+	resp, err := c.send(c.forRegistry(ctx, ref, target), http.MethodGet, target, ref)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -172,12 +182,27 @@ func hasherFor(digest string) (string, hash.Hash) {
 	return "sha256", sha256.New()
 }
 
+// forRegistry records ref's registry in ctx for screen and the realm rule.
+// Through a proxy the connection reaches the proxy, which says nothing about
+// where the registry is, so it stays off the LAN.
+func (c *Client) forRegistry(ctx context.Context, ref Reference, target string) context.Context {
+	ctx = withRegistry(ctx, ref.Host)
+	if !proxied(c.proxy, target) {
+		registry := registryOf(ctx)
+		ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) { registry.connected(info.Conn.RemoteAddr()) },
+		})
+	}
+
+	return ctx
+}
+
 // Resolve returns the digest of the manifest ref's tag names now.
 func (c *Client) Resolve(ctx context.Context, ref Reference) (string, error) {
 	manifestURL := "https://" + ref.Host + "/v2/" + ref.Repository + "/manifests/" +
 		url.PathEscape(ref.Tag)
 
-	resp, err := c.send(ctx, http.MethodHead, manifestURL, ref)
+	resp, err := c.send(c.forRegistry(ctx, ref, manifestURL), http.MethodHead, manifestURL, ref)
 	if err != nil {
 		return "", err
 	}
@@ -281,7 +306,7 @@ func (c *Client) send(
 		return nil, ErrUnauthorized
 	}
 
-	token, err := c.fetchToken(ctx, *bearer, ref)
+	token, err := c.fetchToken(ctx, *bearer, ref, resp.Request.URL.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -326,12 +351,21 @@ func (c *Client) cachedToken(key string) string {
 }
 
 // fetchToken asks the challenge's realm for an anonymous pull token. The realm
-// must be HTTPS: it is the registry's to name, and a token sent in the clear
-// would let anyone on the path replay it.
-func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (bearerToken, error) {
+// must be HTTPS, or anyone on the path could replay the token, and one
+// realmAllowed admits, or any registry could aim the request anywhere.
+func (c *Client) fetchToken(
+	ctx context.Context,
+	ch challenge,
+	ref Reference,
+	challenger string,
+) (bearerToken, error) {
 	realm, err := url.Parse(ch.params["realm"])
 	if err != nil || realm.Scheme != "https" || realm.Host == "" {
-		return bearerToken{}, fmt.Errorf("registry named an unusable token realm")
+		return bearerToken{}, errors.New("registry named an unusable token realm")
+	}
+
+	if !realmAllowed(ctx, realm.Host, challenger) {
+		return bearerToken{}, fmt.Errorf("%w: %s", errForeignRealm, realm.Host)
 	}
 
 	scope := ch.params["scope"]
@@ -375,7 +409,7 @@ func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (b
 	}
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTokenSize)).Decode(&body); err != nil {
-		return bearerToken{}, fmt.Errorf("token service answered an unreadable body")
+		return bearerToken{}, errors.New("token service answered an unreadable body")
 	}
 
 	value := body.Token
@@ -384,7 +418,7 @@ func (c *Client) fetchToken(ctx context.Context, ch challenge, ref Reference) (b
 	}
 
 	if value == "" {
-		return bearerToken{}, fmt.Errorf("token service answered no token")
+		return bearerToken{}, errors.New("token service answered no token")
 	}
 
 	lifetime := defaultTokenLifetime

@@ -37,7 +37,7 @@ func (g *gatedRecorder) Write(b []byte) (int, error) {
 // events it missed: a reconnect from that id would skip them for good.
 func TestSSE_ASlowClientIsResyncedRatherThanSkippedAhead(t *testing.T) {
 	h := cache.NewHistory(1000)
-	b := NewBroadcaster(5*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(5*time.Millisecond, h)
 	defer b.Close()
 
 	w := &gatedRecorder{
@@ -93,7 +93,7 @@ func TestSSE_AFullInboxLagsTheClientsItWasFor(t *testing.T) {
 	nodes := &sseClient{match: TypeMatcher(cache.EventNode)}
 	b := &Broadcaster{
 		clients: map[*sseClient]struct{}{services: {}, nodes: {}},
-		inbox:   make(chan cache.Event), // nothing reads it: always full
+		inbox:   make(chan frameEvent), // nothing reads it: always full
 	}
 
 	b.Broadcast(cache.Event{Type: cache.EventService, ID: "s1", HistoryID: 1})
@@ -113,7 +113,7 @@ func TestSSE_AStalledClientIsDisconnected(t *testing.T) {
 	writeTimeout = 100 * time.Millisecond
 	t.Cleanup(func() { writeTimeout = original })
 
-	b := NewBroadcaster(5*time.Millisecond, noopErrorWriter, nil)
+	b := NewBroadcaster(5*time.Millisecond, nil)
 	defer b.Close()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +170,7 @@ func TestSSE_AnIdleHTTP2StreamOutlivesTheWriteTimeout(t *testing.T) {
 	writeTimeout = 100 * time.Millisecond
 	t.Cleanup(func() { writeTimeout = original })
 
-	b := NewBroadcaster(5*time.Millisecond, noopErrorWriter, nil)
+	b := NewBroadcaster(5*time.Millisecond, nil)
 	b.keepaliveInterval = 100 * time.Millisecond
 	defer b.Close()
 

@@ -11,16 +11,15 @@ import (
 	"strconv"
 	"time"
 
-	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/docker"
 )
 
 // lookupOr404 resolves a resource from the cache by key. Returns false (and
@@ -36,7 +35,7 @@ func lookupOr404[T any](
 	item, ok := getter(key)
 	if !ok {
 		code := notFoundCodes[resource]
-		writeErrorCode(w, r, code, fmt.Sprintf("%s %q not found", resource, key))
+		problem.Write(w, r, code, fmt.Sprintf("%s %q not found", resource, key))
 	}
 	return item, ok
 }
@@ -58,7 +57,7 @@ func lookupACL[T any](
 	}
 
 	if !h.acl.Can(auth.IdentityFromContext(r.Context()), "read", aclResource(item)) {
-		writeErrorCode(w, r, "ACL001", "access denied")
+		problem.Write(w, r, "ACL001", "access denied")
 		var zero T
 		return zero, false
 	}
@@ -83,10 +82,6 @@ func (h *Handlers) filterServiceRefs(r *http.Request, refs []cache.ServiceRef) [
 	return filtered
 }
 
-// writeDockerError handles Docker API errors that don't have a domain-specific
-// error code. Handlers should check for IsConflict/IsFailedPrecondition
-// themselves and call writeErrorCode with the appropriate code before falling
-// through to this function.
 var notFoundCodes = map[string]string{
 	"service": "SVC003",
 	"node":    "NOD003",
@@ -97,6 +92,14 @@ var notFoundCodes = map[string]string{
 	"secret":  "SEC002",
 	"plugin":  "PLG004",
 	"stack":   "STK001",
+}
+
+// invalidCodes are the problem codes of the domain rules a use case refuses
+// a write by; any other invalid write is the engine's.
+var invalidCodes = map[error]string{
+	cluster.ErrScaleGlobal:    "SVC005",
+	cluster.ErrNoPreviousSpec: "SVC007",
+	cluster.ErrImageRequired:  "SVC006",
 }
 
 // maxWriteBody caps every write request body.
@@ -133,13 +136,13 @@ func decodeListMergePatch[T any](
 		return nil, false, false
 	}
 	if patch == nil {
-		writeErrorCode(w, r, "API008", "the merge patch must be a JSON object")
+		problem.Write(w, r, "API008", "the merge patch must be a JSON object")
 		return nil, false, false
 	}
 
 	for name := range patch {
 		if name != member {
-			writeErrorCode(w, r, "API008", fmt.Sprintf(
+			problem.Write(w, r, "API008", fmt.Sprintf(
 				"unknown member %q: this merge patch takes only %q", name, member,
 			))
 			return nil, false, false
@@ -152,7 +155,7 @@ func decodeListMergePatch[T any](
 	}
 
 	if err := json.Unmarshal(raw, &list); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+		problem.Write(w, r, "API008", "invalid JSON")
 		return nil, false, false
 	}
 
@@ -164,13 +167,15 @@ func decodeBody[T any](w http.ResponseWriter, r *http.Request, code, message str
 
 	var v T
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		writeErrorCode(w, r, code, message)
+		problem.Write(w, r, code, message)
 		return v, false
 	}
 
 	return v, true
 }
 
+// writeDockerError is writeResourceError for a write with no conflict code,
+// whose conflicts answer as engine failures.
 func writeDockerError(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -178,48 +183,96 @@ func writeDockerError(
 	resource string,
 	id string,
 ) {
-	if cerrdefs.IsNotFound(err) {
-		detail := fmt.Sprintf("%s %q not found", resource, id)
-		if code, ok := notFoundCodes[resource]; ok {
-			writeErrorCode(w, r, code, detail)
-		} else {
-			writeProblem(w, r, http.StatusNotFound, detail)
-		}
-		return
-	}
-	if cerrdefs.IsInvalidArgument(err) {
-		writeErrorCode(w, r, "ENG003", err.Error())
-		return
-	}
-	if cerrdefs.IsUnavailable(err) {
-		writeErrorCode(w, r, "ENG001", err.Error())
-		return
-	}
-	slog.Error("failed to update "+resource, "error", err)
-	writeErrorCode(w, r, "ENG004", "failed to update "+resource)
+	writeResourceError(w, r, err, resource, id, "")
 }
 
-// writeResourceError handles Docker API errors for resource mutations,
-// mapping version conflicts to the given conflictCode, or to 412 when the
-// version was the one an If-Match precondition validated.
+// writeResourceError maps a refused write through cluster.ClassifyWrite,
+// answering a conflict with conflictCode, or with 412 when the version was the
+// one an If-Match precondition validated.
 func writeResourceError(
 	w http.ResponseWriter,
 	r *http.Request,
 	err error,
 	resource, id, conflictCode string,
 ) {
-	if preconditioned(r.Context()) && docker.IsOutOfSequence(err) {
-		writeErrorCode(w, r, "API013",
-			"If-Match did not match the current state of the resource")
-		return
+	refusal, ok := cluster.ClassifyWrite(err, resource, id)
+	if !ok {
+		refusal = &cluster.WriteError{Kind: cluster.Engine, Resource: resource, Err: err}
 	}
-	if cerrdefs.IsConflict(err) ||
-		cerrdefs.IsFailedPrecondition(err) ||
-		docker.IsOutOfSequence(err) {
-		writeErrorCode(w, r, conflictCode, err.Error())
+
+	writeRefusal(w, r, refusal, conflictCode)
+}
+
+// writeRefusal answers a classified refusal with its problem code; a conflict
+// without a conflictCode is an engine failure.
+func writeRefusal(
+	w http.ResponseWriter,
+	r *http.Request,
+	refusal *cluster.WriteError,
+	conflictCode string,
+) {
+	switch refusal.Kind {
+	case cluster.NotFound:
+		logWithheld(r, refusal)
+		if code, ok := notFoundCodes[refusal.Resource]; ok {
+			problem.Write(w, r, code, refusal.Detail)
+		} else {
+			problem.WriteStatus(w, r, http.StatusNotFound, refusal.Detail)
+		}
 		return
+	case cluster.Denied:
+		code := "ACL002"
+		if _, ok := errors.AsType[*cluster.AttachDeniedError](refusal.Err); ok {
+			code = "ACL001"
+		}
+		problem.Write(w, r, code, refusal.Detail)
+		return
+	case cluster.BelowTier, cluster.HostAccess:
+		problem.Write(w, r, "OPS001", refusal.Detail)
+		return
+	case cluster.Invalid:
+		code := "ENG003"
+		for rule, ruleCode := range invalidCodes {
+			if errors.Is(refusal.Err, rule) {
+				code = ruleCode
+			}
+		}
+		problem.Write(w, r, code, refusal.Detail)
+		return
+	case cluster.Unavailable:
+		problem.Write(w, r, "ENG001", refusal.Detail)
+		return
+	case cluster.Stale:
+		if preconditioned(r.Context()) {
+			problem.Write(w, r, "API013",
+				"If-Match did not match the current state of the resource")
+			return
+		}
+		fallthrough
+	case cluster.Conflict:
+		if conflictCode != "" {
+			logWithheld(r, refusal)
+			problem.Write(w, r, conflictCode, refusal.Detail)
+			return
+		}
+	case cluster.Engine:
 	}
-	writeDockerError(w, r, err, resource, id)
+
+	slog.ErrorContext(r.Context(), "failed to update "+refusal.Resource, "error", refusal.Err)
+	problem.Write(w, r, "ENG004", "failed to update "+refusal.Resource)
+}
+
+func logWithheld(r *http.Request, refusal *cluster.WriteError) {
+	if refusal.Withheld() {
+		slog.InfoContext(
+			r.Context(),
+			"write refused",
+			"resource",
+			refusal.Resource,
+			"error",
+			refusal.Err,
+		)
+	}
 }
 
 // writeMutation calls a writer function and writes the standard detail
@@ -396,13 +449,13 @@ func structMergePatch(
 
 	patchBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
+		problem.Write(w, r, "API007", "failed to read request body")
 		return nil, false
 	}
 
 	var patchMap map[string]any
 	if err := json.Unmarshal(patchBytes, &patchMap); err != nil {
-		writeErrorCode(w, r, "API008", "invalid JSON")
+		problem.Write(w, r, "API008", "invalid JSON")
 		return nil, false
 	}
 
@@ -441,7 +494,7 @@ func writeServiceSpecPatch(
 	err error,
 ) {
 	if spe, ok := errors.AsType[*specPatchError](err); ok {
-		writeErrorCode(w, r, spe.code, spe.message)
+		problem.Write(w, r, spe.code, spe.message)
 		return
 	}
 
@@ -452,7 +505,10 @@ func writeServiceSpecPatch(
 // Returns false and writes a 415 error response if not satisfied.
 func requireMergePatch(w http.ResponseWriter, r *http.Request) bool {
 	if requestMediaType(r) != "application/merge-patch+json" {
-		writeErrorCode(w, r, "API004", "expected Content-Type: application/merge-patch+json")
+		if r.Method == http.MethodPatch {
+			w.Header().Set("Accept-Patch", AcceptMergePatch)
+		}
+		problem.Write(w, r, "API004", "expected Content-Type: application/merge-patch+json")
 		return false
 	}
 	return true
@@ -484,7 +540,8 @@ func parsePatchMutator(
 	isMergePatch := ct == "application/merge-patch+json"
 
 	if !isJSONPatch && !isMergePatch {
-		writeErrorCode(
+		w.Header().Set("Accept-Patch", AcceptPatch)
+		problem.Write(
 			w,
 			r,
 			"API004",
@@ -495,14 +552,14 @@ func parsePatchMutator(
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeErrorCode(w, r, "API007", "failed to read request body")
+		problem.Write(w, r, "API007", "failed to read request body")
 		return nil, false
 	}
 
 	if isJSONPatch {
 		var ops []PatchOp
 		if err := json.Unmarshal(body, &ops); err != nil {
-			writeErrorCode(w, r, "API006", "invalid request body")
+			problem.Write(w, r, "API006", "invalid request body")
 			return nil, false
 		}
 		return func(current map[string]string) (map[string]string, error) {
@@ -517,7 +574,7 @@ func parsePatchMutator(
 	// JSON surfaces as a 400 before the writer even runs an inspect.
 	var mergePatch map[string]*string
 	if err := json.Unmarshal(body, &mergePatch); err != nil {
-		writeErrorCode(w, r, "API006", "invalid request body")
+		problem.Write(w, r, "API006", "invalid request body")
 		return nil, false
 	}
 	return func(current map[string]string) (map[string]string, error) {
@@ -550,10 +607,10 @@ func isPatchApplyError(err error) bool {
 // writePatchError maps JSON Patch application errors to error codes.
 func writePatchError(w http.ResponseWriter, r *http.Request, err error) {
 	if _, ok := errors.AsType[*testFailedError](err); ok {
-		writeErrorCode(w, r, "API010", err.Error())
+		problem.Write(w, r, "API010", err.Error())
 		return
 	}
-	writeErrorCode(w, r, "API011", err.Error())
+	problem.Write(w, r, "API011", err.Error())
 }
 
 type updateImageRequest struct {

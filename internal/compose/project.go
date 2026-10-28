@@ -439,11 +439,9 @@ func serviceSpec(svc swarm.Service, n names) (Service, []string) {
 		out.Logging = &Logging{Driver: l.Name, Options: l.Options}
 	}
 
-	// Placement.Platforms is not exported as platform:. Swarm fills it from
-	// the image manifest rather than from anything an operator asked for — a
-	// multi-arch image yields every architecture it was built for, plus the
-	// unknown/unknown attestation entries — so emitting it would pin a
-	// redeploy to an architecture the running service was never held to.
+	// Placement.Platforms is not exported as platform:. Swarm fills it from the
+	// image manifest (every built architecture, plus unknown/unknown), so
+	// emitting it would pin a redeploy to platforms nobody asked for.
 
 	out.Deploy = deploy(svc)
 

@@ -202,7 +202,7 @@ func TestCache_ReplaceNodes_RemovesStale(t *testing.T) {
 	c.SetNode(swarm.Node{ID: "n3"})
 
 	// Replace with only n1 and n4 — n2 and n3 should be pruned
-	c.replaceNodes([]swarm.Node{{ID: "n1"}, {ID: "n4"}})
+	c.ReplaceAll(FullSyncData{Nodes: []swarm.Node{{ID: "n1"}, {ID: "n4"}}, HasNodes: true})
 
 	nodes := c.ListNodes()
 	if len(nodes) != 2 {
@@ -562,8 +562,7 @@ func TestCache_ReplaceServices_RebuildStacks(t *testing.T) {
 	// Replace with different services
 	svc2 := swarm.Service{ID: "svc2"}
 	svc2.Spec.Labels = map[string]string{StackLabel: "newstack"}
-	c.replaceServices([]swarm.Service{svc2})
-	c.rebuildStacksSynced()
+	c.ReplaceAll(FullSyncData{Services: []swarm.Service{svc2}, HasServices: true})
 
 	if _, ok := c.GetService("svc1"); ok {
 		t.Error("expected svc1 to be replaced")
@@ -583,9 +582,12 @@ func TestCache_ReplaceTasks_RebuildsIndexes(t *testing.T) {
 	c := New(nil)
 	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", NodeID: "node1"})
 
-	c.replaceTasks([]swarm.Task{
-		{ID: "t2", ServiceID: "svc2", NodeID: "node2"},
-		{ID: "t3", ServiceID: "svc2", NodeID: "node2"},
+	c.ReplaceAll(FullSyncData{
+		HasTasks: true,
+		Tasks: []swarm.Task{
+			{ID: "t2", ServiceID: "svc2", NodeID: "node2"},
+			{ID: "t3", ServiceID: "svc2", NodeID: "node2"},
+		},
 	})
 
 	if tasks := c.ListTasksByService("svc1"); len(tasks) != 0 {
@@ -609,8 +611,7 @@ func TestCache_ReplaceConfigs_RebuildStacks(t *testing.T) {
 	c.SetConfig(cfg)
 
 	// Replace with empty — stack from configs should be gone
-	c.replaceConfigs(nil)
-	c.rebuildStacksSynced()
+	c.ReplaceAll(FullSyncData{HasConfigs: true})
 
 	if _, ok := c.GetConfig("cfg1"); ok {
 		t.Error("expected cfg1 to be replaced")
@@ -625,8 +626,7 @@ func TestCache_ReplaceSecrets_RebuildStacks(t *testing.T) {
 
 	sec2 := swarm.Secret{ID: "sec2"}
 	sec2.Spec.Labels = map[string]string{StackLabel: "otherstack"}
-	c.replaceSecrets([]swarm.Secret{sec2})
-	c.rebuildStacksSynced()
+	c.ReplaceAll(FullSyncData{Secrets: []swarm.Secret{sec2}, HasSecrets: true})
 
 	if _, ok := c.GetSecret("sec1"); ok {
 		t.Error("expected sec1 to be replaced")
@@ -640,10 +640,12 @@ func TestCache_ReplaceNetworks_RebuildStacks(t *testing.T) {
 	c := New(nil)
 	c.SetNetwork(network.Summary{ID: "net1", Labels: map[string]string{StackLabel: "mystack"}})
 
-	c.replaceNetworks([]network.Summary{
-		{ID: "net2", Labels: map[string]string{StackLabel: "newstack"}},
+	c.ReplaceAll(FullSyncData{
+		HasNetworks: true,
+		Networks: []network.Summary{
+			{ID: "net2", Labels: map[string]string{StackLabel: "newstack"}},
+		},
 	})
-	c.rebuildStacksSynced()
 
 	if _, ok := c.GetNetwork("net1"); ok {
 		t.Error("expected net1 to be replaced")
@@ -657,10 +659,12 @@ func TestCache_ReplaceVolumes_RebuildStacks(t *testing.T) {
 	c := New(nil)
 	c.SetVolume(volume.Volume{Name: "vol1", Labels: map[string]string{StackLabel: "mystack"}})
 
-	c.replaceVolumes([]volume.Volume{
-		{Name: "vol2", Labels: map[string]string{StackLabel: "newstack"}},
+	c.ReplaceAll(FullSyncData{
+		HasVolumes: true,
+		Volumes: []volume.Volume{
+			{Name: "vol2", Labels: map[string]string{StackLabel: "newstack"}},
+		},
 	})
-	c.rebuildStacksSynced()
 
 	if _, ok := c.GetVolume("vol1"); ok {
 		t.Error("expected vol1 to be replaced")
@@ -684,8 +688,7 @@ func TestCache_ReplaceStacks_CrossResourceRebuild(t *testing.T) {
 	c.SetConfig(cfg)
 
 	// Replace services with empty — stack should be gone (requires services)
-	c.replaceServices(nil)
-	c.rebuildStacksSynced()
+	c.ReplaceAll(FullSyncData{HasServices: true})
 
 	if _, ok := c.GetStack("mystack"); ok {
 		t.Fatal("expected stack to be removed when no services remain")
@@ -1348,7 +1351,7 @@ func TestCache_SetService_NoRefChange_NoExtraEvents(t *testing.T) {
 	}
 }
 
-func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
+func TestSnapshot_Reservations(t *testing.T) {
 	c := New(nil)
 	c.SetNode(swarm.Node{
 		ID:     "n1",
@@ -1421,21 +1424,32 @@ func TestSnapshot_ConvergenceAndReservations(t *testing.T) {
 		},
 	)
 
+	// Reserved once per eligible node: n1 is drained, so only n2 carries it.
+	c.SetService(swarm.Service{
+		ID: "agent",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "agent"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+			TaskTemplate: swarm.TaskSpec{
+				Resources: &swarm.ResourceRequirements{
+					Reservations: &swarm.Resources{
+						NanoCPUs:    100_000_000,
+						MemoryBytes: 64 * 1024 * 1024,
+					},
+				},
+			},
+		},
+	})
+
 	snap := c.Snapshot()
-	if snap.ServicesConverged != 1 {
-		t.Errorf("ServicesConverged=%d, want 1", snap.ServicesConverged)
-	}
-	if snap.ServicesDegraded != 1 {
-		t.Errorf("ServicesDegraded=%d, want 1", snap.ServicesDegraded)
-	}
 	if snap.NodesDraining != 1 {
 		t.Errorf("NodesDraining=%d, want 1", snap.NodesDraining)
 	}
-	if snap.ReservedCPU != 1_000_000_000 {
-		t.Errorf("ReservedCPU=%d, want 1000000000", snap.ReservedCPU)
+	if snap.ReservedCPU != 1_100_000_000 {
+		t.Errorf("ReservedCPU=%d, want 1100000000", snap.ReservedCPU)
 	}
-	if snap.ReservedMemory != 512*1024*1024 {
-		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 512*1024*1024)
+	if snap.ReservedMemory != 576*1024*1024 {
+		t.Errorf("ReservedMemory=%d, want %d", snap.ReservedMemory, 576*1024*1024)
 	}
 }
 
@@ -1456,8 +1470,8 @@ func TestTaskHistoryIsFiledUnderItsService(t *testing.T) {
 }
 
 // A crash-looping service has its replica up a good part of the time; caught
-// then, it must still count as degraded, or the overview reads "all healthy".
-func TestSnapshotCountsFlappingServiceDegraded(t *testing.T) {
+// then, the snapshot must still name it, or the overview reads "all healthy".
+func TestSnapshotNamesFlappingService(t *testing.T) {
 	c := New(nil)
 	c.SetService(swarm.Service{
 		ID: "svc",
@@ -1487,13 +1501,6 @@ func TestSnapshotCountsFlappingServiceDegraded(t *testing.T) {
 	})
 
 	snap := c.Snapshot()
-	if snap.ServicesDegraded != 1 || snap.ServicesConverged != 0 {
-		t.Errorf(
-			"converged=%d degraded=%d, want 0 and 1",
-			snap.ServicesConverged,
-			snap.ServicesDegraded,
-		)
-	}
 	if !snap.Flapping["svc"] {
 		t.Error("Snapshot.Flapping does not name the crash-looping service")
 	}

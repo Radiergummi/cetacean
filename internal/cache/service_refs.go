@@ -16,11 +16,10 @@ type ServiceRef struct {
 	Rollback bool   `json:"rollback,omitempty"`
 }
 
-// serviceRefIndex maintains reverse indexes from resource IDs (config,
-// secret, network, volume) to the services that reference them, and from
-// service name to ID, which swarm keeps unique. A config or secret counts its
-// previous-spec references too, marked false, since a rollback restores them.
-// All methods assume the caller holds the appropriate lock on Cache.mu.
+// serviceRefIndex maintains reverse indexes from config, secret, network and
+// volume IDs to the services referencing them, and from (unique) service name
+// to ID. Previous-spec config/secret references count too, marked false, since
+// a rollback restores them. Callers hold the appropriate lock on Cache.mu.
 type serviceRefIndex struct {
 	byName    map[string]string          // service name -> serviceID
 	byConfig  map[string]map[string]bool // configID -> serviceID -> in the current spec

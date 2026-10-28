@@ -1,9 +1,12 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/filter"
@@ -20,6 +23,7 @@ type listSpec[T any] struct {
 	searchName   func(T) string                                // nil = no search support
 	filterEnv    filter.Env[T]                                 // filter.Nodes, filter.Tasks, …
 	sortKeys     map[string]func(T) string                     // sort field accessors
+	extraSorts   []string                                      // sort keys the handler applies itself
 	prepare      func([]T) []T                                 // optional pre-filter transform (e.g. strip secret data)
 	versions     *versionedSpec[T]                             // optional: groups a config or secret list into versions
 	itemType     string                                        // JSON-LD @type for each item (e.g. "Node")
@@ -29,13 +33,9 @@ type listSpec[T any] struct {
 }
 
 // listNotModified answers a matching conditional request with 304, and reports
-// whether it did.
-//
-// A 304 carries what a client still reads off it — the ETag, the validators'
-// Vary, and the Allow header the dashboard gates its controls on, which costs
-// nothing to compute. It does not carry the pagination Link headers or
-// Content-Range: those need the totals, and producing them is exactly the work
-// being skipped. RFC 9110 §15.4.5 asks for neither.
+// whether it did. The 304 carries the ETag, the validators' Vary and Allow, but
+// not Link or Content-Range: those need the totals the 304 exists to skip, and
+// RFC 9110 §15.4.5 asks for neither.
 func listNotModified[T any](
 	h *Handlers,
 	w http.ResponseWriter,
@@ -43,6 +43,11 @@ func listNotModified[T any](
 	spec listSpec[T],
 	validator string,
 ) bool {
+	// If-Match comes first (RFC 9110 §13.2.2), and only the writer can say
+	// whether it holds.
+	if r.Header.Get("If-Match") != "" {
+		return false
+	}
 
 	tagged := matchedValidator(r, validator)
 	if tagged == "" {
@@ -88,7 +93,7 @@ func handleListOf[T, U any](
 	if spec.versions != nil {
 		var err error
 		if sel, err = versionSelection(r); err != nil {
-			writeErrorCode(w, r, "API016", err.Error())
+			problem.Write(w, r, "API016", err.Error())
 			return
 		}
 	}
@@ -101,7 +106,7 @@ func handleListOf[T, U any](
 		return
 	}
 
-	r, validator = h.ifRange(r, validator)
+	r = ifRange(r, validator)
 
 	items, versions, p, ok := prepareList(h, w, r, spec, sel)
 	if !ok {
@@ -207,8 +212,12 @@ func prepareList[T any](
 	}
 
 	p, err := parsePagination(r)
+	if err == nil && p.Sort != "" && spec.sortKeys[p.Sort] == nil &&
+		!slices.Contains(spec.extraSorts, p.Sort) {
+		err = fmt.Errorf(`invalid "sort" parameter: %q is not a sort key of this list`, p.Sort)
+	}
 	if err != nil {
-		writeProblem(w, r, http.StatusRequestedRangeNotSatisfiable, err.Error())
+		problem.Write(w, r, "API016", err.Error())
 		return nil, versions, PageParams{}, false
 	}
 

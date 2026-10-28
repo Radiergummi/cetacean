@@ -462,20 +462,6 @@ export function del(path: string): Promise<void> {
 
 export const emptyMethods: Set<string> = new Set();
 
-export function setsEqual(a: Set<string>, b: Set<string>): boolean {
-  if (a.size !== b.size) {
-    return false;
-  }
-
-  for (const item of a) {
-    if (!b.has(item)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 export interface Capabilities {
   /** The resource's own methods, from `Allow`. */
   methods: Set<string>;
@@ -651,7 +637,7 @@ async function fetchRange<T>(
   const response = await fetch(apiPath(url), {
     headers: {
       Accept: "application/json",
-      Range: `items ${offset}-${end}`,
+      Range: `items=${offset}-${end}`,
     },
     signal: composeSignals(signal, AbortSignal.timeout(defaultTimeoutMilliseconds)),
   });
@@ -894,6 +880,8 @@ export const api = {
     ),
   services: (params?: ListParams, signal?: AbortSignal) =>
     fetchRange<ServiceListItem>("/services", params, signal, schema.serviceListSchema),
+  allServices: (params?: ListParams, signal?: AbortSignal) =>
+    fetchAll<ServiceListItem>("/services", signal, schema.serviceListSchema, params),
   recommendations: () =>
     fetchJSON<RecommendationsResponse>(
       "/recommendations",

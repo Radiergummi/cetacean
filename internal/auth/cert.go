@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -73,7 +74,7 @@ func (p *CertProvider) RegisterRoutes(_ *http.ServeMux) {}
 // 1.3 dropped renegotiation, and IANA registers no auth-scheme for a
 // certificate, so a challenge would name one no client implements.
 func certRejected(msg string) *AuthError {
-	return &AuthError{Msg: msg, Status: http.StatusForbidden, Code: "AUT005"}
+	return &AuthError{Msg: msg, Code: "AUT005"}
 }
 
 // clientCertificate returns the certificate identifying the client: the one
@@ -126,7 +127,7 @@ func decodeClientCert(value string) ([]byte, error) {
 	// the trim, which counts one as whitespace, and checked at all because
 	// encoding/base64 strips CR and LF before decoding regardless.
 	if strings.ContainsAny(value, "\r\n") {
-		return nil, fmt.Errorf("Client-Cert contains a line break")
+		return nil, errors.New("Client-Cert contains a line break")
 	}
 
 	value = strings.TrimSpace(value)

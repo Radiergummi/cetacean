@@ -499,10 +499,9 @@ func seededWriteClient() *mockWriteClient {
 }
 
 // Covers the one builder that reads the daemon rather than the cache. A plugin
-// genuinely gone is the resource's own 404 — RFC 9110 §13.2.1 keeps the
-// precondition out of the way of it — but a daemon that could not be reached
-// leaves the condition unevaluable, which is a different answer entirely. And
-// the 404 the pass-through counts on has to hold even if the plugin comes back.
+// genuinely gone is the resource's own 404 (RFC 9110 §13.2.1), and that 404 has
+// to hold even if the plugin comes back; an unreachable daemon instead leaves
+// the condition unevaluable.
 func TestPreconditionDistinguishesAnUnreachableBackend(t *testing.T) {
 	cases := []struct {
 		name       string

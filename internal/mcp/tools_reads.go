@@ -4,7 +4,7 @@ import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/radiergummi/cetacean/internal/cluster"
-	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // readTools returns the tier 0 tools: parameterized reads, ungated by operations
@@ -70,7 +70,7 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
+			gate:    toolGate{"service", "read"},
 			handler: s.toolGetLogs,
 			widget:  "logs",
 		},
@@ -146,7 +146,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolFind,
 			widget:  "table",
 		},
@@ -181,7 +180,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolDescribe,
 		},
 		{
@@ -214,7 +212,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			elicits: true,
 			handler: s.toolGetTopology,
 			widget:  "topology",
@@ -267,7 +264,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			elicits: true,
 			handler: s.toolGetMetrics,
 			widget:  "metrics",
@@ -290,7 +286,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetRecommendations,
 			widget:  "recommendations",
 		},
@@ -310,7 +305,6 @@ func (s *Server) readTools() []toolDef {
 					mcplib.Description("Return only this published port. Omit for all of them."),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetPublishedPorts,
 		},
 		{
@@ -355,7 +349,6 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetEvents,
 		},
 		{
@@ -365,13 +358,12 @@ func (s *Server) readTools() []toolDef {
 				mcplib.WithDescription(
 					"Answer whether the cluster is healthy and, when it is not, name what is wrong: the services not in their desired state or restarting in a loop, the nodes that are down or draining, the rollouts in flight, how much CPU and memory is reserved against what the cluster has, and the manager quorum: how many managers are reachable and how many more failures it survives. Start here — it is the one call that says whether to look further and where, and every entry carries the id and name to describe next.",
 				),
-				mcplib.WithOutputSchema[cluster.ClusterStatus](),
+				mcplib.WithOutputSchema[projection.ClusterStatus](),
 				mcplib.WithReadOnlyHintAnnotation(true),
 				mcplib.WithDestructiveHintAnnotation(false),
 				mcplib.WithIdempotentHintAnnotation(true),
 				mcplib.WithOpenWorldHintAnnotation(false),
 			),
-			tier:    config.OpsReadOnly,
 			handler: s.toolGetClusterStatus,
 		},
 		{
@@ -396,7 +388,7 @@ func (s *Server) readTools() []toolDef {
 					),
 				),
 			),
-			tier:    config.OpsReadOnly,
+			gate:    toolGate{"service", "read"},
 			handler: s.toolWatch,
 		},
 	}

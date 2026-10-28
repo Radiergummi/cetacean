@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -180,6 +181,39 @@ func TestLoad_FullPrecedence(t *testing.T) {
 	}
 	if cfg.ListenAddr != ":9090" {
 		t.Errorf("ListenAddr=%s, want :9090 (flag > env > file > default)", cfg.ListenAddr)
+	}
+}
+
+func TestLoad_AllowedHosts(t *testing.T) {
+	fc := &fileConfig{Server: &fileServer{AllowedHosts: []string{"file.lan"}}}
+
+	cfg, err := Load(fc, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !slices.Equal(cfg.AllowedHosts, []string{"file.lan"}) {
+		t.Errorf("AllowedHosts = %v, want the file's", cfg.AllowedHosts)
+	}
+
+	t.Setenv("CETACEAN_ALLOWED_HOSTS", "swarm.lan, cetacean.tailnet.ts.net")
+
+	cfg, err = Load(fc, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"swarm.lan", "cetacean.tailnet.ts.net"}
+	if !slices.Equal(cfg.AllowedHosts, want) {
+		t.Errorf("AllowedHosts = %v, want %v from the environment", cfg.AllowedHosts, want)
+	}
+
+	flag := "flag.lan"
+
+	cfg, err = Load(fc, &Flags{AllowedHosts: &flag})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !slices.Equal(cfg.AllowedHosts, []string{"flag.lan"}) {
+		t.Errorf("AllowedHosts = %v, want the flag's", cfg.AllowedHosts)
 	}
 }
 

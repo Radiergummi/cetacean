@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 var notRemoved = removalResult{Removed: false}
@@ -23,7 +24,7 @@ func (s *Server) serviceRemoval(_ context.Context, arg string) (confirmation, er
 		return confirmation{}, fmt.Errorf("service %q not found", arg)
 	}
 
-	impact := cluster.ServiceRemovalImpact(svc, s.cache.RunningTaskCount(svc.ID))
+	impact := projection.ServiceRemovalImpact(svc, s.cache.RunningTaskCount(svc.ID))
 
 	return confirmation{
 		target:   "service:" + svc.Spec.Name,
@@ -48,7 +49,7 @@ func (s *Server) taskRemoval(ctx context.Context, id string) (confirmation, erro
 
 	return confirmation{
 		target:   "task:" + task.ID,
-		message:  cluster.TaskRemovalImpact(label, service).Message(),
+		message:  projection.TaskRemovalImpact(label, service).Message(),
 		version:  task.Version.Index,
 		bind:     task.ID,
 		declined: notRemoved,
@@ -58,68 +59,49 @@ func (s *Server) taskRemoval(ctx context.Context, id string) (confirmation, erro
 // referenceRemoval builds the confirmation for removing a resource services
 // reference by ID: a config, a secret or a network.
 func (s *Server) referenceRemoval(
-	resourceType string,
-	resolve func(arg string) (id, name string, version uint64, found bool, err error),
+	kind string,
 	users func(id string) []cache.ServiceRef,
 ) func(ctx context.Context, arg string) (confirmation, error) {
 	return func(ctx context.Context, arg string) (confirmation, error) {
-		id, name, version, found, err := resolve(arg)
+		record, found, err := cluster.Lookup(s.cache, kind, arg)
 		if err != nil {
-			return confirmation{}, s.visibleAmbiguity(ctx, resourceType, err)
+			return confirmation{}, s.visibleAmbiguity(ctx, kind, err)
 		}
 
 		if !found {
-			return confirmation{}, fmt.Errorf("%s %q not found", resourceType, arg)
+			return confirmation{}, fmt.Errorf("%s %q not found", kind, arg)
 		}
 
-		impact := cluster.ReferenceRemovalImpact(
-			resourceType, name, users(id), s.readPredicate(ctx))
+		impact := projection.ReferenceRemovalImpact(
+			kind, record.Name, users(record.ID), s.readPredicate(ctx))
 
 		return confirmation{
-			target:   resourceType + ":" + name,
+			target:   record.Resource(),
 			message:  impact.Message(),
-			version:  version,
-			bind:     id,
+			version:  record.Version,
+			bind:     record.ID,
 			declined: notRemoved,
 		}, nil
 	}
 }
 
 func (s *Server) configRemoval(ctx context.Context, arg string) (confirmation, error) {
-	return s.referenceRemoval("config",
-		func(arg string) (string, string, uint64, bool, error) {
-			cfg, found, err := s.cache.ResolveConfig(arg)
-			return cfg.ID, cfg.Spec.Name, cfg.Version.Index, found, err
-		},
-		s.cache.ServicesUsingConfig,
-	)(ctx, arg)
+	return s.referenceRemoval("config", s.cache.ServicesUsingConfig)(ctx, arg)
 }
 
 func (s *Server) secretRemoval(ctx context.Context, arg string) (confirmation, error) {
-	return s.referenceRemoval("secret",
-		func(arg string) (string, string, uint64, bool, error) {
-			sec, found, err := s.cache.ResolveSecret(arg)
-			return sec.ID, sec.Spec.Name, sec.Version.Index, found, err
-		},
-		s.cache.ServicesUsingSecret,
-	)(ctx, arg)
+	return s.referenceRemoval("secret", s.cache.ServicesUsingSecret)(ctx, arg)
 }
 
 func (s *Server) networkRemoval(ctx context.Context, arg string) (confirmation, error) {
-	return s.referenceRemoval("network",
-		func(arg string) (string, string, uint64, bool, error) {
-			net, found, err := s.cache.ResolveNetwork(arg)
-			return net.ID, net.Name, 0, found, err
-		},
-		s.cache.ServicesUsingNetwork,
-	)(ctx, arg)
+	return s.referenceRemoval("network", s.cache.ServicesUsingNetwork)(ctx, arg)
 }
 
 // volumeRemoval is the confirmation remove_volume asks for. A volume the
 // cache does not hold may live where it cannot see, so it is asked about by
 // name alone rather than refused.
 func (s *Server) volumeRemoval(ctx context.Context, name string, force bool) confirmation {
-	impact := cluster.ReferenceRemovalImpact(
+	impact := projection.ReferenceRemovalImpact(
 		"volume", name, s.cache.ServicesUsingVolume(name), s.readPredicate(ctx))
 
 	if force {
@@ -156,15 +138,15 @@ func (s *Server) nodeChange(
 		return confirmation{}, fmt.Errorf("node %q not found", arg)
 	}
 
-	var impact cluster.Impact
+	var impact projection.Impact
 
 	switch {
 	case section == sectionRole:
-		impact = cluster.RoleImpact(node, s.cache.ListNodes(), role)
+		impact = projection.RoleImpact(node, s.cache.ListNodes(), role)
 	case availability == swarm.NodeAvailabilityDrain:
 		impact = s.drainConfirmation(ctx, node)
 	default:
-		impact = cluster.AvailabilityImpact(node, availability)
+		impact = projection.AvailabilityImpact(node, availability)
 	}
 
 	return confirmation{
@@ -178,7 +160,7 @@ func (s *Server) nodeChange(
 
 // drainConfirmation assesses a drain from what the caller may read, as the
 // drain-impact topology view does, and counts the services it hides.
-func (s *Server) drainConfirmation(ctx context.Context, node swarm.Node) cluster.Impact {
+func (s *Server) drainConfirmation(ctx context.Context, node swarm.Node) projection.Impact {
 	all := s.cache.ListNodes()
 	visible := s.filterNodes(ctx, all)
 	services := s.filterServices(ctx, s.cache.ListServices())
@@ -204,5 +186,5 @@ func (s *Server) drainConfirmation(ctx context.Context, node swarm.Node) cluster
 		}
 	}
 
-	return cluster.DrainImpact(node, graph, len(hidden))
+	return projection.DrainImpact(node, graph, len(hidden))
 }

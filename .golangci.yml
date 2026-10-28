@@ -16,7 +16,10 @@ linters:
     - canonicalheader # non-canonical HTTP header keys
     - exhaustive      # non-exhaustive enum switches
     - modernize       # suggests modern Go idioms
+    - sloglint        # a log line with a request in scope carries its req_id
   settings:
+    sloglint:
+      context: scope
     errcheck:
       exclude-functions:
         - io.Copy

@@ -396,7 +396,8 @@ func (s *Store) fetchImage(ctx context.Context, ref imagecheck.Reference, digest
 					cost += int64(len(statement))
 				}
 			} else {
-				slog.Warn("unreadable provenance", "digest", a.Provenance.Digest, "error", err)
+				slog.WarnContext(ctx, "unreadable provenance",
+					"digest", a.Provenance.Digest, "error", err)
 			}
 		}
 

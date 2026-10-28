@@ -243,35 +243,6 @@ func TestStackEnv(t *testing.T) {
 	}
 }
 
-func TestResourceEnv_Dispatch(t *testing.T) {
-	tests := []struct {
-		name     string
-		resource any
-		wantNil  bool
-	}{
-		{"node", swarm.Node{ID: "n1"}, false},
-		{"service", swarm.Service{ID: "s1"}, false},
-		{"task", swarm.Task{ID: "t1"}, false},
-		{"config", swarm.Config{ID: "c1"}, false},
-		{"secret", swarm.Secret{ID: "s1"}, false},
-		{"network", network.Summary{ID: "n1"}, false},
-		{"volume", volume.Volume{Name: "v1"}, false},
-		{"nil", nil, true},
-		{"unknown", "string", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := ResourceEnv(tt.resource)
-			if tt.wantNil && env != nil {
-				t.Errorf("expected nil env for %s", tt.name)
-			}
-			if !tt.wantNil && env == nil {
-				t.Errorf("expected non-nil env for %s", tt.name)
-			}
-		})
-	}
-}
-
 func TestConfigEnv(t *testing.T) {
 	c := swarm.Config{
 		ID:   "c1",

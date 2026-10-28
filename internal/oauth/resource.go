@@ -29,42 +29,30 @@ func (r Resource) metadataPath(basePath string) string {
 	return wellKnownPRM + basePath + r.Path
 }
 
-// mountedMetadataPath is the same document beneath the deployment's own prefix.
-// Served as well as the conformant location, because a reverse proxy forwarding
-// only {base_path}/* never delivers a request to the authority root, and an
-// operator cannot always change that. It is what this server advertised before
-// the conformant location existed.
+// mountedMetadataPath is the same document beneath the deployment's own prefix,
+// served as well as the conformant location because a reverse proxy forwarding
+// only {base_path}/* never delivers a request to the authority root.
 func (r Resource) mountedMetadataPath(basePath string) string {
 	return basePath + wellKnownPRM + r.Path
 }
 
 // identifierOf is a resource's RFC 8707 identifier and the aud claim of every
-// token bound to it.
-//
-// A path under another is still a separate audience. Identifiers are compared
-// for exact equality and nothing here treats one as containing another: a token
-// for the deployment root does not reach a resource mounted beneath it. The
-// opposite reading is the audience-confusion attack resource indicators exist to
-// prevent.
+// token bound to it. Identifiers compare exactly, never by prefix: a token for
+// the deployment root must not reach a resource mounted beneath it.
 func (c ServerConfig) identifierOf(r Resource) string {
 	return c.issuerID() + r.Path
 }
 
-// metadataURL is the absolute URL a WWW-Authenticate challenge points at.
-//
-// The mounted location, not the conformant one, because this URL is followed
-// rather than derived: it must resolve through whatever proxy already forwards
-// this deployment. Both are served, so a client that derives instead — as RFC
-// 9728 §3.1 says to — reaches the same document.
+// metadataURL is the absolute URL a WWW-Authenticate challenge points at: the
+// mounted location, because it is followed rather than derived and must resolve
+// through whatever proxy forwards this deployment.
 func (c ServerConfig) metadataURL(r Resource) string {
 	return c.Issuer + r.mountedMetadataPath(c.BasePath)
 }
 
-// resourceSet is everything about the configured resources that is settled once
-// the server is built: which identifiers a token may be audienced for, which one
-// an unindicated request resolves to, and the resource behind each. Resolved in
-// NewServer rather than per request, because which audiences a deployment
-// accepts is a property of the deployment and not of a request.
+// resourceSet is everything about the configured resources settled in NewServer:
+// which identifiers a token may be audienced for, which one an unindicated
+// request resolves to, and the resource behind each.
 type resourceSet struct {
 	identifiers []string
 	byID        map[string]Resource
@@ -120,22 +108,10 @@ func (s resourceSet) resourceFor(identifier string) Resource {
 	return s.def
 }
 
-// effectiveResource resolves the RFC 8707 resource indicators from a token
-// request to the one identifier the grant will be bound to.
-//
-// An absent indicator resolves to the default resource unless the deployment
-// requires one. A present indicator must equal a configured identifier exactly:
-// a prefix match would let a token for one resource reach another mounted
-// beneath it.
-//
-// RFC 8707 §2 lets the parameter repeat, to ask for a token valid at several
-// resources. This server binds a token to exactly one, so it refuses rather than
-// honouring the first and dropping the rest: a token whose audience is not the
-// one the client asked for is the confusion the indicator exists to prevent.
-//
-// A caller on a POST endpoint passes the body-borne values alone. r.Form merges
-// the query in, and a client echoing one value in each place is not the repeat
-// this refuses; RFC 6749 §3.2 puts these parameters in the body.
+// effectiveResource resolves a token request's RFC 8707 resource indicators to
+// the one identifier the grant is bound to: the default if absent and not
+// required, else an exact match. A repeat (RFC 8707 §2) is refused, not trimmed
+// to one. POST callers pass body values only (RFC 6749 §3.2), not r.Form.
 func (s resourceSet) effectiveResource(raw []string, required bool) (string, error) {
 	if len(raw) > 1 {
 		return "", errors.New(

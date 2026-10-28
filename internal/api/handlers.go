@@ -17,11 +17,13 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/prometheus"
@@ -220,6 +222,7 @@ type Handlers struct {
 	dockerClient         DockerLogStreamer
 	systemClient         DockerSystemClient
 	serviceLifecycle     ServiceLifecycleWriter
+	writes               *cluster.Writes
 	serviceSpec          ServiceSpecWriter
 	serviceAttachment    ServiceAttachmentWriter
 	nodeWriter           NodeWriter
@@ -260,7 +263,7 @@ type Handlers struct {
 }
 
 func NewHandlers(
-	c *cache.Cache,
+	shared *core.Core,
 	b *sse.Broadcaster,
 	dc DockerLogStreamer,
 	sc DockerSystemClient,
@@ -273,11 +276,12 @@ func NewHandlers(
 	aclEval *acl.Evaluator,
 ) *Handlers {
 	return &Handlers{
-		cache:             c,
+		cache:             shared.Cache,
 		broadcaster:       b,
 		dockerClient:      dc,
 		systemClient:      sc,
 		serviceLifecycle:  wc,
+		writes:            cluster.NewWrites(shared.Cache, wc),
 		serviceSpec:       wc,
 		serviceAttachment: wc,
 		nodeWriter:        wc,
@@ -297,8 +301,10 @@ func NewHandlers(
 		dockerVersionCache:   newDockerVersionCache(),
 		topologyDocs:         newProjectionCache(),
 		stackDocs:            newProjectionCache(),
-		versions:             cluster.NewVersionIndex(c),
-		logReads:             new(sse.Slots),
+		versions:             shared.Versions,
+		logReads:             shared.LogReads,
+		secretEntries:        shared.SecretEntries,
+		streams:              shared.Streams,
 	}
 }
 
@@ -334,26 +340,6 @@ func (h *Handlers) imageUpdate(svc swarm.Service) *cluster.ImageUpdate {
 	return cluster.ServiceImageUpdate(svc, h.imageDigests)
 }
 
-// SetSecretEntries lets a secret create complete an entry MCP opened.
-func (h *Handlers) SetSecretEntries(entries *cluster.SecretEntries) {
-	h.secretEntries = entries
-}
-
-// SetLogReads draws plain log reads from slots, which MCP's log reads share.
-func (h *Handlers) SetLogReads(slots *sse.Slots) {
-	h.logReads = slots
-}
-
-// SetVersionIndex shares MCP's config and secret version index.
-func (h *Handlers) SetVersionIndex(x *cluster.VersionIndex) {
-	h.versions = x
-}
-
-// SetStreamLifetime ends the metrics stream and log follows when l ends.
-func (h *Handlers) SetStreamLifetime(l *sse.Lifetime) {
-	h.streams = l
-}
-
 // requireAnyGrant checks that the identity has at least one grant.
 // Used to gate cluster-wide endpoints when ACL is active.
 func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool {
@@ -366,7 +352,7 @@ func (h *Handlers) requireAnyGrant(w http.ResponseWriter, r *http.Request) bool 
 	if h.acl.HasAnyGrant(id) {
 		return true
 	}
-	writeErrorCode(w, r, "ACL001", "no grants found for this identity")
+	problem.Write(w, r, "ACL001", "no grants found for this identity")
 	return false
 }
 
@@ -388,7 +374,7 @@ func (h *Handlers) requireReadEverything(w http.ResponseWriter, r *http.Request)
 	if h.acl.CanReadEverything(auth.IdentityFromContext(r.Context())) {
 		return true
 	}
-	writeErrorCode(w, r, "ACL001", `metrics require read access on "*"`)
+	problem.Write(w, r, "ACL001", `metrics require read access on "*"`)
 	return false
 }
 
@@ -433,12 +419,12 @@ func exprFilter[T any](
 		return items, true
 	}
 	if len(expr) > maxFilterLen {
-		writeErrorCode(w, r, "FLT001", "filter expression too long")
+		problem.Write(w, r, "FLT001", "filter expression too long")
 		return nil, false
 	}
 	prog, err := filter.Compile(expr, env)
 	if err != nil {
-		writeErrorCode(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
+		problem.Write(w, r, "FLT002", fmt.Sprintf("invalid filter expression: %s", err))
 		return nil, false
 	}
 	// Filtered in place. prepareList is the only caller and items is the copy
@@ -452,7 +438,7 @@ func exprFilter[T any](
 		m = env.Build(item, m)
 		ok, err := filter.EvaluateContext(ctx, prog, m)
 		if errors.Is(err, filter.ErrBudget) {
-			writeErrorCode(
+			problem.Write(
 				w,
 				r,
 				"FLT004",
@@ -461,7 +447,7 @@ func exprFilter[T any](
 			return nil, false
 		}
 		if err != nil {
-			writeErrorCode(w, r, "FLT003", fmt.Sprintf("filter evaluation error: %s", err))
+			problem.Write(w, r, "FLT003", fmt.Sprintf("filter evaluation error: %s", err))
 			return nil, false
 		}
 		if ok {

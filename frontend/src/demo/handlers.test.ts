@@ -28,7 +28,7 @@ afterAll(() => server.close());
 describe("demo handler coverage", () => {
   it.each(buildDemoEndpoints(dataset))("GET %s returns a response", async (path) => {
     const response = await fetch(`http://localhost${path}`, {
-      headers: { Accept: "application/json", Range: "items 0-49" },
+      headers: { Accept: "application/json", Range: "items=0-49" },
     });
 
     expect(response.status).toBeLessThan(500);
@@ -37,7 +37,7 @@ describe("demo handler coverage", () => {
 
 async function fetchJSON(path: string) {
   const response = await fetch(`http://localhost${path}`, {
-    headers: { Accept: "application/json", Range: "items 0-49" },
+    headers: { Accept: "application/json", Range: "items=0-49" },
   });
   if (!response.ok) {
     throw new Error(`${path} returned ${response.status}`);
@@ -52,12 +52,22 @@ describe("collection response shapes", () => {
     expect(data.total).toBe(3);
   });
 
-  it("GET /services returns 11 services with RunningTasks", async () => {
+  it("GET /services returns 11 services with their task counts", async () => {
     const data = await fetchJSON("/services");
     expect(data.total).toBe(11);
     for (const item of data.items) {
       expect(item).toHaveProperty("RunningTasks");
+      expect(typeof item.DesiredTasks).toBe("number");
     }
+  });
+
+  it("GET /services counts a global service against its eligible nodes", async () => {
+    const data = await fetchJSON("/services");
+    const global = data.items.find(
+      ({ Spec }: { Spec: { Mode: { Global?: object } } }) => Spec.Mode.Global,
+    );
+
+    expect(global?.DesiredTasks).toBeGreaterThan(0);
   });
 
   it("GET /tasks returns items array", async () => {

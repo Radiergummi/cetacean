@@ -234,4 +234,110 @@ describe("useServiceDetail", () => {
 
     await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1));
   });
+
+  // A save is written onto the cached service, so a stream event that follows
+  // re-derives from the saved spec rather than reverting the editor.
+  it("writes a saved sub-resource into the detail cache", async () => {
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => useServiceDetail("svc1"), {
+      wrapper: createWrapper(client),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+
+    act(() => {
+      result.current.onEnvSaved({ MODE: "production" });
+      result.current.onPortsSaved([{ TargetPort: 80, PublishedPort: 8080 }]);
+      result.current.onHealthcheckSaved(null);
+    });
+
+    await waitFor(() => expect(result.current.envVars).toEqual({ MODE: "production" }));
+    expect(result.current.specPorts).toEqual([{ TargetPort: 80, PublishedPort: 8080 }]);
+    expect(result.current.healthcheck).toBeNull();
+
+    const cached = client.getQueryData<{ data: { service: typeof service } }>([
+      "detail",
+      "/services/svc1",
+    ]);
+
+    expect(cached?.data.service.Spec.TaskTemplate.ContainerSpec).toEqual(
+      expect.objectContaining({ Image: "nginx:1.27", Env: ["MODE=production"] }),
+    );
+  });
+
+  // The server's cache trails the save, so asking it at once would hand back
+  // the old labels; the stream's echo of the save is the earliest safe moment.
+  it("refetches the detail on the stream's echo of a labels save, not before", async () => {
+    const { result } = renderHook(() => useServiceDetail("svc1"), {
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+    const fetches = vi.mocked(api.service).mock.calls.length;
+    const labels = { "caddy.encode": "gzip" };
+    const saved = { ...service, Version: { Index: 2 }, Spec: { ...service.Spec, Labels: labels } };
+
+    act(() => {
+      result.current.onLabelsSaved(labels);
+    });
+
+    await waitFor(() => expect(result.current.serviceLabels).toEqual(labels));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(api.service).toHaveBeenCalledTimes(fetches);
+
+    vi.mocked(api.service).mockResolvedValue({
+      data: { service: saved, integrations: [{ kind: "caddy" }] },
+      allowedMethods: new Set<string>(),
+      canonicalPath: "/services/svc1",
+    } as never);
+
+    act(() => {
+      emit({ type: "service", action: "update", id: "svc1", resource: saved });
+    });
+
+    // Sooner than the stream's debounced invalidation would ask.
+    await waitFor(() => expect(api.service).toHaveBeenCalledTimes(fetches + 1), { timeout: 300 });
+    await waitFor(() =>
+      expect(result.current.integrations).toEqual([expect.objectContaining({ kind: "caddy" })]),
+    );
+    expect(result.current.serviceLabels).toEqual(labels);
+  });
+
+  // A save on one service says nothing about the next one the page shows.
+  it("forgets a pending labels echo when the page moves to another service", async () => {
+    const { result, rerender } = renderHook(({ id }) => useServiceDetail(id), {
+      initialProps: { id: "svc1" },
+      wrapper: createWrapper(createTestQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.service).not.toBeNull());
+
+    act(() => {
+      result.current.onLabelsSaved({ "caddy.encode": "gzip" });
+    });
+
+    const other = { ...service, ID: "svc2", Spec: { ...service.Spec, Name: "other" } };
+
+    vi.mocked(api.service).mockResolvedValue({
+      data: { service: other },
+      allowedMethods: new Set<string>(),
+      canonicalPath: "/services/svc2",
+    } as never);
+    rerender({ id: "svc2" });
+
+    await waitFor(() => expect(result.current.service?.ID).toBe("svc2"));
+    const fetches = vi.mocked(api.service).mock.calls.length;
+
+    act(() => {
+      emit({
+        type: "service",
+        action: "update",
+        id: "svc2",
+        resource: { ...other, Version: { Index: 5 } },
+      });
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(api.service).toHaveBeenCalledTimes(fetches);
+  });
 });

@@ -10,11 +10,13 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-func (h *Handlers) getLocalNodeID() string {
+func (h *Handlers) getLocalNodeID(ctx context.Context) string {
 	h.localNodeMu.Lock()
 	defer h.localNodeMu.Unlock()
 	if h.localNodeID != "" {
@@ -28,11 +30,12 @@ func (h *Handlers) getLocalNodeID() string {
 	}
 
 	if h.systemClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Detached: the answer is cached for every request, not this one's.
+		lookupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		id, err := h.systemClient.LocalNodeID(ctx)
+		id, err := h.systemClient.LocalNodeID(lookupCtx)
 		if err != nil {
-			slog.Warn("failed to get local node ID", "error", err)
+			slog.WarnContext(ctx, "failed to get local node ID", "error", err)
 			retryAt := time.Now().Add(30 * time.Second)
 			h.localNodeRetryAfter = &retryAt
 		} else if id != "" {
@@ -48,24 +51,31 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := h.cache.Snapshot()
+	// Counted from one list, so the two counts never exceed the total.
+	services := h.cache.ListServices()
+	converged, degraded := cluster.CountServiceStates(
+		snap,
+		services,
+		h.cache.EligibleNodeCounts(services...),
+	)
 	overview := ClusterOverviewResponse{
 		NodeCount:            snap.NodeCount,
-		ServiceCount:         snap.ServiceCount,
+		ServiceCount:         len(services),
 		TaskCount:            snap.TaskCount,
 		StackCount:           snap.StackCount,
 		TasksByState:         snap.TasksByState,
 		NodesReady:           snap.NodesReady,
 		NodesDown:            snap.NodesDown,
 		NodesDraining:        snap.NodesDraining,
-		ServicesConverged:    snap.ServicesConverged,
-		ServicesDegraded:     snap.ServicesDegraded,
+		ServicesConverged:    converged,
+		ServicesDegraded:     degraded,
 		ReservedCPU:          snap.ReservedCPU,
 		ReservedMemory:       snap.ReservedMemory,
 		TotalCPU:             snap.TotalCPU,
 		TotalMemory:          snap.TotalMemory,
 		Quorum:               snap.Quorum,
 		PrometheusConfigured: h.promClient != nil,
-		LocalNodeID:          h.getLocalNodeID(),
+		LocalNodeID:          h.getLocalNodeID(r.Context()),
 	}
 	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
 }
@@ -111,7 +121,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if h.promClient == nil {
-		writeErrorCode(w, r, "MTR001", "prometheus not configured")
+		problem.Write(w, r, "MTR001", "prometheus not configured")
 		return
 	}
 
@@ -134,7 +144,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`,
 		)
 		if err != nil {
-			slog.Warn("cluster metrics: CPU query failed", "error", err)
+			slog.WarnContext(ctx, "cluster metrics: CPU query failed", "error", err)
 			return
 		}
 		if len(results) > 0 {
@@ -146,7 +156,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		results, err := h.promClient.InstantQuery(ctx,
 			`sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)`)
 		if err != nil {
-			slog.Warn("cluster metrics: memory query failed", "error", err)
+			slog.WarnContext(ctx, "cluster metrics: memory query failed", "error", err)
 			return
 		}
 		if len(results) > 0 {
@@ -231,12 +241,14 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	if !h.requireAnyGrant(w, r) {
 		return
 	}
+	allowReads(w)
 
 	queryable := h.acl.CanReadEverything(auth.IdentityFromContext(r.Context()))
 
 	if h.promClient == nil {
-		writeJSON(
+		writeCachedJSON(
 			w,
+			r,
 			NewDetailResponse(
 				r.Context(),
 				"/metrics/status",
@@ -268,7 +280,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `count by (instance) (node_uname_info)`)
 		if err != nil {
-			slog.Warn("monitoring status: node-exporter query failed", "error", err)
+			slog.WarnContext(ctx, "monitoring status: node-exporter query failed", "error", err)
 			return
 		}
 		nodeExporter = &TargetStatus{Targets: len(results), Nodes: nodeCount}
@@ -278,7 +290,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `up{job="cadvisor"}`)
 		if err != nil {
-			slog.Warn("monitoring status: cadvisor query failed", "error", err)
+			slog.WarnContext(ctx, "monitoring status: cadvisor query failed", "error", err)
 			return
 		}
 		cadvisor = &TargetStatus{Targets: len(results), Nodes: nodeCount}
@@ -299,7 +311,11 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status))
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status),
+	)
 }
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
@@ -308,7 +324,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM001", "swarm inspect not available")
+		problem.Write(w, r, "SWM001", "swarm inspect not available")
 		return
 	}
 
@@ -317,8 +333,8 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		slog.Error("swarm inspect failed", "error", err)
-		writeErrorCode(w, r, "SWM002", "swarm inspect failed")
+		slog.ErrorContext(ctx, "swarm inspect failed", "error", err)
+		problem.Write(w, r, "SWM002", "swarm inspect failed")
 		return
 	}
 
@@ -406,14 +422,14 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.systemClient == nil {
-		writeErrorCode(w, r, "SWM004", "disk usage not available")
+		problem.Write(w, r, "SWM004", "disk usage not available")
 		return
 	}
 
 	du, err := h.diskUsage.get(r.Context(), h.systemClient.DiskUsage)
 	if err != nil {
-		slog.Error("disk usage failed", "error", err)
-		writeErrorCode(w, r, "SWM005", "disk usage failed")
+		slog.ErrorContext(r.Context(), "disk usage failed", "error", err)
+		problem.Write(w, r, "SWM005", "disk usage failed")
 		return
 	}
 

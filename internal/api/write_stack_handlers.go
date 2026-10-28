@@ -29,10 +29,19 @@ func removeAll(
 			// business reading, so it goes to the log and not the response.
 			message := "failed to remove " + resourceType + " " + id
 			if cluster.IsRemovalConflict(err, resourceType) {
-				slog.Info("removal refused", "resource", resourceType, "id", id, "error", err)
+				slog.InfoContext(
+					ctx,
+					"removal refused",
+					"resource",
+					resourceType,
+					"id",
+					id,
+					"error",
+					err,
+				)
 				message = cluster.RemovalConflictDetail(resourceType, id)
 			} else {
-				slog.Warn(
+				slog.WarnContext(ctx,
 					"stack member removal failed",
 					"resource",
 					resourceType,
@@ -74,7 +83,7 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("removing stack", "stack", name,
+	slog.InfoContext(r.Context(), "removing stack", "stack", name,
 		"services", len(stack.Services),
 		"networks", len(stack.Networks),
 		"configs", len(stack.Configs),

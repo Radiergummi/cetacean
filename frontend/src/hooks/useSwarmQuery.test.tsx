@@ -40,7 +40,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult(items, 1));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -68,7 +74,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValueOnce(makeFetchResult([{ ID: "3", Name: "c" }], 3, 2));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -96,7 +108,13 @@ describe("useSwarmQuery", () => {
       .mockRejectedValue(new Error("fail"));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -112,7 +130,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult(items, 1));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -138,7 +162,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([enriched], 1));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["tasks"],
+          fetchFn,
+          sseType: "task",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -171,7 +201,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([listed], 1));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["secrets"], fetchFn, "secret", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["secrets"],
+          fetchFn,
+          sseType: "secret",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -197,7 +233,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 5));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -232,7 +274,13 @@ describe("useSwarmQuery", () => {
       );
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -271,7 +319,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 50));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["tasks"],
+          fetchFn,
+          sseType: "task",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -299,7 +353,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "a" }], 50));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["tasks"],
+          fetchFn,
+          sseType: "task",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -329,7 +389,14 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "nginx-1" }], 3));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID, true),
+      () =>
+        useSwarmQuery({
+          queryKey: ["tasks"],
+          fetchFn,
+          sseType: "task",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+        }),
       { wrapper },
     );
 
@@ -364,7 +431,14 @@ describe("useSwarmQuery", () => {
       );
 
     const { result } = renderHook(
-      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID, true),
+      () =>
+        useSwarmQuery({
+          queryKey: ["tasks"],
+          fetchFn,
+          sseType: "task",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+        }),
       { wrapper },
     );
 
@@ -391,7 +465,14 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "nginx-1" }], 1));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID, true),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+        }),
       { wrapper },
     );
 
@@ -416,7 +497,14 @@ describe("useSwarmQuery", () => {
       .mockResolvedValue(makeFetchResult([{ ID: "1", Name: "nginx-1" }], 1));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["tasks"], fetchFn, "task", ({ ID }: Item) => ID, true),
+      () =>
+        useSwarmQuery({
+          queryKey: ["tasks"],
+          fetchFn,
+          sseType: "task",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+        }),
       { wrapper },
     );
 
@@ -458,7 +546,14 @@ describe("useSwarmQuery", () => {
 
     const { result } = renderHook(
       () =>
-        useSwarmQuery(["secrets"], fetchFn, "secret", ({ ID }: Item) => ID, true, undefined, true),
+        useSwarmQuery({
+          queryKey: ["secrets"],
+          fetchFn,
+          sseType: "secret",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+          derived: true,
+        }),
       { wrapper },
     );
 
@@ -481,6 +576,150 @@ describe("useSwarmQuery", () => {
     });
   });
 
+  it("SSE refetches on another type's event rather than adding it as a row", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "s1", Name: "web" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    fetchFn.mockResolvedValue(makeFetchResult([{ ID: "s1", Name: "web, refetched" }], 1));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("task", {
+        type: "task",
+        action: "create",
+        id: "t1",
+        resource: { ID: "t1", Name: "web.1" },
+      }),
+    );
+
+    expect(result.current.data).toEqual([{ ID: "s1", Name: "web" }]);
+    expect(result.current.total).toBe(1);
+    await waitFor(
+      () => expect(result.current.data).toEqual([{ ID: "s1", Name: "web, refetched" }]),
+      {
+        timeout: 3000,
+      },
+    );
+  });
+
+  it("SSE patches a row in place on a list following several types", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "n1", Name: "backend" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["networks"],
+          fetchFn,
+          sseType: "network,task",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+          derived: true,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("network", {
+        type: "network",
+        action: "update",
+        id: "n1",
+        resource: { ID: "n1", Name: "backend, renamed" },
+      }),
+    );
+
+    // The refetch answers the old name, so only the patch can show the new one.
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ ID: "n1", Name: "backend, renamed" }]),
+    );
+  });
+
+  it("SSE leaves a resource-less event on a filtered list to the debounced refetch", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "n1", Name: "backend" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["networks"],
+          fetchFn,
+          sseType: "network",
+          getId: ({ ID }: Item) => ID,
+          filtered: true,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("network", {
+        type: "network",
+        action: "ref_changed",
+        id: "n1",
+      }),
+    );
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  });
+
+  it("SSE updates keep the task counts and image update the list computed for a service", async () => {
+    const counted = {
+      ID: "s1",
+      Name: "web",
+      RunningTasks: 2,
+      DesiredTasks: 3,
+      ImageUpdate: { image: "nginx:1.27" },
+    };
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([counted], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("service", {
+        type: "service",
+        action: "update",
+        id: "s1",
+        resource: { ID: "s1", Name: "web, renamed" },
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.data).toEqual([{ ...counted, Name: "web, renamed" }]),
+    );
+  });
+
   it("SSE removes item", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
@@ -495,7 +734,13 @@ describe("useSwarmQuery", () => {
       );
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 
@@ -530,7 +775,13 @@ describe("useSwarmQuery", () => {
       .mockResolvedValueOnce(makeFetchResult(refreshed, 2));
 
     const { result } = renderHook(
-      () => useSwarmQuery(["services"], fetchFn, "service", ({ ID }: Item) => ID),
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
       { wrapper },
     );
 

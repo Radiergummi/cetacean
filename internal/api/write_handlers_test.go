@@ -686,6 +686,40 @@ func TestHandleUpdateServiceImage_EmptyImage(t *testing.T) {
 	}
 }
 
+// MCP trims the image it is given, so the same request must land the same
+// reference over REST: a padded one trimmed, a blank one refused.
+func TestHandleUpdateServiceImage_TrimsWhitespace(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(replicatedService("svc1"))
+
+	var sent string
+	wc := &mockWriteClient{
+		updateServiceImageFn: func(_ context.Context, id string, image string) (swarm.Service, error) {
+			sent = image
+			return replicatedService(id), nil
+		},
+	}
+	h := newTestHandlers(t, withCache(c), withWriteClient(wc))
+
+	for body, want := range map[string]int{
+		`{"image":" nginx:latest\n"}`: http.StatusOK,
+		`{"image":"   "}`:             http.StatusBadRequest,
+	} {
+		req := httptest.NewRequest("PUT", "/services/svc1/image", strings.NewReader(body))
+		req.SetPathValue("id", "svc1")
+		w := httptest.NewRecorder()
+		h.HandleUpdateServiceImage(w, req)
+
+		if w.Code != want {
+			t.Errorf("%s: status=%d, want %d", body, w.Code, want)
+		}
+	}
+
+	if sent != "nginx:latest" {
+		t.Errorf("image sent = %q, want it trimmed", sent)
+	}
+}
+
 func serviceWithPreviousSpec(id string) swarm.Service {
 	spec := swarm.ServiceSpec{}
 	svc := replicatedService(id)
@@ -3848,6 +3882,26 @@ func TestHandleCreateConfig_NameConflict(t *testing.T) {
 	}
 }
 
+// A create the engine refuses is classified as every other write is, and
+// keeps the daemon's text to itself.
+func TestHandleCreateConfig_FailedPreconditionIsAConflict(t *testing.T) {
+	wc := &mockWriteClient{
+		createConfigFn: func(_ context.Context, spec swarm.ConfigSpec) (string, error) {
+			return "", fmt.Errorf("%w: raft 10.0.0.9 not ready", cerrdefs.ErrFailedPrecondition)
+		},
+	}
+	h := newTestHandlers(t, withWriteClient(wc), withOpsLevel(config.OpsConfiguration))
+
+	body := `{"name":"existing","data":"aGVsbG8="}`
+	req := httptest.NewRequest("POST", "/configs", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	h.HandleCreateConfig(w, req)
+
+	if w.Code != http.StatusConflict || strings.Contains(w.Body.String(), "10.0.0.9") {
+		t.Errorf("status=%d, want 409 without the engine's text; body: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandleCreateConfig_InvalidJSON(t *testing.T) {
 	h := newTestHandlers(
 		t,
@@ -5130,6 +5184,369 @@ func TestHostAccessWritesRequireImpactfulLevel(t *testing.T) {
 						written,
 						w.Body.String(),
 					)
+				}
+				if !strings.Contains(w.Body.String(), "OPS001") {
+					t.Errorf("body does not name OPS001: %s", w.Body.String())
+				}
+			})
+		}
+	}
+}
+
+func socketBoundSpec() swarm.ServiceSpec {
+	return swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{Mounts: []mount.Mount{{
+			Type:   mount.TypeBind,
+			Source: "/var/run/docker.sock",
+			Target: "/var/run/docker.sock",
+		}}},
+	}}
+}
+
+// holdsHostAccess is the rule's reading of the fixtures, which reach the host
+// only by mounts: the current spec, or either spec for a rollback.
+func holdsHostAccess(svc swarm.Service, rollback bool) bool {
+	mounted := func(spec *swarm.ServiceSpec) bool {
+		return spec != nil && spec.TaskTemplate.ContainerSpec != nil &&
+			len(spec.TaskTemplate.ContainerSpec.Mounts) > 0
+	}
+
+	return mounted(&svc.Spec) || rollback && mounted(svc.PreviousSpec)
+}
+
+// pinRule is when a host-access write is expected to name the version checked.
+type pinRule int
+
+const (
+	pinWhenHeld pinRule = iota // below level 3, when the service holds host access
+	pinNever                   // the check reads the spec inside the write itself
+	pinAlways                  // the attachment checks pin regardless
+)
+
+// Host access a service already holds is exempt from the mount and capability
+// checks, so changing what runs with it needs the impactful tier instead.
+func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
+	plain := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
+		ContainerSpec: &swarm.ContainerSpec{Image: "nginx"},
+	}}
+	bound := socketBoundSpec()
+	current := swarm.Service{ID: "svc1", Spec: bound, PreviousSpec: &plain}
+	previous := swarm.Service{ID: "svc1", Spec: plain, PreviousSpec: &bound}
+	unbound := swarm.Service{ID: "svc1", Spec: plain, PreviousSpec: &plain}
+
+	image := func(h *Handlers) http.HandlerFunc { return h.HandleUpdateServiceImage }
+	rollback := func(h *Handlers) http.HandlerFunc { return h.HandleRollbackService }
+	containerConfig := func(h *Handlers) http.HandlerFunc {
+		return h.HandlePatchServiceContainerConfig
+	}
+	placement := func(h *Handlers) http.HandlerFunc { return h.HandlePutServicePlacement }
+	putHealthcheck := func(h *Handlers) http.HandlerFunc { return h.HandlePutServiceHealthcheck }
+	patchHealthcheck := func(h *Handlers) http.HandlerFunc {
+		return h.HandlePatchServiceHealthcheck
+	}
+	secrets := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceSecrets }
+	configs := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceConfigs }
+	mounts := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceMounts }
+	env := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceEnv }
+	ports := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServicePorts }
+	networks := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceNetworks }
+	labels := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceLabels }
+
+	const (
+		tier1 = config.OpsOperational
+		tier2 = config.OpsConfiguration
+	)
+	socketMount := `{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}`
+
+	cases := []struct {
+		name    string
+		svc     swarm.Service
+		method  string
+		path    string
+		body    string
+		handler func(*Handlers) http.HandlerFunc
+		below   config.OperationsLevel
+		refused bool
+		pin     pinRule
+	}{
+		{
+			"image",
+			current,
+			"PUT",
+			"/image",
+			`{"image":"evil"}`,
+			image,
+			tier1,
+			true,
+			pinWhenHeld,
+		},
+		{
+			"image with a bind only in the previous spec",
+			previous, "PUT", "/image", `{"image":"nginx:2"}`,
+			image, tier1, false, pinWhenHeld,
+		},
+		{
+			"rollback restoring a bind",
+			previous, "POST", "/rollback", "",
+			rollback, tier1, true, pinWhenHeld,
+		},
+		{
+			"rollback from a bind",
+			current, "POST", "/rollback", "",
+			rollback, tier1, true, pinWhenHeld,
+		},
+		{
+			"command",
+			current, "PATCH", "/container-config", `{"command":["sh"]}`,
+			containerConfig, tier2, true, pinNever,
+		},
+		{
+			"user",
+			current, "PATCH", "/container-config", `{"user":"root"}`,
+			containerConfig, tier2, true, pinNever,
+		},
+		{
+			"working directory",
+			current, "PATCH", "/container-config", `{"dir":"/tmp"}`,
+			containerConfig, tier2, true, pinNever,
+		},
+		{
+			"hostname only",
+			current, "PATCH", "/container-config", `{"hostname":"web"}`,
+			containerConfig, tier2, false, pinNever,
+		},
+		{
+			"placement",
+			current, "PUT", "/placement", `{"Constraints":["node.role==manager"]}`,
+			placement, tier2, true, pinWhenHeld,
+		},
+		{
+			"healthcheck test",
+			current, "PUT", "/healthcheck", `{"Test":["CMD","sh"]}`,
+			putHealthcheck, tier2, true, pinWhenHeld,
+		},
+		{
+			"healthcheck interval only",
+			current, "PUT", "/healthcheck", `{"Interval":1000000000}`,
+			putHealthcheck, tier2, false, pinWhenHeld,
+		},
+		{
+			"patched healthcheck test",
+			current, "PATCH", "/healthcheck", `{"Test":["CMD","sh"]}`,
+			patchHealthcheck, tier2, true, pinNever,
+		},
+		{
+			"patched healthcheck interval only",
+			current, "PATCH", "/healthcheck", `{"Interval":1000000000}`,
+			patchHealthcheck, tier2, false, pinNever,
+		},
+		{
+			"secret added",
+			current, "PATCH", "/secrets",
+			`{"secrets":[{"secretID":"sec1","secretName":"s","fileName":"/docker-entrypoint.sh"}]}`,
+			secrets, tier2, true, pinAlways,
+		},
+		{
+			"config added",
+			current, "PATCH", "/configs",
+			`{"configs":[{"configID":"cfg1","configName":"c","fileName":"/docker-entrypoint.sh"}]}`,
+			configs, tier2, true, pinAlways,
+		},
+		{
+			"mount added beside the bind",
+			current, "PATCH", "/mounts",
+			`{"mounts":[` + socketMount + `,{"Type":"tmpfs","Target":"/docker-entrypoint.sh"}]}`,
+			mounts, tier2, true, pinAlways,
+		},
+		{
+			"mounts unchanged",
+			current, "PATCH", "/mounts", `{"mounts":[` + socketMount + `]}`,
+			mounts, tier2, false, pinAlways,
+		},
+		{
+			"secret added without host access",
+			unbound, "PATCH", "/secrets",
+			`{"secrets":[{"secretID":"sec1","secretName":"s"}]}`,
+			secrets, tier2, false, pinAlways,
+		},
+		{
+			"image without host access",
+			unbound, "PUT", "/image", `{"image":"nginx:2"}`,
+			image, tier1, false, pinWhenHeld,
+		},
+		{
+			"rollback without host access",
+			unbound, "POST", "/rollback", "",
+			rollback, tier1, false, pinWhenHeld,
+		},
+		{
+			"environment",
+			current, "PATCH", "/env", `{"DOCKER_HOST":"tcp://0.0.0.0:2375"}`,
+			env, tier2, true, pinWhenHeld,
+		},
+		{
+			"environment unchanged",
+			current, "PATCH", "/env", `{}`,
+			env, tier2, false, pinWhenHeld,
+		},
+		{
+			"environment without host access",
+			unbound, "PATCH", "/env", `{"FOO":"bar"}`,
+			env, tier2, false, pinWhenHeld,
+		},
+		{
+			"published port",
+			current, "PATCH", "/ports",
+			`{"ports":[{"Protocol":"tcp","TargetPort":2375,"PublishedPort":2375}]}`,
+			ports, tier2, true, pinWhenHeld,
+		},
+		{
+			"ports unchanged",
+			current, "PATCH", "/ports", `{"ports":[]}`,
+			ports, tier2, false, pinWhenHeld,
+		},
+		{
+			"network attached",
+			current, "PATCH", "/networks", `{"networks":[{"target":"net1"}]}`,
+			networks, tier2, true, pinAlways,
+		},
+		{
+			"networks unchanged",
+			current, "PATCH", "/networks", `{"networks":[]}`,
+			networks, tier2, false, pinAlways,
+		},
+		{
+			"service label",
+			current, "PATCH", "/labels", `{"traefik.enable":"true"}`,
+			labels, tier2, true, pinWhenHeld,
+		},
+		{
+			"service labels unchanged",
+			current, "PATCH", "/labels", `{}`,
+			labels, tier2, false, pinWhenHeld,
+		},
+		{
+			"service label without host access",
+			unbound, "PATCH", "/labels", `{"traefik.enable":"true"}`,
+			labels, tier2, false, pinWhenHeld,
+		},
+	}
+
+	for _, tc := range cases {
+		for _, level := range []config.OperationsLevel{tc.below, config.OpsImpactful} {
+			t.Run(fmt.Sprintf("%s at level %d", tc.name, level), func(t *testing.T) {
+				c := cache.New(nil)
+				tc.svc.Version = swarm.Version{Index: 7}
+				c.SetService(tc.svc)
+				c.SetSecret(swarm.Secret{ID: "sec1", Spec: swarm.SecretSpec{
+					Annotations: swarm.Annotations{Name: "s"},
+				}})
+				c.SetConfig(swarm.Config{ID: "cfg1", Spec: swarm.ConfigSpec{
+					Annotations: swarm.Annotations{Name: "c"},
+				}})
+				c.SetNetwork(network.Summary{ID: "net1", Name: "n"})
+
+				written := false
+				var pinned swarm.Version
+				write := func(ctx context.Context) (swarm.Service, error) {
+					written = true
+					pinned, _ = docker.PinnedVersion(ctx, "service", "svc1")
+					return swarm.Service{ID: "svc1", Spec: plain}, nil
+				}
+				live := tc.svc.Spec
+				mock := &mockWriteClient{}
+				mock.simulatedSpec = &live
+				mock.updateServiceImageFn = func(ctx context.Context, _, _ string) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.rollbackServiceFn = func(ctx context.Context, _ string) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServicePlacementFn = func(ctx context.Context, _ string, _ *swarm.Placement) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceSpecFn = func(ctx context.Context, _ string, _ swarm.ServiceSpec) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceHealthcheckFn = func(
+					ctx context.Context, _ string, _ *container.HealthConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceSecretsFn = func(
+					ctx context.Context, _ string, _ []*swarm.SecretReference,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceConfigsFn = func(
+					ctx context.Context, _ string, _ []*swarm.ConfigReference,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceMountsFn = func(
+					ctx context.Context, _ string, _ []mount.Mount,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceEnvFn = func(
+					ctx context.Context, _ string, _ map[string]string,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServicePortsFn = func(
+					ctx context.Context, _ string, _ []swarm.PortConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceNetworksFn = func(
+					ctx context.Context, _ string, _ []swarm.NetworkAttachmentConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceLabelsFn = func(
+					ctx context.Context, _ string, _ map[string]string,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+
+				h := newTestHandlers(t, withCache(c), withWriteClient(mock), withOpsLevel(level))
+				req := httptest.NewRequest(
+					tc.method,
+					"/services/svc1"+tc.path,
+					strings.NewReader(tc.body),
+				)
+				if tc.method == "PATCH" {
+					req.Header.Set("Content-Type", "application/merge-patch+json")
+				} else {
+					req.Header.Set("Content-Type", "application/json")
+				}
+				req.SetPathValue("id", "svc1")
+				w := httptest.NewRecorder()
+				tc.handler(h)(w, req)
+
+				if !tc.refused || level >= config.OpsImpactful {
+					if w.Code != http.StatusOK || !written {
+						t.Fatalf("status=%d written=%v, want 200 and a write; body: %s",
+							w.Code, written, w.Body.String())
+					}
+
+					below := level < config.OpsImpactful
+					wantPin := tc.pin == pinAlways ||
+						tc.pin == pinWhenHeld && below &&
+							holdsHostAccess(tc.svc, tc.path == "/rollback")
+					if wantPin && pinned.Index != 7 {
+						t.Errorf("write pinned to %v, want the checked version 7", pinned)
+					}
+					if !wantPin && pinned.Index != 0 {
+						t.Errorf("write pinned to %v, want it unpinned", pinned)
+					}
+
+					return
+				}
+
+				if w.Code != http.StatusForbidden || written {
+					t.Fatalf("status=%d written=%v, want 403 and no write; body: %s",
+						w.Code, written, w.Body.String())
 				}
 				if !strings.Contains(w.Body.String(), "OPS001") {
 					t.Errorf("body does not name OPS001: %s", w.Body.String())

@@ -542,7 +542,7 @@ func mcpFindID(t *testing.T, proc *sut.Process, resourceType, name string) strin
 type readToolSpec struct {
 	name           string
 	args           func(baselineIDs) map[string]any
-	gatedOnService bool // true for get_logs/watch: toolACLSpecs requires service:read
+	gatedOnService bool // true for get_logs/watch: their toolDef gate is service:read
 }
 
 func driveReadTool(spec readToolSpec) mcpDriveFunc {
@@ -569,8 +569,8 @@ func driveReadTool(spec readToolSpec) mcpDriveFunc {
 
 type mcpDriveFunc func(t *testing.T, env *harness.Env, proc *sut.Process, ids baselineIDs)
 
-// driveFind checks find (never gated in toolACLSpecs by design — see the map
-// in internal/mcp/server.go) across every persona: always visible, and
+// driveFind checks find (ungated by design — it has no toolDef gate,
+// see internal/mcp/tools_reads.go) across every persona: always visible, and
 // per-type results are ACL-filtered rather than refused, so anonymous must
 // get zero items rather than an error.
 func driveFind(t *testing.T, env *harness.Env, proc *sut.Process, _ baselineIDs) {
@@ -1223,12 +1223,10 @@ func driveServiceTools(t *testing.T, env *harness.Env, proc *sut.Process, ids ba
 		waitForServiceImage(t, env, serviceName, fixtureImageRef)
 	})
 
-	// remove_task: oncall genuinely holds write:task:* for real, so it drives
-	// the positive case (Docker reschedules the task, which is harmless for
-	// a replicated service) while every denied persona is checked against
-	// the same task ID without ever reaching Docker.
-	// A running task: after the rollback above the engine still lists the ones
-	// it shut down, which the cache does not keep, so the write tools refuse them.
+	// remove_task: oncall holds write:task:* for real, so it drives the positive
+	// case while every denied persona is checked against the same task. It must
+	// be a running one: after the rollback the engine still lists tasks it shut
+	// down, which the cache does not keep, so the write tools refuse them.
 	taskID := runningTaskOf(t, env, mustServiceInspectID(t, env, serviceName))
 	if taskID == "" {
 		t.Fatal("throwaway service has no running task to drive remove_task with")

@@ -201,6 +201,54 @@ func TestTsnetMetaListenerServesSelfMetrics(t *testing.T) {
 	}
 }
 
+func TestAllowedHosts(t *testing.T) {
+	tests := []struct {
+		listen string
+		tsnet  []string
+		want   []string
+	}{
+		{":9000", nil, nil},
+		{"0.0.0.0:9000", nil, nil},
+		{"[::]:9000", nil, nil},
+		{"10.0.0.5:9000", nil, nil},
+		{"cetacean:9000", nil, []string{"cetacean"}},
+		{":9000", []string{"cetacean.tailnet.ts.net"}, []string{"cetacean.tailnet.ts.net"}},
+	}
+
+	for _, tt := range tests {
+		if got := allowedHosts(tt.listen, tt.tsnet); !slices.Equal(got, tt.want) {
+			t.Errorf("allowedHosts(%q, %v) = %v, want %v", tt.listen, tt.tsnet, got, tt.want)
+		}
+	}
+}
+
+func TestHostGuardWarning(t *testing.T) {
+	for _, tc := range []struct {
+		listen, publicURL string
+		allowed, tsnet    []string
+		want              []string // substrings; nil means no warning
+	}{
+		{":9000", "", nil, nil, []string{"IP address", "localhost", "server.public_url", "server.allowed_hosts"}},
+		{"0.0.0.0:9000", "", nil, nil, []string{"IP address"}},
+		{"cetacean:9000", "", nil, nil, []string{"cetacean"}},
+		{"127.0.0.1:9000", "", nil, nil, nil},
+		{"localhost:9000", "", nil, nil, nil},
+		{":9000", "https://swarm.example.com", nil, nil, nil},
+		{":9000", "", []string{"swarm.lan"}, nil, nil},
+		{":9000", "", nil, []string{"cetacean.tailnet.ts.net"}, nil},
+	} {
+		got := hostGuardWarning(tc.listen, tc.publicURL, tc.allowed, tc.tsnet)
+		if tc.want == nil && got != "" {
+			t.Errorf("%q: warned %q, want nothing", tc.listen, got)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(got, want) {
+				t.Errorf("%q: warning %q does not name %q", tc.listen, got, want)
+			}
+		}
+	}
+}
+
 func TestMCPInClear(t *testing.T) {
 	tests := []struct {
 		name      string

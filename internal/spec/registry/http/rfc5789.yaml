@@ -18,6 +18,10 @@ requirements:
       provide (e.g., in response to a GET during this operation) a partially
       modified representation.
     url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\tmaps.Copy(result, m)"
+        with: "\tmaps.Copy(result, m)\n\tresult = m"
 
   - id: a-failed-patch-changes-nothing
     level: MUST
@@ -25,6 +29,10 @@ requirements:
       If the entire patch document cannot be successfully applied, then the
       server MUST NOT apply any of the changes.
     url: https://www.rfc-editor.org/rfc/rfc5789#section-2
+    mutants:
+      - file: internal/api/jsonpatch.go
+        replace: "\t\tcase \"remove\":\n\t\t\tif _, ok := result[key]; !ok {\n"
+        with: "\t\tcase \"remove\":\n\t\t\tif _, ok := result[key]; !ok {\n\t\t\t\treturn result, nil\n"
 
   - id: patch-document-suits-the-resource
     level: MUST
@@ -47,6 +55,27 @@ requirements:
       - file: internal/api/allow.go
         replace: "\t\tw.Header().Set(\"Accept-Patch\", offer.acceptPatch)"
         with: "\t\t_ = offer.acceptPatch"
+      - file: internal/api/router.go
+        replace: "\t\t\t\t\t\tw.Header().Set(\"Accept-Patch\", patch)"
+        with: "\t\t\t\t\t\t_ = patch"
+
+  - id: error-carries-accept-patch
+    level: SHOULD
+    text: >-
+      Unsupported patch document: Can be specified using a 415 (Unsupported
+      Media Type) response when the client sends a patch document format that
+      the server does not support for the resource identified by the
+      Request-URI. Such a response SHOULD include an Accept-Patch response
+      header as described in Section 3.1 to notify the client what patch
+      document media types are supported.
+    url: https://www.rfc-editor.org/rfc/rfc5789#section-2.2
+    mutants:
+      - file: internal/api/write_helpers.go
+        replace: "\t\tw.Header().Set(\"Accept-Patch\", AcceptPatch)\n\t\tproblem.Write("
+        with: "\t\tproblem.Write("
+      - file: internal/api/write_helpers.go
+        replace: "\t\t\tw.Header().Set(\"Accept-Patch\", AcceptMergePatch)"
+        with: "\t\t\t_ = AcceptMergePatch"
 
 dismissed:
   patch-may-create-a-resource: >-
@@ -72,10 +101,6 @@ dismissed:
     A SHOULD about the status for an unparseable patch document. This server
     answers 415 for a content type it cannot patch with and 400 for a body it
     cannot parse, both as problem details.
-  error-carries-accept-patch: >-
-    A SHOULD to repeat Accept-Patch on the error. The header is on every GET
-    and OPTIONS of a patchable resource instead, which is where a client looks
-    before it tries.
   error-body-explains-the-failure: >-
     A SHOULD met by every refusal here being an RFC 9457 problem details object
     — see http/rfc9457/new-problem-types-are-documented.

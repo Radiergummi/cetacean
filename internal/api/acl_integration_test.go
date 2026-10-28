@@ -20,6 +20,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/jgf"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -319,7 +320,7 @@ func TestHandleCluster_ACL001_WithGrants(t *testing.T) {
 // type field contains the given error code.
 func assertACLErrorCode(t *testing.T, w *httptest.ResponseRecorder, code string) {
 	t.Helper()
-	var p ProblemDetail
+	var p problem.Detail
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatalf("decode problem: %v", err)
 	}
@@ -1094,13 +1095,7 @@ func TestServiceScaleACL_DeniedByResourceName(t *testing.T) {
 	wc := &mockWriteClient{}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
-	)(
+	handler := h.requireWriteACL(h.writeResource("service"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(
 			http.HandlerFunc(h.HandleScaleService),
 		),
@@ -1148,13 +1143,7 @@ func TestServiceScaleACL_AllowedByResourceName(t *testing.T) {
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(
-		resolveResource(
-			"service",
-			h.cache.GetService,
-			func(s swarm.Service) string { return s.Spec.Name },
-		),
-	)(
+	handler := h.requireWriteACL(h.writeResource("service"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsOperational)(
 			http.HandlerFunc(h.HandleScaleService),
 		),
@@ -1196,7 +1185,7 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 	}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(h.taskServiceResource)(
+	handler := h.requireWriteACL(h.writeResource("task"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(
 			http.HandlerFunc(h.HandleRemoveTask),
 		),
@@ -1210,6 +1199,46 @@ func TestTaskRemoveACL_ResolvesToParentService(t *testing.T) {
 
 	if w.Code == http.StatusForbidden {
 		t.Fatalf("expected non-403, got 403; body: %s", w.Body.String())
+	}
+}
+
+// A task's rendered name is its service's, so the write key resolves through
+// it only for a caller who can read that service.
+func TestTaskWriteResourceResolvesANameThroughAReadableService(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "webapp"}},
+	})
+	c.SetTask(swarm.Task{
+		ID: "task1", ServiceID: "svc1", Slot: 1,
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+
+	for resources, want := range map[string]string{
+		"service:webapp": "service:webapp",
+		"task:*":         "task:webapp.1",
+	} {
+		e := acl.NewEvaluator()
+		e.SetResolver(c)
+		e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+			Resources:   []string{resources},
+			Audience:    []string{"*"},
+			Permissions: []string{"read"},
+		}}})
+
+		h := newTestHandlers(t, withCache(c), withACL(e))
+
+		req := httptest.NewRequest("DELETE", "/tasks/webapp.1", nil)
+		req.SetPathValue("id", "webapp.1")
+		req = req.WithContext(
+			auth.ContextWithIdentity(req.Context(), &auth.Identity{Subject: "user1"}),
+		)
+
+		if got := h.writeResource("task")(req); got != want {
+			t.Errorf("reading %s: write resource = %q, want %q", resources, got, want)
+		}
 	}
 }
 
@@ -1233,7 +1262,7 @@ func TestTaskRemoveACL_DeniedWhenParentServiceNotGranted(t *testing.T) {
 	wc := &mockWriteClient{}
 	h := newTestHandlers(t, withCache(c), withACL(e), withWriteClient(wc))
 
-	handler := h.requireWriteACL(h.taskServiceResource)(
+	handler := h.requireWriteACL(h.writeResource("task"))(
 		handlersAt(config.OpsImpactful).requireLevel(config.OpsImpactful)(
 			http.HandlerFunc(h.HandleRemoveTask),
 		),

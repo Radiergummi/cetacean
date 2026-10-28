@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -35,7 +36,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
 
-	b := sse.NewBroadcaster(100*time.Millisecond, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(100*time.Millisecond, nil)
 	h := newTestHandlers(t, withCache(c), withBroadcaster(b))
 	spa := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -44,6 +45,7 @@ func setupIntegrationRouter(t *testing.T) http.Handler {
 
 	specBytes, _ := os.ReadFile("../../api/openapi.yaml")
 	return NewRouter(RouterConfig{
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           h,
 		Broadcaster:        b,
 		SPA:                spa,
@@ -148,7 +150,7 @@ func TestContentNegotiationIntegration(t *testing.T) {
 		if !strings.HasPrefix(ct, "application/problem+json") {
 			t.Fatalf("Content-Type=%q, want application/problem+json", ct)
 		}
-		var p ProblemDetail
+		var p problem.Detail
 		if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
 			t.Fatalf("failed to decode problem: %v", err)
 		}
@@ -200,7 +202,7 @@ func TestContentNegotiationIntegration(t *testing.T) {
 		if !strings.HasPrefix(ct, "application/problem+json") {
 			t.Fatalf("Content-Type=%q, want application/problem+json", ct)
 		}
-		var p ProblemDetail
+		var p problem.Detail
 		if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
 			t.Fatalf("failed to decode problem: %v", err)
 		}

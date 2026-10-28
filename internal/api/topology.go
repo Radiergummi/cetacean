@@ -14,6 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/dot"
 	"github.com/radiergummi/cetacean/internal/api/graphml"
 	"github.com/radiergummi/cetacean/internal/api/jgf"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -90,7 +91,7 @@ func (h *Handlers) HandleTopology(w http.ResponseWriter, r *http.Request) {
 
 	body, err := json.Marshal(doc)
 	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to serialize response")
+		problem.Write(w, r, "API009", "failed to serialize response")
 		return
 	}
 
@@ -134,7 +135,7 @@ func (h *Handlers) HandleTopologyGraphML(w http.ResponseWriter, r *http.Request)
 	g := h.buildACLFilteredNetworkGraph(r)
 	data, err := graphml.Render(g)
 	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to render GraphML")
+		problem.Write(w, r, "API009", "failed to render GraphML")
 		return
 	}
 	w.Header().Set("Content-Type", "application/graphml+xml")
@@ -149,7 +150,7 @@ func (h *Handlers) HandleTopologyDOT(w http.ResponseWriter, r *http.Request) {
 	g := h.buildACLFilteredNetworkGraph(r)
 	data, err := dot.Render(g)
 	if err != nil {
-		writeErrorCode(w, r, "API009", "failed to render DOT")
+		problem.Write(w, r, "API009", "failed to render DOT")
 		return
 	}
 	w.Header().Set("Content-Type", "text/vnd.graphviz")

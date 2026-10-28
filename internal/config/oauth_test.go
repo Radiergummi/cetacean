@@ -21,11 +21,10 @@ const (
 	envBeatsFile   = "ebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebeb"
 )
 
-// clearOAuthEnv unsets every variable loadOAuth reads, so a test asserting the
-// file or default layer cannot be swayed by the ambient environment. The list
-// tracks loadOAuth: add a setting there and add it here. _SIGNING_KEY_FILE is
-// the one worth naming twice — left out, resolveSecret reads a path from the
-// developer's shell and the failure points nowhere near the cause.
+// clearOAuthEnv unsets every variable loadOAuth reads, so the ambient
+// environment cannot sway a test; add a setting there, add it here. Missing
+// _SIGNING_KEY_FILE in particular makes resolveSecret read a path from the
+// developer's shell, failing far from the cause.
 func clearOAuthEnv(t *testing.T) {
 	t.Helper()
 

@@ -1,7 +1,7 @@
 import { api, emptyMethods } from "../api/client";
 import CollapsibleSection from "../components/CollapsibleSection";
 import { ContainerImage, KVTable, MetadataGrid, ResourceId } from "../components/data";
-import FetchError from "../components/FetchError";
+import DetailError from "../components/DetailError";
 import InfoCard from "../components/InfoCard";
 import InstallPluginDialog from "../components/InstallPluginDialog";
 import { LoadingDetail } from "../components/LoadingSkeleton";
@@ -24,7 +24,6 @@ import {
 import { Button } from "../components/ui/button";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { joinCommand, parseCommand } from "../lib/parseCommand";
-import { getErrorMessage } from "../lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpCircle, Power, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -50,9 +49,6 @@ export default function PluginDetail() {
   const plugin = pluginQuery.data?.data ?? null;
   const allowedMethods = pluginQuery.data?.allowedMethods ?? emptyMethods;
   const editable = pluginQuery.data?.editable ?? emptyMethods;
-  const error = pluginQuery.error
-    ? getErrorMessage(pluginQuery.error, "Failed to load plugin")
-    : null;
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [draftArgs, setDraftArgs] = useState("");
 
@@ -63,10 +59,11 @@ export default function PluginDetail() {
     void pluginQuery.refetch();
   };
 
-  if (error) {
+  if (pluginQuery.error) {
     return (
-      <FetchError
-        message={error}
+      <DetailError
+        error={pluginQuery.error}
+        fallback="Failed to load plugin"
         onRetry={fetchPlugin}
       />
     );

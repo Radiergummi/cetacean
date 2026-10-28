@@ -32,6 +32,11 @@ const enrichedFields = [
   "NewestVersion",
   "InUse",
   "OlderVersions",
+  "RunningTasks",
+  "DesiredTasks",
+  "CompletedTasks",
+  "FailedTasks",
+  "ImageUpdate",
 ] as const;
 
 function keepEnrichment<T>(cached: T, incoming: T): T {
@@ -49,24 +54,48 @@ function keepEnrichment<T>(cached: T, incoming: T): T {
 }
 
 /**
- * How long a filtered list gathers stream events before refetching. Timed from
+ * How long a list gathers stream events before refetching. Timed from
  * the first event, so a cluster that never goes quiet still refreshes.
  */
-const filteredRefetchDelay = 750;
+const refetchDelay = 750;
 
 type PageData<T> = FetchResult<CollectionResponse<T>>;
 type InfinitePages<T> = InfiniteData<PageData<T>, number>;
 
-export function useSwarmQuery<T>(
-  queryKey: readonly unknown[],
-  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>,
-  sseType: string,
-  getId: (item: T) => string,
+export interface SwarmQueryOptions<T> {
+  queryKey: readonly unknown[];
+  fetchFn: (offset: number, signal: AbortSignal) => Promise<FetchResult<CollectionResponse<T>>>;
+  /**
+   * The stream's types; an event of any is patched in as a row. Several types
+   * need `derived`, or one that is not the row's would be appended as a row.
+   */
+  sseType: string;
+  getId: (item: T) => string;
+  /**
+   * The server selects the rows, so an event can only prompt a refetch.
+   */
+  filtered?: boolean | undefined;
+  /**
+   * Events this rejects leave the list alone; a sync always refetches.
+   */
+  relevant?: ((event: SSEEvent, loaded: readonly T[]) => boolean) | undefined;
+  /**
+   * The rows are derived from the streamed resources, so a held remove refetches too.
+   */
+  derived?: boolean | undefined;
+  onEvent?: ((event: SSEEvent) => void) | undefined;
+}
+
+export function useSwarmQuery<T>({
+  queryKey,
+  fetchFn,
+  sseType,
+  getId,
   filtered = false,
-  relevant?: (event: SSEEvent, loaded: readonly T[]) => boolean,
+  relevant,
   derived = false,
-  onEvent?: (event: SSEEvent) => void,
-) {
+  onEvent,
+}: SwarmQueryOptions<T>) {
   const queryClient = useQueryClient();
   const getIdRef = useLatestRef(getId);
   const queryKeyRef = useLatestRef(queryKey);
@@ -74,6 +103,7 @@ export function useSwarmQuery<T>(
   const derivedRef = useLatestRef(derived);
   const relevantRef = useLatestRef(relevant);
   const onEventRef = useLatestRef(onEvent);
+  const sseTypeRef = useLatestRef(sseType);
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => () => clearTimeout(refetchTimer.current), []);
@@ -110,6 +140,12 @@ export function useSwarmQuery<T>(
     useCallback(
       (event) => {
         const key = [...queryKeyRef.current];
+        const scheduleRefetch = () => {
+          refetchTimer.current ??= setTimeout(() => {
+            refetchTimer.current = undefined;
+            void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
+          }, refetchDelay);
+        };
 
         if (event.type === "sync") {
           onEventRef.current?.(event);
@@ -129,6 +165,14 @@ export function useSwarmQuery<T>(
 
         onEventRef.current?.(event);
 
+        // Another type's event on this stream moves what the rows were
+        // derived from, so only the server can say what it changed.
+        if (!sseTypeRef.current.split(",").includes(event.type)) {
+          scheduleRefetch();
+
+          return;
+        }
+
         if (!currentData?.pages) {
           return;
         }
@@ -142,10 +186,7 @@ export function useSwarmQuery<T>(
         // whole pages. A derived list asks on a held remove too: what replaces
         // the row may be one it does not hold yet.
         if (filteredRef.current && !(held && event.action === "remove" && !derivedRef.current)) {
-          refetchTimer.current ??= setTimeout(() => {
-            refetchTimer.current = undefined;
-            void queryClient.invalidateQueries({ queryKey: [...queryKeyRef.current] });
-          }, filteredRefetchDelay);
+          scheduleRefetch();
         }
 
         if (event.action === "remove") {
@@ -256,11 +297,11 @@ export function useSwarmQuery<T>(
               };
             });
           }
-        } else {
+        } else if (!filteredRef.current) {
           void queryClient.invalidateQueries({ queryKey: key });
         }
       },
-      [queryClient, queryKeyRef, getIdRef, filteredRef, derivedRef],
+      [queryClient, queryKeyRef, getIdRef, filteredRef, derivedRef, sseTypeRef],
     ),
   );
 

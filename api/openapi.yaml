@@ -18,6 +18,10 @@ info:
     Detail responses include `@context`, `@id`, and `@type`.
     Error responses follow RFC 9457 (Problem Details).
 
+    A request whose `Host` is not one of the
+    [names Cetacean answers for](/configuration#server.public_url) is answered
+    `421 Misdirected Request` (`CSR002`). It is not repeated under each operation.
+
     Every response (except `/-/` meta endpoints) includes:
     - `Link: </api>; rel="service-desc"; type="application/json"` — pointer to this spec
     - `Link: </api/asyncapi>; rel="service-desc"; type="application/vnd.aai.asyncapi+json;version=3.0.0"` —
@@ -383,8 +387,14 @@ paths:
               schema:
                 type: object
                 description: Prometheus labels response (proxied as-is)
+        "400":
+          description: Prometheus refused the request (`MTR009`)
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -424,6 +434,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -609,6 +623,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
+        "502":
+          description: Prometheus is unreachable (`MTR002`), or its answer exceeds the 10 MiB the proxy forwards (`MTR008`)
         "503":
           description: Prometheus not configured
 
@@ -2376,7 +2392,8 @@ paths:
       tags: [Plugins]
       summary: Configure plugin settings
       description: |
-        Updates plugin args and environment variables. Requires operations level 2.
+        Updates plugin args and environment variables. Requires operations level 2, and level 3 for a
+        setting that names one of the plugin's mounts or devices, which sets a host path.
         Returns the updated plugin detail, or 204 with `Prefer: return=minimal`.
       parameters:
         - name: name
@@ -3093,6 +3110,7 @@ paths:
                           Mode:
                             Replicated: { Replicas: 3 }
                         RunningTasks: 3
+                        DesiredTasks: 3
                     total: 12
                     limit: 50
                     offset: 0
@@ -3398,7 +3416,7 @@ paths:
           color: green
       tags: [Services]
       summary: Update service image
-      description: Updates the container image for a service.
+      description: Updates the container image for a service. Requires level 3 when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
@@ -3448,7 +3466,7 @@ paths:
           color: green
       tags: [Services]
       summary: Rollback a service
-      description: Rolls back the service to its previous specification.
+      description: Rolls back the service to its previous specification. Requires level 3 when the current or the previous spec has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/Prefer"
@@ -3587,7 +3605,7 @@ paths:
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service
         environment variables. Requires `Content-Type: application/json-patch+json` or
-        `application/merge-patch+json`.
+        `application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3738,7 +3756,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Update service placement constraints
-      description: Replaces the placement constraints and preferences for the service.
+      description: Replaces the placement constraints and preferences for the service. Requires level 3 when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -3805,7 +3823,7 @@ paths:
       summary: Patch service port bindings
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service port bindings.
-        Requires `Content-Type: application/merge-patch+json`.
+        Requires `Content-Type: application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4088,7 +4106,7 @@ paths:
       summary: Patch service labels
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service labels.
-        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
         Requires operations level 2. Setting `com.docker.stack.namespace` to a stack the service
         is not in also requires `write` on that stack (`403 ACL002` otherwise).
       parameters:
@@ -4175,7 +4193,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Replace service healthcheck config
-      description: Replaces the healthcheck configuration for the service. Requires operations level 2.
+      description: Replaces the healthcheck configuration for the service. Requires operations level 2, and level 3 to change `Test` when the service has host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4227,7 +4245,8 @@ paths:
       summary: Patch service healthcheck config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service healthcheck configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3
+        to change `Test` when the service has host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4311,7 +4330,7 @@ paths:
       description: >-
         Replaces the config references for the service. Requires operations level 2, and read access to
         each config the service does not already carry. A config ID that is not known answers
-        `400 SVC021`.
+        `400 SVC021`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4420,7 +4439,7 @@ paths:
       description: >-
         Replaces the secret references for the service. Requires operations level 2, and read access to
         each secret the service does not already carry. A secret ID that is not known answers
-        `400 SVC021`.
+        `400 SVC021`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4529,7 +4548,7 @@ paths:
       description: >-
         Replaces the network attachments for the service. Requires operations level 2, and read access to
         each network the service does not already join. A network that is not known answers
-        `400 SVC021`; a name several networks share answers `409 API015`.
+        `400 SVC021`; a name several networks share answers `409 API015`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4626,7 +4645,7 @@ paths:
           color: orange
       tags: [Services]
       summary: Patch service mount configuration
-      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have.
+      description: Replaces the mount configuration for the service. Requires operations level 2, and level 3 to add a bind, named-pipe, or driver-configured volume mount the service does not already have, or to change the mounts of a service with host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -4734,7 +4753,7 @@ paths:
       summary: Patch service container config
       description: |
         Applies a JSON Merge Patch (RFC 7396) to the service container configuration.
-        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`.
+        Requires `Content-Type: application/merge-patch+json`. Requires operations level 2, and level 3 to add a capability to `capabilityAdd`, or to change `command`, `args`, `dir`, `user`, or `groups` of a service with host access.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/IfMatch"
@@ -5232,6 +5251,8 @@ paths:
                 $ref: "#/components/schemas/CSVDocument"
         "304":
           $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   # ── Stacks ───────────────────────────────────────────────────────────
 
@@ -7170,7 +7191,8 @@ components:
       description: >
         Optional RFC 9110 precondition. Supply the ETag from a GET on this
         same path; the write is refused with 412 if the resource has
-        changed since. Omitting the header skips the check.
+        changed since. Omitting the header skips the check. If-None-Match
+        and If-Unmodified-Since are evaluated too, in RFC 9110 §13.2.2 order.
       example: '"a1b2c3d4e5f6a1b2"'
 
     IfMatchUnrepresented:
@@ -7227,7 +7249,7 @@ components:
     limit:
       name: limit
       in: query
-      description: Page size
+      description: Page size; a larger value is clamped to 200, and one that is not a positive integer is refused with `API016`
       schema:
         type: integer
         minimum: 1
@@ -7237,7 +7259,7 @@ components:
     offset:
       name: offset
       in: query
-      description: Starting offset for pagination
+      description: Starting offset for pagination; one that is not a non-negative integer is refused with `API016`
       schema:
         type: integer
         minimum: 0
@@ -7248,15 +7270,18 @@ components:
       in: header
       required: false
       description: >
-        Pagination by item range, an alternative to `limit` and `offset`:
-        `items <first>-<last>`, both zero-based and inclusive, with the same
-        200-item cap. Ignored when either query parameter is present. A range
-        that is less than the whole list answers 206 with `Content-Range`; one
-        that starts past the end, or names several ranges, answers 416. JSON
+        Pagination by item range (RFC 9110 §14.2), an alternative to `limit`
+        and `offset`: `items=<first>-<last>`, both zero-based and inclusive,
+        with the same 200-item cap. `items <first>-<last>` is accepted as a
+        deprecated spelling. Ignored when either query parameter is present, and
+        when it is malformed or names several ranges. A range that is less than
+        the whole list answers 206 with `Content-Range`; one that starts past
+        the end answers 416. The 200 and 206 answers carry the collection's
+        ETag, so `If-Range` holds across pages until the list changes. JSON
         only: a CSV download answers 200 with every row.
       schema:
         type: string
-      example: items 0-49
+      example: items=0-49
 
     versions:
       name: versions
@@ -7282,7 +7307,7 @@ components:
     dir:
       name: dir
       in: query
-      description: Sort direction
+      description: Sort direction, in any case; any other value is refused with `API016`, as is a `sort` the list does not name
       schema:
         type: string
         enum: [asc, desc]
@@ -7311,6 +7336,9 @@ components:
         older overflow is dropped. The cursor narrows that replay only: output
         the connection itself receives is delivered whatever its timestamp,
         since a task is stamped by the clock of the node running it.
+        For the same reason an event's id is the newest line of the task
+        furthest behind, at most a minute behind the newest line sent, so a
+        resume may repeat lines already delivered but skips none.
       schema:
         type: string
 
@@ -7591,7 +7619,9 @@ components:
             requestId: req_a1b2c3d4e5f6
 
     PreconditionFailed:
-      description: The If-Match precondition failed — the resource has changed since the supplied ETag was read
+      description: >-
+        A precondition failed — If-Match or If-Unmodified-Since, or on a write
+        If-None-Match — so the resource has changed since the supplied validator was read
       content:
         application/problem+json:
           schema:
@@ -7613,8 +7643,7 @@ components:
 
     RangeNotSatisfiable:
       description: >
-        The `Range` starts past the last item, with `Content-Range: items */<total>`,
-        or names more than one range, with no `Content-Range`
+        The `Range` starts past the last item, with `Content-Range: items */<total>`
       headers:
         Content-Range:
           $ref: "#/components/headers/Content-Range"
@@ -7631,7 +7660,7 @@ components:
                 detail: urn:ietf:rfc:9457#detail
                 instance: { "@id": "urn:ietf:rfc:9457#instance", "@type": "@id" }
             type: about:blank
-            title: Requested Range Not Satisfiable
+            title: Range Not Satisfiable
             status: 416
             detail: range start is beyond the total number of items
             instance: /tasks
@@ -8610,7 +8639,7 @@ components:
 
     ServiceListItem:
       type: object
-      description: Service with running task count (extends Docker swarm.Service)
+      description: Service with its task counts (extends Docker swarm.Service)
       properties:
         "@id":
           type: string
@@ -8626,6 +8655,22 @@ components:
         RunningTasks:
           type: integer
           description: Number of currently running tasks
+        DesiredTasks:
+          type: integer
+          description: >-
+            How many tasks the service asks for: its replicas; for a global service, the
+            ready, active nodes its placement constraints admit; for a job, the completions
+            its run needs (TotalCompletions, else MaxConcurrent, else 1; 1 for a global job).
+        CompletedTasks:
+          type: integer
+          description: >-
+            For a job only, how many tasks of its current run (JobStatus.JobIteration)
+            completed. Absent for any other mode.
+        FailedTasks:
+          type: integer
+          description: >-
+            For a job only, how many tasks of its current run failed or were rejected.
+            Absent for any other mode.
         ImageUpdate:
           $ref: "#/components/schemas/ImageUpdate"
       example:
@@ -8641,6 +8686,7 @@ components:
           Mode:
             Replicated: { Replicas: 3 }
         RunningTasks: 3
+        DesiredTasks: 3
 
     EnrichedTask:
       type: object
@@ -8959,8 +9005,12 @@ components:
           format: int64
         servicesConverged:
           type: integer
+          description: >-
+            Services whose state is running, or a job whose run completed. A
+            service mid-update counts in neither this nor servicesDegraded.
         servicesDegraded:
           type: integer
+          description: Services whose state is failed, pending or flapping.
         reservedCPU:
           type: integer
           format: int64

@@ -449,35 +449,17 @@ func TestExpiryDoesNotClearConsent(t *testing.T) {
 	}
 }
 
-// grantedAt rewinds a remembered approval's grant time, editing the record in
-// place because the store has no clock to inject. Deliberately not a
-// Snapshot/Restore round-trip: Restore prunes what has lapsed, so the test
-// would pass on the record being absent rather than on Allows judging it expired.
-func grantedAt(t *testing.T, s *ConsentStore, age time.Duration) {
-	t.Helper()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if len(s.records) == 0 {
-		t.Fatal("nothing to age")
-	}
-
-	for hash, record := range s.records {
-		record.GrantedAt = time.Now().Add(-age)
-		s.records[hash] = record
-	}
-}
-
 func TestLapsedApprovalIsNotHonoured(t *testing.T) {
 	s := NewConsentStore(time.Hour)
+	now := time.Unix(1_700_000_000, 0)
+	s.now = func() time.Time { return now }
 	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
 
 	// An approval is only revocable by presenting a token from its grant
 	// family. That family is torn down when its refresh token expires, so
 	// without a lease of its own the record would outlive the only handle
 	// anyone had on it and keep authorizing silently, forever.
-	grantedAt(t, s, 2*time.Hour)
+	now = now.Add(2 * time.Hour)
 
 	if s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
 		t.Error("an approval past its lease must not skip the consent page")
@@ -486,11 +468,13 @@ func TestLapsedApprovalIsNotHonoured(t *testing.T) {
 
 func TestApprovalWithinItsLeaseIsHonoured(t *testing.T) {
 	s := NewConsentStore(24 * time.Hour)
+	now := time.Unix(1_700_000_000, 0)
+	s.now = func() time.Time { return now }
 	s.Remember(keyFor(testSubject, testClientID, testResource), testFingerprint)
 
 	// The lease has to outlive the refresh token or the feature is pointless:
 	// not re-prompting once the token expires is the whole reason to remember.
-	grantedAt(t, s, 23*time.Hour)
+	now = now.Add(23 * time.Hour)
 
 	if !s.Allows(keyFor(testSubject, testClientID, testResource), testFingerprint) {
 		t.Error("an approval inside its lease should still be honoured")
@@ -528,10 +512,12 @@ func TestRestorePrunesLapsedApprovals(t *testing.T) {
 
 func TestReapprovalRenewsTheLease(t *testing.T) {
 	s := NewConsentStore(time.Hour)
+	now := time.Unix(1_700_000_000, 0)
+	s.now = func() time.Time { return now }
 	key := keyFor(testSubject, testClientID, testResource)
 
 	s.Remember(key, testFingerprint)
-	grantedAt(t, s, 2*time.Hour)
+	now = now.Add(2 * time.Hour)
 
 	// Re-approving skips the write when nothing changed. A lapsed record has
 	// changed in the one way that matters, so the short-circuit must not
@@ -607,10 +593,9 @@ func TestConsentPageOmitsTheLeaseWhenDisabled(t *testing.T) {
 }
 
 // The wire format keeps tokens, consumed and grants at the top level, where
-// RefreshTokenSnapshot is embedded rather than named. An embedding that nested
-// them under a key would drop every operator's refresh tokens, and the
-// round-trip helpers cannot see it: they are symmetric, and would round-trip a
-// nested shape just as happily. So the fixture is spelled by hand.
+// RefreshTokenSnapshot is embedded; nesting them would drop every refresh token.
+// The fixture is spelled by hand because the symmetric round-trip helpers would
+// accept a nested shape just as happily.
 func TestStateFileKeepsTheSnapshotFlat(t *testing.T) {
 	path := t.TempDir() + "/oauth-tokens.json"
 

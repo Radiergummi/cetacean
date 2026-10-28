@@ -78,16 +78,24 @@ An agent is never more privileged than the identity that signed in. Two controls
 
 [`mcp.operations_level`][mcp.operations_level] caps what agents may do, independently of the dashboard:
 
-| Level | An agent may                                                                              |
-|-------|-------------------------------------------------------------------------------------------|
-| `0`   | Read only                                                                                 |
-| `1`   | Scale, restart, update images, roll back                                                  |
-| `2`   | Also edit service and node configuration, create configs and secrets, and attach volumes  |
-| `3`   | Also add bind mounts, change node availability or role, and remove anything               |
+| Level | An agent may                                                                                                                                     |
+|-------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `0`   | Read only                                                                                                                                        |
+| `1`   | Scale, restart, update images, roll back                                                                                                         |
+| `2`   | Also edit service and node configuration, create configs and secrets, and attach volumes                                                         |
+| `3`   | Also add bind mounts, change node availability or role, and remove anything; and change what runs in a service with host access, or roll it back |
 
 > [!CAUTION]
 > At level `3` an agent can bind-mount any host path, and binding `/var/run/docker.sock` gives the container control
 > of the whole cluster. Demoting managers can also cost the swarm its Raft quorum.
+
+A service has host access when its spec carries a bind, named-pipe, or cluster mount, a volume with driver options, or
+an added capability; a named volume the manager doesn't hold doesn't count. Below level `3`, an agent may scale and
+restart such a service but not change what runs in it or how it is reached—its image, command, health check command,
+environment, labels, placement, published ports, secrets, configs, or mounts—since the new code or a newly exposed
+port would inherit the access. Resending the same values isn't a change. Rolling back needs level `3` when either spec
+has host access. A named volume on a worker can't be inspected from the manager, so host access that comes only
+through one isn't held to this rule.
 
 It inherits [`server.operations_level`][server.operations_level] when unset. Setting it lower is how you let your team
 scale services from the dashboard while agents stay read-only.

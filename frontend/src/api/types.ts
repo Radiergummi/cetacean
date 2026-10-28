@@ -50,21 +50,25 @@ export interface Service {
         TTY?: boolean | undefined;
         Groups?: string[] | null | undefined;
         Hosts?: string[] | null | undefined;
-        DNSConfig?: {
-          Nameservers?: string[] | null | undefined;
-          Search?: string[] | null | undefined;
-          Options?: string[] | null | undefined;
-        };
+        DNSConfig?:
+          | {
+              Nameservers?: string[] | null | undefined;
+              Search?: string[] | null | undefined;
+              Options?: string[] | null | undefined;
+            }
+          | undefined;
         CapabilityAdd?: string[] | null | undefined;
         CapabilityDrop?: string[] | null | undefined;
-        Healthcheck?: {
-          Test?: string[] | null | undefined;
-          Interval?: number | undefined;
-          Timeout?: number | undefined;
-          Retries?: number | undefined;
-          StartPeriod?: number | undefined;
-          StartInterval?: number | undefined;
-        };
+        Healthcheck?:
+          | {
+              Test?: string[] | null | undefined;
+              Interval?: number | undefined;
+              Timeout?: number | undefined;
+              Retries?: number | undefined;
+              StartPeriod?: number | undefined;
+              StartInterval?: number | undefined;
+            }
+          | undefined;
         Configs?: Array<{
           ConfigID: string;
           ConfigName: string;
@@ -154,6 +158,13 @@ export interface Service {
     CompletedAt?: string | undefined;
     Message?: string | undefined;
   };
+  /** A job's run counter: bumped each time the job is executed again. */
+  JobStatus?:
+    | {
+        JobIteration: { Index?: number | undefined };
+        LastExecution?: string | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -172,6 +183,12 @@ export interface ServiceListItem extends Service {
   "@id"?: string;
   "@type"?: string;
   RunningTasks: number;
+  /** Replicas, a global service's eligible nodes, or a job's completion target. */
+  DesiredTasks: number;
+  /** A job's current run only. */
+  CompletedTasks?: number | undefined;
+  /** A job's current run only; a rejected task counts. */
+  FailedTasks?: number | undefined;
   ImageUpdate?: ImageUpdate | undefined;
 }
 
@@ -180,11 +197,14 @@ export interface Task {
   "@type"?: string;
   ID: string;
   Version: { Index: number };
+  CreatedAt: string;
   ServiceID: string;
   NodeID?: string | undefined;
   ServiceName?: string | undefined;
   NodeHostname?: string | undefined;
   Slot?: number | undefined;
+  /** The service's JobStatus.JobIteration when this task was created; jobs only. */
+  JobIteration?: { Index?: number | undefined } | undefined;
   Status: {
     Timestamp: string;
     State: string;
@@ -315,11 +335,6 @@ export interface Stack {
   secrets: string[];
   networks: string[];
   volumes: string[];
-}
-
-export interface PagedResponse<T> {
-  items: T[];
-  total: number;
 }
 
 export interface CollectionResponse<T> {

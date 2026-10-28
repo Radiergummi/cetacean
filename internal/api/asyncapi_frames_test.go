@@ -104,11 +104,9 @@ func streamUntilIdle(
 }
 
 // streamTestRouter is a router over the spec fixtures whose broadcaster has a
-// real history ring, so Last-Event-ID reaches the replay path rather than
-// being ignored, and whose Docker client serves one log frame.
-//
-// batch is the broadcaster's batching interval; zero sends each event on its
-// own.
+// real history ring, so Last-Event-ID reaches the replay path, and whose Docker
+// client serves one log frame. batch is the broadcaster's batching interval;
+// zero sends each event on its own.
 func streamTestRouter(
 	t *testing.T,
 	batch time.Duration,
@@ -119,7 +117,7 @@ func streamTestRouter(
 	c := cache.New(nil)
 	populateSpecFixtures(c)
 
-	broadcaster := sse.NewBroadcaster(batch, noopErrorWriter, c.History())
+	broadcaster := sse.NewBroadcaster(batch, c.History())
 	t.Cleanup(broadcaster.Close)
 
 	var frames bytes.Buffer

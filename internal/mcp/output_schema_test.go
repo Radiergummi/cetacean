@@ -58,6 +58,7 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 		ID:   "svc1",
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
+	updatable(t, c, "svc1")
 	c.SetTask(swarm.Task{ID: "task1", ServiceID: "svc1"})
 
 	mutated := func(_ context.Context, id string) (swarm.Service, error) {
@@ -135,6 +136,7 @@ func TestCuratedToolOutputsValidate(t *testing.T) {
 // directly sees neither the validator nor the assembled CallToolResult.
 func TestEveryToolResultConformsToItsOutputSchema(t *testing.T) {
 	c := seededDescribeCache()
+	updatable(t, c, "svc1")
 
 	svc := swarm.Service{
 		ID:      "svc1",

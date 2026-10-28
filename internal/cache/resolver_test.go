@@ -163,9 +163,12 @@ func TestStackOf_ServiceFollowsEveryWrite(t *testing.T) {
 		t.Errorf("after delete, StackOf = %q, want empty", got)
 	}
 
-	c.replaceServices([]swarm.Service{service("svc2", "api", "billing")})
+	c.ReplaceAll(FullSyncData{
+		HasServices: true,
+		Services:    []swarm.Service{service("svc2", "api", "billing")},
+	})
 	if got := c.StackOf("service", "api"); got != "billing" {
-		t.Errorf("after replaceServices, StackOf(api) = %q, want billing", got)
+		t.Errorf("after a sync, StackOf(api) = %q, want billing", got)
 	}
 
 	c.ReplaceAll(

@@ -61,6 +61,7 @@ type Config struct {
 	ImageAttestations bool             // CETACEAN_IMAGE_ATTESTATIONS, default true
 	OperationsLevel   OperationsLevel  // CETACEAN_OPERATIONS_LEVEL
 	CORSOrigins       []string         // CETACEAN_CORS_ORIGINS, default empty (disabled)
+	AllowedHosts      []string         // CETACEAN_ALLOWED_HOSTS
 	TrustedProxies    []netip.Prefix   // CETACEAN_TRUSTED_PROXIES
 	ForwardedHeaders  ForwardedHeaders // CETACEAN_FORWARDED_HEADERS
 	MCP               MCPConfig        // [mcp] section / CETACEAN_MCP_* env vars
@@ -122,6 +123,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fBasePath          *string
 		fPublicURL         *string
 		fCORSOrigins       []string
+		fAllowedHosts      []string
 		fTrustedProxies    *string
 		fForwardedHeaders  *string
 		fOTelEndpoint      *string
@@ -138,6 +140,7 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			fOpsLevel = fc.Server.OperationsLevel
 			fBasePath = fc.Server.BasePath
 			fPublicURL = fc.Server.PublicURL
+			fAllowedHosts = fc.Server.AllowedHosts
 			fTrustedProxies = fc.Server.TrustedProxies
 			fForwardedHeaders = fc.Server.ForwardedHeaders
 			if fc.Server.SSE != nil {
@@ -316,6 +319,11 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 			flags.CORSOrigins,
 			"CETACEAN_CORS_ORIGINS",
 			fCORSOrigins,
+		),
+		AllowedHosts: resolveStringSlice(
+			flags.AllowedHosts,
+			"CETACEAN_ALLOWED_HOSTS",
+			fAllowedHosts,
 		),
 	}
 

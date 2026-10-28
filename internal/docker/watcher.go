@@ -129,6 +129,9 @@ type Watcher struct {
 	// loopRunning reports whether the event loop is reading refreshes.
 	loopRunning atomic.Bool
 
+	// refreshWaiting counts Refresh calls waiting for the loop to take them.
+	refreshWaiting atomic.Int32
+
 	// Whether the watcher is still tracking the cluster. See Liveness.
 	connected atomic.Bool
 	lastSync  atomic.Int64 // UnixNano; zero until the first sync
@@ -197,28 +200,29 @@ func (w *Watcher) Run(ctx context.Context) {
 	}()
 
 	since := eventsSince()
-	if err := w.fullSync(ctx); err == nil {
+	synced := w.fullSync(ctx) == nil
+	if synced {
 		w.writeSnapshot()
 	}
 
 	// Event stream with reconnect and exponential backoff.
 	backoff := 1 * time.Second
-	const maxBackoff = 30 * time.Second
 
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		w.watchEvents(ctx, since)
-		slog.Warn("event stream disconnected", "retry_in", backoff)
+		w.watchEvents(ctx, since, synced)
+		slog.WarnContext(ctx, "event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
 		}
-		slog.Info("re-syncing after reconnect")
+		slog.InfoContext(ctx, "re-syncing after reconnect")
 		since = eventsSince()
-		if err := w.fullSync(ctx); err == nil {
+		synced = w.fullSync(ctx) == nil
+		if synced {
 			w.writeSnapshot()
 			backoff = 1 * time.Second // Reset on success.
 		} else {
@@ -278,7 +282,7 @@ func (w *Watcher) sync(ctx context.Context) error {
 // periodic tick, so it can try the lock instead of blocking behind it.
 func (w *Watcher) syncLocked(ctx context.Context) error {
 	start := time.Now()
-	slog.Info("starting full sync")
+	slog.InfoContext(ctx, "starting full sync")
 
 	// Bounded: a hung engine would otherwise hold syncMu, and on the event
 	// loop every event behind it, for good.
@@ -287,7 +291,7 @@ func (w *Watcher) syncLocked(ctx context.Context) error {
 
 	data, err := w.client.FullSync(ctx)
 	if err != nil {
-		slog.Error("full sync failed", "error", err)
+		slog.ErrorContext(ctx, "full sync failed", "error", err)
 		metrics.RecordSyncFailure()
 
 		return err
@@ -301,7 +305,7 @@ func (w *Watcher) syncLocked(ctx context.Context) error {
 	w.lastSync.Store(done.UnixNano())
 
 	snap := w.store.Snapshot()
-	slog.Info(
+	slog.InfoContext(ctx,
 		"full sync complete",
 		"nodes",
 		snap.NodeCount,
@@ -383,6 +387,9 @@ const (
 
 	// eventReplayMargin is how far before a sync its event stream starts.
 	eventReplayMargin = 5 * time.Second
+
+	// maxBackoff caps the wait between reconnects, and between sync retries.
+	maxBackoff = 30 * time.Second
 )
 
 // eventKey identifies a unique resource for coalescing.
@@ -392,8 +399,16 @@ type eventKey struct {
 }
 
 // coalesced holds the latest action for a given resource.
+// created survives coalescing: a create's not-found retry must not be lost
+// to whatever event followed it within the same window.
 type coalesced struct {
-	action string
+	action  string
+	created bool
+}
+
+// then is c with a later action for the same resource coalesced onto it.
+func (c coalesced) then(action string) coalesced {
+	return coalesced{action: action, created: c.created || action == "create"}
 }
 
 // actionSettle marks a task update triggered by its container ending,
@@ -418,7 +433,7 @@ func isContainerDeath(action events.Action) bool {
 	}
 }
 
-func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
+func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool) {
 	msgCh, errCh := w.client.Events(ctx, since)
 
 	w.loopRunning.Store(true)
@@ -460,6 +475,48 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 		}
 	}
 
+	// loopSync re-reads the cluster from the loop and reports whether it did.
+	loopSync := func(syncCtx context.Context, kind string) bool {
+		flushPending()
+
+		// TryLock, not sync: a Resync that started before this loop did
+		// (it holds syncMu too) refreshes everything this one would, and
+		// waiting for it here would stall event processing behind it.
+		if !w.syncMu.TryLock() {
+			slog.InfoContext(ctx, kind+" full re-sync skipped: a sync is already running")
+			return false
+		}
+
+		slog.InfoContext(ctx, kind+" full re-sync")
+
+		// Beside a live stream a failure is not a disconnection, but a
+		// success is the stream's verdict restored. lastSync stopping is
+		// what reports a cache gone stale.
+		err := w.syncLocked(syncCtx)
+		w.syncMu.Unlock()
+
+		if err != nil {
+			return false
+		}
+
+		w.markTracking()
+		w.writeSnapshot()
+
+		return true
+	}
+
+	// Until a sync succeeds beside this stream, one is retried on a backoff,
+	// rather than leaving the cache stale, and the instance unready, until
+	// the periodic tick.
+	var retry *time.Timer
+	var retryC <-chan time.Time
+	retryDelay, retryTimeout := time.Second, retrySyncTimeout
+	if !synced {
+		retry = time.NewTimer(retryDelay)
+		defer retry.Stop()
+		retryC = retry.C
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -474,7 +531,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			return
 		case err := <-errCh:
 			if err != nil {
-				slog.Warn("event stream error", "error", err)
+				slog.WarnContext(ctx, "event stream error", "error", err)
 			}
 			if timer != nil {
 				timer.Stop()
@@ -492,7 +549,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			if key.id == "" {
 				continue // unrecognized event, skip
 			}
-			pending[key] = coalesced{action: action}
+			pending[key] = pending[key].then(action)
 			if timerC == nil {
 				if timer == nil {
 					timer = time.NewTimer(debounceWindow)
@@ -531,31 +588,32 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time) {
 			w.syncMu.Unlock()
 
 			if err != nil {
-				slog.Debug("task poll failed", "error", err)
+				slog.DebugContext(ctx, "task poll failed", "error", err)
 			}
 		case <-syncTicker.C:
-			flushPending()
+			if loopSync(ctx, "periodic") && retryC != nil {
+				retry.Stop()
+				retryC = nil
+			}
+		case <-retryC:
+			// A Refresh waiting for the loop goes first, or its hand-off times
+			// out; the backoff brings the retry round again. Each failed retry
+			// is given longer, for a cluster whose sync outgrows the first bound.
+			if w.refreshWaiting.Load() == 0 {
+				retryCtx, cancel := context.WithTimeout(ctx, retryTimeout)
+				ok := loopSync(retryCtx, "retried")
+				cancel()
 
-			// TryLock, not sync: a Resync that started before this loop did
-			// (it holds syncMu too) refreshes everything this tick would, and
-			// waiting for it here would stall event processing behind it.
-			if !w.syncMu.TryLock() {
-				slog.Info("periodic full re-sync skipped: a sync is already running")
-				continue
+				if ok {
+					retryC = nil
+					continue
+				}
+
+				retryTimeout = min(retryTimeout*2, fullSyncTimeout)
 			}
 
-			slog.Info("periodic full re-sync")
-
-			// Beside a live stream a failure is not a disconnection, but a
-			// success is the stream's verdict restored. lastSync stopping is
-			// what reports a cache gone stale.
-			err := w.syncLocked(ctx)
-			w.syncMu.Unlock()
-
-			if err == nil {
-				w.markTracking()
-				w.writeSnapshot()
-			}
+			retryDelay = min(retryDelay*2, maxBackoff)
+			retry.Reset(retryDelay)
 		}
 	}
 }
@@ -626,7 +684,7 @@ func (w *Watcher) processBatch(ctx context.Context, batch map[eventKey]coalesced
 	for range workers {
 		wg.Go(func() {
 			for key := range work {
-				w.inspectAndApply(ctx, key)
+				w.inspectAndApply(ctx, key, batch[key].created)
 			}
 		})
 	}
@@ -681,7 +739,7 @@ func (w *Watcher) reconcileScopes(ctx context.Context, scopes []TaskScope) {
 
 	for _, scope := range scopes {
 		if err := w.reconcileTasks(ctx, scope); err != nil {
-			slog.Debug(
+			slog.DebugContext(ctx,
 				"task re-list failed",
 				"service", scope.Service,
 				"node", scope.Node,
@@ -751,7 +809,7 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 				return
 			}
 
-			slog.Debug(
+			slog.DebugContext(ctx,
 				"task still unsettled after re-read",
 				"id", key.id,
 				"attempt", attempt+1,
@@ -773,14 +831,14 @@ type settledRead struct {
 // burst of exits holds neither the loop nor a Refresh behind it. It reports
 // whether the task has caught up, which ends the re-reads.
 func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) bool {
-	resource, err := w.inspectWithRetry(ctx, key)
+	resource, err := w.inspectWithRetry(ctx, key, false)
 
 	var read settledRead
 	switch {
 	case cerrdefs.IsNotFound(err):
 		read.gone = true
 	case err != nil:
-		slog.Warn("task re-read failed", "id", key.id, "error", err)
+		slog.WarnContext(ctx, "task re-read failed", "id", key.id, "error", err)
 		return ctx.Err() != nil
 	default:
 		task, ok := resource.(swarm.Task)
@@ -874,35 +932,14 @@ func (w *Watcher) applyRemove(key eventKey) {
 	}
 }
 
-// handleEvent processes a single Docker event synchronously (inspect + apply).
-// Used by tests; the production path uses watchEvents with debouncing.
-func (w *Watcher) handleEvent(ctx context.Context, msg events.Message) {
-	key, action := w.eventKeyFromMsg(msg)
-	if key.id == "" {
-		return
-	}
-	if action == "remove" {
-		w.applyRemove(key)
-
-		return
-	}
-
-	w.inspectAndApply(ctx, key)
-
-	if action == actionSettle || action == actionStarted {
-		w.scheduleSettle(ctx, key, action)
-	}
-}
-
-func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
-	resource, err := w.inspectWithRetry(ctx, key)
+func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey, created bool) {
+	resource, err := w.inspectWithRetry(ctx, key, created)
 	if err != nil {
-		// A not-found that outlived every retry is the daemon's answer, not a
-		// race: Swarm garbage-collects a task's record without emitting a
-		// removal event, so this is the only signal it went. The retries are
-		// what tell it from "not registered yet" during a stack deploy.
+		// A not-found is the daemon's answer, not a race: Swarm garbage-collects
+		// a task's record without emitting a removal event, so this is the only
+		// signal it went. Only a create retries it, as "not registered yet".
 		if cerrdefs.IsNotFound(err) {
-			slog.Debug(
+			slog.DebugContext(ctx,
 				"resource no longer exists; dropping cached record",
 				"type", string(key.resourceType),
 				"id", key.id,
@@ -916,7 +953,7 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey) {
 		// evidence is not evidence of absence: the cache stays as-is and the
 		// periodic re-sync reconciles it. Log loudly so the operator can
 		// correlate cache drift with the underlying Docker error.
-		slog.Warn(
+		slog.WarnContext(ctx,
 			"inspect failed; cache may drift until next periodic re-sync",
 			"type", string(key.resourceType),
 			"id", key.id,
@@ -952,8 +989,29 @@ func (w *Watcher) apply(resource any) {
 // fullSyncTimeout bounds one full sync, however it was started.
 var fullSyncTimeout = 2 * time.Minute
 
+// retrySyncTimeout bounds the first sync retried after a failed one. It holds
+// the event loop beside a cache already serving reads, so it gives up sooner.
+var retrySyncTimeout = 10 * time.Second
+
 // taskListTimeout bounds one task re-list, which holds the event loop.
 var taskListTimeout = 30 * time.Second
+
+// inspectTimeout bounds reading one resource, every attempt included, since
+// it holds the event loop too; one attempt gets half, so a retry fits.
+var inspectTimeout = 10 * time.Second
+
+// inspect makes one inspect attempt, bounded by timeout.
+func (w *Watcher) inspect(
+	ctx context.Context,
+	timeout time.Duration,
+	kind events.Type,
+	id string,
+) (any, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	return w.client.Inspect(ctx, kind, id)
+}
 
 // refreshHandoffTimeout bounds how long Refresh waits for the event loop to
 // take its request. Long enough that a loop busy with a burst of events still
@@ -989,13 +1047,15 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 
 	done := make(chan error, 1)
 
-	// The loop can stop between that check and this send, and during an outage
-	// it is gone for a whole reconnect interval. A request context carries no
-	// deadline of its own, so an unbounded send would hold the write this
-	// refresh precedes until the client gave up. Unavailable is what the
-	// engine being out of reach already answers with.
+	// The loop can stop between that check and this send, and stays gone for a
+	// reconnect interval during an outage. A request context has no deadline, so
+	// an unbounded send would stall the write this refresh precedes; give up with
+	// Unavailable, as an unreachable engine already answers.
 	handoff := time.NewTimer(refreshHandoffTimeout)
 	defer handoff.Stop()
+
+	w.refreshWaiting.Add(1)
+	defer w.refreshWaiting.Add(-1)
 
 	select {
 	case w.refreshes <- refreshRequest{run: refresh, done: done}:
@@ -1017,12 +1077,17 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 // inspect failure is returned rather than logged: the caller asked because it
 // cannot tolerate a stale answer.
 func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
-	resource, err := w.client.Inspect(ctx, events.Type(kind), id)
+	resource, err := w.inspect(ctx, inspectTimeout, events.Type(kind), id)
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			w.applyRemove(eventKey{resourceType: events.Type(kind), id: id})
 
 			return nil
+		}
+
+		// Our own deadline, not the caller's: the engine is out of reach.
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			return fmt.Errorf("%w: %w", cerrdefs.ErrUnavailable, err)
 		}
 
 		return err
@@ -1034,25 +1099,32 @@ func (w *Watcher) refreshNow(ctx context.Context, kind, id string) error {
 }
 
 // inspectWithRetry retries transient inspect failures with capped exponential
-// backoff. Rapid stack deploys race: an event arrives for a resource the daemon
-// has not registered yet. A one-shot inspect drops the event and leaves the
-// cache stale until the periodic re-sync.
-func (w *Watcher) inspectWithRetry(ctx context.Context, key eventKey) (any, error) {
+// backoff, holding the event loop meanwhile. A not-found is retried only after a
+// create, which can outrun the object during a stack deploy; anywhere else the
+// object is gone, and a task outlives every container event that names it.
+func (w *Watcher) inspectWithRetry(
+	ctx context.Context,
+	key eventKey,
+	created bool,
+) (any, error) {
 	const maxAttempts = 4
 	backoff := 100 * time.Millisecond
 
+	ctx, cancel := context.WithTimeout(ctx, inspectTimeout)
+	defer cancel()
+
 	var lastErr error
 	for range maxAttempts {
-		resource, err := w.client.Inspect(ctx, key.resourceType, key.id)
+		resource, err := w.inspect(ctx, inspectTimeout/2, key.resourceType, key.id)
 		if err == nil {
 			return resource, nil
 		}
 		lastErr = err
-		// Don't retry on definitive 404s if the event was a "remove" raced
-		// with us — but during stack deploy a 404 means "not visible yet",
-		// so we still retry. Cancel/deadline shortcuts here only when the
-		// outer context is dead.
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		// An attempt's own timeout is retried while the budget lasts.
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if cerrdefs.IsNotFound(err) && !created {
 			return nil, err
 		}
 		// Don't waste retries on errors that won't change (auth, not implemented).

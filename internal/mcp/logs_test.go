@@ -13,11 +13,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/logs"
 )
@@ -73,7 +75,7 @@ func newLogTestServer(t *testing.T, c *cache.Cache, logs LogStreamer) *Server {
 	t.Helper()
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		Logs:           logs,
@@ -111,6 +113,47 @@ func TestReadServiceLogsReturnsParsedLines(t *testing.T) {
 	}
 	if streamer.calledID != "svc1" {
 		t.Errorf("streamer called with id=%q, want svc1", streamer.calledID)
+	}
+}
+
+// pausingLogStreamer sends one frame, pauses, then sends another: a remote
+// node's lines arrive later than the local ones.
+type pausingLogStreamer struct{ pause time.Duration }
+
+func (f *pausingLogStreamer) Logs(
+	ctx context.Context,
+	_ docker.LogKind,
+	_, _ string,
+	_ bool,
+	_, _ string,
+) (io.ReadCloser, error) {
+	reader, writer := io.Pipe()
+	go func() {
+		_, _ = writer.Write(buildLogFrame(1, "2024-01-01T00:00:00.000000000Z local\n"))
+		select {
+		case <-ctx.Done():
+			_ = writer.CloseWithError(ctx.Err())
+			return
+		case <-time.After(f.pause):
+		}
+		_, _ = writer.Write(buildLogFrame(1, "2024-01-01T00:00:01.000000000Z remote\n"))
+		_ = writer.Close()
+	}()
+
+	return reader, nil
+}
+
+// A read waits as long after the last line as the REST log endpoint does, so
+// a slower node's lines are not dropped.
+func TestReadServiceLogsWaitsForSlowerStreams(t *testing.T) {
+	srv := newLogTestServer(t, cache.New(nil), &pausingLogStreamer{pause: time.Second})
+
+	got, err := srv.readServiceLogs(context.Background(), "svc1")
+	if err != nil {
+		t.Fatalf("readServiceLogs: %v", err)
+	}
+	if resp := got.(LogResourceResponse); len(resp.Lines) != 2 {
+		t.Errorf("lines = %d, want 2: a line after a pause was dropped", len(resp.Lines))
 	}
 }
 

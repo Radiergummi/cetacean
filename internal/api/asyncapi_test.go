@@ -16,6 +16,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
@@ -43,12 +44,9 @@ func loadAsyncAPIDoc(t *testing.T) map[string]any {
 }
 
 // TestAsyncAPIDocumentIsValid validates api/asyncapi.yaml against the official
-// AsyncAPI 3.0.0 meta-schema.
-//
-// The meta-schema's $refs are absolute http://asyncapi.com/ URLs, but every
-// one of them resolves inside the file: each entry under definitions carries
-// the matching $id. No loader is installed, so a ref that did not resolve
-// locally would fail the compile rather than reach the network.
+// AsyncAPI 3.0.0 meta-schema. Its absolute http://asyncapi.com/ $refs resolve
+// inside the file via each definition's $id; no loader is installed, so an
+// unresolved ref fails the compile rather than reaching the network.
 func TestAsyncAPIDocumentIsValid(t *testing.T) {
 	const metaURL = "http://asyncapi.com/definitions/3.0.0/asyncapi.json"
 
@@ -84,9 +82,7 @@ func TestAsyncAPIDocumentIsValid(t *testing.T) {
 
 // TestAsyncAPISchemasMatchOpenAPI pins the two schemas asyncapi.yaml copies
 // from openapi.yaml. They are copied rather than $ref'd because the correct
-// reference differs between the file in the repository and the document as
-// served, and one reference with two correct spellings is the trap
-// /.well-known/jwks.json fell into from the other direction.
+// reference differs between the file in the repository and the served document.
 func TestAsyncAPISchemasMatchOpenAPI(t *testing.T) {
 	specYAML, _, _ := loadTestSpec(t)
 	openAPI := loadYAMLDocument(t, "openapi.yaml", specYAML)
@@ -273,7 +269,9 @@ func TestAsyncAPINamesTheDeployment(t *testing.T) {
 	t.Run("a second origin is not served the first one's document", func(t *testing.T) {
 		router := newTestRouterWithConfig(
 			t,
-			[]routerOption{withAsyncAPISpec(t)},
+			[]routerOption{withAsyncAPISpec(t), func(cfg *RouterConfig) {
+				cfg.Hosts = auth.NewHostSet("", "one.example.com", "two.example.com")
+			}},
 			withCache(cache.New(nil)),
 		)
 
@@ -335,11 +333,9 @@ func asyncAPIAddresses(t *testing.T) map[string]string {
 }
 
 // TestAsyncAPIChannelsAnswerAsStreams drives every channel address the
-// document declares and requires it to open a stream.
-//
-// The assertion is the content type, not the status: the SPA fallback answers
-// 200 for any unrouted path, so a bogus address would pass a status check. It
-// answers text/html, which this fails on.
+// document declares and requires it to open a stream. It asserts the content
+// type, not the status: the SPA fallback answers 200 text/html for any
+// unrouted path.
 func TestAsyncAPIChannelsAnswerAsStreams(t *testing.T) {
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -634,14 +630,14 @@ func TestAsyncAPIIsPublicWithAPublicURL(t *testing.T) {
 	)
 
 	req := httptest.NewRequest(http.MethodGet, asyncAPIPath, nil)
-	req.Host = "evil.attacker.example"
+	req.Host = "192.0.2.10:9000"
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=3600" {
 		t.Errorf("Cache-Control = %q, want public", got)
 	}
-	if strings.Contains(rec.Body.String(), "evil.attacker.example") {
+	if strings.Contains(rec.Body.String(), "192.0.2.10") {
 		t.Error("the document names the request's Host instead of the public URL")
 	}
 }

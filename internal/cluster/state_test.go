@@ -15,6 +15,7 @@ func TestDeriveServiceState(t *testing.T) {
 		name         string
 		svc          swarm.Service
 		runningCount int
+		eligible     cluster.Eligible
 		flapping     bool
 		want         string
 	}{
@@ -91,6 +92,28 @@ func TestDeriveServiceState(t *testing.T) {
 				},
 			},
 			runningCount: 0,
+			eligible:     cluster.Eligible{N: 3, Known: true},
+			want:         "pending",
+		},
+		{
+			name: "global with nowhere to run",
+			svc: swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}},
+				},
+			},
+			runningCount: 0,
+			eligible:     cluster.Eligible{Known: true},
+			want:         "running",
+		},
+		{
+			name: "global with an unknown eligible count",
+			svc: swarm.Service{
+				Spec: swarm.ServiceSpec{
+					Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}},
+				},
+			},
+			runningCount: 0,
 			want:         "pending",
 		},
 		{
@@ -151,7 +174,13 @@ func TestDeriveServiceState(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := cluster.DeriveServiceState(tc.svc, tc.runningCount, 0, tc.flapping)
+			got := cluster.DeriveServiceState(
+				tc.svc,
+				tc.runningCount,
+				0,
+				tc.eligible,
+				tc.flapping,
+			)
 			if got != tc.want {
 				t.Errorf("DeriveServiceState() = %q, want %q", got, tc.want)
 			}
@@ -195,6 +224,7 @@ func TestJobServiceStateFollowsItsRun(t *testing.T) {
 				tc.svc,
 				tc.running,
 				tc.completed,
+				cluster.Eligible{},
 				false,
 			); got != tc.want {
 				t.Errorf("DeriveServiceState = %q, want %q", got, tc.want)
@@ -234,7 +264,13 @@ func TestServiceConvergedWaitsOutRollback(t *testing.T) {
 				t.Errorf("reported converged during %s (status %q)", state, status)
 			}
 
-			if got := cluster.DeriveServiceState(svc, 2, 0, false); got != "updating" {
+			if got := cluster.DeriveServiceState(
+				svc,
+				2,
+				0,
+				cluster.Eligible{},
+				false,
+			); got != "updating" {
 				t.Errorf("DeriveServiceState = %q, want %q — the two must agree", got, "updating")
 			}
 		})
@@ -271,7 +307,7 @@ func TestServiceConvergedRejectsSurplusRunningTasks(t *testing.T) {
 	// DeriveServiceState deliberately does not follow it here. It answers
 	// "is this service healthy", and a surplus replica is not a fault; only
 	// "has the mutation landed" cares that the count is above the spec.
-	if got := cluster.DeriveServiceState(svc, 3, 0, false); got != "running" {
+	if got := cluster.DeriveServiceState(svc, 3, 0, cluster.Eligible{}, false); got != "running" {
 		t.Errorf("DeriveServiceState = %q, want %q", got, "running")
 	}
 }

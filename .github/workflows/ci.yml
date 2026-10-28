@@ -113,6 +113,8 @@ jobs:
       # does. Without this step misformatted Go passes CI and is caught only
       # by a local `make fmt-check`.
       - run: golangci-lint fmt --diff ./... 2>&1 | diff /dev/null -
+      # The four-line cap on comment blocks, which no golangci linter enforces.
+      - run: go run ./scripts/comment-cap
       - run: make vuln
 
   lint-workflows:
@@ -179,6 +181,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/node
       - run: pnpm --filter frontend exec oxlint
+      - run: pnpm --filter frontend exec knip
       - run: pnpm --filter frontend exec oxfmt --check .
       - run: pnpm --filter frontend check
       # The whole workspace: audit reads the lockfile and ignores --filter.

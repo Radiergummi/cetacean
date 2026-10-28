@@ -6,12 +6,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/auth"
 )
-
-type basePathCtxKey struct{}
-
-var basePathKey = basePathCtxKey{}
 
 // unstrippedCtxKey marks a request basePathMiddleware passed on with its path
 // still rooted at the host rather than at the base path.
@@ -24,10 +22,7 @@ var publicURLKey = publicURLCtxKey{}
 // BasePathFromContext extracts the base path from the context.
 // Returns "" if not set.
 func BasePathFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(basePathKey).(string); ok {
-		return v
-	}
-	return ""
+	return reqctx.BasePath(ctx)
 }
 
 // PublicURLFromContext extracts the configured external origin.
@@ -42,11 +37,7 @@ func PublicURLFromContext(ctx context.Context) string {
 // absPath prepends the base path from context to path.
 // If the base path is "", path is returned unchanged.
 func absPath(ctx context.Context, path string) string {
-	base := BasePathFromContext(ctx)
-	if base == "" {
-		return path
-	}
-	return base + path
+	return reqctx.AbsPath(ctx, path)
 }
 
 // absURL builds a full absolute URL (scheme://host/base/path) from the
@@ -172,7 +163,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		// refuse. Only the documents registered there: the SPA fallback answers
 		// whatever is left unrouted, which would put the dashboard at the host root.
 		if strings.HasPrefix(path, derivedWellKnownPrefix) && routes.serves(r) {
-			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			ctx := reqctx.WithBasePath(r.Context(), basePath)
 
 			// routes.serves matches the mux's own clean-path redirect, so a
 			// dot-segment escape (.../../nodes) that leaves the family here
@@ -189,8 +180,8 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 
 		if !strings.HasPrefix(path, basePath+"/") && path != basePath {
 			// The context is ours, under the prefix; the instance is the path asked for.
-			ctx := context.WithValue(r.Context(), basePathKey, basePath)
-			writeProblemTyped(w, r.WithContext(ctx), ProblemDetail{
+			ctx := reqctx.WithBasePath(r.Context(), basePath)
+			problem.WriteTyped(w, r.WithContext(ctx), problem.Detail{
 				Status:   http.StatusNotFound,
 				Detail:   "no such resource",
 				Instance: path,
@@ -202,7 +193,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 		stripped := path[len(basePath):]
 
 		if stripped == "" || stripped == "/" {
-			ctx := context.WithValue(r.Context(), basePathKey, basePath)
+			ctx := reqctx.WithBasePath(r.Context(), basePath)
 			r = r.WithContext(ctx)
 			r.URL.Path, r.URL.RawPath = "/", ""
 			next.ServeHTTP(w, r)
@@ -221,7 +212,7 @@ func basePathMiddleware(basePath string, routes *routeRecorder, next http.Handle
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), basePathKey, basePath)
+		ctx := reqctx.WithBasePath(r.Context(), basePath)
 		r = r.WithContext(ctx)
 		r.URL.Path = stripped
 		r.URL.RawPath = trimRawPrefix(r.URL.RawPath, len(basePath))

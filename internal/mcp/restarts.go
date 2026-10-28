@@ -3,7 +3,7 @@ package mcp
 import (
 	"time"
 
-	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // restartWindows are the two the digest reports. The short one answers "is
@@ -18,8 +18,8 @@ const (
 // reads, which matters because a digest is rebuilt on every cache event for a
 // subscribed resource. It never returns nil: the cache always has a tracker, so
 // a zero means "measured, none". Nil belongs to a caller with no tracker.
-func (s *Server) serviceRestarts(serviceID string) *cluster.ServiceRestarts {
-	return &cluster.ServiceRestarts{
+func (s *Server) serviceRestarts(serviceID string) *projection.ServiceRestarts {
+	return &projection.ServiceRestarts{
 		LastHour:      s.cache.RestartCount(serviceID, restartWindowShort),
 		LastWeek:      s.cache.RestartCount(serviceID, restartWindowLong),
 		TrackingSince: s.cache.RestartTrackingSince().UTC().Format(time.RFC3339),

@@ -5,18 +5,15 @@ import (
 	"sync"
 )
 
-// projectionCacheSize bounds how many (generation, audience) pairs are kept.
-// One entry serves a deployment with no ACL policy; a handful serve one with a
-// few roles. Past that it evicts and the endpoint costs what it always did,
-// which is the right floor — a deployment with hundreds of distinct grant sets
-// gets no benefit and no regression.
+// projectionCacheSize bounds how many (generation, audience) pairs are kept:
+// one serves a deployment without ACL policy, a handful one with a few roles.
+// Past that it evicts, and the endpoint costs what it would uncached.
 const projectionCacheSize = 16
 
-// projectionKey identifies a rendered document. The generation and fingerprint
-// are both load-bearing: the generation because the cluster changes underneath,
-// and the fingerprint because these documents are ACL-filtered and two
-// identities must never be handed each other's. scope names the resource for
-// documents that have one, and is empty for cluster-wide ones.
+// projectionKey identifies a rendered document. The fingerprint is
+// load-bearing: these documents are ACL-filtered, and two identities must never
+// be handed each other's. scope names the resource, or is empty for
+// cluster-wide documents.
 type projectionKey struct {
 	generation  uint64
 	fingerprint uint64
@@ -33,9 +30,8 @@ type renderedDoc struct {
 
 // projectionCache memoises documents that are a pure function of cache contents
 // and the caller's grants — nothing parameterised by a query belongs here.
-//
-// Entries are immutable once stored, so a hit hands back the same backing array
-// to every caller. Nothing may write to a returned document.
+// Entries are immutable once stored and a hit shares the backing array, so
+// nothing may write to a returned document.
 type projectionCache struct {
 	mu      sync.Mutex
 	entries map[projectionKey]renderedDoc
@@ -59,12 +55,9 @@ func (p *projectionCache) get(key projectionKey) (renderedDoc, bool) {
 	return doc, ok
 }
 
-// put stores doc under key, dropping anything the cluster has already moved
-// past and evicting the oldest entry if the cache is still full.
-//
-// Superseded generations go first because they can never be served again, and
-// a document here is hundreds of kilobytes — waiting for FIFO to push them out
-// keeps a whole cluster's worth of dead graphs resident.
+// put stores doc under key, dropping superseded generations first — they can
+// never be served again, and waiting for FIFO keeps large dead documents
+// resident — then evicting the oldest entry if the cache is still full.
 func (p *projectionCache) put(key projectionKey, doc renderedDoc) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
@@ -25,11 +26,11 @@ type searchResult struct {
 func searchQuery(w http.ResponseWriter, r *http.Request) (string, bool) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
-		writeErrorCode(w, r, "SEA001", "missing required query parameter: q")
+		problem.Write(w, r, "SEA001", "missing required query parameter: q")
 		return "", false
 	}
 	if len(q) > 200 {
-		writeErrorCode(w, r, "SEA002", "query too long (max 200 characters)")
+		problem.Write(w, r, "SEA002", "query too long (max 200 characters)")
 		return "", false
 	}
 
@@ -51,9 +52,13 @@ func (h *Handlers) HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	limit := 3
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			limit = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			problem.Write(w, r, "API016",
+				`invalid "limit" parameter: must be a non-negative integer`)
+			return
 		}
+		limit = n
 	}
 
 	raw := cluster.Search(

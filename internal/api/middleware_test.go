@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -268,7 +269,7 @@ func TestNewSPAHandler_FallbackToIndex(t *testing.T) {
 
 func TestRequestID_Generated(t *testing.T) {
 	handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := RequestIDFrom(r.Context())
+		id := reqctx.RequestID(r.Context())
 		if id == "" {
 			t.Error("expected request ID in context")
 		}
@@ -290,7 +291,7 @@ func TestRequestID_Generated(t *testing.T) {
 
 func TestRequestID_Forwarded(t *testing.T) {
 	handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(RequestIDFrom(r.Context())))
+		w.Write([]byte(reqctx.RequestID(r.Context())))
 	}))
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -307,7 +308,7 @@ func TestRequestID_Forwarded(t *testing.T) {
 }
 
 func TestRequestIDFrom_Empty(t *testing.T) {
-	if got := RequestIDFrom(t.Context()); got != "" {
+	if got := reqctx.RequestID(t.Context()); got != "" {
 		t.Errorf("RequestIDFrom on plain context=%q, want empty", got)
 	}
 }
@@ -315,13 +316,14 @@ func TestRequestIDFrom_Empty(t *testing.T) {
 func TestNewRouter_Smoke(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
-	prom := promapi.NewProxy("http://localhost:9090", noopErrorWriter)
+	prom := promapi.NewProxy("http://localhost:9090")
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(RouterConfig{
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           h,
 		Broadcaster:        b,
 		MetricsProxy:       prom,
@@ -372,7 +374,7 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(RequestIDFrom(r.Context())))
+				w.Write([]byte(reqctx.RequestID(r.Context())))
 			}))
 
 			req := httptest.NewRequest("GET", "/test", nil)
@@ -403,12 +405,13 @@ func TestRequestID_RejectsUnsafeCharacters(t *testing.T) {
 func TestVaryAccumulatesAcrossMiddleware(t *testing.T) {
 	c := cache.New(nil)
 	h := newTestHandlers(t, withCache(c))
-	b := sse.NewBroadcaster(0, noopErrorWriter, nil)
+	b := sse.NewBroadcaster(0, nil)
 	defer b.Close()
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}
 	spa := NewSPAHandler(fs.FS(fsys), "")
 
 	router := NewRouter(RouterConfig{
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           h,
 		Broadcaster:        b,
 		SPA:                spa,
@@ -446,7 +449,7 @@ func TestRequestID_AcceptsSafeCharacters(t *testing.T) {
 	} {
 		t.Run(input, func(t *testing.T) {
 			handler := requestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(RequestIDFrom(r.Context())))
+				w.Write([]byte(reqctx.RequestID(r.Context())))
 			}))
 
 			req := httptest.NewRequest("GET", "/test", nil)
@@ -548,7 +551,7 @@ func TestMetricsProxyIsNotGatedOnClusterReadiness(t *testing.T) {
 	router := newTestRouterWithConfig(
 		t,
 		[]routerOption{
-			func(cfg *RouterConfig) { cfg.MetricsProxy = promapi.NewProxy(prom.URL, noopErrorWriter) },
+			func(cfg *RouterConfig) { cfg.MetricsProxy = promapi.NewProxy(prom.URL) },
 		},
 		withCache(cache.New(nil)),
 		withReady(notReady),

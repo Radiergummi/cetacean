@@ -32,6 +32,7 @@ type fakeRegistry struct {
 	body        string // what a GET sends
 	open        bool   // no auth at all
 	hang        bool   // never answers
+	realm       string // the realm challenges name, when not the registry's own /token
 
 	contentType string            // the Content-Type a manifest GET states
 	blobs       map[string]string // blob bodies by the digest they are requested by
@@ -76,8 +77,13 @@ func (r *fakeRegistry) serve(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if !r.open && (r.private || req.Header.Get("Authorization") != "Bearer "+issuedToken) {
+		realm := r.realm
+		if realm == "" {
+			realm = r.URL + "/token"
+		}
+
 		w.Header().Set("WWW-Authenticate",
-			`Bearer realm="`+r.URL+`/token",service="registry.test"`)
+			`Bearer realm="`+realm+`",service="registry.test"`)
 		w.WriteHeader(http.StatusUnauthorized)
 
 		return

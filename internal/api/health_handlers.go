@@ -9,6 +9,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
 )
 
@@ -70,12 +71,12 @@ func HandleResync(r Resyncer) http.HandlerFunc {
 				// still succeed for whoever else is waiting on it.
 				return
 			}
-			slog.Warn("manual resync failed", "error", err)
+			slog.WarnContext(req.Context(), "manual resync failed", "error", err)
 			code := "ENG006"
 			if errors.Is(err, context.DeadlineExceeded) {
 				code = "ENG005"
 			}
-			writeErrorCode(w, req, code, err.Error())
+			problem.Write(w, req, code, err.Error())
 			return
 		}
 		writeJSONStatus(w, http.StatusOK, map[string]any{
@@ -94,7 +95,7 @@ const profilePath = "/profile"
 func (h *Handlers) HandleProfile(w http.ResponseWriter, r *http.Request) {
 	id := auth.IdentityFromContext(r.Context())
 	if id == nil {
-		writeErrorCode(w, r, "AUT001", "not authenticated")
+		problem.Write(w, r, "AUT001", "not authenticated")
 		return
 	}
 

@@ -23,8 +23,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc6750#section-3
     mutants:
       - file: internal/auth/middleware.go
-        replace: "\t\tw.Header().Add(\"WWW-Authenticate\", challenge)\n\t\tif !named && status == http.StatusForbidden {"
-        with: "\t\tif !named && status == http.StatusForbidden {"
+        replace: "\t\tw.Header().Add(\"WWW-Authenticate\", challenge)\n\t\tif !named && code == \"AUT006\" {"
+        with: "\t\tif !named && code == \"AUT006\" {"
 
   - id: challenge-uses-the-bearer-scheme
     level: MUST

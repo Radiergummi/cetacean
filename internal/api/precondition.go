@@ -6,11 +6,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
@@ -20,24 +22,40 @@ import (
 // stacks and plugins a precondition at all. The subject is made current from
 // the engine first, or the header could only refuse what the cache already saw.
 func (h *Handlers) precond(rep representationFunc) Constructor {
-	return h.conditional(rep, true)
+	return h.conditional(rep, true, nil)
+}
+
+// precondTimed is precond for a representation that also sends Last-Modified,
+// which modified reads, so If-Unmodified-Since has a date to compare.
+func (h *Handlers) precondTimed(
+	rep representationFunc,
+	modified func(*http.Request) time.Time,
+) Constructor {
+	return h.conditional(rep, true, modified)
 }
 
 // unrepresented evaluates If-Match on a write whose path serves no GET. There is
 // no representation to match, so §13.1.1 makes every If-Match false, "*" too;
 // exists only says whether the subject is there, so a missing one still 404s.
 func (h *Handlers) unrepresented(exists representationFunc) Constructor {
-	return h.conditional(exists, false)
+	return h.conditional(exists, false, nil)
 }
 
 // subjectExists is an exists for a write whose subject is the cluster itself.
 func subjectExists(*http.Request) (any, error) { return struct{}{}, nil }
 
-func (h *Handlers) conditional(rep representationFunc, represented bool) Constructor {
+// conditional evaluates a write's preconditions in RFC 9110 §13.2.2 order;
+// If-Modified-Since binds only a GET or HEAD, so it is not read here.
+func (h *Handlers) conditional(
+	rep representationFunc,
+	represented bool,
+	lastModified func(*http.Request) time.Time,
+) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ifMatch := r.Header.Get("If-Match")
-			if ifMatch == "" {
+			ifNoneMatch := r.Header.Get("If-None-Match")
+			if ifMatch == "" && ifNoneMatch == "" && r.Header.Get("If-Unmodified-Since") == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -46,15 +64,15 @@ func (h *Handlers) conditional(rep representationFunc, represented bool) Constru
 				// Same reasoning as an unbuildable representation below: the
 				// condition could not be evaluated, and 412 would name the
 				// wrong problem.
-				slog.Error("failed to refresh a precondition subject",
+				slog.ErrorContext(r.Context(), "failed to refresh a precondition subject",
 					"path", r.URL.Path, "error", err)
 
 				if cerrdefs.IsUnavailable(err) {
-					writeErrorCode(w, r, "ENG001", err.Error())
+					problem.Write(w, r, "ENG001", err.Error())
 					return
 				}
 
-				writeErrorCode(w, r, "ENG004",
+				problem.Write(w, r, "ENG004",
 					"failed to read the current representation")
 				return
 			}
@@ -79,38 +97,56 @@ func (h *Handlers) conditional(rep representationFunc, represented bool) Constru
 				// The condition could not be evaluated at all. Reporting 412
 				// here would tell the caller its validator is stale, which is
 				// a different problem with a different fix.
-				slog.Error("failed to build a precondition representation",
+				slog.ErrorContext(r.Context(), "failed to build a precondition representation",
 					"path", r.URL.Path, "error", err)
 
 				if cerrdefs.IsUnavailable(err) {
-					writeErrorCode(w, r, "ENG001", err.Error())
+					problem.Write(w, r, "ENG001", err.Error())
 					return
 				}
 
-				writeErrorCode(w, r, "ENG004",
+				problem.Write(w, r, "ENG004",
 					"failed to read the current representation")
 				return
 			}
 
+			// With no representation, If-None-Match finds none to match and
+			// If-Unmodified-Since has no date, so only If-Match can fail.
 			if !represented {
-				writeErrorCode(
-					w,
-					r,
-					"API013",
-					"If-Match cannot match: this endpoint serves no representation to compare it to",
-				)
+				if ifMatch != "" {
+					problem.Write(
+						w,
+						r,
+						"API013",
+						"If-Match cannot match: this endpoint serves no representation to compare it to",
+					)
+					return
+				}
+
+				next.ServeHTTP(w, r)
 				return
 			}
 
 			body, err := json.Marshal(value)
 			if err != nil {
-				writeErrorCode(w, r, "API009", "failed to serialize response")
+				problem.Write(w, r, "API009", "failed to serialize response")
+				return
+			}
+			etag := computeETag(body)
+
+			var modified time.Time
+			if lastModified != nil {
+				modified = lastModified(r)
+			}
+
+			if reason := preconditionFailed(r, etag, modified); reason != "" {
+				problem.Write(w, r, "API013", reason)
 				return
 			}
 
-			if !etagMatchStrong(ifMatch, computeETag(body)) {
-				writeErrorCode(w, r, "API013",
-					"If-Match did not match the current state of the resource")
+			if ifNoneMatch != "" && etagMatch(ifNoneMatch, etag) {
+				problem.Write(w, r, "API013",
+					"If-None-Match matched the current state of the resource")
 				return
 			}
 

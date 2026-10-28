@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"net/url"
@@ -187,7 +188,7 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 			)
 		}
 		if cfg.Tailscale.Mode == "tsnet" && cfg.Tailscale.AuthKey == "" {
-			return nil, fmt.Errorf("tailscale tsnet mode requires auth.tailscale.authkey")
+			return nil, errors.New("tailscale tsnet mode requires auth.tailscale.authkey")
 		}
 
 	case "cert":
@@ -248,7 +249,7 @@ func LoadAuth(flags *Flags, fc *fileConfig, publicURL, basePath string) (*AuthCo
 			SecretValue: secretValue,
 		}
 		if cfg.Headers.Subject == "" {
-			return nil, fmt.Errorf("headers mode requires auth.headers.subject")
+			return nil, errors.New("headers mode requires auth.headers.subject")
 		}
 		if cfg.Headers.SecretHeader != "" && cfg.Headers.SecretValue == "" {
 			return nil, fmt.Errorf(
@@ -404,6 +405,29 @@ func (c *Config) ValidateTsnetMode(tlsEnabled bool) error {
 	}
 
 	return nil
+}
+
+// WildcardCORS reports whether origins is the single entry "*", meaning any
+// origin. Every reader asks here, so two cannot answer differently for one
+// configuration. A "*" alongside real origins is not a wildcard: the list is
+// matched literally and "*" matches nothing.
+func WildcardCORS(origins []string) bool {
+	return len(origins) == 1 && origins[0] == "*"
+}
+
+// RefuseWildcardCORS refuses server.cors.origins "*" where identity is the
+// network address: any page a visitor opens would read the API as them.
+func RefuseWildcardCORS(origins []string, authMode string) error {
+	if !WildcardCORS(origins) || authMode != "none" && authMode != "tailscale" {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"server.cors.origins cannot be \"*\" with auth.mode %q: identity comes from the "+
+			"network, so every site a visitor opens could read the API as them; "+
+			"list the origins instead",
+		authMode,
+	)
 }
 
 // RequireTrustedProxies refuses a headers-mode deployment with no list. Headers

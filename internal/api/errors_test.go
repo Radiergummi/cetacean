@@ -9,6 +9,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
@@ -26,12 +27,12 @@ func TestHandleErrorIndex_JSON(t *testing.T) {
 		t.Errorf("Content-Type=%s, want application/json", ct)
 	}
 
-	var resp CollectionResponse[ErrorDef]
+	var resp CollectionResponse[problem.Def]
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if len(resp.Items) != len(errorRegistry) {
-		t.Errorf("got %d errors, want %d", len(resp.Items), len(errorRegistry))
+	if len(resp.Items) != len(problem.Defs()) {
+		t.Errorf("got %d errors, want %d", len(resp.Items), len(problem.Defs()))
 	}
 }
 
@@ -52,7 +53,7 @@ func TestHandleErrorDetail_JSON(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 
-	var def ErrorDef
+	var def problem.Def
 	if err := json.Unmarshal(w.Body.Bytes(), &def); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -91,7 +92,7 @@ func TestWriteErrorCode_KnownCode(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/nodes/node1", nil)
 	w := httptest.NewRecorder()
 
-	writeErrorCode(w, req, "NOD001", "node xyz is not down and can't be removed")
+	problem.Write(w, req, "NOD001", "node xyz is not down and can't be removed")
 
 	if w.Code != http.StatusConflict {
 		t.Errorf("status=%d, want 409", w.Code)
@@ -123,7 +124,7 @@ func TestWriteErrorCode_KnownCode(t *testing.T) {
 	}
 
 	// The title is the registry's, so it does not vary between occurrences.
-	if body["title"] != errorRegistry["NOD001"].Title {
+	if def, _ := problem.Lookup("NOD001"); body["title"] != def.Title {
 		t.Errorf("title=%v, want the registered title", body["title"])
 	}
 
@@ -152,7 +153,7 @@ func TestWriteErrorCode_UnknownCode(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/test", nil)
 	w := httptest.NewRecorder()
 
-	writeErrorCode(w, req, "XXX999", "something went wrong")
+	problem.Write(w, req, "XXX999", "something went wrong")
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("status=%d, want 500", w.Code)
@@ -174,11 +175,11 @@ func TestWriteErrorCode_UnknownCode(t *testing.T) {
 }
 
 func TestErrorDomainsMatchTheRegistry(t *testing.T) {
-	labelled := make(map[string]bool, len(ErrorDomains))
+	labelled := make(map[string]bool, len(problem.Domains))
 
-	for _, domain := range ErrorDomains {
+	for _, domain := range problem.Domains {
 		if labelled[domain.Prefix] {
-			t.Errorf("ErrorDomains lists %q twice", domain.Prefix)
+			t.Errorf("problem.Domains lists %q twice", domain.Prefix)
 		}
 		if domain.Label == "" {
 			t.Errorf("domain %q has no label", domain.Prefix)
@@ -187,9 +188,10 @@ func TestErrorDomainsMatchTheRegistry(t *testing.T) {
 		labelled[domain.Prefix] = true
 	}
 
-	used := make(map[string]bool, len(ErrorDomains))
+	used := make(map[string]bool, len(problem.Domains))
 
-	for code := range errorRegistry {
+	for _, def := range problem.Defs() {
+		code := def.Code
 		if len(code) != 6 {
 			t.Errorf("code %q is not three letters and three digits", code)
 			continue
@@ -199,13 +201,13 @@ func TestErrorDomainsMatchTheRegistry(t *testing.T) {
 		used[prefix] = true
 
 		if !labelled[prefix] {
-			t.Errorf("code %s uses prefix %q, which ErrorDomains does not name", code, prefix)
+			t.Errorf("code %s uses prefix %q, which problem.Domains does not name", code, prefix)
 		}
 	}
 
-	for _, domain := range ErrorDomains {
+	for _, domain := range problem.Domains {
 		if !used[domain.Prefix] {
-			t.Errorf("ErrorDomains names %q, which no error code uses", domain.Prefix)
+			t.Errorf("problem.Domains names %q, which no error code uses", domain.Prefix)
 		}
 	}
 }
@@ -213,10 +215,10 @@ func TestErrorDomainsMatchTheRegistry(t *testing.T) {
 func TestErrorDefsAreCompleteAndSorted(t *testing.T) {
 	spec.Satisfies(t, "http/rfc9457/new-problem-types-are-documented")
 
-	defs := ErrorDefs()
+	defs := problem.Defs()
 
-	if len(defs) != len(errorRegistry) {
-		t.Fatalf("ErrorDefs returned %d entries, want %d", len(defs), len(errorRegistry))
+	if len(defs) != len(problem.Defs()) {
+		t.Fatalf("ErrorDefs returned %d entries, want %d", len(defs), len(problem.Defs()))
 	}
 
 	for i, def := range defs {
@@ -242,7 +244,7 @@ func TestWriteErrorCodeSSE001Is429(t *testing.T) {
 			req := httptest.NewRequest("GET", "/events", nil)
 			w := httptest.NewRecorder()
 
-			writeErrorCode(w, req, code, "too many connections")
+			problem.Write(w, req, code, "too many connections")
 
 			if w.Code != http.StatusTooManyRequests {
 				t.Errorf("status=%d, want 429", w.Code)

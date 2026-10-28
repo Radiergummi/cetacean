@@ -70,19 +70,19 @@ func (sc *SizingChecker) Check(ctx context.Context) []Recommendation {
 	cpuP95Result, memP95Result := results[2], results[3]
 
 	if cpuResult.err != nil {
-		slog.Warn("sizing: CPU query failed", "error", cpuResult.err)
+		slog.WarnContext(ctx, "sizing: CPU query failed", "error", cpuResult.err)
 	}
 
 	if memResult.err != nil {
-		slog.Warn("sizing: memory query failed", "error", memResult.err)
+		slog.WarnContext(ctx, "sizing: memory query failed", "error", memResult.err)
 	}
 
 	if cpuP95Result.err != nil {
-		slog.Warn("sizing: p95 CPU query failed", "error", cpuP95Result.err)
+		slog.WarnContext(ctx, "sizing: p95 CPU query failed", "error", cpuP95Result.err)
 	}
 
 	if memP95Result.err != nil {
-		slog.Warn("sizing: p95 memory query failed", "error", memP95Result.err)
+		slog.WarnContext(ctx, "sizing: p95 memory query failed", "error", memP95Result.err)
 	}
 
 	cpu, mem := byService(cpuResult.results), byService(memResult.results)
@@ -127,14 +127,24 @@ func measured(cpuData, memData map[string]float64, service string) *serviceMetri
 	return &serviceMetrics{cpu: cpu, memory: mem}
 }
 
-// formatPromDuration formats a time.Duration as a Prometheus duration string.
+// formatPromDuration formats a time.Duration as a Prometheus duration string,
+// in the largest unit that holds it exactly.
 func formatPromDuration(d time.Duration) string {
-	hours := int(d.Hours())
-	if hours%24 == 0 && hours >= 24 {
-		return fmt.Sprintf("%dd", hours/24)
+	for _, unit := range []struct {
+		size   time.Duration
+		suffix string
+	}{
+		{24 * time.Hour, "d"},
+		{time.Hour, "h"},
+		{time.Minute, "m"},
+		{time.Second, "s"},
+	} {
+		if d >= unit.size && d%unit.size == 0 {
+			return fmt.Sprintf("%d%s", d/unit.size, unit.suffix)
+		}
 	}
 
-	return fmt.Sprintf("%dh", hours)
+	return fmt.Sprintf("%dms", d.Milliseconds())
 }
 
 func extractSpec(svc swarm.Service) serviceSpec {

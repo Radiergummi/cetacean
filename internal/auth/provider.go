@@ -19,12 +19,9 @@ type Provider interface {
 // Implementations control the wire format (e.g. plain JSON vs JSON-LD).
 type WriteIdentityFunc func(http.ResponseWriter, *http.Request, *Identity)
 
-// WhoamiHandler returns an http.HandlerFunc that authenticates as the auth
-// middleware does — a token of ours first, then the provider — and responds
-// with the identity. /auth/* routes are exempt from the middleware, so this
-// handler authenticates itself rather than reading identity from context.
-// Callers pass writeIdentity to control the response format (e.g. JSON-LD
-// wrapping); pass WriteIdentityJSON for plain JSON.
+// WhoamiHandler returns a handler that authenticates as the middleware does —
+// a token of ours first, then the provider — since /auth/* is exempt from it,
+// and writes the identity via writeIdentity (WriteIdentityJSON for plain JSON).
 func WhoamiHandler(p Provider, tokens APITokens, writeIdentity WriteIdentityFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err, fromToken := tokens.authenticate(r)
@@ -36,7 +33,7 @@ func WhoamiHandler(p Provider, tokens APITokens, writeIdentity WriteIdentityFunc
 			// the middleware, so this handler is the only place a failure
 			// here is observable, and the refusal deliberately says nothing
 			// about the cause.
-			slog.Warn("authentication failed",
+			slog.WarnContext(r.Context(), "authentication failed",
 				"path", r.URL.Path,
 				"error", err,
 			)

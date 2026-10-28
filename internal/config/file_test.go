@@ -342,14 +342,9 @@ func TestLoadFileAcceptsTheCurrentSchema(t *testing.T) {
 	}
 }
 
-// The reference file is documentation an operator copies from, so it has to
-// survive the same refusal their own file would. Now that an unknown key is an
-// error, a setting renamed in code and not in the reference fails here rather
-// than in someone's deployment.
-// Every setting in the reference is commented out, so loading the file as it
-// stands decodes nothing and LoadFile's refusal of an unknown key never fires.
-// The settings are uncommented first, which is what makes a rename in code and
-// not in the reference fail here rather than in someone's deployment.
+// The reference file is what operators copy from, so it must pass LoadFile's
+// unknown-key refusal. Its settings are all commented out, so they are
+// uncommented first; otherwise nothing decodes and a rename never fails here.
 func TestReferenceConfigMatchesTheSchema(t *testing.T) {
 	path := filepath.Join("..", "..", "docs", "config.reference.toml")
 	raw, err := os.ReadFile(path)

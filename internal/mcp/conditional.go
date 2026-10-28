@@ -48,7 +48,7 @@ func (s *Server) pinVersion(
 ) (context.Context, string, condition, error) {
 	raw, present := req.GetArguments()["version"]
 	if !present || raw == nil {
-		return ctx, arg, condition{}, nil
+		return ctx, arg, condition{kind: kind, id: arg}, nil
 	}
 
 	number, ok := raw.(float64)
@@ -63,7 +63,7 @@ func (s *Server) pinVersion(
 		return ctx, arg, condition{}, fmt.Errorf("a %s write cannot be made conditional", kind)
 	}
 
-	id, name, _, found, err := s.cachedRecord(kind, arg)
+	record, found, err := cluster.Lookup(s.cache, kind, arg)
 	if err != nil {
 		return ctx, arg, condition{}, err
 	}
@@ -72,30 +72,9 @@ func (s *Server) pinVersion(
 		return ctx, arg, condition{}, fmt.Errorf("%s %q not found", kind, arg)
 	}
 
-	c := condition{kind: kind, id: id, name: name, version: uint64(number), set: true}
+	c := condition{kind: kind, id: record.ID, name: record.Name, version: uint64(number), set: true}
 
-	return docker.WithPinnedVersion(ctx, kind, id, swarm.Version{Index: c.version}), id, c, nil
-}
-
-// cachedRecord resolves arg to the ID, display name and version of a record
-// of a Versioned kind.
-func (s *Server) cachedRecord(kind, arg string) (string, string, uint64, bool, error) {
-	switch kind {
-	case "service":
-		svc, found, err := s.cache.ResolveService(arg)
-		return svc.ID, svc.Spec.Name, svc.Version.Index, found, err
-	case "node":
-		node, found, err := s.cache.ResolveNode(arg)
-		return node.ID, node.Description.Hostname, node.Version.Index, found, err
-	case "config":
-		cfg, found, err := s.cache.ResolveConfig(arg)
-		return cfg.ID, cfg.Spec.Name, cfg.Version.Index, found, err
-	case "secret":
-		sec, found, err := s.cache.ResolveSecret(arg)
-		return sec.ID, sec.Spec.Name, sec.Version.Index, found, err
-	default:
-		return "", "", 0, false, nil
-	}
+	return docker.WithPinnedVersion(ctx, kind, c.id, swarm.Version{Index: c.version}), c.id, c, nil
 }
 
 // pinChecked is docker.PinChecked for a write the caller may also have made
@@ -123,10 +102,15 @@ func (s *Server) pinChecked(
 }
 
 // refused reports a write the engine turned away for being out of sequence as
-// the caller's version having gone stale. Any other error passes through.
-func (s *Server) refused(c condition, err error) error {
-	if !c.set || !docker.IsOutOfSequence(err) {
+// the caller's version having gone stale. Any other error is reported as
+// writeFailure reports it.
+func (s *Server) refused(ctx context.Context, c condition, err error) error {
+	refusal, ok := cluster.ClassifyWrite(err, c.kind, c.id)
+	if !ok {
 		return err
+	}
+	if !c.set || refusal.Kind != cluster.Stale {
+		return refusalError(ctx, refusal)
 	}
 
 	if stale, ok := errors.AsType[*docker.StaleVersionError](err); ok {
@@ -135,7 +119,8 @@ func (s *Server) refused(c condition, err error) error {
 
 	// The record moved between the writer's read and its write, so the cache
 	// is the best account there is of where it went.
-	_, _, current, _, _ := s.cachedRecord(c.kind, c.id)
+	record, _, _ := cluster.Lookup(s.cache, c.kind, c.id)
+	current := record.Version
 	if current == c.version {
 		current = 0
 	}

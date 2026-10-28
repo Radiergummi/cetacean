@@ -4,8 +4,8 @@ import BuildSection from "../components/build/BuildSection";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection from "../components/ComposeSection";
 import { ContainerImage, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
+import DetailError from "../components/DetailError";
 import ErrorBoundary from "../components/ErrorBoundary";
-import FetchError from "../components/FetchError";
 import { KeyValueEditor } from "../components/KeyValueEditor";
 import { LoadingDetail } from "../components/LoadingSkeleton";
 import { LogViewer } from "../components/log";
@@ -15,7 +15,7 @@ import ResourceName from "../components/ResourceName";
 import {
   CapabilitiesEditor,
   CommandEditor,
-  ConfigsEditor,
+  DataRefsEditor,
   DeploymentChanges,
   DnsEditor,
   EnvEditor,
@@ -26,7 +26,6 @@ import {
   PortsEditor,
   ReplicaCard,
   RuntimeEditor,
-  SecretsEditor,
   ServiceActions,
 } from "../components/service-detail";
 import { DeployConfigSection } from "../components/service-detail/DeployConfigSection";
@@ -35,6 +34,7 @@ import { ServiceStatusCard } from "../components/service-detail/ServiceStatusCar
 import ServiceLinks from "../components/ServiceLinks";
 import { SizingBanner } from "../components/SizingBanner";
 import TasksTable from "../components/TasksTable";
+import TaskTimeline from "../components/TaskTimeline";
 import { useEditVersion } from "../hooks/useEditVersion";
 import { useServiceDetail } from "../hooks/useServiceDetail";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
@@ -48,7 +48,13 @@ export default function ServiceDetail() {
   const labelsVersion = useEditVersion(`/services/${id}/labels`);
 
   if (detail.error) {
-    return <FetchError message="Failed to load service" />;
+    return (
+      <DetailError
+        error={detail.error}
+        fallback="Failed to load service"
+        onRetry={detail.refetchService}
+      />
+    );
   }
 
   if (!detail.service) {
@@ -143,6 +149,11 @@ export default function ServiceDetail() {
         tasks={detail.tasks}
         variant="service"
         metrics={detail.hasCadvisor ? detail.taskMetrics : undefined}
+      />
+
+      <TaskTimeline
+        tasks={detail.tasks}
+        variant={service.Spec.Mode?.Global || service.Spec.Mode?.GlobalJob ? "global" : "service"}
       />
 
       {detail.hasPrometheus && (
@@ -295,30 +306,31 @@ export default function ServiceDetail() {
         networks={(taskTemplate?.Networks ?? []).flatMap(({ Target, Aliases }) =>
           Target ? [{ target: Target, aliases: Aliases ?? undefined }] : [],
         )}
-        networkNames={detail.networkNames}
         onSaved={detail.refetchService}
         canEdit={detail.editable.has("networks")}
       />
 
       {/* Configs */}
-      <ConfigsEditor
+      <DataRefsEditor
+        kind="config"
         serviceId={id!}
-        configs={(containerSpec?.Configs ?? []).map((cfg) => ({
-          configID: cfg.ConfigID,
-          configName: cfg.ConfigName,
-          fileName: cfg.File?.Name ?? "",
+        refs={(containerSpec?.Configs ?? []).map(({ ConfigID, ConfigName, File }) => ({
+          id: ConfigID,
+          name: ConfigName,
+          fileName: File?.Name ?? "",
         }))}
         onSaved={detail.refetchService}
         canEdit={detail.editable.has("configs")}
       />
 
       {/* Secrets */}
-      <SecretsEditor
+      <DataRefsEditor
+        kind="secret"
         serviceId={id!}
-        secrets={(containerSpec?.Secrets ?? []).map((sec) => ({
-          secretID: sec.SecretID,
-          secretName: sec.SecretName,
-          fileName: sec.File?.Name ?? "",
+        refs={(containerSpec?.Secrets ?? []).map(({ SecretID, SecretName, File }) => ({
+          id: SecretID,
+          name: SecretName,
+          fileName: File?.Name ?? "",
         }))}
         onSaved={detail.refetchService}
         canEdit={detail.editable.has("secrets")}

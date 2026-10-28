@@ -14,6 +14,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
@@ -115,7 +116,7 @@ func TestTaskLogsHintHidesAnUnreadableService(t *testing.T) {
 
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:   cfg,
 		Logs:     &fakeLogStreamer{err: dockerNotFound},
 		ACL:      e,

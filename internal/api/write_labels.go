@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -11,10 +10,10 @@ import (
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
-// getLabelsSpec describes how to read labels for a resource type.
+// getLabelsSpec describes how to read labels for a resource type addressed by
+// the "id" path value.
 type getLabelsSpec[T any] struct {
 	resource    string // e.g. "node", "service"
-	pathKey     string // path value key: "id" or "name"
 	typeName    string // JSON-LD type: "NodeLabels", "ServiceLabels", etc.
 	getter      func(string) (T, bool)
 	aclResource func(T) string
@@ -32,7 +31,7 @@ func (spec getLabelsSpec[T]) detail(r *http.Request, item T) DetailResponse {
 
 	return NewDetailResponse(
 		r.Context(),
-		"/"+spec.resource+"s/"+r.PathValue(spec.pathKey)+"/labels",
+		"/"+spec.resource+"s/"+r.PathValue("id")+"/labels",
 		spec.typeName,
 		LabelsResponse{Labels: labels},
 	)
@@ -41,7 +40,7 @@ func (spec getLabelsSpec[T]) detail(r *http.Request, item T) DetailResponse {
 // representation is the spec's representationFunc, for wiring an If-Match
 // precondition onto the paired PATCH.
 func (spec getLabelsSpec[T]) representation(r *http.Request) (any, error) {
-	item, ok := spec.getter(r.PathValue(spec.pathKey))
+	item, ok := spec.getter(r.PathValue("id"))
 	if !ok {
 		return nil, errNoRepresentation
 	}
@@ -62,6 +61,14 @@ type patchLabelsSpec[T any] struct {
 
 	// stackMember marks a type whose stack membership follows its labels.
 	stackMember bool
+
+	// hold, when set, answers a refusal itself or returns the context to write
+	// with and the check a label change must pass inside the write.
+	hold func(
+		w http.ResponseWriter,
+		r *http.Request,
+		item T,
+	) (context.Context, func(before, after map[string]string) error, bool)
 }
 
 func handleGetLabels[T any](
@@ -70,7 +77,7 @@ func handleGetLabels[T any](
 	h *Handlers,
 	spec getLabelsSpec[T],
 ) {
-	key := r.PathValue(spec.pathKey)
+	key := r.PathValue("id")
 
 	item, ok := lookupACL(h, w, r, spec.resource, key, spec.getter, spec.aclResource)
 	if !ok {
@@ -87,11 +94,12 @@ func handlePatchLabels[T any](
 	evaluator *acl.Evaluator,
 	spec patchLabelsSpec[T],
 ) {
-	key := r.PathValue(spec.pathKey)
+	key := r.PathValue("id")
 
 	// Cache lookup is for the 404 only — the merge runs against the
 	// freshly-inspected spec inside the writer (M-42).
-	if _, ok := lookupOr404(w, r, spec.resource, key, spec.getter); !ok {
+	item, ok := lookupOr404(w, r, spec.resource, key, spec.getter)
+	if !ok {
 		return
 	}
 
@@ -107,14 +115,34 @@ func handlePatchLabels[T any](
 		})
 	}
 
-	slog.Info("patching "+spec.resource+" labels", spec.resource, key)
-
-	result, err := spec.update(r.Context(), key, mutate)
-	if err != nil {
-		if denied, ok := errors.AsType[*cluster.StackLabelDeniedError](err); ok {
-			writeErrorCode(w, r, "ACL002", denied.Error())
+	ctx := r.Context()
+	var refused error
+	if spec.hold != nil {
+		var check func(before, after map[string]string) error
+		if ctx, check, ok = spec.hold(w, r, item); !ok {
 			return
 		}
+
+		inner := mutate
+		mutate = func(current map[string]string) (map[string]string, error) {
+			updated, err := inner(current)
+			if err != nil {
+				return nil, err
+			}
+			refused = check(current, updated)
+
+			return updated, refused
+		}
+	}
+
+	slog.InfoContext(ctx, "patching "+spec.resource+" labels", spec.resource, key)
+
+	result, err := spec.update(ctx, key, mutate)
+	if refused != nil {
+		writeResourceError(w, r, refused, spec.resource, key, spec.conflictCode)
+		return
+	}
+	if err != nil {
 		if isPatchApplyError(err) {
 			writePatchError(w, r, err)
 			return

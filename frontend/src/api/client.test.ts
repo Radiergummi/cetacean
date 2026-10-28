@@ -79,7 +79,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 0-49" },
+        headers: { Accept: "application/json", Range: "items=0-49" },
       }),
     );
   });
@@ -90,7 +90,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes?sort=hostname&dir=desc&search=web",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 0-49" },
+        headers: { Accept: "application/json", Range: "items=0-49" },
       }),
     );
   });
@@ -101,7 +101,7 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 50-99" },
+        headers: { Accept: "application/json", Range: "items=50-99" },
       }),
     );
   });
@@ -149,8 +149,34 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenLastCalledWith(
       "/secrets?versions=all",
       expect.objectContaining({
-        headers: { Accept: "application/json", Range: "items 200-399" },
+        headers: { Accept: "application/json", Range: "items=200-399" },
       }),
+    );
+  });
+
+  it("pages through every service matching a filter", async () => {
+    const services = (from: number, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ID: `svc${from + index}`,
+        Version: { Index: 1 },
+        Spec: { Name: `web_${from + index}`, Mode: { Replicated: { Replicas: 1 } } },
+        RunningTasks: 1,
+      }));
+    mockFetch
+      .mockReturnValueOnce(
+        jsonResponse({ items: services(0, 200), total: 260, limit: 200, offset: 0 }),
+      )
+      .mockReturnValueOnce(
+        jsonResponse({ items: services(200, 60), total: 260, limit: 200, offset: 200 }),
+      );
+
+    const all = await api.allServices({ filter: 'stack == "web"' });
+
+    expect(all).toHaveLength(260);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      `/services?${new URLSearchParams({ filter: 'stack == "web"' })}`,
+      expect.anything(),
     );
   });
 

@@ -105,11 +105,9 @@ func (c *Cache) removeFromStack(resource EventType, id string, labels map[string
 }
 
 // StackContains reports whether the named stack lists id as a member of the
-// given resource kind. It answers under the read lock without copying
-// membership out, because the SSE stack streams ask once per event per
-// subscribed client.
-//
-// Membership is sorted — see appendUnique — so the lookup is a binary search.
+// given resource kind. It answers under the read lock without copying, since
+// SSE stack streams ask once per event per client; membership is sorted (see
+// appendUnique), so the lookup is a binary search.
 func (c *Cache) StackContains(name string, resource EventType, id string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

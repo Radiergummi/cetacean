@@ -34,6 +34,7 @@ import type {
   ServiceConfigRef,
   ServiceDetail,
   ServiceLink,
+  ServiceListItem,
   ServiceMount,
   ServiceNetworkRef,
   ServiceRef,
@@ -313,6 +314,7 @@ function createTask(service: Service, slot: number, node: Node): Task {
   return {
     ID: randomHex(25),
     Version: { Index: Math.floor(Math.random() * 10000) },
+    CreatedAt: new Date().toISOString(),
     ServiceID: service.ID,
     NodeID: node.ID,
     Slot: slot,
@@ -344,13 +346,13 @@ function compareStrings(a: string, b: string): number {
 }
 
 /**
- * Parse the Range header (e.g. "items 0-49") into offset and limit.
+ * Parse the Range header (e.g. "items=0-49", or the deprecated "items 0-49") into offset and limit.
  */
 function parseRange(request: Request): { offset: number; limit: number } {
   const range = request.headers.get("Range");
 
   if (range) {
-    const match = range.match(/^items\s+(\d+)-(\d+)$/);
+    const match = range.match(/^items(?:=|\s+)(\d+)-(\d+)$/i);
 
     if (match) {
       const start = parseInt(match[1] ?? "", 10);
@@ -707,7 +709,7 @@ function deriveStacks(dataset: Dataset) {
   return stacks;
 }
 
-function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
+export function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   const tasksByState: Record<string, number> = {};
 
   for (const task of dataset.tasks) {
@@ -747,6 +749,15 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     }
   }
 
+  // A global service keeps its tasks on every ready node that is active or
+  // paused, and starts new ones only on active nodes; the demo's services carry
+  // no placement constraints.
+  const readyNodes = dataset.nodes.filter(({ Status }) => Status.State === "ready");
+  const eligibleNodes = readyNodes.filter(({ Spec }) => Spec.Availability === "active").length;
+  const schedulableNodes = readyNodes.filter(
+    ({ Spec }) => Spec.Availability === "active" || Spec.Availability === "pause",
+  ).length;
+
   let reservedCPU = 0;
   let reservedMemory = 0;
 
@@ -757,12 +768,12 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
       continue;
     }
 
-    let replicas = 1;
+    let replicas = 0;
 
     if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
       replicas = service.Spec.Mode.Replicated.Replicas;
     } else if (service.Spec.Mode.Global) {
-      replicas = dataset.nodes.length;
+      replicas = schedulableNodes;
     }
 
     reservedCPU += (reservations.NanoCPUs ?? 0) * replicas;
@@ -773,21 +784,13 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
   let servicesDegraded = 0;
 
   for (const service of dataset.services) {
-    let desired = 0;
+    const state = demoServiceState(service, dataset.tasks, eligibleNodes);
 
-    if (service.Spec.Mode.Replicated?.Replicas !== undefined) {
-      desired = service.Spec.Mode.Replicated.Replicas;
-    } else if (service.Spec.Mode.Global) {
-      desired = dataset.nodes.length;
+    if (state === "converged") {
+      servicesConverged++;
     }
 
-    const running = dataset.tasks.filter(
-      (t) => t.ServiceID === service.ID && t.Status.State === "running",
-    ).length;
-
-    if (running >= desired) {
-      servicesConverged++;
-    } else {
+    if (state === "degraded") {
       servicesDegraded++;
     }
   }
@@ -810,6 +813,46 @@ function buildClusterSnapshot(dataset: Dataset): ClusterSnapshot {
     quorum: quorumOf(managers, reachableManagers),
     prometheusConfigured: true,
   };
+}
+
+const updatingStates = new Set(["updating", "rollback_started", "rollback_paused"]);
+
+/**
+ * The server's overview rule, without restart tracking: a service mid-update
+ * counts in neither bucket, a job converges once its run met its completion
+ * target, and a global service with nowhere to run has nothing outstanding.
+ * Running counts only tasks the orchestrator still means to run.
+ */
+function demoServiceState(
+  service: Service,
+  tasks: Task[],
+  eligibleNodes: number,
+): "converged" | "degraded" | "updating" {
+  if (service.UpdateStatus && updatingStates.has(service.UpdateStatus.State ?? "")) {
+    return "updating";
+  }
+
+  const own = tasks.filter(({ ServiceID }) => ServiceID === service.ID);
+  const running = own.filter(
+    ({ Status, DesiredState }) =>
+      Status.State === "running" && DesiredState !== "shutdown" && DesiredState !== "remove",
+  ).length;
+  const { Mode } = service.Spec;
+
+  if (Mode.ReplicatedJob || Mode.GlobalJob) {
+    const completed = own.filter(({ Status }) => Status.State === "complete").length;
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
+
+    return running > 0 || completed >= Math.max(target, 1) ? "converged" : "degraded";
+  }
+
+  if (Mode.Global) {
+    return running > 0 || eligibleNodes === 0 ? "converged" : "degraded";
+  }
+
+  const desired = Mode.Replicated?.Replicas ?? 0;
+
+  return running >= desired ? "converged" : "degraded";
 }
 
 function quorumOf(managers: number, reachable: number): ManagerQuorum {
@@ -1000,13 +1043,53 @@ function countRunningTasks(dataset: Dataset, serviceID: string): number {
   ).length;
 }
 
+/**
+ * A service as the list serves it: its desired count is the server's rule, and
+ * a job's outcome counts only its current run. The demo's services carry no
+ * placement constraints, so a global service is eligible on every ready, active node.
+ */
+function serviceListItem(dataset: Dataset, service: Service): ServiceListItem {
+  const { Mode } = service.Spec;
+  const RunningTasks = countRunningTasks(dataset, service.ID);
+
+  if (Mode.ReplicatedJob || Mode.GlobalJob) {
+    const iteration = service.JobStatus?.JobIteration.Index;
+    const run = dataset.tasks.filter(
+      ({ ServiceID, JobIteration }) =>
+        ServiceID === service.ID &&
+        (iteration === undefined ||
+          JobIteration?.Index === undefined ||
+          JobIteration.Index === iteration),
+    );
+    const target = Mode.ReplicatedJob?.TotalCompletions ?? Mode.ReplicatedJob?.MaxConcurrent ?? 1;
+
+    return {
+      ...service,
+      RunningTasks,
+      DesiredTasks: Math.max(target, 1),
+      CompletedTasks: run.filter(({ Status }) => Status.State === "complete").length,
+      FailedTasks: run.filter(
+        ({ Status }) => Status.State === "failed" || Status.State === "rejected",
+      ).length,
+    };
+  }
+
+  const DesiredTasks = Mode.Global
+    ? dataset.nodes.filter(
+        ({ Status, Spec }) => Status.State === "ready" && Spec.Availability === "active",
+      ).length
+    : (Mode.Replicated?.Replicas ?? 0);
+
+  return { ...service, RunningTasks, DesiredTasks };
+}
+
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
   function broadcastServiceUpdate(service: Service) {
     broadcast(clients, "service", "services", service.ID, {
       type: "service",
       action: "update",
       id: service.ID,
-      resource: { ...service, RunningTasks: countRunningTasks(dataset, service.ID) },
+      resource: serviceListItem(dataset, service),
     });
   }
 
@@ -1587,10 +1670,7 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     get("*/services", ({ request }) => {
-      const items = dataset.services.map((service) => ({
-        ...service,
-        RunningTasks: countRunningTasks(dataset, service.ID),
-      }));
+      const items = dataset.services.map((service) => serviceListItem(dataset, service));
       return jsonResponse(paginateWrapped(items, request, "Service", (s) => `/services/${s.ID}`));
     }),
 

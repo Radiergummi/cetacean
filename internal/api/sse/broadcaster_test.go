@@ -18,10 +18,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-func noopErrorWriter(w http.ResponseWriter, _ *http.Request, _, detail string) {
-	http.Error(w, detail, http.StatusInternalServerError)
-}
-
 // waitForClients polls until the broadcaster has at least n clients registered.
 func waitForClients(t *testing.T, b *Broadcaster, n int) {
 	t.Helper()
@@ -58,7 +54,7 @@ func waitForBody(t *testing.T, w *flushRecorder, substr string) {
 }
 
 func TestSSE_BroadcastsEvents(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	b := NewBroadcaster(0, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -66,7 +62,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -85,7 +81,7 @@ func TestSSE_BroadcastsEvents(t *testing.T) {
 }
 
 func TestSSE_FiltersByType(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	b := NewBroadcaster(0, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events?types=service", nil)
@@ -93,7 +89,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -113,7 +109,7 @@ func TestSSE_FiltersByType(t *testing.T) {
 }
 
 func TestSSE_BatchesRapidEvents(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	b := NewBroadcaster(0, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -121,7 +117,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -165,7 +161,7 @@ func TestSSE_BatchesRapidEvents(t *testing.T) {
 }
 
 func TestSSE_EventContainsJSONLD(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	b := NewBroadcaster(0, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -173,7 +169,7 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -192,7 +188,7 @@ func TestSSE_EventContainsJSONLD(t *testing.T) {
 }
 
 func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
-	b := NewBroadcaster(0, noopErrorWriter, nil)
+	b := NewBroadcaster(0, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -200,7 +196,7 @@ func TestSSE_BatchEventContainsJSONLD(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(w, req)
+		b.ServeSSE(w, req, TypesFilter(req), ReplayAll)
 		close(done)
 	}()
 
@@ -268,31 +264,8 @@ func TestResourceType(t *testing.T) {
 	}
 }
 
-// recordedError captures what the broadcaster asked its ErrorWriter to write.
-// The real writer is internal/api's, which this package cannot import — that is
-// the whole reason ErrorWriter is a callback — so the concrete status for a code
-// is asserted there and what the broadcaster decides is asserted here.
-type recordedError struct {
-	code   string
-	detail string
-}
-
-// recordingErrorWriter records the code and detail, and writes the status the
-// SSE001 registry entry documents, so the recorder observes a realistic
-// response rather than noopErrorWriter's blanket 500.
-func recordingErrorWriter(rec *recordedError) ErrorWriter {
-	return func(w http.ResponseWriter, _ *http.Request, code, detail string) {
-		rec.code = code
-		rec.detail = detail
-
-		http.Error(w, detail, http.StatusTooManyRequests)
-	}
-}
-
 func TestSSE_429OnConnectionLimit(t *testing.T) {
-	var recorded recordedError
-
-	b := NewBroadcaster(0, recordingErrorWriter(&recorded), nil)
+	b := NewBroadcaster(0, nil)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -302,7 +275,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	b.mu.Lock()
 	for range MaxClients {
 		c := &sseClient{
-			events: make(chan cache.Event, 1),
+			events: make(chan frameEvent, 1),
 			done:   make(chan struct{}),
 		}
 		b.clients[c] = struct{}{}
@@ -311,7 +284,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 
 	// This recorder doesn't implement Flusher, so we need a flushRecorder
 	fw := &flushRecorder{ResponseRecorder: w}
-	b.ServeHTTP(fw, req)
+	b.ServeSSE(fw, req, TypesFilter(req), ReplayAll)
 
 	if w.Code != http.StatusTooManyRequests {
 		t.Errorf("status = %d, want 429", w.Code)
@@ -322,8 +295,8 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 	// asserted rather than assumed.
 	assertRetryAfter(t, w.Header().Get("Retry-After"))
 
-	if recorded.code != "SSE001" {
-		t.Errorf("error code = %q, want SSE001", recorded.code)
+	if !strings.Contains(w.Body.String(), "/api/errors/SSE001") {
+		t.Errorf("body = %s, want an SSE001 problem", w.Body.String())
 	}
 
 	if !strings.Contains(w.Body.String(), "too many SSE connections") {
@@ -332,7 +305,7 @@ func TestSSE_429OnConnectionLimit(t *testing.T) {
 }
 
 func TestSSE_Keepalive(t *testing.T) {
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, nil)
+	b := NewBroadcaster(10*time.Millisecond, nil)
 	b.keepaliveInterval = 50 * time.Millisecond
 	defer b.Close()
 
@@ -510,7 +483,7 @@ func TestSSE_ReplayOnReconnect(t *testing.T) {
 	// IDs are 1–5. Reconnect with Last-Event-ID: 2 → replay IDs 3,4,5.
 	// Only service events (IDs 3,5) should appear; node event (ID 4) filtered out.
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
@@ -548,7 +521,7 @@ func TestSSE_ReplayTooOld_SendsSync(t *testing.T) {
 	}
 	// Ring holds IDs 8,9,10. Requesting replay from ID 1 → too old → sync.
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
@@ -580,7 +553,7 @@ func TestSSE_ReplayIneligible_SendsSync(t *testing.T) {
 	h := cache.NewHistory(10)
 	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)
@@ -610,7 +583,7 @@ func TestSSE_NoLastEventID_NoReplay(t *testing.T) {
 	h := cache.NewHistory(10)
 	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
@@ -647,7 +620,7 @@ func TestSSE_ReplayNoMatchingType_DoesNotDropLiveEvents(t *testing.T) {
 	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
 	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n2"})
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	// Connect a service stream with Last-Event-ID: 0 — history has entries
@@ -690,7 +663,7 @@ func TestSSE_LiveSyncAfterReplayIsDelivered(t *testing.T) {
 	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
 	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s2"})
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/services", nil)
@@ -725,7 +698,7 @@ func TestSSE_EndToEnd_ReplayThenLive(t *testing.T) {
 		})
 	}
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
@@ -770,6 +743,59 @@ func (f *flushRecorder) Write(b []byte) (int, error) {
 	return f.ResponseRecorder.Write(b)
 }
 
+// net/http discards a HEAD's body, so a stream served to one would never end.
+func TestSSE_HeadAnswersWithoutRegisteringAClient(t *testing.T) {
+	b := NewBroadcaster(0, nil)
+	defer b.Close()
+
+	fw := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(fw, httptest.NewRequest(http.MethodHead, "/events", nil), nil, ReplayAll)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HEAD on a stream did not return")
+	}
+
+	if fw.Code != http.StatusOK || fw.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("HEAD answered %d with Content-Type %q, want 200 text/event-stream",
+			fw.Code, fw.Header().Get("Content-Type"))
+	}
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if len(b.clients) != 0 || len(b.owners) != 0 {
+		t.Errorf("HEAD left %d clients and %d owners registered", len(b.clients), len(b.owners))
+	}
+}
+
+// HEAD answers what a GET would at the cap, without taking a slot itself.
+func TestSSE_HeadAtTheCapAnswers429(t *testing.T) {
+	b := NewBroadcaster(0, nil)
+	defer b.Close()
+
+	req := httptest.NewRequest(http.MethodHead, "/events", nil)
+	b.mu.Lock()
+	b.owners[ownerOf(req)] = MaxClientsPerOwner
+	b.mu.Unlock()
+
+	fw := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	b.ServeSSE(fw, req, nil, ReplayAll)
+
+	if fw.Code != http.StatusTooManyRequests || fw.Header().Get("Retry-After") == "" {
+		t.Errorf("HEAD at the cap = %d, Retry-After %q; want 429 with one",
+			fw.Code, fw.Header().Get("Retry-After"))
+	}
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if len(b.clients) != 0 || b.owners[ownerOf(req)] != MaxClientsPerOwner {
+		t.Errorf("HEAD registered a client")
+	}
+}
+
 func (f *flushRecorder) bodyString() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -781,9 +807,7 @@ func (f *flushRecorder) Flush() {}
 // One caller cannot take every slot: past its share it is refused, while a
 // different caller still gets in.
 func TestSSE_429PastOneOwnersShare(t *testing.T) {
-	var recorded recordedError
-
-	b := NewBroadcaster(10*time.Millisecond, recordingErrorWriter(&recorded), nil)
+	b := NewBroadcaster(10*time.Millisecond, nil)
 	defer b.Close()
 
 	// Bounded, so a stream that is wrongly admitted ends instead of hanging.
@@ -800,10 +824,11 @@ func TestSSE_429PastOneOwnersShare(t *testing.T) {
 	b.mu.Unlock()
 
 	w := httptest.NewRecorder()
-	b.ServeHTTP(&flushRecorder{ResponseRecorder: w}, hog)
+	b.ServeSSE(&flushRecorder{ResponseRecorder: w}, hog, TypesFilter(hog), ReplayAll)
 
-	if w.Code != http.StatusTooManyRequests || recorded.code != "SSE001" {
-		t.Fatalf("status = %d, code = %q; want 429 SSE001", w.Code, recorded.code)
+	if w.Code != http.StatusTooManyRequests ||
+		!strings.Contains(w.Body.String(), "/api/errors/SSE001") {
+		t.Fatalf("status = %d, body = %s; want 429 SSE001", w.Code, w.Body.String())
 	}
 
 	assertRetryAfter(t, w.Header().Get("Retry-After"))
@@ -813,7 +838,12 @@ func TestSSE_429PastOneOwnersShare(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		b.ServeHTTP(&flushRecorder{ResponseRecorder: httptest.NewRecorder()}, other)
+		b.ServeSSE(
+			&flushRecorder{ResponseRecorder: httptest.NewRecorder()},
+			other,
+			TypesFilter(other),
+			ReplayAll,
+		)
 		close(done)
 	}()
 
@@ -862,11 +892,11 @@ func TestSSE_ForeignCursorSendsSync(t *testing.T) {
 		h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: id})
 	}
 
-	previous := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	previous := NewBroadcaster(10*time.Millisecond, h)
 	previous.Close()
 
 	for _, lastID := range []string{"1", previous.EventID(1)} {
-		b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+		b := NewBroadcaster(10*time.Millisecond, h)
 
 		req := httptest.NewRequest("GET", "/services", nil)
 		req.Header.Set("Last-Event-ID", lastID)
@@ -904,7 +934,7 @@ func TestSSE_ReplayAllReplaysEveryType(t *testing.T) {
 	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s1"})
 	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
 
-	b := NewBroadcaster(10*time.Millisecond, noopErrorWriter, h)
+	b := NewBroadcaster(10*time.Millisecond, h)
 	defer b.Close()
 
 	req := httptest.NewRequest("GET", "/events", nil)

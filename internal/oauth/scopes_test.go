@@ -12,10 +12,9 @@ import (
 )
 
 // RFC 8414 §2 recommends scopes_supported, and RFC 9728 allows it per resource.
-// This server defines no scopes, so both documents say so explicitly: an absent
-// field reads as "unspecified", where an empty array is an answer. Asserted as
-// raw JSON because a Go nil slice and an empty one differ on the wire — null
-// versus [] — and only the second says what is meant.
+// This server defines no scopes, so both documents say so with an empty array:
+// an absent field reads as "unspecified". Asserted as raw JSON because a nil
+// slice encodes as null, not [].
 func TestBothDocumentsSayThereAreNoScopes(t *testing.T) {
 	spec.Satisfies(t,
 		"oauth/rfc8414/scopes-supported-recommended",
@@ -62,11 +61,10 @@ func TestBothDocumentsSayThereAreNoScopes(t *testing.T) {
 	}
 }
 
-// A client that sends a scope anyway is not refused — RFC 6749 §4.1.2.1 offers
-// invalid_scope for an unknown one, but refusing would break clients that send
-// `offline_access` out of habit and get what they wanted regardless. The scope is
-// ignored, and omitted from the response because the granted and requested scopes
-// both reduce to the empty set, which §5.1 makes optional to report.
+// A requested scope is ignored, not refused with invalid_scope (RFC 6749
+// §4.1.2.1), which would break clients sending `offline_access` out of habit.
+// It is omitted from the response: granted and requested both reduce to the
+// empty set, which §5.1 makes optional to report.
 func TestARequestedScopeIsIgnoredRatherThanRefused(t *testing.T) {
 	spec.Satisfies(t, "oauth/rfc9700/tokens-restricted-to-resources-and-actions")
 

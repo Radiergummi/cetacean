@@ -121,6 +121,9 @@ export function createSSEHandlers(dataset: Dataset) {
   return { handlers, clients };
 }
 
+/** The service list's rows carry task counts and eligible nodes, as on the server. */
+const listsAlsoCarrying: Record<string, string[]> = { tasks: ["services"], nodes: ["services"] };
+
 /**
  * Broadcast an SSE event to all relevant subscribers.
  * Silently removes clients that fail to receive (disconnected).
@@ -148,12 +151,14 @@ export function broadcast(
     send(client, clients.global);
   }
 
-  // Per-type list subscribers (e.g. /services)
-  const typeSet = clients.byType.get(typePlural);
+  // Per-type list subscribers (e.g. /services), and the lists whose rows the type moves
+  for (const list of [typePlural, ...(listsAlsoCarrying[typePlural] ?? [])]) {
+    const typeSet = clients.byType.get(list);
 
-  if (typeSet) {
-    for (const client of typeSet) {
-      send(client, typeSet);
+    if (typeSet) {
+      for (const client of typeSet) {
+        send(client, typeSet);
+      }
     }
   }
 

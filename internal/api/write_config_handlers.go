@@ -13,7 +13,6 @@ import (
 func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Config]{
 		resource:     "config",
-		pathKey:      "id",
 		getter:       h.cache.GetConfig,
 		remove:       h.configWriter.RemoveConfig,
 		conflictCode: "CFG001",
@@ -64,7 +63,6 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) configLabelsSpec() getLabelsSpec[swarm.Config] {
 	return getLabelsSpec[swarm.Config]{
 		resource:    "config",
-		pathKey:     "id",
 		typeName:    "ConfigLabels",
 		getter:      h.cache.GetConfig,
 		aclResource: func(c swarm.Config) string { return "config:" + c.Spec.Name },
