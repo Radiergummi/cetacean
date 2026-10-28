@@ -202,6 +202,34 @@ func TestMetricsProxyHandler_RefusesAnOversizedBody(t *testing.T) {
 	}
 }
 
+// A query Prometheus refuses is the caller's to fix, not an outage.
+func TestMetricsProxyHandler_RejectedQueryIsNotAnOutage(t *testing.T) {
+	for status, want := range map[int]struct {
+		status int
+		code   string
+	}{
+		http.StatusBadRequest:          {http.StatusBadRequest, "MTR009"},
+		http.StatusUnprocessableEntity: {http.StatusBadRequest, "MTR009"},
+		http.StatusServiceUnavailable:  {http.StatusBadGateway, "MTR002"},
+		http.StatusInternalServerError: {http.StatusBadGateway, "MTR002"},
+	} {
+		prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			w.Write([]byte(`{"status":"error","errorType":"bad_data","error":"too many points"}`))
+		}))
+
+		w := httptest.NewRecorder()
+		NewProxy(prom.URL).
+			HandleMetrics(w, httptest.NewRequest("GET", "/metrics?query=up", nil))
+		prom.Close()
+
+		if w.Code != want.status || !strings.Contains(w.Body.String(), "/api/errors/"+want.code) {
+			t.Errorf("HTTP %d: got %d %s, want %d %s", status, w.Code, w.Body.String(),
+				want.status, want.code)
+		}
+	}
+}
+
 // Prometheus's own query errors are 4xx and the caller's to fix; a 5xx may come
 // from a gateway in front of it, whose message can name internal addresses.
 func TestMetricsProxyHandler_ForwardsTheUpstreamReasonOnlyFor4xx(t *testing.T) {
