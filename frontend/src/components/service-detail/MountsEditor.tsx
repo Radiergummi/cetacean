@@ -423,25 +423,25 @@ export function MountsEditor({
           {mounts.map(({ Type, Source, Target, ReadOnly }, index) => (
             <span
               key={index}
-              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm"
+              className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border px-3 py-2 text-sm"
             >
               <MountTypeBadge type={Type} />
               {Type === "tmpfs" ? (
-                <span className="font-mono">{Target}</span>
+                <span className="font-mono break-all">{Target}</span>
               ) : (
                 <>
                   {Type === "volume" && Source ? (
                     <Link
                       to={`/volumes/${encodeURIComponent(Source)}`}
-                      className="font-mono text-link hover:underline"
+                      className="font-mono break-all text-link hover:underline"
                     >
                       <ResourceName name={Source} />
                     </Link>
                   ) : (
-                    <span className="font-mono">{Source}</span>
+                    <span className="font-mono break-all">{Source}</span>
                   )}
                   <ArrowRight className="size-3.5 text-muted-foreground" />
-                  <span className="font-mono">{Target}</span>
+                  <span className="font-mono break-all">{Target}</span>
                 </>
               )}
               {ReadOnly && (

@@ -108,6 +108,34 @@ func TestClassifyRemoval(t *testing.T) {
 		"abc",
 	)
 	if !ok || refusal.Kind != Invalid {
-		t.Errorf("an unmarked removal error classified as %d, want Invalid", refusal.Kind)
+		t.Errorf("an unmarked removal error classified as %+v, %t, want Invalid", refusal, ok)
+	}
+}
+
+// daemonError is shaped like the Docker client's httpError: the class is
+// reached through Is, while Unwrap leads only to the daemon's message.
+type daemonError struct {
+	message error
+	class   error
+}
+
+func (e *daemonError) Error() string        { return e.message.Error() }
+func (e *daemonError) Unwrap() error        { return e.message }
+func (e *daemonError) Is(target error) bool { return errors.Is(e.class, target) }
+
+func TestClassifyWriteReadsTheDaemonsAnswer(t *testing.T) {
+	for class, want := range map[error]WriteErrorKind{
+		cerrdefs.ErrNotFound:           NotFound,
+		cerrdefs.ErrInvalidArgument:    Invalid,
+		cerrdefs.ErrConflict:           Conflict,
+		cerrdefs.ErrFailedPrecondition: Conflict,
+		cerrdefs.ErrUnavailable:        Unavailable,
+	} {
+		err := &daemonError{message: errors.New(`plugin "absent" not found`), class: class}
+
+		refusal, ok := ClassifyWrite(err, "plugin", "absent")
+		if !ok || refusal.Kind != want {
+			t.Errorf("%v: ClassifyWrite = %+v, %t, want kind %d", class, refusal, ok, want)
+		}
 	}
 }

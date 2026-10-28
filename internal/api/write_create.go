@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	cerrdefs "github.com/containerd/errdefs"
-
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -74,7 +72,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 	if err := cluster.CheckStackLabel(nil, labels, func(resource string) bool {
 		return spec.acl.Can(identity, "write", resource)
 	}); err != nil {
-		problem.Write(w, r, "ACL002", err.Error())
+		writeResourceError(w, r, err, spec.resource, req.Name, spec.conflictCode)
 		return
 	}
 
@@ -88,12 +86,7 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 
 	id, err := spec.create(r.Context(), req.Name, labels, data)
 	if err != nil {
-		if cerrdefs.IsConflict(err) {
-			problem.Write(w, r, spec.conflictCode, err.Error())
-			return
-		}
-
-		writeDockerError(w, r, err, spec.resource, req.Name)
+		writeResourceError(w, r, err, spec.resource, req.Name, spec.conflictCode)
 		return
 	}
 

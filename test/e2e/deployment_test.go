@@ -427,11 +427,16 @@ func TestMCPOriginGuardRefusesAForgedOrigin(t *testing.T) {
 		proc := sut.Start(t, sut.Config{
 			Port:       deploymentPort,
 			DockerHost: env.DockerHost,
+			// auth.mode "none" refuses a wildcard outright, so this needs one
+			// whose identity is not the network address.
 			Env: map[string]string{
-				"CETACEAN_AUTH_MODE":        "none",
-				"CETACEAN_OPERATIONS_LEVEL": "1",
-				"CETACEAN_MCP":              "true",
-				"CETACEAN_CORS_ORIGINS":     "*",
+				"CETACEAN_AUTH_MODE":            "headers",
+				"CETACEAN_AUTH_HEADERS_SUBJECT": "X-Auth-User",
+				"CETACEAN_TRUSTED_PROXIES":      "127.0.0.1/32",
+				"CETACEAN_MCP_AUTH_BYPASS":      "headers",
+				"CETACEAN_OPERATIONS_LEVEL":     "1",
+				"CETACEAN_MCP":                  "true",
+				"CETACEAN_CORS_ORIGINS":         "*",
 			},
 		})
 

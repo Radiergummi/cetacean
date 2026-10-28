@@ -108,7 +108,12 @@ func (p *Proxy) proxyTo(
 		"status", resp.StatusCode,
 		"body", string(preview),
 	)
-	problem.Write(w, r, "MTR002", prometheusErrorDetail(resp.StatusCode, preview))
+	code := "MTR002"
+	if resp.StatusCode == http.StatusBadRequest ||
+		resp.StatusCode == http.StatusUnprocessableEntity {
+		code = "MTR009"
+	}
+	problem.Write(w, r, code, prometheusErrorDetail(resp.StatusCode, preview))
 }
 
 // HandleMetricsLabels proxies to /api/v1/labels with optional match[] param.

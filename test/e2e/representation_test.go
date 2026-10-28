@@ -418,6 +418,8 @@ var excusedRepresentationRoutes = map[string]string{
 	"GET /metrics": "every representation is answered 503 without Prometheus, which " +
 		"this environment does not run — the unconfigured case is driven by the read sweep",
 	"GET /cluster/metrics": "same as /metrics: Prometheus is not configured here",
+	"GET /secret-entries/{id}": "an entry exists only while an MCP create_secret URL " +
+		"elicitation is open, which this lane does not drive",
 }
 
 // unnegotiatedRoutes names routes the undeclared-type rule does not reach,
