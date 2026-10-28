@@ -388,6 +388,27 @@ func driveList(path string, alsoEmpty ...string) readDriveFunc {
 	}
 }
 
+// drivePorts checks the published ports, filtered per service: anonymous
+// sees none and every granted persona is served. The fixture publishes no
+// port, so a granted persona's list may be empty too.
+func drivePorts(t *testing.T, proc *sut.Process, _ baselineIDs) {
+	for _, p := range readPersonas {
+		t.Run(p.name, func(t *testing.T) {
+			resp := readAs(t, proc, p, "/ports", "")
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+			}
+
+			env := decodeCollection(t, resp, "/ports", p.name)
+			if p.name == "anonymous" && env.Total != 0 {
+				t.Errorf("anonymous sees %d published ports, want 0", env.Total)
+			}
+		})
+	}
+}
+
 // driveDetail checks a standard detail endpoint keyed by pathFn(ids):
 // anonymous must be refused with ACL001 and every granted persona served.
 // alsoDenied names granted personas expected to be refused too.
@@ -877,6 +898,7 @@ var drivenReadRoutes = map[string]readDriveFunc{
 		"/opensearch.xml",
 		"application/opensearchdescription+xml",
 	),
+	"GET /ports":          drivePorts,
 	"GET /plugins":        drivePlugins,
 	"GET /search":         driveSearch,
 	"GET /stacks/summary": driveStacksSummary,
@@ -922,6 +944,10 @@ var excusedReadRoutes = map[string]string{
 	"GET /plugins/{name}": "this environment's DinD engine has no plugins installed, so any name 404s " +
 		"before the ACL check on a specific plugin (plugin:name) is ever reached; the write sweep excuses " +
 		"the whole /plugins family for the same reason",
+
+	"GET /secret-entries/{id}": "an entry is opened by MCP create_secret's URL elicitation and " +
+		"answers only the subject that opened it, whatever the policy; internal/api's " +
+		"secret_entry_test.go drives that ownership check",
 
 	// Genuinely out of scope for a request/response sweep.
 	"GET /events": "SSE-only ACL filtering (aclMatchWrap) needs a streaming client to observe, not a " +
