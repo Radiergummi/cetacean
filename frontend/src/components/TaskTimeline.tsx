@@ -8,7 +8,12 @@ import TaskStatusBadge from "@/components/TaskStatusBadge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDateTime, formatDuration } from "@/lib/format";
 import { statusColor } from "@/lib/statusColor";
-import { buildTimeline, type TimelineBar, type TimelineWindow } from "@/lib/taskTimeline";
+import {
+  buildTimeline,
+  type TimelineBar,
+  type TimelineVariant,
+  type TimelineWindow,
+} from "@/lib/taskTimeline";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -44,18 +49,20 @@ function percentOf(time: number, { start, end }: TimelineWindow): number {
 
 function Bar({
   bar,
+  lanes,
   variant,
   timeWindow,
 }: {
   bar: TimelineBar;
-  variant: "service" | "node";
+  lanes: number;
+  variant: TimelineVariant;
   timeWindow: TimelineWindow;
 }) {
-  const { task, start, end, ongoing, failed, error } = bar;
+  const { task, start, end, lane, ongoing, failed, error } = bar;
   const left = percentOf(start, timeWindow);
   const width = percentOf(end, timeWindow) - left;
   const context =
-    variant === "service"
+    variant !== "node"
       ? task.NodeHostname || task.NodeID?.slice(0, 12)
       : task.ServiceName || task.ServiceID.slice(0, 12);
 
@@ -65,11 +72,16 @@ function Bar({
         render={<Link to={`/tasks/${task.ID}`} />}
         aria-label={`Task ${task.ID.slice(0, 12)}, ${task.Status.State}`}
         className={cn(
-          "absolute inset-y-0.5 min-w-0.5 rounded-sm outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring",
+          "absolute min-w-0.5 rounded-sm outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring",
           statusColor(task.Status.State),
           ongoing && "rounded-r-none",
         )}
-        style={{ left: `${left}%`, width: `${width}%` }}
+        style={{
+          left: `${left}%`,
+          width: `${width}%`,
+          top: `calc(${(lane / lanes) * 100}% + 2px)`,
+          height: `calc(${100 / lanes}% - 4px)`,
+        }}
       >
         {failed && (
           <span className="absolute -inset-y-0.5 -right-px w-0.5 rounded-full bg-status-danger" />
@@ -103,7 +115,7 @@ export default function TaskTimeline({
   variant,
 }: {
   tasks: Task[];
-  variant: "service" | "node";
+  variant: TimelineVariant;
 }) {
   const { range, customFrom, customTo, setRange, clearCustomRange } = useTimeRange();
   const isCustomRange = customFrom != null && customTo != null;
@@ -115,7 +127,7 @@ export default function TaskTimeline({
         : { start: now - rangeSeconds(range) * 1000, end: now },
     [isCustomRange, customFrom, customTo, range, now],
   );
-  const { rows, earliest } = useMemo(
+  const rows = useMemo(
     () => buildTimeline(tasks, variant, timeWindow, now),
     [tasks, variant, timeWindow, now],
   );
@@ -123,9 +135,6 @@ export default function TaskTimeline({
   if (tasks.length === 0) {
     return null;
   }
-
-  const unretained =
-    earliest !== undefined && earliest > timeWindow.start ? percentOf(earliest, timeWindow) : 0;
 
   const controls = (
     <>
@@ -160,35 +169,48 @@ export default function TaskTimeline({
           </p>
         )}
 
-        {rows.map(({ key, label, bars }) => (
-          <div
-            key={key}
-            className="flex items-center gap-2"
-          >
-            <span
-              className={cn(labelWidth, "truncate text-xs text-muted-foreground")}
-              title={label}
+        {rows.map(({ key, label, bars, lanes, earliest }) => {
+          const unretained = earliest > timeWindow.start ? percentOf(earliest, timeWindow) : 0;
+
+          return (
+            <div
+              key={key}
+              className="flex items-center gap-2"
             >
-              {label}
-            </span>
-            <div className="relative h-5 flex-1 rounded-sm bg-muted/50">
-              {unretained > 0 && (
-                <div
-                  className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
-                  style={{ width: `${unretained}%` }}
-                />
-              )}
-              {bars.map((bar) => (
-                <Bar
-                  key={bar.task.ID}
-                  bar={bar}
-                  variant={variant}
-                  timeWindow={timeWindow}
-                />
-              ))}
+              <span
+                className={cn(labelWidth, "truncate text-xs text-muted-foreground")}
+                title={label}
+              >
+                {label}
+              </span>
+              <div
+                className="relative flex-1 rounded-sm bg-muted/50"
+                style={{ height: `${lanes * 1.25}rem` }}
+                title={
+                  unretained > 0
+                    ? `No task history before ${formatAxisTime(earliest, timeWindow)}`
+                    : undefined
+                }
+              >
+                {unretained > 0 && (
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
+                    style={{ width: `${unretained}%` }}
+                  />
+                )}
+                {bars.map((bar) => (
+                  <Bar
+                    key={bar.task.ID}
+                    bar={bar}
+                    lanes={lanes}
+                    variant={variant}
+                    timeWindow={timeWindow}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className={labelWidth} />
@@ -202,9 +224,9 @@ export default function TaskTimeline({
           </div>
         </div>
 
-        {unretained > 0 && earliest !== undefined && (
+        {rows.some(({ earliest }) => earliest > timeWindow.start) && (
           <p className="text-xs text-muted-foreground">
-            No task history before {formatAxisTime(earliest, timeWindow)}.
+            Hatched: Swarm keeps no older task history for that row.
           </p>
         )}
       </div>

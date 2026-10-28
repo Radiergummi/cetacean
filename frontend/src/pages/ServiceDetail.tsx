@@ -144,7 +144,7 @@ export default function ServiceDetail() {
 
       <TaskTimeline
         tasks={detail.tasks}
-        variant="service"
+        variant={service.Spec.Mode?.Global || service.Spec.Mode?.GlobalJob ? "global" : "service"}
       />
 
       {detail.hasPrometheus && (

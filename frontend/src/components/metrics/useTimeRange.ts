@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 
+const maxEpochSeconds = 8.64e12;
+
 /**
  * The time range in the URL: a named `range`, or `from`/`to` in epoch seconds.
  * Every panel on a page reads it from here, so their windows line up.
@@ -10,8 +12,13 @@ export function useTimeRange() {
   const range = params.get("range") ?? "1h";
   const fromParam = params.get("from");
   const toParam = params.get("to");
-  const customFrom = fromParam ? Number(fromParam) : null;
-  const customTo = toParam ? Number(toParam) : null;
+  // A window that is not one — unparseable, empty, reversed, or past what a
+  // Date holds — is no custom range at all, rather than a crash downstream.
+  const from = fromParam ? Number(fromParam) : Number.NaN;
+  const to = toParam ? Number(toParam) : Number.NaN;
+  const valid = from >= 0 && to > from && to <= maxEpochSeconds;
+  const customFrom = valid ? from : null;
+  const customTo = valid ? to : null;
 
   const setRange = useCallback(
     (value: string) => {

@@ -12,6 +12,8 @@ export interface TimelineBar {
   task: Task;
   start: number;
   end: number;
+  /** Tasks of one row that overlap in time take separate lanes. */
+  lane: number;
   ongoing: boolean;
   failed: boolean;
   error: string | undefined;
@@ -21,14 +23,14 @@ export interface TimelineRow {
   key: string;
   label: string;
   bars: TimelineBar[];
+  lanes: number;
+
+  /** When the row's oldest retained task was created: Swarm prunes per slot. */
+  earliest: number;
 }
 
-export interface Timeline {
-  rows: TimelineRow[];
-
-  /** When the oldest task Swarm still retains was created. */
-  earliest: number | undefined;
-}
+/** A replicated service's rows are slots, a global one's nodes. */
+export type TimelineVariant = "service" | "global" | "node";
 
 interface Group {
   key: string;
@@ -37,11 +39,11 @@ interface Group {
 }
 
 /**
- * On a service page a row is a slot, or a node for a global service, whose
- * tasks have no slot. On a node page it is a service's slot, so a replica
- * restarting in place reads as one row of short bars.
+ * On a service page a row is a slot, or a node for a global service. On a
+ * node page it is a service's slot, so a replica restarting in place reads as
+ * one row of short bars.
  */
-function groupOf(task: Task, variant: "service" | "node"): Group {
+function groupOf(task: Task, variant: TimelineVariant): Group {
   const slot = task.Slot ?? 0;
 
   if (variant === "node") {
@@ -52,7 +54,7 @@ function groupOf(task: Task, variant: "service" | "node"): Group {
       : { key: task.ServiceID, label: name, order: [name, 0] };
   }
 
-  if (slot > 0) {
+  if (variant === "service") {
     return { key: `slot:${slot}`, label: `Replica #${slot}`, order: ["", slot] };
   }
 
@@ -69,59 +71,73 @@ function startOf(task: Task): number {
   return Number.isFinite(created) && created > 0 ? created : Date.parse(task.Status.Timestamp);
 }
 
-function barOf(task: Task, now: number): TimelineBar {
+function barOf(task: Task, now: number): Omit<TimelineBar, "lane"> {
   const { State, Err, ContainerStatus, Timestamp } = task.Status;
   const start = startOf(task);
   const stopped = isTerminalTaskState(State);
   const exitCode = stopped ? ContainerStatus?.ExitCode : undefined;
+  const failed = statusTone(State) === "danger";
 
   return {
     task,
     start,
-    end: stopped ? Math.max(start, Date.parse(Timestamp)) : now,
+    end: Math.max(start, stopped ? Date.parse(Timestamp) : now),
     ongoing: !stopped,
-    failed: statusTone(State) === "danger",
-    error: Err || (exitCode ? `exit ${exitCode}` : undefined),
+    failed,
+    // A task stopped by an update exits non-zero too; that is no error.
+    error: Err || (failed && exitCode ? `exit ${exitCode}` : undefined),
   };
+}
+
+/** Puts each bar in the first lane free at its start. */
+function laneBars(bars: Omit<TimelineBar, "lane">[]): { bars: TimelineBar[]; lanes: number } {
+  const laneEnds: number[] = [];
+  const placed = bars
+    .sort((left, right) => left.start - right.start)
+    .map((bar) => {
+      let lane = laneEnds.findIndex((end) => end <= bar.start);
+
+      if (lane === -1) {
+        lane = laneEnds.length;
+      }
+
+      laneEnds[lane] = bar.end;
+
+      return { ...bar, lane };
+    });
+
+  return { bars: placed, lanes: Math.max(1, laneEnds.length) };
 }
 
 export function buildTimeline(
   tasks: Task[],
-  variant: "service" | "node",
+  variant: TimelineVariant,
   timeWindow: TimelineWindow,
   now: number,
-): Timeline {
-  const groups = new Map<string, Group & { bars: TimelineBar[] }>();
-  let earliest: number | undefined;
+): TimelineRow[] {
+  const groups = new Map<string, Group & { bars: Omit<TimelineBar, "lane">[]; earliest: number }>();
 
   for (const task of tasks) {
     const bar = barOf(task, now);
+    const group = groupOf(task, variant);
+    let existing = groups.get(group.key);
 
-    earliest = earliest === undefined ? bar.start : Math.min(earliest, bar.start);
-
-    if (bar.end < timeWindow.start || bar.start > timeWindow.end) {
-      continue;
+    if (!existing) {
+      existing = { ...group, bars: [], earliest: bar.start };
+      groups.set(group.key, existing);
     }
 
-    const group = groupOf(task, variant);
-    const existing = groups.get(group.key);
+    existing.earliest = Math.min(existing.earliest, bar.start);
 
-    if (existing) {
+    if (bar.end >= timeWindow.start && bar.start <= timeWindow.end) {
       existing.bars.push(bar);
-    } else {
-      groups.set(group.key, { ...group, bars: [bar] });
     }
   }
 
-  const rows = [...groups.values()]
+  return [...groups.values()]
+    .filter(({ bars }) => bars.length > 0)
     .sort(({ order: [leftName, leftSlot] }, { order: [rightName, rightSlot] }) =>
       leftName === rightName ? leftSlot - rightSlot : leftName.localeCompare(rightName),
     )
-    .map(({ key, label, bars }) => ({
-      key,
-      label,
-      bars: bars.sort((left, right) => left.start - right.start),
-    }));
-
-  return { rows, earliest };
+    .map(({ key, label, bars, earliest }) => ({ key, label, earliest, ...laneBars(bars) }));
 }

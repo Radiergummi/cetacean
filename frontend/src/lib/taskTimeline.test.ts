@@ -33,7 +33,7 @@ function makeTask(
 
 describe("buildTimeline", () => {
   it("groups a replicated service's tasks into one row per slot, in slot order", () => {
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [
         makeTask({ ID: "b", Slot: 10, createdAgo: 30, changedAgo: 29 }),
         makeTask({ ID: "a", Slot: 2, createdAgo: 30, changedAgo: 29 }),
@@ -52,7 +52,7 @@ describe("buildTimeline", () => {
   });
 
   it("groups a global service's tasks by node, named by hostname", () => {
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [
         makeTask({
           ID: "a",
@@ -79,7 +79,7 @@ describe("buildTimeline", () => {
           changedAgo: 4,
         }),
       ],
-      "service",
+      "global",
       timeWindow,
       now,
     );
@@ -92,7 +92,7 @@ describe("buildTimeline", () => {
   });
 
   it("groups a node's tasks by service and slot", () => {
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [
         makeTask({
           ID: "a",
@@ -141,7 +141,7 @@ describe("buildTimeline", () => {
   });
 
   it("runs a bar from creation to the last state change once the task has stopped", () => {
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [makeTask({ state: "complete", createdAgo: 40, changedAgo: 10 })],
       "service",
       timeWindow,
@@ -157,7 +157,7 @@ describe("buildTimeline", () => {
 
   it("runs a bar to now while the task has not stopped", () => {
     for (const state of ["running", "pending", "starting"]) {
-      const { rows } = buildTimeline(
+      const rows = buildTimeline(
         [makeTask({ state, createdAgo: 40, changedAgo: 39 })],
         "service",
         timeWindow,
@@ -172,7 +172,7 @@ describe("buildTimeline", () => {
     const failed = makeTask({ ID: "a", state: "failed", createdAgo: 40, changedAgo: 30 });
     failed.Status.Err = "task: non-zero exit (137)";
 
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [
         failed,
         makeTask({ ID: "b", Slot: 2, state: "rejected", createdAgo: 40, changedAgo: 39 }),
@@ -191,13 +191,13 @@ describe("buildTimeline", () => {
     const task = makeTask({ state: "failed", createdAgo: 40, changedAgo: 30 });
     task.Status.ContainerStatus = { ContainerID: "c", ExitCode: 1 };
 
-    const { rows } = buildTimeline([task], "service", timeWindow, now);
+    const rows = buildTimeline([task], "service", timeWindow, now);
 
     expect(rows[0]?.bars[0]?.error).toBe("exit 1");
   });
 
   it("leaves out tasks entirely outside the timeWindow, and rows left empty by that", () => {
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [
         makeTask({ ID: "old", Slot: 1, state: "shutdown", createdAgo: 200, changedAgo: 90 }),
         makeTask({ ID: "kept", Slot: 1, state: "shutdown", createdAgo: 200, changedAgo: 30 }),
@@ -213,7 +213,7 @@ describe("buildTimeline", () => {
 
   it("leaves out tasks created after a timeWindow in the past", () => {
     const past = { start: now - 120 * minute, end: now - 60 * minute };
-    const { rows } = buildTimeline(
+    const rows = buildTimeline(
       [makeTask({ createdAgo: 30, changedAgo: 29 })],
       "service",
       past,
@@ -223,26 +223,76 @@ describe("buildTimeline", () => {
     expect(rows).toEqual([]);
   });
 
-  it("reports the earliest retained task, inside the timeWindow or not", () => {
-    const { earliest } = buildTimeline(
+  it("reports each row's earliest retained task, inside the timeWindow or not", () => {
+    const rows = buildTimeline(
       [
-        makeTask({ ID: "a", state: "shutdown", createdAgo: 200, changedAgo: 90 }),
-        makeTask({ ID: "b", createdAgo: 30, changedAgo: 29 }),
+        makeTask({ ID: "a", Slot: 1, state: "shutdown", createdAgo: 200, changedAgo: 90 }),
+        makeTask({ ID: "b", Slot: 1, createdAgo: 30, changedAgo: 29 }),
+        makeTask({ ID: "c", Slot: 2, createdAgo: 10, changedAgo: 9 }),
       ],
       "service",
       timeWindow,
       now,
     );
 
-    expect(earliest).toBe(now - 200 * minute);
-    expect(buildTimeline([], "service", timeWindow, now).earliest).toBeUndefined();
+    expect(rows.map(({ earliest }) => earliest)).toEqual([now - 200 * minute, now - 10 * minute]);
+  });
+
+  it("gives tasks of one slot that overlap in time a lane each", () => {
+    const rows = buildTimeline(
+      [
+        makeTask({ ID: "stuck", Slot: 1, createdAgo: 50, changedAgo: 49 }),
+        makeTask({ ID: "replacement", Slot: 1, createdAgo: 20, changedAgo: 19 }),
+        makeTask({ ID: "earlier", Slot: 2, state: "shutdown", createdAgo: 50, changedAgo: 30 }),
+        makeTask({ ID: "later", Slot: 2, createdAgo: 30, changedAgo: 29 }),
+      ],
+      "service",
+      timeWindow,
+      now,
+    );
+
+    expect(rows.map(({ lanes, bars }) => [lanes, bars.map(({ lane }) => lane)])).toEqual([
+      [2, [0, 1]],
+      [1, [0, 0]],
+    ]);
+  });
+
+  it("keeps a replicated service's slot rows even when Swarm numbers a slot 0", () => {
+    const rows = buildTimeline(
+      [makeTask({ ID: "a", Slot: 0, createdAgo: 5, changedAgo: 4 })],
+      "service",
+      timeWindow,
+      now,
+    );
+
+    expect(rows.map(({ label }) => label)).toEqual(["Replica #0"]);
+  });
+
+  it("never draws a running task's bar backwards when it starts after now", () => {
+    const rows = buildTimeline(
+      [makeTask({ createdAgo: -0.5, changedAgo: -0.5 })],
+      "service",
+      { start: now - 60 * minute, end: now + minute },
+      now,
+    );
+
+    expect(rows[0]?.bars[0]?.end).toBe(rows[0]?.bars[0]?.start);
+  });
+
+  it("reports no error for a task an update shut down, whatever its exit code", () => {
+    const task = makeTask({ state: "shutdown", createdAgo: 40, changedAgo: 30 });
+    task.Status.ContainerStatus = { ContainerID: "c", ExitCode: 143 };
+
+    const rows = buildTimeline([task], "service", timeWindow, now);
+
+    expect(rows[0]?.bars[0]?.error).toBeUndefined();
   });
 
   it("starts a task without a creation time at its last state change", () => {
     const task = makeTask({ state: "running", createdAgo: 0, changedAgo: 20 });
     task.CreatedAt = "0001-01-01T00:00:00Z";
 
-    const { rows } = buildTimeline([task], "service", timeWindow, now);
+    const rows = buildTimeline([task], "service", timeWindow, now);
 
     expect(rows[0]?.bars[0]?.start).toBe(now - 20 * minute);
   });
