@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A task path ending in `.json`, `.csv` or another format suffix names a task by that whole identifier, as service and node paths do: `DELETE /tasks/abc.json` no longer removes task `abc`
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
 - A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
-- MCP write tools, and API conflict codes such as `SVC001`, no longer repeat the Docker engine's text for not-found, failed-precondition or out-of-sequence refusals; Cetacean's log keeps it
+- MCP write tools no longer repeat the Docker engine's text for not-found, failed-precondition or out-of-sequence refusals, nor API conflict codes such as `SVC001` for the latter two; Cetacean's log keeps it
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 - A failure that stops Cetacean logs `cetacean stopped`, with the cause in `error`, after closing what it opened. Update log queries that matched the failure's own message, such as `server error`.
 - **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Metric charts on the 7D range update live again instead of staying at the values they loaded with
 - Long bind mount paths on service pages wrap on narrow screens rather than widening the page
+- `POST /configs` and `POST /secrets` answer an engine refusal as every other write does, so a failed precondition is `409` rather than `500 ENG004`
 - Node cards dragged in the physical topology stay where they are dropped until a node joins or leaves
 - The services page and stack pages judge a global service against the nodes it can run on, rather than showing it grey
 - The services page's running counts and job health update as tasks start, stop, and finish
