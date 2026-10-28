@@ -103,7 +103,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		"Service",
 		func(s ServiceListItem) string { return "/services/" + s.ID },
 		func(page []swarm.Service) []ServiceListItem {
-			tallies := h.cache.TaskTallies()
+			tallies := h.cache.TaskTallies(page...)
 			eligible := h.cache.EligibleNodeCounts(page...)
 
 			items := make([]ServiceListItem, len(page))

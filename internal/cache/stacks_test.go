@@ -229,7 +229,8 @@ func TestCompletedJobTaskCountFollowsTheCurrentIteration(t *testing.T) {
 }
 
 // A job's failures count over its current run as its completions do, and a
-// rejection is a failure; nothing but a job has either.
+// rejection is a failure; nothing but a job has either. Only the services asked
+// about are tallied.
 func TestTaskTallies(t *testing.T) {
 	c := New(nil)
 
@@ -259,7 +260,8 @@ func TestTaskTallies(t *testing.T) {
 	c.SetTask(task("up", "web", nil, swarm.TaskStateRunning))
 	c.SetTask(task("crashed", "web", nil, swarm.TaskStateFailed))
 
-	tallies := c.TaskTallies()
+	web, _ := c.GetService("web")
+	tallies := c.TaskTallies(job, web)
 
 	if got, want := tallies["job-1"], (TaskTally{Running: 1, Completed: 1, Failed: 2}); got != want {
 		t.Errorf("job tally = %+v, want %+v", got, want)
@@ -267,5 +269,9 @@ func TestTaskTallies(t *testing.T) {
 
 	if got, want := tallies["web"], (TaskTally{Running: 1}); got != want {
 		t.Errorf("service tally = %+v, want %+v", got, want)
+	}
+
+	if _, ok := c.TaskTallies(web)["job-1"]; ok {
+		t.Error("TaskTallies(web) tallied job-1, a service it was not asked about")
 	}
 }

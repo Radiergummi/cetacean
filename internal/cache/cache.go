@@ -1202,31 +1202,33 @@ type TaskTally struct {
 	Running, Completed, Failed int
 }
 
-// TaskTallies is a TaskTally for every service with a task, in one pass under
-// one read lock.
-func (c *Cache) TaskTallies() map[string]TaskTally {
+// TaskTallies is a TaskTally for each of the given services, keyed by ID,
+// under one read lock.
+func (c *Cache) TaskTallies(services ...swarm.Service) map[string]TaskTally {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	tallies := make(map[string]TaskTally, len(c.services))
-	for _, t := range c.tasks {
-		svc, ok := c.services[t.ServiceID]
+	tallies := make(map[string]TaskTally, len(services))
+	for _, given := range services {
+		svc, ok := c.services[given.ID]
 		if !ok {
 			continue
 		}
 
-		tally := tallies[t.ServiceID]
-		switch {
-		case CountsAsRunningReplica(t):
-			tally.Running++
-		case CountsAsJobCompletion(svc, t):
-			tally.Completed++
-		case countsAsJobFailure(svc, t):
-			tally.Failed++
-		default:
-			continue
+		var tally TaskTally
+		for id := range c.tasksByService[svc.ID] {
+			t, ok := c.tasks[id]
+			switch {
+			case !ok:
+			case CountsAsRunningReplica(t):
+				tally.Running++
+			case CountsAsJobCompletion(svc, t):
+				tally.Completed++
+			case countsAsJobFailure(svc, t):
+				tally.Failed++
+			}
 		}
-		tallies[t.ServiceID] = tally
+		tallies[svc.ID] = tally
 	}
 
 	return tallies
