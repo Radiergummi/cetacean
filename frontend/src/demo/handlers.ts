@@ -211,6 +211,7 @@ function createTask(service: Service, slot: number, node: Node): Task {
   return {
     ID: randomHex(25),
     Version: { Index: Math.floor(Math.random() * 10000) },
+    CreatedAt: new Date().toISOString(),
     ServiceID: service.ID,
     NodeID: node.ID,
     Slot: slot,

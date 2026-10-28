@@ -9,10 +9,10 @@ import {
 } from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
+import { useTimeRange } from "./useTimeRange";
 import { AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 
 function formatRange(from: number, to: number): string {
   const fromDate = new Date(from * 1000);
@@ -59,66 +59,9 @@ interface Props {
 }
 
 export default function MetricsPanel({ charts, children, header, stackable }: Props) {
-  const [params, setParams] = useSearchParams();
-  const range = params.get("range") ?? "1h";
-
-  const setRange = (value: string) => {
-    setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-
-        if (value === "1h") {
-          next.delete("range");
-        } else {
-          next.set("range", value);
-        }
-
-        next.delete("from");
-        next.delete("to");
-
-        return next;
-      },
-      { replace: true },
-    );
-  };
-
-  const fromParam = params.get("from");
-  const toParam = params.get("to");
-  const customFrom = fromParam ? Number(fromParam) : null;
-  const customTo = toParam ? Number(toParam) : null;
+  const { range, customFrom, customTo, setRange, setCustomRange, clearCustomRange } =
+    useTimeRange();
   const isCustomRange = customFrom != null && customTo != null;
-
-  const setCustomRange = useCallback(
-    (from: number, to: number) => {
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous);
-
-          next.set("from", String(Math.floor(from)));
-          next.set("to", String(Math.floor(to)));
-          next.delete("range");
-
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setParams],
-  );
-
-  const clearCustomRange = useCallback(() => {
-    setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-
-        next.delete("from");
-        next.delete("to");
-
-        return next;
-      },
-      { replace: true },
-    );
-  }, [setParams]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [stacked, setStacked] = useState(false);
   const [streaming, setStreaming] = useState(true);
