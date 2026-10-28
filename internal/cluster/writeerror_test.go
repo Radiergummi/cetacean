@@ -108,7 +108,7 @@ func TestClassifyRemoval(t *testing.T) {
 		"abc",
 	)
 	if !ok || refusal.Kind != Invalid {
-		t.Errorf("an unmarked removal error classified as %d, want Invalid", refusal.Kind)
+		t.Errorf("an unmarked removal error classified as %+v, %t, want Invalid", refusal, ok)
 	}
 }
 
