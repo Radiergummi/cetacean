@@ -681,8 +681,14 @@ describe("useSwarmQuery", () => {
     await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2), { timeout: 3000 });
   });
 
-  it("SSE updates keep the task counts the list computed for a service", async () => {
-    const counted = { ID: "s1", Name: "web", RunningTasks: 2, DesiredTasks: 3 };
+  it("SSE updates keep the task counts and image update the list computed for a service", async () => {
+    const counted = {
+      ID: "s1",
+      Name: "web",
+      RunningTasks: 2,
+      DesiredTasks: 3,
+      ImageUpdate: { image: "nginx:1.27" },
+    };
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
       .mockResolvedValue(makeFetchResult([counted], 1));
