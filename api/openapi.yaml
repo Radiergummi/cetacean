@@ -6994,7 +6994,8 @@ paths:
       summary: SBOM of a task's image
       description: |
         As for a service, for the platform of the task's node. `platform` is
-        needed only when that node matches several, such as ARM variants.
+        needed only when that node matches several, such as the ARM variants
+        of a node that names no ARM version.
       parameters:
         - $ref: "#/components/parameters/resourceId"
         - $ref: "#/components/parameters/attestationPlatform"

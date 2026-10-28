@@ -142,8 +142,10 @@ func ServiceProvenance(
 			continue
 		}
 
+		runs := nodePlatforms(node, t.Attested.Platforms)
+
 		for i, p := range t.Attested.Platforms {
-			if nodeRuns(node, p.Platform) {
+			if slices.Contains(runs, p.Platform) {
 				out.Platforms[i].RunningTasks++
 			}
 		}
@@ -163,23 +165,23 @@ func TaskProvenance(
 	return project(TaskAttestationTarget(ctx, task, nodes, src))
 }
 
-// taskPlatforms are the platforms of img a task's node can be running. The
-// node does not report an ARM variant, so every variant matches; a task not
-// placed yet could run any.
+// taskPlatforms are the platforms of img a task's node can be running; a
+// task not placed yet could run any.
 func taskPlatforms(
 	task swarm.Task,
 	node *swarm.Node,
 	img attestations.Image,
 ) []attestations.Platform {
-	var out []attestations.Platform
-
-	for _, p := range img.Platforms {
-		if task.NodeID == "" || node == nil || nodeRuns(*node, p.Platform) {
+	if task.NodeID == "" || node == nil {
+		var out []attestations.Platform
+		for _, p := range img.Platforms {
 			out = append(out, p.Platform)
 		}
+
+		return out
 	}
 
-	return out
+	return nodePlatforms(*node, img.Platforms)
 }
 
 // selectPlatform picks the requested platform among candidates, or the only
@@ -324,11 +326,61 @@ type DockerfileView struct {
 	*attestations.Dockerfile
 }
 
-func nodeRuns(node swarm.Node, p attestations.Platform) bool {
+// nodePlatforms are the platforms of an image a node pulls. A 32-bit ARM node
+// names its version (armv7l), and gets the highest variant not above it, as
+// containerd picks; one naming none (arm) may run any variant.
+func nodePlatforms(
+	node swarm.Node,
+	platforms []attestations.ImagePlatform,
+) []attestations.Platform {
 	have := node.Description.Platform
+	version := armVersion(have.Architecture)
+	arch := normalizeArch(have.Architecture)
 
-	return strings.EqualFold(have.OS, p.OS) &&
-		normalizeArch(have.Architecture) == normalizeArch(p.Architecture)
+	if version > 0 {
+		arch = "arm"
+	}
+
+	var out []attestations.Platform
+
+	best := 0
+
+	for _, ip := range platforms {
+		p := ip.Platform
+		if !strings.EqualFold(have.OS, p.OS) || normalizeArch(p.Architecture) != arch {
+			continue
+		}
+
+		if arch == "arm" && version > 0 {
+			v := armVersion("arm" + p.Variant)
+			if v == 0 && p.Variant == "" {
+				v = 7 // containerd reads linux/arm without a variant as v7
+			}
+
+			if v == 0 || v > version || v < best {
+				continue
+			}
+
+			if v > best {
+				best, out = v, out[:0]
+			}
+		}
+
+		out = append(out, p)
+	}
+
+	return out
+}
+
+// armVersion is the ARM version an architecture or variant names: 7 for
+// armv7l and for arm with variant v7, 0 when it names none from 5 to 7.
+func armVersion(arch string) int {
+	rest, ok := strings.CutPrefix(arch, "armv")
+	if !ok || rest == "" || rest[0] < '5' || rest[0] > '7' {
+		return 0
+	}
+
+	return int(rest[0] - '0')
 }
 
 // project renders the candidate platforms of t's image.
@@ -469,7 +521,13 @@ func ciSummary(ci *attestations.GitHubContext) *CISummary {
 	}
 
 	if workflow != "" && ci.WorkflowSHA != "" {
-		s.WorkflowURL = base + "/blob/" + url.PathEscape(ci.WorkflowSHA) + "/" + workflow
+		segments := strings.Split(workflow, "/")
+		for i, segment := range segments {
+			segments[i] = url.PathEscape(segment)
+		}
+
+		s.WorkflowURL = base + "/blob/" + url.PathEscape(ci.WorkflowSHA) + "/" +
+			strings.Join(segments, "/")
 	}
 
 	return s

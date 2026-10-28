@@ -291,8 +291,9 @@ It is normalized to OCI names (`amd64`, `arm64`) before matching. `normalizeArch
 entries. Both are reused. The rules also live in `internal/cluster`:
 
 - **Task:** the attestation for the platform of the task's node.
-  - If that node's platform matches several index entries (`arm` with several variants, since the
-    node description has no variant), all of them are returned.
+  - A 32-bit ARM node names its version (`armv7l`). It matches the highest variant not above that
+    version, as containerd picks; `linux/arm` without a variant counts as `v7`.
+  - A node that names no version (`arm`) matches every variant, and all of them are returned.
   - If the task has no node yet, every platform is returned, the same as for a service.
 - **Service:** every platform the index has. The dashboard selects first the platform most of the
   service's running tasks are on, and otherwise the first one listed.

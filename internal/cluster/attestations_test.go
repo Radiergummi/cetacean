@@ -85,16 +85,50 @@ func TestTaskPlatformsNormalisesNodeArch(t *testing.T) {
 	}
 }
 
-func TestTaskPlatformsArmVariantsAreAllCandidates(t *testing.T) {
-	node := nodeOn("n1", "armv7l")
+func TestTaskPlatformsArmVariants(t *testing.T) {
+	armv5 := attestations.Platform{OS: "linux", Architecture: "arm", Variant: "v5"}
+	arm := attestations.Platform{OS: "linux", Architecture: "arm"}
 
-	got := taskPlatforms(
-		taskOn("n1", swarm.TaskStateRunning),
-		&node,
-		imageWith(amd64, armv6, armv7),
-	)
-	if !slices.Equal(got, []attestations.Platform{armv6, armv7}) {
-		t.Errorf("got %v", got)
+	cases := []struct {
+		node   string
+		image  []attestations.Platform
+		expect []attestations.Platform
+	}{
+		{
+			"armv7l",
+			[]attestations.Platform{amd64, armv5, armv6, armv7},
+			[]attestations.Platform{armv7},
+		},
+		{"armv7l", []attestations.Platform{armv5, armv6}, []attestations.Platform{armv6}},
+		{"armv6l", []attestations.Platform{armv5, armv6, armv7}, []attestations.Platform{armv6}},
+		{"armv7l", []attestations.Platform{armv6, arm}, []attestations.Platform{arm}},
+		{"armv6l", []attestations.Platform{armv7}, nil},
+		// A node naming no version may be any of them.
+		{"arm", []attestations.Platform{armv6, armv7}, []attestations.Platform{armv6, armv7}},
+	}
+
+	for _, tc := range cases {
+		node := nodeOn("n1", tc.node)
+
+		got := taskPlatforms(taskOn("n1", swarm.TaskStateRunning), &node, imageWith(tc.image...))
+		if !slices.Equal(got, tc.expect) {
+			t.Errorf("%s on %v: got %v, want %v", tc.node, tc.image, got, tc.expect)
+		}
+	}
+}
+
+func TestServiceProvenanceCountsAnArmNodeOnce(t *testing.T) {
+	tasks := []swarm.Task{taskOn("a", swarm.TaskStateRunning)}
+	svc := swarm.Service{Spec: swarm.ServiceSpec{TaskTemplate: tasks[0].Spec}}
+	src := &fakeAttestations{image: imageWith(armv6, armv7)}
+
+	got := ServiceProvenance(context.Background(), svc, tasks, func(string) (swarm.Node, bool) {
+		return nodeOn("a", "armv7l"), true
+	}, src)
+
+	if got.Platforms[0].RunningTasks != 0 || got.Platforms[1].RunningTasks != 1 {
+		t.Errorf("running = %d, %d; want 0, 1",
+			got.Platforms[0].RunningTasks, got.Platforms[1].RunningTasks)
 	}
 }
 
@@ -282,6 +316,15 @@ func TestCILinks(t *testing.T) {
 		"422dfad83311be8c7e03e219ab6e8f70f4619575/.github/workflows/ci.yaml" ||
 		got.Workflow != ".github/workflows/ci.yaml" {
 		t.Errorf("workflow = %q at %q", got.Workflow, got.WorkflowURL)
+	}
+
+	odd := *ci
+	odd.WorkflowRef = "docker/buildkit-syft-scanner/.github/workflows/c i?x#y.yaml@refs/heads/main"
+
+	if got := summaryOf(&attestations.Provenance{CI: &odd}).CI; got.WorkflowURL !=
+		"https://github.com/docker/buildkit-syft-scanner/blob/"+
+			"422dfad83311be8c7e03e219ab6e8f70f4619575/.github/workflows/c%20i%3Fx%23y.yaml" {
+		t.Errorf("workflow URL = %q; the path must stay a path", got.WorkflowURL)
 	}
 
 	plain := *ci
