@@ -119,6 +119,7 @@ func newTestRouter(
 	})
 
 	return NewRouter(RouterConfig{
+		Hosts:              auth.NewHostSet("", "example.com", "cetacean.example.com"),
 		Handlers:           handlers,
 		Broadcaster:        broadcaster,
 		SPA:                noopSPA,

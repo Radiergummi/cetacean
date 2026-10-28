@@ -36,6 +36,12 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
 
 <ConfigParam name="server.public_url" flag="-public-url" env="CETACEAN_PUBLIC_URL">
   Canonical external URL clients reach Cetacean at, for example `https://cetacean.example.com`. Origin only—set the path prefix with [`server.base_path`][server.base_path], which is used for both inbound and outbound paths. Supplies the default for [`oauth.issuer`][oauth.issuer] and [`auth.oidc.redirect_url`][auth.oidc.redirect_url], and makes Atom and JSON Feed links independent of the `X-Forwarded-*` headers a client can set. Set it behind a reverse proxy.
+
+  Its host is one of the names Cetacean answers for. A request whose `Host` is none of them is refused with `421`, which stops a site that points its own name at Cetacean (DNS rebinding) from reading the API as its visitor. Also accepted: any IP address, `localhost`, a host name in [`server.listen_addr`][server.listen_addr], the tailnet name in [`tsnet` mode][tailscale], each name in [`server.allowed_hosts`][server.allowed_hosts], and any request from a [trusted proxy][server.trusted_proxies]. `/-/health`, `/-/ready`, and `/-/metrics` answer under any name.
+</ConfigParam>
+
+<ConfigParam name="server.allowed_hosts" flag="-allowed-hosts" env="CETACEAN_ALLOWED_HOSTS">
+  Further host names Cetacean answers for, as a comma-separated list, for example `swarm.lan,cetacean.tailnet.ts.net`. Add every name people reach Cetacean by other than the host of [`server.public_url`][server.public_url]; a request naming any other host is refused with `421`. IP addresses and `localhost` need no entry.
 </ConfigParam>
 
 <ConfigParam name="docker.host" flag="-docker-host" env="CETACEAN_DOCKER_HOST" default="unix:///var/run/docker.sock">
@@ -87,7 +93,7 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
 </ConfigParam>
 
 <ConfigParam name="server.image_check" flag="-image-check" env="CETACEAN_IMAGE_CHECK" default="true">
-  Ask each service image's registry, hourly, which image its tag names now, so the service pages and the recommendations can point out a newer one. Only the manifest is requested, anonymously; a private image Cetacean holds no credentials for is skipped. Turn it off where Cetacean must not reach the internet; services then show no update hint.
+  Ask each service image's registry, hourly, which image its tag names now, so the service pages and the recommendations can point out a newer one. Only the manifest is requested, anonymously; a private image Cetacean holds no credentials for is skipped. Redirects must stay on HTTPS. A registry on a private network may send Cetacean to other private hosts; a public one's redirects and token service must be on its own domain or publicly reachable, and through a proxy its redirects must stay on its domain. Cetacean can't see the addresses a proxy reaches, so with `HTTPS_PROXY` set the proxy is the egress control. Turn it off where Cetacean must not reach the internet; services then show no update hint.
 </ConfigParam>
 
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
@@ -106,10 +112,12 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Origins allowed to make cross-origin requests to the API, as a comma-separated list, for example `https://admin.example.com`, or `*` for any. When unset, no CORS headers are sent and browsers block cross-origin requests.
 
   The same origins are trusted for cross-origin writes; `*` can't be, so with a wildcard browsers may read the API from any origin while cross-origin writes are refused.
+
+  Under [`auth.mode`][auth.mode] `none` or `tailscale`, `*` refuses startup. Those modes know a visitor by their network address, so a wildcard would let any site that visitor opens read the API as them.
 </ConfigParam>
 
 <ConfigParam name="server.trusted_proxies" flag="-trusted-proxies" env="CETACEAN_TRUSTED_PROXIES">
-  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, for example `10.0.0.0/8,172.16.0.0/12`. The real client IP is read from the header family [`server.forwarded_headers`][server.forwarded_headers] names. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection.
+  Comma-separated IP addresses or [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing) ranges of reverse proxies whose forwarding headers are trusted, for example `10.0.0.0/8,172.16.0.0/12`. The real client IP is read from the header family [`server.forwarded_headers`][server.forwarded_headers] names. Required for [header-based authentication][trusted-proxy-headers], and for `cert` mode behind a [TLS-terminating proxy][cert-behind-proxy]. When unset, every request counts as a direct connection. Never list the address range of the ingress or routing mesh: every client reaches Cetacean through it, so each would count as a trusted proxy and could name its own address, identity, and host.
 </ConfigParam>
 
 <ConfigParam name="server.forwarded_headers" flag="-forwarded-headers" env="CETACEAN_FORWARDED_HEADERS" default="x-forwarded">
@@ -502,6 +510,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [acl.policy_file]: #acl.policy_file
 [api]: api
 [auth.headers.secret_header]: #auth.headers.secret_header
+[auth.mode]: #auth.mode
 [auth.oidc.redirect_url]: #auth.oidc.redirect_url
 [authentication]: authentication
 [authorization]: authorization
@@ -530,8 +539,10 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [operations-level]: #operations-level
 [recommendations]: recommendations
 [rfc7239]: https://www.rfc-editor.org/rfc/rfc7239
+[server.allowed_hosts]: #server.allowed_hosts
 [server.base_path]: #server.base_path
 [server.forwarded_headers]: #server.forwarded_headers
+[server.listen_addr]: #server.listen_addr
 [server.operations_level]: #server.operations_level
 [server.pprof]: #server.pprof
 [server.public_url]: #server.public_url

@@ -3,6 +3,7 @@ package prometheus
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -11,6 +12,20 @@ import (
 	"testing"
 	"time"
 )
+
+// A raw body past the limit is an error, not the first maxResponseBytes of it.
+func TestClient_RawQueryRefusesAnOversizedBody(t *testing.T) {
+	prom := oversizedProm(false)
+	defer prom.Close()
+
+	body, err := NewClient(prom.URL).InstantQueryRaw(t.Context(), "up")
+	if !errors.Is(err, ErrResponseTooLarge) {
+		t.Errorf("got %d bytes and error %v, want ErrResponseTooLarge", len(body), err)
+	}
+	if err != nil && strings.Contains(err.Error(), prom.URL) {
+		t.Errorf("error %q names the Prometheus address", err)
+	}
+}
 
 func TestClient_InstantQuery(t *testing.T) {
 	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

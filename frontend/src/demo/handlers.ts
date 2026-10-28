@@ -242,13 +242,13 @@ function compareStrings(a: string, b: string): number {
 }
 
 /**
- * Parse the Range header (e.g. "items 0-49") into offset and limit.
+ * Parse the Range header (e.g. "items=0-49", or the deprecated "items 0-49") into offset and limit.
  */
 function parseRange(request: Request): { offset: number; limit: number } {
   const range = request.headers.get("Range");
 
   if (range) {
-    const match = range.match(/^items\s+(\d+)-(\d+)$/);
+    const match = range.match(/^items(?:=|\s+)(\d+)-(\d+)$/i);
 
     if (match) {
       const start = parseInt(match[1] ?? "", 10);

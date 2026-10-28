@@ -16,6 +16,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
@@ -273,7 +274,9 @@ func TestAsyncAPINamesTheDeployment(t *testing.T) {
 	t.Run("a second origin is not served the first one's document", func(t *testing.T) {
 		router := newTestRouterWithConfig(
 			t,
-			[]routerOption{withAsyncAPISpec(t)},
+			[]routerOption{withAsyncAPISpec(t), func(cfg *RouterConfig) {
+				cfg.Hosts = auth.NewHostSet("", "one.example.com", "two.example.com")
+			}},
 			withCache(cache.New(nil)),
 		)
 
@@ -634,14 +637,14 @@ func TestAsyncAPIIsPublicWithAPublicURL(t *testing.T) {
 	)
 
 	req := httptest.NewRequest(http.MethodGet, asyncAPIPath, nil)
-	req.Host = "evil.attacker.example"
+	req.Host = "192.0.2.10:9000"
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=3600" {
 		t.Errorf("Cache-Control = %q, want public", got)
 	}
-	if strings.Contains(rec.Body.String(), "evil.attacker.example") {
+	if strings.Contains(rec.Body.String(), "192.0.2.10") {
 		t.Error("the document names the request's Host instead of the public URL")
 	}
 }

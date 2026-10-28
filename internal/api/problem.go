@@ -55,7 +55,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, detail str
 	p := ProblemDetail{
 		Context:   problemContext(absPath(ctx, jsonLDContext)),
 		Type:      "about:blank",
-		Title:     http.StatusText(status),
+		Title:     statusPhrase(status),
 		Status:    status,
 		Detail:    detail,
 		Instance:  absPath(ctx, r.URL.Path),
@@ -75,7 +75,7 @@ func writeProblemTyped(w http.ResponseWriter, r *http.Request, p ProblemDetail) 
 		p.Type = "about:blank"
 	}
 	if p.Title == "" {
-		p.Title = http.StatusText(p.Status)
+		p.Title = statusPhrase(p.Status)
 	}
 	if p.Instance == "" {
 		p.Instance = absPath(ctx, r.URL.Path)
@@ -84,6 +84,21 @@ func writeProblemTyped(w http.ResponseWriter, r *http.Request, p ProblemDetail) 
 		p.RequestID = RequestIDFrom(ctx)
 	}
 	writeProblemJSON(w, p)
+}
+
+// statusPhrase is the reason phrase RFC 9110 §15 recommends, where net/http
+// still carries the one an obsoleted RFC gave.
+func statusPhrase(status int) string {
+	switch status {
+	case http.StatusRequestEntityTooLarge:
+		return "Content Too Large"
+	case http.StatusRequestedRangeNotSatisfiable:
+		return "Range Not Satisfiable"
+	case http.StatusUnprocessableEntity:
+		return "Unprocessable Content"
+	default:
+		return http.StatusText(status)
+	}
 }
 
 func writeProblemJSON(w http.ResponseWriter, p ProblemDetail) {

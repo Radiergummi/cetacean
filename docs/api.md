@@ -39,6 +39,12 @@ writes, so name every origin that should be allowed to make them.
 Requests that carry no browser headers, such as `curl` or a script, aren't affected. Neither are `/mcp` and the
 OAuth `token`, `revoke`, and `register` endpoints, which authenticate from the request itself.
 
+## Host names
+
+A page can point its own name at Cetacean's address and then read the API as if it came from the same origin. To
+stop that, a request whose `Host` isn't one of the [names Cetacean answers for][server.public_url] is refused with
+`421` and code [`CSR002`](api/errors#CSR002).
+
 ## Content negotiation
 
 Every resource URL serves JSON, HTML (the embedded [dashboard][dashboard]), SSE, or a feed format depending on what
@@ -298,6 +304,10 @@ List endpoints page by query parameter or by HTTP `Range` header.
 | `search`  | string | none    | Case-insensitive substring match on name                      |
 | `filter`  | string | none    | [expr-lang](https://expr-lang.org/) expression, max 512 chars |
 
+A `limit` or `offset` that isn't a whole number in range, a `dir` other than `asc` or `desc`, or a `sort` the
+list doesn't offer is refused with `400` ([`API016`](api/errors#API016)). The same goes for a malformed
+`before` or `limit` on `/history`, the feeds and `/search`.
+
 ```http tab
 GET /services?limit=10&offset=20 HTTP/1.1
 
@@ -314,10 +324,13 @@ curl "http://localhost:9000/configs?search=nginx"
 
 ### Range header pagination
 
-List endpoints accept `Range: items 0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
+List endpoints accept `Range: items=0-24` and answer `206 Partial Content` with `Content-Range: items 0-24/142`.
 Every list response sets `Accept-Ranges: items`. An offset past the end returns `416` with `Content-Range: items
-*/142`. Query parameters take precedence when both are present. With `If-Range` naming the `ETag` of the page
-you hold, the range is served only if that page is unchanged; otherwise you get the first page with a `200`.
+*/142`. Query parameters take precedence when both are present, and a malformed `Range` or one naming several
+ranges is ignored. `Range: items 0-24`, without the `=`, is still accepted but deprecated.
+
+Every page of a list carries the collection's `ETag`, as does the full answer. With `If-Range` naming it, any
+page is served as long as the list is unchanged; otherwise you get the first page with a `200`.
 
 ### History pagination
 
@@ -498,13 +511,14 @@ suggestion; `GET /api/errors/{code}` returns one.
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
 | [Grants][authorization] deny read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
 | Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
+| `Host` names none of Cetacean's names | 421 | [`CSR002`](api/errors#CSR002) | Add the name to [`server.allowed_hosts`][server.allowed_hosts] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |
 | Docker daemon unreachable | 503 | [`ENG001`](api/errors#ENG001) | Check the socket and the daemon |
 | Name in the path identifies more than one resource | 409 | [`API015`](api/errors#API015) | Address the resource by ID; the detail lists the candidates |
 
 ## Caching
 
-JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. Use `If-None-Match` for conditional requests:
+JSON responses carry an `ETag` and `Cache-Control: no-cache`; `GET /swarm/unlock-key` sends `no-store` instead, so no cache keeps the key. `GET /auth/whoami` sends `no-store` and no `ETag`: it describes the caller, and a validator on it would invite the sharing `no-store` forbids. Use `If-None-Match` for conditional requests:
 
 ```bash
 curl -v http://localhost:9000/services
@@ -517,6 +531,11 @@ curl -H 'If-None-Match: "3a7f..."' http://localhost:9000/services
 A service's and a node's detail also set `Last-Modified` from the resource's update timestamp, or for a service from
 when a newer image was found if that is later, and honor `If-Modified-Since`. When both conditional headers are present, `If-None-Match` wins. A config, secret, network,
 volume, or task lists what refers to it, which changes without its timestamp moving, so those carry only the `ETag`.
+
+A read honors `If-Match`, and `If-Unmodified-Since` where it sends `Last-Modified`, as well: when one doesn't hold, the
+answer is `412` ([`API013`](api/errors#API013)). They are evaluated in the order
+[RFC 9110 §13.2.2](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.2) gives: `If-Match`, or `If-Unmodified-Since`
+without it, then `If-None-Match`, or `If-Modified-Since` without it, and `If-Range` last.
 
 `/api` and `/api/context.jsonld` return `Cache-Control: public, max-age=3600`; `/api/scalar.js` returns `max-age=86400`.
 SSE and streaming endpoints set no caching headers.
@@ -547,11 +566,21 @@ A service's `ports`, `configs`, `secrets`, `networks` and `mounts` each take a m
 spelled exactly so; any other member answers `400`. A patch without the member changes nothing; `null` or `[]` empties
 the list.
 
-A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does.
+A method a path doesn't serve answers `405 Method Not Allowed`, with an `Allow` naming the methods it does. That
+includes a `GET` on a path only writes are routed at, such as `/services/{id}/scale`, from a client whose `Accept`
+rules out HTML; a browser there gets the dashboard. `OPTIONS` on any routed path answers `204` with that `Allow`, and
+with `Accept-Patch` where it offers a `PATCH`. Both list only the writes your operations level and grants open, as
+a `GET`'s `Allow` does. A `415` for a patch format the path doesn't take carries
+`Accept-Patch` too.
 
 Write endpoints honor [RFC 7240](https://www.rfc-editor.org/rfc/rfc7240) `Prefer: return=minimal`, answering
 `204 No Content` (or `201 Created` for a create) with `Preference-Applied: return=minimal` instead of the updated
 resource.
+
+A write answering with a body checks `Accept` once you're authorized and before it changes anything: an `Accept`
+that rules out both JSON and `application/problem+json` answers `406` ([`API003`](api/errors#API003)) and the write
+doesn't happen. The writes that always answer `204` skip the check, as does one sent with `Prefer: return=minimal`
+and no `wait` or `respond-async`, except `POST /plugins` and `POST /plugins/privileges`, which always send a body.
 
 Every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. HSTS
 is added when TLS is enabled.
@@ -724,6 +753,9 @@ Append `point` events to the data you already hold to build a rolling window.
 
 Under an [ACL policy][authorization], the stream and the Prometheus proxy (`GET /metrics`, `GET /metrics/labels`,
 `GET /metrics/labels/{name}`) answer `403 ACL001` unless the caller holds `read` on the bare resource `*`.
+
+The proxy forwards a Prometheus answer of up to 10 MiB. A longer one is refused whole with `502`
+([`MTR008`](api/errors#MTR008)) rather than cut short; on a stream, the same answer is a `query_error` event.
 
 ### Stream contract
 
@@ -929,6 +961,12 @@ header ([RFC 9110 §13.1.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.1.
 refused with `412 Precondition Failed` (error code `API013`) instead of being applied. The header
 is always optional—omit it and the write proceeds exactly as it did before this existed.
 
+The same endpoints evaluate `If-None-Match` and `If-Unmodified-Since`, in the RFC 9110 §13.2.2 order. `If-None-Match:
+*` refuses the write while the resource exists, and a tag refuses it while that tag is current, both with `412`.
+`If-Unmodified-Since` is compared with the `Last-Modified` a `GET` sends, so only `DELETE /services/{id}` and
+`DELETE /nodes/{id}` have a date to compare it with; elsewhere it's ignored, as is a value that isn't a single valid
+date, and it's ignored whenever `If-Match` is present.
+
 A `412` always means the resource moved. A resource that is gone answers `404`, the same as it
 would without the header—[RFC 9110 §13.2.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1)
 keeps the precondition out of the way of an answer that was never going to be a success. Where the
@@ -955,7 +993,7 @@ change in that instant goes unnoticed.
 `DELETE /tasks/{id}`, `DELETE /stacks/{name}`, `DELETE /plugins/{name}`.
 
 19 refuse every `If-Match`, `*` included, with `412`: they are action-style endpoints with no `GET` at that exact
-path, so there is no `ETag` the header could match. They are `PUT /services/{id}/scale`,
+path, so there is no `ETag` the header could match, and `If-None-Match` finds none to refuse. They are `PUT /services/{id}/scale`,
 `PUT /services/{id}/image`, `POST /services/{id}/restart`, `POST /services/{id}/rollback`,
 `PUT /nodes/{id}/availability`, `POST /plugins/{name}/enable`, `POST /plugins/{name}/disable`,
 `POST /plugins/{name}/upgrade`, `PATCH /plugins/{name}/settings`, `POST /plugins/privileges`, `PATCH /swarm/ca`,
@@ -1052,7 +1090,7 @@ the changelog marks each one **Breaking**.
 - **Response bodies:** field names, types and meaning, the `@type` of each document, and every term
   `/api/context.jsonld` defines.
 - **Errors:** every problem code and the status it answers with, as the [error reference](api/errors) lists them.
-- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items` and
+- **Pagination, filtering and sorting:** the query parameters, `Link` relations, `Range: items=` and
   `Content-Range`, the `?filter=` grammar and its fields, and the `?sort=` fields.
 - **Feeds and spreadsheets:** which endpoints serve them, and CSV column names and order.
 - **Event streams:** event names, payload shapes, `Last-Event-ID` replay and the `sync` and `full_sync` events, as
@@ -1115,6 +1153,7 @@ it.
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
 [requirements]: getting-started#requirements
+[server.allowed_hosts]: configuration#server.allowed_hosts
 [server.cors.origins]: configuration#server.cors.origins
 [server.public_url]: configuration#server.public_url
 [server.sse.batch_interval]: configuration#server.sse.batch_interval

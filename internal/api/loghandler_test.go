@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -104,6 +105,26 @@ func TestHandleServiceLogs_JSON_NotFound(t *testing.T) {
 
 func withContentType(r *http.Request, ct ContentType) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), contentTypeKey{}, ct))
+}
+
+// A HEAD on the tail answers with the stream's headers and never asks Docker,
+// whose follow stream would otherwise stay open behind a body nobody reads.
+func TestHandleServiceLogs_SSEHead(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1"})
+	h := newTestHandlers(t, withCache(c),
+		withDockerClient(&mockLogStreamer{err: errors.New("Docker was asked")}))
+
+	req := httptest.NewRequest(http.MethodHead, "/services/svc1/logs", nil)
+	req.SetPathValue("id", "svc1")
+	req = withContentType(req, ContentTypeSSE)
+	w := httptest.NewRecorder()
+	h.HandleServiceLogs(w, req)
+
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("HEAD answered %d with Content-Type %q, want 200 text/event-stream; body %s",
+			w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
 }
 
 func TestHandleServiceLogs_SSE(t *testing.T) {

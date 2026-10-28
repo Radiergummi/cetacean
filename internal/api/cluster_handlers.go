@@ -239,12 +239,14 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	if !h.requireAnyGrant(w, r) {
 		return
 	}
+	allowReads(w)
 
 	queryable := h.acl.CanReadEverything(auth.IdentityFromContext(r.Context()))
 
 	if h.promClient == nil {
-		writeJSON(
+		writeCachedJSON(
 			w,
+			r,
 			NewDetailResponse(
 				r.Context(),
 				"/metrics/status",
@@ -307,7 +309,11 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	writeJSON(w, NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status))
+	writeCachedJSON(
+		w,
+		r,
+		NewDetailResponse(r.Context(), "/metrics/status", "MonitoringStatus", status),
+	)
 }
 
 func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {

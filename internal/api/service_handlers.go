@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -66,7 +67,7 @@ func (h *Handlers) HandleListServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r, validator = h.ifRange(r, validator)
+	r = ifRange(r, validator)
 
 	services, _, p, ok := prepareList(h, w, r, spec, cluster.VersionSelection{})
 	if !ok {
@@ -138,14 +139,26 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The image check can add an update with no change to the service, and a
-	// client revalidating on the date alone must not be told it has that.
+	writeCachedJSONTimed(w, r, rep, h.serviceLastModified(svc))
+}
+
+// serviceLastModified is the Last-Modified of a service's representation. The
+// image check can add an update with no change to the service, and a client
+// revalidating on the date alone must not be told it has that.
+func (h *Handlers) serviceLastModified(svc swarm.Service) time.Time {
 	lastModified := svc.UpdatedAt
 	if update := h.imageUpdate(svc); update != nil && update.Since.After(lastModified) {
 		lastModified = update.Since
 	}
 
-	writeCachedJSONTimed(w, r, rep, lastModified)
+	return lastModified
+}
+
+// serviceModified is serviceLastModified for the service a request addresses.
+func (h *Handlers) serviceModified(r *http.Request) time.Time {
+	svc, _ := h.cache.GetService(r.PathValue("id"))
+
+	return h.serviceLastModified(svc)
 }
 
 func (h *Handlers) HandleServiceTasks(w http.ResponseWriter, r *http.Request) {

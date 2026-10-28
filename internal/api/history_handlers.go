@@ -26,7 +26,12 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		limit = h.cache.History().Size()
 	}
 	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			writeErrorCode(w, r, "API016", errInvalidLimit.Error())
+			return
+		}
+		if n <= 200 {
 			limit = n
 		}
 	}
@@ -44,7 +49,13 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Paged by cursor, as the feeds are: the ring moves under an offset.
-	beforeID, _ := strconv.ParseUint(q.Get("before"), 10, 64)
+	var beforeID uint64
+	if v := q.Get("before"); v != "" {
+		if beforeID, err = strconv.ParseUint(v, 10, 64); err != nil {
+			writeErrorCode(w, r, "API016", errInvalidBefore.Error())
+			return
+		}
+	}
 
 	query := cache.HistoryQuery{
 		Type:         cache.EventType(resourceType),
