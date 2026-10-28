@@ -25,7 +25,7 @@ export interface TimelineRow {
   bars: TimelineBar[];
   lanes: number;
 
-  /** When the row's oldest retained task was created: Swarm prunes per slot. */
+  /** When the row's earliest known task was created; only tasks of this row count. */
   earliest: number;
 }
 

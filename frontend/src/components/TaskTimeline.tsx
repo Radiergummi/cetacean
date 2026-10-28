@@ -22,13 +22,24 @@ import { Link } from "react-router-dom";
 const labelWidth = "w-24 shrink-0 sm:w-40";
 const day = 86_400_000;
 
+/** Skips ticks while the tab is hidden and catches up when it is shown again. */
 function useNow(intervalMilliseconds: number): number {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMilliseconds);
+    const tick = () => {
+      if (document.visibilityState === "visible") {
+        setNow(Date.now());
+      }
+    };
+    const id = setInterval(tick, intervalMilliseconds);
 
-    return () => clearInterval(id);
+    document.addEventListener("visibilitychange", tick);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [intervalMilliseconds]);
 
   return now;
@@ -107,17 +118,15 @@ function Bar({
   );
 }
 
-/**
- * Task lifetimes as bars over the same URL time range as the metric charts.
- */
-export default function TaskTimeline({
-  tasks,
-  variant,
-}: {
-  tasks: Task[];
-  variant: TimelineVariant;
-}) {
-  const { range, customFrom, customTo, setRange, clearCustomRange } = useTimeRange();
+const unseenNote: Record<TimelineVariant, string> = {
+  service: "Hatched: no task in that slot before its first bar.",
+  global: "Hatched: no task on that node before its first bar.",
+  node: "Hatched: no task of that slot on this node before its first bar.",
+};
+
+/** Mounted only while the section is open, so a collapsed one does not tick. */
+function TimelineTracks({ tasks, variant }: { tasks: Task[]; variant: TimelineVariant }) {
+  const { range, customFrom, customTo } = useTimeRange();
   const isCustomRange = customFrom != null && customTo != null;
   const now = useNow(30_000);
   const timeWindow = useMemo<TimelineWindow>(
@@ -131,6 +140,84 @@ export default function TaskTimeline({
     () => buildTimeline(tasks, variant, timeWindow, now),
     [tasks, variant, timeWindow, now],
   );
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border bg-card p-3">
+      {rows.length === 0 && (
+        <p className="py-2 text-center text-sm text-muted-foreground">
+          No tasks in this time range
+        </p>
+      )}
+
+      {rows.map(({ key, label, bars, lanes, earliest }) => {
+        const unseen = earliest > timeWindow.start ? percentOf(earliest, timeWindow) : 0;
+
+        return (
+          <div
+            key={key}
+            className="flex items-center gap-2"
+          >
+            <span
+              className={cn(labelWidth, "truncate text-xs text-muted-foreground")}
+              title={label}
+            >
+              {label}
+            </span>
+            <div
+              className="relative flex-1 rounded-sm bg-muted/50"
+              style={{ height: `${lanes * 1.25}rem` }}
+            >
+              {unseen > 0 && (
+                <div
+                  className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
+                  style={{ width: `${unseen}%` }}
+                />
+              )}
+              {bars.map((bar) => (
+                <Bar
+                  key={bar.task.ID}
+                  bar={bar}
+                  lanes={lanes}
+                  variant={variant}
+                  timeWindow={timeWindow}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className={labelWidth} />
+        <div className="flex flex-1 justify-between gap-2">
+          <time dateTime={new Date(timeWindow.start).toISOString()}>
+            {formatAxisTime(timeWindow.start, timeWindow)}
+          </time>
+          <time dateTime={new Date(timeWindow.end).toISOString()}>
+            {isCustomRange ? formatAxisTime(timeWindow.end, timeWindow) : "now"}
+          </time>
+        </div>
+      </div>
+
+      {rows.some(({ earliest }) => earliest > timeWindow.start) && (
+        <p className="text-xs text-muted-foreground">{unseenNote[variant]}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Task lifetimes as bars over the same URL time range as the metric charts.
+ */
+export default function TaskTimeline({
+  tasks,
+  variant,
+}: {
+  tasks: Task[];
+  variant: TimelineVariant;
+}) {
+  const { range, customFrom, customTo, setRange, clearCustomRange } = useTimeRange();
+  const isCustomRange = customFrom != null && customTo != null;
 
   if (tasks.length === 0) {
     return null;
@@ -162,74 +249,10 @@ export default function TaskTimeline({
       title="Task Timeline"
       controls={controls}
     >
-      <div className="flex flex-col gap-1 rounded-lg border bg-card p-3">
-        {rows.length === 0 && (
-          <p className="py-2 text-center text-sm text-muted-foreground">
-            No tasks in this time range
-          </p>
-        )}
-
-        {rows.map(({ key, label, bars, lanes, earliest }) => {
-          const unretained = earliest > timeWindow.start ? percentOf(earliest, timeWindow) : 0;
-
-          return (
-            <div
-              key={key}
-              className="flex items-center gap-2"
-            >
-              <span
-                className={cn(labelWidth, "truncate text-xs text-muted-foreground")}
-                title={label}
-              >
-                {label}
-              </span>
-              <div
-                className="relative flex-1 rounded-sm bg-muted/50"
-                style={{ height: `${lanes * 1.25}rem` }}
-                title={
-                  unretained > 0
-                    ? `No task history before ${formatAxisTime(earliest, timeWindow)}`
-                    : undefined
-                }
-              >
-                {unretained > 0 && (
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
-                    style={{ width: `${unretained}%` }}
-                  />
-                )}
-                {bars.map((bar) => (
-                  <Bar
-                    key={bar.task.ID}
-                    bar={bar}
-                    lanes={lanes}
-                    variant={variant}
-                    timeWindow={timeWindow}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className={labelWidth} />
-          <div className="flex flex-1 justify-between gap-2">
-            <time dateTime={new Date(timeWindow.start).toISOString()}>
-              {formatAxisTime(timeWindow.start, timeWindow)}
-            </time>
-            <time dateTime={new Date(timeWindow.end).toISOString()}>
-              {isCustomRange ? formatAxisTime(timeWindow.end, timeWindow) : "now"}
-            </time>
-          </div>
-        </div>
-
-        {rows.some(({ earliest }) => earliest > timeWindow.start) && (
-          <p className="text-xs text-muted-foreground">
-            Hatched: Swarm keeps no older task history for that row.
-          </p>
-        )}
-      </div>
+      <TimelineTracks
+        tasks={tasks}
+        variant={variant}
+      />
     </CollapsibleSection>
   );
 }

@@ -223,7 +223,7 @@ describe("buildTimeline", () => {
     expect(rows).toEqual([]);
   });
 
-  it("reports each row's earliest retained task, inside the timeWindow or not", () => {
+  it("reports each row's earliest known task, inside the timeWindow or not", () => {
     const rows = buildTimeline(
       [
         makeTask({ ID: "a", Slot: 1, state: "shutdown", createdAgo: 200, changedAgo: 90 }),
