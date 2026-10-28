@@ -128,7 +128,7 @@ rule in the table above stops being two rules.
 
 ## Decisions this settles
 
-Each needs a yes from the maintainer; the recommendation is what the proposal assumes.
+All five accepted by the maintainer on 2026-10-28.
 
 1. **An unreadable target answers as not found in both transports.** REST changes from
    `403 ACL002` to the resource's 404 for a write the caller cannot even read, so a write no
