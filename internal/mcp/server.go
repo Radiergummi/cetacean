@@ -167,6 +167,7 @@ type Server struct {
 	cache          *cache.Cache
 	versions       *cluster.VersionIndex
 	writeClient    DockerWriteClient
+	writes         *cluster.Writes
 	logs           LogStreamer
 	acl            *acl.Evaluator
 	config         config.MCPConfig
@@ -347,6 +348,7 @@ func New(shared *core.Core, opts Options) (*Server, error) {
 		bypass:         resolveBypass(opts),
 		cache:          shared.Cache,
 		writeClient:    opts.WriteClient,
+		writes:         cluster.NewWrites(shared.Cache, opts.WriteClient),
 		logs:           opts.Logs,
 		acl:            opts.ACL,
 		config:         opts.Config,

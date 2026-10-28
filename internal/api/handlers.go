@@ -222,6 +222,7 @@ type Handlers struct {
 	dockerClient         DockerLogStreamer
 	systemClient         DockerSystemClient
 	serviceLifecycle     ServiceLifecycleWriter
+	writes               *cluster.Writes
 	serviceSpec          ServiceSpecWriter
 	serviceAttachment    ServiceAttachmentWriter
 	nodeWriter           NodeWriter
@@ -279,6 +280,7 @@ func NewHandlers(
 		dockerClient:      dc,
 		systemClient:      sc,
 		serviceLifecycle:  wc,
+		writes:            cluster.NewWrites(shared.Cache, wc),
 		serviceSpec:       wc,
 		serviceAttachment: wc,
 		nodeWriter:        wc,

@@ -94,6 +94,14 @@ var notFoundCodes = map[string]string{
 	"stack":   "STK001",
 }
 
+// invalidCodes are the problem codes of the domain rules a use case refuses
+// a write by; any other invalid write is the engine's.
+var invalidCodes = map[error]string{
+	cluster.ErrScaleGlobal:    "SVC005",
+	cluster.ErrNoPreviousSpec: "SVC007",
+	cluster.ErrImageRequired:  "SVC006",
+}
+
 // maxWriteBody caps every write request body.
 const maxWriteBody = 1 << 20
 
@@ -223,7 +231,13 @@ func writeRefusal(
 		problem.Write(w, r, "OPS001", refusal.Detail)
 		return
 	case cluster.Invalid:
-		problem.Write(w, r, "ENG003", refusal.Detail)
+		code := "ENG003"
+		for rule, ruleCode := range invalidCodes {
+			if errors.Is(refusal.Err, rule) {
+				code = ruleCode
+			}
+		}
+		problem.Write(w, r, code, refusal.Detail)
 		return
 	case cluster.Unavailable:
 		problem.Write(w, r, "ENG001", refusal.Detail)

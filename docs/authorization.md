@@ -165,10 +165,12 @@ which resources a given identity may write. A common pairing is `server.operatio
 ```mermaid
 flowchart LR
     accTitle: How a write request is authorized
-    accDescr: A write passes the per-resource grant check first, then the operations level check. Failing the first answers 403 ACL002, failing the second answers 403 OPS001.
+    accDescr: A write passes the per-resource grant check first, then the operations level check. Failing the first answers 404 when the caller can't read the resource either, and 403 ACL002 when it can; failing the second answers 403 OPS001.
 
     request["Write request"] --> grant{"A grant gives write<br/>on this resource?"}
-    grant -->|no| acl["403 ACL002"]
+    grant -->|no| read{"A grant gives read<br/>on it?"}
+    read -->|no| missing["404"]
+    read -->|yes| acl["403 ACL002"]
     grant -->|yes| level{"Operations level allows<br/>this category of write?"}
     level -->|no| ops["403 OPS001"]
     level -->|yes| handler["Handler runs"]
@@ -177,11 +179,14 @@ flowchart LR
     class handler accent
 ```
 
-| Grant          | Operations level | Result                |
-| -------------- | ---------------- | --------------------- |
-| Grants `write` | Allows           | Allowed               |
-| No `write`     | Allows or blocks | Denied (`403 ACL002`) |
-| Grants `write` | Blocks           | Denied (`403 OPS001`) |
+| Grant          | Operations level | Result                                  |
+| -------------- | ---------------- | --------------------------------------- |
+| Grants `write` | Allows           | Allowed                                 |
+| Grants `read`  | Allows or blocks | Denied (`403 ACL002`)                   |
+| Neither        | Allows or blocks | The resource's not-found answer (`404`) |
+| Grants `write` | Blocks           | Denied (`403 OPS001`)                   |
+
+A write to a resource you can't read is answered as if it didn't exist. A read of one still answers `403 ACL001`.
 
 Denied requests answer with an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:
 

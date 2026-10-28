@@ -440,18 +440,14 @@ func (s *Server) toolScaleService(ctx context.Context, req mcplib.CallToolReques
 	if replicas < 0 {
 		return "", errors.New("replicas must be >= 0")
 	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	svc, err := wc.ScaleService(ctx, id, uint64(replicas))
+	svc, err := s.writes.ScaleService(ctx, s.writeCaller(ctx), id, uint64(replicas))
 	if err != nil {
 		return "", s.refused(ctx, cond, err)
 	}
@@ -473,26 +469,14 @@ func (s *Server) toolUpdateServiceImage(
 	if err != nil {
 		return "", err
 	}
-	image = cluster.ServiceImage(image)
-	if image == "" {
-		return "", errors.New("image must not be empty")
-	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	ctx, id, err = s.guardHostAccess(ctx, cond, id, always("changing the image of"))
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.UpdateServiceImage(ctx, id, image)
+	svc, err := s.writes.UpdateServiceImage(ctx, s.writeCaller(ctx), id, image)
 	if err != nil {
 		return "", s.refused(ctx, cond, err)
 	}
@@ -510,22 +494,14 @@ func (s *Server) toolRollbackService(
 	if err != nil {
 		return "", err
 	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	ctx, id, err = s.guardHostAccess(ctx, cond, id, always(cluster.RollingBack))
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
-		return "", err
-	}
-	svc, err := wc.RollbackService(ctx, id)
+	svc, err := s.writes.RollbackService(ctx, s.writeCaller(ctx), id)
 	if err != nil {
 		return "", s.refused(ctx, cond, err)
 	}
@@ -572,11 +548,6 @@ func (s *Server) guardHostAccess(
 	return ctx, svc.ID, err
 }
 
-// always is a change every request to a tool makes.
-func always(change string) func(swarm.Service) string {
-	return func(swarm.Service) string { return change }
-}
-
 // containerSpec is svc's container spec, or an empty one.
 func containerSpec(svc swarm.Service) *swarm.ContainerSpec {
 	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
@@ -594,18 +565,14 @@ func (s *Server) toolRestartService(
 	if err != nil {
 		return "", err
 	}
-	if err := s.checkServiceWrite(ctx, id); err != nil {
-		return "", err
-	}
 	ctx, id, cond, err := s.pinVersion(ctx, req, "service", id)
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	svc, err := wc.RestartService(ctx, id)
+	svc, err := s.writes.RestartService(ctx, s.writeCaller(ctx), id)
 	if err != nil {
 		return "", s.refused(ctx, cond, err)
 	}

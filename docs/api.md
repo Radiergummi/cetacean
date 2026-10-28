@@ -510,7 +510,8 @@ suggestion; `GET /api/errors/{code}` returns one.
 |---|---|---|---|
 | Resource changed between your read and your write | 409 | [`SVC001`](api/errors#SVC001), [`NOD002`](api/errors#NOD002), [`CFG005`](api/errors#CFG005), [`SEC005`](api/errors#SEC005), [`SWM012`](api/errors#SWM012) | Re-read the resource and retry |
 | Endpoint above the configured [operations level][operations-level] | 403 | [`OPS001`](api/errors#OPS001) | Raise the operations level |
-| [Grants][authorization] deny read or write | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| [Grants][authorization] deny a read, or a write to a resource you can read | 403 | [`ACL001`](api/errors#ACL001), [`ACL002`](api/errors#ACL002) | The response names the resource and permission checked |
+| [Grants][authorization] deny a write to a resource they don't let you read either | 404 | The resource's not-found code, such as [`SVC003`](api/errors#SVC003) | Ask for a grant on the resource |
 | Cross-origin write from an origin that isn't allowed | 403 | [`CSR001`](api/errors#CSR001) | Add the origin to [`server.cors.origins`][server.cors.origins] |
 | `Host` names none of Cetacean's names | 421 | [`CSR002`](api/errors#CSR002) | Add the name to [`server.allowed_hosts`][server.allowed_hosts] |
 | `PATCH` sent with the wrong `Content-Type` | 415 | [`API004`](api/errors#API004) | Use `application/json-patch+json` or `application/merge-patch+json` |

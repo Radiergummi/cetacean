@@ -973,6 +973,7 @@ func TestToolRequireWriteClient(t *testing.T) {
 
 func TestToolPropagatesWriteClientError(t *testing.T) {
 	c := cache.New(nil)
+	seedService(t, c, "svc1", 1, 1)
 	wc := &fakeWriteClient{
 		scaleServiceFn: func(context.Context, string, uint64) (swarm.Service, error) {
 			return swarm.Service{}, fmt.Errorf("boom")

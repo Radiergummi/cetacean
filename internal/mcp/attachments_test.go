@@ -21,15 +21,19 @@ func attachmentTestCache(t *testing.T) *cache.Cache {
 	t.Helper()
 
 	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:      "svc1",
-		Version: swarm.Version{Index: 41},
-		Spec: swarm.ServiceSpec{
-			Annotations: swarm.Annotations{Name: "web"},
-			TaskTemplate: swarm.TaskSpec{
-				ContainerSpec: &swarm.ContainerSpec{Image: "nginx:alpine"},
-			},
+	spec := swarm.ServiceSpec{
+		Name: "web",
+		Mode: swarm.ServiceMode{Replicated: &swarm.ReplicatedService{}},
+		TaskTemplate: swarm.TaskSpec{
+			ContainerSpec: &swarm.ContainerSpec{Image: "nginx:alpine"},
 		},
+	}
+	previous := spec
+	c.SetService(swarm.Service{
+		ID:           "svc1",
+		Version:      swarm.Version{Index: 41},
+		Spec:         spec,
+		PreviousSpec: &previous,
 	})
 	c.SetSecret(swarm.Secret{
 		ID:   "s2",

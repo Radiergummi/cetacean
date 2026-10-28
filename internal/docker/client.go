@@ -508,6 +508,13 @@ func (c *Client) Logs(
 	}
 }
 
+var (
+	// ErrScaleGlobal refuses scaling a service that runs one task per node.
+	ErrScaleGlobal = errors.New("cannot scale a global-mode service")
+	// ErrNoPreviousSpec refuses rolling back a service never updated.
+	ErrNoPreviousSpec = errors.New("service has no previous spec to roll back to")
+)
+
 func (c *Client) ScaleService(
 	ctx context.Context,
 	id string,
@@ -515,7 +522,7 @@ func (c *Client) ScaleService(
 ) (swarm.Service, error) {
 	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
 		if spec.Mode.Replicated == nil {
-			return errdefs.InvalidParameter(errors.New("cannot scale a global-mode service"))
+			return errdefs.InvalidParameter(ErrScaleGlobal)
 		}
 		spec.Mode.Replicated.Replicas = &replicas
 		return nil
@@ -540,9 +547,7 @@ func (c *Client) RollbackService(ctx context.Context, id string) (swarm.Service,
 		swarm.ServiceUpdateOptions{Rollback: "previous"},
 		func(svc *swarm.Service) error {
 			if svc.PreviousSpec == nil {
-				return errdefs.InvalidParameter(
-					errors.New("service has no previous spec to rollback to"),
-				)
+				return errdefs.InvalidParameter(ErrNoPreviousSpec)
 			}
 			return nil
 		},
