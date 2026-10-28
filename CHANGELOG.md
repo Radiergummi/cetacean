@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
+- Metric charts on the 7D range update live again instead of staying at the values they loaded with
+- Long bind mount paths on service pages wrap on narrow screens rather than widening the page
 - Node cards dragged in the physical topology stay where they are dropped until a node joins or leaves
 - The services page and stack pages judge a global service against the nodes it can run on, rather than showing it grey
 - The services page's running counts and job health update as tasks start, stop, and finish
