@@ -230,10 +230,40 @@ func (h *Handlers) handleFeedRecommendations(
 	})
 }
 
-// feedHistoryHandler wraps handleFeedHistory as an http.HandlerFunc.
+// feedHistoryHandler serves /history's feeds, which read the time window its
+// JSON does. /events serves the same feed through handleFeedHistory, unwindowed.
 func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.handleFeedHistory(w, r, render)
+		if !h.requireAnyGrant(w, r) {
+			return
+		}
+
+		q := r.URL.Query()
+
+		window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
+		if err != nil {
+			problem.Write(w, r, "API016", err.Error())
+			return
+		}
+
+		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{
+			After:  window.Since,
+			Before: window.Until,
+		})
+		if !ok {
+			return
+		}
+
+		// The links echo the window back, the BREACH shape handleFeedSearch
+		// opts out of, so a windowed page opts out too.
+		if q.Has("since") || q.Has("until") {
+			r = disableCompression(r)
+		}
+
+		data := historyFeedData(r, "History", entries, beforeID, limit)
+		data.QueryParams = historyWindowParams
+
+		render(w, r, data)
 	}
 }
 
@@ -492,7 +522,13 @@ var searchFeedParams = []string{"q"}
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
 // historyCSVParams names what HandleHistory reads.
-var historyCSVParams = []string{"type", "resourceId", "search", "before", "limit"}
+var historyCSVParams = []string{
+	"type", "resourceId", "search", "before", "limit", "since", "until",
+}
+
+// historyWindowParams names what /history's feeds read beyond the pagination
+// pair.
+var historyWindowParams = []string{"since", "until"}
 
 // feedQuery returns the subset of r's query a feed's links may carry: the
 // pagination pair every feed reads, plus whatever else the caller declares.

@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -43,12 +42,7 @@ func (s *Server) toolGetEvents(
 	ctx context.Context,
 	req mcplib.CallToolRequest,
 ) (string, error) {
-	since, err := optionalTime(req, "since")
-	if err != nil {
-		return "", err
-	}
-
-	until, err := optionalTime(req, "until")
+	window, err := cluster.ParseTimeWindow(req.GetString("since", ""), req.GetString("until", ""))
 	if err != nil {
 		return "", err
 	}
@@ -87,8 +81,8 @@ func (s *Server) toolGetEvents(
 		ResourceID: resource,
 		Types:      types,
 		Limit:      history.Size(),
-		After:      since,
-		Before:     until,
+		After:      window.Since,
+		Before:     window.Until,
 		Visible:    cluster.HistoryReadable(s.readPredicate(ctx)),
 	})
 
@@ -129,25 +123,6 @@ func (s *Server) toolGetEvents(
 	}
 
 	return marshalResult(result)
-}
-
-// optionalTime parses an RFC 3339 argument, naming the format when it cannot.
-// A model that guessed "yesterday" has to be told what is accepted.
-func optionalTime(req mcplib.CallToolRequest, arg string) (time.Time, error) {
-	raw := req.GetString(arg, "")
-	if raw == "" {
-		return time.Time{}, nil
-	}
-
-	parsed, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		return time.Time{}, fmt.Errorf(
-			"%s: %q is not an RFC 3339 timestamp (e.g. 2026-09-05T14:02:00Z)",
-			arg, raw,
-		)
-	}
-
-	return parsed, nil
 }
 
 // requestedTypes reads the `types` array, or returns nil for "all". An

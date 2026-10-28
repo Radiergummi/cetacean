@@ -1141,10 +1141,11 @@ func (rt routes) views() {
 
 	// History
 	mux.HandleFunc("GET /history", contentNegotiated(h.HandleHistory, feedHandlers{
-		atom:      h.feedHistoryHandler(renderAtom),
-		jsonFeed:  h.feedHistoryHandler(renderJSONFeed),
-		csv:       true,
-		csvParams: historyCSVParams,
+		atom:        h.feedHistoryHandler(renderAtom),
+		jsonFeed:    h.feedHistoryHandler(renderJSONFeed),
+		csv:         true,
+		csvParams:   historyCSVParams,
+		queryParams: historyWindowParams,
 	}, spa))
 
 	// Search

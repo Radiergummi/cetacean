@@ -163,7 +163,6 @@ var excusedUncovered = map[string]string{
 	"GET /cluster/capacity":               sweepGap,
 	"GET /configs":                        sweepGap,
 	"GET /configs/{id}/labels":            sweepGap,
-	"GET /history":                        sweepGap,
 	"GET /index":                          sweepGap,
 	"GET /metrics/status":                 sweepGap,
 	"GET /networks":                       sweepGap,

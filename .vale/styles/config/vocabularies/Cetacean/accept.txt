@@ -75,6 +75,7 @@ Forgejo
 Gantry
 Gitea
 GitHub
+Grafana
 Graphviz
 HAProxy
 hono

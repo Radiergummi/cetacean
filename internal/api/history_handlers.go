@@ -58,12 +58,20 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
+	}
+
 	query := cache.HistoryQuery{
 		Type:         cache.EventType(resourceType),
 		ResourceID:   resourceID,
 		BeforeID:     beforeID,
 		NameContains: q.Get("search"),
 		Limit:        limit,
+		After:        window.Since,
+		Before:       window.Until,
 		Visible:      h.readableHistory(r),
 	}
 
