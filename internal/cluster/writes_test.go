@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -196,15 +198,28 @@ func TestWritesHoldsHostAccessBelowLevelThree(t *testing.T) {
 
 func TestResolvableNamesWhatLookupFinds(t *testing.T) {
 	c := cache.New(nil)
-	c.SetService(writable("web"))
+	web := writable("web")
+	web.Spec.Labels = map[string]string{"com.docker.stack.namespace": "shop"}
+	c.SetService(web)
+	c.SetNode(swarm.Node{ID: "node-1"})
+	c.SetTask(swarm.Task{ID: "task-1", ServiceID: web.ID})
+	c.SetConfig(swarm.Config{ID: "cfg-1"})
+	c.SetSecret(swarm.Secret{ID: "sec-1"})
+	c.SetNetwork(network.Summary{ID: "net-1"})
+	c.SetVolume(volume.Volume{Name: "data"})
 
-	for _, kind := range []string{"service", "plugin", "swarm"} {
-		_, found, _ := Lookup(c, kind, "web")
-		if kind == "service" && (!Resolvable(kind) || !found) {
-			t.Errorf("%s: Resolvable = %t, found = %t", kind, Resolvable(kind), found)
+	seeded := map[string]string{
+		"service": web.ID, "node": "node-1", "task": "task-1", "config": "cfg-1",
+		"secret": "sec-1", "network": "net-1", "stack": "shop", "volume": "data",
+		"plugin": "web", "swarm": "web",
+	}
+	for kind, ident := range seeded {
+		_, found, err := Lookup(c, kind, ident)
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
 		}
-		if kind != "service" && Resolvable(kind) {
-			t.Errorf("%s: Resolvable, though Lookup cannot resolve it", kind)
+		if Resolvable(kind) != found {
+			t.Errorf("%s: Resolvable = %t, Lookup found = %t", kind, Resolvable(kind), found)
 		}
 	}
 }
