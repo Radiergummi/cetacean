@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/client"
@@ -118,14 +119,24 @@ func ClassifyRemoval(err error, resource, key string) (*WriteError, bool) {
 
 // fromEngine reports an error the engine classified, which every API answer
 // is, or a failure to reach it: the client's own, which names the socket and
-// carries no class, or a raw transport error. Resolve answers ErrUnknown for
-// an unclassified error too, so a deliberate Unknown is asked for separately.
+// carries no class, or a raw transport error. Not cerrdefs.Resolve: it follows
+// the client's Unwrap to the bare message and never asks its Is for the class.
 func fromEngine(err error) bool {
 	_, transport := errors.AsType[*url.Error](err)
 	if _, dial := errors.AsType[net.Error](err); dial || client.IsErrConnectionFailed(err) {
 		transport = true
 	}
 
-	return transport || cerrdefs.IsUnknown(err) ||
-		!errors.Is(cerrdefs.Resolve(err), cerrdefs.ErrUnknown)
+	return transport || slices.ContainsFunc(engineClasses, func(is func(error) bool) bool {
+		return is(err)
+	})
+}
+
+var engineClasses = []func(error) bool{
+	cerrdefs.IsUnknown, cerrdefs.IsInvalidArgument, cerrdefs.IsNotFound,
+	cerrdefs.IsAlreadyExists, cerrdefs.IsPermissionDenied, cerrdefs.IsResourceExhausted,
+	cerrdefs.IsFailedPrecondition, cerrdefs.IsConflict, cerrdefs.IsNotModified,
+	cerrdefs.IsAborted, cerrdefs.IsOutOfRange, cerrdefs.IsNotImplemented,
+	cerrdefs.IsInternal, cerrdefs.IsUnavailable, cerrdefs.IsDataLoss,
+	cerrdefs.IsUnauthorized,
 }
