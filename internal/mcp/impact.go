@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 var notRemoved = removalResult{Removed: false}
@@ -23,7 +24,7 @@ func (s *Server) serviceRemoval(_ context.Context, arg string) (confirmation, er
 		return confirmation{}, fmt.Errorf("service %q not found", arg)
 	}
 
-	impact := cluster.ServiceRemovalImpact(svc, s.cache.RunningTaskCount(svc.ID))
+	impact := projection.ServiceRemovalImpact(svc, s.cache.RunningTaskCount(svc.ID))
 
 	return confirmation{
 		target:   "service:" + svc.Spec.Name,
@@ -48,7 +49,7 @@ func (s *Server) taskRemoval(ctx context.Context, id string) (confirmation, erro
 
 	return confirmation{
 		target:   "task:" + task.ID,
-		message:  cluster.TaskRemovalImpact(label, service).Message(),
+		message:  projection.TaskRemovalImpact(label, service).Message(),
 		version:  task.Version.Index,
 		bind:     task.ID,
 		declined: notRemoved,
@@ -71,7 +72,7 @@ func (s *Server) referenceRemoval(
 			return confirmation{}, fmt.Errorf("%s %q not found", kind, arg)
 		}
 
-		impact := cluster.ReferenceRemovalImpact(
+		impact := projection.ReferenceRemovalImpact(
 			kind, record.Name, users(record.ID), s.readPredicate(ctx))
 
 		return confirmation{
@@ -100,7 +101,7 @@ func (s *Server) networkRemoval(ctx context.Context, arg string) (confirmation, 
 // cache does not hold may live where it cannot see, so it is asked about by
 // name alone rather than refused.
 func (s *Server) volumeRemoval(ctx context.Context, name string, force bool) confirmation {
-	impact := cluster.ReferenceRemovalImpact(
+	impact := projection.ReferenceRemovalImpact(
 		"volume", name, s.cache.ServicesUsingVolume(name), s.readPredicate(ctx))
 
 	if force {
@@ -137,15 +138,15 @@ func (s *Server) nodeChange(
 		return confirmation{}, fmt.Errorf("node %q not found", arg)
 	}
 
-	var impact cluster.Impact
+	var impact projection.Impact
 
 	switch {
 	case section == sectionRole:
-		impact = cluster.RoleImpact(node, s.cache.ListNodes(), role)
+		impact = projection.RoleImpact(node, s.cache.ListNodes(), role)
 	case availability == swarm.NodeAvailabilityDrain:
 		impact = s.drainConfirmation(ctx, node)
 	default:
-		impact = cluster.AvailabilityImpact(node, availability)
+		impact = projection.AvailabilityImpact(node, availability)
 	}
 
 	return confirmation{
@@ -159,7 +160,7 @@ func (s *Server) nodeChange(
 
 // drainConfirmation assesses a drain from what the caller may read, as the
 // drain-impact topology view does, and counts the services it hides.
-func (s *Server) drainConfirmation(ctx context.Context, node swarm.Node) cluster.Impact {
+func (s *Server) drainConfirmation(ctx context.Context, node swarm.Node) projection.Impact {
 	all := s.cache.ListNodes()
 	visible := s.filterNodes(ctx, all)
 	services := s.filterServices(ctx, s.cache.ListServices())
@@ -185,5 +186,5 @@ func (s *Server) drainConfirmation(ctx context.Context, node swarm.Node) cluster
 		}
 	}
 
-	return cluster.DrainImpact(node, graph, len(hidden))
+	return projection.DrainImpact(node, graph, len(hidden))
 }

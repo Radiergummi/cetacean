@@ -8,7 +8,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // The whole surface's landing question, end to end: one call, and the broken
@@ -34,7 +34,7 @@ func TestGetClusterStatusNamesTheBrokenService(t *testing.T) {
 		t.Fatalf("toolGetClusterStatus: %v", err)
 	}
 
-	var got cluster.ClusterStatus
+	var got projection.ClusterStatus
 	if err := json.Unmarshal([]byte(body), &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

@@ -1,4 +1,4 @@
-package cluster
+package projection
 
 import (
 	"fmt"
@@ -11,14 +11,15 @@ import (
 	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/ipam"
 )
 
 // NodeDigest builds the detail view of one cluster node. State comes from
-// deriveNodeState, the same rule RowsForNodes uses, so a node cannot read
+// cluster.DeriveNodeState, the same rule cluster.RowsForNodes uses, so a node cannot read
 // "ready" in a list and "drain" in its own digest.
 func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) Digest {
-	state := deriveNodeState(node)
+	state := cluster.DeriveNodeState(node)
 
 	var reason string
 	if state != string(swarm.NodeStateReady) {
@@ -34,7 +35,7 @@ func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) D
 	related := make([]Related, 0)
 
 	for _, task := range tasks {
-		if task.NodeID != node.ID || !TaskIsLive(task) {
+		if task.NodeID != node.ID || !cluster.TaskIsLive(task) {
 			continue
 		}
 
@@ -98,7 +99,7 @@ func NodeDigest(node swarm.Node, tasks []swarm.Task, services []swarm.Service) D
 // because a caller may read the task but not what it references, and the digest
 // must stay usable rather than erroring or leaving the name blank.
 func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Digest {
-	name := TaskName(task, service)
+	name := cluster.TaskName(task, service)
 
 	var reason string
 	if task.Status.State != swarm.TaskStateRunning {
@@ -115,7 +116,7 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 	}
 
 	if spec := task.Spec.ContainerSpec; spec != nil {
-		details["image"] = StripImageDigest(spec.Image)
+		details["image"] = cluster.StripImageDigest(spec.Image)
 	}
 
 	if cs := task.Status.ContainerStatus; cs != nil {
@@ -171,11 +172,16 @@ func TaskDigest(task swarm.Task, service *swarm.Service, node *swarm.Node) Diges
 // pass over a stack's members can find the worst one without a second scan
 // back through them to explain it.
 var stackStateRank = map[string]int{
-	"failed": 0, "updating": 1, "pending": 2, "flapping": 3, "running": 4, stateCompleted: 4,
+	"failed":               0,
+	"updating":             1,
+	"pending":              2,
+	"flapping":             3,
+	"running":              4,
+	cluster.StateCompleted: 4,
 }
 
 // StackDigest builds the detail view of one stack. A stack has no Swarm status,
-// so State and Reason derive from its members by the rule RowsForServices
+// so State and Reason derive from its members by the rule cluster.RowsForServices
 // applies, or a stack and its own services list could disagree. Related spans
 // all five member types, since a stack's membership crosses that many.
 func StackDigest(
@@ -221,15 +227,15 @@ func StackDigest(
 	for _, svc := range stack.Services {
 		members = append(members, member{
 			svc: svc,
-			state: DeriveServiceState(
+			state: cluster.DeriveServiceState(
 				svc,
 				running[svc.ID],
 				completed[svc.ID],
-				EligibleIn(eligible, svc.ID),
+				cluster.EligibleIn(eligible, svc.ID),
 				flapping[svc.ID],
 			),
 		})
-		desiredTotal += ReplicaCount(svc)
+		desiredTotal += cluster.ReplicaCount(svc)
 		runningTotal += running[svc.ID]
 
 		if !haveNewest || svc.UpdatedAt.After(newest) {
@@ -316,7 +322,7 @@ func StackDigest(
 		RecentFailures: make([]TaskFailure, 0),
 	}
 
-	if links := StackLinks(stack.Services); len(links) > 0 {
+	if links := cluster.StackLinks(stack.Services); len(links) > 0 {
 		digest.Details["links"] = links
 	}
 
@@ -455,7 +461,7 @@ func VolumeDigest(vol volume.Volume, users []cache.ServiceRef) Digest {
 func stackScopedDetails(labels map[string]string) map[string]any {
 	details := make(map[string]any)
 
-	if stack := labels[StackNamespaceLabel]; stack != "" {
+	if stack := labels[cluster.StackNamespaceLabel]; stack != "" {
 		details["stack"] = stack
 	}
 

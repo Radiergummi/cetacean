@@ -118,7 +118,7 @@ func Search(
 						Type:   "nodes",
 						ID:     n.ID,
 						Name:   n.Description.Hostname,
-						State:  deriveNodeState(n),
+						State:  DeriveNodeState(n),
 						Detail: string(n.Spec.Role),
 					}
 				},

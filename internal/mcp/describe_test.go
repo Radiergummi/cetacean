@@ -16,7 +16,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
+	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
 
 // describeDigest calls the describe tool and decodes its result as a Digest,
@@ -26,7 +26,7 @@ func describeDigest(
 	ctx context.Context,
 	srv *Server,
 	args map[string]any,
-) cluster.Digest {
+) projection.Digest {
 	t.Helper()
 
 	td, ok := srv.findTool("describe")
@@ -39,7 +39,7 @@ func describeDigest(
 		t.Fatalf("handler: %v", err)
 	}
 
-	var got cluster.Digest
+	var got projection.Digest
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("unmarshal: %v: %s", err, out)
 	}
@@ -93,7 +93,7 @@ func TestDescribeAndResourceReadAgree(t *testing.T) {
 		t.Fatalf("handler: %v", err)
 	}
 
-	var got cluster.Digest
+	var got projection.Digest
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("unmarshal: %v: %s", err, out)
 	}
@@ -107,7 +107,7 @@ func TestDescribeAndResourceReadAgree(t *testing.T) {
 		t.Fatalf("readResource: %v", err)
 	}
 
-	var fromResource cluster.Digest
+	var fromResource projection.Digest
 	if err := json.Unmarshal([]byte(body), &fromResource); err != nil {
 		t.Fatalf("unmarshal resource body: %v: %s", err, body)
 	}
@@ -456,8 +456,8 @@ func TestDescribeServiceOmitsUnreadableNetworkNames(t *testing.T) {
 	}
 }
 
-func hasRelated(related []cluster.Related, resourceType, name string) bool {
-	return slices.ContainsFunc(related, func(r cluster.Related) bool {
+func hasRelated(related []projection.Related, resourceType, name string) bool {
+	return slices.ContainsFunc(related, func(r projection.Related) bool {
 		return r.Type == resourceType && r.Name == name
 	})
 }

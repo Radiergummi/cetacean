@@ -1,4 +1,4 @@
-package cluster
+package projection
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
@@ -268,7 +269,7 @@ func TestBuildClusterStatusUnhealthyWithAnUnreachableManager(t *testing.T) {
 	}
 }
 
-// The overview's two counts follow DeriveServiceState, so a service the
+// The overview's two counts follow cluster.DeriveServiceState, so a service the
 // status call names as unhealthy is never counted converged.
 func TestCountServiceStatesFollowsTheStateRule(t *testing.T) {
 	one := uint64(1)
@@ -305,7 +306,7 @@ func TestCountServiceStatesFollowsTheStateRule(t *testing.T) {
 	}
 	eligible := map[string]int{"global-down": 2, "global-up": 2}
 
-	converged, degraded := CountServiceStates(snap, services, eligible)
+	converged, degraded := cluster.CountServiceStates(snap, services, eligible)
 
 	if converged != 3 || degraded != 3 {
 		t.Errorf("converged=%d degraded=%d, want 3 and 3", converged, degraded)
@@ -321,7 +322,7 @@ func TestCountServiceStatesTakesEligibilityWithTheList(t *testing.T) {
 		Spec: swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}},
 	}
 
-	converged, degraded := CountServiceStates(
+	converged, degraded := cluster.CountServiceStates(
 		cache.ClusterSnapshot{},
 		[]swarm.Service{svc},
 		map[string]int{"agent": 2},

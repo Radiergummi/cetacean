@@ -1,16 +1,17 @@
-package cluster
+package projection
 
 import (
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/quorum"
 )
 
 // ClusterStatus is the landing read: everything needed to decide whether to
 // look further, and where. It names the unhealthy resources rather than
 // counting them, since a count guarantees a second call. Every unhealthy entry
-// is a Row, so it carries the id and name the next describe needs.
+// is a cluster.Row, so it carries the id and name the next describe needs.
 type ClusterStatus struct {
 	// Healthy is the one-line answer: nothing degraded, unreachable (a manager
 	// included, whatever its node reports), or stalled mid-rollout. A drained
@@ -26,10 +27,10 @@ type ClusterStatus struct {
 	// UnhealthyServices are the services not in their desired state, and
 	// Rollouts those mid-update, and DrainingNodes those deliberately made
 	// unavailable. All are always arrays, never null.
-	UnhealthyServices []Row `json:"unhealthyServices"`
-	UnhealthyNodes    []Row `json:"unhealthyNodes"`
-	DrainingNodes     []Row `json:"drainingNodes"`
-	Rollouts          []Row `json:"rollouts"`
+	UnhealthyServices []cluster.Row `json:"unhealthyServices"`
+	UnhealthyNodes    []cluster.Row `json:"unhealthyNodes"`
+	DrainingNodes     []cluster.Row `json:"drainingNodes"`
+	Rollouts          []cluster.Row `json:"rollouts"`
 
 	Capacity ClusterCapacity `json:"capacity"`
 	Quorum   quorum.Quorum   `json:"quorum"`
@@ -76,10 +77,10 @@ func BuildClusterStatus(
 		ServiceCount:      snap.ServiceCount,
 		TaskCount:         snap.TaskCount,
 		StackCount:        snap.StackCount,
-		UnhealthyServices: []Row{},
-		UnhealthyNodes:    []Row{},
-		DrainingNodes:     []Row{},
-		Rollouts:          []Row{},
+		UnhealthyServices: []cluster.Row{},
+		UnhealthyNodes:    []cluster.Row{},
+		DrainingNodes:     []cluster.Row{},
+		Rollouts:          []cluster.Row{},
 		Capacity:          CapacityOf(snap),
 		Quorum:            snap.Quorum,
 	}
@@ -94,7 +95,7 @@ func BuildClusterStatus(
 
 	stalled := 0
 
-	rows := RowsForServices(
+	rows := cluster.RowsForServices(
 		services,
 		running,
 		snap.CompletedJobsByService,
@@ -123,7 +124,7 @@ func BuildClusterStatus(
 		}
 	}
 
-	for _, row := range RowsForNodes(nodes) {
+	for _, row := range cluster.RowsForNodes(nodes) {
 		switch row.State {
 		case string(swarm.NodeStateReady):
 			// Nominal: ready and accepting work.
@@ -142,35 +143,6 @@ func BuildClusterStatus(
 		snap.Quorum.Reachable == snap.Quorum.Managers
 
 	return status
-}
-
-// CountServiceStates splits services by DeriveServiceState: running, and a job
-// whose run completed, are converged; failed, pending and flapping are the
-// degraded BuildClusterStatus names. A service mid-update is in neither.
-// eligible must be cache.EligibleNodeCounts of these same services.
-func CountServiceStates(
-	snap cache.ClusterSnapshot,
-	services []swarm.Service,
-	eligible map[string]int,
-) (converged, degraded int) {
-	for _, svc := range services {
-		state := DeriveServiceState(
-			svc,
-			snap.RunningByService[svc.ID],
-			snap.CompletedJobsByService[svc.ID],
-			EligibleIn(eligible, svc.ID),
-			snap.Flapping[svc.ID],
-		)
-
-		switch state {
-		case "running", stateCompleted:
-			converged++
-		case "failed", "pending", "flapping":
-			degraded++
-		}
-	}
-
-	return converged, degraded
 }
 
 // rolloutStalled reports whether a spec change stopped short rather than
