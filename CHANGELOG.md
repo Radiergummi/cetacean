@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 - A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
 - `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
+- A task path ending in `.json`, `.csv` or another format suffix names a task by that whole identifier, as service and node paths do: `DELETE /tasks/abc.json` no longer removes task `abc`
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
 
 ### Fixed

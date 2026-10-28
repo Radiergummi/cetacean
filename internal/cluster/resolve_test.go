@@ -2,6 +2,7 @@ package cluster_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -34,6 +35,37 @@ func TestResolveTaskPrefersTheLiveTaskInASlot(t *testing.T) {
 
 	if task.ID != "zzz-live" {
 		t.Errorf("ResolveTask(web.1) = %q, want %q", task.ID, "zzz-live")
+	}
+}
+
+// A start-first update keeps the outgoing task live until its successor runs;
+// the name means the successor, as it does once the update settles.
+func TestResolveTaskPrefersTheNewestLiveTaskInASlot(t *testing.T) {
+	c := newTestCache()
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+	c.SetTask(swarm.Task{
+		ID: "aaa-outgoing", ServiceID: "svc1", Slot: 1,
+		CreatedAt:    time.Unix(100, 0),
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateRunning},
+	})
+	c.SetTask(swarm.Task{
+		ID: "zzz-incoming", ServiceID: "svc1", Slot: 1,
+		CreatedAt:    time.Unix(200, 0),
+		DesiredState: swarm.TaskStateRunning,
+		Status:       swarm.TaskStatus{State: swarm.TaskStateStarting},
+	})
+
+	task, ok, err := cluster.ResolveTask(c, "web.1")
+	if err != nil || !ok {
+		t.Fatalf("ResolveTask(web.1) = (_, %v, %v), want a task", ok, err)
+	}
+
+	if task.ID != "zzz-incoming" {
+		t.Errorf("ResolveTask(web.1) = %q, want %q", task.ID, "zzz-incoming")
 	}
 }
 
