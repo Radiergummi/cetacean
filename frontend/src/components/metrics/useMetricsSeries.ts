@@ -26,6 +26,9 @@ function stepFor(seconds: number): number {
   return Math.max(Math.floor(seconds / 300), 15);
 }
 
+// The stream polls at its step, and the server refuses one above 300s (MTR004).
+const maxStreamStep = 300;
+
 interface Options {
   query: string;
   range: string;
@@ -196,7 +199,7 @@ export function useMetricsSeries({
     }
 
     const seconds = rangeSeconds(range);
-    const url = api.metricsStreamURL(query, stepFor(seconds), seconds);
+    const url = api.metricsStreamURL(query, Math.min(stepFor(seconds), maxStreamStep), seconds);
 
     const handleInitial = (event: MessageEvent) => {
       try {

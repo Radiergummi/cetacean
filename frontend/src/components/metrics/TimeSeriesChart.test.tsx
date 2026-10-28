@@ -306,6 +306,17 @@ describe("TimeSeriesChart live stream", () => {
     expect(rangeSeconds).toBe(3600);
   });
 
+  it("keeps the stream's step within what the server accepts on a long range", async () => {
+    await renderChart({ range: "7d" });
+
+    await waitFor(() => expect(metricsStreamURL).toHaveBeenCalled());
+
+    const [, step, rangeSeconds] = metricsStreamURL.mock.calls[0] as unknown[];
+
+    expect(step).toBe(300);
+    expect(rangeSeconds).toBe(604800);
+  });
+
   it("opens no stream for an explicit window", async () => {
     await renderChart({ from: 1000, to: 2000 });
 
