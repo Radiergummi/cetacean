@@ -355,7 +355,7 @@ curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 `since` and `until` narrow `/history` to a window, as RFC 3339 timestamps: `since` is exclusive and `until`
 inclusive, the same boundaries as the MCP tool `get_events`. Either can be left out. They combine with the other
 filters, apply to the CSV, Atom and JSON Feed representations too, and stay on the `next` link, so paging never
-leaves the window.
+leaves the window. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
 
 ```http tab
 GET /history?since=2026-09-05T14:00:00Z&until=2026-09-05T14:30:00Z HTTP/1.1
@@ -369,9 +369,10 @@ curl "http://localhost:9000/history?since=2026-09-05T14:00:00Z&until=2026-09-05T
 
 A Grafana JSON data source, such as the Infinity plugin, can draw the history as annotations on any dashboard.
 Point it at `/history.json` with an [API access token](authentication#api-access-tokens) as its bearer token, and
-pass the dashboard's range as `since=${__from:date:iso}&until=${__to:date:iso}`. Take the rows from `items`, the
-time from `timestamp`, and the text from `name` and `action`. Grafana sees only the entries the token's identity
-may read.
+pass the dashboard's range as `since=${__from:date:iso}&until=${__to:date:iso}&limit=200`. A page holds at most 200
+entries, so a data source that doesn't follow the `next` link shows only the newest 200 of a busier range. Take the
+rows from `items`, the time from `timestamp`, and the text from `name` and `action`. Grafana sees only the entries
+the token's identity may read.
 
 ### Who made a change
 

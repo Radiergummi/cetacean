@@ -21,6 +21,7 @@ func TestParseTimeWindow(t *testing.T) {
 		{name: "both", since: "2026-09-05T14:02:00Z", until: "2026-09-05T15:02:00Z",
 			want: TimeWindow{Since: at, Until: at.Add(time.Hour)}},
 		{name: "offset", since: "2026-09-05T16:02:00+02:00", want: TimeWindow{Since: at}},
+		{name: "lower case", since: "2026-09-05t14:02:00z", want: TimeWindow{Since: at}},
 		{name: "bad since", since: "yesterday", wantErr: `invalid "since" parameter`},
 		{name: "bad until", until: "1h", wantErr: `invalid "until" parameter`},
 		{name: "date only", since: "2026-09-05", wantErr: `invalid "since" parameter`},

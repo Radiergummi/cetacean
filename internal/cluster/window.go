@@ -2,11 +2,12 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
 // TimeWindow is the span a timeline read covers. Since is exclusive and Until
-// inclusive, so two windows sharing a boundary never both hold an item; a zero
+// inclusive, so two windows sharing a boundary never both hold a moment; a zero
 // bound is open. cache.HistoryQuery's After and Before are the same comparison.
 type TimeWindow struct {
 	Since time.Time
@@ -14,7 +15,8 @@ type TimeWindow struct {
 }
 
 // ParseTimeWindow reads the since and until parameters both transports take.
-// An empty value is an open bound; anything else must be RFC 3339.
+// An empty value is an open bound; anything else must be RFC 3339, whose "T"
+// and "Z" may be lower case (§5.6), which time.RFC3339 alone refuses.
 func ParseTimeWindow(since, until string) (TimeWindow, error) {
 	var (
 		window TimeWindow
@@ -37,7 +39,7 @@ func parseWindowBound(name, raw string) (time.Time, error) {
 		return time.Time{}, nil
 	}
 
-	parsed, err := time.Parse(time.RFC3339, raw)
+	parsed, err := time.Parse(time.RFC3339, strings.ToUpper(raw))
 	if err != nil {
 		return time.Time{}, fmt.Errorf(
 			"invalid %q parameter: must be an RFC 3339 timestamp, such as 2026-09-05T14:02:00Z",

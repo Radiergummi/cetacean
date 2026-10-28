@@ -32,9 +32,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 			problem.Write(w, r, "API016", errInvalidLimit.Error())
 			return
 		}
-		if n <= 200 {
-			limit = n
-		}
+		limit = min(n, 200)
 	}
 	// `resourceId` is a query parameter, so the canonical redirect never
 	// reaches it and a caller holding a name would read an empty timeline.
