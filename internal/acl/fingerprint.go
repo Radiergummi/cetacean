@@ -25,9 +25,9 @@ func (e *Evaluator) Fingerprint(id *auth.Identity) uint64 {
 		return 0
 	}
 
-	// Grant order depends on policy file order and on what the provider
-	// returned, neither of which changes what the identity may see. Summing is
-	// commutative, so an identical set of grants fingerprints identically.
+	// Summing is commutative, so the order of policy and provider grants does
+	// not change the fingerprint. Walked inline rather than via collectGrants:
+	// this runs on every conditional request, and collecting would allocate.
 	var sum uint64
 	for _, g := range p.Grants {
 		if audienceMatches(g, id, e.userClaims) {

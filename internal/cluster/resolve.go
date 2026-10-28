@@ -73,7 +73,7 @@ func ResolveTaskAs(
 
 // ResolveIdentifier returns the canonical ID the history ring keys a resource
 // by, given that ID or a name visible through canRead. An empty type answers
-// only when exactly one type matches. An unknown type or unmatched identifier
+// only when exactly one resource matches. An unknown type or unmatched identifier
 // comes back unchanged: the ring holds IDs the cache has since forgotten.
 func ResolveIdentifier(
 	c *cache.Cache,

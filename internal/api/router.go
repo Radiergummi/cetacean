@@ -422,7 +422,8 @@ func (rt routes) meta() {
 	))
 }
 
-// docs registers the API's own documents: the OpenAPI and AsyncAPI descriptions, the JSON-LD context, discovery, and the error catalogue.
+// docs registers the API's descriptions, JSON-LD context, discovery documents
+// and error catalogue.
 func (rt routes) docs() {
 	mux, spa := rt.mux, rt.cfg.SPA
 	cfg := rt.cfg
@@ -1120,7 +1121,8 @@ func (rt routes) volumes() {
 			ThenFunc(h.HandleRemoveVolume))
 }
 
-// views registers the views across resources: ports, recommendations, history, search, the profile, and topology.
+// views registers the views across resources: ports, recommendations, history,
+// search, the profile, and topology.
 func (rt routes) views() {
 	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
 

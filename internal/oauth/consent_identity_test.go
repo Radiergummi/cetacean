@@ -54,10 +54,10 @@ func consentGET(
 	return rec
 }
 
-// A token this server issued must not found another grant: consent runs under
-// the upstream provider's middleware, so a leaked access token could otherwise
-// mint a fresh grant with no human in the loop. 403, not 401: no credential of
-// the same kind would succeed, which is what a 401 promises (RFC 9110 §15.5.2).
+// A token this server issued must not found another grant: consent's middleware
+// accepts our tokens, so a leaked one could otherwise mint a fresh grant with no
+// human in the loop. 403, not 401: no credential of the same kind would
+// succeed, which is what a 401 promises (RFC 9110 §15.5.2).
 func TestConsentRefusesAnIdentityFromOurOwnToken(t *testing.T) {
 	s := newTestServer(t)
 
