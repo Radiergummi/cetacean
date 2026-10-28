@@ -38,16 +38,15 @@ callers with read on a bare `"*"`. There is no server-side panel execution path.
 - **MCP gets no panels.** `get_metrics` owns its PromQL so that no caller supplies a selector
   (`internal/mcp/metrics.go`); a panel is a caller-supplied selector by another route.
 
-### Open decision: panels for scoped users
+### No panels for scoped users
 
 Scoped users could get panels if Cetacean rewrote every vector selector in the query to add a
 regex matcher on the caller's readable services, the approach of prom-label-proxy. That needs a
 PromQL parser, which means depending on `prometheus/prometheus`, and makes Cetacean responsible
 for a rewrite that must hold across every PromQL construct. It also needs one label naming the
-service on every series, which cAdvisor's have and an application's own metrics may not.
-**Recommendation:** don't, in this design. Ship panels for read-everything callers, and revisit
-only if scoped deployments ask for them; the same rewrite would then also open the console to
-scoped users.
+service on every series, which cAdvisor's have and an application's own metrics may not. This
+design ships panels for read-everything callers only; it is revisited if scoped deployments ask
+for them, and the same rewrite would then also open the console to scoped users.
 
 ## Definitions
 

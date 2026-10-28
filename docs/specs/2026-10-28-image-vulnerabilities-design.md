@@ -48,13 +48,12 @@ small sidecar that runs `trivy sbom --server <trivy> --format json` on the body,
 Trivy server in `compose.security.yaml`. `trivy sbom` owns the SPDX reading, distro detection
 included. Anything that speaks the contract can stand in for it.
 
-#### Open decision: who ships the sidecar image
+#### Who ships the sidecar image
 
-The sidecar is a few dozen lines around the `trivy` binary, but it is a second image to build,
-sign and publish. **Recommendation:** build it from this repository in the release workflow,
-tagged with Cetacean's version, so the contract and its only implementation move together. The
-alternative is a documented Dockerfile operators build themselves, which keeps the release
-pipeline to one image at the cost of every deployment owning a build.
+The sidecar is a few dozen lines around the `trivy` binary, built from this repository in the
+release workflow and tagged with Cetacean's version, so the contract and its only implementation
+move together. A documented Dockerfile for operators to build would keep the release pipeline to
+one image, at the cost of every deployment owning a build.
 
 ### Fetching ahead of time
 
