@@ -273,7 +273,7 @@ func (s *Server) registerTools() {
 		// actually produced it. A binary built without `npm run build:widgets`
 		// serves no ui:// resources, and a tool naming one anyway would send a
 		// host off to fetch a resource that does not exist.
-		if td.widget != "" && hasWidget(td.widget) {
+		if td.widget != "" && s.hasWidget(td.widget) {
 			td.tool.Meta = toolUIMeta(td.widget)
 		}
 		s.registeredTools = append(s.registeredTools, td)

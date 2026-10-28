@@ -16,6 +16,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/acl"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 // fakeWriteClient is a no-op implementation of DockerWriteClient used as a base
@@ -414,11 +415,12 @@ func newToolTestServer(
 		GlobalOpsLevel: opsLevel,
 		WriteClient:    wc,
 		AuthMode:       "none",
+		Widgets:        testWidgets,
 	}
 	for _, fn := range overrides {
 		fn(&o)
 	}
-	srv, err := New(c, o)
+	srv, err := New(core.New(c, nil), o)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

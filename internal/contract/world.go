@@ -25,6 +25,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/mcp"
 )
 
@@ -122,7 +123,7 @@ type World struct {
 }
 
 // NewWorld seeds a cluster and mounts the real REST router and the real MCP
-// handler over it. Both read the same cache, which is what makes a
+// handler over it. Both share one core.Core, which is what makes a
 // cross-transport invariant meaningful: a divergence is the transports
 // disagreeing, never two fixtures disagreeing.
 func NewWorld(t *testing.T) *World {
@@ -133,6 +134,19 @@ func NewWorld(t *testing.T) *World {
 
 // NewWorldAt is NewWorld with both transports at one operations level.
 func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
+	t.Helper()
+
+	return newWorld(t, level, nil)
+}
+
+// NewWorldWithWidgets is NewWorld with MCP serving the widget bundles in widgets.
+func NewWorldWithWidgets(t *testing.T, widgets fs.FS) *World {
+	t.Helper()
+
+	return newWorld(t, config.OpsImpactful, widgets)
+}
+
+func newWorld(t *testing.T, level config.OperationsLevel, widgets fs.FS) *World {
 	t.Helper()
 
 	c := cache.New(nil)
@@ -156,8 +170,9 @@ func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
 	// Docker clients are nil: every read answers from the cache. A read
 	// endpoint that needs a live daemon is an e2e-only route and is excused as
 	// one, rather than stubbed into looking covered here.
+	shared := core.New(c, nil)
 	handlers := api.NewHandlers(
-		c, broadcaster,
+		shared, broadcaster,
 		nil, nil, nil, nil,
 		ready,
 		nil,
@@ -172,8 +187,9 @@ func NewWorldAt(t *testing.T, level config.OperationsLevel) *World {
 	// what a bypassed mode runs in production.
 	authProvider := headersProvider()
 
-	mcpServer, err := mcp.New(c, mcp.Options{
-		ACL: evaluator,
+	mcpServer, err := mcp.New(shared, mcp.Options{
+		ACL:     evaluator,
+		Widgets: widgets,
 		Config: config.MCPConfig{
 			Enabled:         true,
 			OperationsLevel: config.OpsInherit,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 )
 
 // mcp-go reads a body whole, so without a cap one request can take the host's
@@ -63,7 +64,7 @@ func TestGuardsAnswerBeforeTheBodyCap(t *testing.T) {
 	t.Run("no bearer", func(t *testing.T) {
 		cfg := config.DefaultMCPConfig()
 		cfg.Enabled = true
-		srv, err := New(cache.New(nil), Options{
+		srv, err := New(core.New(cache.New(nil), nil), Options{
 			Config:   cfg,
 			OAuth:    oauthServerFor([]byte("test-secret-32-bytes-long-padding")),
 			Resource: testResource,

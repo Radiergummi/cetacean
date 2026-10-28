@@ -19,13 +19,13 @@ const (
 // serverExtensions returns the extension capability map advertised on
 // server/discover. An extension goes here only once its capability is wired: a
 // host takes the list as a promise, and one told nothing uses the core
-// protocol. UI asks the same uiResources() registerUIResources publishes from.
-func serverExtensions() map[string]any {
+// protocol. ui reports whether registerUIResources publishes any widget.
+func serverExtensions(ui bool) map[string]any {
 	extensions := map[string]any{
 		extensionTasks: map[string]any{},
 	}
 
-	if len(uiResources()) > 0 {
+	if ui {
 		extensions[extensionUI] = map[string]any{
 			"mimeTypes": []string{uiMIMEType},
 		}

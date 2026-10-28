@@ -15,6 +15,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/oauth"
 )
 
@@ -84,7 +85,7 @@ func TestNew(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		AuthMode:       "none",
@@ -105,6 +106,10 @@ func TestNewRequiresCache(t *testing.T) {
 	cfg.Enabled = true
 
 	if _, err := New(nil, Options{Config: cfg}); err == nil {
+		t.Fatal("expected error without shared state")
+	}
+
+	if _, err := New(core.New(nil, nil), Options{Config: cfg}); err == nil {
 		t.Fatal("expected error when cache is nil")
 	}
 }
@@ -116,7 +121,7 @@ func TestHandlerEmits401WithoutBearerWhenOAuthConfigured(t *testing.T) {
 
 	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:   cfg,
 		OAuth:    oauthSrv,
 		Resource: testResource,
@@ -157,7 +162,7 @@ func TestHandlerAcceptsValidBearer(t *testing.T) {
 		ClientID: "test-client",
 	})
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:   cfg,
 		OAuth:    oauthSrv,
 		Resource: testResource,
@@ -200,7 +205,7 @@ func TestHandlerAuthBypassUsesUpstreamIdentity(t *testing.T) {
 		Provider: "cert",
 	}}
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
 		Resource:     testResource,
@@ -237,7 +242,7 @@ func TestHandlerAuthBypassFallsBackWhenUpstreamFails(t *testing.T) {
 
 	provider := &fakeAuthProvider{err: errors.New("no client certificate")}
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
 		Resource:     testResource,
@@ -265,7 +270,10 @@ func TestCloseIsIdempotentUnderConcurrency(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	srv, err := New(c, Options{Config: cfg, GlobalOpsLevel: config.OpsReadOnly, AuthMode: "none"})
+	srv, err := New(
+		core.New(c, nil),
+		Options{Config: cfg, GlobalOpsLevel: config.OpsReadOnly, AuthMode: "none"},
+	)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -296,7 +304,7 @@ func TestHandlerAuthBypassIgnoredWhenModeNotListed(t *testing.T) {
 	// Provider would succeed, but the active mode (oidc) is NOT in AuthBypass.
 	provider := &fakeAuthProvider{id: &auth.Identity{Subject: "u", Provider: "oidc"}}
 
-	srv, err := New(c, Options{
+	srv, err := New(core.New(c, nil), Options{
 		Config:       cfg,
 		OAuth:        oauthSrv,
 		Resource:     testResource,
@@ -336,7 +344,7 @@ func TestBearerAuthBuildsTheIdentityFromClaims(t *testing.T) {
 		ClientID: "test-client",
 	})
 
-	srv, err := New(c, Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
+	srv, err := New(core.New(c, nil), Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -375,7 +383,7 @@ func TestHandlerWithoutOAuthServesUnguardedUnderNone(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	srv, err := New(cache.New(nil), Options{Config: cfg, AuthMode: "none"})
+	srv, err := New(core.New(cache.New(nil), nil), Options{Config: cfg, AuthMode: "none"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -398,7 +406,7 @@ func TestNewRefusesAnUnsetAuthMode(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	if _, err := New(cache.New(nil), Options{Config: cfg}); err == nil {
+	if _, err := New(core.New(cache.New(nil), nil), Options{Config: cfg}); err == nil {
 		t.Fatal("an unset auth mode was accepted")
 	}
 }
@@ -411,7 +419,7 @@ func TestNewRefusesAConfigurationThatWouldServeUnguarded(t *testing.T) {
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
 
-	_, err := New(cache.New(nil), Options{
+	_, err := New(core.New(cache.New(nil), nil), Options{
 		Config:       cfg,
 		AuthMode:     "oidc",
 		AuthProvider: &fakeAuthProvider{id: &auth.Identity{Subject: "alice"}},
@@ -431,7 +439,7 @@ func TestNewRefusesABypassWithNoProvider(t *testing.T) {
 	cfg.Enabled = true
 	cfg.AuthBypass = []string{"cert"}
 
-	_, err := New(cache.New(nil), Options{Config: cfg, AuthMode: "cert"})
+	_, err := New(core.New(cache.New(nil), nil), Options{Config: cfg, AuthMode: "cert"})
 	if err == nil {
 		t.Fatal("a bypass without a provider was accepted")
 	}
@@ -449,7 +457,7 @@ func TestHandlerWithoutOAuthAuthenticatesABypassedMode(t *testing.T) {
 		Provider: "cert",
 	}}
 
-	srv, err := New(cache.New(nil), Options{
+	srv, err := New(core.New(cache.New(nil), nil), Options{
 		Config:       cfg,
 		AuthMode:     "cert",
 		AuthProvider: provider,
@@ -488,7 +496,7 @@ func TestHandlerWithoutOAuthRefusesWhatUpstreamRefuses(t *testing.T) {
 		"no identity at all": {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			srv, err := New(cache.New(nil), Options{
+			srv, err := New(core.New(cache.New(nil), nil), Options{
 				Config:       cfg,
 				AuthMode:     "cert",
 				AuthProvider: provider,
@@ -626,7 +634,10 @@ func TestHandlerRefusesATokenForAnotherResource(t *testing.T) {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
 
-	srv, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv, Resource: testResource})
+	srv, err := New(
+		core.New(cache.New(nil), nil),
+		Options{Config: cfg, OAuth: oauthSrv, Resource: testResource},
+	)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -659,7 +670,7 @@ func TestNewRefusesAnAuthorizationServerWithNoResource(t *testing.T) {
 
 	oauthSrv := oauthServerFor([]byte("test-secret-32-bytes-long-padding"))
 
-	_, err := New(cache.New(nil), Options{Config: cfg, OAuth: oauthSrv})
+	_, err := New(core.New(cache.New(nil), nil), Options{Config: cfg, OAuth: oauthSrv})
 	if err == nil {
 		t.Fatal("an authorization server without a resource was accepted")
 	}

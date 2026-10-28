@@ -26,7 +26,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
-	"github.com/radiergummi/cetacean/internal/cluster"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 )
 
@@ -289,8 +288,7 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 	}
 	h.dockerVersionCache.fetchedAt = time.Now()
 
-	entries := cluster.NewSecretEntries()
-	h.SetSecretEntries(entries)
+	entries := h.secretEntries
 
 	entry, err := entries.Open("anonymous", "db_password", nil, "utf8")
 	if err != nil {

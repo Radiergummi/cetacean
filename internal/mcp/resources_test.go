@@ -13,10 +13,18 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/recommendations"
 )
 
 func newResourceTestServer(t *testing.T, c *cache.Cache, opts ...func(*Options)) *Server {
+	t.Helper()
+
+	return newSharedTestServer(t, core.New(c, nil), opts...)
+}
+
+// newSharedTestServer is newResourceTestServer over state the test also holds.
+func newSharedTestServer(t *testing.T, shared *core.Core, opts ...func(*Options)) *Server {
 	t.Helper()
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
@@ -24,11 +32,12 @@ func newResourceTestServer(t *testing.T, c *cache.Cache, opts ...func(*Options))
 		Config:         cfg,
 		GlobalOpsLevel: config.OpsReadOnly,
 		AuthMode:       "none",
+		Widgets:        testWidgets,
 	}
 	for _, fn := range opts {
 		fn(&o)
 	}
-	srv, err := New(c, o)
+	srv, err := New(shared, o)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

@@ -19,7 +19,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
-	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
 
@@ -130,10 +129,7 @@ func TestGoldenMCP(t *testing.T) {
 		)
 	}
 
-	mcp.SetWidgetFS(widgets)
-	t.Cleanup(func() { mcp.SetWidgetFS(nil) })
-
-	w := NewWorld(t)
+	w := NewWorldWithWidgets(t, widgets)
 	catalog := MCPCatalog(t, w)
 
 	var lines []string

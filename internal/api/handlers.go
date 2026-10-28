@@ -23,6 +23,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/filter"
 	"github.com/radiergummi/cetacean/internal/prometheus"
@@ -260,7 +261,7 @@ type Handlers struct {
 }
 
 func NewHandlers(
-	c *cache.Cache,
+	shared *core.Core,
 	b *sse.Broadcaster,
 	dc DockerLogStreamer,
 	sc DockerSystemClient,
@@ -273,7 +274,7 @@ func NewHandlers(
 	aclEval *acl.Evaluator,
 ) *Handlers {
 	return &Handlers{
-		cache:             c,
+		cache:             shared.Cache,
 		broadcaster:       b,
 		dockerClient:      dc,
 		systemClient:      sc,
@@ -297,8 +298,10 @@ func NewHandlers(
 		dockerVersionCache:   newDockerVersionCache(),
 		topologyDocs:         newProjectionCache(),
 		stackDocs:            newProjectionCache(),
-		versions:             cluster.NewVersionIndex(c),
-		logReads:             new(sse.Slots),
+		versions:             shared.Versions,
+		logReads:             shared.LogReads,
+		secretEntries:        shared.SecretEntries,
+		streams:              shared.Streams,
 	}
 }
 
@@ -327,26 +330,6 @@ func (h *Handlers) imageUpdate(svc swarm.Service) *cluster.ImageUpdate {
 	}
 
 	return cluster.ServiceImageUpdate(svc, h.imageDigests)
-}
-
-// SetSecretEntries lets a secret create complete an entry MCP opened.
-func (h *Handlers) SetSecretEntries(entries *cluster.SecretEntries) {
-	h.secretEntries = entries
-}
-
-// SetLogReads draws plain log reads from slots, which MCP's log reads share.
-func (h *Handlers) SetLogReads(slots *sse.Slots) {
-	h.logReads = slots
-}
-
-// SetVersionIndex shares MCP's config and secret version index.
-func (h *Handlers) SetVersionIndex(x *cluster.VersionIndex) {
-	h.versions = x
-}
-
-// SetStreamLifetime ends the metrics stream and log follows when l ends.
-func (h *Handlers) SetStreamLifetime(l *sse.Lifetime) {
-	h.streams = l
 }
 
 // requireAnyGrant checks that the identity has at least one grant.
