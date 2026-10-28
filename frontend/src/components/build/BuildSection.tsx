@@ -42,7 +42,7 @@ export default function BuildSection({ kind, id }: { kind: AttestedKind; id: str
   const platforms = data.platforms ?? [];
   const current =
     data.status === "available"
-      ? platforms.find(({ platform }) => platform === (selected ?? defaultPlatform(platforms)))
+      ? (platforms.find(({ platform }) => platform === selected) ?? defaultPlatform(platforms))
       : undefined;
 
   return (
@@ -139,10 +139,10 @@ function useTimePassed(timestamp: string | undefined) {
  * most likely means; a task offers only its own.
  */
 function defaultPlatform(platforms: PlatformProvenance[]) {
-  return platforms.reduce(
-    (best, candidate) => (candidate.runningTasks > best.runningTasks ? candidate : best),
-    platforms[0] as PlatformProvenance,
-  ).platform;
+  return platforms.reduce<PlatformProvenance | undefined>(
+    (best, candidate) => (!best || candidate.runningTasks > best.runningTasks ? candidate : best),
+    undefined,
+  );
 }
 
 function Actions({

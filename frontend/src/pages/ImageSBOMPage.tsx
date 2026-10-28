@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/search";
 import SimpleTable from "@/components/SimpleTable";
 import { buttonVariants } from "@/components/ui/button";
 import { useAttestationBreadcrumbs } from "@/hooks/useAttestationBreadcrumbs";
+import { useProvenance } from "@/hooks/useProvenance";
 import { apiPath } from "@/lib/basePath";
 import { getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -234,15 +235,12 @@ function Page({
 }
 
 function PlatformPicker({ kind, id }: { kind: AttestedKind; id: string }) {
-  const { data } = useQuery({
-    queryKey: ["provenance", kind, id],
-    queryFn: ({ signal }) => api.provenance(kind, id, signal),
-  });
+  const { data } = useProvenance(kind, id);
 
   return (
     <ul className="flex flex-wrap gap-2">
       {(data?.platforms ?? [])
-        .filter(({ sbom }) => sbom === undefined || !sbom.tooLarge)
+        .filter(({ sbom }) => sbom !== undefined && !sbom.tooLarge)
         .map(({ platform }) => (
           <li key={platform}>
             <Link

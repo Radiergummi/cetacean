@@ -142,8 +142,21 @@ describe("ImageSBOMPage", () => {
       image: "app:1",
       status: "available",
       platforms: [
-        { platform: "linux/amd64", manifestDigest: "a", runningTasks: 0, dockerfile: false },
-        { platform: "linux/arm64", manifestDigest: "b", runningTasks: 0, dockerfile: false },
+        {
+          platform: "linux/amd64",
+          manifestDigest: "a",
+          runningTasks: 0,
+          dockerfile: false,
+          sbom: { digest: "s", size: 1, tooLarge: false },
+        },
+        {
+          platform: "linux/arm64",
+          manifestDigest: "b",
+          runningTasks: 0,
+          dockerfile: false,
+          sbom: { digest: "t", size: 1, tooLarge: false },
+        },
+        { platform: "linux/arm/v7", manifestDigest: "c", runningTasks: 0, dockerfile: false },
       ],
     });
     renderPage("/services/svc1/sbom");
@@ -152,5 +165,6 @@ describe("ImageSBOMPage", () => {
       "href",
       "/services/svc1/sbom?platform=linux%2Farm64",
     );
+    expect(screen.queryByRole("link", { name: "linux/arm/v7" })).toBeNull();
   });
 });
