@@ -231,7 +231,14 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// Check for IdP-returned errors (e.g. access_denied).
 	if errCode := r.URL.Query().Get("error"); errCode != "" {
 		desc := r.URL.Query().Get("error_description")
-		slog.Warn("oidc authorization error", "error", errCode, "description", desc)
+		slog.WarnContext(
+			r.Context(),
+			"oidc authorization error",
+			"error",
+			errCode,
+			"description",
+			desc,
+		)
 		problem.Write(w, r, "AUT002", "authorization denied: "+errCode)
 		return
 	}
@@ -241,7 +248,8 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// the iss parameter MUST be present. Always validate it when present.
 	iss := r.URL.Query().Get("iss")
 	if iss == "" && p.issRequired {
-		slog.Error(
+		slog.ErrorContext(
+			r.Context(),
 			"oidc callback missing required iss parameter (IdP advertises authorization_response_iss_parameter_supported)",
 		)
 		problem.Write(w, r, "AUT003", "missing iss parameter")
@@ -249,7 +257,14 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if iss != "" {
 		if subtle.ConstantTimeCompare([]byte(iss), []byte(p.issuer)) != 1 {
-			slog.Error("oidc issuer mismatch in callback", "expected", p.issuer, "got", iss)
+			slog.ErrorContext(
+				r.Context(),
+				"oidc issuer mismatch in callback",
+				"expected",
+				p.issuer,
+				"got",
+				iss,
+			)
 			problem.Write(w, r, "AUT003", "issuer mismatch")
 			return
 		}
@@ -297,41 +312,41 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 		oauth2.VerifierOption(verifierCookie.Value),
 	)
 	if err != nil {
-		slog.Error("oidc token exchange failed", "error", err)
+		slog.ErrorContext(r.Context(), "oidc token exchange failed", "error", err)
 		problem.Write(w, r, "AUT004", "token exchange failed")
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
-		slog.Error("oidc response missing id_token")
+		slog.ErrorContext(r.Context(), "oidc response missing id_token")
 		problem.Write(w, r, "AUT004", "missing id_token")
 		return
 	}
 
 	idToken, err := p.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
-		slog.Error("oidc id_token verification failed", "error", err)
+		slog.ErrorContext(r.Context(), "oidc id_token verification failed", "error", err)
 		problem.Write(w, r, "AUT004", "invalid id_token")
 		return
 	}
 
 	// Verify nonce matches what we sent in the authorization request.
 	if subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonceCookie.Value)) != 1 {
-		slog.Error("oidc nonce mismatch")
+		slog.ErrorContext(r.Context(), "oidc nonce mismatch")
 		problem.Write(w, r, "AUT003", "nonce mismatch")
 		return
 	}
 
 	var claims map[string]any
 	if err := idToken.Claims(&claims); err != nil {
-		slog.Error("oidc claims parsing failed", "error", err)
+		slog.ErrorContext(r.Context(), "oidc claims parsing failed", "error", err)
 		problem.Write(w, r, "AUT004", "failed to parse claims")
 		return
 	}
 
 	if err := p.validateAzp(idToken, claims); err != nil {
-		slog.Error("oidc azp validation failed", "error", err)
+		slog.ErrorContext(r.Context(), "oidc azp validation failed", "error", err)
 		problem.Write(w, r, "AUT003", "azp validation failed")
 		return
 	}

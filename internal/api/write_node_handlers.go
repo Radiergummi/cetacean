@@ -44,7 +44,14 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	slog.Info("updating node availability", "node", id, "availability", req.Availability)
+	slog.InfoContext(
+		r.Context(),
+		"updating node availability",
+		"node",
+		id,
+		"availability",
+		req.Availability,
+	)
 
 	writeNodeMutation(w, r, id, func() (swarm.Node, error) {
 		return h.nodeWriter.UpdateNodeAvailability(r.Context(), id, availability)
@@ -77,7 +84,7 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	slog.Info("updating node role", "node", id, "role", req.Role)
+	slog.InfoContext(r.Context(), "updating node role", "node", id, "role", req.Role)
 
 	writeNodeMutation(w, r, id, func() (swarm.Node, error) {
 		return h.nodeWriter.UpdateNodeRole(r.Context(), id, role)
@@ -93,7 +100,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	force := r.URL.Query().Get("force") == "true"
 
-	slog.Info("removing node", "node", id, "force", force)
+	slog.InfoContext(r.Context(), "removing node", "node", id, "force", force)
 
 	err := h.nodeWriter.RemoveNode(r.Context(), id, force)
 	if err != nil {

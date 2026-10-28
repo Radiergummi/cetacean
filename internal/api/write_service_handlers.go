@@ -39,7 +39,7 @@ func (h *Handlers) HandleScaleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("scaling service", "service", id, "replicas", *req.Replicas)
+	slog.InfoContext(r.Context(), "scaling service", "service", id, "replicas", *req.Replicas)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.ScaleService(r.Context(), id, *req.Replicas)
@@ -88,7 +88,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 		return
 	}
 
-	slog.Info("updating service endpoint mode", "service", id, "mode", req.Mode)
+	slog.InfoContext(r.Context(), "updating service endpoint mode", "service", id, "mode", req.Mode)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.UpdateServiceEndpointMode(r.Context(), id, mode)
@@ -117,7 +117,7 @@ func (h *Handlers) HandleUpdateServiceImage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	slog.Info("updating service image", "service", id, "image", req.Image)
+	slog.InfoContext(ctx, "updating service image", "service", id, "image", req.Image)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.UpdateServiceImage(ctx, id, req.Image)
@@ -141,7 +141,7 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	slog.Info("rolling back service", "service", id)
+	slog.InfoContext(ctx, "rolling back service", "service", id)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.RollbackService(ctx, id)
@@ -188,7 +188,7 @@ func (h *Handlers) HandleRestartService(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	slog.Info("restarting service", "service", id)
+	slog.InfoContext(r.Context(), "restarting service", "service", id)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
 		return h.serviceLifecycle.RestartService(r.Context(), id)
@@ -250,7 +250,7 @@ func (h *Handlers) HandlePatchServiceEnv(w http.ResponseWriter, r *http.Request)
 		return updated, refused
 	}
 
-	slog.Info("patching service env", "service", id)
+	slog.InfoContext(ctx, "patching service env", "service", id)
 
 	result, err := h.serviceSpec.UpdateServiceEnv(ctx, id, guarded)
 	if refused != nil {
@@ -384,7 +384,7 @@ func patchServiceSpecField[T any](
 		return
 	}
 
-	slog.Info("updating service "+patch.name, "service", id)
+	slog.InfoContext(r.Context(), "updating service "+patch.name, "service", id)
 
 	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
@@ -496,7 +496,7 @@ func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		slog.Info("updating service ports", "service", id)
+		slog.InfoContext(ctx, "updating service ports", "service", id)
 
 		var err error
 		if updated, err = h.serviceSpec.UpdateServicePorts(ctx, id, ports); err != nil {
@@ -545,7 +545,7 @@ func (h *Handlers) HandlePutServiceHealthcheck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	slog.Info("updating service healthcheck", "service", id)
+	slog.InfoContext(ctx, "updating service healthcheck", "service", id)
 
 	updated, err := h.serviceSpec.UpdateServiceHealthcheck(ctx, id, &hc)
 	if err != nil {
@@ -588,7 +588,7 @@ func (h *Handlers) HandlePutServicePlacement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	slog.Info("updating service placement", "service", id)
+	slog.InfoContext(ctx, "updating service placement", "service", id)
 
 	updated, err := h.serviceSpec.UpdateServicePlacement(ctx, id, &placement)
 	if err != nil {
@@ -767,7 +767,7 @@ func (h *Handlers) HandlePatchServiceContainerConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	slog.Info("updating service container config", "service", id)
+	slog.InfoContext(r.Context(), "updating service container config", "service", id)
 
 	level := h.levelFor(r)
 	updated, err := h.serviceSpec.UpdateServiceSpec(
@@ -962,7 +962,7 @@ func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	slog.Info("updating service configs", "service", id)
+	slog.InfoContext(r.Context(), "updating service configs", "service", id)
 
 	updated, err := h.serviceAttachment.UpdateServiceConfigs(
 		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
@@ -1070,7 +1070,7 @@ func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	slog.Info("updating service secrets", "service", id)
+	slog.InfoContext(r.Context(), "updating service secrets", "service", id)
 
 	updated, err := h.serviceAttachment.UpdateServiceSecrets(
 		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
@@ -1157,7 +1157,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	slog.Info("updating service networks", "service", id)
+	slog.InfoContext(r.Context(), "updating service networks", "service", id)
 
 	updated, err := h.serviceAttachment.UpdateServiceNetworks(
 		docker.PinChecked(r.Context(), "service", svc.ID, svc.Version),
@@ -1226,7 +1226,14 @@ func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		slog.Info("updating service mounts", "service", id, "count", len(mounts))
+		slog.InfoContext(
+			r.Context(),
+			"updating service mounts",
+			"service",
+			id,
+			"count",
+			len(mounts),
+		)
 
 		var err error
 		updated, err = h.serviceAttachment.UpdateServiceMounts(

@@ -134,7 +134,7 @@ func (c *dockerVersionCache) fetch(ctx context.Context) (*DockerLatestVersion, e
 func (h *Handlers) HandleDockerLatestVersion(w http.ResponseWriter, r *http.Request) {
 	v, err := h.dockerVersionCache.get(r.Context())
 	if err != nil {
-		slog.Warn("failed to fetch latest Docker version", "error", err)
+		slog.WarnContext(r.Context(), "failed to fetch latest Docker version", "error", err)
 	}
 
 	if v == nil {

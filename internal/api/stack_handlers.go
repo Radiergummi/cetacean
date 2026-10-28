@@ -165,7 +165,7 @@ func (h *Handlers) HandleStackSummary(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) queryStackMetric(ctx context.Context, query string) map[string]float64 {
 	results, err := h.promClient.InstantQuery(ctx, query)
 	if err != nil {
-		slog.Warn("prometheus stack metric query failed", "error", err)
+		slog.WarnContext(ctx, "prometheus stack metric query failed", "error", err)
 		return nil
 	}
 	out := make(map[string]float64, len(results))

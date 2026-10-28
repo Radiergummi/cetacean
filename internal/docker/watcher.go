@@ -213,13 +213,13 @@ func (w *Watcher) Run(ctx context.Context) {
 			return
 		}
 		w.watchEvents(ctx, since, synced)
-		slog.Warn("event stream disconnected", "retry_in", backoff)
+		slog.WarnContext(ctx, "event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
 		}
-		slog.Info("re-syncing after reconnect")
+		slog.InfoContext(ctx, "re-syncing after reconnect")
 		since = eventsSince()
 		synced = w.fullSync(ctx) == nil
 		if synced {
@@ -282,7 +282,7 @@ func (w *Watcher) sync(ctx context.Context) error {
 // periodic tick, so it can try the lock instead of blocking behind it.
 func (w *Watcher) syncLocked(ctx context.Context) error {
 	start := time.Now()
-	slog.Info("starting full sync")
+	slog.InfoContext(ctx, "starting full sync")
 
 	// Bounded: a hung engine would otherwise hold syncMu, and on the event
 	// loop every event behind it, for good.
@@ -291,7 +291,7 @@ func (w *Watcher) syncLocked(ctx context.Context) error {
 
 	data, err := w.client.FullSync(ctx)
 	if err != nil {
-		slog.Error("full sync failed", "error", err)
+		slog.ErrorContext(ctx, "full sync failed", "error", err)
 		metrics.RecordSyncFailure()
 
 		return err
@@ -305,7 +305,7 @@ func (w *Watcher) syncLocked(ctx context.Context) error {
 	w.lastSync.Store(done.UnixNano())
 
 	snap := w.store.Snapshot()
-	slog.Info(
+	slog.InfoContext(ctx,
 		"full sync complete",
 		"nodes",
 		snap.NodeCount,
@@ -483,11 +483,11 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 		// (it holds syncMu too) refreshes everything this one would, and
 		// waiting for it here would stall event processing behind it.
 		if !w.syncMu.TryLock() {
-			slog.Info(kind + " full re-sync skipped: a sync is already running")
+			slog.InfoContext(ctx, kind+" full re-sync skipped: a sync is already running")
 			return false
 		}
 
-		slog.Info(kind + " full re-sync")
+		slog.InfoContext(ctx, kind+" full re-sync")
 
 		// Beside a live stream a failure is not a disconnection, but a
 		// success is the stream's verdict restored. lastSync stopping is
@@ -531,7 +531,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 			return
 		case err := <-errCh:
 			if err != nil {
-				slog.Warn("event stream error", "error", err)
+				slog.WarnContext(ctx, "event stream error", "error", err)
 			}
 			if timer != nil {
 				timer.Stop()
@@ -588,7 +588,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 			w.syncMu.Unlock()
 
 			if err != nil {
-				slog.Debug("task poll failed", "error", err)
+				slog.DebugContext(ctx, "task poll failed", "error", err)
 			}
 		case <-syncTicker.C:
 			if loopSync(ctx, "periodic") && retryC != nil {
@@ -739,7 +739,7 @@ func (w *Watcher) reconcileScopes(ctx context.Context, scopes []TaskScope) {
 
 	for _, scope := range scopes {
 		if err := w.reconcileTasks(ctx, scope); err != nil {
-			slog.Debug(
+			slog.DebugContext(ctx,
 				"task re-list failed",
 				"service", scope.Service,
 				"node", scope.Node,
@@ -809,7 +809,7 @@ func (w *Watcher) scheduleSettle(ctx context.Context, key eventKey, action strin
 				return
 			}
 
-			slog.Debug(
+			slog.DebugContext(ctx,
 				"task still unsettled after re-read",
 				"id", key.id,
 				"attempt", attempt+1,
@@ -838,7 +838,7 @@ func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) b
 	case cerrdefs.IsNotFound(err):
 		read.gone = true
 	case err != nil:
-		slog.Warn("task re-read failed", "id", key.id, "error", err)
+		slog.WarnContext(ctx, "task re-read failed", "id", key.id, "error", err)
 		return ctx.Err() != nil
 	default:
 		task, ok := resource.(swarm.Task)
@@ -939,7 +939,7 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey, created boo
 		// a task's record without emitting a removal event, so this is the only
 		// signal it went. Only a create retries it, as "not registered yet".
 		if cerrdefs.IsNotFound(err) {
-			slog.Debug(
+			slog.DebugContext(ctx,
 				"resource no longer exists; dropping cached record",
 				"type", string(key.resourceType),
 				"id", key.id,
@@ -953,7 +953,7 @@ func (w *Watcher) inspectAndApply(ctx context.Context, key eventKey, created boo
 		// evidence is not evidence of absence: the cache stays as-is and the
 		// periodic re-sync reconciles it. Log loudly so the operator can
 		// correlate cache drift with the underlying Docker error.
-		slog.Warn(
+		slog.WarnContext(ctx,
 			"inspect failed; cache may drift until next periodic re-sync",
 			"type", string(key.resourceType),
 			"id", key.id,

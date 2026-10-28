@@ -413,7 +413,7 @@ func (c *Client) FullSync(ctx context.Context) (cache.FullSyncData, error) {
 	for range fetchers {
 		r := <-ch
 		if r.err != nil {
-			slog.Warn("full sync resource failed", "resource", r.name, "error", r.err)
+			slog.WarnContext(ctx, "full sync resource failed", "resource", r.name, "error", r.err)
 			failed[r.name] = r.err
 		}
 	}

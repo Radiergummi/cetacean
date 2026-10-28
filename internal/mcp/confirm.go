@@ -375,7 +375,7 @@ func confirmationOutcome(answer *mcplib.ElicitationResult) string {
 // logConfirmation records a person's answer. The change history has no actor
 // yet (#438), so this line is the only record that a person confirmed.
 func logConfirmation(ctx context.Context, tool, target, outcome string) {
-	slog.Info("MCP confirmation", append(callerAttrs(ctx),
+	slog.InfoContext(ctx, "MCP confirmation", append(callerAttrs(ctx),
 		"tool", tool,
 		"target", target,
 		"outcome", outcome,
@@ -384,7 +384,7 @@ func logConfirmation(ctx context.Context, tool, target, outcome string) {
 
 // logConfirmableWrite is the line an eliciting tool writes once it has acted.
 func logConfirmableWrite(ctx context.Context, tool, target string, confirmed bool) {
-	slog.Info("MCP write", append(callerAttrs(ctx),
+	slog.InfoContext(ctx, "MCP write", append(callerAttrs(ctx),
 		"tool", tool,
 		"target", target,
 		"confirmed", confirmed,

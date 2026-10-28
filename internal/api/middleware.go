@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -17,11 +16,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/metrics"
 )
-
-// RequestIDFrom extracts the request ID from a context.
-func RequestIDFrom(ctx context.Context) string {
-	return reqctx.RequestID(ctx)
-}
 
 // maxRequestIDLength bounds the request ID a proxy may forward.
 const maxRequestIDLength = 64
@@ -198,7 +192,6 @@ func requestLogger(next http.Handler) http.Handler {
 		}
 
 		slog.Log(r.Context(), level, "request",
-			"req_id", RequestIDFrom(r.Context()),
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", sw.status,
@@ -213,8 +206,7 @@ func recovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				slog.Error("panic recovered",
-					"req_id", RequestIDFrom(r.Context()),
+				slog.ErrorContext(r.Context(), "panic recovered",
 					"error", err,
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),

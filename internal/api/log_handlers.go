@@ -121,7 +121,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 
 	stream, err := fetch(ctx, strconv.Itoa(tail), false, since, until)
 	if err != nil {
-		slog.Error("failed to get logs", "error", err)
+		slog.ErrorContext(ctx, "failed to get logs", "error", err)
 		problem.Write(w, r, "LOG006", "failed to get logs")
 		return
 	}
@@ -131,7 +131,7 @@ func (h *Handlers) serveLogs(w http.ResponseWriter, r *http.Request, fetch logFe
 	// after sending all data, so the read ends once it goes idle instead.
 	lines, err := logs.ParseDockerLogsWithIdleCancel(stream, cancel, logs.IdleCancelAfter)
 	if err != nil {
-		slog.Error("failed to parse logs", "error", err)
+		slog.ErrorContext(ctx, "failed to parse logs", "error", err)
 		problem.Write(w, r, "LOG007", "failed to parse logs")
 		return
 	}
@@ -227,7 +227,7 @@ func (h *Handlers) serveLogsSSE(
 
 	stream, err := fetch(r.Context(), tail, true, since, "")
 	if err != nil {
-		slog.Error("failed to stream logs", "error", err)
+		slog.ErrorContext(r.Context(), "failed to stream logs", "error", err)
 		problem.Write(w, r, "LOG008", "failed to stream logs")
 		return
 	}
@@ -264,7 +264,7 @@ func (h *Handlers) serveLogsSSE(
 		case line, ok := <-ch:
 			if !ok {
 				if err := <-done; err != nil {
-					slog.Warn("log stream ended with an error", "error", err)
+					slog.WarnContext(r.Context(), "log stream ended with an error", "error", err)
 				}
 				return
 			}
@@ -289,7 +289,12 @@ func (h *Handlers) serveLogsSSE(
 			for range ch {
 			}
 			if err := <-done; err != nil {
-				slog.Debug("log stream closed after the client left", "error", err)
+				slog.DebugContext(
+					r.Context(),
+					"log stream closed after the client left",
+					"error",
+					err,
+				)
 			}
 			return
 		}

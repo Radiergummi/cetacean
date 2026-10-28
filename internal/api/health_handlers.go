@@ -71,7 +71,7 @@ func HandleResync(r Resyncer) http.HandlerFunc {
 				// still succeed for whoever else is waiting on it.
 				return
 			}
-			slog.Warn("manual resync failed", "error", err)
+			slog.WarnContext(req.Context(), "manual resync failed", "error", err)
 			code := "ENG006"
 			if errors.Is(err, context.DeadlineExceeded) {
 				code = "ENG005"

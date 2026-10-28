@@ -16,7 +16,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-func (h *Handlers) getLocalNodeID() string {
+func (h *Handlers) getLocalNodeID(ctx context.Context) string {
 	h.localNodeMu.Lock()
 	defer h.localNodeMu.Unlock()
 	if h.localNodeID != "" {
@@ -30,11 +30,12 @@ func (h *Handlers) getLocalNodeID() string {
 	}
 
 	if h.systemClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Detached: the answer is cached for every request, not this one's.
+		lookupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		id, err := h.systemClient.LocalNodeID(ctx)
+		id, err := h.systemClient.LocalNodeID(lookupCtx)
 		if err != nil {
-			slog.Warn("failed to get local node ID", "error", err)
+			slog.WarnContext(ctx, "failed to get local node ID", "error", err)
 			retryAt := time.Now().Add(30 * time.Second)
 			h.localNodeRetryAfter = &retryAt
 		} else if id != "" {
@@ -74,7 +75,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		TotalMemory:          snap.TotalMemory,
 		Quorum:               snap.Quorum,
 		PrometheusConfigured: h.promClient != nil,
-		LocalNodeID:          h.getLocalNodeID(),
+		LocalNodeID:          h.getLocalNodeID(r.Context()),
 	}
 	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
 }
@@ -143,7 +144,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 			`sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) / sum(rate(node_cpu_seconds_total[5m])) * 100`,
 		)
 		if err != nil {
-			slog.Warn("cluster metrics: CPU query failed", "error", err)
+			slog.WarnContext(ctx, "cluster metrics: CPU query failed", "error", err)
 			return
 		}
 		if len(results) > 0 {
@@ -155,7 +156,7 @@ func (h *Handlers) HandleClusterMetrics(w http.ResponseWriter, r *http.Request) 
 		results, err := h.promClient.InstantQuery(ctx,
 			`sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)`)
 		if err != nil {
-			slog.Warn("cluster metrics: memory query failed", "error", err)
+			slog.WarnContext(ctx, "cluster metrics: memory query failed", "error", err)
 			return
 		}
 		if len(results) > 0 {
@@ -279,7 +280,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `count by (instance) (node_uname_info)`)
 		if err != nil {
-			slog.Warn("monitoring status: node-exporter query failed", "error", err)
+			slog.WarnContext(ctx, "monitoring status: node-exporter query failed", "error", err)
 			return
 		}
 		nodeExporter = &TargetStatus{Targets: len(results), Nodes: nodeCount}
@@ -289,7 +290,7 @@ func (h *Handlers) HandleMonitoringStatus(w http.ResponseWriter, r *http.Request
 	wg.Go(func() {
 		results, err := h.promClient.InstantQuery(ctx, `up{job="cadvisor"}`)
 		if err != nil {
-			slog.Warn("monitoring status: cadvisor query failed", "error", err)
+			slog.WarnContext(ctx, "monitoring status: cadvisor query failed", "error", err)
 			return
 		}
 		cadvisor = &TargetStatus{Targets: len(results), Nodes: nodeCount}
@@ -332,7 +333,7 @@ func (h *Handlers) HandleSwarm(w http.ResponseWriter, r *http.Request) {
 
 	sw, err := h.systemClient.SwarmInspect(ctx)
 	if err != nil {
-		slog.Error("swarm inspect failed", "error", err)
+		slog.ErrorContext(ctx, "swarm inspect failed", "error", err)
 		problem.Write(w, r, "SWM002", "swarm inspect failed")
 		return
 	}
@@ -427,7 +428,7 @@ func (h *Handlers) HandleDiskUsage(w http.ResponseWriter, r *http.Request) {
 
 	du, err := h.diskUsage.get(r.Context(), h.systemClient.DiskUsage)
 	if err != nil {
-		slog.Error("disk usage failed", "error", err)
+		slog.ErrorContext(r.Context(), "disk usage failed", "error", err)
 		problem.Write(w, r, "SWM005", "disk usage failed")
 		return
 	}

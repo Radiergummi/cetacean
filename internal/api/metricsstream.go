@@ -86,7 +86,7 @@ func (h *Handlers) HandleMetricsStream(w http.ResponseWriter, r *http.Request) {
 	failing := false
 	writeQueryError := func(err error) {
 		if !failing && ctx.Err() == nil {
-			slog.Warn("metrics stream query failed", "query", query, "error", err)
+			slog.WarnContext(ctx, "metrics stream query failed", "query", query, "error", err)
 		}
 		failing = true
 		fmt.Fprintf(w, "event: query_error\ndata: %s\n\n", marshalErrorEvent(err))
