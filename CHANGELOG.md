@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Every log line written while serving a request carries its `req_id`, so the `requestId` in an error response finds the lines that explain it
 
 ### Changed
-- A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`, as MCP already did
+- A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`
 - MCP's `scale_service` refuses a global service as REST does, and its lifecycle tools answer a service Cetacean doesn't hold as not found rather than passing it to Docker
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
