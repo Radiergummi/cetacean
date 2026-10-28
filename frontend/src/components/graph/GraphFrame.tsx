@@ -1,6 +1,5 @@
 import { Spinner } from "@/components/Spinner";
-import { useInView } from "@/hooks/useInView";
-import { Suspense, useRef, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 
 function Loading() {
   return (
@@ -17,7 +16,26 @@ function Loading() {
  */
 export function GraphFrame({ children }: { children: ReactNode }) {
   const frame = useRef<HTMLDivElement>(null);
-  const seen = useInView(frame);
+  const [seen, setSeen] = useState(false);
+
+  useEffect(() => {
+    const element = frame.current;
+
+    if (!element) {
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(({ isIntersecting }) => isIntersecting)) {
+        setSeen(true);
+        observer.disconnect();
+      }
+    });
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div

@@ -237,7 +237,10 @@ export default function TaskDetail() {
           label="Slot"
           value={task.Slot ? String(task.Slot) : "\u2014"}
         />
-        <ContainerImage image={task.Spec?.ContainerSpec?.Image ?? ""} />
+        <ContainerImage
+          image={task.Spec?.ContainerSpec?.Image ?? ""}
+          attestedAs={{ kind: "task", id: task.ID }}
+        />
         <Timestamp
           label="Timestamp"
           date={status.Timestamp}

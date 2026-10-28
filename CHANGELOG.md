@@ -24,9 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
-- Service and task pages show the build provenance BuildKit attached to their image, with SBOM and Dockerfile-with-layer-sizes pages; `/provenance`, `/sbom`, `/dockerfile` and MCP resources serve the same, and `server.image_attestations` turns it off
+- Service and task pages mark images carrying BuildKit attestations and show their build provenance in a **Manifest** section, with SBOM and Dockerfile pages; `/provenance`, `/sbom`, `/dockerfile` and MCP resources serve the same, and `server.image_attestations` turns it off
 
 ### Changed
+- Compose files and config contents are syntax-highlighted more accurately, with alternating line backgrounds
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 

@@ -1,7 +1,7 @@
 import BuildSection from "./BuildSection";
 import type { ImageProvenance } from "@/api/types";
 import { createTestQueryClient, createWrapper } from "@/test/mocks";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -12,19 +12,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
 import { api } from "@/api/client";
 const provenance = vi.mocked(api.provenance);
 
-let reveal: (() => void) | undefined;
-
 beforeEach(() => {
-  reveal = undefined;
-  (globalThis as unknown as Record<string, unknown>).IntersectionObserver = class {
-    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
-      reveal = () => callback([{ isIntersecting: true }]);
-    }
-
-    observe() {}
-
-    disconnect() {}
-  };
   provenance.mockReset();
 });
 
@@ -86,25 +74,12 @@ async function shown(response: ImageProvenance) {
   provenance.mockResolvedValue(response);
   const view = renderSection();
 
-  act(() => reveal?.());
   await waitFor(() => expect(provenance).toHaveBeenCalled());
 
   return view;
 }
 
 describe("BuildSection", () => {
-  it("fetches only when scrolled into view", async () => {
-    provenance.mockResolvedValue(available);
-    renderSection();
-
-    expect(provenance).not.toHaveBeenCalled();
-
-    act(() => reveal?.());
-    await waitFor(() =>
-      expect(provenance).toHaveBeenCalledWith("service", "svc1", expect.anything()),
-    );
-  });
-
   it("selects the platform with most running tasks", async () => {
     await shown(available);
 
@@ -128,14 +103,17 @@ describe("BuildSection", () => {
   it("links the SBOM and Dockerfile pages", async () => {
     await shown(available);
 
-    expect(await screen.findByRole("link", { name: /SBOM/ })).toHaveAttribute(
+    const dockerfile = "/services/svc1/dockerfile?platform=linux%2Farm64";
+
+    expect(await screen.findByRole("link", { name: "SBOM" })).toHaveAttribute(
       "href",
       "/services/svc1/sbom?platform=linux%2Farm64",
     );
-    expect(screen.getByRole("link", { name: /Dockerfile/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Show Dockerfile" })).toHaveAttribute(
       "href",
-      "/services/svc1/dockerfile?platform=linux%2Farm64",
+      dockerfile,
     );
+    expect(screen.getByRole("link", { name: "Dockerfile" })).toHaveAttribute("href", dockerfile);
   });
 
   it("states read as facts", async () => {

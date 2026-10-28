@@ -134,8 +134,9 @@ rather than exporting their contents.
 ## Build information
 
 When an image was pushed by BuildKit with attestations, which minimal provenance is by default, and which the Docker
-Official Images all carry, service and task pages show a **Build** section under the overview. It's read from the
-image's registry, anonymously, when the section scrolls into view, and it shows what the build recorded:
+Official Images all carry, service and task pages mark the image with a blue check and show a **Manifest** section
+under the overview. It's read from the image's registry, anonymously, when the page opens, and it shows what the
+build recorded:
 
 - the source repository and commit, linked on GitHub, GitLab, and Codeberg
 - for an image built on GitHub Actions, who pushed what, the workflow, and a link to the run
@@ -146,14 +147,14 @@ which starts on the platform most of the service's running tasks are on; a task 
 When there is nothing to show, the section says why in one line: the image has no attestations, isn't pinned by
 digest, is private, or is gone from its registry. [`server.image_attestations`][configuration] turns it off.
 
-When the image has an SBOM, the section links its **SBOM** page: every package with its version, ecosystem,
+When the image has an SBOM, the section's **SBOM** button opens its page: every package with its version, ecosystem,
 license, and where in the image it was found, searchable by name or package URL and filterable by ecosystem and
 license, with the list downloadable as CSV or as the SPDX document itself. Distribution packages usually declare a
 license; Go modules in a Syft SBOM never do, and the page says so instead of leaving the column unexplained.
 
-When the provenance was recorded with `mode=max`, it embeds the Dockerfile, and the section links a **Dockerfile**
-page: the file, with the size of the layers each instruction produced beside it, scaled so the heaviest stand out,
-and how much of the image came from its base. It answers why an image is as large as it is. A layer no line
+When the provenance was recorded with `mode=max`, it embeds the Dockerfile, and **Show Dockerfile** opens a page
+with the file, the size of the layers each instruction produced beside it with a small pie of its share of the
+image, and how much of the image came from its base. It answers why an image is as large as it is. A layer no line
 produced is listed beneath, rather than guessed at.
 
 ## Network addresses

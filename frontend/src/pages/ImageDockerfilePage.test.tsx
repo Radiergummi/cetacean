@@ -99,12 +99,32 @@ describe("ImageDockerfilePage", () => {
     expect(await screen.findByText(/sha256:stray/)).toBeInTheDocument();
   });
 
-  it("makes the heaviest line stand out", async () => {
+  it("draws each line's share of the image, never less than a degree", async () => {
     renderPage(probe);
 
-    const heaviest = await screen.findByTestId("bar-4");
-    expect(heaviest.style.width).toBe("100%");
-    expect(parseFloat(screen.getByTestId("bar-6").style.width)).toBeLessThan(1);
+    const base = await screen.findByTestId("pie-4");
+    expect(Number(base.dataset["degrees"])).toBeCloseTo((4092319 / 6807538) * 360);
+    expect(screen.getByTestId("pie-9").dataset["degrees"]).toBe("1");
+    expect(screen.getByTestId("pie-9")).toHaveAccessibleName("<0.1% of the image");
+  });
+
+  it("shows a multi-line instruction's size once", async () => {
+    renderPage({
+      ...probe,
+      steps: [
+        {
+          ranges: [
+            [5, 5],
+            [6, 6],
+          ],
+          base: false,
+          layers: [{ digest: "sha256:l2", size: 2565002 }],
+        },
+      ],
+    });
+
+    expect(await screen.findByTestId("pie-5")).toBeInTheDocument();
+    expect(screen.queryByTestId("pie-6")).not.toBeInTheDocument();
   });
 
   it("links the raw Dockerfile", async () => {

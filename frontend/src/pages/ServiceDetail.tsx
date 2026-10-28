@@ -108,6 +108,7 @@ export default function ServiceDetail() {
           serviceId={id}
           canEdit={detail.editable.has("image")}
           imageUpdate={detail.imageUpdate}
+          attestedAs={{ kind: "service", id: service.ID }}
         />
         <ReplicaCard
           service={service}

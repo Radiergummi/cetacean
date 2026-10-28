@@ -1,4 +1,4 @@
-import { type AttestedKind, api, attestationPath } from "@/api/client";
+import { type AttestedKind, attestationPath } from "@/api/client";
 import type {
   AttestationStatus,
   ImageProvenance,
@@ -7,11 +7,12 @@ import type {
   ProvenanceSummary,
 } from "@/api/types";
 import CollapsibleSection from "@/components/CollapsibleSection";
-import { Button } from "@/components/ui/button";
-import { useInView } from "@/hooks/useInView";
+import { KVTable } from "@/components/data";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { useProvenance } from "@/hooks/useProvenance";
 import { formatBytes, formatDateTime, formatDuration } from "@/lib/format";
-import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { ExternalLink } from "lucide-react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -28,43 +29,53 @@ const statusLines: Record<Exclude<AttestationStatus, "available" | "disabled">, 
 
 /**
  * What the provenance BuildKit attached to a service's or task's image says
- * about how it was built. It loads once the section scrolls into view, since
- * reading it asks the image's registry.
+ * about how it was built, with its SBOM and Dockerfile pages as actions.
  */
 export default function BuildSection({ kind, id }: { kind: AttestedKind; id: string }) {
-  const anchor = useRef<HTMLDivElement>(null);
-  const visible = useInView(anchor);
-  const { data, refetch } = useQuery({
-    queryKey: ["provenance", kind, id],
-    queryFn: ({ signal }) => api.provenance(kind, id, signal),
-    enabled: visible,
-  });
+  const { data, refetch } = useProvenance(kind, id);
+  const [selected, setSelected] = useState<string>();
 
-  if (data?.status === "disabled") {
+  if (!data || data.status === "disabled") {
     return null;
   }
 
+  const platforms = data.platforms ?? [];
+  const current =
+    data.status === "available"
+      ? platforms.find(({ platform }) => platform === (selected ?? defaultPlatform(platforms)))
+      : undefined;
+
   return (
-    <div ref={anchor}>
-      {data && (
-        <CollapsibleSection title="Build">
-          <p className="mb-3 text-xs text-muted-foreground">As recorded by the image's build</p>
-          {data.status === "available" ? (
-            <Platforms
-              kind={kind}
-              id={id}
-              provenance={data}
-            />
-          ) : (
-            <StatusLine
-              key={data.retryAfter}
-              provenance={data}
-              onRetry={() => refetch()}
-            />
-          )}
-        </CollapsibleSection>
+    <CollapsibleSection
+      title="Manifest"
+      controls={
+        current && (
+          <Actions
+            kind={kind}
+            id={id}
+            platforms={platforms}
+            current={current}
+            onSelect={setSelected}
+          />
+        )
+      }
+    >
+      {data.status !== "available" ? (
+        <StatusLine
+          key={data.retryAfter}
+          provenance={data}
+          onRetry={() => refetch()}
+        />
+      ) : current ? (
+        <Manifest
+          kind={kind}
+          id={id}
+          platform={current}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">{statusLines.none}</p>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -134,145 +145,174 @@ function defaultPlatform(platforms: PlatformProvenance[]) {
   ).platform;
 }
 
-function Platforms({
+function Actions({
   kind,
   id,
-  provenance,
+  platforms,
+  current,
+  onSelect,
 }: {
   kind: AttestedKind;
   id: string;
-  provenance: ImageProvenance;
+  platforms: PlatformProvenance[];
+  current: PlatformProvenance;
+  onSelect: (platform: string) => void;
 }) {
-  const platforms = provenance.platforms ?? [];
-  const [selected, setSelected] = useState(() =>
-    platforms.length > 0 ? defaultPlatform(platforms) : "",
-  );
-  const current = platforms.find(({ platform }) => platform === selected) ?? platforms[0];
-
-  if (!current) {
-    return <p className="text-sm text-muted-foreground">{statusLines.none}</p>;
-  }
-
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <>
       {platforms.length > 1 && (
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          Platform
-          <select
-            aria-label="Platform"
-            value={current.platform}
-            onChange={(event) => setSelected(event.target.value)}
-            className="flex h-8 rounded-md border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {platforms.map(({ platform }) => (
-              <option
-                key={platform}
-                value={platform}
-              >
-                {platform}
-              </option>
-            ))}
-          </select>
-        </label>
+        <select
+          aria-label="Platform"
+          value={current.platform}
+          onChange={(event) => onSelect(event.target.value)}
+          className="flex h-8 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {platforms.map(({ platform }) => (
+            <option
+              key={platform}
+              value={platform}
+            >
+              {platform}
+            </option>
+          ))}
+        </select>
       )}
-
-      {current.provenance ? (
-        <Summary provenance={current.provenance} />
-      ) : (
-        <p className="text-muted-foreground">No provenance for this platform.</p>
+      {current.sbom && !current.sbom.tooLarge && (
+        <Link
+          to={attestationPath(kind, id, "sbom", current.platform)}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          SBOM
+        </Link>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        {current.sbom && !current.sbom.tooLarge && (
-          <Link
-            className="underline-offset-4 hover:underline"
-            to={attestationPath(kind, id, "sbom", current.platform)}
-          >
-            SBOM ({formatBytes(current.sbom.size)})
-          </Link>
-        )}
-        {current.sbom?.tooLarge && (
-          <span className="text-muted-foreground">The SBOM is too large to show here.</span>
-        )}
-        {current.dockerfile && (
-          <Link
-            className="underline-offset-4 hover:underline"
-            to={attestationPath(kind, id, "dockerfile", current.platform)}
-          >
-            Dockerfile with layer sizes
-          </Link>
-        )}
-      </div>
-    </div>
+      {current.dockerfile && (
+        <Link
+          to={attestationPath(kind, id, "dockerfile", current.platform)}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          Show Dockerfile
+        </Link>
+      )}
+    </>
   );
 }
 
-function Summary({ provenance }: { provenance: ProvenanceSummary }) {
+function Manifest({
+  kind,
+  id,
+  platform,
+}: {
+  kind: AttestedKind;
+  id: string;
+  platform: PlatformProvenance;
+}) {
+  const { provenance, sbom, dockerfile } = platform;
+
+  if (!provenance) {
+    return <p className="text-sm text-muted-foreground">No provenance for this platform.</p>;
+  }
+
   const { source, builder, ci, dockerfilePath, startedOn, finishedOn, inputs } = provenance;
   const images = (inputs ?? []).filter(({ image }) => image);
-  const built = finishedOn ? formatDateTime(finishedOn) : undefined;
   const took =
     startedOn && finishedOn
       ? formatDuration((Date.parse(finishedOn) - Date.parse(startedOn)) * 1_000_000)
       : undefined;
+  const dockerfileName = dockerfilePath || "Dockerfile";
 
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-      {source && (
-        <Row label="Source">
-          <ExternalOrText href={source.repositoryUrl}>{source.repository}</ExternalOrText>
-          {source.subdirectory && (
-            <span className="text-muted-foreground"> /{source.subdirectory}</span>
-          )}
-          {source.commit && (
-            <>
-              {" @ "}
-              <ExternalOrText href={source.commitUrl}>
-                <code>{source.commit.slice(0, 12)}</code>
-              </ExternalOrText>
-            </>
-          )}
-          {source.ref && source.ref !== source.commit && (
-            <span className="text-muted-foreground"> ({source.ref})</span>
-          )}
-        </Row>
-      )}
-      {ci && (
-        <Row label="CI">
-          <CILine ci={ci} />
-        </Row>
-      )}
-      {builder && (
-        <Row label="Builder">
-          <ExternalOrText href={builder.href}>{builder.value}</ExternalOrText>
-        </Row>
-      )}
-      {built && (
-        <Row label="Built">
-          {built}
-          {took && <span className="text-muted-foreground"> in {took}</span>}
-        </Row>
-      )}
-      {dockerfilePath && (
-        <Row label="Dockerfile">
-          <code>{dockerfilePath}</code>
-        </Row>
-      )}
-      {images.length > 0 && (
-        <Row label="Inputs">
-          <ul>
+    <KVTable
+      rows={[
+        source && [
+          "Source",
+          <SourceLine
+            key="source"
+            source={source}
+          />,
+          undefined,
+          source.commit ? `${source.repository}@${source.commit}` : source.repository,
+        ],
+        ci && [
+          "CI",
+          <CILine
+            key="ci"
+            ci={ci}
+          />,
+          undefined,
+          ci.runUrl ?? "",
+        ],
+        builder && [
+          "Builder",
+          <ExternalOrText
+            key="builder"
+            href={builder.href}
+          >
+            {builder.value}
+          </ExternalOrText>,
+          undefined,
+          builder.value,
+        ],
+        finishedOn && [
+          "Built",
+          <Fragment key="built">
+            {formatDateTime(finishedOn)}
+            {took && <span className="text-muted-foreground"> in {took}</span>}
+          </Fragment>,
+          undefined,
+          finishedOn,
+        ],
+        (dockerfile || dockerfilePath) && [
+          "Dockerfile",
+          dockerfile ? (
+            <Link
+              key="dockerfile"
+              to={attestationPath(kind, id, "dockerfile", platform.platform)}
+              className="text-link hover:underline"
+            >
+              {dockerfileName}
+            </Link>
+          ) : (
+            dockerfileName
+          ),
+          undefined,
+          dockerfileName,
+        ],
+        images.length > 0 && [
+          "Inputs",
+          <ul key="inputs">
             {images.map(({ uri, image }) => (
-              <li
-                key={uri}
-                className="break-all"
-              >
-                <code>{image}</code>
-              </li>
+              <li key={uri}>{image}</li>
             ))}
-          </ul>
-        </Row>
+          </ul>,
+          undefined,
+          images.map(({ image }) => image).join("\n"),
+        ],
+        sbom?.tooLarge && [
+          "SBOM",
+          <Fragment key="sbom">{formatBytes(sbom.size)}, too large to show here</Fragment>,
+        ],
+      ]}
+    />
+  );
+}
+
+function SourceLine({ source }: { source: NonNullable<ProvenanceSummary["source"]> }) {
+  return (
+    <>
+      <ExternalOrText href={source.repositoryUrl}>{source.repository}</ExternalOrText>
+      {source.subdirectory && (
+        <span className="text-muted-foreground"> /{source.subdirectory}</span>
       )}
-    </dl>
+      {source.commit && (
+        <>
+          {" @ "}
+          <ExternalOrText href={source.commitUrl}>{source.commit.slice(0, 12)}</ExternalOrText>
+        </>
+      )}
+      {source.ref && source.ref !== source.commit && (
+        <span className="text-muted-foreground"> ({source.ref})</span>
+      )}
+    </>
   );
 }
 
@@ -305,15 +345,6 @@ function CILine({ ci }: { ci: ProvenanceCI }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
-    </>
-  );
-}
-
 function ExternalOrText({ href, children }: { href?: string | undefined; children: ReactNode }) {
   if (!href) {
     return <>{children}</>;
@@ -324,9 +355,13 @@ function ExternalOrText({ href, children }: { href?: string | undefined; childre
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="underline-offset-4 hover:underline"
+      className="inline-flex items-center gap-1 text-link hover:underline"
     >
       {children}
+      <ExternalLink
+        className="size-3 shrink-0"
+        aria-hidden="true"
+      />
     </a>
   );
 }

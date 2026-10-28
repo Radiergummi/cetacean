@@ -5,24 +5,17 @@ import FetchError from "@/components/FetchError";
 import { LoadingDetail } from "@/components/LoadingSkeleton";
 import PageHeader from "@/components/PageHeader";
 import { SearchInput } from "@/components/search";
+import SimpleTable from "@/components/SimpleTable";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useAttestationBreadcrumbs } from "@/hooks/useAttestationBreadcrumbs";
 import { apiPath } from "@/lib/basePath";
-import { attestationBreadcrumbs } from "@/lib/resourceBreadcrumbs";
 import { getErrorMessage } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 const selectClassName =
-  "flex h-8 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "flex min-w-0 rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const noLicense = "(none)";
 
@@ -142,12 +135,12 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
         </p>
       )}
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
         <SearchInput
           value={query}
           onChange={setQuery}
           placeholder="Search by name or package URL…"
-          className="sm:max-w-xs"
+          className="sm:w-72 sm:shrink-0"
         />
         <select
           aria-label="Ecosystem"
@@ -169,7 +162,7 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
           aria-label="License"
           value={license}
           onChange={(event) => setLicense(event.target.value)}
-          className={selectClassName}
+          className={`${selectClassName} sm:max-w-64`}
         >
           <option value="all">All licenses</option>
           {licenses.map((value) => (
@@ -183,33 +176,29 @@ export default function ImageSBOMPage({ kind }: { kind: AttestedKind }) {
         </select>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Version</TableHead>
-            <TableHead>Ecosystem</TableHead>
-            <TableHead>License</TableHead>
-            <TableHead>Found in</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((entry) => (
-            <TableRow key={`${entry.purl}|${entry.name}|${entry.version}|${entry.foundIn}`}>
-              <TableCell
-                className="font-medium break-all"
-                title={entry.purl}
-              >
-                {entry.name}
-              </TableCell>
-              <TableCell className="break-all">{entry.version}</TableCell>
-              <TableCell>{entry.ecosystem}</TableCell>
-              <TableCell className="break-words">{entry.license}</TableCell>
-              <TableCell className="break-all text-muted-foreground">{entry.foundIn}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <SimpleTable
+        columns={["Name", "Version", "Ecosystem", "License", "Found in"]}
+        items={filtered}
+        keyFn={(entry) => `${entry.purl}|${entry.name}|${entry.version}|${entry.foundIn}`}
+        renderRow={(entry) => (
+          <>
+            <td
+              className="p-3 text-sm font-medium"
+              title={entry.purl}
+            >
+              {entry.name}
+            </td>
+            <td className="p-3 text-sm">{entry.version}</td>
+            <td className="p-3 text-sm">{entry.ecosystem}</td>
+            <td className="p-3 text-sm">
+              <div className="max-w-64 break-words whitespace-normal">{entry.license}</div>
+            </td>
+            <td className="p-3 font-mono text-xs text-muted-foreground">
+              <div className="max-w-96 break-all whitespace-normal">{entry.foundIn}</div>
+            </td>
+          </>
+        )}
+      />
 
       {filtered.length === 0 && <EmptyState message="No matching packages." />}
     </Page>
@@ -229,13 +218,15 @@ function Page({
   actions?: React.ReactNode | undefined;
   children: React.ReactNode;
 }) {
+  const breadcrumbs = useAttestationBreadcrumbs(kind, id, "SBOM");
+
   return (
     <>
       <PageHeader
         title="SBOM"
         subtitle={subtitle}
         actions={actions}
-        breadcrumbs={attestationBreadcrumbs(kind, id, "SBOM")}
+        breadcrumbs={breadcrumbs}
       />
       {children}
     </>

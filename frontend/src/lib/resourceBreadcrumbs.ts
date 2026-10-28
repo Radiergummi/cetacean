@@ -6,22 +6,6 @@ export interface Crumb {
   to?: string | undefined;
 }
 
-/**
- * The trail of a page about a service's or task's image: the list, the
- * resource, and the page itself.
- */
-export function attestationBreadcrumbs(
-  kind: "service" | "task",
-  id: string,
-  page: string,
-): Crumb[] {
-  return [
-    { label: kind === "service" ? "Services" : "Tasks", to: `/${kind}s` },
-    { label: kind === "service" ? "Service" : "Task", to: `/${kind}s/${id}` },
-    { label: page },
-  ];
-}
-
 interface ResourceCrumbsConfig {
   /** Plural label of the resource's own list page, e.g. "Services". */
   listLabel: string;
