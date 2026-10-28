@@ -164,11 +164,16 @@ func TestStackSummaryAppliesAGlobalServicesConstraints(t *testing.T) {
 	c := New(nil)
 
 	node := func(id string, role swarm.NodeRole) swarm.Node {
-		return swarm.Node{
+		n := swarm.Node{
 			ID:     id,
 			Spec:   swarm.NodeSpec{Role: role, Availability: swarm.NodeAvailabilityActive},
 			Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 		}
+		if role == swarm.NodeRoleManager {
+			n.ManagerStatus = &swarm.ManagerStatus{Reachability: swarm.ReachabilityReachable}
+		}
+
+		return n
 	}
 	c.SetNode(node("manager-1", swarm.NodeRoleManager))
 	c.SetNode(node("worker-1", swarm.NodeRoleWorker))

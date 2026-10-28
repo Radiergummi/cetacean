@@ -234,7 +234,7 @@ func PlacementGraph(
 			svc,
 			runningPerService[svc.ID],
 			completedPerService[svc.ID],
-			eligible[svc.ID],
+			EligibleIn(eligible, svc.ID),
 			flapping[svc.ID],
 		)
 		nodes = append(nodes, serviceNode(svc, state))

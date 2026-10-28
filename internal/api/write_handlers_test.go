@@ -5230,6 +5230,7 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 	env := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceEnv }
 	ports := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServicePorts }
 	networks := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceNetworks }
+	labels := func(h *Handlers) http.HandlerFunc { return h.HandlePatchServiceLabels }
 
 	const (
 		tier1 = config.OpsOperational
@@ -5394,6 +5395,21 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			current, "PATCH", "/networks", `{"networks":[]}`,
 			networks, tier2, false, pinAlways,
 		},
+		{
+			"service label",
+			current, "PATCH", "/labels", `{"traefik.enable":"true"}`,
+			labels, tier2, true, pinWhenHeld,
+		},
+		{
+			"service labels unchanged",
+			current, "PATCH", "/labels", `{}`,
+			labels, tier2, false, pinWhenHeld,
+		},
+		{
+			"service label without host access",
+			unbound, "PATCH", "/labels", `{"traefik.enable":"true"}`,
+			labels, tier2, false, pinWhenHeld,
+		},
 	}
 
 	for _, tc := range cases {
@@ -5464,6 +5480,11 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 				}
 				mock.updateServiceNetworksFn = func(
 					ctx context.Context, _ string, _ []swarm.NetworkAttachmentConfig,
+				) (swarm.Service, error) {
+					return write(ctx)
+				}
+				mock.updateServiceLabelsFn = func(
+					ctx context.Context, _ string, _ map[string]string,
 				) (swarm.Service, error) {
 					return write(ctx)
 				}

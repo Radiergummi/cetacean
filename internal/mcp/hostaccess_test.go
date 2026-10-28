@@ -109,6 +109,11 @@ func hostAccessWriteClient(
 		) (swarm.Service, error) {
 			return record(ctx)
 		},
+		updateServiceLabelsFn: func(
+			ctx context.Context, _ string, _ map[string]string,
+		) (swarm.Service, error) {
+			return record(ctx)
+		},
 	}
 }
 
@@ -228,6 +233,19 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		},
 		{
 			"ports unchanged", current, section("ports", `[]`),
+			tier2, false, pinWhenHeld,
+		},
+		{
+			"service label", current, section("labels", `{"traefik.enable":"true"}`),
+			tier2, true, pinWhenHeld,
+		},
+		{
+			"service labels unchanged", current, section("labels", `{}`),
+			tier2, false, pinWhenHeld,
+		},
+		{
+			"service label without host access", unbound,
+			section("labels", `{"traefik.enable":"true"}`),
 			tier2, false, pinWhenHeld,
 		},
 	}

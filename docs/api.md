@@ -447,8 +447,9 @@ curl -i -H 'Accept: application/json' http://localhost:9000/services/shop_web
 `307` preserves the method and the body, so writes may be addressed by name too: `PUT /services/shop_web/scale`
 reaches the scale endpoint with its payload intact. Most clients follow the redirect on request (`curl -L`).
 
-Volumes and stacks are keyed by name already, so their paths never redirect. Tasks are addressable by ID only: a
-task's `<service>.<slot>` name is derived from its parent rather than stored on it.
+Volumes and stacks are keyed by name already, so their paths never redirect. A task's name is its service's name and
+slot, `shop_web.1`, or node ID for a global service; it names the live task in that slot, and resolves only for a
+caller who may read the service.
 
 A name matching more than one resource is answered `409 Conflict` with [`API015`](api/errors#API015), whose
 detail lists every ID the request could have meant.
@@ -947,8 +948,9 @@ hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capabi
 A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
 capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
 a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
-`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `ports`, `networks`, `secrets`,
-`configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change.
+`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `labels`, `ports`, `networks`,
+`secrets`, `configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change. Service
+labels count because a reverse proxy routes by them; the container labels in `container-config` don't.
 `POST /services/{id}/rollback` needs it when either the current or the previous spec has host access. Below that they
 answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so host access that comes
 only through one isn't held to this rule.

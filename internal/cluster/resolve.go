@@ -34,14 +34,21 @@ func ResolveTask(c *cache.Cache, identifier string) (swarm.Task, bool, error) {
 
 	// Swarm keeps a record for every replica it has replaced, rendering under
 	// the name of the one that succeeded it. A caller means the live one, and
-	// where none is live there is nothing to name.
+	// where none is live there is nothing to name. A start-first update keeps
+	// two live, and the name means the newer.
+	var (
+		match swarm.Task
+		found bool
+	)
+
 	for _, task := range c.ListTasksByService(service.ID) {
-		if TaskIsLive(task) && TaskName(task, &service) == identifier {
-			return task, true, nil
+		if TaskIsLive(task) && TaskName(task, &service) == identifier &&
+			(!found || task.CreatedAt.After(match.CreatedAt)) {
+			match, found = task, true
 		}
 	}
 
-	return swarm.Task{}, false, nil
+	return match, found, nil
 }
 
 // ResolveTaskAs is ResolveTask for a caller reading through canRead; nil reads

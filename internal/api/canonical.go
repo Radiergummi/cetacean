@@ -14,11 +14,11 @@ import (
 
 // canonicalKinds maps the collections whose detail paths accept a name as well
 // as an ID to the kind cluster.Lookup resolves their members as. Volumes and
-// stacks are absent because both are keyed by name already; tasks because
-// their routes address them by ID alone.
+// stacks are absent because both are keyed by name already.
 var canonicalKinds = map[string]string{
 	"services": "service",
 	"nodes":    "node",
+	"tasks":    "task",
 	"configs":  "config",
 	"secrets":  "secret",
 	"networks": "network",
@@ -68,10 +68,11 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 			return
 		}
 
-		record, found, err := cluster.Lookup(h.cache, kind, identifier)
+		record, found, err := cluster.LookupAs(h.cache, kind, identifier, h.readerFor(r))
 
+		// A task name's ambiguity would be its service's, which Swarm keeps unique.
 		if _, ok := errors.AsType[*cache.AmbiguousNameError](err); ok {
-			if !h.reportAmbiguousName(w, r, kind, err) {
+			if kind == "task" || !h.reportAmbiguousName(w, r, kind, err) {
 				next.ServeHTTP(w, r)
 			}
 
@@ -109,6 +110,13 @@ func (h *Handlers) canonicalIdentifier(next http.Handler) http.Handler {
 		w.Header().Set("Location", target)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	})
+}
+
+// readerFor is the read check cluster.LookupAs resolves a task name through.
+func (h *Handlers) readerFor(r *http.Request) func(resource string) bool {
+	identity := auth.IdentityFromContext(r.Context())
+
+	return func(resource string) bool { return h.acl.Can(identity, "read", resource) }
 }
 
 // reportAmbiguousName answers a name matching several resources of one type
