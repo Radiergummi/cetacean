@@ -45,10 +45,12 @@ func TestAGlobalServiceReadsTheSameStateEverywhere(t *testing.T) {
 			snap := c.Snapshot()
 
 			got := map[string]string{
-				"DeriveServiceState": DeriveServiceState(svc, 0, 0, eligible[svc.ID], false),
-				"RowsForServices":    RowsForServices(services, nil, nil, eligible, nil)[0].State,
+				"DeriveServiceState": DeriveServiceState(
+					svc, 0, 0, EligibleIn(eligible, svc.ID), false,
+				),
+				"RowsForServices": RowsForServices(services, nil, nil, eligible, nil)[0].State,
 				"ServiceDigest": ServiceDigest(
-					svc, nil, nil, nil, false, eligible[svc.ID], nil,
+					svc, nil, nil, nil, false, EligibleIn(eligible, svc.ID), nil,
 				).State,
 				"StackDigest": StackDigest(
 					cache.StackDetail{Name: "ops", Services: services}, nil, nil, eligible,
@@ -77,5 +79,25 @@ func TestAGlobalServiceReadsTheSameStateEverywhere(t *testing.T) {
 				t.Errorf("unhealthy services = %d for a service reading %q", unhealthy, tc.want)
 			}
 		})
+	}
+}
+
+// A count missing from the map is not a count of zero: a global service with
+// nothing running reads pending, as it did before counts were known at all.
+func TestAMissingEligibleCountReadsPending(t *testing.T) {
+	svc := swarm.Service{
+		ID: "agent",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: "agent"},
+			Mode:        swarm.ServiceMode{Global: &swarm.GlobalService{}},
+		},
+	}
+	services := []swarm.Service{svc}
+
+	if got := RowsForServices(services, nil, nil, nil, nil)[0].State; got != "pending" {
+		t.Errorf("RowsForServices = %q, want pending", got)
+	}
+	if got := PlacementGraph(nil, nil, services, nil, nil).Nodes[0].State; got != "pending" {
+		t.Errorf("PlacementGraph = %q, want pending", got)
 	}
 }

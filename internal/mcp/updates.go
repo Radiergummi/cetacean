@@ -256,6 +256,19 @@ var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, 
 
 		return cluster.EnvChange(current, updated)
 	},
+	sectionLabels: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
+		patch, err := requireStringMapPatch(req, "value")
+		if err != nil {
+			return ""
+		}
+
+		updated, err := mergePatchMutator(patch)(svc.Spec.Labels)
+		if err != nil {
+			return ""
+		}
+
+		return cluster.LabelsChange(svc.Spec.Labels, updated)
+	},
 	sectionPorts: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
 		ports, err := decodeSection[[]swarm.PortConfig](req, section)
 		if err != nil {

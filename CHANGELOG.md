@@ -24,13 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
+- `/tasks/{id}` and its sub-paths accept a task's `<service>.<slot>` name, redirecting to its ID as service and node names do
 
 ### Changed
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
-- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
 - `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
+- A task path ending in `.json`, `.csv` or another format suffix names a task by that whole identifier, as service and node paths do: `DELETE /tasks/abc.json` no longer removes task `abc`
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
 - A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 - The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
@@ -47,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The cluster overview, `GET /cluster` and `cetacean://cluster` count global services' reservations once per eligible node, and count services converged or degraded by the state each service shows
 - Task failure counts in the flaky-service recommendation and the MCP restart digest no longer include failures from before Cetacean started counting
 - A `sizing.thresholds.lookback` under an hour, or not a whole number of hours, is queried as set instead of being cut to whole hours; startup refuses one under `1m`
-- Placement constraints match values, built-in keys and label prefixes regardless of case, as Swarm does, in drain impact and the desired task count of global services
+- Placement constraints match as Swarm does in drain impact and the desired task count of global services: regardless of case, `node.ip` by address or CIDR, and `node.role` by the role a node holds
 - MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
 - A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves

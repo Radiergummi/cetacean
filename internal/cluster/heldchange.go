@@ -106,6 +106,16 @@ func EnvChange(before, after map[string]string) string {
 	return "changing the environment of"
 }
 
+// LabelsChange compares service labels, by which a reverse proxy can route
+// the network to a socket the service holds.
+func LabelsChange(before, after map[string]string) string {
+	if maps.Equal(before, after) {
+		return ""
+	}
+
+	return "changing the labels of"
+}
+
 // PortsChange compares published ports, which can expose a socket the service
 // holds to the network.
 func PortsChange(before, after []swarm.PortConfig) string {

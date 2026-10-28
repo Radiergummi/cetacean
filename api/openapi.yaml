@@ -4103,7 +4103,7 @@ paths:
       summary: Patch service labels
       description: |
         Applies a JSON Patch (RFC 6902) or JSON Merge Patch (RFC 7396) to the service labels.
-        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`.
+        Requires `Content-Type: application/json-patch+json` or `application/merge-patch+json`. Requires level 3 to change them on a service with host access (a bind, named-pipe, cluster, or driver-configured volume mount, or an added capability).
         Requires operations level 2. Setting `com.docker.stack.namespace` to a stack the service
         is not in also requires `write` on that stack (`403 ACL002` otherwise).
       parameters:

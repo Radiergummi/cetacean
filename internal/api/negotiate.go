@@ -194,7 +194,7 @@ func (h *Handlers) namesReadableMember(r *http.Request, collection, identifier s
 
 	switch kind, resolvable := canonicalKinds[collection]; {
 	case resolvable:
-		record, found, err := cluster.Lookup(h.cache, kind, identifier)
+		record, found, err := cluster.LookupAs(h.cache, kind, identifier, h.readerFor(r))
 		named := record.Resource()
 		if err != nil {
 			named, found = kind+":"+identifier, true

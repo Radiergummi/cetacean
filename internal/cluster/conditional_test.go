@@ -35,7 +35,7 @@ func TestDigestsReportTheVersionAConditionalWriteTakes(t *testing.T) {
 	meta := swarm.Meta{Version: swarm.Version{Index: 42}}
 
 	digests := []Digest{
-		ServiceDigest(swarm.Service{ID: "s", Meta: meta}, nil, nil, nil, false, 0, nil),
+		ServiceDigest(swarm.Service{ID: "s", Meta: meta}, nil, nil, nil, false, Eligible{}, nil),
 		NodeDigest(swarm.Node{ID: "n", Meta: meta}, nil, nil),
 		ConfigDigest(swarm.Config{ID: "c", Meta: meta}, nil),
 		SecretDigest(swarm.Secret{ID: "x", Meta: meta}, nil),

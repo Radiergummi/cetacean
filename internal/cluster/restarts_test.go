@@ -27,7 +27,7 @@ func TestServiceDigestReportsRestartCounts(t *testing.T) {
 		nil,
 		&ServiceRestarts{LastHour: 12, LastWeek: 840},
 		false,
-		0,
+		Eligible{},
 		nil,
 	)
 
@@ -51,7 +51,7 @@ func TestServiceDigestOmitsRestartsWhenUnknown(t *testing.T) {
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	}
 
-	got := ServiceDigest(svc, nil, nil, nil, false, 0, nil)
+	got := ServiceDigest(svc, nil, nil, nil, false, Eligible{}, nil)
 
 	if got.Restarts != nil {
 		t.Errorf("Restarts = %+v, want nil when no tracker was consulted", got.Restarts)
@@ -73,7 +73,7 @@ func TestServiceRestartsSeparatesRecentFromChronic(t *testing.T) {
 		nil,
 		&ServiceRestarts{LastHour: 20, LastWeek: 20},
 		false,
-		0,
+		Eligible{},
 		nil,
 	)
 	longBroken := ServiceDigest(
@@ -82,7 +82,7 @@ func TestServiceRestartsSeparatesRecentFromChronic(t *testing.T) {
 		nil,
 		&ServiceRestarts{LastHour: 20, LastWeek: 900},
 		false,
-		0,
+		Eligible{},
 		nil,
 	)
 
@@ -117,7 +117,7 @@ func TestServiceDigestExplainsAFlappingService(t *testing.T) {
 		},
 	}
 
-	got := ServiceDigest(svc, tasks, nil, nil, true, 0, nil)
+	got := ServiceDigest(svc, tasks, nil, nil, true, Eligible{}, nil)
 
 	if got.State != "flapping" {
 		t.Errorf("State = %q, want flapping", got.State)

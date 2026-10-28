@@ -121,7 +121,7 @@ func (s *Server) digestOf(
 			s.readableAttachedNetworks(ctx, resource),
 			s.serviceRestarts(resource.ID),
 			s.cache.IsFlapping(resource.ID),
-			s.cache.EligibleNodeCounts(resource)[resource.ID],
+			cluster.EligibleIn(s.cache.EligibleNodeCounts(resource), resource.ID),
 			cluster.ServiceImageUpdate(resource, s.images),
 		), nil
 

@@ -225,7 +225,7 @@ func StackDigest(
 				svc,
 				running[svc.ID],
 				completed[svc.ID],
-				eligible[svc.ID],
+				EligibleIn(eligible, svc.ID),
 				flapping[svc.ID],
 			),
 		})

@@ -62,6 +62,14 @@ type patchLabelsSpec[T any] struct {
 
 	// stackMember marks a type whose stack membership follows its labels.
 	stackMember bool
+
+	// hold, when set, answers a refusal itself or returns the context to write
+	// with and the check a label change must pass inside the write.
+	hold func(
+		w http.ResponseWriter,
+		r *http.Request,
+		item T,
+	) (context.Context, func(before, after map[string]string) error, bool)
 }
 
 func handleGetLabels[T any](
@@ -91,7 +99,8 @@ func handlePatchLabels[T any](
 
 	// Cache lookup is for the 404 only — the merge runs against the
 	// freshly-inspected spec inside the writer (M-42).
-	if _, ok := lookupOr404(w, r, spec.resource, key, spec.getter); !ok {
+	item, ok := lookupOr404(w, r, spec.resource, key, spec.getter)
+	if !ok {
 		return
 	}
 
@@ -107,9 +116,33 @@ func handlePatchLabels[T any](
 		})
 	}
 
+	ctx := r.Context()
+	var refused error
+	if spec.hold != nil {
+		var check func(before, after map[string]string) error
+		if ctx, check, ok = spec.hold(w, r, item); !ok {
+			return
+		}
+
+		inner := mutate
+		mutate = func(current map[string]string) (map[string]string, error) {
+			updated, err := inner(current)
+			if err != nil {
+				return nil, err
+			}
+			refused = check(current, updated)
+
+			return updated, refused
+		}
+	}
+
 	slog.Info("patching "+spec.resource+" labels", spec.resource, key)
 
-	result, err := spec.update(r.Context(), key, mutate)
+	result, err := spec.update(ctx, key, mutate)
+	if refused != nil {
+		writeErrorCode(w, r, "OPS001", refused.Error())
+		return
+	}
 	if err != nil {
 		if denied, ok := errors.AsType[*cluster.StackLabelDeniedError](err); ok {
 			writeErrorCode(w, r, "ACL002", denied.Error())
