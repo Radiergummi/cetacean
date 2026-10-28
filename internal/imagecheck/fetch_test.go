@@ -144,3 +144,24 @@ func TestBlobReportsMissingAndPrivate(t *testing.T) {
 		t.Errorf("private: err = %v, want ErrUnauthorized", err)
 	}
 }
+
+// A digest read from an index is untrusted, and must not reach the URL.
+func TestFetchRefusesWhatIsNotADigest(t *testing.T) {
+	registry := newFakeRegistry(t, nil)
+
+	for _, digest := range []string{"sha256:../../other/manifests/latest", "sha256:AB", ""} {
+		if _, _, err := registry.client().
+			Manifest(context.Background(), registry.ref(""), digest); err == nil {
+			t.Errorf("manifest %q was fetched", digest)
+		}
+
+		if _, err := registry.client().
+			Blob(context.Background(), registry.ref(""), digest, 1<<10); err == nil {
+			t.Errorf("blob %q was fetched", digest)
+		}
+	}
+
+	if n := registry.manifestRequests.Load(); n != 0 {
+		t.Errorf("%d requests reached the registry", n)
+	}
+}

@@ -23,6 +23,11 @@ var (
 	digestGrammar = regexp.MustCompile(`^(sha256:[a-f0-9]{64}|sha512:[a-f0-9]{128})$`)
 )
 
+// ValidDigest reports whether digest is a sha256 or sha512 digest.
+func ValidDigest(digest string) bool {
+	return digestGrammar.MatchString(digest)
+}
+
 // Reference is a tagged image as a registry is asked about it: the host to
 // dial, the repository on it, and the tag.
 type Reference struct {

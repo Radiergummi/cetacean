@@ -110,6 +110,14 @@ func withProbe(t *testing.T, f *fakeFetcher) string {
 	return "registry.test/probe:1@" + probeIndex
 }
 
+var (
+	syntheticAMD         = digestFor("amd")
+	syntheticARM         = digestFor("arm")
+	syntheticAttestation = digestFor("att")
+	syntheticSBOM        = digestFor("sbom")
+	syntheticProvenance  = digestFor("prov")
+)
+
 const (
 	probeAttestation = "sha256:fbec505132e151e9e2e685331ff075fa55edc4e2915b600a06c436cdc2194df6"
 	syntheticIndex   = "sha256:" + "9999999999999999999999999999999999999999999999999999999999999999"
@@ -122,18 +130,19 @@ func withSynthetic(t *testing.T, f *fakeFetcher, sbomSize int64) {
 	t.Helper()
 
 	f.manifests[syntheticIndex] = `{"mediaType":"` + ociIndexType + `","manifests":[
-		{"digest":"sha256:amd","platform":{"os":"linux","architecture":"amd64"}},
-		{"digest":"sha256:arm","platform":{"os":"linux","architecture":"arm64"}},
-		{"digest":"sha256:att","platform":{"os":"unknown","architecture":"unknown"},
+		{"digest":"` + syntheticAMD + `","platform":{"os":"linux","architecture":"amd64"}},
+		{"digest":"` + syntheticARM + `","platform":{"os":"linux","architecture":"arm64"}},
+		{"digest":"` + syntheticAttestation + `","platform":{"os":"unknown","architecture":"unknown"},
 		 "annotations":{"vnd.docker.reference.type":"attestation-manifest",
-		                "vnd.docker.reference.digest":"sha256:amd"}}]}`
-	f.manifests["sha256:att"] = fmt.Sprintf(`{"layers":[
-		{"digest":"sha256:sbom","size":%d,
+		                "vnd.docker.reference.digest":"` + syntheticAMD + `"}}]}`
+	f.manifests[syntheticAttestation] = fmt.Sprintf(`{"layers":[
+		{"digest":"%s","size":%d,
 		 "annotations":{"in-toto.io/predicate-type":"https://spdx.dev/Document"}},
-		{"digest":"sha256:prov","size":10,
-		 "annotations":{"in-toto.io/predicate-type":"https://slsa.dev/provenance/v1"}}]}`, sbomSize)
-	f.blobs["sha256:sbom"] = fixture(t, "syft-sbom.json")
-	f.blobs["sha256:prov"] = fixture(t, "syft-provenance.json")
+		{"digest":"%s","size":10,
+		 "annotations":{"in-toto.io/predicate-type":"https://slsa.dev/provenance/v1"}}]}`,
+		syntheticSBOM, sbomSize, syntheticProvenance)
+	f.blobs[syntheticSBOM] = fixture(t, "syft-sbom.json")
+	f.blobs[syntheticProvenance] = fixture(t, "syft-provenance.json")
 }
 
 type clock struct{ t time.Time }
@@ -342,7 +351,7 @@ func TestSBOMTooLargeNoDownload(t *testing.T) {
 		t.Errorf("err = %v, want ErrTooLarge", err)
 	}
 
-	if n := f.count("sha256:sbom"); n != 0 {
+	if n := f.count(syntheticSBOM); n != 0 {
 		t.Errorf("an SBOM over the cap was downloaded %d times", n)
 	}
 }
@@ -445,8 +454,8 @@ func TestEvictsByBytes(t *testing.T) {
 func TestImageIndexWithoutAttestationsIsNone(t *testing.T) {
 	f := newFakeFetcher()
 	f.manifests[syntheticIndex] = `{"mediaType":"` + ociIndexType + `","manifests":[
-		{"digest":"sha256:amd","platform":{"os":"linux","architecture":"amd64"}},
-		{"digest":"sha256:arm","platform":{"os":"linux","architecture":"arm64"}}]}`
+		{"digest":"` + syntheticAMD + `","platform":{"os":"linux","architecture":"amd64"}},
+		{"digest":"` + syntheticARM + `","platform":{"os":"linux","architecture":"arm64"}}]}`
 	s, _ := newTestStore(f)
 
 	if got := s.Image(context.Background(), syntheticImage); got.Status != StatusNone {

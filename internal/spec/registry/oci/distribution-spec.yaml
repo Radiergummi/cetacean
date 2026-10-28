@@ -107,18 +107,25 @@ requirements:
         replace: "hex.EncodeToString(h.Sum(nil)); got != digest {"
         with: "hex.EncodeToString(h.Sum(nil)); got == \"\" {"
 
+  - id: client-ignores-content-type-parameters
+    level: SHOULD
+    text: >-
+      The client SHOULD ignore parameters on the Content-Type header.
+    url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
+    mutants:
+      - file: internal/attestations/index.go
+        replace: "\tif !indexTypes[headerType] && "
+        with: "\tif _ = headerType; !indexTypes[mediaType] && "
+
 dismissed:
   registry-omits-content-type-parameters: >-
     Binds the registry.
-  client-ignores-content-type-parameters: >-
-    The client never reads Content-Type at all: the digest is all it compares,
-    so a parameter there cannot change its answer.
   content-type-matches-the-push: >-
     Binds the registry, about what a client pushed.
   client-rejects-a-mismatched-media-type: >-
-    The client never parses a manifest. It hashes the bytes it was sent, and a
-    manifest whose mediaType disagrees with its Content-Type still has exactly
-    one digest, which is the thing compared.
+    The image check never parses a manifest, and attestations read an index
+    when either the header or the mediaType field names one. Every fetch is
+    verified against its digest, so a disagreement cannot change the content.
   get-returns-the-manifest-with-200: >-
     Binds the registry. The client treats anything but 200 as no answer.
   get-states-the-digest: >-

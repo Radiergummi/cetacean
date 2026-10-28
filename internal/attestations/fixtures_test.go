@@ -1,6 +1,8 @@
 package attestations
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,4 +53,11 @@ func probeLayers(t *testing.T) []Descriptor {
 	}
 
 	return manifest.Layers
+}
+
+// digestFor is a well-formed digest standing for name in a synthetic index.
+func digestFor(name string) string {
+	sum := sha256.Sum256([]byte(name))
+
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

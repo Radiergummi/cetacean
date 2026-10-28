@@ -2,8 +2,11 @@ package attestations
 
 import (
 	"fmt"
+	"mime"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/imagecheck"
 )
 
 const (
@@ -44,7 +47,8 @@ func parseManifest(body []byte) (manifest, error) {
 
 // parseIndex pairs each platform of an index with the attestation manifest
 // BuildKit stored for it, reading those manifests through read. Anything but
-// an index has no attestations, and gives nil.
+// an index has no attestations, and gives nil; a descriptor whose digest is
+// not one is skipped, never fetched.
 func parseIndex(
 	body []byte,
 	mediaType string,
@@ -59,14 +63,16 @@ func parseIndex(
 		return nil, fmt.Errorf("index: %w", err)
 	}
 
-	if !indexTypes[mediaType] && !indexTypes[index.MediaType] {
+	headerType, _, _ := mime.ParseMediaType(mediaType)
+	if !indexTypes[headerType] && !indexTypes[index.MediaType] {
 		return nil, nil
 	}
 
 	attestationFor := map[string]string{}
 
 	for _, d := range index.Manifests {
-		if d.Annotations[annotationKind] == "attestation-manifest" {
+		if d.Annotations[annotationKind] == "attestation-manifest" &&
+			imagecheck.ValidDigest(d.Digest) {
 			attestationFor[d.Annotations[annotationFor]] = d.Digest
 		}
 	}
@@ -74,7 +80,8 @@ func parseIndex(
 	var out []Attested
 
 	for _, d := range index.Manifests {
-		if d.Platform == nil || d.Annotations[annotationKind] == "attestation-manifest" {
+		if d.Platform == nil || d.Annotations[annotationKind] == "attestation-manifest" ||
+			!imagecheck.ValidDigest(d.Digest) {
 			continue
 		}
 
@@ -114,6 +121,10 @@ func readAttestation(a *Attested, digest string, read func(string) ([]byte, erro
 	}
 
 	for _, layer := range m.Layers {
+		if !imagecheck.ValidDigest(layer.Digest) {
+			continue
+		}
+
 		d := &Descriptor{Digest: layer.Digest, Size: layer.Size}
 
 		switch layer.Annotations[annotationPredicate] {

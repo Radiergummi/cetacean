@@ -18,9 +18,11 @@ import (
 	json "github.com/goccy/go-json"
 )
 
+// MaxManifestSize is the most of a manifest the client reads.
+const MaxManifestSize = 4 << 20
+
 const (
-	maxManifestSize = 4 << 20
-	maxTokenSize    = 64 << 10
+	maxTokenSize = 64 << 10
 
 	// The token specification's default for a token that states no lifetime.
 	defaultTokenLifetime = 60 * time.Second
@@ -92,7 +94,7 @@ func (c *Client) Manifest(
 ) ([]byte, string, error) {
 	target := "https://" + ref.Host + "/v2/" + ref.Repository + "/manifests/" + digest
 
-	body, header, err := c.fetchDigested(ctx, target, ref, digest, maxManifestSize)
+	body, header, err := c.fetchDigested(ctx, target, ref, digest, MaxManifestSize)
 	if err != nil {
 		return nil, "", err
 	}
@@ -121,6 +123,11 @@ func (c *Client) fetchDigested(
 	digest string,
 	limit int64,
 ) ([]byte, http.Header, error) {
+	// The digest becomes part of the URL, so it must be one and nothing more.
+	if !ValidDigest(digest) {
+		return nil, nil, fmt.Errorf("not a digest: %q", digest)
+	}
+
 	resp, err := c.send(ctx, http.MethodGet, target, ref)
 	if err != nil {
 		return nil, nil, err
@@ -208,13 +215,13 @@ func (c *Client) digestOfBody(
 	stated := resp.Header.Get("Docker-Content-Digest")
 	algorithm, h := hasherFor(stated)
 
-	n, err := io.Copy(h, io.LimitReader(resp.Body, maxManifestSize+1))
+	n, err := io.Copy(h, io.LimitReader(resp.Body, MaxManifestSize+1))
 	if err != nil {
 		return "", err
 	}
 
-	if n > maxManifestSize {
-		return "", fmt.Errorf("manifest larger than %d bytes", maxManifestSize)
+	if n > MaxManifestSize {
+		return "", fmt.Errorf("manifest larger than %d bytes", MaxManifestSize)
 	}
 
 	digest := algorithm + ":" + hex.EncodeToString(h.Sum(nil))
