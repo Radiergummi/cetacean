@@ -1133,7 +1133,12 @@ func startImageAttestations(cfg *config.Config) *attestations.Store {
 
 	slog.Info("image attestations enabled")
 
-	return attestations.NewStore(imagecheck.NewClient(&http.Client{Timeout: 10 * time.Second}))
+	// A client timeout would cut off a large SBOM mid-read; the store bounds
+	// the whole fetch, and a registry still has to start answering promptly.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 10 * time.Second
+
+	return attestations.NewStore(imagecheck.NewClient(&http.Client{Transport: transport}))
 }
 
 // setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, returning nil

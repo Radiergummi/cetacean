@@ -131,7 +131,8 @@ costs 1 + platforms pulls once, for as long as it stays in the cache.
 - A provenance blob is capped at 4 MiB. An SBOM blob is capped at 32 MiB, which is my call.
   BuildKit's SBOMs for large images are a few MB, so this leaves wide margin. The cap is checked
   against the size in the layer descriptor before any download, and again while reading.
-- Each registry request has a 10 s timeout, and the whole operation for one image has 30 s.
+- Each registry request must start answering within 10 s, and the whole operation, body reads
+  included, has 30 s.
 
 ## What is extracted
 
