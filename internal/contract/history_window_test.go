@@ -82,16 +82,17 @@ func TestMalformedHistoryWindowIsRefusedByBothTransports(t *testing.T) {
 		"arguments": map[string]any{"since": "yesterday"},
 	})
 
+	if rpcErr != nil {
+		return
+	}
+
 	var call struct {
 		IsError bool `json:"isError"`
 	}
-	if rpcErr == nil {
-		if err := json.Unmarshal(result, &call); err != nil {
-			t.Fatalf("decode get_events: %v", err)
-		}
+	if err := json.Unmarshal(result, &call); err != nil {
+		t.Fatalf("decode get_events: %v", err)
 	}
-
-	if rpcErr == nil && !call.IsError {
+	if !call.IsError {
 		t.Error("get_events accepted a since that is not RFC 3339")
 	}
 }

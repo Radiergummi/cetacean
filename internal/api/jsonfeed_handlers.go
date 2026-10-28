@@ -9,6 +9,8 @@ import (
 
 // renderJSONFeed converts format-agnostic feedData to a JSON Feed and writes it.
 func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
+	r = echoingFeedRequest(r, data)
+
 	items := make([]jsonfeed.Item, 0, len(data.Entries))
 	for _, e := range data.Entries {
 		var authors []jsonfeed.Author

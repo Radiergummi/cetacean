@@ -11,6 +11,7 @@ import (
 	"time"
 
 	atomxml "github.com/radiergummi/cetacean/internal/api/atom"
+	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -18,9 +19,7 @@ var windowBase = time.Date(2026, 9, 5, 14, 0, 0, 0, time.UTC)
 
 // windowedHistory holds one service entry a minute, "m0" at windowBase through
 // "m5" five minutes later.
-func windowedHistory(t *testing.T) (http.Handler, *Handlers) {
-	t.Helper()
-
+func windowedHistory() *cache.Cache {
 	c := cache.New(nil)
 	for i, name := range []string{"m0", "m1", "m2", "m3", "m4", "m5"} {
 		c.History().Append(cache.HistoryEntry{
@@ -32,7 +31,7 @@ func windowedHistory(t *testing.T) (http.Handler, *Handlers) {
 		})
 	}
 
-	return newTestRouterWithCache(t, c), newTestHandlers(t, withCache(c))
+	return c
 }
 
 func windowQuery(from, to int) string {
@@ -45,33 +44,23 @@ func windowQuery(from, to int) string {
 // Since is exclusive and until inclusive, as get_events has them, and the next
 // link keeps a page inside the window it started in.
 func TestHandleHistory_TimeWindowPagesInsideIt(t *testing.T) {
-	_, h := windowedHistory(t)
+	h := newTestHandlers(t, withCache(windowedHistory()))
 
-	var pages [][]string
-	for target := "/history?limit=2&" + windowQuery(1, 4); target != ""; {
+	var all []string
+	pages := 0
+	for target := "/history?limit=2&" + windowQuery(1, 4); target != ""; pages++ {
 		var names []string
 		names, target = historyPage(t, h, target)
-		pages = append(pages, names)
+		all = append(all, names...)
 	}
 
-	if got := strings.Join(flatten(pages), " "); got != "m4 m3 m2" {
-		t.Errorf("entries = %s, want m4 m3 m2", got)
+	if got := strings.Join(all, " "); got != "m4 m3 m2" || pages != 2 {
+		t.Errorf("entries = %s over %d pages, want m4 m3 m2 over two", got, pages)
 	}
-	if len(pages) != 2 {
-		t.Errorf("pages = %v, want two", pages)
-	}
-}
-
-func flatten(pages [][]string) []string {
-	var all []string
-	for _, p := range pages {
-		all = append(all, p...)
-	}
-	return all
 }
 
 func TestHandleHistory_RejectsAMalformedBound(t *testing.T) {
-	_, h := windowedHistory(t)
+	h := newTestHandlers(t, withCache(windowedHistory()))
 
 	for _, query := range []string{"since=yesterday", "until=2026-09-05"} {
 		t.Run(query, func(t *testing.T) {
@@ -82,10 +71,7 @@ func TestHandleHistory_RejectsAMalformedBound(t *testing.T) {
 				t.Fatalf("status = %d, want 400", w.Code)
 			}
 
-			var p struct {
-				Type   string `json:"type"`
-				Detail string `json:"detail"`
-			}
+			var p problem.Detail
 			if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 				t.Fatal(err)
 			}
@@ -99,7 +85,7 @@ func TestHandleHistory_RejectsAMalformedBound(t *testing.T) {
 }
 
 func TestHistoryCSVHonoursTheTimeWindow(t *testing.T) {
-	router, _ := windowedHistory(t)
+	router := newTestRouterWithCache(t, windowedHistory())
 
 	body := getHistory(t, router, "/history.csv?"+windowQuery(1, 3))
 
@@ -112,7 +98,7 @@ func TestHistoryCSVHonoursTheTimeWindow(t *testing.T) {
 
 // The feed's links carry the window, so a reader following next stays in it.
 func TestHistoryAtomHonoursTheTimeWindow(t *testing.T) {
-	router, _ := windowedHistory(t)
+	router := newTestRouterWithCache(t, windowedHistory())
 
 	body := getHistory(t, router, "/history.atom?limit=1&"+windowQuery(1, 3))
 
@@ -138,12 +124,32 @@ func TestHistoryAtomHonoursTheTimeWindow(t *testing.T) {
 }
 
 func TestHistoryFeedRejectsAMalformedBound(t *testing.T) {
-	router, _ := windowedHistory(t)
+	router := newTestRouterWithCache(t, windowedHistory())
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/history.feed?since=now", nil))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", rec.Code)
+	}
+}
+
+// A windowed page echoes the bounds into its links; an unwindowed one echoes
+// nothing beyond the cursor and stays compressed.
+func TestHistoryFeedEchoingTheWindowIsNotCompressed(t *testing.T) {
+	router := newTestRouterWithCache(t, windowedHistory())
+
+	for target, want := range map[string]string{
+		"/history.atom":                        "gzip",
+		"/history.atom?" + windowQuery(-1, 10): "",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("Content-Encoding"); got != want {
+			t.Errorf("GET %s: Content-Encoding = %q, want %q", target, got, want)
+		}
 	}
 }

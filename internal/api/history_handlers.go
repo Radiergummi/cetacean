@@ -21,19 +21,18 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	wantCSV := ContentTypeFromContext(r.Context()) == ContentTypeCSV
 
-	limit := 50
-	if wantCSV {
-		// A download nobody paginated is the whole log the ring still holds.
+	// Paged by cursor, as the feeds are: the ring moves under an offset.
+	beforeID, limit, err := parseFeedPagination(r)
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
+	}
+
+	// A download nobody paginated is the whole log the ring still holds.
+	if wantCSV && q.Get("limit") == "" {
 		limit = h.cache.History().Size()
 	}
-	if v := q.Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
-			problem.Write(w, r, "API016", errInvalidLimit.Error())
-			return
-		}
-		limit = min(n, 200)
-	}
+
 	// `resourceId` is a query parameter, so the canonical redirect never
 	// reaches it and a caller holding a name would read an empty timeline.
 	resourceType := q.Get("type")
@@ -45,15 +44,6 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	)
 	if h.reportAmbiguousName(w, r, resourceType, err) {
 		return
-	}
-
-	// Paged by cursor, as the feeds are: the ring moves under an offset.
-	var beforeID uint64
-	if v := q.Get("before"); v != "" {
-		if beforeID, err = strconv.ParseUint(v, 10, 64); err != nil {
-			problem.Write(w, r, "API016", errInvalidBefore.Error())
-			return
-		}
 	}
 
 	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))

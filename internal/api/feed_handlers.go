@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -182,8 +183,7 @@ func (h *Handlers) handleFeedSearch(
 }
 
 // searchFeedData is historyFeedData for the search feed, the one feed that
-// reads ?q= and so the only one whose links may carry it back. Echoing it is
-// safe only because handleFeedSearch pairs it with disableCompression.
+// reads ?q= and so the only one whose links may carry it back.
 func searchFeedData(
 	r *http.Request,
 	title string,
@@ -252,12 +252,6 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		})
 		if !ok {
 			return
-		}
-
-		// The links echo the window back, the BREACH shape handleFeedSearch
-		// opts out of, so a windowed page opts out too.
-		if q.Has("since") || q.Has("until") {
-			r = disableCompression(r)
 		}
 
 		data := historyFeedData(r, "History", entries, beforeID, limit)
@@ -521,14 +515,25 @@ var searchFeedParams = []string{"q"}
 // its JSON handler prepared, so the alternate link has to carry them.
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
-// historyCSVParams names what HandleHistory reads.
-var historyCSVParams = []string{
-	"type", "resourceId", "search", "before", "limit", "since", "until",
-}
-
 // historyWindowParams names what /history's feeds read beyond the pagination
 // pair.
 var historyWindowParams = []string{"since", "until"}
+
+// historyCSVParams names what HandleHistory reads.
+var historyCSVParams = slices.Concat(
+	[]string{"type", "resourceId", "search", "before", "limit"}, historyWindowParams,
+)
+
+// echoingFeedRequest opts r out of compression when the feed's links will echo
+// a parameter beyond the pagination pair back: reflected input beside
+// ACL-filtered entries is the BREACH shape.
+func echoingFeedRequest(r *http.Request, data feedData) *http.Request {
+	if len(keptQuery(r, data.QueryParams)) > 0 {
+		return disableCompression(r)
+	}
+
+	return r
+}
 
 // feedQuery returns the subset of r's query a feed's links may carry: the
 // pagination pair every feed reads, plus whatever else the caller declares.
