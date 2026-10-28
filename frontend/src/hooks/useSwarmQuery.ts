@@ -36,6 +36,7 @@ const enrichedFields = [
   "DesiredTasks",
   "CompletedTasks",
   "FailedTasks",
+  "ImageUpdate",
 ] as const;
 
 function keepEnrichment<T>(cached: T, incoming: T): T {
