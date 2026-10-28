@@ -183,6 +183,12 @@ export interface ServiceListItem extends Service {
   "@id"?: string;
   "@type"?: string;
   RunningTasks: number;
+  /** Replicas, a global service's eligible nodes, or a job's completion target. */
+  DesiredTasks: number;
+  /** A job's current run only. */
+  CompletedTasks?: number | undefined;
+  /** A job's current run only; a rejected task counts. */
+  FailedTasks?: number | undefined;
   ImageUpdate?: ImageUpdate | undefined;
 }
 

@@ -594,7 +594,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		"GET /services",
 		contentNegotiatedWithSSE(
 			h.HandleListServices,
-			func(w http.ResponseWriter, r *http.Request) { h.streamList(w, r, cache.EventService) },
+			h.streamServices,
 			h.listFeeds("Services", cache.EventService),
 			spa,
 		),

@@ -4,7 +4,8 @@ import { GraphLegend, dashedMark, mutedMark } from "@/components/graph/GraphLege
 import { MeasuredGraph } from "@/components/graph/MeasuredGraph";
 import { useNodeSelection } from "@/components/graph/useNodeSelection";
 import type { LayerConstraints } from "@/lib/graphLayout";
-import { stackToReactFlow, type TaskCount } from "@/lib/stackGraph";
+import type { TaskCount } from "@/lib/serviceHealth";
+import { stackToReactFlow } from "@/lib/stackGraph";
 import { FileText, HardDrive, KeyRound } from "lucide-react";
 import { useMemo } from "react";
 

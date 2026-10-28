@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - An MCP tool given a hostname several nodes share asks the person which node they mean, when the client supports elicitation
 - `create_secret` sends the person to the dashboard's `/secrets/new` page to enter the value when the client supports URL elicitation; `mcp.inline_secret_values` refuses values passed as arguments
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
+- `GET /services` items carry `DesiredTasks`, and a job's `CompletedTasks` and `FailedTasks` for its current run
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
 - `/tasks/{id}` and its sub-paths accept a task's `<service>.<slot>` name, redirecting to its ID as service and node names do
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
 - A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- The `GET /services` event stream also carries task and node events, which change the counts its items report
 - `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - A task path ending in `.json`, `.csv` or another format suffix names a task by that whole identifier, as service and node paths do: `DELETE /tasks/abc.json` no longer removes task `abc`
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
@@ -40,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
+- The services page and stack pages judge a global service against the nodes it can run on, rather than showing it grey
+- The services page's running counts and job health update as tasks start, stop, and finish
 - The image check no longer follows a registry's redirect to plain HTTP or to a private address on another domain, nor asks another domain's token service
 - Removing a task whose service is gone, through `DELETE /tasks/{id}` or `remove_task`, needs a write grant on that task; a `service:` grant no longer covers it
 - `PUT /services/{id}/image` trims whitespace around the image, as `update_service_image` does, and refuses a blank one

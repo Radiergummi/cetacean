@@ -306,9 +306,7 @@ var createsByName = map[string]bool{"config": true, "secret": true}
 // setAllowList sets the Allow header for list endpoints.
 func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resourceType string) {
 	offer := readOnly
-	id := auth.IdentityFromContext(r.Context())
-	if h.acl.Can(id, "write", resourceType+":*") ||
-		createsByName[resourceType] && grantsWriteOnType(h.acl.PermissionsFor(id), resourceType) {
+	if h.grantsCreate(r, resourceType) {
 		offer = h.routedWrites(r, false)
 	}
 	writeAllow(w, offer)
@@ -318,11 +316,15 @@ func (h *Handlers) setAllowList(w http.ResponseWriter, r *http.Request, resource
 // list's Allow reads it; the type is the path's first segment.
 func (h *Handlers) mayCreate(r *http.Request) bool {
 	root, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	resourceType := strings.TrimSuffix(root, "s")
+
+	return h.grantsCreate(r, strings.TrimSuffix(root, "s"))
+}
+
+func (h *Handlers) grantsCreate(r *http.Request, resourceType string) bool {
 	id := auth.IdentityFromContext(r.Context())
 
 	return h.acl.Can(id, "write", resourceType+":*") ||
-		grantsWriteOnType(h.acl.PermissionsFor(id), resourceType)
+		createsByName[resourceType] && grantsWriteOnType(h.acl.PermissionsFor(id), resourceType)
 }
 
 // grantsWriteOnType reports whether a grant pattern names the type itself. A
