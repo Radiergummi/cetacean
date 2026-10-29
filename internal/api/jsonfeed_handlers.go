@@ -29,11 +29,16 @@ func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
 		})
 	}
 
+	// The subscription and the home page are the feed without a cursor on it.
+	baseQuery := feedQuery(r, data.QueryParams)
+	baseQuery.Del("before")
+	baseQuery.Del("limit")
+
 	feed := jsonfeed.Feed{
 		Version:     jsonfeed.Version,
 		Title:       data.Title,
-		FeedURL:     absURL(r, r.URL.Path+".feed"),
-		HomePageURL: absURL(r, r.URL.Path),
+		FeedURL:     feedHref(absURL(r, r.URL.Path+".feed"), baseQuery),
+		HomePageURL: feedHref(absURL(r, r.URL.Path), baseQuery),
 		Authors:     []jsonfeed.Author{{Name: "Cetacean"}},
 		Items:       items,
 	}

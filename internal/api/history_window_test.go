@@ -153,3 +153,25 @@ func TestHistoryFeedEchoingTheWindowIsNotCompressed(t *testing.T) {
 		}
 	}
 }
+
+// A JSON Feed reader refreshes from feed_url, so it has to keep the window.
+func TestHistoryJSONFeedURLKeepsTheWindow(t *testing.T) {
+	router := newTestRouterWithCache(t, windowedHistory())
+
+	var feed struct {
+		FeedURL     string `json:"feed_url"`
+		HomePageURL string `json:"home_page_url"`
+	}
+	body := getHistory(t, router, "/history.feed?limit=1&"+windowQuery(1, 3))
+	if err := json.Unmarshal([]byte(body), &feed); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	for _, href := range []string{feed.FeedURL, feed.HomePageURL} {
+		parsed, err := url.Parse(href)
+		if err != nil || parsed.Query().Get("since") == "" || parsed.Query().Get("until") == "" ||
+			parsed.Query().Has("before") || parsed.Query().Has("limit") {
+			t.Errorf("%q does not carry the window alone", href)
+		}
+	}
+}

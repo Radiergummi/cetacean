@@ -354,8 +354,8 @@ curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 
 `since` and `until` narrow `/history` to a window, as RFC 3339 timestamps: `since` is exclusive and `until`
 inclusive, the same boundaries as the MCP tool `get_events`. Either can be left out. They combine with the other
-filters, apply to the CSV, Atom and JSON Feed representations too, and stay on the `next` link, so paging never
-leaves the window. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
+filters in JSON and CSV, apply to the Atom and JSON Feed representations too, which read no other filter, and stay
+on the `next` link, so paging never leaves the window. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
 
 ```http tab
 GET /history?since=2026-09-05T14:00:00Z&until=2026-09-05T14:30:00Z HTTP/1.1

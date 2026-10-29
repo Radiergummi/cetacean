@@ -33,6 +33,12 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		limit = h.cache.History().Size()
 	}
 
+	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
+	}
+
 	// `resourceId` is a query parameter, so the canonical redirect never
 	// reaches it and a caller holding a name would read an empty timeline.
 	resourceType := q.Get("type")
@@ -43,12 +49,6 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		h.cache, resourceType, q.Get("resourceId"), canRead,
 	)
 	if h.reportAmbiguousName(w, r, resourceType, err) {
-		return
-	}
-
-	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
-	if err != nil {
-		problem.Write(w, r, "API016", err.Error())
 		return
 	}
 

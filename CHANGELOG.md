@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
-- A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50
+- A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50; on `/history.csv` it returns 200 rows instead of the whole history, which leaving `limit` out still does
 - A log stream resumed after a dropped connection no longer loses the lines a node with a slower clock wrote meanwhile; resuming may now repeat lines, which the dashboard hides
 - Metric charts on the 7D range update live again instead of staying at the values they loaded with
 - Long bind mount paths on service pages wrap on narrow screens rather than widening the page
