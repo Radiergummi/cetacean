@@ -12,6 +12,8 @@ import (
 
 // renderAtom converts format-agnostic feedData to an Atom feed and writes it.
 func renderAtom(w http.ResponseWriter, r *http.Request, data feedData) {
+	r = echoingFeedRequest(r, data)
+
 	writeCachedAtom(w, r, atomxml.Feed{
 		Title:   data.Title,
 		Author:  &atomxml.Author{Name: "Cetacean"},

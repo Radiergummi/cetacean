@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
 - `GET /services` items carry `DesiredTasks`, and a job's `CompletedTasks` and `FailedTasks` for its current run
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
+- `/history` takes `since` and `until` to read a time window, in JSON, CSV and its feeds, so a JSON data source can show the history as Grafana annotations
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
 - Service and task pages mark images carrying BuildKit attestations and show their build provenance in a **Manifest** section, with SBOM and Dockerfile pages; `/provenance`, `/sbom`, `/dockerfile` and MCP resources serve the same, and `server.image_attestations` turns it off
 - `/tasks/{id}` and its sub-paths accept a task's `<service>.<slot>` name, redirecting to its ID as service and node names do
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 
 ### Fixed
+- A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50; on `/history.csv` it returns 200 rows instead of the whole history, which leaving `limit` out still does
 - A log stream resumed after a dropped connection no longer loses the lines a node with a slower clock wrote meanwhile; resuming may now repeat lines, which the dashboard hides
 - Metric charts on the 7D range update live again instead of staying at the values they loaded with
 - Long bind mount paths on service pages wrap on narrow screens rather than widening the page

@@ -343,7 +343,8 @@ List endpoints page by query parameter or by HTTP `Range` header.
 
 A `limit` or `offset` that isn't a whole number in range, a `dir` other than `asc` or `desc`, or a `sort` the
 list doesn't offer is refused with `400` ([`API016`](api/errors#API016)). The same goes for a malformed
-`before` or `limit` on `/history`, the feeds and `/search`.
+`before` or `limit` on `/history`, the feeds and `/search`, and a `since` or `until` on `/history` that isn't an
+RFC 3339 timestamp.
 
 ```http tab
 GET /services?limit=10&offset=20 HTTP/1.1
@@ -385,6 +386,30 @@ GET /history?search=web&before=<entry-id>&limit=50 HTTP/1.1
 curl "http://localhost:9000/history?search=web&limit=50"
 curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 ```
+
+### History by time
+
+`since` and `until` narrow `/history` to a window, as RFC 3339 timestamps: `since` is exclusive and `until`
+inclusive, the same boundaries as the MCP tool `get_events`. Either can be left out. They combine with the other
+filters in JSON and CSV, apply to the Atom and JSON Feed representations too, which read no other filter, and stay
+on the `next` link, so paging never leaves the window. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
+
+```http tab
+GET /history?since=2026-09-05T14:00:00Z&until=2026-09-05T14:30:00Z HTTP/1.1
+```
+
+```bash tab
+curl "http://localhost:9000/history?since=2026-09-05T14:00:00Z&until=2026-09-05T14:30:00Z"
+```
+
+### History as Grafana annotations
+
+A Grafana JSON data source, such as the Infinity plugin, can draw the history as annotations on any dashboard.
+Point it at `/history.json` with an [API access token](authentication#api-access-tokens) as its bearer token, and
+pass the dashboard's range as `since=${__from:date:iso}&until=${__to:date:iso}&limit=200`. A page holds at most 200
+entries, so a data source that doesn't follow the `next` link shows only the newest 200 of a busier range. Take the
+rows from `items`, the time from `timestamp`, and the text from `name` and `action`. Grafana sees only the entries
+the token's identity may read.
 
 ### Who made a change
 

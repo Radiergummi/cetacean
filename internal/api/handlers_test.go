@@ -1248,6 +1248,29 @@ func TestHandleHistory_CustomLimit(t *testing.T) {
 	}
 }
 
+func TestHandleHistory_LimitOverTheCapIsTheCap(t *testing.T) {
+	c := cache.New(nil)
+	for i := range 250 {
+		c.History().Append(cache.HistoryEntry{
+			Type: cache.EventService,
+			Name: fmt.Sprintf("svc-%d", i),
+		})
+	}
+	h := newTestHandlers(t, withCache(c))
+
+	req := httptest.NewRequest("GET", "/history?limit=1000", nil)
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	var resp CollectionResponse[cache.HistoryEntry]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if len(resp.Items) != 200 {
+		t.Errorf("got %d entries, want the cap of 200", len(resp.Items))
+	}
+}
+
 // historyPage reads one page of /history and the target of its next link.
 func historyPage(t *testing.T, h *Handlers, target string) ([]string, string) {
 	t.Helper()

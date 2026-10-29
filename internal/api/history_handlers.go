@@ -21,21 +21,24 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	wantCSV := ContentTypeFromContext(r.Context()) == ContentTypeCSV
 
-	limit := 50
-	if wantCSV {
-		// A download nobody paginated is the whole log the ring still holds.
+	// Paged by cursor, as the feeds are: the ring moves under an offset.
+	beforeID, limit, err := parseFeedPagination(r)
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
+	}
+
+	// A download nobody paginated is the whole log the ring still holds.
+	if wantCSV && q.Get("limit") == "" {
 		limit = h.cache.History().Size()
 	}
-	if v := q.Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
-			problem.Write(w, r, "API016", errInvalidLimit.Error())
-			return
-		}
-		if n <= 200 {
-			limit = n
-		}
+
+	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
 	}
+
 	// `resourceId` is a query parameter, so the canonical redirect never
 	// reaches it and a caller holding a name would read an empty timeline.
 	resourceType := q.Get("type")
@@ -49,21 +52,14 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Paged by cursor, as the feeds are: the ring moves under an offset.
-	var beforeID uint64
-	if v := q.Get("before"); v != "" {
-		if beforeID, err = strconv.ParseUint(v, 10, 64); err != nil {
-			problem.Write(w, r, "API016", errInvalidBefore.Error())
-			return
-		}
-	}
-
 	query := cache.HistoryQuery{
 		Type:         cache.EventType(resourceType),
 		ResourceID:   resourceID,
 		BeforeID:     beforeID,
 		NameContains: q.Get("search"),
 		Limit:        limit,
+		After:        window.Since,
+		Before:       window.Until,
 		Visible:      h.readableHistory(r),
 	}
 

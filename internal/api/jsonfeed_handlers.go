@@ -9,6 +9,8 @@ import (
 
 // renderJSONFeed converts format-agnostic feedData to a JSON Feed and writes it.
 func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
+	r = echoingFeedRequest(r, data)
+
 	items := make([]jsonfeed.Item, 0, len(data.Entries))
 	for _, e := range data.Entries {
 		var authors []jsonfeed.Author
@@ -27,11 +29,16 @@ func renderJSONFeed(w http.ResponseWriter, r *http.Request, data feedData) {
 		})
 	}
 
+	// The subscription and the home page are the feed without a cursor on it.
+	baseQuery := feedQuery(r, data.QueryParams)
+	baseQuery.Del("before")
+	baseQuery.Del("limit")
+
 	feed := jsonfeed.Feed{
 		Version:     jsonfeed.Version,
 		Title:       data.Title,
-		FeedURL:     absURL(r, r.URL.Path+".feed"),
-		HomePageURL: absURL(r, r.URL.Path),
+		FeedURL:     feedHref(absURL(r, r.URL.Path+".feed"), baseQuery),
+		HomePageURL: feedHref(absURL(r, r.URL.Path), baseQuery),
 		Authors:     []jsonfeed.Author{{Name: "Cetacean"}},
 		Items:       items,
 	}
