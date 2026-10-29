@@ -64,15 +64,10 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		return
 	}
 
+	// The use case is the authority; this refuses a name without a grant
+	// before the payload decodes.
 	if !spec.acl.Can(identity, "write", spec.resource+":"+req.Name) {
 		problem.Write(w, r, "ACL002", "write access denied")
-		return
-	}
-
-	if err := cluster.CheckStackLabel(nil, labels, func(resource string) bool {
-		return spec.acl.Can(identity, "write", resource)
-	}); err != nil {
-		writeResourceError(w, r, err, spec.resource, req.Name, spec.conflictCode)
 		return
 	}
 
@@ -81,8 +76,6 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		problem.Write(w, r, spec.nameErrCode, "data must be valid base64")
 		return
 	}
-
-	slog.InfoContext(r.Context(), "creating "+spec.resource, "name", req.Name)
 
 	id, err := spec.create(r.Context(), req.Name, labels, data)
 	if err != nil {

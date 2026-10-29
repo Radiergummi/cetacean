@@ -64,8 +64,9 @@ liability — it is the only part of the previous version of this file that rott
   settings, stacks, the precondition read) still classify for themselves.
 - A write both transports offer is one `cluster.Writes` use case: target, ACL,
   tier, domain rules, Docker, classification. The transports decode, pin a
-  version on the context and render. So far the service lifecycle and sections;
-  nodes, removals, creates and labels follow (design 2026-10-28, step 5).
+  version on the context and render. `cluster.Writer` is the only Docker writer
+  either holds for them; REST's `DockerWriteClient` adds the writes only it
+  offers (node removal, config and secret labels, stacks).
 - **A service section is judged inside the writer**, against the spec Docker
   returned: `Writes.CheckedChange` runs every spec rule on the before and after.
   Judging the cache instead needs a version pin to stay honest; REST-only

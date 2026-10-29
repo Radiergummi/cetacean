@@ -26,6 +26,8 @@ func (f refusingRESTWriter) ScaleService(context.Context, string, uint64) (swarm
 	return swarm.Service{}, f.err
 }
 
+func (f refusingRESTWriter) RemoveVolume(context.Context, string, bool) error { return f.err }
+
 type refusingMCPWriter struct {
 	mcp.DockerWriteClient
 	err error
@@ -34,6 +36,8 @@ type refusingMCPWriter struct {
 func (f refusingMCPWriter) ScaleService(context.Context, string, uint64) (swarm.Service, error) {
 	return swarm.Service{}, f.err
 }
+
+func (f refusingMCPWriter) RemoveVolume(context.Context, string, bool) error { return f.err }
 
 // Both transports show the engine's text for the same classes of refusal and
 // withhold it for the rest, as cluster.ClassifyWrite decides for both.

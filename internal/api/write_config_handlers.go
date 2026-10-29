@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
-
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveConfig(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Config]{
-		resource:     "config",
-		getter:       h.cache.GetConfig,
-		remove:       h.configWriter.RemoveConfig,
+		resource: "config",
+		getter:   h.cache.GetConfig,
+		remove: func(ctx context.Context, key string) error {
+			return h.writes.RemoveConfig(ctx, h.caller(r), key)
+		},
 		conflictCode: "CFG001",
 	})
 }
@@ -28,15 +28,7 @@ func (h *Handlers) HandleCreateConfig(w http.ResponseWriter, r *http.Request) {
 		basePath:     "/configs/",
 		typeName:     "Config",
 		create: func(ctx context.Context, name string, _ map[string]string, data []byte) (string, error) {
-			id, err := h.configWriter.CreateConfig(ctx, swarm.ConfigSpec{
-				Name: name,
-				Data: data,
-			})
-			if err == nil {
-				cluster.SeedCreatedConfig(ctx, h.cache, h.configWriter.InspectConfig, id, name, nil)
-			}
-
-			return id, err
+			return h.writes.CreateConfig(ctx, h.caller(r), name, nil, data)
 		},
 		// Created now and labelled as asked, so it ranks and groups as the
 		// real record will.
@@ -77,7 +69,7 @@ func (h *Handlers) HandleGetConfigLabels(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) HandlePatchConfigLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Config]{
 		getLabelsSpec: h.configLabelsSpec(),
-		update:        h.configWriter.UpdateConfigLabels,
+		update:        h.writer.UpdateConfigLabels,
 		conflictCode:  "CFG005",
 		stackMember:   true,
 	})

@@ -891,6 +891,7 @@ func TestToolUpdateServiceEnvRejectsNonStringValues(t *testing.T) {
 
 func TestToolUpdateNodeAvailability(t *testing.T) {
 	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node1"})
 	var got swarm.NodeAvailability
 	wc := &fakeWriteClient{
 		updateNodeAvailFn: func(_ context.Context, _ string, a swarm.NodeAvailability) (swarm.Node, error) {

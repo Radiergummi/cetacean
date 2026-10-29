@@ -98,28 +98,28 @@ func (h *Handlers) HandleRemoveStack(w http.ResponseWriter, r *http.Request) {
 		ctx,
 		stack.Services,
 		"service",
-		h.serviceLifecycle.RemoveService,
+		h.writer.RemoveService,
 		errs,
 	)
 	resp.Removed.Networks, errs = removeAll(
 		ctx,
 		stack.Networks,
 		"network",
-		h.resourceRemover.RemoveNetwork,
+		h.writer.RemoveNetwork,
 		errs,
 	)
 	resp.Removed.Secrets, errs = removeAll(
 		ctx,
 		stack.Secrets,
 		"secret",
-		h.secretWriter.RemoveSecret,
+		h.writer.RemoveSecret,
 		errs,
 	)
 	resp.Removed.Configs, errs = removeAll(
 		ctx,
 		stack.Configs,
 		"config",
-		h.configWriter.RemoveConfig,
+		h.writer.RemoveConfig,
 		errs,
 	)
 

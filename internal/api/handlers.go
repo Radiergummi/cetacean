@@ -65,87 +65,22 @@ type DockerSystemClient interface {
 	UnlockSwarm(ctx context.Context, key string) error
 }
 
-// Narrow write interfaces: each handler depends only on the methods it needs,
-// and docker.Client satisfies all of them structurally. Service operations are
-// grouped into lifecycle and spec updates, so a test can mock only the group
-// it exercises.
+// DockerWriteClient is the Docker writer behind REST: the surface the write
+// use cases call, and the writes only REST offers. docker.Client satisfies it.
+type DockerWriteClient interface {
+	cluster.Writer
 
-type ServiceLifecycleWriter interface {
-	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
-	UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error)
-	RollbackService(ctx context.Context, id string) (swarm.Service, error)
-	RestartService(ctx context.Context, id string) (swarm.Service, error)
-	RemoveService(ctx context.Context, id string) error
-}
-
-type ServiceSpecWriter interface {
-	// UpdateServiceSpec is how every merge patch writes: the base it merges
-	// into must be the live spec, so the merge runs inside the writer rather
-	// than against the asynchronously filled cache (M-42).
-	UpdateServiceSpec(
-		ctx context.Context,
-		id string,
-		mutate func(spec *swarm.ServiceSpec) error,
-	) (swarm.Service, error)
-}
-
-// ServiceWriter composes all service write interfaces.
-type ServiceWriter interface {
-	ServiceLifecycleWriter
-	ServiceSpecWriter
-}
-
-type NodeWriter interface {
-	UpdateNodeAvailability(
-		ctx context.Context,
-		id string,
-		availability swarm.NodeAvailability,
-	) (swarm.Node, error)
-	UpdateNodeLabels(
-		ctx context.Context,
-		id string,
-		mutate func(current map[string]string) (map[string]string, error),
-	) (swarm.Node, error)
-	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
 	RemoveNode(ctx context.Context, id string, force bool) error
-}
-
-type ConfigWriter interface {
-	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
-	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
-	RemoveConfig(ctx context.Context, id string) error
 	UpdateConfigLabels(
 		ctx context.Context,
 		id string,
 		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Config, error)
-}
-
-type SecretWriter interface {
-	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
-	RemoveSecret(ctx context.Context, id string) error
 	UpdateSecretLabels(
 		ctx context.Context,
 		id string,
 		mutate func(current map[string]string) (map[string]string, error),
 	) (swarm.Secret, error)
-}
-
-type ResourceRemover interface {
-	RemoveTask(ctx context.Context, id string) error
-	RemoveNetwork(ctx context.Context, id string) error
-	RemoveVolume(ctx context.Context, name string, force bool) error
-}
-
-// DockerWriteClient composes all resource-specific write interfaces.
-// Tests can mock narrower interfaces; the concrete docker.Client satisfies this.
-type DockerWriteClient interface {
-	ServiceWriter
-	NodeWriter
-	ConfigWriter
-	SecretWriter
-	ResourceRemover
 }
 
 type DockerPluginClient interface {
@@ -169,13 +104,8 @@ type Handlers struct {
 	broadcaster          *sse.Broadcaster
 	dockerClient         DockerLogStreamer
 	systemClient         DockerSystemClient
-	serviceLifecycle     ServiceLifecycleWriter
+	writer               DockerWriteClient
 	writes               *cluster.Writes
-	serviceSpec          ServiceSpecWriter
-	nodeWriter           NodeWriter
-	configWriter         ConfigWriter
-	secretWriter         SecretWriter
-	resourceRemover      ResourceRemover
 	pluginClient         DockerPluginClient
 	ready                <-chan struct{}
 	liveness             LivenessReporter
@@ -223,21 +153,16 @@ func NewHandlers(
 	aclEval *acl.Evaluator,
 ) *Handlers {
 	return &Handlers{
-		cache:            shared.Cache,
-		broadcaster:      b,
-		dockerClient:     dc,
-		systemClient:     sc,
-		serviceLifecycle: wc,
-		writes:           cluster.NewWrites(shared.Cache, wc),
-		serviceSpec:      wc,
-		nodeWriter:       wc,
-		configWriter:     wc,
-		secretWriter:     wc,
-		resourceRemover:  wc,
-		pluginClient:     pc,
-		ready:            ready,
-		promClient:       promClient,
-		operationsLevel:  operationsLevel,
+		cache:           shared.Cache,
+		broadcaster:     b,
+		dockerClient:    dc,
+		systemClient:    sc,
+		writer:          wc,
+		writes:          cluster.NewWrites(shared.Cache, wc),
+		pluginClient:    pc,
+		ready:           ready,
+		promClient:      promClient,
+		operationsLevel: operationsLevel,
 
 		// Unset, a token is the person it speaks for. Only a deployment that
 		// says otherwise holds it lower.

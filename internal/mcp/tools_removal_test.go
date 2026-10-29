@@ -9,6 +9,7 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/api/types/volume"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/config"
@@ -19,6 +20,7 @@ import (
 func TestRemoveTools_RefusalDoesNotRepeatEngineText(t *testing.T) {
 	c := cache.New(nil)
 	c.SetNetwork(network.Summary{ID: "net1", Name: "web"})
+	c.SetVolume(volume.Volume{Name: "data"})
 	c.SetConfig(swarm.Config{
 		ID:   "cfg1",
 		Spec: swarm.ConfigSpec{Annotations: swarm.Annotations{Name: "app"}},

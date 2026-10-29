@@ -398,17 +398,16 @@ func (s *Server) toolUpdateNode(
 		return "", err
 	}
 
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
 
 	var updated swarm.Node
 
 	if section == sectionRole {
-		updated, err = writeClient.UpdateNodeRole(ctx, id, role)
+		updated, err = s.writes.UpdateNodeRole(ctx, s.writeCaller(ctx), id, role)
 	} else {
-		updated, err = writeClient.UpdateNodeAvailability(ctx, id, availability)
+		updated, err = s.writes.UpdateNodeAvailability(ctx, s.writeCaller(ctx), id, availability)
 	}
 
 	if err != nil {

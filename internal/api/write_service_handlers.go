@@ -77,7 +77,7 @@ func (h *Handlers) HandleUpdateServiceEndpointMode(w http.ResponseWriter, r *htt
 	slog.InfoContext(r.Context(), "updating service endpoint mode", "service", id, "mode", req.Mode)
 
 	h.writeServiceMutation(w, r, id, func() (swarm.Service, error) {
-		return h.serviceSpec.UpdateServiceSpec(
+		return h.writer.UpdateServiceSpec(
 			r.Context(),
 			id,
 			h.writes.CheckedChange(h.caller(r), cluster.SetEndpointMode(mode)),
@@ -106,9 +106,11 @@ func (h *Handlers) HandleRollbackService(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) HandleRemoveService(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Service]{
-		resource:     "service",
-		getter:       h.cache.GetService,
-		remove:       h.serviceLifecycle.RemoveService,
+		resource: "service",
+		getter:   h.cache.GetService,
+		remove: func(ctx context.Context, key string) error {
+			return h.writes.RemoveService(ctx, h.caller(r), key)
+		},
 		conflictCode: "SVC002",
 	})
 }
@@ -903,7 +905,7 @@ func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Req
 
 	slog.InfoContext(r.Context(), "updating service networks", "service", id)
 
-	updated, err := h.serviceSpec.UpdateServiceSpec(
+	updated, err := h.writer.UpdateServiceSpec(
 		r.Context(),
 		id,
 		h.writes.CheckedChange(h.caller(r), cluster.SetNetworks(networks)),

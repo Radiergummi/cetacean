@@ -20,62 +20,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
-// ServiceLifecycleWriter is the subset of Docker service-lifecycle operations
-// exposed via Tier 1 (Operational) MCP tools.
-type ServiceLifecycleWriter interface {
-	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
-	UpdateServiceImage(ctx context.Context, id string, image string) (swarm.Service, error)
-	RollbackService(ctx context.Context, id string) (swarm.Service, error)
-	RestartService(ctx context.Context, id string) (swarm.Service, error)
-	RemoveService(ctx context.Context, id string) error
-}
-
-// ServiceSpecWriter is the subset of Docker service-spec operations exposed via
-// Tier 2 (Configuration) MCP tools.
-type ServiceSpecWriter interface {
-	UpdateServiceSpec(
-		ctx context.Context,
-		id string,
-		mutate func(spec *swarm.ServiceSpec) error,
-	) (swarm.Service, error)
-}
-
-// ResourceCreator creates the two resource types a service can reference by
-// name. Narrow, like every other write interface here, so a test fake
-// implements only what it exercises.
-type ResourceCreator interface {
-	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
-	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
-	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
-	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
-}
-
-// NodeWriter is the subset of Docker node operations exposed via MCP tools.
-// UpdateNodeLabels is Tier 2; UpdateNodeAvailability/UpdateNodeRole are Tier 3.
-type NodeWriter interface {
-	UpdateNodeAvailability(
-		ctx context.Context,
-		id string,
-		availability swarm.NodeAvailability,
-	) (swarm.Node, error)
-	UpdateNodeLabels(
-		ctx context.Context,
-		id string,
-		mutate func(current map[string]string) (map[string]string, error),
-	) (swarm.Node, error)
-	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
-}
-
-// ResourceRemover is the subset of Docker delete operations the tier 3 MCP
-// remove tools use.
-type ResourceRemover interface {
-	RemoveTask(ctx context.Context, id string) error
-	RemoveConfig(ctx context.Context, id string) error
-	RemoveSecret(ctx context.Context, id string) error
-	RemoveNetwork(ctx context.Context, id string) error
-	RemoveVolume(ctx context.Context, name string, force bool) error
-}
-
 // toolDef bundles an mcp-go tool, the write it carries out if any, the grant
 // it is listed for, and the handler invoked by mcp-go when the tool is called.
 type toolDef struct {
@@ -477,7 +421,7 @@ func (s *Server) removeResolvedHandler(
 	resource string,
 	resolve func(ctx context.Context, id string) (string, error),
 	impact func(ctx context.Context, id string) (confirmation, error),
-	remove func(wc DockerWriteClient, ctx context.Context, id string) error,
+	remove func(ctx context.Context, id string) error,
 ) func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 	return func(ctx context.Context, req mcplib.CallToolRequest) (string, error) {
 		arg, err := req.RequireString("id")
@@ -496,11 +440,10 @@ func (s *Server) removeResolvedHandler(
 			return "", err
 		}
 
-		wc, err := s.requireWriteClient()
-		if err != nil {
+		if _, err := s.requireWriteClient(); err != nil {
 			return "", err
 		}
-		if err := remove(wc, ctx, id); err != nil {
+		if err := remove(ctx, id); err != nil {
 			return "", removalError(ctx, err, resource, id)
 		}
 		logConfirmableWrite(ctx, req.Params.Name, resource+":"+id, confirmed)
@@ -545,11 +488,10 @@ func (s *Server) toolUpdateNodeLabels(
 		return "", err
 	}
 
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	updated, err := wc.UpdateNodeLabels(ctx, id, mergePatchMutator(patch))
+	updated, err := s.writes.UpdateNodeLabels(ctx, s.writeCaller(ctx), id, mergePatchMutator(patch))
 	if err != nil {
 		return "", s.refused(ctx, cond, err)
 	}
@@ -571,11 +513,10 @@ func (s *Server) toolRemoveVolume(ctx context.Context, req mcplib.CallToolReques
 	if err != nil {
 		return "", err
 	}
-	wc, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
-	if err := wc.RemoveVolume(ctx, name, force); err != nil {
+	if err := s.writes.RemoveVolume(ctx, s.writeCaller(ctx), name, force); err != nil {
 		return "", removalError(ctx, err, "volume", name)
 	}
 	logConfirmableWrite(ctx, req.Params.Name, "volume:"+name, confirmed)

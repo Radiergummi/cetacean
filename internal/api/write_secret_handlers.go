@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/swarm"
-
-	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func (h *Handlers) HandleRemoveSecret(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Secret]{
-		resource:     "secret",
-		getter:       h.cache.GetSecret,
-		remove:       h.secretWriter.RemoveSecret,
+		resource: "secret",
+		getter:   h.cache.GetSecret,
+		remove: func(ctx context.Context, key string) error {
+			return h.writes.RemoveSecret(ctx, h.caller(r), key)
+		},
 		conflictCode: "SEC001",
 	})
 }
@@ -34,22 +34,7 @@ func (h *Handlers) HandleCreateSecret(w http.ResponseWriter, r *http.Request) {
 			labels map[string]string,
 			data []byte,
 		) (string, error) {
-			id, err := h.secretWriter.CreateSecret(ctx, swarm.SecretSpec{
-				Name: name, Labels: labels,
-				Data: data,
-			})
-			if err == nil {
-				cluster.SeedCreatedSecret(
-					ctx,
-					h.cache,
-					h.secretWriter.InspectSecret,
-					id,
-					name,
-					labels,
-				)
-			}
-
-			return id, err
+			return h.writes.CreateSecret(ctx, h.caller(r), name, labels, data)
 		},
 		// Created now and labelled as asked; see the config's.
 		buildFallback: func(id, name string, labels map[string]string) any {
@@ -89,7 +74,7 @@ func (h *Handlers) HandleGetSecretLabels(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) HandlePatchSecretLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Secret]{
 		getLabelsSpec: h.secretLabelsSpec(),
-		update:        h.secretWriter.UpdateSecretLabels,
+		update:        h.writer.UpdateSecretLabels,
 		conflictCode:  "SEC005",
 		stackMember:   true,
 	})
