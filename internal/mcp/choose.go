@@ -171,8 +171,8 @@ func nodeOptionTitle(n swarm.Node) string {
 }
 
 // resolveNodeWrite resolves the node a write names and checks the caller may
-// write it, returning the ID to hand Docker. A node the cache does not hold is
-// passed on as named when no policy applies, as before.
+// write it, returning the ID the use case takes. A node the cache does not
+// hold is passed on as named when no policy applies, for the use case to refuse.
 func (s *Server) resolveNodeWrite(
 	ctx context.Context,
 	req mcplib.CallToolRequest,

@@ -294,8 +294,8 @@ func (s *Server) checkResolvedWrite(
 }
 
 // resolveWrite is checkResolvedWrite returning the ID arg resolved to, so the
-// write names the object its history event will; an argument the cache could
-// not resolve passes through for Docker to judge.
+// write names the object its history event will. An argument the cache could
+// not resolve passes through; the use case then refuses it as not found.
 func (s *Server) resolveWrite(kind string) func(ctx context.Context, arg string) (string, error) {
 	return func(ctx context.Context, arg string) (string, error) {
 		record, found, err := cluster.Lookup(s.cache, kind, arg)

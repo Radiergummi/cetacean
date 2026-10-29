@@ -64,8 +64,8 @@ func handleCreateDataResource(w http.ResponseWriter, r *http.Request, spec creat
 		return
 	}
 
-	// The use case is the authority; this refuses early, so a refusal does
-	// not depend on the payload decoding.
+	// The use case is the authority; this refuses a name without a grant
+	// before the payload decodes.
 	if !spec.acl.Can(identity, "write", spec.resource+":"+req.Name) {
 		problem.Write(w, r, "ACL002", "write access denied")
 		return

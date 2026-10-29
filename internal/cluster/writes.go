@@ -324,7 +324,13 @@ func (w *Writes) service(c Caller, op Operation, key string) (swarm.Service, err
 		return swarm.Service{}, err
 	}
 
-	svc, _ := w.cache.GetService(record.ID)
+	// Removed since the lookup: refused as one never there would be.
+	svc, ok := w.cache.GetService(record.ID)
+	if !ok {
+		return swarm.Service{}, &WriteError{
+			Kind: NotFound, Resource: "service", Detail: fmt.Sprintf("service %q not found", key),
+		}
+	}
 
 	return svc, nil
 }
