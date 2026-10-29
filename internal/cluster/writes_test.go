@@ -3,8 +3,11 @@ package cluster
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
@@ -18,6 +21,9 @@ type recordingWriter struct {
 	called string
 	ctx    context.Context
 	err    error
+
+	// target is the ID or name the last call addressed Docker by.
+	target string
 
 	// live is the spec Docker holds, which can differ from the cache's.
 	live    *swarm.ServiceSpec
@@ -68,6 +74,90 @@ func (w *recordingWriter) UpdateServiceSpec(
 	w.written = spec
 
 	return w.record(ctx, "spec")
+}
+
+func (w *recordingWriter) UpdateNodeAvailability(
+	ctx context.Context,
+	id string,
+	_ swarm.NodeAvailability,
+) (swarm.Node, error) {
+	return w.recordNode(ctx, "availability", id)
+}
+
+func (w *recordingWriter) UpdateNodeRole(
+	ctx context.Context,
+	id string,
+	_ swarm.NodeRole,
+) (swarm.Node, error) {
+	return w.recordNode(ctx, "role", id)
+}
+
+func (w *recordingWriter) UpdateNodeLabels(
+	ctx context.Context,
+	id string,
+	_ MapChange,
+) (swarm.Node, error) {
+	return w.recordNode(ctx, "node labels", id)
+}
+
+func (w *recordingWriter) recordNode(ctx context.Context, call, id string) (swarm.Node, error) {
+	_, err := w.record(ctx, call)
+	w.target = id
+
+	return swarm.Node{ID: id}, err
+}
+
+func (w *recordingWriter) removal(ctx context.Context, call, id string) error {
+	_, err := w.record(ctx, call)
+	w.target = id
+
+	return err
+}
+
+func (w *recordingWriter) RemoveService(ctx context.Context, id string) error {
+	return w.removal(ctx, "remove service", id)
+}
+
+func (w *recordingWriter) RemoveTask(ctx context.Context, id string) error {
+	return w.removal(ctx, "remove task", id)
+}
+
+func (w *recordingWriter) RemoveConfig(ctx context.Context, id string) error {
+	return w.removal(ctx, "remove config", id)
+}
+
+func (w *recordingWriter) RemoveSecret(ctx context.Context, id string) error {
+	return w.removal(ctx, "remove secret", id)
+}
+
+func (w *recordingWriter) RemoveNetwork(ctx context.Context, id string) error {
+	return w.removal(ctx, "remove network", id)
+}
+
+func (w *recordingWriter) RemoveVolume(ctx context.Context, name string, _ bool) error {
+	return w.removal(ctx, "remove volume", name)
+}
+
+func (w *recordingWriter) CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error) {
+	_, err := w.record(ctx, "create config")
+	w.target = spec.Name
+
+	return "cfg-new", err
+}
+
+func (w *recordingWriter) CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error) {
+	_, err := w.record(ctx, "create secret")
+	w.target = spec.Name
+
+	return "sec-new", err
+}
+
+func (w *recordingWriter) InspectConfig(_ context.Context, id string) (swarm.Config, error) {
+	return swarm.Config{ID: id}, nil
+}
+
+func (w *recordingWriter) InspectSecret(_ context.Context, id string) (swarm.Secret, error) {
+	return swarm.Secret{ID: id}, nil
 }
 
 func everything(string) bool { return true }
@@ -350,5 +440,148 @@ func TestUpdateServiceRefusesAContainerItDoesNotHave(t *testing.T) {
 
 	if kindOf(t, err) != Invalid || !errors.Is(err, ErrNoContainerSpec) {
 		t.Errorf("error = %v, want Invalid wrapping ErrNoContainerSpec", err)
+	}
+}
+
+func TestRemovalsResolveTheTargetForTheCaller(t *testing.T) {
+	c := cache.New(nil)
+	c.SetConfig(swarm.Config{ID: "cfg-1", Spec: swarm.ConfigSpec{
+		Annotations: swarm.Annotations{Name: "nginx-conf"},
+	}})
+	c.SetVolume(volume.Volume{Name: "data"})
+
+	readOnly := Caller{CanRead: everything, CanWrite: nothing, Level: config.OpsImpactful}
+	blind := Caller{CanRead: nothing, CanWrite: nothing, Level: config.OpsImpactful}
+
+	for _, tc := range []struct {
+		name   string
+		caller Caller
+		remove func(*Writes, Caller) error
+		want   WriteErrorKind
+		target string
+	}{
+		{"by name, addressed by ID", operator(config.OpsImpactful),
+			func(w *Writes, c Caller) error { return w.RemoveConfig(t.Context(), c, "nginx-conf") },
+			0, "cfg-1"},
+		{"absent", operator(config.OpsImpactful),
+			func(w *Writes, c Caller) error { return w.RemoveSecret(t.Context(), c, "nope") },
+			NotFound, ""},
+		{"a volume the cache does not hold", operator(config.OpsImpactful),
+			func(w *Writes, c Caller) error { return w.RemoveVolume(t.Context(), c, "gone", false) },
+			NotFound, ""},
+		{"unreadable", blind,
+			func(w *Writes, c Caller) error { return w.RemoveConfig(t.Context(), c, "cfg-1") },
+			NotFound, ""},
+		{"readable but not writable", readOnly,
+			func(w *Writes, c Caller) error { return w.RemoveVolume(t.Context(), c, "data", true) },
+			Denied, ""},
+		{"below the operation's tier", operator(config.OpsConfiguration),
+			func(w *Writes, c Caller) error { return w.RemoveConfig(t.Context(), c, "cfg-1") },
+			BelowTier, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writer := &recordingWriter{}
+			err := tc.remove(NewWrites(c, writer), tc.caller)
+
+			if tc.want == 0 {
+				if err != nil {
+					t.Fatalf("remove: %v", err)
+				}
+				if writer.target != tc.target {
+					t.Errorf("Docker addressed %q, want %q", writer.target, tc.target)
+				}
+				return
+			}
+			if got := kindOf(t, err); got != tc.want {
+				t.Errorf("kind = %d, want %d", got, tc.want)
+			}
+			if writer.called != "" {
+				t.Errorf("Docker was called (%s) for a refused removal", writer.called)
+			}
+		})
+	}
+}
+
+func TestARemovalSomethingStillUsesIsAConflict(t *testing.T) {
+	c := cache.New(nil)
+	c.SetSecret(swarm.Secret{ID: "sec-1", Spec: swarm.SecretSpec{
+		Annotations: swarm.Annotations{Name: "db"},
+	}})
+	writer := &recordingWriter{err: fmt.Errorf(
+		"%w: secret 'db' is in use by the following service: billing", cerrdefs.ErrInvalidArgument,
+	)}
+
+	err := NewWrites(c, writer).RemoveSecret(t.Context(), operator(config.OpsImpactful), "db")
+
+	if kindOf(t, err) != Conflict || strings.Contains(err.Error(), "billing") {
+		t.Errorf("error = %v, want a Conflict that does not name the service", err)
+	}
+}
+
+func TestCreatesAreJudgedByTheNameTheyWillHave(t *testing.T) {
+	billing := map[string]string{StackNamespaceLabel: "billing"}
+	shop := func(resource string) bool { return resource != "stack:billing" }
+
+	for _, tc := range []struct {
+		name   string
+		caller Caller
+		labels map[string]string
+		want   WriteErrorKind
+	}{
+		{"allowed", operator(config.OpsConfiguration), nil, 0},
+		{"no grant on the name", Caller{
+			CanRead: everything, CanWrite: nothing, Level: config.OpsConfiguration,
+		}, nil, Denied},
+		{"into a stack it may not write", Caller{
+			CanRead: everything, CanWrite: shop, Level: config.OpsConfiguration,
+		}, billing, Denied},
+		{"below the operation's tier", operator(config.OpsOperational), nil, BelowTier},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := cache.New(nil)
+			writer := &recordingWriter{}
+
+			id, err := NewWrites(c, writer).CreateSecret(
+				t.Context(), tc.caller, "db-password", tc.labels, []byte("hunter2"),
+			)
+
+			if tc.want == 0 {
+				if err != nil {
+					t.Fatalf("CreateSecret: %v", err)
+				}
+				if _, ok := c.GetSecret(id); !ok {
+					t.Error("the created secret was not seeded into the cache")
+				}
+				return
+			}
+			if got := kindOf(t, err); got != tc.want {
+				t.Errorf("kind = %d, want %d", got, tc.want)
+			}
+			if writer.called != "" {
+				t.Errorf("Docker was called (%s) for a refused create", writer.called)
+			}
+		})
+	}
+}
+
+func TestNodeWritesAddressTheNodeByID(t *testing.T) {
+	c := cache.New(nil)
+	c.SetNode(swarm.Node{ID: "node-1", Description: swarm.NodeDescription{Hostname: "worker-1"}})
+	writer := &recordingWriter{}
+
+	if _, err := NewWrites(c, writer).UpdateNodeAvailability(
+		t.Context(), operator(config.OpsImpactful), "worker-1", swarm.NodeAvailabilityDrain,
+	); err != nil {
+		t.Fatalf("UpdateNodeAvailability: %v", err)
+	}
+	if writer.target != "node-1" {
+		t.Errorf("Docker addressed %q, want node-1", writer.target)
+	}
+
+	_, err := NewWrites(c, &recordingWriter{}).UpdateNodeLabels(
+		t.Context(), operator(config.OpsOperational), "node-1", nil,
+	)
+	if kindOf(t, err) != BelowTier {
+		t.Errorf("error = %v, want BelowTier", err)
 	}
 }

@@ -1,7 +1,7 @@
 package api
 
 import (
-	"log/slog"
+	"context"
 	"net/http"
 
 	"github.com/docker/docker/api/types/network"
@@ -10,18 +10,22 @@ import (
 
 func (h *Handlers) HandleRemoveTask(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[swarm.Task]{
-		resource:     "task",
-		getter:       h.cache.GetTask,
-		remove:       h.resourceRemover.RemoveTask,
+		resource: "task",
+		getter:   h.cache.GetTask,
+		remove: func(ctx context.Context, key string) error {
+			return h.writes.RemoveTask(ctx, h.caller(r), key)
+		},
 		conflictCode: "TSK001",
 	})
 }
 
 func (h *Handlers) HandleRemoveNetwork(w http.ResponseWriter, r *http.Request) {
 	handleRemove(w, r, removeSpec[network.Summary]{
-		resource:     "network",
-		getter:       h.cache.GetNetwork,
-		remove:       h.resourceRemover.RemoveNetwork,
+		resource: "network",
+		getter:   h.cache.GetNetwork,
+		remove: func(ctx context.Context, key string) error {
+			return h.writes.RemoveNetwork(ctx, h.caller(r), key)
+		},
 		conflictCode: "NET001",
 	})
 }
@@ -35,12 +39,8 @@ func (h *Handlers) HandleRemoveVolume(w http.ResponseWriter, r *http.Request) {
 
 	force := r.URL.Query().Get("force") == "true"
 
-	slog.InfoContext(r.Context(), "removing volume", "volume", name, "force", force)
-
-	err := h.resourceRemover.RemoveVolume(r.Context(), name, force)
+	err := h.writes.RemoveVolume(r.Context(), h.caller(r), name, force)
 	if err != nil {
-		// On a local volume force overrides driver errors, not use; Docker
-		// refuses an in-use local volume either way.
 		writeRemovalError(w, r, err, "VOL001", "volume", name)
 		return
 	}

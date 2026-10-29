@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 )
 
@@ -25,8 +24,6 @@ func handleRemove[T any](
 	if _, ok := lookupOr404(w, r, spec.resource, key, spec.getter); !ok {
 		return
 	}
-
-	slog.InfoContext(r.Context(), "removing "+spec.resource, spec.resource, key)
 
 	if err := spec.remove(r.Context(), key); err != nil {
 		writeRemovalError(w, r, err, spec.conflictCode, spec.resource, key)

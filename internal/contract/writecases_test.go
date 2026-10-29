@@ -401,3 +401,46 @@ func TestHostAccessHeldIsJudgedAgainstTheLiveSpecAlike(t *testing.T) {
 		t.Errorf("written: REST %t, MCP %t; want neither", restWrote, mcpWrote)
 	}
 }
+
+// A removal names a record the cache holds, or it is not found: neither
+// transport hands Docker a name nothing has checked a grant against.
+func TestRemovingAVolumeCetaceanDoesNotHoldIsNotFoundAlike(t *testing.T) {
+	w := refusingWorld(t)
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodDelete, w.Server.URL+"/volumes/nowhere", nil,
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	setPersonaHeaders(t, req, "ops")
+
+	resp, err := w.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("DELETE volume: %v", err)
+	}
+	defer resp.Body.Close()
+	overREST, _ := io.ReadAll(resp.Body)
+
+	result, rpcErr := w.MCP(t, "ops", "tools/call", map[string]any{
+		"name": "remove_volume", "arguments": map[string]any{"name": "nowhere"},
+	})
+	if rpcErr != nil {
+		t.Fatalf("remove_volume: %s", rpcErr.Message)
+	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("REST = %d %s, want 404", resp.StatusCode, overREST)
+	}
+	if !strings.Contains(string(result), "not found") {
+		t.Errorf("MCP = %s, want not found", result)
+	}
+	for transport, answer := range map[string]string{
+		"REST": string(overREST), "MCP": string(result),
+	} {
+		if strings.Contains(answer, engineAsked) {
+			t.Errorf("%s asked Docker to remove a volume it does not hold: %s", transport, answer)
+		}
+	}
+}

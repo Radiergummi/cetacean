@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
@@ -68,15 +66,19 @@ func createLabels(req mcplib.CallToolRequest) (map[string]string, error) {
 }
 
 // dataResourceSpec is the half of a create that differs between a secret and a
-// config: what to call it, how to write it, and how to seed it. The other half
-// is identical, and includes the ordering the refusal path depends on.
+// config: what to call it and which use case writes it. The other half is
+// identical, and includes the ordering the refusal path depends on.
 type dataResourceSpec struct {
 	// kind is both the ACL resource type and the result's Type.
 	kind string
 
+	// create also seeds the record into the cache, which resolution reads and
+	// the watcher fills only later: the documented rotation sequence would
+	// otherwise fail its second step with "no such secret".
 	create func(
-		wc DockerWriteClient,
+		w *cluster.Writes,
 		ctx context.Context,
+		c cluster.Caller,
 		name string,
 		labels map[string]string,
 		data []byte,
@@ -84,18 +86,6 @@ type dataResourceSpec struct {
 
 	// entersValue lets a person enter the value in the dashboard instead.
 	entersValue bool
-
-	// seed writes the created record into the cache, which resolution reads and
-	// the watcher fills only a few hundred milliseconds later — otherwise the
-	// documented rotation sequence fails its second step with "no such secret".
-	// Neither seed carries the payload: the cache backs every listing.
-	seed func(
-		ctx context.Context,
-		wc DockerWriteClient,
-		c *cache.Cache,
-		id, name string,
-		labels map[string]string,
-	)
 }
 
 // Swarm secrets and configs are immutable, so "rotate this password" is three
@@ -106,52 +96,12 @@ var (
 	secretResource = dataResourceSpec{
 		kind:        "secret",
 		entersValue: true,
-		create: func(
-			wc DockerWriteClient,
-			ctx context.Context,
-			name string,
-			labels map[string]string,
-			data []byte,
-		) (string, error) {
-			return wc.CreateSecret(ctx, swarm.SecretSpec{
-				Name: name, Labels: labels,
-				Data: data,
-			})
-		},
-		seed: func(
-			ctx context.Context,
-			wc DockerWriteClient,
-			c *cache.Cache,
-			id, name string,
-			labels map[string]string,
-		) {
-			cluster.SeedCreatedSecret(ctx, c, wc.InspectSecret, id, name, labels)
-		},
+		create:      (*cluster.Writes).CreateSecret,
 	}
 
 	configResource = dataResourceSpec{
-		kind: "config",
-		create: func(
-			wc DockerWriteClient,
-			ctx context.Context,
-			name string,
-			labels map[string]string,
-			data []byte,
-		) (string, error) {
-			return wc.CreateConfig(ctx, swarm.ConfigSpec{
-				Name: name, Labels: labels,
-				Data: data,
-			})
-		},
-		seed: func(
-			ctx context.Context,
-			wc DockerWriteClient,
-			c *cache.Cache,
-			id, name string,
-			labels map[string]string,
-		) {
-			cluster.SeedCreatedConfig(ctx, c, wc.InspectConfig, id, name, labels)
-		},
+		kind:   "config",
+		create: (*cluster.Writes).CreateConfig,
 	}
 )
 
@@ -178,6 +128,8 @@ func (s *Server) createHandler(
 			return "", err
 		}
 
+		// Early too: a person sent to enter the value must not be refused
+		// only after typing it.
 		if err := cluster.CheckStackLabel(nil, labels, s.writePredicate(ctx)); err != nil {
 			return "", err
 		}
@@ -192,8 +144,7 @@ func (s *Server) createHandler(
 			}
 		}
 
-		writeClient, err := s.requireWriteClient()
-		if err != nil {
+		if _, err := s.requireWriteClient(); err != nil {
 			return "", err
 		}
 
@@ -202,7 +153,7 @@ func (s *Server) createHandler(
 			return "", err
 		}
 
-		id, err := spec.create(writeClient, ctx, name, labels, data)
+		id, err := spec.create(s.writes, ctx, s.writeCaller(ctx), name, labels, data)
 		if err != nil {
 			return "", fmt.Errorf(
 				"create %s: %w",
@@ -210,8 +161,6 @@ func (s *Server) createHandler(
 				writeFailure(ctx, err, spec.kind, name),
 			)
 		}
-
-		spec.seed(ctx, writeClient, s.cache, id, name, labels)
 
 		return marshalResult(createResult{ID: id, Name: name, Type: spec.kind})
 	}

@@ -24,6 +24,26 @@ type Writer interface {
 	// UpdateServiceSpec hands change the spec Docker holds and writes back
 	// what it left, so a merge never starts from the cache.
 	UpdateServiceSpec(ctx context.Context, id string, change SpecChange) (swarm.Service, error)
+
+	UpdateNodeAvailability(
+		ctx context.Context,
+		id string,
+		availability swarm.NodeAvailability,
+	) (swarm.Node, error)
+	UpdateNodeRole(ctx context.Context, id string, role swarm.NodeRole) (swarm.Node, error)
+	UpdateNodeLabels(ctx context.Context, id string, change MapChange) (swarm.Node, error)
+
+	RemoveService(ctx context.Context, id string) error
+	RemoveTask(ctx context.Context, id string) error
+	RemoveConfig(ctx context.Context, id string) error
+	RemoveSecret(ctx context.Context, id string) error
+	RemoveNetwork(ctx context.Context, id string) error
+	RemoveVolume(ctx context.Context, name string, force bool) error
+
+	CreateConfig(ctx context.Context, spec swarm.ConfigSpec) (string, error)
+	CreateSecret(ctx context.Context, spec swarm.SecretSpec) (string, error)
+	InspectConfig(ctx context.Context, id string) (swarm.Config, error)
+	InspectSecret(ctx context.Context, id string) (swarm.Secret, error)
 }
 
 // Caller is who asks for a write, as a transport established it.
@@ -71,7 +91,7 @@ func (w *Writes) ScaleService(
 	slog.InfoContext(ctx, "scaling service", "service", svc.ID, "replicas", replicas)
 	updated, err := w.docker.ScaleService(ctx, svc.ID, replicas)
 
-	return updated, classify(err, key)
+	return updated, classify(err, "service", key)
 }
 
 // UpdateServiceImage points a service at another image.
@@ -96,13 +116,13 @@ func (w *Writes) UpdateServiceImage(
 		w.cache.GetVolume,
 		c.Level,
 	); err != nil {
-		return swarm.Service{}, classify(err, key)
+		return swarm.Service{}, classify(err, "service", key)
 	}
 
 	slog.InfoContext(ctx, "updating service image", "service", svc.ID, "image", image)
 	updated, err := w.docker.UpdateServiceImage(ctx, svc.ID, image)
 
-	return updated, classify(err, key)
+	return updated, classify(err, "service", key)
 }
 
 // RollbackService returns a service to its previous spec.
@@ -116,13 +136,13 @@ func (w *Writes) RollbackService(ctx context.Context, c Caller, key string) (swa
 	}
 
 	if err := CheckHostAccessHeld(svc, RollingBack, w.cache.GetVolume, c.Level); err != nil {
-		return swarm.Service{}, classify(err, key)
+		return swarm.Service{}, classify(err, "service", key)
 	}
 
 	slog.InfoContext(ctx, "rolling back service", "service", svc.ID)
 	updated, err := w.docker.RollbackService(ctx, svc.ID)
 
-	return updated, classify(err, key)
+	return updated, classify(err, "service", key)
 }
 
 // RestartService replaces every task of a service.
@@ -135,7 +155,7 @@ func (w *Writes) RestartService(ctx context.Context, c Caller, key string) (swar
 	slog.InfoContext(ctx, "restarting service", "service", svc.ID)
 	updated, err := w.docker.RestartService(ctx, svc.ID)
 
-	return updated, classify(err, key)
+	return updated, classify(err, "service", key)
 }
 
 // UpdateService applies change to the service's live spec, refusing what
@@ -155,7 +175,7 @@ func (w *Writes) UpdateService(
 	slog.InfoContext(ctx, "updating service", "service", svc.ID, "operation", op)
 	updated, err := w.docker.UpdateServiceSpec(ctx, svc.ID, w.CheckedChange(c, change))
 
-	return updated, classify(err, key)
+	return updated, classify(err, "service", key)
 }
 
 // CheckedChange applies change to the live spec, then refuses the result
@@ -297,52 +317,76 @@ func cloneSpec(spec *swarm.ServiceSpec) (*swarm.ServiceSpec, error) {
 	return &clone, nil
 }
 
-// service resolves the service a write names. One the caller cannot read is
-// not found, so a refusal never confirms it exists.
+// service resolves the service a write names.
 func (w *Writes) service(c Caller, op Operation, key string) (swarm.Service, error) {
-	svc, found, err := w.cache.ResolveService(key)
+	record, err := w.record(c, op, "service", key)
 	if err != nil {
-		if !c.CanRead("service:" + key) {
-			found = false
-		} else {
-			return swarm.Service{}, &WriteError{
-				Kind: Invalid, Resource: "service", Detail: err.Error(), Err: err,
-			}
-		}
+		return swarm.Service{}, err
 	}
 
-	resource := "service:" + svc.Spec.Name
-	if !found || !c.CanRead(resource) {
-		return swarm.Service{}, &WriteError{
-			Kind: NotFound, Resource: "service", Detail: fmt.Sprintf("service %q not found", key),
-		}
-	}
-	if !c.CanWrite(resource) {
-		return swarm.Service{}, &WriteError{
-			Kind: Denied, Resource: "service", Detail: "write access denied for " + resource,
-		}
-	}
-	if c.Level < op.Tier() {
-		return swarm.Service{}, &WriteError{
-			Kind:     BelowTier,
-			Resource: "service",
-			Detail: fmt.Sprintf(
-				"this operation requires operations level %d, but the caller is at level %d",
-				op.Tier(), c.Level,
-			),
-		}
-	}
+	svc, _ := w.cache.GetService(record.ID)
 
 	return svc, nil
 }
 
+// record resolves the record of kind a write names, then judges the caller
+// against it. One the caller cannot read is not found, so a refusal never
+// confirms it exists.
+func (w *Writes) record(c Caller, op Operation, kind, key string) (Record, error) {
+	record, found, err := LookupAs(w.cache, kind, key, c.CanRead)
+	if err != nil {
+		if !c.CanRead(kind + ":" + key) {
+			found = false
+		} else {
+			return Record{}, &WriteError{
+				Kind:     Invalid,
+				Resource: kind,
+				Detail:   err.Error(),
+				Err:      err,
+			}
+		}
+	}
+
+	resource := record.WriteResource()
+	if !found || !c.CanRead(resource) {
+		return Record{}, &WriteError{
+			Kind: NotFound, Resource: kind, Detail: fmt.Sprintf("%s %q not found", kind, key),
+		}
+	}
+	if !c.CanWrite(resource) {
+		return Record{}, denied(kind, resource)
+	}
+
+	return record, belowTier(c, op, kind)
+}
+
+func denied(kind, resource string) *WriteError {
+	return &WriteError{Kind: Denied, Resource: kind, Detail: "write access denied for " + resource}
+}
+
+// belowTier refuses a caller below op's tier, or returns nil.
+func belowTier(c Caller, op Operation, kind string) error {
+	if c.Level >= op.Tier() {
+		return nil
+	}
+
+	return &WriteError{
+		Kind:     BelowTier,
+		Resource: kind,
+		Detail: fmt.Sprintf(
+			"this operation requires operations level %d, but the caller is at level %d",
+			op.Tier(), c.Level,
+		),
+	}
+}
+
 // classify turns what a write returned into the refusal for the key the caller
 // named. An error that is none of the kinds is Cetacean's own and passes.
-func classify(err error, key string) error {
+func classify(err error, resource, key string) error {
 	if err == nil {
 		return nil
 	}
-	if refusal, ok := ClassifyWrite(err, "service", key); ok {
+	if refusal, ok := ClassifyWrite(err, resource, key); ok {
 		return refusal
 	}
 

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -43,17 +44,8 @@ func (h *Handlers) HandleUpdateNodeAvailability(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	slog.InfoContext(
-		r.Context(),
-		"updating node availability",
-		"node",
-		id,
-		"availability",
-		req.Availability,
-	)
-
 	writeNodeMutation(w, r, id, func() (swarm.Node, error) {
-		return h.nodeWriter.UpdateNodeAvailability(r.Context(), id, availability)
+		return h.writes.UpdateNodeAvailability(r.Context(), h.caller(r), id, availability)
 	})
 }
 
@@ -83,10 +75,8 @@ func (h *Handlers) HandleUpdateNodeRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	slog.InfoContext(r.Context(), "updating node role", "node", id, "role", req.Role)
-
 	writeNodeMutation(w, r, id, func() (swarm.Node, error) {
-		return h.nodeWriter.UpdateNodeRole(r.Context(), id, role)
+		return h.writes.UpdateNodeRole(r.Context(), h.caller(r), id, role)
 	})
 }
 
@@ -101,7 +91,7 @@ func (h *Handlers) HandleRemoveNode(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(r.Context(), "removing node", "node", id, "force", force)
 
-	err := h.nodeWriter.RemoveNode(r.Context(), id, force)
+	err := h.writer.RemoveNode(r.Context(), id, force)
 	if err != nil {
 		writeRemovalError(w, r, err, "NOD001", "node", id)
 		return
@@ -148,7 +138,13 @@ func (h *Handlers) HandleGetNodeLabels(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HandlePatchNodeLabels(w http.ResponseWriter, r *http.Request) {
 	handlePatchLabels(w, r, h.acl, patchLabelsSpec[swarm.Node]{
 		getLabelsSpec: h.nodeLabelsSpec(),
-		update:        h.nodeWriter.UpdateNodeLabels,
-		conflictCode:  "NOD002",
+		update: func(
+			ctx context.Context,
+			id string,
+			mutate func(map[string]string) (map[string]string, error),
+		) (swarm.Node, error) {
+			return h.writes.UpdateNodeLabels(ctx, h.caller(r), id, mutate)
+		},
+		conflictCode: "NOD002",
 	})
 }

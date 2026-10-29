@@ -71,8 +71,8 @@ func (s *Server) impactfulTools() []toolDef {
 				"service",
 				s.resolveWrite("service"),
 				s.serviceRemoval,
-				func(wc DockerWriteClient, ctx context.Context, id string) error {
-					return wc.RemoveService(ctx, id)
+				func(ctx context.Context, id string) error {
+					return s.writes.RemoveService(ctx, s.writeCaller(ctx), id)
 				},
 			),
 		},
@@ -96,8 +96,8 @@ func (s *Server) impactfulTools() []toolDef {
 			gate:    toolGate{"task", "write"},
 			elicits: true,
 			handler: s.removeResolvedHandler("task", s.resolveTaskWrite, s.taskRemoval,
-				func(wc DockerWriteClient, ctx context.Context, id string) error {
-					return wc.RemoveTask(ctx, id)
+				func(ctx context.Context, id string) error {
+					return s.writes.RemoveTask(ctx, s.writeCaller(ctx), id)
 				}),
 		},
 		{
@@ -123,8 +123,8 @@ func (s *Server) impactfulTools() []toolDef {
 				"config",
 				s.resolveWrite("config"),
 				s.configRemoval,
-				func(wc DockerWriteClient, ctx context.Context, id string) error {
-					return wc.RemoveConfig(ctx, id)
+				func(ctx context.Context, id string) error {
+					return s.writes.RemoveConfig(ctx, s.writeCaller(ctx), id)
 				},
 			),
 		},
@@ -151,8 +151,8 @@ func (s *Server) impactfulTools() []toolDef {
 				"secret",
 				s.resolveWrite("secret"),
 				s.secretRemoval,
-				func(wc DockerWriteClient, ctx context.Context, id string) error {
-					return wc.RemoveSecret(ctx, id)
+				func(ctx context.Context, id string) error {
+					return s.writes.RemoveSecret(ctx, s.writeCaller(ctx), id)
 				},
 			),
 		},
@@ -179,8 +179,8 @@ func (s *Server) impactfulTools() []toolDef {
 				"network",
 				s.resolveWrite("network"),
 				s.networkRemoval,
-				func(wc DockerWriteClient, ctx context.Context, id string) error {
-					return wc.RemoveNetwork(ctx, id)
+				func(ctx context.Context, id string) error {
+					return s.writes.RemoveNetwork(ctx, s.writeCaller(ctx), id)
 				},
 			),
 		},
