@@ -1,144 +1,29 @@
 # CLAUDE.md
 
-Cetacean is a read-mostly observability dashboard for Docker Swarm Mode. One Go binary with an
-embedded React SPA: it reads the Docker socket, caches all swarm state in memory, and pushes
-updates to browsers over SSE. The goal is to replace the Docker CLI for *understanding* a
-cluster — every resource browsable, with working cross-references between them.
+`.claude/ARCHITECTURE.md` has the component map and the traps. Read it before you change a component.
 
-- `.claude/ARCHITECTURE.md` — the component map and the traps. Read it when changing a
-  component, not before.
-- `.claude/rules/` — per-language style, loaded when a matching file is opened.
-- `docs/` — user documentation, published to the website.
-- `docs/specs/*-design.md` — why a larger change is shaped the way it is.
-- The rest of `.claude/` is machine-local and untracked: settings, worktrees, the backlog,
-  the archived implementation plans.
-
-## Commands
-
-```bash
-make check        # lint + typecheck + fmt-check + test + test-frontend + spec — the gate
-make lint-docs    # Vale over the published docs, README, CONTRIBUTING, and CHANGELOG
-make build        # frontend + widgets + go build
-make fmt          # gofmt + oxfmt (write)
-make test         # go test ./...
-make sbom         # regenerate the committed SBOM (rarely needed by hand)
-```
-
-The end-to-end suite is local-only, behind the `e2e` build tag, and drives the real binary
-against a Docker-in-Docker swarm. `test/e2e/README.md` covers its lanes and known gaps.
-
-```bash
-make test-stack   # build instrumented + run the suite, reporting the coverage it reached
-make e2e-up       # bring the environment up with a SUT on :19001, for the browser suite
-make e2e-down     # tear it down
-```
-
-```bash
-go build -o cetacean .          # needs frontend/dist and frontend/dist-widgets to exist
-go test ./internal/cache/       # one package
-go run .
-```
-
-The frontend and the website are one pnpm workspace, driven from the repository
-root. `pnpm install` covers both; the version of pnpm is pinned by
-`packageManager` and the Node version by `.nvmrc`.
-
-```bash
-pnpm --filter frontend dev              # Vite on :5173, proxies to :9000
-pnpm --filter frontend build            # -> frontend/dist
-pnpm --filter frontend build:widgets    # -> frontend/dist-widgets (a go build prerequisite)
-pnpm --filter frontend check            # tsc only, faster than a build
-pnpm --filter frontend exec vitest run
-```
-
-```bash
-pnpm --filter website sync-assets       # generates src/data/errors.json; needed before `check` in a clean tree
-pnpm --filter website dev               # Astro on :4321
-pnpm --filter website check             # astro check, covers .astro as well as .ts
-```
-
-Docker: `docker build --build-arg SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) -t cetacean:latest .`
-(the argument makes the build date the commit's), then `docker stack deploy -c compose.yaml cetacean`.
-Add `-c compose.prometheus.yaml` to join the `monitoring` network from `compose.monitoring.yaml`.
-
-## Configuration
-
-80 settings, all optional, all with a TOML path and an env var, plus `-config` itself; the `acl.*`, `mcp.*`, `oauth.*`,
-`sizing.*` and `tracing.*` settings have no flag.
-**`docs/configuration.mdx` is canonical** — do not restate the table anywhere else, and
-name settings by their TOML path (`server.trusted_proxies`) in user-facing text.
-
-Secret settings also accept a `_FILE` suffix on the env var, which reads the value from a file
-and ranks below the direct variable.
-
-Locally you usually want `CETACEAN_PROMETHEUS_URL` (metrics are off without it) and
-`CETACEAN_MCP=true` (MCP server at `/mcp`).
-
-## Conventions
-
-These bite across the codebase; the per-component rules live in `.claude/ARCHITECTURE.md`.
+## Invariants
 
 - Docker Engine API types are the domain model (`swarm.Service`, `swarm.Node`). No separate structs.
-- **Volumes are keyed by Name; everything else by ID.** The volume route takes `{name}`.
-- **Secret data is cleared before every response** — list, detail, stack, search, MCP alike.
-- Stacks are derived from the `com.docker.stack.namespace` label, not a Docker primitive.
-- Every response is content-negotiated: `Accept`, or a `.json`/`.html`/`.atom`/`.csv` suffix.
-  An endpoint refuses a type it cannot produce; it does not fall back to JSON.
-- JSON responses carry JSON-LD `@context`/`@id`/`@type`; lists return `CollectionResponse`
-  with pagination `Link` headers; errors are RFC 9457 problem details.
-- Every JSON and Atom response carries an ETag and honours `If-None-Match`.
-- Writes are gated twice: `requireLevel` (operations tier 0–3) **and** `requireWriteACL`
-  (per-resource). The `Allow` header on every GET reports what the caller may actually do.
-- A rule that both the REST and MCP transports must apply belongs in `internal/cluster`.
-  A projection only one of them renders does not — see the note at the end of that
-  package's section in `.claude/ARCHITECTURE.md`.
-- Protocol work follows the RFC exactly — case-insensitivity where the spec says so, header
-  syntax, status codes. A shortcut that passes the tests we happened to write is still wrong.
-- Structured logging via `log/slog` throughout.
-- A requirement from an external specification belongs in `internal/spec/registry/`,
-  claimed by the test that exercises it with `spec.Satisfies` as the first statement
-  of the test or subtest holding the `t` it is given. `make spec` fails on a
-  requirement nothing claims, a cited specification nothing accounts for, and — via
-  `scripts/spec-vet`, a `go vet` tool — a claim written in a form the gate cannot
-  read. `make spec-mutants` fails when a requirement's mutants survive its
-  claimants. The `mcp/sep-*.yaml` families are generated — edit `scripts/spec-genmcp`
-  and run `make spec-genmcp`, not the files.
+- Volumes are keyed by Name (the route takes `{name}`). Everything else is keyed by ID.
+- Secret data is cleared before every response: list, detail, stack, search, and MCP.
+- Content negotiation never falls back to JSON. An endpoint refuses a type it cannot produce.
+  Meta endpoints (`/-/health`, `/-/ready`) have no negotiation and no discovery links.
+- Writes are gated twice: `requireLevel` (operations level) and `requireWriteACL` (per resource).
+- Protocol work follows the RFC exactly (case rules, header syntax, status codes), not only our tests.
+- A requirement from an external spec goes in `internal/spec/registry/`. The test that covers it
+  claims it with `spec.Satisfies` as its first statement. The `mcp/sep-*.yaml` files are generated:
+  edit `scripts/spec-genmcp` and run `make spec-genmcp`.
+- `docs/configuration.mdx` is the only settings reference. Don't copy it. Name settings by TOML path.
 
-## Code style
+## Comments
 
-### Comments
-
-- **A comment block caps at four lines.** If the explanation needs more room, it belongs in
-  the commit message or a design doc under `docs/specs/` — not above the function.
-  `scripts/comment-cap` enforces it in `make lint` and CI.
-- A comment states what the code cannot: an invariant, a constraint, a trap, a reason a
-  tempting simpler version is wrong. The *argument for* a change — what it used to be, what
-  it cost, why it beat the alternative — is commit-message material, every time.
-- Don't name the test that pins the behaviour. Don't restate the identifier. Don't quote
-  measurements. Don't re-explain a rule at each site that reads it; state it once where it
-  lives and let the tests hold it.
-- Match the terseness of the siblings: if `listFeeds` has a one-line doc, `searchFeeds` gets one.
-- `.claude/ARCHITECTURE.md` is dense on purpose. It is not a model for source comments.
+A comment says what the code cannot: an invariant, a trap, why a simpler version is wrong.
+History, reasoning, and measurements go in the commit message. Don't name the test that pins it.
 
 ## Review
 
-- Docs here sometimes land ahead of the code, on a separate branch. Before calling a documented
-  setting or endpoint nonexistent, run `gh pr list --state open` and grep the open diffs; say
-  "not on `main`; see PR #N". An unticked plan file is not evidence either.
-- Don't flag the action versions in `.github/workflows/` as nonexistent. They are ahead of model
-  training data and are correct as written.
-
-## Releases
-
-- **Sign release tags** — `git tag -s`, never `-a`. Unsigned tags show unverified, and
-  immutable releases make it unfixable afterwards.
-- **Update `CHANGELOG.md`** for every user-facing change — `.claude/rules/changelog.md`
-  says how an entry is written.
-
-## API documentation
-
-- `api/openapi.yaml` — the web API, served at `GET /api` (Scalar playground for HTML).
-- `internal/api/context.go` — the JSON-LD context, served at `GET /api/context.jsonld`.
-- `docs/api.md` — the prose reference.
-
-Meta endpoints (`/-/health`, `/-/ready`) have no negotiation and no discovery links.
+- Docs sometimes land before the code, on another branch. Before you call a setting or endpoint
+  missing, check `gh pr list --state open` and say "not on `main`; see PR #N".
+- The action versions in `.github/workflows/` are newer than your training data. They are correct.
+- `new(expr)` is valid Go and `modernize` requires it. Copilot calls it a compile error; it is wrong.

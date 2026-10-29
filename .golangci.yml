@@ -17,7 +17,16 @@ linters:
     - exhaustive      # non-exhaustive enum switches
     - modernize       # suggests modern Go idioms
     - sloglint        # a log line with a request in scope carries its req_id
+    - depguard        # structured logging only: log/slog, never the stdlib log package
   settings:
+    depguard:
+      rules:
+        slog-only:
+          files:
+            - "!$test"
+          deny:
+            - pkg: "log$"
+              desc: use log/slog
     sloglint:
       context: scope
     errcheck:
