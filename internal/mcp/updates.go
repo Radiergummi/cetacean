@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -72,235 +71,122 @@ var serviceSectionKeys = map[string][]string{
 	sectionMounts: {"mountTargets", "bindMounts"},
 }
 
-// sectionWriter decodes one section's `value` and applies it, returning the
-// service as Docker left it. Splitting the decode out is not worth it: the
-// shape `value` takes is exactly what decides which writer runs.
-type sectionWriter func(
-	wc DockerWriteClient,
-	ctx context.Context,
-	id string,
-	req mcplib.CallToolRequest,
-	section string,
-) (swarm.Service, error)
+// sectionChange decodes one section's `value` into the change it makes.
+// Splitting the decode out is not worth it: the shape `value` takes is
+// exactly what decides which change runs.
+type sectionChange func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error)
 
-// serviceSectionWriters is what update_service can perform, deliberately
+// serviceSectionChanges is what update_service can perform, deliberately
 // narrower than serviceSectionKeys, which only answers how a section is
 // reported. The accepted list, the advertised enum and the dispatch are one
 // table, so a section absent here is refused before any write is attempted.
-var serviceSectionWriters = map[string]sectionWriter{
-	sectionEnv: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, _ string,
-	) (swarm.Service, error) {
+var serviceSectionChanges = map[string]sectionChange{
+	sectionEnv: func(req mcplib.CallToolRequest, _ string) (cluster.SpecChange, error) {
 		patch, err := requireStringMapPatch(req, "value")
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceEnv(ctx, id, mergePatchMutator(patch))
+		return cluster.PatchEnv(mergePatchMutator(patch)), nil
 	},
 
-	sectionLabels: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, _ string,
-	) (swarm.Service, error) {
+	sectionLabels: func(req mcplib.CallToolRequest, _ string) (cluster.SpecChange, error) {
 		patch, err := requireStringMapPatch(req, "value")
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceLabels(ctx, id, mergePatchMutator(patch))
+		return cluster.PatchLabels(mergePatchMutator(patch)), nil
 	},
 
-	sectionResources: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionResources: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		resources, err := decodeSection[swarm.ResourceRequirements](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceResources(ctx, id, &resources)
+		return cluster.SetResources(&resources), nil
 	},
 
-	sectionPlacement: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionPlacement: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		placement, err := decodeSection[swarm.Placement](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServicePlacement(ctx, id, &placement)
+		return cluster.SetPlacement(&placement), nil
 	},
 
-	sectionPorts: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionPorts: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		ports, err := decodeSection[[]swarm.PortConfig](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
 		if err := cluster.ValidatePorts(ports); err != nil {
-			return swarm.Service{}, fmt.Errorf("section %q: %w", section, err)
+			return nil, fmt.Errorf("section %q: %w", section, err)
 		}
 
-		return wc.UpdateServicePorts(ctx, id, ports)
+		return cluster.SetPorts(ports), nil
 	},
 
-	sectionUpdatePolicy: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionUpdatePolicy: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		policy, err := decodeSection[swarm.UpdateConfig](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceUpdatePolicy(ctx, id, &policy)
+		return cluster.SetUpdatePolicy(&policy), nil
 	},
 
-	sectionRollbackPolicy: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionRollbackPolicy: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		policy, err := decodeSection[swarm.UpdateConfig](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceRollbackPolicy(ctx, id, &policy)
+		return cluster.SetRollbackPolicy(&policy), nil
 	},
 
-	sectionLogDriver: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionLogDriver: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		driver, err := decodeSection[swarm.Driver](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceLogDriver(ctx, id, &driver)
+		return cluster.SetLogDriver(&driver), nil
 	},
 
-	sectionHealthcheck: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionHealthcheck: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		value, err := decodeSection[healthcheckValue](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
 		hc, err := value.toHealthConfig()
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceHealthcheck(ctx, id, hc)
+		return cluster.SetHealthcheck(hc), nil
 	},
 
-	sectionCommand: func(
-		wc DockerWriteClient, ctx context.Context, id string,
-		req mcplib.CallToolRequest, section string,
-	) (swarm.Service, error) {
+	sectionCommand: func(req mcplib.CallToolRequest, section string) (cluster.SpecChange, error) {
 		value, err := decodeSection[commandValue](req, section)
 		if err != nil {
-			return swarm.Service{}, err
+			return nil, err
 		}
 
-		return wc.UpdateServiceContainerConfig(ctx, id, value.applyTo)
-	},
-}
-
-// hostAccessSections are the sections that can change what runs in the
-// container. Each names the change a request makes for cluster.CheckHostAccessHeld,
-// or returns "" for one that leaves it alone.
-// A value that doesn't decode is the writer's to refuse, so it changes nothing.
-var hostAccessSections = map[string]func(swarm.Service, mcplib.CallToolRequest, string) string{
-	sectionCommand: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
-		value, err := decodeSection[commandValue](req, section)
-		if err != nil {
-			return ""
-		}
-
-		before := containerSpec(svc)
-		after := *before
-		value.applyTo(&after)
-
-		return cluster.CommandChange(before, &after)
-	},
-	sectionPlacement: func(swarm.Service, mcplib.CallToolRequest, string) string {
-		return "changing the placement of"
-	},
-	sectionEnv: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
-		patch, err := requireStringMapPatch(req, "value")
-		if err != nil {
-			return ""
-		}
-
-		current := make(map[string]string)
-		for _, variable := range containerSpec(svc).Env {
-			name, value, _ := strings.Cut(variable, "=")
-			current[name] = value
-		}
-
-		updated, err := mergePatchMutator(patch)(current)
-		if err != nil {
-			return ""
-		}
-
-		return cluster.EnvChange(current, updated)
-	},
-	sectionLabels: func(svc swarm.Service, req mcplib.CallToolRequest, _ string) string {
-		patch, err := requireStringMapPatch(req, "value")
-		if err != nil {
-			return ""
-		}
-
-		updated, err := mergePatchMutator(patch)(svc.Spec.Labels)
-		if err != nil {
-			return ""
-		}
-
-		return cluster.LabelsChange(svc.Spec.Labels, updated)
-	},
-	sectionPorts: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
-		ports, err := decodeSection[[]swarm.PortConfig](req, section)
-		if err != nil {
-			return ""
-		}
-
-		var current []swarm.PortConfig
-		if svc.Spec.EndpointSpec != nil {
-			current = svc.Spec.EndpointSpec.Ports
-		}
-
-		return cluster.PortsChange(current, ports)
-	},
-	sectionHealthcheck: func(svc swarm.Service, req mcplib.CallToolRequest, section string) string {
-		value, err := decodeSection[healthcheckValue](req, section)
-		if err != nil {
-			return ""
-		}
-
-		hc, err := value.toHealthConfig()
-		if err != nil {
-			return ""
-		}
-
-		return cluster.HealthcheckChange(containerSpec(svc).Healthcheck, hc)
+		return cluster.EditContainer(func(cs *swarm.ContainerSpec) error {
+			value.applyTo(cs)
+			return nil
+		}), nil
 	},
 }
 
 // updateServiceSections is the advertised enum and the error message's list:
 // the table's own keys, sorted so tools/list is byte-stable across runs.
-var updateServiceSections = slices.Sorted(maps.Keys(serviceSectionWriters))
+var updateServiceSections = slices.Sorted(maps.Keys(serviceSectionChanges))
 
 // nodeSectionKeys is the node counterpart, over NodeDigest's details.
 var nodeSectionKeys = map[string][]string{
@@ -385,7 +271,7 @@ func stringDetail(details map[string]any, key string) string {
 }
 
 // toolUpdateService dispatches one section of a service's specification to the
-// writer that owns it. The cost of folding eight tools into one is the input
+// change that owns it. The cost of folding eight tools into one is the input
 // schema: `value` is whatever the section takes, so JSON Schema cannot describe
 // it and decodeSection has to name both the section and the shape it wanted.
 func (s *Server) toolUpdateService(
@@ -402,7 +288,7 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
-	write, dispatched := serviceSectionWriters[section]
+	decode, dispatched := serviceSectionChanges[section]
 	if !dispatched {
 		// A section this tool does not dispatch but the projection knows
 		// about is reached by a tool of its own, and the error is the only
@@ -421,10 +307,14 @@ func (s *Server) toolUpdateService(
 		)
 	}
 
-	// Before the write client is even resolved, for the same reason every
-	// other mutation checks first: a refusal must not depend on whether
-	// Docker happens to be reachable.
+	// The use case is the authority; this refuses early, so a value decoded
+	// for a caller who may not write here never reaches the cache lookups.
 	if err := s.checkServiceWrite(ctx, id); err != nil {
+		return "", err
+	}
+
+	change, err := decode(req, section)
+	if err != nil {
 		return "", err
 	}
 
@@ -433,48 +323,18 @@ func (s *Server) toolUpdateService(
 		return "", err
 	}
 
-	if changes, held := hostAccessSections[section]; held {
-		ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
-			return changes(svc, req, section)
-		})
-		if err != nil {
-			return "", err
-		}
-	}
-
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
 
-	writeClient = stackLabelGuard{writeClient, s.writePredicate(ctx)}
-
-	updated, err := write(writeClient, ctx, id, req, section)
+	updated, err := s.writes.UpdateService(
+		ctx, s.writeCaller(ctx), cluster.OpUpdateService, id, change,
+	)
 	if err != nil {
 		return "", s.refused(ctx, cond, err)
 	}
 
 	return marshalResult(serviceUpdate(section, updated))
-}
-
-// stackLabelGuard refuses a relabel into a stack the caller may not write,
-// inside the writer's read-modify-write so it compares against Docker's labels.
-type stackLabelGuard struct {
-	DockerWriteClient
-
-	canWrite func(resource string) bool
-}
-
-func (g stackLabelGuard) UpdateServiceLabels(
-	ctx context.Context,
-	id string,
-	mutate func(current map[string]string) (map[string]string, error),
-) (swarm.Service, error) {
-	return g.DockerWriteClient.UpdateServiceLabels(
-		ctx,
-		id,
-		cluster.GuardStackLabel(mutate, g.canWrite),
-	)
 }
 
 // toolUpdateNode is the node counterpart, over the two sections that need the

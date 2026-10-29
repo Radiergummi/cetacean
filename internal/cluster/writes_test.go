@@ -18,6 +18,10 @@ type recordingWriter struct {
 	called string
 	ctx    context.Context
 	err    error
+
+	// live is the spec Docker holds, which can differ from the cache's.
+	live    *swarm.ServiceSpec
+	written swarm.ServiceSpec
 }
 
 func (w *recordingWriter) record(ctx context.Context, call string) (swarm.Service, error) {
@@ -47,6 +51,23 @@ func (w *recordingWriter) RollbackService(ctx context.Context, _ string) (swarm.
 
 func (w *recordingWriter) RestartService(ctx context.Context, _ string) (swarm.Service, error) {
 	return w.record(ctx, "restart")
+}
+
+func (w *recordingWriter) UpdateServiceSpec(
+	ctx context.Context,
+	_ string,
+	change SpecChange,
+) (swarm.Service, error) {
+	spec := writable("web").Spec
+	if w.live != nil {
+		spec = *w.live
+	}
+	if err := change(&spec); err != nil {
+		return swarm.Service{}, err
+	}
+	w.written = spec
+
+	return w.record(ctx, "spec")
 }
 
 func everything(string) bool { return true }
@@ -221,5 +242,113 @@ func TestResolvableNamesWhatLookupFinds(t *testing.T) {
 		if Resolvable(kind) != found {
 			t.Errorf("%s: Resolvable = %t, Lookup found = %t", kind, Resolvable(kind), found)
 		}
+	}
+}
+
+func TestUpdateServiceChecksTheLiveSpec(t *testing.T) {
+	// The cache has caught up with neither: Docker's copy is what is judged.
+	held := socketHolder()
+	unheld := writable("proxy")
+
+	for _, tc := range []struct {
+		name         string
+		cached, live swarm.Service
+		want         WriteErrorKind
+	}{
+		{"live holds host access the cache does not show", unheld, held, HostAccess},
+		{"cache holds host access the live spec dropped", held, unheld, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writes, writer := writesOver(t, tc.cached)
+			writer.live = &tc.live.Spec
+
+			_, err := writes.UpdateService(
+				t.Context(), operator(config.OpsConfiguration), OpUpdateService, "proxy",
+				PatchEnv(func(map[string]string) (map[string]string, error) {
+					return map[string]string{"MODE": "debug"}, nil
+				}),
+			)
+
+			if tc.want == 0 {
+				if err != nil {
+					t.Fatalf("UpdateService: %v", err)
+				}
+				if got := writer.written.TaskTemplate.ContainerSpec.Env; len(got) != 1 {
+					t.Errorf("env written = %v, want MODE=debug", got)
+				}
+				return
+			}
+			if got := kindOf(t, err); got != tc.want {
+				t.Errorf("kind = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestUpdateServiceLetsAHolderChangeWhatDoesNotRun(t *testing.T) {
+	holder := socketHolder()
+	writes, writer := writesOver(t, holder)
+	writer.live = &holder.Spec
+
+	for _, change := range []SpecChange{
+		SetResources(&swarm.ResourceRequirements{Limits: &swarm.Limit{MemoryBytes: 1 << 30}}),
+		SetPlacement(nil),
+	} {
+		if _, err := writes.UpdateService(
+			t.Context(), operator(config.OpsConfiguration), OpUpdateService, "proxy", change,
+		); err != nil {
+			t.Errorf("UpdateService: %v", err)
+		}
+	}
+}
+
+func TestUpdateServiceRefusesWhatTheCallerMayNotAttach(t *testing.T) {
+	stack := map[string]string{StackNamespaceLabel: "billing"}
+
+	for _, tc := range []struct {
+		name   string
+		change SpecChange
+	}{
+		{"an unreadable secret", SetSecrets([]*swarm.SecretReference{{
+			SecretID: "sec-1", SecretName: "db-password",
+		}})},
+		{"an unreadable volume", SetMounts([]mount.Mount{{
+			Type: mount.TypeVolume, Source: "data", Target: "/data",
+		}})},
+		{"a stack it may not write", PatchLabels(func(map[string]string) (map[string]string, error) {
+			return stack, nil
+		})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writes, writer := writesOver(t, writable("web"))
+			caller := Caller{
+				CanRead:  func(resource string) bool { return resource == "service:web" },
+				CanWrite: func(resource string) bool { return resource == "service:web" },
+				Level:    config.OpsImpactful,
+			}
+
+			_, err := writes.UpdateService(t.Context(), caller, OpUpdateService, "web", tc.change)
+
+			if kindOf(t, err) != Denied {
+				t.Errorf("error = %v, want Denied", err)
+			}
+			if writer.called != "" {
+				t.Error("the refused change was written")
+			}
+		})
+	}
+}
+
+func TestUpdateServiceRefusesAContainerItDoesNotHave(t *testing.T) {
+	writes, writer := writesOver(t, writable("web"))
+	writer.live = &swarm.ServiceSpec{Name: "web"}
+
+	_, err := writes.UpdateService(
+		t.Context(), operator(config.OpsImpactful), OpUpdateService, "web",
+		SetHealthcheck(nil),
+	)
+
+	if kindOf(t, err) != Invalid || !errors.Is(err, ErrNoContainerSpec) {
+		t.Errorf("error = %v, want Invalid wrapping ErrNoContainerSpec", err)
 	}
 }

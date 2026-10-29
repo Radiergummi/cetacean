@@ -77,30 +77,6 @@ func (s *Server) pinVersion(
 	return docker.WithPinnedVersion(ctx, kind, c.id, swarm.Version{Index: c.version}), c.id, c, nil
 }
 
-// pinChecked is docker.PinChecked for a write the caller may also have made
-// conditional. The two pins must agree, or the check validated a spec other
-// than the one the write is applied to.
-func (s *Server) pinChecked(
-	ctx context.Context,
-	c condition,
-	svc swarm.Service,
-) (context.Context, error) {
-	if !c.set || c.version == svc.Version.Index {
-		return docker.PinChecked(ctx, "service", svc.ID, svc.Version), nil
-	}
-
-	if svc.Version.Index > c.version {
-		return ctx, c.changed(svc.Version.Index)
-	}
-
-	return ctx, fmt.Errorf(
-		"service %q: Cetacean has not caught up with version %d yet (it holds %d), "+
-			"and this write is checked against what it holds; nothing was written. Retry in a "+
-			"moment, and if it is refused again, describe the service and use the version it reports",
-		c.name, c.version, svc.Version.Index,
-	)
-}
-
 // refused reports a write the engine turned away for being out of sequence as
 // the caller's version having gone stale. Any other error is reported as
 // writeFailure reports it.

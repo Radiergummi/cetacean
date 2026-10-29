@@ -78,10 +78,7 @@ func (s *Server) toolUpdateServiceSecrets(
 		return "", err
 	}
 
-	svc, _, _ := s.cache.ResolveService(id)
-
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
 
@@ -105,28 +102,12 @@ func (s *Server) toolUpdateServiceSecrets(
 			)
 		}
 
-		if err := cluster.CheckAttachable(
-			svc, s.readPredicate(ctx), cluster.AttachSecret, sec.ID, sec.Spec.Name,
-		); err != nil {
-			return "", err
-		}
-
 		resolved = append(resolved, cluster.SecretReference(sec, ref.Target))
 	}
 
-	ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
-		return cluster.SecretsChange(containerSpec(svc).Secrets, resolved)
-	})
-	if err != nil {
-		return "", err
-	}
-
-	ctx, err = s.pinChecked(ctx, cond, svc)
-	if err != nil {
-		return "", err
-	}
-
-	updated, err := writeClient.UpdateServiceSecrets(ctx, id, resolved)
+	updated, err := s.writes.UpdateService(
+		ctx, s.writeCaller(ctx), cluster.OpUpdateServiceSecrets, id, cluster.SetSecrets(resolved),
+	)
 	if err != nil {
 		return "", fmt.Errorf("update service secrets: %w", s.refused(ctx, cond, err))
 	}
@@ -155,10 +136,7 @@ func (s *Server) toolUpdateServiceConfigs(
 		return "", err
 	}
 
-	svc, _, _ := s.cache.ResolveService(id)
-
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
 
@@ -182,28 +160,12 @@ func (s *Server) toolUpdateServiceConfigs(
 			)
 		}
 
-		if err := cluster.CheckAttachable(
-			svc, s.readPredicate(ctx), cluster.AttachConfig, cfg.ID, cfg.Spec.Name,
-		); err != nil {
-			return "", err
-		}
-
 		resolved = append(resolved, cluster.ConfigReference(cfg, ref.Target))
 	}
 
-	ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
-		return cluster.ConfigsChange(containerSpec(svc).Configs, resolved)
-	})
-	if err != nil {
-		return "", err
-	}
-
-	ctx, err = s.pinChecked(ctx, cond, svc)
-	if err != nil {
-		return "", err
-	}
-
-	updated, err := writeClient.UpdateServiceConfigs(ctx, id, resolved)
+	updated, err := s.writes.UpdateService(
+		ctx, s.writeCaller(ctx), cluster.OpUpdateServiceConfigs, id, cluster.SetConfigs(resolved),
+	)
 	if err != nil {
 		return "", fmt.Errorf("update service configs: %w", s.refused(ctx, cond, err))
 	}
@@ -274,8 +236,7 @@ func (s *Server) toolUpdateServiceMounts(
 		return "", err
 	}
 
-	writeClient, err := s.requireWriteClient()
-	if err != nil {
+	if _, err := s.requireWriteClient(); err != nil {
 		return "", err
 	}
 
@@ -297,29 +258,9 @@ func (s *Server) toolUpdateServiceMounts(
 		mounts = append(mounts, converted)
 	}
 
-	svc, _, _ := s.cache.ResolveService(id)
-	if err := cluster.CheckVolumesAttachable(svc, s.readPredicate(ctx), mounts); err != nil {
-		return "", err
-	}
-
-	level := s.config.EffectiveOperationsLevel(s.globalOpsLevel)
-	if err := cluster.CheckMounts(svc, mounts, s.cache.GetVolume, level); err != nil {
-		return "", err
-	}
-
-	ctx, id, err = s.guardHostAccess(ctx, cond, id, func(svc swarm.Service) string {
-		return cluster.MountsChange(containerSpec(svc).Mounts, mounts)
-	})
-	if err != nil {
-		return "", err
-	}
-
-	ctx, err = s.pinChecked(ctx, cond, svc)
-	if err != nil {
-		return "", err
-	}
-
-	updated, err := writeClient.UpdateServiceMounts(ctx, id, mounts)
+	updated, err := s.writes.UpdateService(
+		ctx, s.writeCaller(ctx), cluster.OpUpdateServiceMounts, id, cluster.SetMounts(mounts),
+	)
 	if err != nil {
 		return "", fmt.Errorf("update service mounts: %w", s.refused(ctx, cond, err))
 	}

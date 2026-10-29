@@ -61,14 +61,6 @@ type patchLabelsSpec[T any] struct {
 
 	// stackMember marks a type whose stack membership follows its labels.
 	stackMember bool
-
-	// hold, when set, answers a refusal itself or returns the context to write
-	// with and the check a label change must pass inside the write.
-	hold func(
-		w http.ResponseWriter,
-		r *http.Request,
-		item T,
-	) (context.Context, func(before, after map[string]string) error, bool)
 }
 
 func handleGetLabels[T any](
@@ -98,8 +90,7 @@ func handlePatchLabels[T any](
 
 	// Cache lookup is for the 404 only — the merge runs against the
 	// freshly-inspected spec inside the writer (M-42).
-	item, ok := lookupOr404(w, r, spec.resource, key, spec.getter)
-	if !ok {
+	if _, ok := lookupOr404(w, r, spec.resource, key, spec.getter); !ok {
 		return
 	}
 
@@ -115,33 +106,9 @@ func handlePatchLabels[T any](
 		})
 	}
 
-	ctx := r.Context()
-	var refused error
-	if spec.hold != nil {
-		var check func(before, after map[string]string) error
-		if ctx, check, ok = spec.hold(w, r, item); !ok {
-			return
-		}
+	slog.InfoContext(r.Context(), "patching "+spec.resource+" labels", spec.resource, key)
 
-		inner := mutate
-		mutate = func(current map[string]string) (map[string]string, error) {
-			updated, err := inner(current)
-			if err != nil {
-				return nil, err
-			}
-			refused = check(current, updated)
-
-			return updated, refused
-		}
-	}
-
-	slog.InfoContext(ctx, "patching "+spec.resource+" labels", spec.resource, key)
-
-	result, err := spec.update(ctx, key, mutate)
-	if refused != nil {
-		writeResourceError(w, r, refused, spec.resource, key, spec.conflictCode)
-		return
-	}
+	result, err := spec.update(r.Context(), key, mutate)
 	if err != nil {
 		if isPatchApplyError(err) {
 			writePatchError(w, r, err)

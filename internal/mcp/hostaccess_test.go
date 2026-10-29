@@ -15,26 +15,6 @@ import (
 	"github.com/radiergummi/cetacean/internal/docker"
 )
 
-// holdsHostAccess is the rule's reading of the fixtures, which reach the host
-// only by mounts: the current spec, or either spec for a rollback.
-func holdsHostAccess(svc swarm.Service, rollback bool) bool {
-	mounted := func(spec *swarm.ServiceSpec) bool {
-		return spec != nil && spec.TaskTemplate.ContainerSpec != nil &&
-			len(spec.TaskTemplate.ContainerSpec.Mounts) > 0
-	}
-
-	return mounted(&svc.Spec) || rollback && mounted(svc.PreviousSpec)
-}
-
-// pinRule is when a host-access write is expected to name the version checked.
-type pinRule int
-
-const (
-	pinWhenHeld pinRule = iota // below level 3, when the service holds host access
-	pinNever                   // the check reads the spec inside the write itself
-	pinAlways                  // the attachment checks pin regardless
-)
-
 const socketBoundID = "svc1abcdef"
 
 func hostAccessSpecs() (plain, bound swarm.ServiceSpec) {
@@ -141,60 +121,59 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		call    string
 		below   config.OperationsLevel
 		refused bool
-		pin     pinRule
 	}{
 		{
 			"image", current,
 			`{"name":"update_service_image","arguments":{"id":"web","image":"evil"}}`,
-			tier1, true, pinWhenHeld,
+			tier1, true,
 		},
 		{
 			"image with a bind only in the previous spec", previous,
 			`{"name":"update_service_image","arguments":{"id":"web","image":"nginx:2"}}`,
-			tier1, false, pinWhenHeld,
+			tier1, false,
 		},
 		{
 			"rollback restoring a bind", previous,
 			`{"name":"rollback_service","arguments":{"id":"web"}}`,
-			tier1, true, pinWhenHeld,
+			tier1, true,
 		},
 		{
 			"command", current, section("command", `{"command":["sh"]}`),
-			tier2, true, pinWhenHeld,
+			tier2, true,
 		},
 		{
 			"command unchanged", current, section("command", `{}`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 		{
 			"placement", current, section("placement", `{"Constraints":["node.role==manager"]}`),
-			tier2, true, pinWhenHeld,
+			tier2, true,
 		},
 		{
 			"healthcheck test", current, section("healthcheck", `{"test":["CMD","sh"]}`),
-			tier2, true, pinWhenHeld,
+			tier2, true,
 		},
 		{
 			"healthcheck interval only", current, section("healthcheck", `{"interval":"10s"}`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 		{
 			"secret added", current,
 			`{"name":"update_service_secrets","arguments":{"id":"web",` +
 				`"secrets":[{"name":"s","target":"/docker-entrypoint.sh"}]}}`,
-			tier2, true, pinAlways,
+			tier2, true,
 		},
 		{
 			"config added", current,
 			`{"name":"update_service_configs","arguments":{"id":"web",` +
 				`"configs":[{"name":"c","target":"/docker-entrypoint.sh"}]}}`,
-			tier2, true, pinAlways,
+			tier2, true,
 		},
 		{
 			"mount added beside the bind", current,
 			`{"name":"update_service_mounts","arguments":{"id":"web","mounts":[` + socketMount +
 				`,{"type":"tmpfs","target":"/docker-entrypoint.sh"}]}}`,
-			tier2, true, pinAlways,
+			tier2, true,
 		},
 		{
 			"mounts unchanged",
@@ -202,51 +181,50 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			`{"name":"update_service_mounts","arguments":{"id":"web","mounts":[` + socketMount + `]}}`,
 			tier2,
 			false,
-			pinAlways,
 		},
 		{
 			"image without host access", unbound,
 			`{"name":"update_service_image","arguments":{"id":"web","image":"nginx:2"}}`,
-			tier1, false, pinWhenHeld,
+			tier1, false,
 		},
 		{
 			"rollback without host access", unbound,
 			`{"name":"rollback_service","arguments":{"id":"web"}}`,
-			tier1, false, pinWhenHeld,
+			tier1, false,
 		},
 		{
 			"environment", current, section("env", `{"DOCKER_HOST":"tcp://0.0.0.0:2375"}`),
-			tier2, true, pinWhenHeld,
+			tier2, true,
 		},
 		{
 			"environment unchanged", current, section("env", `{}`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 		{
 			"environment without host access", unbound, section("env", `{"FOO":"bar"}`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 		{
 			"published port", current,
 			section("ports", `[{"Protocol":"tcp","TargetPort":2375,"PublishedPort":2375}]`),
-			tier2, true, pinWhenHeld,
+			tier2, true,
 		},
 		{
 			"ports unchanged", current, section("ports", `[]`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 		{
 			"service label", current, section("labels", `{"traefik.enable":"true"}`),
-			tier2, true, pinWhenHeld,
+			tier2, true,
 		},
 		{
 			"service labels unchanged", current, section("labels", `{}`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 		{
 			"service label without host access", unbound,
 			section("labels", `{"traefik.enable":"true"}`),
-			tier2, false, pinWhenHeld,
+			tier2, false,
 		},
 	}
 
@@ -279,14 +257,9 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 						t.Fatal("the write did not run")
 					}
 
-					below := level < config.OpsImpactful
-					wantPin := tc.pin == pinAlways ||
-						tc.pin == pinWhenHeld && below &&
-							holdsHostAccess(tc.svc, strings.Contains(tc.call, "rollback_service"))
-					if wantPin && pinned.Index != 7 {
-						t.Errorf("write pinned to %v, want the checked version 7", pinned)
-					}
-					if !wantPin && pinned.Index != 0 {
+					// Decided inside the write, against Docker's spec: no
+					// pin to what the cache held is needed to keep it honest.
+					if pinned.Index != 0 {
 						t.Errorf("write pinned to %v, want it unpinned", pinned)
 					}
 

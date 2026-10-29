@@ -114,6 +114,10 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 		opt(&cfg)
 	}
 
+	if mock, ok := cfg.writeClient.(*mockWriteClient); ok && mock.live == nil {
+		mock.live = cfg.cache.GetService
+	}
+
 	shared := cfg.core
 	if shared == nil {
 		shared = core.New(cfg.cache, nil)

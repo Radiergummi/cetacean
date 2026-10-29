@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +19,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/versions"
@@ -792,38 +790,6 @@ func (c *Client) removing(
 // is what closes the lost-update window a cache-side merge leaves open.
 type MapMutator = func(current map[string]string) (map[string]string, error)
 
-func envSliceToMap(env []string) map[string]string {
-	out := make(map[string]string, len(env))
-	for _, e := range env {
-		k, v, ok := strings.Cut(e, "=")
-		if !ok {
-			continue
-		}
-		out[k] = v
-	}
-	return out
-}
-
-func (c *Client) UpdateServiceEnv(
-	ctx context.Context,
-	id string,
-	mutate MapMutator,
-) (swarm.Service, error) {
-	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
-		updated, err := mutate(envSliceToMap(cs.Env))
-		if err != nil {
-			return err
-		}
-		envSlice := make([]string, 0, len(updated))
-		for k, v := range updated {
-			envSlice = append(envSlice, k+"="+v)
-		}
-		sort.Strings(envSlice)
-		cs.Env = envSlice
-		return nil
-	})
-}
-
 func (c *Client) UpdateNodeLabels(
 	ctx context.Context,
 	id string,
@@ -835,46 +801,6 @@ func (c *Client) UpdateNodeLabels(
 			return err
 		}
 		spec.Labels = updated
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceLabels(
-	ctx context.Context,
-	id string,
-	mutate MapMutator,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		updated, err := mutate(spec.Labels)
-		if err != nil {
-			return err
-		}
-		spec.Labels = updated
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceHealthcheck(
-	ctx context.Context,
-	id string,
-	hc *container.HealthConfig,
-) (swarm.Service, error) {
-	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
-		cs.Healthcheck = hc
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceEndpointMode(
-	ctx context.Context,
-	id string,
-	mode swarm.ResolutionMode,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		if spec.EndpointSpec == nil {
-			spec.EndpointSpec = &swarm.EndpointSpec{}
-		}
-		spec.EndpointSpec.Mode = mode
 		return nil
 	})
 }
@@ -940,139 +866,6 @@ func (c *Client) updateContainerSpec(
 			return errdefs.InvalidParameter(errors.New("service has no container spec"))
 		}
 		return mutate(spec.TaskTemplate.ContainerSpec)
-	})
-}
-
-// ensureContainerSpec is for the reference lists, which a service may gain
-// before it has any other container settings.
-func ensureContainerSpec(spec *swarm.ServiceSpec) *swarm.ContainerSpec {
-	if spec.TaskTemplate.ContainerSpec == nil {
-		spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
-	}
-	return spec.TaskTemplate.ContainerSpec
-}
-
-func (c *Client) UpdateServiceResources(
-	ctx context.Context,
-	id string,
-	resources *swarm.ResourceRequirements,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		spec.TaskTemplate.Resources = resources
-		return nil
-	})
-}
-
-func (c *Client) UpdateServicePlacement(
-	ctx context.Context,
-	id string,
-	placement *swarm.Placement,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		spec.TaskTemplate.Placement = placement
-		return nil
-	})
-}
-
-func (c *Client) UpdateServicePorts(
-	ctx context.Context,
-	id string,
-	ports []swarm.PortConfig,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		if spec.EndpointSpec == nil {
-			spec.EndpointSpec = &swarm.EndpointSpec{}
-		}
-		spec.EndpointSpec.Ports = ports
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceUpdatePolicy(
-	ctx context.Context,
-	id string,
-	policy *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		spec.UpdateConfig = policy
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceRollbackPolicy(
-	ctx context.Context,
-	id string,
-	policy *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		spec.RollbackConfig = policy
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceLogDriver(
-	ctx context.Context,
-	id string,
-	driver *swarm.Driver,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		spec.TaskTemplate.LogDriver = driver
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceConfigs(
-	ctx context.Context,
-	id string,
-	configs []*swarm.ConfigReference,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		ensureContainerSpec(spec).Configs = configs
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceSecrets(
-	ctx context.Context,
-	id string,
-	secrets []*swarm.SecretReference,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		ensureContainerSpec(spec).Secrets = secrets
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceNetworks(
-	ctx context.Context,
-	id string,
-	networks []swarm.NetworkAttachmentConfig,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		spec.TaskTemplate.Networks = networks
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceMounts(
-	ctx context.Context,
-	id string,
-	mounts []mount.Mount,
-) (swarm.Service, error) {
-	return c.UpdateServiceSpec(ctx, id, func(spec *swarm.ServiceSpec) error {
-		ensureContainerSpec(spec).Mounts = mounts
-		return nil
-	})
-}
-
-func (c *Client) UpdateServiceContainerConfig(
-	ctx context.Context,
-	id string,
-	apply func(spec *swarm.ContainerSpec),
-) (swarm.Service, error) {
-	return c.updateContainerSpec(ctx, id, func(cs *swarm.ContainerSpec) error {
-		apply(cs)
-		return nil
 	})
 }
 

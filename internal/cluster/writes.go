@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,10 @@ type Writer interface {
 	UpdateServiceImage(ctx context.Context, id, image string) (swarm.Service, error)
 	RollbackService(ctx context.Context, id string) (swarm.Service, error)
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
+
+	// UpdateServiceSpec hands change the spec Docker holds and writes back
+	// what it left, so a merge never starts from the cache.
+	UpdateServiceSpec(ctx context.Context, id string, change SpecChange) (swarm.Service, error)
 }
 
 // Caller is who asks for a write, as a transport established it.
@@ -131,6 +136,165 @@ func (w *Writes) RestartService(ctx context.Context, c Caller, key string) (swar
 	updated, err := w.docker.RestartService(ctx, svc.ID)
 
 	return updated, classify(err, key)
+}
+
+// UpdateService applies change to the service's live spec, refusing what
+// checkServiceChange refuses. op is the section's operation, for its tier.
+func (w *Writes) UpdateService(
+	ctx context.Context,
+	c Caller,
+	op Operation,
+	key string,
+	change SpecChange,
+) (swarm.Service, error) {
+	svc, err := w.service(c, op, key)
+	if err != nil {
+		return swarm.Service{}, err
+	}
+
+	slog.InfoContext(ctx, "updating service", "service", svc.ID, "operation", op)
+	updated, err := w.docker.UpdateServiceSpec(ctx, svc.ID, w.CheckedChange(c, change))
+
+	return updated, classify(err, key)
+}
+
+// CheckedChange applies change to the live spec, then refuses the result
+// unless checkServiceChange passes it against a copy taken before.
+func (w *Writes) CheckedChange(c Caller, change SpecChange) SpecChange {
+	return func(spec *swarm.ServiceSpec) error {
+		live, err := cloneSpec(spec)
+		if err != nil {
+			return err
+		}
+		if err := change(spec); err != nil {
+			return err
+		}
+
+		return w.checkServiceChange(c, *live, spec)
+	}
+}
+
+// checkServiceChange refuses a change from live to next the caller may not
+// make: an attachment it cannot read, a stack it cannot write, host access
+// below level 3, or any change to what runs in a service that holds some.
+func (w *Writes) checkServiceChange(
+	c Caller,
+	live swarm.ServiceSpec,
+	next *swarm.ServiceSpec,
+) error {
+	current := swarm.Service{Spec: live}
+	is := containerOf(next)
+
+	for _, ref := range is.Secrets {
+		name := ref.SecretName
+		if sec, ok := w.cache.GetSecret(ref.SecretID); ok {
+			name = sec.Spec.Name
+		}
+		if err := CheckAttachable(
+			current,
+			c.CanRead,
+			AttachSecret,
+			ref.SecretID,
+			name,
+		); err != nil {
+			return err
+		}
+	}
+	for _, ref := range is.Configs {
+		name := ref.ConfigName
+		if cfg, ok := w.cache.GetConfig(ref.ConfigID); ok {
+			name = cfg.Spec.Name
+		}
+		if err := CheckAttachable(
+			current,
+			c.CanRead,
+			AttachConfig,
+			ref.ConfigID,
+			name,
+		); err != nil {
+			return err
+		}
+	}
+	for _, ref := range next.TaskTemplate.Networks {
+		name := ref.Target
+		if network, ok := w.cache.GetNetwork(ref.Target); ok {
+			name = network.Name
+		}
+		if err := CheckAttachable(current, c.CanRead, AttachNetwork, ref.Target, name); err != nil {
+			return err
+		}
+	}
+	if err := CheckVolumesAttachable(current, c.CanRead, is.Mounts); err != nil {
+		return err
+	}
+	if err := CheckStackLabel(live.Labels, next.Labels, c.CanWrite); err != nil {
+		return err
+	}
+	if err := CheckMounts(current, is.Mounts, w.cache.GetVolume, c.Level); err != nil {
+		return err
+	}
+	if err := CheckCapabilities(current, is.CapabilityAdd, c.Level); err != nil {
+		return err
+	}
+
+	return CheckHostAccessHeld(current, specChange(&live, next), w.cache.GetVolume, c.Level)
+}
+
+// specChange names the first change from before to after that a *Change
+// function finds, or returns "" when there is none.
+func specChange(before, after *swarm.ServiceSpec) string {
+	was, is := containerOf(before), containerOf(after)
+
+	for _, change := range []string{
+		CommandChange(was, is),
+		HealthcheckChange(was.Healthcheck, is.Healthcheck),
+		SecretsChange(was.Secrets, is.Secrets),
+		ConfigsChange(was.Configs, is.Configs),
+		MountsChange(was.Mounts, is.Mounts),
+		EnvChange(envMap(was.Env, true), envMap(is.Env, true)),
+		LabelsChange(before.Labels, after.Labels),
+		PortsChange(endpointPorts(before), endpointPorts(after)),
+		NetworksChange(before.TaskTemplate.Networks, after.TaskTemplate.Networks),
+		PlacementChange(before.TaskTemplate.Placement, after.TaskTemplate.Placement),
+	} {
+		if change != "" {
+			return change
+		}
+	}
+
+	return ""
+}
+
+func containerOf(spec *swarm.ServiceSpec) *swarm.ContainerSpec {
+	if spec.TaskTemplate.ContainerSpec == nil {
+		return &swarm.ContainerSpec{}
+	}
+
+	return spec.TaskTemplate.ContainerSpec
+}
+
+func endpointPorts(spec *swarm.ServiceSpec) []swarm.PortConfig {
+	if spec.EndpointSpec == nil {
+		return nil
+	}
+
+	return spec.EndpointSpec.Ports
+}
+
+// cloneSpec copies a spec as Docker's API carries it, so nothing in the copy
+// shares a pointer, slice or map with the spec a change then edits.
+func cloneSpec(spec *swarm.ServiceSpec) (*swarm.ServiceSpec, error) {
+	encoded, err := json.Marshal(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	var clone swarm.ServiceSpec
+	if err := json.Unmarshal(encoded, &clone); err != nil {
+		return nil, err
+	}
+
+	return &clone, nil
 }
 
 // service resolves the service a write names. One the caller cannot read is

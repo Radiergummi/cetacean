@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -23,6 +25,10 @@ import (
 // for table-driven tool tests. Individual tests override the specific method
 // they exercise so unrelated tools can panic if they're ever called.
 type fakeWriteClient struct {
+	// live is Docker's copy of a service, which UpdateServiceSpec edits.
+	// newToolTestServer points it at the cache when a test leaves it unset.
+	live func(id string) (swarm.Service, bool)
+
 	// simulated* stand in for the "fresh inspect" that the real writer would
 	// do against Docker; the env/labels mutator is applied to these before
 	// the *Fn callback receives the resolved map (M-42).
@@ -86,42 +92,6 @@ type fakeWriteClient struct {
 	) (swarm.Service, error)
 }
 
-func (f *fakeWriteClient) UpdateServiceMounts(
-	ctx context.Context,
-	id string,
-	mounts []mount.Mount,
-) (swarm.Service, error) {
-	if f.updateServiceMountsFn == nil {
-		return swarm.Service{}, errNotImplemented
-	}
-
-	return f.updateServiceMountsFn(ctx, id, mounts)
-}
-
-func (f *fakeWriteClient) UpdateServiceSecrets(
-	ctx context.Context,
-	id string,
-	secrets []*swarm.SecretReference,
-) (swarm.Service, error) {
-	if f.updateServiceSecretsFn == nil {
-		return swarm.Service{}, errNotImplemented
-	}
-
-	return f.updateServiceSecretsFn(ctx, id, secrets)
-}
-
-func (f *fakeWriteClient) UpdateServiceConfigs(
-	ctx context.Context,
-	id string,
-	configs []*swarm.ConfigReference,
-) (swarm.Service, error) {
-	if f.updateServiceConfigsFn == nil {
-		return swarm.Service{}, errNotImplemented
-	}
-
-	return f.updateServiceConfigsFn(ctx, id, configs)
-}
-
 func (f *fakeWriteClient) CreateSecret(
 	ctx context.Context,
 	spec swarm.SecretSpec,
@@ -160,31 +130,176 @@ func (f *fakeWriteClient) CreateConfig(
 	return f.createConfigFn(ctx, spec)
 }
 
-func (f *fakeWriteClient) UpdateServiceHealthcheck(
-	ctx context.Context,
-	id string,
-	hc *container.HealthConfig,
-) (swarm.Service, error) {
-	if f.updateServiceHealthFn == nil {
-		return swarm.Service{}, errNotImplemented
-	}
-
-	return f.updateServiceHealthFn(ctx, id, hc)
-}
-
-func (f *fakeWriteClient) UpdateServiceContainerConfig(
-	ctx context.Context,
-	id string,
-	apply func(spec *swarm.ContainerSpec),
-) (swarm.Service, error) {
-	if f.updateServiceContainerFn == nil {
-		return swarm.Service{}, errNotImplemented
-	}
-
-	return f.updateServiceContainerFn(ctx, id, apply)
-}
-
 var errNotImplemented = errors.New("fakeWriteClient: method not stubbed")
+
+// UpdateServiceSpec stands in for the writer's read-modify-write: it applies
+// change to the live copy, then hands the section it changed to that
+// section's stub, or the first stub set when the change was a no-op.
+func (f *fakeWriteClient) UpdateServiceSpec(
+	ctx context.Context,
+	id string,
+	change func(spec *swarm.ServiceSpec) error,
+) (swarm.Service, error) {
+	var live swarm.ServiceSpec
+	if f.live != nil {
+		if svc, ok := f.live(id); ok {
+			live = cloneServiceSpec(svc.Spec)
+		}
+	}
+	if f.simulatedEnv != nil {
+		cs := liveContainer(&live)
+		cs.Env = nil
+		for name, value := range f.simulatedEnv {
+			cs.Env = append(cs.Env, name+"="+value)
+		}
+	}
+	if f.simulatedLabels != nil {
+		live.Labels = maps.Clone(f.simulatedLabels)
+	}
+
+	spec := cloneServiceSpec(live)
+	if err := change(&spec); err != nil {
+		return swarm.Service{}, err
+	}
+
+	was, is := liveContainer(&live), liveContainer(&spec)
+	ports := func(spec swarm.ServiceSpec) []swarm.PortConfig {
+		if spec.EndpointSpec == nil {
+			return nil
+		}
+		return spec.EndpointSpec.Ports
+	}
+
+	stubs := []struct {
+		changed, set bool
+		call         func() (swarm.Service, error)
+	}{
+		{
+			!reflect.DeepEqual(was.Env, is.Env),
+			f.updateServiceEnvFn != nil,
+			func() (swarm.Service, error) {
+				env := map[string]string{}
+				for _, entry := range is.Env {
+					name, value, _ := strings.Cut(entry, "=")
+					env[name] = value
+				}
+				return f.updateServiceEnvFn(ctx, id, env)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.Labels, spec.Labels),
+			f.updateServiceLabelsFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceLabelsFn(ctx, id, spec.Labels)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.TaskTemplate.Resources, spec.TaskTemplate.Resources),
+			f.updateServiceResFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceResFn(ctx, id, spec.TaskTemplate.Resources)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.TaskTemplate.Placement, spec.TaskTemplate.Placement),
+			f.updateServicePlaceFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServicePlaceFn(ctx, id, spec.TaskTemplate.Placement)
+			},
+		},
+		{
+			!reflect.DeepEqual(ports(live), ports(spec)),
+			f.updateServicePortsFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServicePortsFn(ctx, id, ports(spec))
+			},
+		},
+		{
+			!reflect.DeepEqual(live.UpdateConfig, spec.UpdateConfig),
+			f.updateServiceUpdateFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceUpdateFn(ctx, id, spec.UpdateConfig)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.RollbackConfig, spec.RollbackConfig),
+			f.updateServiceRbackFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceRbackFn(ctx, id, spec.RollbackConfig)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.TaskTemplate.LogDriver, spec.TaskTemplate.LogDriver),
+			f.updateServiceLogDrvFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceLogDrvFn(ctx, id, spec.TaskTemplate.LogDriver)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Healthcheck, is.Healthcheck),
+			f.updateServiceHealthFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceHealthFn(ctx, id, is.Healthcheck)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Secrets, is.Secrets),
+			f.updateServiceSecretsFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceSecretsFn(ctx, id, is.Secrets)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Configs, is.Configs),
+			f.updateServiceConfigsFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceConfigsFn(ctx, id, is.Configs)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Mounts, is.Mounts),
+			f.updateServiceMountsFn != nil,
+			func() (swarm.Service, error) {
+				return f.updateServiceMountsFn(ctx, id, is.Mounts)
+			},
+		},
+		// Last: the command stub re-applies the change to a container of its own.
+		{false, f.updateServiceContainerFn != nil, func() (swarm.Service, error) {
+			return f.updateServiceContainerFn(ctx, id, func(cs *swarm.ContainerSpec) {
+				_ = change(&swarm.ServiceSpec{
+					Annotations:  spec.Annotations,
+					TaskTemplate: swarm.TaskSpec{ContainerSpec: cs},
+				})
+			})
+		}},
+	}
+	for _, stub := range stubs {
+		if stub.changed && stub.set {
+			return stub.call()
+		}
+	}
+	for _, stub := range stubs {
+		if stub.set {
+			return stub.call()
+		}
+	}
+
+	return swarm.Service{}, errNotImplemented
+}
+
+func liveContainer(spec *swarm.ServiceSpec) *swarm.ContainerSpec {
+	if spec.TaskTemplate.ContainerSpec == nil {
+		spec.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	return spec.TaskTemplate.ContainerSpec
+}
+
+func cloneServiceSpec(spec swarm.ServiceSpec) swarm.ServiceSpec {
+	encoded, _ := json.Marshal(spec)
+	var clone swarm.ServiceSpec
+	_ = json.Unmarshal(encoded, &clone)
+	return clone
+}
 
 func (f *fakeWriteClient) ScaleService(
 	ctx context.Context,
@@ -223,110 +338,6 @@ func (f *fakeWriteClient) RemoveService(ctx context.Context, id string) error {
 		return f.removeServiceFn(ctx, id)
 	}
 	return errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServiceEnv(
-	ctx context.Context,
-	id string,
-	mutate func(map[string]string) (map[string]string, error),
-) (swarm.Service, error) {
-	current := f.simulatedEnv
-	if current == nil {
-		current = map[string]string{}
-	}
-	env, err := mutate(current)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if f.updateServiceEnvFn != nil {
-		return f.updateServiceEnvFn(ctx, id, env)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServiceLabels(
-	ctx context.Context,
-	id string,
-	mutate func(map[string]string) (map[string]string, error),
-) (swarm.Service, error) {
-	current := f.simulatedLabels
-	if current == nil {
-		current = map[string]string{}
-	}
-	labels, err := mutate(current)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if f.updateServiceLabelsFn != nil {
-		return f.updateServiceLabelsFn(ctx, id, labels)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServiceResources(
-	ctx context.Context,
-	id string,
-	r *swarm.ResourceRequirements,
-) (swarm.Service, error) {
-	if f.updateServiceResFn != nil {
-		return f.updateServiceResFn(ctx, id, r)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServicePlacement(
-	ctx context.Context,
-	id string,
-	p *swarm.Placement,
-) (swarm.Service, error) {
-	if f.updateServicePlaceFn != nil {
-		return f.updateServicePlaceFn(ctx, id, p)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServicePorts(
-	ctx context.Context,
-	id string,
-	ports []swarm.PortConfig,
-) (swarm.Service, error) {
-	if f.updateServicePortsFn != nil {
-		return f.updateServicePortsFn(ctx, id, ports)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServiceUpdatePolicy(
-	ctx context.Context,
-	id string,
-	p *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	if f.updateServiceUpdateFn != nil {
-		return f.updateServiceUpdateFn(ctx, id, p)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServiceRollbackPolicy(
-	ctx context.Context,
-	id string,
-	p *swarm.UpdateConfig,
-) (swarm.Service, error) {
-	if f.updateServiceRbackFn != nil {
-		return f.updateServiceRbackFn(ctx, id, p)
-	}
-	return swarm.Service{}, errNotImplemented
-}
-
-func (f *fakeWriteClient) UpdateServiceLogDriver(
-	ctx context.Context,
-	id string,
-	d *swarm.Driver,
-) (swarm.Service, error) {
-	if f.updateServiceLogDrvFn != nil {
-		return f.updateServiceLogDrvFn(ctx, id, d)
-	}
-	return swarm.Service{}, errNotImplemented
 }
 
 func (f *fakeWriteClient) UpdateNodeAvailability(
@@ -410,6 +421,9 @@ func newToolTestServer(
 	t.Helper()
 	cfg := config.DefaultMCPConfig()
 	cfg.Enabled = true
+	if fake, ok := wc.(*fakeWriteClient); ok && fake.live == nil {
+		fake.live = c.GetService
+	}
 	o := Options{
 		Config:         cfg,
 		GlobalOpsLevel: opsLevel,
@@ -923,6 +937,7 @@ func TestToolUpdateNodeAvailabilityRejectsInvalid(t *testing.T) {
 
 func TestToolUpdateServiceResourcesRoundtripsJSON(t *testing.T) {
 	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Name: "web"}})
 	var got *swarm.ResourceRequirements
 	wc := &fakeWriteClient{
 		updateServiceResFn: func(_ context.Context, _ string, r *swarm.ResourceRequirements) (swarm.Service, error) {

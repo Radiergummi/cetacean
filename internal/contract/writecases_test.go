@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -8,9 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/api"
+	"github.com/radiergummi/cetacean/internal/config"
+	"github.com/radiergummi/cetacean/internal/mcp"
 )
 
 const engineAsked = "the engine was asked"
@@ -285,4 +290,114 @@ func writeAs(
 	answer, _ := io.ReadAll(resp.Body)
 
 	return resp.StatusCode, string(answer)
+}
+
+// liveSpecWriter holds the spec Docker has, which the cache may not show yet,
+// and applies a section change to it as the real writer does.
+type liveSpecWriter struct {
+	live    swarm.ServiceSpec
+	written *bool
+}
+
+func (f liveSpecWriter) UpdateServiceSpec(
+	_ context.Context,
+	id string,
+	change func(*swarm.ServiceSpec) error,
+) (swarm.Service, error) {
+	encoded, _ := json.Marshal(f.live)
+	var spec swarm.ServiceSpec
+	_ = json.Unmarshal(encoded, &spec)
+	if err := change(&spec); err != nil {
+		return swarm.Service{}, err
+	}
+	*f.written = true
+
+	return swarm.Service{ID: id, Spec: spec}, nil
+}
+
+type liveRESTWriter struct {
+	api.DockerWriteClient
+	liveSpecWriter
+}
+
+func (f liveRESTWriter) UpdateServiceSpec(
+	ctx context.Context,
+	id string,
+	change func(*swarm.ServiceSpec) error,
+) (swarm.Service, error) {
+	return f.liveSpecWriter.UpdateServiceSpec(ctx, id, change)
+}
+
+type liveMCPWriter struct {
+	mcp.DockerWriteClient
+	liveSpecWriter
+}
+
+func (f liveMCPWriter) UpdateServiceSpec(
+	ctx context.Context,
+	id string,
+	change func(*swarm.ServiceSpec) error,
+) (swarm.Service, error) {
+	return f.liveSpecWriter.UpdateServiceSpec(ctx, id, change)
+}
+
+// Both transports judge a change to a service holding host access against
+// the spec Docker holds, not the cache's copy, which has not caught up here.
+func TestHostAccessHeldIsJudgedAgainstTheLiveSpecAlike(t *testing.T) {
+	cached, ok := NewWorld(t).Cache.GetService(SeededServiceID)
+	if !ok {
+		t.Fatal("the seeded service is not cached")
+	}
+	live := cached.Spec
+	container := *live.TaskTemplate.ContainerSpec
+	container.Mounts = []mount.Mount{{
+		Type: mount.TypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock",
+	}}
+	live.TaskTemplate.ContainerSpec = &container
+
+	var restWrote, mcpWrote bool
+	w := NewWorldWithWritersAt(
+		t,
+		config.OpsConfiguration,
+		liveRESTWriter{live: live, written: &restWrote},
+		liveMCPWriter{live: live, written: &mcpWrote},
+	)
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodPatch, w.Server.URL+"/services/"+SeededServiceID+"/env",
+		strings.NewReader(`{"MODE":"debug"}`),
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	setPersonaHeaders(t, req, "ops")
+
+	resp, err := w.Server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("PATCH env: %v", err)
+	}
+	defer resp.Body.Close()
+	overREST, _ := io.ReadAll(resp.Body)
+
+	result, rpcErr := w.MCP(t, "ops", "tools/call", map[string]any{
+		"name": "update_service",
+		"arguments": map[string]any{
+			"id": SeededServiceID, "section": "env", "value": map[string]any{"MODE": "debug"},
+		},
+	})
+	if rpcErr != nil {
+		t.Fatalf("update_service: %s", rpcErr.Message)
+	}
+
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(overREST), "OPS001") {
+		t.Errorf("REST = %d %s, want 403 OPS001", resp.StatusCode, overREST)
+	}
+	if !strings.Contains(string(result), "requires operations level 3") {
+		t.Errorf("MCP = %s, want the host-access refusal", result)
+	}
+	if restWrote || mcpWrote {
+		t.Errorf("written: REST %t, MCP %t; want neither", restWrote, mcpWrote)
+	}
 }
