@@ -1,0 +1,284 @@
+{
+ "_type": "https://in-toto.io/Statement/v0.1",
+ "predicate": {
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+   "created": "2026-10-21T22:17:16Z",
+   "creators": [
+    "Organization: Docker, Inc",
+    "Tool: docker-scout-1.18.1",
+    "Tool: buildkit-0.16.0-tianon"
+   ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://docker.com/docker-scout/fs/sbom-761f04f2-e05d-41e9-87a8-0409f55b9f00",
+  "files": [],
+  "name": "sbom",
+  "packages": [
+   {
+    "SPDXID": "SPDXRef-DocumentRoot",
+    "downloadLocation": "NOASSERTION",
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "sbom",
+    "primaryPackagePurpose": "FILE",
+    "supplier": "NOASSERTION"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-dd04b91bd6dae853653060098258e962",
+    "description": "extensions to the C++ standard library\n Abseil is an open-source collection of C++ library code designed to augment the\n C++ standard library. The Abseil library code is collected from Google's C++\n codebase and has been extensively tested and used in production. In some cases,\n Abseil provides pieces missing from the C++ standard; in others, Abseil\n provides alternatives to the standard for special needs.\n .\n This package contains Abseil's shared libraries.",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:deb/debian/abseil@20240722.0-4?os_distro=trixie&os_name=debian&os_version=13",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": true,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "Apache-2.0",
+    "name": "abseil",
+    "originator": "Person: Benjamin Barenblat \\u003cbbaren@debian.org\\u003e",
+    "supplier": "Person: Benjamin Barenblat \\u003cbbaren@debian.org\\u003e",
+    "versionInfo": "20240722.0-4"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-93bd1c920854d3ea54091f1460ba6798",
+    "description": "access control list - shared library\n This package contains the shared library containing the POSIX 1003.1e\n draft standard 17 functions for manipulating access control lists.",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:deb/debian/acl@2.3.2-2?os_distro=trixie&os_name=debian&os_version=13",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": true,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "GPL-2.0-only OR GPL-2.0-or-later OR LGPL-2.0-or-later OR LGPL-2.1-only",
+    "name": "acl",
+    "originator": "Person: Guillem Jover \\u003cguillem@debian.org\\u003e",
+    "supplier": "Person: Guillem Jover \\u003cguillem@debian.org\\u003e",
+    "versionInfo": "2.3.2-2"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-7c2bb373ed884561cdbda6b64dcaa8df",
+    "description": "AV1 Video Codec Library\n AOMedia Video 1 (AV1) is an open and royalty free video encoding format\n optimized for the Internet and the successor of VP9. aom is the\n reference encoder and decoder implementation published by the Alliance\n for Open Media.\n .\n This package contains the shared library.",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:deb/debian/aom@3.12.1-1%2Bdeb13u1?os_distro=trixie&os_name=debian&os_version=13",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": true,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "BSD-2-Clause OR BSD-3-Clause OR ISC",
+    "name": "aom",
+    "originator": "Person: Debian Multimedia Maintainers \\u003cdebian-multimedia@lists.debian.org\\u003e",
+    "supplier": "Person: Debian Multimedia Maintainers \\u003cdebian-multimedia@lists.debian.org\\u003e",
+    "versionInfo": "3.12.1-1+deb13u1"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-3cd69302188ba1aa89f1e2aef1a9bc2f",
+    "description": "OpenPGP archive certificates of the Debian archive\n The Debian project digitally signs its Release files. This package\n contains the archive certificates used for that.",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:deb/debian/debian-archive-keyring@2025.1?os_distro=trixie&os_name=debian&os_version=13",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": true,
+    "licenseConcluded": "NOASSERTION",
+    "name": "debian-archive-keyring",
+    "originator": "Person: Debian Release Team \\u003cpackages@release.debian.org\\u003e",
+    "supplier": "Person: Debian Release Team \\u003cpackages@release.debian.org\\u003e",
+    "versionInfo": "2025.1"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-602f77293ae8cb0f06d1405c5de9083f",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:maven/libintl/libintl@0.23.1",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": true,
+    "licenseConcluded": "NOASSERTION",
+    "name": "libintl/libintl",
+    "originator": "NOASSERTION",
+    "supplier": "NOASSERTION",
+    "versionInfo": "0.23.1"
+   }
+  ],
+  "relationships": [
+   {
+    "relatedSpdxElement": "SPDXRef-DocumentRoot",
+    "relationshipType": "DESCRIBES",
+    "spdxElementId": "SPDXRef-DOCUMENT"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-dd04b91bd6dae853653060098258e962",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-93bd1c920854d3ea54091f1460ba6798",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-7c2bb373ed884561cdbda6b64dcaa8df",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-3cd69302188ba1aa89f1e2aef1a9bc2f",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-602f77293ae8cb0f06d1405c5de9083f",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot"
+   }
+  ],
+  "spdxVersion": "SPDX-2.3"
+ },
+ "predicateType": "https://spdx.dev/Document",
+ "subject": [
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31.8?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@mainline?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@latest?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31.8-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@mainline-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@1.31-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/nginx@trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31.8?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@mainline?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@latest?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31.8-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@mainline-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@1.31-trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/amd64/nginx@trixie?platform=linux%2Famd64"
+  },
+  {
+   "digest": {
+    "sha256": "59a9ae22b8933b536391e6c1708fa761297e922809c97675c5a56ba316be62af"
+   },
+   "name": "pkg:docker/oisupport/staging-amd64@4fefbbd1bef60231104cb07485ccbb1e16eb091b64f60db8ffbbe774792febb8?platform=linux%2Famd64"
+  }
+ ]
+}

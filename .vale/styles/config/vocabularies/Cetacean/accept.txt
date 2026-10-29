@@ -98,6 +98,7 @@ Portainer
 Prometheus
 seccomp
 Swarmpit
+Syft
 Tailscale(?:'s)?
 TLS
 tmpfs

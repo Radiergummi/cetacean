@@ -1,19 +1,20 @@
 source: OCI Distribution Specification
 title: Open Container Initiative Distribution Specification
 revision: v1.1.1
-reviewed: 2026-10-25
+reviewed: 2026-10-27
 url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md
 
 inventory:
   from: >-
-    The "Pulling manifests" and "Checking if content exists in the registry"
-    sections in full, counted one sentence to a statement. The image check
-    asks a registry what a tag names with a manifest HEAD, falling back to a
-    GET, and nothing else; pushing, blobs, discovery and content management
-    are a registry client's business this deployment does not have. Most of
-    what the two sections say binds the registry, and is accounted for here
-    with what the client does about it.
-  count: 21
+    The "Pulling manifests", "Pulling blobs" and "Checking if content exists
+    in the registry" sections in full, counted one sentence to a statement.
+    The image check asks a registry what a tag names with a manifest HEAD,
+    falling back to a GET; image attestations fetch manifests and blobs by
+    digest. Pushing, discovery and content management are a registry
+    client's business this deployment does not have. Most of what the three
+    sections say binds the registry, and is accounted for here with what the
+    client does about it.
+  count: 28
 
 requirements:
   - id: reference-is-a-digest-or-a-tag
@@ -37,8 +38,8 @@ requirements:
     url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
     mutants:
       - file: internal/imagecheck/reference.go
-        replace: "\tif !nameGrammar.MatchString(repository) || !tagGrammar.MatchString(tag) {"
-        with: "\tif !tagGrammar.MatchString(tag) {"
+        replace: "\tif !nameGrammar.MatchString(repository) {"
+        with: "\tif false {"
 
   - id: tag-is-at-most-128-characters
     level: MUST
@@ -59,8 +60,8 @@ requirements:
     url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
     mutants:
       - file: internal/imagecheck/reference.go
-        replace: "\tif !nameGrammar.MatchString(repository) || !tagGrammar.MatchString(tag) {"
-        with: "\tif !nameGrammar.MatchString(repository) {"
+        replace: "\t\tif !tagGrammar.MatchString(tag) {"
+        with: "\t\tif false {"
 
   - id: client-sends-accept
     level: SHOULD
@@ -84,18 +85,47 @@ requirements:
         replace: "\tif stated != \"\" && stated != digest {"
         with: "\tif false {"
 
+  - id: a-digest-reference-is-verified
+    level: SHOULD
+    text: >-
+      If the <reference> part of a manifest request is a digest, clients SHOULD
+      verify the returned manifest matches this digest.
+    url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
+    mutants:
+      - file: internal/imagecheck/client.go
+        replace: "hex.EncodeToString(h.Sum(nil)); got != digest {"
+        with: "hex.EncodeToString(h.Sum(nil)); got == \"\" {"
+
+  - id: client-verifies-blob-digest
+    level: SHOULD
+    text: >-
+      Clients SHOULD verify that the response body matches the requested
+      digest.
+    url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-blobs
+    mutants:
+      - file: internal/imagecheck/client.go
+        replace: "hex.EncodeToString(h.Sum(nil)); got != digest {"
+        with: "hex.EncodeToString(h.Sum(nil)); got == \"\" {"
+
+  - id: client-ignores-content-type-parameters
+    level: SHOULD
+    text: >-
+      The client SHOULD ignore parameters on the Content-Type header.
+    url: https://github.com/opencontainers/distribution-spec/blob/v1.1.1/spec.md#pulling-manifests
+    mutants:
+      - file: internal/attestations/index.go
+        replace: "\tif !indexTypes[headerType] && "
+        with: "\tif _ = headerType; !indexTypes[mediaType] && "
+
 dismissed:
   registry-omits-content-type-parameters: >-
     Binds the registry.
-  client-ignores-content-type-parameters: >-
-    The client never reads Content-Type at all: the digest is all it compares,
-    so a parameter there cannot change its answer.
   content-type-matches-the-push: >-
     Binds the registry, about what a client pushed.
   client-rejects-a-mismatched-media-type: >-
-    The client never parses a manifest. It hashes the bytes it was sent, and a
-    manifest whose mediaType disagrees with its Content-Type still has exactly
-    one digest, which is the thing compared.
+    The image check never parses a manifest, and attestations read an index
+    when either the header or the mediaType field names one. Every fetch is
+    verified against its digest, so a disagreement cannot change the content.
   get-returns-the-manifest-with-200: >-
     Binds the registry. The client treats anything but 200 as no answer.
   get-states-the-digest: >-
@@ -106,8 +136,19 @@ dismissed:
   differing-digest-may-mean-another-algorithm: >-
     Explains a difference rather than requiring anything. A sha512 statement
     is hashed with sha512 when the client verifies one.
-  a-digest-reference-is-verified: >-
-    The client only ever requests a manifest by tag, never by digest.
+  blob-get-returns-the-blob-with-200: >-
+    Binds the registry. The client treats anything but 200 as no answer.
+  blob-states-the-digest: >-
+    Binds the registry, and the client does not read the header on a blob.
+  blob-stated-digest-matches-the-body: >-
+    Binds the registry.
+  a-used-blob-digest-matches-the-body: >-
+    A MAY the client takes: it never uses the stated header on a blob, and
+    verifies the body against the digest it requested instead.
+  missing-blob-is-404: >-
+    Binds the registry. The client reads a 404 as content that is gone.
+  registry-supports-range: >-
+    Binds the registry; the client never sends Range.
   missing-manifest-is-404-on-get: >-
     Binds the registry. The client reads a 404 as a tag that does not exist and
     reports nothing for it.

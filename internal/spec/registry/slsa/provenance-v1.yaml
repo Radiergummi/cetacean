@@ -1,0 +1,26 @@
+source: SLSA
+title: SLSA Provenance v1.0
+revision: v1.0
+reviewed: 2026-10-27
+url: https://slsa.dev/spec/v1.0/provenance
+
+inventory:
+  from: >-
+    The "Parsing rules" section in full, counted one sentence to a statement.
+    Image attestations read a handful of fields to display them and verify
+    nothing, so the field definitions' requirements bind the producer and the
+    "Verification" section a verifier this deployment is not.
+  count: 2
+
+requirements:
+  - id: consumers-ignore-unrecognized-fields
+    level: MUST
+    text: >-
+      Consumers MUST ignore unrecognized fields unless otherwise noted.
+    url: https://slsa.dev/spec/v1.0/provenance#parsing-rules
+
+  - id: unset-null-empty-equivalent
+    level: MUST
+    text: >-
+      Unset, null, and empty field values MUST be interpreted equivalently.
+    url: https://slsa.dev/spec/v1.0/provenance#parsing-rules

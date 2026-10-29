@@ -252,6 +252,7 @@ type Handlers struct {
 	dockerVersionCache *dockerVersionCache
 	diskUsage          diskUsageCache
 	imageDigests       ImageDigestSource // nil when server.image_check is off
+	attestations       cluster.AttestationSource
 
 	// topologyDocs and stackDocs memoise rendered documents that are pure
 	// functions of the cache generation and what the caller may see.
@@ -322,6 +323,11 @@ type ImageDigestSource interface {
 // SetImageDigests reports a newer image for a service's tag from d.
 func (h *Handlers) SetImageDigests(d ImageDigestSource) {
 	h.imageDigests = d
+}
+
+// SetAttestations answers the provenance and SBOM endpoints from s.
+func (h *Handlers) SetAttestations(s cluster.AttestationSource) {
+	h.attestations = s
 }
 
 // imageUpdate is what svc's response says about its image tag, nil when the

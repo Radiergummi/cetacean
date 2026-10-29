@@ -71,6 +71,18 @@ var servedMediaTypes = map[ContentType]string{
 	ContentTypeJSONFeed: "application/feed+json",
 	ContentTypeCSV:      "text/csv",
 	ContentTypeYAML:     "application/yaml",
+	ContentTypeSPDX:     "application/spdx+json",
+	ContentTypePlain:    "text/plain",
+}
+
+// servedList names types for a 406.
+func servedList(types []ContentType) string {
+	names := make([]string, len(types))
+	for i, ct := range types {
+		names[i] = servedMediaTypes[ct]
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // contentNegotiated wraps a JSON handler to dispatch based on content type.
@@ -94,11 +106,7 @@ func contentNegotiatedWithSSE(
 	// What this endpoint serves is decided here, once, from the handlers it
 	// was given, so the switch and the 406 that names its arms cannot drift.
 	types := feeds.servedTypes(sseHandler != nil)
-	names := make([]string, len(types))
-	for i, ct := range types {
-		names[i] = servedMediaTypes[ct]
-	}
-	served := strings.Join(names, ", ")
+	served := servedList(types)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		r, ct := choose(r, nil, types...)

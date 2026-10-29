@@ -1,0 +1,4 @@
+{
+ "docker/buildkit-syft-scanner:latest": "sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315",
+ "nginx:latest": "sha256:4c41e2d0a3a55b325ed572cd0200bdb72af1433c3daa2bca6ef8eea68ce504a2"
+}

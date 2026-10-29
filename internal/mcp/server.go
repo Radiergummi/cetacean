@@ -185,13 +185,14 @@ type Server struct {
 	// re-derived per request. Who authenticates /mcp is a property of the
 	// deployment, and asking a helper at request time is how an endpoint ends
 	// up unguarded because a provider happened to be nil.
-	guard      guardMode
-	bypass     bool
-	mcpServer  *mcpserver.MCPServer
-	httpServer *mcpserver.StreamableHTTPServer
-	recEngine  RecommendationEngine
-	prom       MetricsQuerier       // nil when Prometheus is not configured
-	images     cluster.ImageDigests // nil when server.image_check is off
+	guard        guardMode
+	bypass       bool
+	mcpServer    *mcpserver.MCPServer
+	httpServer   *mcpserver.StreamableHTTPServer
+	recEngine    RecommendationEngine
+	prom         MetricsQuerier            // nil when Prometheus is not configured
+	images       cluster.ImageDigests      // nil when server.image_check is off
+	attestations cluster.AttestationSource // nil when server.image_attestations is off
 
 	// allowedOrigins is the set of origins, serialised, the streamable HTTP
 	// endpoint accepts. originGuard rejects any other non-empty Origin with
@@ -300,6 +301,10 @@ type Options struct {
 	// server.image_check is off.
 	ImageDigests cluster.ImageDigests
 
+	// Attestations reads the provenance and SBOMs of an image from its
+	// registry. Nil when server.image_attestations is off.
+	Attestations cluster.AttestationSource
+
 	// IconBaseURL is the canonical external base URL (issuer + base path) used
 	// to build absolute tool-icon `src` values. Icons are served from the
 	// embedded frontend under /assets/mcp-icons/. Empty disables tool icons.
@@ -360,6 +365,7 @@ func New(shared *core.Core, opts Options) (*Server, error) {
 		recEngine:      opts.Recommendations,
 		prom:           opts.Prometheus,
 		images:         opts.ImageDigests,
+		attestations:   opts.Attestations,
 		allowedOrigins: withPublicOrigin(opts.AllowedOrigins, opts.PublicURL),
 		hosts:          opts.Hosts,
 		iconBaseURL:    strings.TrimRight(opts.IconBaseURL, "/"),

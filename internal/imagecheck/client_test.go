@@ -34,6 +34,10 @@ type fakeRegistry struct {
 	hang        bool   // never answers
 	realm       string // the realm challenges name, when not the registry's own /token
 
+	contentType string            // the Content-Type a manifest GET states
+	blobs       map[string]string // blob bodies by the digest they are requested by
+	blobsAt     string            // a server blob GETs redirect to, as Docker Hub's CDN does
+
 	tokenRequests    atomic.Int64
 	manifestRequests atomic.Int64
 	lastAccept       atomic.Value
@@ -85,6 +89,12 @@ func (r *fakeRegistry) serve(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if blob, ok := strings.CutPrefix(req.URL.Path, "/v2/library/app/blobs/"); ok {
+		r.serveBlob(w, req, blob)
+
+		return
+	}
+
 	if !strings.HasPrefix(req.URL.Path, "/v2/library/app/manifests/") {
 		w.WriteHeader(http.StatusNotFound)
 
@@ -98,6 +108,10 @@ func (r *fakeRegistry) serve(w http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodGet {
 		if r.statedOnGet != "" {
 			w.Header().Set("Docker-Content-Digest", r.statedOnGet)
+		}
+
+		if r.contentType != "" {
+			w.Header().Set("Content-Type", r.contentType)
 		}
 
 		_, _ = w.Write([]byte(r.body))

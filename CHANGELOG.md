@@ -26,10 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `GET /services` items carry `DesiredTasks`, and a job's `CompletedTasks` and `FailedTasks` for its current run
 - History names who made each change through Cetacean, and whether via the dashboard, the API or MCP, on `/history`, its CSV and feeds, and `get_events`
 - MCP tools that edit a service or node take an optional `version`, as `describe` reports it, and refuse without writing if the resource changed since
+- Service and task pages mark images carrying BuildKit attestations and show their build provenance in a **Manifest** section, with SBOM and Dockerfile pages; `/provenance`, `/sbom`, `/dockerfile` and MCP resources serve the same, and `server.image_attestations` turns it off
 - `/tasks/{id}` and its sub-paths accept a task's `<service>.<slot>` name, redirecting to its ID as service and node names do
 - Every log line written while serving a request carries its `req_id`, so the `requestId` in an error response finds the lines that explain it
 
 ### Changed
+- Compose files and config contents are syntax-highlighted more accurately, with alternating line backgrounds
 - A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`
 - MCP's `scale_service` refuses a global service as REST does, and its lifecycle tools answer a service Cetacean doesn't hold as not found rather than passing it to Docker
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built

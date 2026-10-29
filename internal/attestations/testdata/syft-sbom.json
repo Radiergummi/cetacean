@@ -1,0 +1,213 @@
+{
+ "_type": "https://in-toto.io/Statement/v1",
+ "predicate": {
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+   "created": "2026-10-26T16:32:46Z",
+   "creators": [
+    "Organization: Anchore, Inc",
+    "Tool: syft-v1.42.3",
+    "Tool: buildkit-v0.32.2"
+   ],
+   "licenseListVersion": "3.28"
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://anchore.com/syft/dir/sbom-d4410e90-85cb-4ef4-a44c-612047f7e053",
+  "files": [],
+  "name": "sbom",
+  "packages": [
+   {
+    "SPDXID": "SPDXRef-Package-go-module-cel.dev-expr-e0ecbacf989c4148",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:golang/cel.dev/expr@v0.25.1",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "cel.dev/expr",
+    "sourceInfo": "acquired package info from go module information: /bin/syft-scanner",
+    "supplier": "NOASSERTION",
+    "versionInfo": "v0.25.1"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-go-module-cloud.google.com-go-fe690e9d3ffa401e",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:golang/cloud.google.com/go@v0.123.0",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "cloud.google.com/go",
+    "sourceInfo": "acquired package info from go module information: /bin/syft-scanner",
+    "supplier": "NOASSERTION",
+    "versionInfo": "v0.123.0"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-go-module-cloud.google.com-go-auth-40571103f58654db",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "SECURITY",
+      "referenceLocator": "cpe:2.3:a:go:auth:v0.18.2:*:*:*:*:*:*:*",
+      "referenceType": "cpe23Type"
+     },
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:golang/cloud.google.com/go/auth@v0.18.2",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "cloud.google.com/go/auth",
+    "sourceInfo": "acquired package info from go module information: /bin/syft-scanner",
+    "supplier": "NOASSERTION",
+    "versionInfo": "v0.18.2"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-go-module-cloud.google.com-go-auth-oauth2adapt-4171994761645966",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "SECURITY",
+      "referenceLocator": "cpe:2.3:a:go:auth\\/oauth2adapt:v0.2.8:*:*:*:*:*:*:*",
+      "referenceType": "cpe23Type"
+     },
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:golang/cloud.google.com/go/auth/oauth2adapt@v0.2.8",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "cloud.google.com/go/auth/oauth2adapt",
+    "sourceInfo": "acquired package info from go module information: /bin/syft-scanner",
+    "supplier": "NOASSERTION",
+    "versionInfo": "v0.2.8"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-go-module-cloud.google.com-go-compute-metadata-1e40c7c939f4f950",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "SECURITY",
+      "referenceLocator": "cpe:2.3:a:go:compute\\/metadata:v0.9.0:*:*:*:*:*:*:*",
+      "referenceType": "cpe23Type"
+     },
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:golang/cloud.google.com/go/compute/metadata@v0.9.0",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "cloud.google.com/go/compute/metadata",
+    "sourceInfo": "acquired package info from go module information: /bin/syft-scanner",
+    "supplier": "NOASSERTION",
+    "versionInfo": "v0.9.0"
+   },
+   {
+    "SPDXID": "SPDXRef-Package-go-module-cloud.google.com-go-iam-7cb4e3a2f10e1ce3",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "externalRefs": [
+     {
+      "referenceCategory": "SECURITY",
+      "referenceLocator": "cpe:2.3:a:go:iam:v1.5.3:*:*:*:*:*:*:*",
+      "referenceType": "cpe23Type"
+     },
+     {
+      "referenceCategory": "PACKAGE-MANAGER",
+      "referenceLocator": "pkg:golang/cloud.google.com/go/iam@v1.5.3",
+      "referenceType": "purl"
+     }
+    ],
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "cloud.google.com/go/iam",
+    "sourceInfo": "acquired package info from go module information: /bin/syft-scanner",
+    "supplier": "NOASSERTION",
+    "versionInfo": "v1.5.3"
+   },
+   {
+    "SPDXID": "SPDXRef-DocumentRoot-Directory-sbom",
+    "copyrightText": "NOASSERTION",
+    "downloadLocation": "NOASSERTION",
+    "filesAnalyzed": false,
+    "licenseConcluded": "NOASSERTION",
+    "licenseDeclared": "NOASSERTION",
+    "name": "sbom",
+    "primaryPackagePurpose": "FILE",
+    "supplier": "NOASSERTION"
+   }
+  ],
+  "relationships": [
+   {
+    "relatedSpdxElement": "SPDXRef-Package-go-module-cel.dev-expr-e0ecbacf989c4148",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot-Directory-sbom"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-go-module-cloud.google.com-go-fe690e9d3ffa401e",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot-Directory-sbom"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-go-module-cloud.google.com-go-auth-40571103f58654db",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot-Directory-sbom"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-go-module-cloud.google.com-go-auth-oauth2adapt-4171994761645966",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot-Directory-sbom"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-go-module-cloud.google.com-go-compute-metadata-1e40c7c939f4f950",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot-Directory-sbom"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-Package-go-module-cloud.google.com-go-iam-7cb4e3a2f10e1ce3",
+    "relationshipType": "CONTAINS",
+    "spdxElementId": "SPDXRef-DocumentRoot-Directory-sbom"
+   },
+   {
+    "relatedSpdxElement": "SPDXRef-DocumentRoot-Directory-sbom",
+    "relationshipType": "DESCRIBES",
+    "spdxElementId": "SPDXRef-DOCUMENT"
+   }
+  ],
+  "spdxVersion": "SPDX-2.3"
+ },
+ "predicateType": "https://spdx.dev/Document",
+ "subject": [
+  {
+   "digest": {
+    "sha256": "10a413da6b52acacf4af4262eafeae6ca05076fbd65850ad7f233163c6d6a81c"
+   },
+   "name": "pkg:docker/docker/buildkit-syft-scanner@latest?platform=linux%2Famd64"
+  }
+ ]
+}

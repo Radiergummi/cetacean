@@ -27,6 +27,8 @@ import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "re
 const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
 const ErrorIndex = lazy(() => import("./pages/ErrorIndex"));
 const History = lazy(() => import("./pages/History"));
+const ImageSBOMPage = lazy(() => import("./pages/ImageSBOMPage"));
+const ImageDockerfilePage = lazy(() => import("./pages/ImageDockerfilePage"));
 const ErrorCodeDetail = lazy(() => import("./pages/ErrorCodeDetail"));
 const ConfigDetail = lazy(() => import("./pages/ConfigDetail"));
 const ConfigList = lazy(() => import("./pages/ConfigList"));
@@ -309,6 +311,38 @@ export default function App() {
                     element={
                       <PerResource>
                         <ServiceDetail />
+                      </PerResource>
+                    }
+                  />
+                  <Route
+                    path="/services/:id/sbom"
+                    element={
+                      <PerResource>
+                        <ImageSBOMPage kind="service" />
+                      </PerResource>
+                    }
+                  />
+                  <Route
+                    path="/services/:id/dockerfile"
+                    element={
+                      <PerResource>
+                        <ImageDockerfilePage kind="service" />
+                      </PerResource>
+                    }
+                  />
+                  <Route
+                    path="/tasks/:id/dockerfile"
+                    element={
+                      <PerResource>
+                        <ImageDockerfilePage kind="task" />
+                      </PerResource>
+                    }
+                  />
+                  <Route
+                    path="/tasks/:id/sbom"
+                    element={
+                      <PerResource>
+                        <ImageSBOMPage kind="task" />
                       </PerResource>
                     }
                   />

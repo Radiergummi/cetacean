@@ -30,6 +30,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/api"
 	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
@@ -365,6 +366,7 @@ func run(s settings) error {
 		slog.Warn("prometheus not configured, metrics disabled")
 	}
 	imageChecker := startImageCheck(ctx, cfg, stateCache.ListServices, watcher.Ready())
+	imageAttestations := startImageAttestations(cfg)
 
 	// Recommendations engine
 	var recEngine *recommendations.Engine
@@ -448,6 +450,10 @@ func run(s settings) error {
 
 	if imageChecker != nil {
 		handlers.SetImageDigests(imageChecker)
+	}
+
+	if imageAttestations != nil {
+		handlers.SetAttestations(imageAttestations)
 	}
 
 	// SPA
@@ -554,6 +560,7 @@ func run(s settings) error {
 		rec:          recEngine,
 		prometheus:   promClient,
 		images:       imageChecker,
+		attestations: imageAttestations,
 		tracer:       mcpTracer,
 	}
 
@@ -943,14 +950,15 @@ type mcpDeps struct {
 	// than finding out by trying again.
 	dataDirReady bool
 
-	shared      *core.Core
-	writeClient mcp.DockerWriteClient
-	logs        mcp.LogStreamer
-	acl         *acl.Evaluator
-	rec         mcp.RecommendationEngine
-	prometheus  *promapi.Client
-	images      *imagecheck.Checker
-	tracer      oteltrace.Tracer
+	shared       *core.Core
+	writeClient  mcp.DockerWriteClient
+	logs         mcp.LogStreamer
+	acl          *acl.Evaluator
+	rec          mcp.RecommendationEngine
+	prometheus   *promapi.Client
+	images       *imagecheck.Checker
+	attestations *attestations.Store
+	tracer       oteltrace.Tracer
 }
 
 // setupOAuth builds the OAuth 2.1 authorization server, or returns nil when the
@@ -1043,6 +1051,25 @@ func startImageCheck(
 	return checker
 }
 
+// startImageAttestations returns the attestation store, or nil when it is
+// off, which every consumer reads as disabled.
+func startImageAttestations(cfg *config.Config) *attestations.Store {
+	if !cfg.ImageAttestations {
+		slog.Info("image attestations disabled")
+
+		return nil
+	}
+
+	slog.Info("image attestations enabled")
+
+	// A client timeout would cut off a large SBOM mid-read; the store bounds
+	// the whole fetch, and a registry still has to start answering promptly.
+	transport := imagecheck.GuardedTransport()
+	transport.ResponseHeaderTimeout = 10 * time.Second
+
+	return attestations.NewStore(imagecheck.NewClient(&http.Client{Transport: transport}))
+}
+
 // setupMCP builds the MCP HTTP handler when CETACEAN_MCP=true, or nil when
 // disabled. The caller must invoke the returned cleanup at shutdown so the
 // cache change listener detaches before the cache is torn down. The
@@ -1078,6 +1105,11 @@ func setupMCP(
 		imageDigests = d.images
 	}
 
+	var imageAttestations cluster.AttestationSource
+	if d.attestations != nil {
+		imageAttestations = d.attestations
+	}
+
 	mcpSrv, err := mcp.New(d.shared, mcp.Options{
 		WriteClient:     d.writeClient,
 		Logs:            d.logs,
@@ -1091,6 +1123,7 @@ func setupMCP(
 		Recommendations: d.rec,
 		Prometheus:      metricsQuerier,
 		ImageDigests:    imageDigests,
+		Attestations:    imageAttestations,
 		AllowedOrigins:  d.cfg.CORSOrigins,
 		PublicURL:       d.cfg.PublicURL,
 		Hosts:           d.hosts,

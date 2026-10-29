@@ -1071,3 +1071,113 @@ export interface PublishedPort {
   Stack?: string | undefined;
   Nodes?: string[] | undefined;
 }
+
+/**
+ * What an image's attestations say about how it was built. Nothing in it is
+ * verified: it is what the image claims about itself.
+ */
+export type AttestationStatus =
+  | "available"
+  | "none"
+  | "unpinned"
+  | "private"
+  | "missing"
+  | "unavailable"
+  | "disabled";
+
+export interface ImageProvenance {
+  image: string;
+  status: AttestationStatus;
+  retryAfter?: string | undefined;
+  platforms?: PlatformProvenance[] | undefined;
+}
+
+export interface PlatformProvenance {
+  platform: string;
+  manifestDigest: string;
+  runningTasks: number;
+  provenance?: ProvenanceSummary | undefined;
+  /** Why provenance the image lists for this platform could not be read. */
+  provenanceStatus?: "private" | "missing" | "unavailable" | undefined;
+  sbom?: { digest: string; size: number; tooLarge: boolean } | undefined;
+  dockerfile: boolean;
+}
+
+export interface ProvenanceSummary {
+  source?: ProvenanceSource | undefined;
+  dockerfilePath?: string | undefined;
+  builder?: { value: string; href?: string | undefined } | undefined;
+  startedOn?: string | undefined;
+  finishedOn?: string | undefined;
+  frontend?: string | undefined;
+  reproducible?: boolean | undefined;
+  inputs?: ProvenanceInput[] | undefined;
+  ci?: ProvenanceCI | undefined;
+}
+
+export interface ProvenanceSource {
+  repository: string;
+  ref?: string | undefined;
+  commit?: string | undefined;
+  subdirectory?: string | undefined;
+  repositoryUrl?: string | undefined;
+  commitUrl?: string | undefined;
+}
+
+export interface ProvenanceInput {
+  uri: string;
+  digest?: string | undefined;
+  image?: string | undefined;
+}
+
+export interface ProvenanceCI {
+  actor?: string | undefined;
+  triggeringActor?: string | undefined;
+  event?: string | undefined;
+  ref?: string | undefined;
+  workflow?: string | undefined;
+  workflowSha?: string | undefined;
+  runId?: string | undefined;
+  runAttempt?: string | undefined;
+  runnerEnvironment?: string | undefined;
+  runUrl?: string | undefined;
+  workflowUrl?: string | undefined;
+}
+
+export interface SBOMPackage {
+  name: string;
+  version: string;
+  ecosystem: string;
+  license: string;
+  purl: string;
+  foundIn: string;
+}
+
+export interface ImageSBOM {
+  platform: string;
+  generators: string[] | null;
+  created?: string | undefined;
+  summary: { total: number; licensed: number; ecosystems: Record<string, number> | null };
+  packages: SBOMPackage[];
+}
+
+export interface LayerDescriptor {
+  digest: string;
+  size: number;
+}
+
+export interface DockerfileStep {
+  ranges: [number, number][];
+  base: boolean;
+  layers: LayerDescriptor[] | null;
+}
+
+export interface ImageDockerfile {
+  platform: string;
+  path: string;
+  lines: string[];
+  steps: DockerfileStep[] | null;
+  unattributed: LayerDescriptor[] | null;
+  totalSize: number;
+  baseSize: number;
+}

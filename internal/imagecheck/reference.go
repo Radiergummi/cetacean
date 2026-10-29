@@ -23,6 +23,11 @@ var (
 	digestGrammar = regexp.MustCompile(`^(sha256:[a-f0-9]{64}|sha512:[a-f0-9]{128})$`)
 )
 
+// ValidDigest reports whether digest is a sha256 or sha512 digest.
+func ValidDigest(digest string) bool {
+	return digestGrammar.MatchString(digest)
+}
+
 // Reference is a tagged image as a registry is asked about it: the host to
 // dial, the repository on it, and the tag.
 type Reference struct {
@@ -41,24 +46,38 @@ func (r Reference) Key() string {
 // Swarm stores once it has resolved the tag. A reference with no tag, or with
 // no digest to compare against, has nothing to check and reports false.
 func ParsePinned(image string) (ref Reference, pinned string, ok bool) {
-	name, pinned, found := strings.Cut(image, "@")
-	if !found || !digestGrammar.MatchString(pinned) {
+	ref, pinned, ok = ParseDigested(image)
+	if !ok || ref.Tag == "" {
 		return Reference{}, "", false
 	}
 
-	colon := strings.LastIndex(name, ":")
-	if colon <= strings.LastIndex(name, "/") {
+	return ref, pinned, true
+}
+
+// ParseDigested parses an image addressed by digest, with or without a tag:
+// `name@digest` is pinned as exactly as `name:tag@digest`. The tag, when there
+// is one, is kept but nothing here asks about it.
+func ParseDigested(image string) (ref Reference, digest string, ok bool) {
+	name, digest, found := strings.Cut(image, "@")
+	if !found || !digestGrammar.MatchString(digest) {
 		return Reference{}, "", false
 	}
 
-	host, repository := splitHost(name[:colon])
-	tag := name[colon+1:]
+	tag := ""
+	if colon := strings.LastIndex(name, ":"); colon > strings.LastIndex(name, "/") {
+		name, tag = name[:colon], name[colon+1:]
 
-	if !nameGrammar.MatchString(repository) || !tagGrammar.MatchString(tag) {
+		if !tagGrammar.MatchString(tag) {
+			return Reference{}, "", false
+		}
+	}
+
+	host, repository := splitHost(name)
+	if !nameGrammar.MatchString(repository) {
 		return Reference{}, "", false
 	}
 
-	return Reference{Host: host, Repository: repository, Tag: tag}, pinned, true
+	return Reference{Host: host, Repository: repository, Tag: tag}, digest, true
 }
 
 // splitHost applies Docker's rule: the first component is a registry only if

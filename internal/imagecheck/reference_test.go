@@ -115,3 +115,34 @@ func TestParsePinnedHoldsTheTagGrammar(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDigestedAcceptsADigestWithOrWithoutATag(t *testing.T) {
+	digest512 := "sha512:" + strings.Repeat("c", 128)
+
+	cases := []struct {
+		image  string
+		want   Reference
+		digest string
+	}{
+		{"nginx@" + digestA, Reference{"registry-1.docker.io", "library/nginx", ""}, digestA},
+		{"ghcr.io/a/b:1@" + digest512, Reference{"ghcr.io", "a/b", "1"}, digest512},
+		{
+			"registry.example.com:5000/app@" + digestA,
+			Reference{"registry.example.com:5000", "app", ""},
+			digestA,
+		},
+	}
+
+	for _, tc := range cases {
+		got, digest, ok := ParseDigested(tc.image)
+		if !ok || got != tc.want || digest != tc.digest {
+			t.Errorf("%q: got %+v, %q, %v", tc.image, got, digest, ok)
+		}
+	}
+
+	for _, image := range []string{"nginx:1", "nginx@md5:abc", "Nginx@" + digestA} {
+		if ref, _, ok := ParseDigested(image); ok {
+			t.Errorf("%q parsed as %+v", image, ref)
+		}
+	}
+}

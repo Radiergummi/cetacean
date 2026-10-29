@@ -185,6 +185,12 @@ func proxied(proxy func(*http.Request) (*url.URL, error), target string) bool {
 	return err != nil || through != nil
 }
 
+// GuardedTransport is the transport the checker dials registries through, with
+// the proxy the environment names.
+func GuardedTransport() *http.Transport {
+	return guardedTransport(httpproxy.FromEnvironment())
+}
+
 // guardedTransport dials only screened addresses. The proxy env names is the
 // operator's and is dialled unscreened, on its own port only.
 func guardedTransport(env *httpproxy.Config) *http.Transport {

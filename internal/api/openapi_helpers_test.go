@@ -24,6 +24,7 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/linkset"
 	"github.com/radiergummi/cetacean/internal/api/sse"
+	"github.com/radiergummi/cetacean/internal/attestations"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
@@ -158,8 +159,11 @@ func populateSpecFixtures(c *cache.Cache) {
 			Role:         swarm.NodeRoleManager,
 			Availability: swarm.NodeAvailabilityActive,
 		},
-		Description: swarm.NodeDescription{Hostname: "manager-1"},
-		Status:      swarm.NodeStatus{State: swarm.NodeStateReady},
+		Description: swarm.NodeDescription{
+			Hostname: "manager-1",
+			Platform: swarm.Platform{OS: "linux", Architecture: "x86_64"},
+		},
+		Status: swarm.NodeStatus{State: swarm.NodeStateReady},
 		ManagerStatus: &swarm.ManagerStatus{
 			Leader:       true,
 			Reachability: swarm.ReachabilityReachable,
@@ -278,8 +282,16 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 		getUnlockKeyFn: func(context.Context) (string, error) { return "SWMKEY-1-test", nil },
 	}
 
+	attested := &fakeAttestationSource{
+		image: attestations.Image{
+			Status:    attestations.StatusAvailable,
+			Platforms: twoPlatformImage().Platforms[:1],
+		},
+		dockerfile: &attestations.Dockerfile{Lines: []string{"FROM alpine"}},
+	}
+
 	h := newTestHandlers(t, withCache(c), withPromClient(promapi.NewClient(prom.URL)),
-		withPluginClient(plugins), withSystemClient(system))
+		withPluginClient(plugins), withSystemClient(system), withAttestations(attested))
 
 	// Seeded, so /-/docker-latest-version answers without calling GitHub.
 	h.dockerVersionCache.version = &DockerLatestVersion{

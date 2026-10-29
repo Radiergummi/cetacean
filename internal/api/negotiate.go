@@ -5,6 +5,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,6 +34,11 @@ const (
 	// compose export.
 	ContentTypeYAML
 
+	// ContentTypeSPDX and ContentTypePlain are an image's SBOM as stored and
+	// its Dockerfile as written.
+	ContentTypeSPDX
+	ContentTypePlain
+
 	// ContentTypeUnsupported means no supported media type matched. What to
 	// do about it is the endpoint's to decide.
 	ContentTypeUnsupported ContentType = -1
@@ -60,6 +66,10 @@ func (ct ContentType) String() string {
 		return "CSV"
 	case ContentTypeYAML:
 		return "YAML"
+	case ContentTypeSPDX:
+		return "SPDX"
+	case ContentTypePlain:
+		return "Plain"
 	case ContentTypeUnsupported:
 		return "Unsupported"
 	default:
@@ -283,6 +293,8 @@ var supportedTypes = []struct {
 	{"application", "asyncapi+yaml", ContentTypeYAML},
 	{"text", "yaml", ContentTypeYAML},
 	{"text", "x-yaml", ContentTypeYAML},
+	{"application", "spdx+json", ContentTypeSPDX},
+	{"text", "plain", ContentTypePlain},
 }
 
 // contentTypeOrder is each ContentType once, in supportedTypes order.
@@ -310,6 +322,8 @@ var sentAs = map[ContentType]mediaType{
 	ContentTypeDOT:      mustMediaType("text/vnd.graphviz"),
 	ContentTypeCSV:      mustMediaType("text/csv;header=present"),
 	ContentTypeYAML:     mustMediaType("application/yaml"),
+	ContentTypeSPDX:     mustMediaType("application/spdx+json"),
+	ContentTypePlain:    mustMediaType("text/plain;charset=utf-8"),
 }
 
 // sending names what an endpoint sends for a type where that is not sentAs.
@@ -335,7 +349,8 @@ var extensionTypes = []struct {
 	ext string
 	ct  ContentType
 	// under, when set, limits the suffix to these routes and what lies
-	// below them. Elsewhere it is part of the identifier.
+	// below them; a * stands for one segment. Elsewhere it is part of the
+	// identifier.
 	under []string
 }{
 	{ext: ".json", ct: ContentTypeJSON},
@@ -348,17 +363,21 @@ var extensionTypes = []struct {
 	{ext: ".csv", ct: ContentTypeCSV},
 	{ext: ".yaml", ct: ContentTypeYAML, under: yamlPaths},
 	{ext: ".yml", ct: ContentTypeYAML, under: yamlPaths},
+	{ext: ".spdx", ct: ContentTypeSPDX, under: []string{"/services/*/sbom", "/tasks/*/sbom"}},
+	{ext: ".txt", ct: ContentTypePlain, under: []string{
+		"/services/*/dockerfile", "/tasks/*/dockerfile",
+	}},
 }
 
 // scopedTo reports whether path is one of the routes a suffix is limited to,
 // or below it. An unscoped suffix reads everywhere.
-func scopedTo(under []string, path string) bool {
+func scopedTo(under []string, p string) bool {
 	if under == nil {
 		return true
 	}
 
 	for _, route := range under {
-		if path == route || strings.HasPrefix(path, route+"/") {
+		if matched, _ := path.Match(route, p); matched || strings.HasPrefix(p, route+"/") {
 			return true
 		}
 	}

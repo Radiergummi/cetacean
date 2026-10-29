@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
+import BuildSection from "../components/build/BuildSection";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection from "../components/ComposeSection";
 import { ContainerImage, MetadataGrid, ResourceLink, Timestamp } from "../components/data";
@@ -113,6 +114,7 @@ export default function ServiceDetail() {
           serviceId={id}
           canEdit={detail.editable.has("image")}
           imageUpdate={detail.imageUpdate}
+          attestedAs={{ kind: "service", id: service.ID }}
         />
         <ReplicaCard
           service={service}
@@ -134,6 +136,13 @@ export default function ServiceDetail() {
           date={service.UpdatedAt}
         />
       </MetadataGrid>
+
+      <ErrorBoundary inline>
+        <BuildSection
+          kind="service"
+          id={service.ID}
+        />
+      </ErrorBoundary>
 
       {/* Tasks */}
       <TasksTable

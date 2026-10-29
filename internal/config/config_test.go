@@ -506,3 +506,50 @@ func TestLoad_ImageCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_ImageAttestations(t *testing.T) {
+	t.Setenv("CETACEAN_IMAGE_ATTESTATIONS", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.ImageAttestations {
+		t.Error("ImageAttestations=false by default, want true")
+	}
+
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(
+		path,
+		[]byte("[server]\nimage_attestations = false\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	fc, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	flags, err := ParseFlags([]string{"-image-attestations=false"})
+	if err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+
+	for name, load := range map[string]func() (*Config, error){
+		"file": func() (*Config, error) { return Load(fc, nil) },
+		"flag": func() (*Config, error) { return Load(nil, flags) },
+		"env": func() (*Config, error) {
+			t.Setenv("CETACEAN_IMAGE_ATTESTATIONS", "false")
+			defer t.Setenv("CETACEAN_IMAGE_ATTESTATIONS", "")
+			return Load(nil, nil)
+		},
+	} {
+		cfg, err := load()
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", name, err)
+		}
+		if cfg.ImageAttestations {
+			t.Errorf("%s: ImageAttestations=true, want false", name)
+		}
+	}
+}

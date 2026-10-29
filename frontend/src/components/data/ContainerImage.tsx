@@ -1,7 +1,8 @@
 import InfoCard from "../InfoCard";
 import { NewerImageBadge, newerImageMessage } from "./NewerImageBadge";
-import { api } from "@/api/client";
+import { type AttestedKind, api } from "@/api/client";
 import type { ImageUpdate } from "@/api/types";
+import { AttestedBadge } from "@/components/build/AttestedBadge";
 import { Spinner } from "@/components/Spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,12 +164,15 @@ export default function ContainerImage({
   serviceId,
   canEdit = false,
   imageUpdate,
+  attestedAs,
 }: {
   image?: string | undefined;
   label?: string | undefined;
   serviceId?: string | undefined;
   canEdit?: boolean | undefined;
   imageUpdate?: ImageUpdate | undefined;
+  /** The service or task whose image's attestations the badge reports. */
+  attestedAs?: { kind: AttestedKind; id: string } | undefined;
 }) {
   if (!image) {
     return null;
@@ -212,6 +216,12 @@ export default function ContainerImage({
   const value = (
     <>
       {link}
+      {attestedAs && (
+        <AttestedBadge
+          kind={attestedAs.kind}
+          id={attestedAs.id}
+        />
+      )}
       {imageUpdate && <NewerImageBadge update={imageUpdate} />}
       {serviceId && canEdit && (
         <ImageUpdatePopover

@@ -103,6 +103,26 @@ func StackLinks(services []swarm.Service) []ServiceLink {
 	return links
 }
 
+// stripUserinfo drops the credentials a URL's authority may carry, which a git
+// remote recorded from a local checkout sometimes does.
+func stripUserinfo(raw string) string {
+	scheme, rest, ok := strings.Cut(raw, "://")
+	if !ok {
+		return raw
+	}
+
+	end := strings.IndexAny(rest, "/?#")
+	if end < 0 {
+		end = len(rest)
+	}
+
+	if at := strings.LastIndexByte(rest[:end], '@'); at >= 0 {
+		rest = rest[at+1:]
+	}
+
+	return scheme + "://" + rest
+}
+
 // normaliseHTTPURL returns value as a valid RFC 3986 URI when it is
 // structurally an absolute http(s) URL, percent-encoding whatever its path,
 // query and fragment may not hold. Userinfo is refused: it can make a link

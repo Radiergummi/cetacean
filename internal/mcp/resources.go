@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -112,6 +113,42 @@ var (
 			title:       "Service as a compose file",
 			mimeType:    composeMIMEType,
 			description: "One service rendered as a one-service compose YAML document. Everything it references — networks, volumes, configs, secrets — is declared external, because a single service creates none of them.",
+		},
+		{
+			uri:         "cetacean://services/{id}/provenance",
+			name:        "service_provenance",
+			title:       "Service image build provenance",
+			description: "What the provenance BuildKit attached to the service's image records, per platform: source repository and commit, builder, build times, inputs such as base images, the GitHub Actions job, whether an SBOM and a Dockerfile exist, and how many running tasks are on that platform. Read anonymously from the image's registry; nothing is verified. `status` says why there is nothing: none, unpinned, private, missing, unavailable or disabled.",
+		},
+		{
+			uri:         "cetacean://tasks/{id}/provenance",
+			name:        "task_provenance",
+			title:       "Task image build provenance",
+			description: "As cetacean://services/{id}/provenance, for the image this task runs (which differs from the service's mid-update) and only the platforms its node can run.",
+		},
+		{
+			uri:         "cetacean://services/{id}/sbom{?platform}",
+			name:        "service_sbom",
+			title:       "Service image SBOM",
+			description: "The packages in one platform of the service's image, from its SPDX SBOM: name, version, ecosystem (the package URL type), license, package URL, and where in the image it was found, with counts per ecosystem. `platform` (os/arch[/variant]) is needed when the image has more than one.",
+		},
+		{
+			uri:         "cetacean://tasks/{id}/sbom{?platform}",
+			name:        "task_sbom",
+			title:       "Task image SBOM",
+			description: "As cetacean://services/{id}/sbom, for the platform of the task's node; `platform` is needed only when that node matches several.",
+		},
+		{
+			uri:         "cetacean://services/{id}/dockerfile{?platform}",
+			name:        "service_dockerfile",
+			title:       "Service image Dockerfile with layer sizes",
+			description: "The Dockerfile the image's mode=max provenance embeds, with each instruction's line ranges and the image layers and bytes it produced, the total size and how much came from the base image. Answers why an image is as large as it is.",
+		},
+		{
+			uri:         "cetacean://tasks/{id}/dockerfile{?platform}",
+			name:        "task_dockerfile",
+			title:       "Task image Dockerfile with layer sizes",
+			description: "As cetacean://services/{id}/dockerfile, for the platform of the task's node.",
 		},
 		{
 			uri:         "cetacean://stacks/{name}",
@@ -283,6 +320,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		return nil, fmt.Errorf("invalid resource URI: %s", uri)
 	}
 
+	path, rawQuery, _ := strings.Cut(path, "?")
+	query, _ := url.ParseQuery(rawQuery)
+
 	parts := strings.SplitN(path, "/", 3)
 	resourceType := parts[0]
 	resourceID := ""
@@ -359,6 +399,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 				compose.FromService(svc, s.filterNetworks(ctx, s.cache.ListNetworks())),
 			)
 		}
+		if isAttestationResource(subResource) {
+			return s.readServiceAttestation(ctx, svc, subResource, query.Get("platform"))
+		}
 		return svc, nil
 
 	case "tasks":
@@ -371,6 +414,9 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 		}
 		if err := s.checkReadable(ctx, uri, "task", task.ID); err != nil {
 			return nil, err
+		}
+		if isAttestationResource(subResource) {
+			return s.readTaskAttestation(ctx, task, subResource, query.Get("platform"))
 		}
 		return s.readableEnrichedTask(ctx, task), nil
 

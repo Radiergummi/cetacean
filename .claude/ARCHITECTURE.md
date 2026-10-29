@@ -35,6 +35,7 @@ liability — it is the only part of the previous version of this file that rott
 | `mcp/projection/` | What MCP renders that REST does not: resource digests, the impact text a confirmation asks with, cluster status, the timeline |
 | `prometheus/`, `prom/` | Query client and proxy; `prom/` is the three result types alone |
 | `recommendations/` | The checkers and the engine that schedules them |
+| `attestations/` | BuildKit provenance, SBOMs and the Dockerfile layer join, fetched on demand by digest and cached; knows OCI, SLSA and SPDX, not Swarm |
 | `filter/`, `integrations/`, `metrics/`, `version/` | expr-lang filtering, third-party label detection, our own instrumentation, build stamps |
 | `spec/` | The requirement registry: what each cited specification requires, the tests claiming it, the mutants they must kill |
 | `contract/` | Tests only: invariants every route, MCP tool and resource type must hold, looped over inventories derived from the router, MCP server and OpenAPI spec |
@@ -154,6 +155,11 @@ Each of these looks like a simplification and is not.
   RTL cannot see fake timers and hangs until the test times out. React Flow draws
   an edge only once both endpoints are measured, which jsdom never does, so edge
   assertions belong in the layout unit test.
+- **Attestation answers about content never expire; failures do.** Everything
+  under a digest is immutable, "no attestations" and unparseable content
+  included, so only `private`, `missing` (an hour) and `unavailable` (a minute)
+  are retried. SBOMs have their own budget so they cannot evict images. A nil
+  `attestations.Store` is the feature switched off and reports `disabled`.
 
 ## Details that bite
 

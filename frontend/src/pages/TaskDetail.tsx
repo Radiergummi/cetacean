@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { Task } from "../api/types";
+import BuildSection from "../components/build/BuildSection";
 import { ContainerImage, ResourceId, ResourceLink, Timestamp } from "../components/data";
 import DetailError from "../components/DetailError";
 import ErrorBoundary from "../components/ErrorBoundary";
@@ -233,7 +234,10 @@ export default function TaskDetail() {
           label="Slot"
           value={task.Slot ? String(task.Slot) : "\u2014"}
         />
-        <ContainerImage image={task.Spec?.ContainerSpec?.Image ?? ""} />
+        <ContainerImage
+          image={task.Spec?.ContainerSpec?.Image ?? ""}
+          attestedAs={{ kind: "task", id: task.ID }}
+        />
         <Timestamp
           label="Timestamp"
           date={status.Timestamp}
@@ -269,6 +273,13 @@ export default function TaskDetail() {
           </div>
         )}
       </div>
+
+      <ErrorBoundary inline>
+        <BuildSection
+          kind="task"
+          id={task.ID}
+        />
+      </ErrorBoundary>
 
       {hasCadvisor && taskState === "running" && myMetrics && (
         <TaskResourceGauges

@@ -210,8 +210,8 @@ func TestNegotiate(t *testing.T) {
 		}
 	})
 
-	t.Run("text/plain alone resolves to Unsupported", func(t *testing.T) {
-		ct, _ := run("/services", "text/plain")
+	t.Run("an unknown type alone resolves to Unsupported", func(t *testing.T) {
+		ct, _ := run("/services", "application/pdf")
 		if ct != ContentTypeUnsupported {
 			t.Errorf("got %v, want Unsupported", ct)
 		}
@@ -518,10 +518,10 @@ func TestSingleRepresentationDocumentsNeedNoTableRow(t *testing.T) {
 	fetchCatalog(t, router, apiCatalogPath, linkset.MediaType)
 }
 
-// The YAML suffixes read only where a YAML representation exists. Everywhere
-// else they belong to the identifier: prometheus.yml is what an operator calls
-// a volume, and a name read as a suffix leaves the volume unaddressable.
-func TestNegotiate_YAMLSuffixOnlyWhereYAMLIsServed(t *testing.T) {
+// A scoped suffix reads only where its representation exists. Everywhere else
+// it belongs to the identifier: prometheus.yml is what an operator calls a
+// volume, and a name read as a suffix leaves the volume unaddressable.
+func TestNegotiate_ScopedSuffixOnlyWhereServed(t *testing.T) {
 	for _, tc := range []struct {
 		path string
 		want ContentType
@@ -537,6 +537,10 @@ func TestNegotiate_YAMLSuffixOnlyWhereYAMLIsServed(t *testing.T) {
 		{"/volumes/prometheus.yml", ContentTypeJSON, "/volumes/prometheus.yml"},
 		{"/configs/app.yaml", ContentTypeJSON, "/configs/app.yaml"},
 		{"/networks/mesh.yml", ContentTypeJSON, "/networks/mesh.yml"},
+		{"/services/web/sbom.spdx", ContentTypeSPDX, "/services/web/sbom"},
+		{"/tasks/t1/dockerfile.txt", ContentTypePlain, "/tasks/t1/dockerfile"},
+		{"/volumes/sbom.spdx", ContentTypeJSON, "/volumes/sbom.spdx"},
+		{"/configs/dockerfile.txt", ContentTypeJSON, "/configs/dockerfile.txt"},
 	} {
 		var captured ContentType
 		var capturedPath string

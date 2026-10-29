@@ -96,6 +96,10 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Ask each service image's registry, hourly, which image its tag names now, so the service pages and the recommendations can point out a newer one. Only the manifest is requested, anonymously; a private image Cetacean holds no credentials for is skipped. Redirects must stay on HTTPS. A registry on a private network may send Cetacean to other private hosts; a public one's redirects and token service must be on its own domain or publicly reachable, and through a proxy its redirects must stay on its domain. Cetacean can't see the addresses a proxy reaches, so with `HTTPS_PROXY` set the proxy is the egress control. Turn it off where Cetacean must not reach the internet; services then show no update hint.
 </ConfigParam>
 
+<ConfigParam name="server.image_attestations" flag="-image-attestations" env="CETACEAN_IMAGE_ATTESTATIONS" default="true">
+  When someone opens a service or task, ask its image's registry, anonymously, for the provenance and SBOM BuildKit attached to the image, so the pages can show what it was built from and what it contains. Nothing is fetched in the background, and a private image Cetacean holds no credentials for is skipped. Turn it off where Cetacean must not reach the internet; the pages then show no build information.
+</ConfigParam>
+
 <ConfigParam name="server.recommendations" flag="-recommendations" env="CETACEAN_RECOMMENDATIONS" default="true">
   Enable the recommendation engine, which periodically analyzes swarm state and Prometheus metrics to surface findings. See [Recommendations][recommendations].
 </ConfigParam>

@@ -351,6 +351,10 @@ than a standing claim:
   `oauth_test.go` does cover is that an `https://` client_id takes the CIMD path and that the guard is
   live in the shipped binary.
 - The ACL case that a digest never names a resource behind a grant.
+- Image attestations read from a registry. The DinD swarm has no anonymous HTTPS registry holding
+  an image with attestations, so `attestations_test.go` covers only the `unpinned` and `disabled`
+  statuses; fetching, caching and the SBOM and Dockerfile views are covered by `internal/attestations`
+  and `internal/api` against real BuildKit fixtures.
 - Three answers the MCP conformance suite disagrees with, each pinned as it stands by the lane
   above. The Origin guard's over-refusal is a deferred requirement in
   `internal/spec/registry/mcp/transports.yaml`, which carries the reason. The other two are not
