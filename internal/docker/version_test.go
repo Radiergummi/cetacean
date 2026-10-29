@@ -82,10 +82,6 @@ func TestPinnedWritesRefuseAMovedRecord(t *testing.T) {
 		write    func(*Client, context.Context) error
 	}{
 		{"service", "svc", func(c *Client, ctx context.Context) error {
-			_, err := c.UpdateServiceEnv(ctx, "svc", keep)
-			return err
-		}},
-		{"service", "svc", func(c *Client, ctx context.Context) error {
 			_, err := c.UpdateServiceSpec(ctx, "svc", func(*swarm.ServiceSpec) error { return nil })
 			return err
 		}},
@@ -156,16 +152,3 @@ func TestIsOutOfSequenceMatchesTheEnginesRefusal(t *testing.T) {
 
 // A precondition's pin is the version the caller validated, so a check that
 // runs after it must not move it.
-func TestPinCheckedLeavesAPreconditionsPin(t *testing.T) {
-	ctx := WithPinnedVersion(context.Background(), "service", "s1", swarm.Version{Index: 7})
-	ctx = PinChecked(ctx, "service", "s1", swarm.Version{Index: 9})
-
-	if v, _ := PinnedVersion(ctx, "service", "s1"); v.Index != 7 {
-		t.Errorf("pinned %d, want the precondition's 7", v.Index)
-	}
-
-	fresh := PinChecked(context.Background(), "service", "s1", swarm.Version{Index: 9})
-	if v, ok := PinnedVersion(fresh, "service", "s1"); !ok || v.Index != 9 {
-		t.Errorf("pinned %d (ok=%v), want the checked 9", v.Index, ok)
-	}
-}

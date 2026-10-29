@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 
 	"github.com/radiergummi/cetacean/internal/acl"
@@ -69,8 +67,8 @@ type DockerSystemClient interface {
 
 // Narrow write interfaces: each handler depends only on the methods it needs,
 // and docker.Client satisfies all of them structurally. Service operations are
-// grouped into lifecycle, spec updates and attachment updates, so a test can
-// mock only the group it exercises.
+// grouped into lifecycle and spec updates, so a test can mock only the group
+// it exercises.
 
 type ServiceLifecycleWriter interface {
 	ScaleService(ctx context.Context, id string, replicas uint64) (swarm.Service, error)
@@ -78,11 +76,6 @@ type ServiceLifecycleWriter interface {
 	RollbackService(ctx context.Context, id string) (swarm.Service, error)
 	RestartService(ctx context.Context, id string) (swarm.Service, error)
 	RemoveService(ctx context.Context, id string) error
-	UpdateServiceEndpointMode(
-		ctx context.Context,
-		id string,
-		mode swarm.ResolutionMode,
-	) (swarm.Service, error)
 }
 
 type ServiceSpecWriter interface {
@@ -94,57 +87,12 @@ type ServiceSpecWriter interface {
 		id string,
 		mutate func(spec *swarm.ServiceSpec) error,
 	) (swarm.Service, error)
-	UpdateServiceEnv(
-		ctx context.Context,
-		id string,
-		mutate func(current map[string]string) (map[string]string, error),
-	) (swarm.Service, error)
-	UpdateServiceLabels(
-		ctx context.Context,
-		id string,
-		mutate func(current map[string]string) (map[string]string, error),
-	) (swarm.Service, error)
-	UpdateServiceHealthcheck(
-		ctx context.Context,
-		id string,
-		hc *container.HealthConfig,
-	) (swarm.Service, error)
-	UpdateServicePlacement(
-		ctx context.Context,
-		id string,
-		placement *swarm.Placement,
-	) (swarm.Service, error)
-	UpdateServicePorts(
-		ctx context.Context,
-		id string,
-		ports []swarm.PortConfig,
-	) (swarm.Service, error)
-}
-
-type ServiceAttachmentWriter interface {
-	UpdateServiceConfigs(
-		ctx context.Context,
-		id string,
-		configs []*swarm.ConfigReference,
-	) (swarm.Service, error)
-	UpdateServiceSecrets(
-		ctx context.Context,
-		id string,
-		secrets []*swarm.SecretReference,
-	) (swarm.Service, error)
-	UpdateServiceNetworks(
-		ctx context.Context,
-		id string,
-		networks []swarm.NetworkAttachmentConfig,
-	) (swarm.Service, error)
-	UpdateServiceMounts(ctx context.Context, id string, mounts []mount.Mount) (swarm.Service, error)
 }
 
 // ServiceWriter composes all service write interfaces.
 type ServiceWriter interface {
 	ServiceLifecycleWriter
 	ServiceSpecWriter
-	ServiceAttachmentWriter
 }
 
 type NodeWriter interface {
@@ -224,7 +172,6 @@ type Handlers struct {
 	serviceLifecycle     ServiceLifecycleWriter
 	writes               *cluster.Writes
 	serviceSpec          ServiceSpecWriter
-	serviceAttachment    ServiceAttachmentWriter
 	nodeWriter           NodeWriter
 	configWriter         ConfigWriter
 	secretWriter         SecretWriter
@@ -276,22 +223,21 @@ func NewHandlers(
 	aclEval *acl.Evaluator,
 ) *Handlers {
 	return &Handlers{
-		cache:             shared.Cache,
-		broadcaster:       b,
-		dockerClient:      dc,
-		systemClient:      sc,
-		serviceLifecycle:  wc,
-		writes:            cluster.NewWrites(shared.Cache, wc),
-		serviceSpec:       wc,
-		serviceAttachment: wc,
-		nodeWriter:        wc,
-		configWriter:      wc,
-		secretWriter:      wc,
-		resourceRemover:   wc,
-		pluginClient:      pc,
-		ready:             ready,
-		promClient:        promClient,
-		operationsLevel:   operationsLevel,
+		cache:            shared.Cache,
+		broadcaster:      b,
+		dockerClient:     dc,
+		systemClient:     sc,
+		serviceLifecycle: wc,
+		writes:           cluster.NewWrites(shared.Cache, wc),
+		serviceSpec:      wc,
+		nodeWriter:       wc,
+		configWriter:     wc,
+		secretWriter:     wc,
+		resourceRemover:  wc,
+		pluginClient:     pc,
+		ready:            ready,
+		promClient:       promClient,
+		operationsLevel:  operationsLevel,
 
 		// Unset, a token is the person it speaks for. Only a deployment that
 		// says otherwise holds it lower.

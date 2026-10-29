@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -40,9 +42,10 @@ type mockServiceLifecycleWriter struct {
 
 type mockServiceSpecWriter struct {
 	// These stand in for the fresh inspect the real writer would do against
-	// Docker. The mutator passed into the update methods is applied to them, so
-	// what the callback receives reflects the contract: the merge ran against
-	// the live spec, not the cache.
+	// Docker, over the cached service live reads. The change is applied to
+	// them, so what a callback receives reflects the contract: the merge ran
+	// against the live spec, not the cache.
+	live                       func(id string) (swarm.Service, bool)
 	simulatedEnv               map[string]string
 	simulatedLabels            map[string]string
 	simulatedSpec              *swarm.ServiceSpec
@@ -159,25 +162,6 @@ func (m *mockResourceRemover) RemoveTask(ctx context.Context, id string) error {
 		return m.removeTaskFn(ctx, id)
 	}
 	return fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceEnv(
-	ctx context.Context,
-	id string,
-	mutate func(map[string]string) (map[string]string, error),
-) (swarm.Service, error) {
-	current := m.simulatedEnv
-	if current == nil {
-		current = map[string]string{}
-	}
-	env, err := mutate(current)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if m.updateServiceEnvFn != nil {
-		return m.updateServiceEnvFn(ctx, id, env)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
 func (m *mockNodeWriter) UpdateNodeLabels(
@@ -315,136 +299,6 @@ func (m *mockResourceRemover) RemoveVolume(ctx context.Context, name string, for
 		return m.removeVolumeFn(ctx, name, force)
 	}
 	return fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceLabels(
-	ctx context.Context,
-	id string,
-	mutate func(map[string]string) (map[string]string, error),
-) (swarm.Service, error) {
-	current := m.simulatedLabels
-	if current == nil {
-		current = map[string]string{}
-	}
-	labels, err := mutate(current)
-	if err != nil {
-		return swarm.Service{}, err
-	}
-	if m.updateServiceLabelsFn != nil {
-		return m.updateServiceLabelsFn(ctx, id, labels)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceSpec(
-	ctx context.Context,
-	id string,
-	mutate func(spec *swarm.ServiceSpec) error,
-) (swarm.Service, error) {
-	spec := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
-		ContainerSpec: &swarm.ContainerSpec{},
-	}}
-	if m.simulatedSpec != nil {
-		spec = *m.simulatedSpec
-	}
-
-	if err := mutate(&spec); err != nil {
-		return swarm.Service{}, err
-	}
-
-	if m.updateServiceSpecFn != nil {
-		return m.updateServiceSpecFn(ctx, id, spec)
-	}
-
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceLifecycleWriter) UpdateServiceEndpointMode(
-	ctx context.Context,
-	id string,
-	mode swarm.ResolutionMode,
-) (swarm.Service, error) {
-	if m.updateServiceEndpointModeFn != nil {
-		return m.updateServiceEndpointModeFn(ctx, id, mode)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServiceHealthcheck(
-	ctx context.Context,
-	id string,
-	hc *container.HealthConfig,
-) (swarm.Service, error) {
-	if m.updateServiceHealthcheckFn != nil {
-		return m.updateServiceHealthcheckFn(ctx, id, hc)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServicePlacement(
-	ctx context.Context,
-	id string,
-	placement *swarm.Placement,
-) (swarm.Service, error) {
-	if m.updateServicePlacementFn != nil {
-		return m.updateServicePlacementFn(ctx, id, placement)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceSpecWriter) UpdateServicePorts(
-	ctx context.Context,
-	id string,
-	ports []swarm.PortConfig,
-) (swarm.Service, error) {
-	if m.updateServicePortsFn != nil {
-		return m.updateServicePortsFn(ctx, id, ports)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceAttachmentWriter) UpdateServiceConfigs(
-	ctx context.Context,
-	id string,
-	configs []*swarm.ConfigReference,
-) (swarm.Service, error) {
-	if m.updateServiceConfigsFn != nil {
-		return m.updateServiceConfigsFn(ctx, id, configs)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceAttachmentWriter) UpdateServiceSecrets(
-	ctx context.Context,
-	id string,
-	secrets []*swarm.SecretReference,
-) (swarm.Service, error) {
-	if m.updateServiceSecretsFn != nil {
-		return m.updateServiceSecretsFn(ctx, id, secrets)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceAttachmentWriter) UpdateServiceNetworks(
-	ctx context.Context,
-	id string,
-	networks []swarm.NetworkAttachmentConfig,
-) (swarm.Service, error) {
-	if m.updateServiceNetworksFn != nil {
-		return m.updateServiceNetworksFn(ctx, id, networks)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
-}
-
-func (m *mockServiceAttachmentWriter) UpdateServiceMounts(
-	ctx context.Context,
-	id string,
-	mounts []mount.Mount,
-) (swarm.Service, error) {
-	if m.updateServiceMountsFn != nil {
-		return m.updateServiceMountsFn(ctx, id, mounts)
-	}
-	return swarm.Service{}, fmt.Errorf("not implemented")
 }
 
 func (m *mockServiceLifecycleWriter) RemoveService(ctx context.Context, id string) error {
@@ -5203,26 +5057,6 @@ func socketBoundSpec() swarm.ServiceSpec {
 	}}
 }
 
-// holdsHostAccess is the rule's reading of the fixtures, which reach the host
-// only by mounts: the current spec, or either spec for a rollback.
-func holdsHostAccess(svc swarm.Service, rollback bool) bool {
-	mounted := func(spec *swarm.ServiceSpec) bool {
-		return spec != nil && spec.TaskTemplate.ContainerSpec != nil &&
-			len(spec.TaskTemplate.ContainerSpec.Mounts) > 0
-	}
-
-	return mounted(&svc.Spec) || rollback && mounted(svc.PreviousSpec)
-}
-
-// pinRule is when a host-access write is expected to name the version checked.
-type pinRule int
-
-const (
-	pinWhenHeld pinRule = iota // below level 3, when the service holds host access
-	pinNever                   // the check reads the spec inside the write itself
-	pinAlways                  // the attachment checks pin regardless
-)
-
 // Host access a service already holds is exempt from the mount and capability
 // checks, so changing what runs with it needs the impactful tier instead.
 func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
@@ -5267,7 +5101,6 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 		handler func(*Handlers) http.HandlerFunc
 		below   config.OperationsLevel
 		refused bool
-		pin     pinRule
 	}{
 		{
 			"image",
@@ -5278,157 +5111,156 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 			image,
 			tier1,
 			true,
-			pinWhenHeld,
 		},
 		{
 			"image with a bind only in the previous spec",
 			previous, "PUT", "/image", `{"image":"nginx:2"}`,
-			image, tier1, false, pinWhenHeld,
+			image, tier1, false,
 		},
 		{
 			"rollback restoring a bind",
 			previous, "POST", "/rollback", "",
-			rollback, tier1, true, pinWhenHeld,
+			rollback, tier1, true,
 		},
 		{
 			"rollback from a bind",
 			current, "POST", "/rollback", "",
-			rollback, tier1, true, pinWhenHeld,
+			rollback, tier1, true,
 		},
 		{
 			"command",
 			current, "PATCH", "/container-config", `{"command":["sh"]}`,
-			containerConfig, tier2, true, pinNever,
+			containerConfig, tier2, true,
 		},
 		{
 			"user",
 			current, "PATCH", "/container-config", `{"user":"root"}`,
-			containerConfig, tier2, true, pinNever,
+			containerConfig, tier2, true,
 		},
 		{
 			"working directory",
 			current, "PATCH", "/container-config", `{"dir":"/tmp"}`,
-			containerConfig, tier2, true, pinNever,
+			containerConfig, tier2, true,
 		},
 		{
 			"hostname only",
 			current, "PATCH", "/container-config", `{"hostname":"web"}`,
-			containerConfig, tier2, false, pinNever,
+			containerConfig, tier2, false,
 		},
 		{
 			"placement",
 			current, "PUT", "/placement", `{"Constraints":["node.role==manager"]}`,
-			placement, tier2, true, pinWhenHeld,
+			placement, tier2, true,
 		},
 		{
 			"healthcheck test",
 			current, "PUT", "/healthcheck", `{"Test":["CMD","sh"]}`,
-			putHealthcheck, tier2, true, pinWhenHeld,
+			putHealthcheck, tier2, true,
 		},
 		{
 			"healthcheck interval only",
 			current, "PUT", "/healthcheck", `{"Interval":1000000000}`,
-			putHealthcheck, tier2, false, pinWhenHeld,
+			putHealthcheck, tier2, false,
 		},
 		{
 			"patched healthcheck test",
 			current, "PATCH", "/healthcheck", `{"Test":["CMD","sh"]}`,
-			patchHealthcheck, tier2, true, pinNever,
+			patchHealthcheck, tier2, true,
 		},
 		{
 			"patched healthcheck interval only",
 			current, "PATCH", "/healthcheck", `{"Interval":1000000000}`,
-			patchHealthcheck, tier2, false, pinNever,
+			patchHealthcheck, tier2, false,
 		},
 		{
 			"secret added",
 			current, "PATCH", "/secrets",
 			`{"secrets":[{"secretID":"sec1","secretName":"s","fileName":"/docker-entrypoint.sh"}]}`,
-			secrets, tier2, true, pinAlways,
+			secrets, tier2, true,
 		},
 		{
 			"config added",
 			current, "PATCH", "/configs",
 			`{"configs":[{"configID":"cfg1","configName":"c","fileName":"/docker-entrypoint.sh"}]}`,
-			configs, tier2, true, pinAlways,
+			configs, tier2, true,
 		},
 		{
 			"mount added beside the bind",
 			current, "PATCH", "/mounts",
 			`{"mounts":[` + socketMount + `,{"Type":"tmpfs","Target":"/docker-entrypoint.sh"}]}`,
-			mounts, tier2, true, pinAlways,
+			mounts, tier2, true,
 		},
 		{
 			"mounts unchanged",
 			current, "PATCH", "/mounts", `{"mounts":[` + socketMount + `]}`,
-			mounts, tier2, false, pinAlways,
+			mounts, tier2, false,
 		},
 		{
 			"secret added without host access",
 			unbound, "PATCH", "/secrets",
 			`{"secrets":[{"secretID":"sec1","secretName":"s"}]}`,
-			secrets, tier2, false, pinAlways,
+			secrets, tier2, false,
 		},
 		{
 			"image without host access",
 			unbound, "PUT", "/image", `{"image":"nginx:2"}`,
-			image, tier1, false, pinWhenHeld,
+			image, tier1, false,
 		},
 		{
 			"rollback without host access",
 			unbound, "POST", "/rollback", "",
-			rollback, tier1, false, pinWhenHeld,
+			rollback, tier1, false,
 		},
 		{
 			"environment",
 			current, "PATCH", "/env", `{"DOCKER_HOST":"tcp://0.0.0.0:2375"}`,
-			env, tier2, true, pinWhenHeld,
+			env, tier2, true,
 		},
 		{
 			"environment unchanged",
 			current, "PATCH", "/env", `{}`,
-			env, tier2, false, pinWhenHeld,
+			env, tier2, false,
 		},
 		{
 			"environment without host access",
 			unbound, "PATCH", "/env", `{"FOO":"bar"}`,
-			env, tier2, false, pinWhenHeld,
+			env, tier2, false,
 		},
 		{
 			"published port",
 			current, "PATCH", "/ports",
 			`{"ports":[{"Protocol":"tcp","TargetPort":2375,"PublishedPort":2375}]}`,
-			ports, tier2, true, pinWhenHeld,
+			ports, tier2, true,
 		},
 		{
 			"ports unchanged",
 			current, "PATCH", "/ports", `{"ports":[]}`,
-			ports, tier2, false, pinWhenHeld,
+			ports, tier2, false,
 		},
 		{
 			"network attached",
 			current, "PATCH", "/networks", `{"networks":[{"target":"net1"}]}`,
-			networks, tier2, true, pinAlways,
+			networks, tier2, true,
 		},
 		{
 			"networks unchanged",
 			current, "PATCH", "/networks", `{"networks":[]}`,
-			networks, tier2, false, pinAlways,
+			networks, tier2, false,
 		},
 		{
 			"service label",
 			current, "PATCH", "/labels", `{"traefik.enable":"true"}`,
-			labels, tier2, true, pinWhenHeld,
+			labels, tier2, true,
 		},
 		{
 			"service labels unchanged",
 			current, "PATCH", "/labels", `{}`,
-			labels, tier2, false, pinWhenHeld,
+			labels, tier2, false,
 		},
 		{
 			"service label without host access",
 			unbound, "PATCH", "/labels", `{"traefik.enable":"true"}`,
-			labels, tier2, false, pinWhenHeld,
+			labels, tier2, false,
 		},
 	}
 
@@ -5530,14 +5362,9 @@ func TestHostAccessHeldRequiresImpactfulLevel(t *testing.T) {
 							w.Code, written, w.Body.String())
 					}
 
-					below := level < config.OpsImpactful
-					wantPin := tc.pin == pinAlways ||
-						tc.pin == pinWhenHeld && below &&
-							holdsHostAccess(tc.svc, tc.path == "/rollback")
-					if wantPin && pinned.Index != 7 {
-						t.Errorf("write pinned to %v, want the checked version 7", pinned)
-					}
-					if !wantPin && pinned.Index != 0 {
+					// Decided inside the write, against Docker's spec: no
+					// pin to what the cache held is needed to keep it honest.
+					if pinned.Index != 0 {
 						t.Errorf("write pinned to %v, want it unpinned", pinned)
 					}
 
@@ -5636,52 +5463,159 @@ func TestPreferWaitReleasesItsSlot(t *testing.T) {
 	}
 }
 
-// The check exempts what the cached service carries, so the write must name the
-// version the check read: if the engine has moved on, it refuses rather than
-// applying the request against a spec the check never saw.
-func TestHandlePatchServiceMounts_PinsTheCheckedVersion(t *testing.T) {
-	c := cache.New(nil)
-	c.SetService(swarm.Service{
-		ID:      "svc1",
-		Version: swarm.Version{Index: 41},
-		Spec: swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{
-			ContainerSpec: &swarm.ContainerSpec{Mounts: []mount.Mount{
-				{
-					Type:   mount.TypeBind,
-					Source: "/var/run/docker.sock",
-					Target: "/var/run/docker.sock",
-				},
-			}},
-		}},
-	})
+// UpdateServiceSpec stands in for the writer's read-modify-write, then hands
+// the section the change edited to that section's stub, falling back to
+// updateServiceSpecFn and then to whichever stub is set.
+func (m *mockWriteClient) UpdateServiceSpec(
+	ctx context.Context,
+	id string,
+	mutate func(spec *swarm.ServiceSpec) error,
+) (swarm.Service, error) {
+	live := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{}}}
+	switch {
+	case m.simulatedSpec != nil:
+		live = cloneTestSpec(*m.simulatedSpec)
+	case m.live != nil:
+		if svc, ok := m.live(id); ok {
+			live = cloneTestSpec(svc.Spec)
+		}
+	}
+	if live.TaskTemplate.ContainerSpec == nil {
+		live.TaskTemplate.ContainerSpec = &swarm.ContainerSpec{}
+	}
+	if m.simulatedEnv != nil {
+		live.TaskTemplate.ContainerSpec.Env = nil
+		for name, value := range m.simulatedEnv {
+			live.TaskTemplate.ContainerSpec.Env = append(
+				live.TaskTemplate.ContainerSpec.Env, name+"="+value,
+			)
+		}
+	}
+	if m.simulatedLabels != nil {
+		live.Labels = maps.Clone(m.simulatedLabels)
+	}
 
-	var pinned swarm.Version
-	var ok bool
-	wc := &mockWriteClient{
-		updateServiceMountsFn: func(ctx context.Context, _ string, mounts []mount.Mount) (swarm.Service, error) {
-			pinned, ok = docker.PinnedVersion(ctx, "service", "svc1")
+	// The labels are the test's own map, so a patch that edits its input in
+	// place shows there as it would in Docker's copy.
+	spec := cloneTestSpec(live)
+	if m.simulatedLabels != nil {
+		spec.Labels = m.simulatedLabels
+	}
+	if err := mutate(&spec); err != nil {
+		return swarm.Service{}, err
+	}
 
-			return swarm.Service{ID: "svc1"}, nil
+	was, is := live.TaskTemplate.ContainerSpec, spec.TaskTemplate.ContainerSpec
+	if is == nil {
+		is = &swarm.ContainerSpec{}
+	}
+	endpoint := func(spec swarm.ServiceSpec) swarm.EndpointSpec {
+		if spec.EndpointSpec == nil {
+			return swarm.EndpointSpec{}
+		}
+		return *spec.EndpointSpec
+	}
+
+	stubs := []struct {
+		changed, set bool
+		call         func() (swarm.Service, error)
+	}{
+		{
+			!reflect.DeepEqual(was.Env, is.Env),
+			m.updateServiceEnvFn != nil,
+			func() (swarm.Service, error) {
+				env := map[string]string{}
+				for _, entry := range is.Env {
+					name, value, _ := strings.Cut(entry, "=")
+					env[name] = value
+				}
+				return m.updateServiceEnvFn(ctx, id, env)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.Labels, spec.Labels),
+			m.updateServiceLabelsFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceLabelsFn(ctx, id, spec.Labels)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Healthcheck, is.Healthcheck),
+			m.updateServiceHealthcheckFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceHealthcheckFn(ctx, id, is.Healthcheck)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.TaskTemplate.Placement, spec.TaskTemplate.Placement),
+			m.updateServicePlacementFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServicePlacementFn(ctx, id, spec.TaskTemplate.Placement)
+			},
+		},
+		{
+			!reflect.DeepEqual(endpoint(live).Ports, endpoint(spec).Ports),
+			m.updateServicePortsFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServicePortsFn(ctx, id, endpoint(spec).Ports)
+			},
+		},
+		{
+			endpoint(live).Mode != endpoint(spec).Mode,
+			m.updateServiceEndpointModeFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceEndpointModeFn(ctx, id, endpoint(spec).Mode)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Configs, is.Configs),
+			m.updateServiceConfigsFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceConfigsFn(ctx, id, is.Configs)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Secrets, is.Secrets),
+			m.updateServiceSecretsFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceSecretsFn(ctx, id, is.Secrets)
+			},
+		},
+		{
+			!reflect.DeepEqual(live.TaskTemplate.Networks, spec.TaskTemplate.Networks),
+			m.updateServiceNetworksFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceNetworksFn(ctx, id, spec.TaskTemplate.Networks)
+			},
+		},
+		{
+			!reflect.DeepEqual(was.Mounts, is.Mounts),
+			m.updateServiceMountsFn != nil,
+			func() (swarm.Service, error) {
+				return m.updateServiceMountsFn(ctx, id, is.Mounts)
+			},
 		},
 	}
-	h := newTestHandlers(
-		t,
-		withCache(c),
-		withWriteClient(wc),
-		withOpsLevel(config.OpsConfiguration),
-	)
-
-	body := `{"mounts":[{"Type":"bind","Source":"/var/run/docker.sock","Target":"/var/run/docker.sock"}]}`
-	req := httptest.NewRequest("PATCH", "/services/svc1/mounts", strings.NewReader(body))
-	req.SetPathValue("id", "svc1")
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	w := httptest.NewRecorder()
-	h.HandlePatchServiceMounts(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d, want 200; body: %s", w.Code, w.Body.String())
+	for _, stub := range stubs {
+		if stub.changed && stub.set {
+			return stub.call()
+		}
 	}
-	if !ok || pinned.Index != 41 {
-		t.Errorf("write pinned to %v (pinned=%v), want the checked version 41", pinned, ok)
+	if m.updateServiceSpecFn != nil {
+		return m.updateServiceSpecFn(ctx, id, spec)
 	}
+	for _, stub := range stubs {
+		if stub.set {
+			return stub.call()
+		}
+	}
+
+	return swarm.Service{}, fmt.Errorf("not implemented")
+}
+
+func cloneTestSpec(spec swarm.ServiceSpec) swarm.ServiceSpec {
+	encoded, _ := json.Marshal(spec)
+	var clone swarm.ServiceSpec
+	_ = json.Unmarshal(encoded, &clone)
+	return clone
 }

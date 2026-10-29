@@ -485,9 +485,10 @@ func structMergePatch(
 	}, true
 }
 
-// writeServiceSpecPatch answers a service merge patch: a specPatchError is the
-// request's own fault, anything else is the engine's.
-func writeServiceSpecPatch(
+// writeServiceSectionError answers a refused service section write: a
+// specPatchError or a patch that did not apply is the request's own fault,
+// anything else is mapped as the write's refusal.
+func writeServiceSectionError(
 	w http.ResponseWriter,
 	r *http.Request,
 	id string,
@@ -495,6 +496,10 @@ func writeServiceSpecPatch(
 ) {
 	if spe, ok := errors.AsType[*specPatchError](err); ok {
 		problem.Write(w, r, spe.code, spe.message)
+		return
+	}
+	if isPatchApplyError(err) {
+		writePatchError(w, r, err)
 		return
 	}
 

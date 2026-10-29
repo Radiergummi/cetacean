@@ -271,8 +271,8 @@ than read as empty.
     | `command`         | `command` plus `args`  | The entrypoint and what follows it, the split Docker makes. Omitting one clears it                                                                                                                    |
 
     Every section other than `env` and `labels` replaces its section wholesale: a field you omit is cleared.
-    On a service with host access, `placement`, and an `env`, `labels`, `ports`, `command`, or `healthcheck` value
-    that changes the section, need level 3, as `update_service_image` does; so do `update_service_secrets`,
+    On a service with host access, a `placement`, `env`, `labels`, `ports`, `command`, or `healthcheck` value
+    that changes the section needs level 3, as `update_service_image` does; so do `update_service_secrets`,
     `update_service_configs`, and `update_service_mounts` when they change the set attached.
     A `null` value is refused for every section.
 

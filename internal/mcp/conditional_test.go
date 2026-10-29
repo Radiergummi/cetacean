@@ -131,14 +131,6 @@ func conditionalCases() []conditionalCase {
 	}
 }
 
-// checkedTools are the editing tools whose check reads the cached service and
-// pins the write to what it read, whether or not a version was passed.
-var checkedTools = []string{
-	"update_service_secrets",
-	"update_service_configs",
-	"update_service_mounts",
-}
-
 func conditionalTestCache(t *testing.T) *cache.Cache {
 	t.Helper()
 
@@ -267,10 +259,6 @@ func TestAVersionPinsTheWriteToIt(t *testing.T) {
 
 func TestNoVersionLeavesTheWriteUnpinned(t *testing.T) {
 	for _, tc := range conditionalCases() {
-		if slices.Contains(checkedTools, tc.tool) {
-			continue
-		}
-
 		t.Run(tc.tool, func(t *testing.T) {
 			f := &fakeWriteClient{}
 			tc.stub(f, func(ctx context.Context, id string) error {
@@ -330,30 +318,6 @@ func TestTheEnginesSequenceConflictIsAlsoAStaleVersion(t *testing.T) {
 	err := callConditional(t, tc, f, cachedIndex(tc.kind))
 	if err == nil || !strings.Contains(err.Error(), "changed since you read it") {
 		t.Errorf("err = %v, want it reported as a changed record", err)
-	}
-}
-
-// A tool whose check reads the cached service must be pinned to what the
-// check read; a caller's version that differs from it cannot be honoured
-// without writing against a spec the check never saw.
-func TestACheckedWriteRefusesAVersionItsCheckDidNotRead(t *testing.T) {
-	for _, tc := range conditionalCases() {
-		if !slices.Contains(checkedTools, tc.tool) {
-			continue
-		}
-
-		t.Run(tc.tool, func(t *testing.T) {
-			for _, version := range []float64{40, 43} {
-				err := callConditional(t, tc, &fakeWriteClient{}, version)
-				if err == nil {
-					t.Fatalf("version %v accepted against a check that read 41", version)
-				}
-
-				if strings.Contains(err.Error(), "not stubbed") {
-					t.Errorf("version %v reached the writer: %v", version, err)
-				}
-			}
-		})
 	}
 }
 

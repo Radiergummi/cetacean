@@ -34,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Compose files and config contents are syntax-highlighted more accurately, with alternating line backgrounds
 - A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`
-- MCP's `scale_service` refuses a global service as REST does, and its lifecycle tools answer a service Cetacean doesn't hold as not found rather than passing it to Docker
+- MCP's `scale_service` refuses a global service as REST does, and its lifecycle and service-editing tools answer a service Cetacean doesn't hold as not found rather than passing it to Docker
+- Service edits are checked against the service as Docker holds it, so a host-access refusal no longer depends on Cetacean having caught up; resending a service's placement unchanged needs no level 3
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built
 - `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`

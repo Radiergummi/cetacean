@@ -1012,14 +1012,14 @@ hold as a plain `local` volume; `PATCH /services/{id}/container-config` a capabi
 `PATCH /plugins/{name}/settings` a setting that names one of the plugin's mounts or devices, since it sets a host path.
 
 A service with host access—a bind, named-pipe, or cluster mount, a volume with driver options, or an added
-capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, `PUT /services/{id}/placement`,
-a `PATCH /services/{id}/container-config` that changes `command`, `args`, `dir`, `user`, or `groups`, a `PUT` or
-`PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of its `env`, `labels`, `ports`, `networks`,
-`secrets`, `configs`, or `mounts` that changes them; resending the same values, in any order, isn't a change. Service
-labels count because a reverse proxy routes by them; the container labels in `container-config` don't.
-`POST /services/{id}/rollback` needs it when either the current or the previous spec has host access. Below that they
-answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so host access that comes
-only through one isn't held to this rule.
+capability—needs level 3 for any change to what runs with it: `PUT /services/{id}/image`, a
+`PUT /services/{id}/placement` that changes it, a `PATCH /services/{id}/container-config` that changes `command`,
+`args`, `dir`, `user`, or `groups`, a `PUT` or `PATCH /services/{id}/healthcheck` that changes `Test`, and a `PATCH` of
+its `env`, `labels`, `ports`, `networks`, `secrets`, `configs`, or `mounts` that changes them; resending the same
+values, in any order, isn't a change. Service labels count because a reverse proxy routes by them; the container labels
+in `container-config` don't. `POST /services/{id}/rollback` needs it when either the current or the previous spec has
+host access. Below that they answer `403` (`OPS001`). A named volume on a worker can't be inspected from the manager, so
+host access that comes only through one isn't held to this rule.
 
 ### Preconditions
 

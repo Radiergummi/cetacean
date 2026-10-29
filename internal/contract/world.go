@@ -157,6 +157,18 @@ func NewWorldWithWriters(
 	return newWorld(t, config.OpsImpactful, nil, rest, agent)
 }
 
+// NewWorldWithWritersAt is NewWorldWithWriters at one operations level.
+func NewWorldWithWritersAt(
+	t *testing.T,
+	level config.OperationsLevel,
+	rest api.DockerWriteClient,
+	agent mcp.DockerWriteClient,
+) *World {
+	t.Helper()
+
+	return newWorld(t, level, nil, rest, agent)
+}
+
 func newWorld(
 	t *testing.T,
 	level config.OperationsLevel,

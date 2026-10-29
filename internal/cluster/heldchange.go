@@ -126,6 +126,16 @@ func PortsChange(before, after []swarm.PortConfig) string {
 	return "changing the published ports of"
 }
 
+// PlacementChange compares where tasks may run, which decides which host's
+// socket or files a held mount reaches.
+func PlacementChange(before, after *swarm.Placement) string {
+	if jsonKey(before) == jsonKey(after) {
+		return ""
+	}
+
+	return "changing the placement of"
+}
+
 // NetworksChange compares network attachments, which can do the same.
 func NetworksChange(before, after []swarm.NetworkAttachmentConfig) string {
 	key := func(n swarm.NetworkAttachmentConfig) string {
