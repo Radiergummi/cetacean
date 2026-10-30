@@ -38,7 +38,7 @@ export default function ClusterOverview() {
 
   const { data: history = [], isLoading: historyLoading } = useQuery({
     queryKey: ["history", { limit: 25 }],
-    queryFn: () => api.history({ limit: 25 }),
+    queryFn: ({ signal }) => api.recentActivity({}, 25, signal),
   });
 
   useEffect(() => {

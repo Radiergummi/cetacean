@@ -715,7 +715,16 @@ export interface HistoryPage {
 
 /** The path of the first `/history` page for these filters. */
 function historyPath(
-  params?: { type?: string; resourceId?: string; search?: string; limit?: number } | undefined,
+  params?:
+    | {
+        type?: string;
+        resourceId?: string;
+        search?: string;
+        kind?: string;
+        since?: string;
+        limit?: number;
+      }
+    | undefined,
 ): string {
   const queryParams = new URLSearchParams();
 
@@ -731,6 +740,14 @@ function historyPath(
     queryParams.set("search", params.search);
   }
 
+  if (params?.kind) {
+    queryParams.set("kind", params.kind);
+  }
+
+  if (params?.since) {
+    queryParams.set("since", params.since);
+  }
+
   if (params?.limit) {
     queryParams.set("limit", String(params.limit));
   }
@@ -738,6 +755,33 @@ function historyPath(
   const query = queryParams.toString();
 
   return `/history${query ? `?${query}` : ""}`;
+}
+
+/**
+ * The newest `limit` changes, and the gaps since the oldest of them, newest
+ * first. One page holding both could fill up with gaps and show no change.
+ */
+async function fetchRecentActivity(
+  params: { type?: string; resourceId?: string },
+  limit: number,
+  signal?: AbortSignal | undefined,
+): Promise<HistoryEntry[]> {
+  const { items: changes } = await fetchHistoryPage(
+    historyPath({ ...params, kind: "change", limit }),
+    signal,
+  );
+  const oldest = changes.at(-1);
+
+  if (oldest === undefined) {
+    return [];
+  }
+
+  const { items: gaps } = await fetchHistoryPage(
+    historyPath({ kind: "gap", since: oldest.timestamp, limit: maximumPageSize }),
+    signal,
+  );
+
+  return [...changes, ...gaps].sort((first, second) => second.id - first.id);
 }
 
 /**
@@ -986,6 +1030,7 @@ export const api = {
 
     return items;
   },
+  recentActivity: fetchRecentActivity,
   historyPath,
   historyPage: fetchHistoryPage,
   topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),

@@ -4,6 +4,7 @@ import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 const transportLabels: Record<HistoryActor["transport"], string> = {
@@ -29,6 +30,31 @@ function gapLength({ timestamp, until }: HistoryEntry): number {
 }
 
 /**
+ * One row of the feed: a marker on the timeline, a time, and what happened.
+ */
+function TimelineRow({
+  marker,
+  date,
+  children,
+}: {
+  marker: ReactNode;
+  date: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3">
+      {marker}
+
+      <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">
+        <TimeAgo date={date} />
+      </span>
+
+      {children}
+    </div>
+  );
+}
+
+/**
  * A run of windows nobody watched, newest first: changes made in them are
  * missing, so it reads as a break in the timeline rather than a quiet stretch.
  */
@@ -42,11 +68,13 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
 
   const end = newest.until ?? newest.timestamp;
   const total = gaps.reduce((sum, gap) => sum + gapLength(gap), 0);
-  const range = `${formatDateTime(oldest.timestamp)} to ${formatDateTime(end)}`;
-  const label =
+
+  // Changes a filter hides may sit between merged gaps, so a run names the
+  // span it falls in, not one window from its first start to its last end.
+  const range =
     gaps.length === 1
-      ? `Nothing recorded from ${range}`
-      : `Nothing recorded in ${gaps.length} stretches from ${range}`;
+      ? `Nothing recorded from ${formatDateTime(oldest.timestamp)} to ${formatDateTime(end)}`
+      : `${gaps.length} stretches between ${formatDateTime(oldest.timestamp)} and ${formatDateTime(end)}`;
 
   let text = "Not watching";
 
@@ -57,22 +85,25 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
   }
 
   return (
-    <div
-      role="separator"
-      aria-label={label}
-      title={label}
-      className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3"
+    <TimelineRow
+      date={end}
+      marker={
+        <div className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full border border-dashed border-muted-foreground bg-background ring-2 ring-background" />
+      }
     >
-      <div className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full border border-dashed border-muted-foreground bg-background ring-2 ring-background" />
-
-      <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">
-        <TimeAgo date={end} />
+      <span
+        className="text-sm whitespace-nowrap text-muted-foreground"
+        title={range}
+      >
+        {text}
+        <span className="sr-only">: {range}</span>
       </span>
 
-      <span className="text-sm whitespace-nowrap text-muted-foreground">{text}</span>
-
-      <span className="h-px flex-1 border-t border-dashed border-muted-foreground/50" />
-    </div>
+      <span
+        aria-hidden="true"
+        className="h-px flex-1 border-t border-dashed border-muted-foreground/50"
+      />
+    </TimelineRow>
   );
 }
 
@@ -80,9 +111,17 @@ interface ActivityFeedProps {
   entries: HistoryEntry[];
   loading?: boolean | undefined;
   hideType?: boolean | undefined;
+
+  /** Shown in place of "No recent activity" when the entries hold no change. */
+  emptyText?: string | undefined;
 }
 
-export default function ActivityFeed({ entries, loading, hideType }: ActivityFeedProps) {
+export default function ActivityFeed({
+  entries,
+  loading,
+  hideType,
+  emptyText = "No recent activity",
+}: ActivityFeedProps) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -99,7 +138,7 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
   const rows = activityRows(entries);
 
   if (rows.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No recent activity</p>;
+    return <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
   }
 
   return (
@@ -119,19 +158,16 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
         const { action, actor, id, name, resourceId, timestamp, type } = row.entry;
 
         return (
-          <div
+          <TimelineRow
             key={id}
-            className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3"
+            date={timestamp}
+            marker={
+              <div
+                data-action={action}
+                className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-status-ok ring-2 ring-background data-[action=remove]:bg-status-danger"
+              />
+            }
           >
-            <div
-              data-action={action}
-              className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-status-ok ring-2 ring-background data-[action=remove]:bg-status-danger"
-            />
-
-            <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">
-              <TimeAgo date={timestamp} />
-            </span>
-
             <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
               {!hideType && (
                 <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
@@ -163,7 +199,7 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
                 </span>
               )}
             </div>
-          </div>
+          </TimelineRow>
         );
       })}
     </div>

@@ -10,7 +10,8 @@ export type ActivityRow =
 
 /**
  * Whether entries hold a change. Gaps are on every resource's timeline, so
- * they alone are no reason to show a list.
+ * they alone are no reason to show a list, nor may they use up a page meant
+ * for changes; `api.recentActivity` fetches the two apart for that reason.
  */
 export function hasChanges(entries: HistoryEntry[]): boolean {
   return entries.some(({ kind }) => kind === "change");
@@ -46,24 +47,4 @@ export function activityRows(entries: HistoryEntry[]): ActivityRow[] {
   }
 
   return rows;
-}
-
-/**
- * The newest entries up to the limit-th change, with the gaps among and after
- * them, so gaps cannot use up a page meant for a resource's own changes.
- */
-export function keepChanges(entries: HistoryEntry[], limit: number): HistoryEntry[] {
-  let changes = 0;
-
-  for (const [index, { kind }] of entries.entries()) {
-    if (kind === "change") {
-      changes += 1;
-    }
-
-    if (changes === limit) {
-      return entries.slice(0, index + 1);
-    }
-  }
-
-  return entries;
 }

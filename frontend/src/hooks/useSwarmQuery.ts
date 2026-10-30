@@ -147,6 +147,11 @@ export function useSwarmQuery<T>({
           }, refetchDelay);
         };
 
+        // A gap names no resource, so no list row moved.
+        if (event.type === "gap") {
+          return;
+        }
+
         if (event.type === "sync") {
           onEventRef.current?.(event);
           void queryClient.invalidateQueries({ queryKey: key });

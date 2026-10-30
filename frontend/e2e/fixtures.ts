@@ -88,9 +88,9 @@ export async function authProvider(
 }
 
 /**
- * Whether the SUT holds change history for a resource: changes only, since a
- * gap is on every resource's timeline. A resource unchanged since startup has
- * none however long the dashboard is given — a real precondition, not a wait.
+ * Whether the SUT holds change history for a resource. A resource unchanged
+ * since startup has none however long the dashboard is given — a real
+ * precondition, not a wait.
  */
 export async function hasHistory(
   request: import("@playwright/test").APIRequestContext,

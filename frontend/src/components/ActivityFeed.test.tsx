@@ -145,10 +145,10 @@ describe("ActivityFeed", () => {
       </MemoryRouter>,
     );
 
-    const divider = screen.getByRole("separator");
+    const divider = screen.getByText(/^Not watching for 3h/);
 
-    expect(divider).toHaveTextContent("Not watching for 3h");
-    expect(divider).toHaveAccessibleName(/^Nothing recorded from .+ to .+$/);
+    expect(divider).toHaveTextContent(/^Not watching for 3h: Nothing recorded from .+ to .+$/);
+    expect(divider).toHaveAttribute("title", expect.stringMatching(/^Nothing recorded from /));
     expect(screen.queryByText("d")).not.toBeInTheDocument();
     expect(screen.getByText("updated")).toBeInTheDocument();
   });
@@ -188,7 +188,7 @@ describe("ActivityFeed", () => {
 
     render(<ActivityFeed entries={entries} />);
 
-    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Not watching/)).not.toBeInTheDocument();
     expect(screen.getByText("No recent activity")).toBeInTheDocument();
   });
 
@@ -224,10 +224,11 @@ describe("ActivityFeed", () => {
       </MemoryRouter>,
     );
 
-    const dividers = screen.getAllByRole("separator");
+    const dividers = screen.getAllByText(/Not watching/);
 
     expect(dividers).toHaveLength(1);
-    expect(dividers[0]).toHaveTextContent("Not watching 2 times, 2h in total");
-    expect(dividers[0]).toHaveAccessibleName(/^Nothing recorded in 2 stretches from .+ to .+$/);
+    expect(dividers[0]).toHaveTextContent(
+      /^Not watching 2 times, 2h in total: 2 stretches between .+ and .+$/,
+    );
   });
 });

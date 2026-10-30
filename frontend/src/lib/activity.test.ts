@@ -1,5 +1,5 @@
 import type { HistoryEntry } from "../api/types";
-import { activityRows, hasChanges, keepChanges } from "./activity";
+import { activityRows, hasChanges } from "./activity";
 import { describe, expect, it } from "vitest";
 
 const change = (id: number): HistoryEntry => ({
@@ -50,19 +50,5 @@ describe("hasChanges", () => {
   it("counts changes only", () => {
     expect(hasChanges([gap(1)])).toBe(false);
     expect(hasChanges([gap(2), change(1)])).toBe(true);
-  });
-});
-
-describe("keepChanges", () => {
-  it("keeps the newest entries up to the limit-th change", () => {
-    const entries = [gap(6), change(5), gap(4), change(3), gap(2), change(1)];
-
-    expect(keepChanges(entries, 2).map(({ id }) => id)).toEqual([6, 5, 4, 3]);
-  });
-
-  it("keeps everything with fewer changes than the limit", () => {
-    const entries = [gap(3), change(2), gap(1)];
-
-    expect(keepChanges(entries, 10)).toEqual(entries);
   });
 });
