@@ -31,7 +31,7 @@ different answer, without changing anything on its side. The covered surfaces:
 | ACL policy | grant syntax, resource types, permissions, audience prefixes | `docs/authorization.md` |
 | Operations tiers | which tier each write needs | the tier table in `docs/configuration.mdx` |
 | Metrics | `cetacean_*` metric names and label names | `/-/metrics` |
-| On-disk state | `snapshot.json`, `oauth-tokens.json` and the DCR store stay readable by the next 1.x | `storage.data_dir` |
+| On-disk state | `snapshot.json`, `cetacean.db`, `oauth-tokens.json` and the DCR store stay readable by the next 1.x | `storage.data_dir` |
 | Binary | the `healthcheck` subcommand and its exit codes | `main.go` |
 
 Not covered, and stated as such in the docs:

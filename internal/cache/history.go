@@ -171,8 +171,9 @@ func (h *History) Count() uint64 {
 }
 
 // Since returns all entries with ID > afterID in chronological order.
-// Returns ok=false if afterID has been overwritten or is a future ID,
-// meaning the caller cannot trust the result is complete.
+// Returns ok=false if afterID is a future ID, or if entries after it have been
+// overwritten, meaning the caller cannot trust the result is complete; in the
+// latter case the result is what the ring still holds.
 func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -187,41 +188,73 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 		return nil, true
 	}
 
-	// Determine the oldest ID still in the ring
-	var oldestID uint64
+	// Read, not derived from count and size: restored IDs may jump.
+	oldest := 0
 	if h.full {
-		oldestID = h.count - uint64(h.size) + 1
-	} else {
-		oldestID = 1
+		oldest = h.cursor
 	}
 
 	// The entry right after afterID has been overwritten — zero included.
-	if afterID+1 < oldestID {
-		return nil, false
-	}
+	complete := afterID+1 >= h.entries[oldest].ID
 
-	// Collect entries with ID > afterID in chronological order.
-	// Walk the ring from oldest to newest.
-	total := h.size
+	slots := h.size
 	if !h.full {
-		total = h.cursor
+		slots = h.cursor
 	}
 
 	var result []HistoryEntry
 
-	for i := total - 1; i >= 0; i-- {
-		idx := h.cursor - 1 - i
-		if idx < 0 {
-			idx += h.size
+	// Newest first, so a caller close behind visits only what it lacks.
+	for i := range slots {
+		index := h.cursor - 1 - i
+		if index < 0 {
+			index += h.size
 		}
 
-		e := h.entries[idx]
-		if e.ID > afterID {
-			result = append(result, e)
+		e := h.entries[index]
+		if e.ID <= afterID {
+			break
 		}
+
+		result = append(result, e)
 	}
 
-	return result, true
+	slices.Reverse(result)
+
+	return result, complete
+}
+
+// Restore fills an empty ring with entries recorded by an earlier process,
+// oldest first, keeping the newest that fit. It must precede any Append. Count
+// skips a ring's worth past the last ID: a process that crashed handed out up
+// to a second of IDs it never wrote, and a feed reader has seen them.
+func (h *History) Restore(entries []HistoryEntry) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if len(entries) > h.size {
+		entries = entries[len(entries)-h.size:]
+	}
+
+	for _, e := range entries {
+		h.entries[h.cursor] = e
+		h.index(e.ResourceID)
+		if e.ServiceID != "" {
+			h.index(e.ServiceID)
+		}
+
+		h.cursor++
+		if h.cursor >= h.size {
+			h.cursor = 0
+			h.full = true
+		}
+
+		h.count = e.ID
+	}
+
+	if len(entries) > 0 {
+		h.count += uint64(h.size)
+	}
 }
 
 func (h *History) Append(e HistoryEntry) uint64 {

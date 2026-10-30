@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Command-line flags, environment variables, TOML config file, operations level, health checks, and snapshots.
+description: Command-line flags, environment variables, TOML config file, operations level, health checks, snapshots, and the change history.
 category: reference
 tags: [configuration, environment, toml, operations-level]
 ---
@@ -134,8 +134,16 @@ names it. So does a value a setting can't parse: an on-off setting takes `true`,
   Persist swarm state to disk after every sync. On restart Cetacean loads the snapshot to serve data immediately while the live sync catches up.
 </ConfigParam>
 
+<ConfigParam name="storage.timeline" flag="-timeline" env="CETACEAN_TIMELINE" default="true">
+  Persist the change history to `cetacean.db` so it survives a restart. Independent of [`storage.snapshot`][storage.snapshot]: the snapshot is current state, the history a record of changes. See [Change history](#change-history).
+</ConfigParam>
+
+<ConfigParam name="storage.history_entries" flag="-history-entries" env="CETACEAN_HISTORY_ENTRIES" default="10000">
+  How many change history entries Cetacean keeps, in memory and on disk, from 1,000 to 100,000. Startup refuses a value outside that range. It also bounds how far a reconnecting stream can replay and what a CSV download of the history returns when it names no `limit`.
+</ConfigParam>
+
 <ConfigParam name="storage.data_dir" flag="-data-dir" env="CETACEAN_DATA_DIR" default="./data">
-  Directory holding `snapshot.json` and, when the [authorization server][oauth.enabled] is enabled, `oauth-tokens.json`. The token file is written regardless of [`storage.snapshot`][storage.snapshot]. Must be writable by the Cetacean process; mount it as a volume in Docker.
+  Directory holding `snapshot.json`, `cetacean.db` when [`storage.timeline`][storage.timeline] is on, and, when the [authorization server][oauth.enabled] is enabled, `oauth-tokens.json`. The token file is written regardless of [`storage.snapshot`][storage.snapshot]. Must be writable by the Cetacean process; mount it as a volume in Docker.
 </ConfigParam>
 
 <ConfigParam name="tls.cert" flag="-tls-cert" env="CETACEAN_TLS_CERT">
@@ -442,6 +450,17 @@ representation: JSON, CSV, MCP, and the dashboard alike. Without a snapshot, rea
 state answer `503` until the first sync, and `/-/ready` answers `503` until then either way.
 Snapshot writes are atomic, so a crash mid-write can't corrupt the file.
 
+## Change history
+
+Cetacean records every change Docker reports, newest last, up to
+[`storage.history_entries`][storage.history_entries]. With [`storage.timeline`][storage.timeline]
+on, it commits the history to `${data_dir}/cetacean.db` once a second and restores it on startup,
+so a restart keeps the record; a crash loses what was recorded since the last write. The database
+is SQLite and belongs to one process. A Cetacean that finds it held waits up to 15 seconds, the
+time a replaced task takes to stop, then logs a warning and keeps its history in memory only. A
+failed write, such as on a full disk, is retried and never fails a request; what the history
+drops while writes keep failing isn't written.
+
 ## Health checks
 
 Two meta endpoints, exempt from authentication and content negotiation:
@@ -553,7 +572,9 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [server.public_url]: #server.public_url
 [server.trusted_proxies]: #server.trusted_proxies
 [storage.data_dir]: #storage.data_dir
+[storage.history_entries]: #storage.history_entries
 [storage.snapshot]: #storage.snapshot
+[storage.timeline]: #storage.timeline
 [tailscale]: #tailscale
 [tls.cert]: #tls.cert
 [tls.key]: #tls.key

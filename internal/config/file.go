@@ -165,8 +165,10 @@ type fileLogging struct {
 }
 
 type fileStorage struct {
-	DataDir  *string `toml:"data_dir"`
-	Snapshot *bool   `toml:"snapshot"`
+	DataDir        *string `toml:"data_dir"`
+	Snapshot       *bool   `toml:"snapshot"`
+	Timeline       *bool   `toml:"timeline"`
+	HistoryEntries *int    `toml:"history_entries"`
 }
 
 type fileTLS struct {

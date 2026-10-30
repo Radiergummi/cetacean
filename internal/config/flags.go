@@ -63,8 +63,10 @@ type Flags struct {
 	TLSKey  *string
 
 	// Storage
-	Snapshot *bool
-	DataDir  *string
+	Snapshot       *bool
+	Timeline       *bool
+	HistoryEntries *int
+	DataDir        *string
 
 	// Server
 	OperationsLevel  *int
@@ -204,6 +206,16 @@ func ParseFlags(args []string) (*Flags, error) {
 		false,
 		"Enable disk persistence (env: CETACEAN_SNAPSHOT, default true)",
 	)
+	timeline := fs.Bool(
+		"timeline",
+		false,
+		"Persist the change history across restarts (env: CETACEAN_TIMELINE, default true)",
+	)
+	historyEntries := fs.Int(
+		"history-entries",
+		0,
+		"Change history entries kept, 1000-100000 (env: CETACEAN_HISTORY_ENTRIES, default 10000)",
+	)
 	dataDir := fs.String(
 		"data-dir",
 		"",
@@ -329,6 +341,10 @@ func ParseFlags(args []string) (*Flags, error) {
 			f.TLSKey = tlsKey
 		case "snapshot":
 			f.Snapshot = snapshot
+		case "timeline":
+			f.Timeline = timeline
+		case "history-entries":
+			f.HistoryEntries = historyEntries
 		case "data-dir":
 			f.DataDir = dataDir
 		case "operations-level":

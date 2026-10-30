@@ -553,3 +553,54 @@ func TestLoad_ImageAttestations(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_Timeline(t *testing.T) {
+	t.Setenv("CETACEAN_TIMELINE", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Timeline {
+		t.Error("Timeline=false, want true by default")
+	}
+
+	t.Setenv("CETACEAN_TIMELINE", "false")
+
+	cfg, err = Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Timeline {
+		t.Error("Timeline=true, want false from the env")
+	}
+}
+
+func TestLoad_HistoryEntries(t *testing.T) {
+	t.Setenv("CETACEAN_HISTORY_ENTRIES", "")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HistoryEntries != 10_000 {
+		t.Errorf("HistoryEntries=%d, want 10000", cfg.HistoryEntries)
+	}
+
+	entries := 50_000
+	cfg, err = Load(&fileConfig{Storage: &fileStorage{HistoryEntries: &entries}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HistoryEntries != entries {
+		t.Errorf("HistoryEntries=%d, want %d from the file", cfg.HistoryEntries, entries)
+	}
+
+	for _, raw := range []string{"999", "100001", "banana"} {
+		t.Setenv("CETACEAN_HISTORY_ENTRIES", raw)
+
+		if _, err := Load(nil, nil); err == nil {
+			t.Errorf("CETACEAN_HISTORY_ENTRIES=%s: expected an error", raw)
+		}
+	}
+}

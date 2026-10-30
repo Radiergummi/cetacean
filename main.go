@@ -44,6 +44,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/oauth"
 	promapi "github.com/radiergummi/cetacean/internal/prometheus"
 	"github.com/radiergummi/cetacean/internal/recommendations"
+	"github.com/radiergummi/cetacean/internal/timeline"
 	"github.com/radiergummi/cetacean/internal/version"
 )
 
@@ -251,7 +252,7 @@ func run(s settings) error {
 	}
 
 	// State cache — created first so its history can be passed to the broadcaster
-	stateCache := cache.New(nil)
+	stateCache := cache.New(nil, cache.WithHistorySize(cfg.HistoryEntries))
 
 	// SSE broadcaster — needs history for Last-Event-ID replay
 	broadcaster := sse.NewBroadcaster(cfg.SSEBatchInterval, stateCache.History())
@@ -299,15 +300,14 @@ func run(s settings) error {
 	}
 
 	// Created once, for whichever feature needs it: the cache snapshot, the
-	// authorization server's token store, or both. Token durability is not tied
-	// to storage.snapshot, so either reason alone is enough, and one call means
-	// one place that can fail.
+	// timeline, the authorization server's token store. None is tied to another,
+	// so any reason alone is enough, and one call means one place that can fail.
 	dataDirReady := false
-	if cfg.Snapshot || cfg.OAuth.Enabled {
+	if cfg.Snapshot || cfg.Timeline || cfg.OAuth.Enabled {
 		//nolint:gosec // DataDir is operator-configured, not user input
 		if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 			slog.Warn(
-				"could not create data dir; snapshots and OAuth state will not persist",
+				"could not create data dir; snapshots, history and OAuth state will not persist",
 				"error", err,
 				"path", cfg.DataDir,
 			)
@@ -326,6 +326,26 @@ func run(s settings) error {
 		}
 	}
 
+	// Before the watcher starts; see History.Restore.
+	var (
+		timelineStore  timeline.Store
+		timelineWriter *timeline.Writer
+	)
+	if cfg.Timeline && dataDirReady {
+		timelineStore = restoreTimeline(
+			filepath.Join(cfg.DataDir, "cetacean.db"),
+			stateCache.History(),
+			cfg.HistoryEntries,
+		)
+	}
+	if timelineStore != nil {
+		timelineWriter = timeline.NewWriter(
+			timelineStore,
+			stateCache.History(),
+			cfg.HistoryEntries,
+		)
+	}
+
 	watcher := docker.NewWatcher(dockerClient, stateCache, snapshotPath)
 	watcher.SetTaskPollInterval(cfg.DockerTaskPollInterval)
 
@@ -341,18 +361,54 @@ func run(s settings) error {
 		watcher.Run(ctx)
 	}()
 
+	// Stopped only after the watcher, so the changes it recorded last are
+	// written; a nil store has nothing to write and stops at once.
+	timelineCtx, stopTimeline := context.WithCancel(context.Background())
+	timelineStopped := make(chan struct{})
+	go func() {
+		defer close(timelineStopped)
+
+		if timelineWriter != nil {
+			timelineWriter.Run(timelineCtx, watcher.Ready())
+		}
+	}()
+
 	watcherDone := make(chan struct{})
 	go func() {
 		defer close(watcherDone)
 
 		<-ctx.Done()
+		grace, cancelGrace := context.WithTimeout(context.Background(), shutdownGrace)
+		defer cancelGrace()
+
 		select {
 		case <-watcherStopped:
-		case <-time.After(shutdownGrace):
+		case <-grace.Done():
 			slog.Warn(
 				"the watcher did not stop within the shutdown grace; its snapshot may be stale",
 			)
 		}
+
+		// A window of its own: a watcher that used up the grace would otherwise
+		// leave no time to write what it recorded last.
+		stopTimeline()
+		select {
+		case <-timelineStopped:
+			if timelineStore != nil {
+				if err := timelineStore.Close(); err != nil {
+					slog.Warn("could not close the timeline", "error", err)
+				}
+			}
+		case <-time.After(timelineGrace):
+			slog.Warn("the change history was not written within its shutdown grace")
+		}
+	}()
+
+	// Every return from here on, an early error included, stops the watcher
+	// and waits for the history's last write.
+	defer func() {
+		stop()
+		<-watcherDone
 	}()
 
 	// API — pass ready channel so /-/ready reports sync status
@@ -724,6 +780,52 @@ func run(s settings) error {
 	return nil
 }
 
+// openTimeline opens the timeline, waiting up to timelineHeldWait while
+// another process holds it.
+func openTimeline(ctx context.Context, path string) (*timeline.SQLite, error) {
+	deadline := time.Now().Add(timelineHeldWait)
+
+	for waited := false; ; waited = true {
+		store, err := timeline.OpenSQLite(ctx, path)
+		if !errors.Is(err, timeline.ErrHeld) || time.Now().After(deadline) {
+			return store, err
+		}
+
+		if !waited {
+			slog.InfoContext(ctx, "the timeline is held by another process; waiting", "path", path)
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
+// restoreTimeline opens the timeline and fills the history from it, or returns
+// nil when it cannot: the history then lives in memory only, as it would with
+// storage.timeline off, and startup goes on.
+func restoreTimeline(path string, history *cache.History, keep int) timeline.Store {
+	ctx := context.Background()
+
+	store, err := openTimeline(ctx, path)
+	if err != nil {
+		slog.Warn("could not open the timeline; the change history will not persist",
+			"error", err, "path", path)
+		return nil
+	}
+
+	entries, err := store.Restore(ctx, keep)
+	if err != nil {
+		_ = store.Close()
+		slog.Warn("could not restore the timeline; the change history will not persist",
+			"error", err, "path", path)
+		return nil
+	}
+
+	history.Restore(entries)
+	slog.Info("restored the change history", "entries", len(entries))
+
+	return store
+}
+
 // dockerProbeTimeout bounds the startup version probe, so a socket that
 // accepts and then says nothing cannot hold startup open.
 const dockerProbeTimeout = 10 * time.Second
@@ -738,6 +840,13 @@ const (
 // shutdownGrace bounds how long a signalled process waits for in-flight
 // requests, inside the ten seconds an orchestrator allows before SIGKILL.
 const shutdownGrace = 5 * time.Second
+
+// timelineGrace bounds the history's final write, after the watcher stopped.
+const timelineGrace = 2 * time.Second
+
+// timelineHeldWait is how long startup waits for a previous process, such as
+// the task a start-first update replaces, to let go of the timeline.
+const timelineHeldWait = 15 * time.Second
 
 // runHealthcheck probes the server's readiness with the configuration the
 // server itself would load, so a listen address, base path or TLS set in any

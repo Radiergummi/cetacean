@@ -166,6 +166,11 @@ Each of these looks like a simplification and is not.
   are retried. SBOMs have their own budget so they cannot evict images. A nil
   `attestations.Store` is the feature switched off and reports `disabled`.
 
+- **The timeline writer follows the history ring; it is never fed from
+  `notify`.** A channel there would either block recording on the disk or drop
+  entries. IDs are the recorder's, never SQLite's, and the store is opened and
+  restored before the watcher starts, so no `Append` precedes the restore.
+
 ## Details that bite
 
 - Config data comes back base64-encoded from the Docker SDK; the frontend decodes it.
