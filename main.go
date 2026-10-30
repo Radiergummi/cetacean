@@ -326,11 +326,22 @@ func run(s settings) error {
 		}
 	}
 
-	// Before the watcher starts, so the restore precedes every Append.
-	var timelineStore timeline.Store
+	// Before the watcher starts, so the restore and the writer's starting
+	// point both precede every Append.
+	var (
+		timelineStore  timeline.Store
+		timelineWriter *timeline.Writer
+	)
 	if cfg.Timeline && dataDirReady {
 		timelineStore = restoreTimeline(
 			filepath.Join(cfg.DataDir, "cetacean.db"),
+			stateCache.History(),
+			cfg.HistoryEntries,
+		)
+	}
+	if timelineStore != nil {
+		timelineWriter = timeline.NewWriter(
+			timelineStore,
 			stateCache.History(),
 			cfg.HistoryEntries,
 		)
@@ -358,9 +369,8 @@ func run(s settings) error {
 	go func() {
 		defer close(timelineStopped)
 
-		if timelineStore != nil {
-			timeline.NewWriter(timelineStore, stateCache.History(), cfg.HistoryEntries).
-				Run(timelineCtx, watcher.Ready())
+		if timelineWriter != nil {
+			timelineWriter.Run(timelineCtx, watcher.Ready())
 		}
 	}()
 
@@ -369,10 +379,12 @@ func run(s settings) error {
 		defer close(watcherDone)
 
 		<-ctx.Done()
-		grace := time.After(shutdownGrace)
+		grace, cancelGrace := context.WithTimeout(context.Background(), shutdownGrace)
+		defer cancelGrace()
+
 		select {
 		case <-watcherStopped:
-		case <-grace:
+		case <-grace.Done():
 			slog.Warn(
 				"the watcher did not stop within the shutdown grace; its snapshot may be stale",
 			)
@@ -386,7 +398,7 @@ func run(s settings) error {
 					slog.Warn("could not close the timeline", "error", err)
 				}
 			}
-		case <-grace:
+		case <-grace.Done():
 			slog.Warn("the change history was not written within the shutdown grace")
 		}
 	}()

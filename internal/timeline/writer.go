@@ -45,6 +45,11 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	// database/sql discards a connection whose transaction was cancelled, and
+	// with it the store's lock, so ending ctx stops the loop, never a commit.
+	stop := ctx.Done()
+	ctx = context.WithoutCancel(ctx)
+
 	for {
 		select {
 		case <-ready:
@@ -57,8 +62,8 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 			}
 
 			w.flush(ctx)
-		case <-ctx.Done():
-			w.flush(context.WithoutCancel(ctx))
+		case <-stop:
+			w.flush(ctx)
 			return
 		}
 	}

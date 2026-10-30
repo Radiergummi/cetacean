@@ -24,7 +24,8 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// kindChange is the only kind this version records.
+// kindChange is the only kind this version records, restores and retains;
+// rows of kinds a newer binary added are left alone.
 const kindChange = "change"
 
 // SQLite is the Store on a local SQLite database, owned by one process.
@@ -147,7 +148,7 @@ func (s *SQLite) Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, 
 	rows, err := s.db.QueryContext(ctx, `SELECT id, at, type, action, resource_id, name, summary,
 			service, stack, service_id,
 			actor_subject, actor_name, actor_provider, actor_client, actor_transport
-		FROM timeline ORDER BY id DESC LIMIT ?`, limit)
+		FROM timeline WHERE kind = ? ORDER BY id DESC LIMIT ?`, kindChange, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -264,8 +265,10 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 		// With fewer than Keep entries the subquery is NULL and deletes nothing.
 		if _, err := tx.ExecContext(
 			ctx,
-			`DELETE FROM timeline
-				WHERE id < (SELECT id FROM timeline ORDER BY id DESC LIMIT 1 OFFSET ?)`,
+			`DELETE FROM timeline WHERE kind = ?1 AND id < (
+				SELECT id FROM timeline WHERE kind = ?1 ORDER BY id DESC LIMIT 1 OFFSET ?2
+			)`,
+			kindChange,
 			batch.Keep-1,
 		); err != nil {
 			return err
@@ -273,8 +276,8 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 
 		// The newest row stays: it is where the next gap starts.
 		_, err := tx.ExecContext(ctx, `DELETE FROM coverage
-			WHERE seen_at < (SELECT min(at) FROM timeline)
-				AND id < (SELECT max(id) FROM coverage)`)
+			WHERE seen_at < (SELECT min(at) FROM timeline WHERE kind = ?)
+				AND id < (SELECT max(id) FROM coverage)`, kindChange)
 
 		return err
 	})

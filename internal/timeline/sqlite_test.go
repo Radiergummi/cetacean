@@ -21,8 +21,14 @@ func TestSQLite(t *testing.T) {
 	})
 }
 
+// Opened once before, so the second open finds nothing to migrate and must
+// take the lock all the same.
 func TestSQLite_SecondProcessIsRefused(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cetacean.db")
+
+	if err := openSQLite(t, path).Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	first := openSQLite(t, path)
 	defer first.Close() //nolint:errcheck // test cleanup
@@ -77,6 +83,7 @@ func TestSQLite_OpensANewerDatabase(t *testing.T) {
 	for _, stmt := range []string{
 		`ALTER TABLE timeline ADD COLUMN later TEXT`,
 		`INSERT INTO schema_migrations (version, applied_at) VALUES (9999, 0)`,
+		`INSERT INTO timeline (id, kind, at, later) VALUES (1, 'later-kind', 0, 'x')`,
 	} {
 		if _, err := newer.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("%s: %v", stmt, err)
@@ -88,19 +95,35 @@ func TestSQLite_OpensANewerDatabase(t *testing.T) {
 	}
 
 	store = openSQLite(t, path)
-	defer store.Close() //nolint:errcheck // test cleanup
 
 	err := store.Commit(ctx, timeline.Batch{
-		Entries: []cache.HistoryEntry{{ID: 1, Timestamp: time.Now(), Type: cache.EventService}},
-		Keep:    10,
+		Entries: []cache.HistoryEntry{
+			{ID: 2, Timestamp: time.Now(), Type: cache.EventService},
+			{ID: 3, Timestamp: time.Now(), Type: cache.EventService},
+		},
+		Keep: 1,
 	})
 	if err != nil {
 		t.Fatalf("Commit against a newer schema: %v", err)
 	}
 
 	entries, err := store.Restore(ctx, 10)
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("Restore = %d entries, err=%v; want 1", len(entries), err)
+	if err != nil || len(entries) != 1 || entries[0].ID != 3 {
+		t.Fatalf("Restore = %+v, err=%v; want only the change 3", entries, err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := timeline.OpenRaw(t, path)
+	defer raw.Close() //nolint:errcheck // test cleanup
+
+	var kept int
+	if err := raw.QueryRowContext(
+		ctx, `SELECT count(*) FROM timeline WHERE kind = 'later-kind'`,
+	).Scan(&kept); err != nil || kept != 1 {
+		t.Fatalf("rows of the unknown kind = %d, err=%v; want it left alone", kept, err)
 	}
 }
 

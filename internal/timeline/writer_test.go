@@ -18,6 +18,9 @@ type fakeStore struct {
 	err      error
 	batches  []Batch
 	coverage int
+
+	// cancelled records a store call made with a cancelled context.
+	cancelled bool
 }
 
 func (f *fakeStore) Restore(context.Context, int) ([]cache.HistoryEntry, error) {
@@ -37,9 +40,11 @@ func (f *fakeStore) OpenCoverage(context.Context, time.Time) (time.Time, bool, e
 	return time.Time{}, false, nil
 }
 
-func (f *fakeStore) Commit(_ context.Context, batch Batch) error {
+func (f *fakeStore) Commit(ctx context.Context, batch Batch) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	f.cancelled = f.cancelled || ctx.Err() != nil
 
 	if f.err != nil {
 		return f.err
@@ -210,6 +215,10 @@ func TestWriter_Run(t *testing.T) {
 
 		if got := store.committed(); !slices.Equal(got, []uint64{1, 2}) {
 			t.Fatalf("committed %v, want [1 2] by the final flush", got)
+		}
+
+		if store.cancelled {
+			t.Fatal("a commit ran under the cancelled context")
 		}
 	})
 }
