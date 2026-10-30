@@ -126,26 +126,6 @@ func (r *indexRing) newest() int {
 	return r.indices[r.cursor-1]
 }
 
-// iterNewest calls fn with each stored index, newest first.
-// fn returns false to stop iteration.
-func (r *indexRing) iterNewest(fn func(int) bool) {
-	total := len(r.indices)
-	if !r.full {
-		total = r.cursor
-	}
-
-	for i := range total {
-		idx := r.cursor - 1 - i
-		if idx < 0 {
-			idx += len(r.indices)
-		}
-
-		if !fn(r.indices[idx]) {
-			return
-		}
-	}
-}
-
 func NewHistory(size int) *History {
 	return &History{
 		entries:    make([]HistoryEntry, size),
@@ -243,11 +223,10 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 	return result, complete
 }
 
-// Restore fills an empty ring with entries recorded by an earlier process,
-// oldest first, keeping the newest that fit. It must precede any Append. Count
-// skips a ring's worth past last, the largest ID stored of any kind: a process
-// that crashed handed out up to a second of IDs it never wrote, which a feed
-// reader has seen, and a kind the ring does not hold took the IDs it shows.
+// Restore fills an empty ring, oldest first, with the newest entries that fit;
+// it must precede any Append. Count skips a ring's worth past last, the largest
+// ID stored of any kind, since a crashed process handed out IDs it never wrote
+// and a reader has seen them.
 func (h *History) Restore(entries []HistoryEntry, last uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -450,12 +429,12 @@ func (h *History) listByResource(
 	q HistoryQuery,
 	limit int,
 ) (entries []HistoryEntry, complete bool) {
-	own := h.indexed(q.ResourceID, func(e HistoryEntry) bool { return e.about(q.ResourceID) })
+	own := h.indexCursor(q.ResourceID, func(e HistoryEntry) bool { return e.about(q.ResourceID) })
 
 	// Every gap belongs on every resource's timeline, so its index is merged in.
-	gaps := indexedEntries{whole: true}
+	gaps := &indexCursor{whole: true}
 	if q.Kind == "" || q.Kind == KindGap {
-		gaps = h.indexed("", func(e HistoryEntry) bool { return e.Kind == KindGap })
+		gaps = h.indexCursor("", func(e HistoryEntry) bool { return e.Kind == KindGap })
 	}
 
 	result := make([]HistoryEntry, 0, min(limit, indexRingSize))
@@ -464,18 +443,17 @@ func (h *History) listByResource(
 	for len(result) < limit {
 		// An index that has wrapped may have lost older entries that would
 		// sort between the other's, so running out of one ends the answer.
-		if len(own.entries) == 0 && !own.whole || len(gaps.entries) == 0 && !gaps.whole {
+		if !own.ok && !own.whole || !gaps.ok && !gaps.whole {
 			return result, false
 		}
 
 		var e HistoryEntry
 
 		switch {
-		case len(own.entries) > 0 &&
-			(len(gaps.entries) == 0 || own.entries[0].ID > gaps.entries[0].ID):
-			e, own.entries = own.entries[0], own.entries[1:]
-		case len(gaps.entries) > 0:
-			e, gaps.entries = gaps.entries[0], gaps.entries[1:]
+		case own.ok && (!gaps.ok || own.head.ID > gaps.head.ID):
+			e = own.next()
+		case gaps.ok:
+			e = gaps.next()
 		default:
 			return result, true
 		}
@@ -498,37 +476,70 @@ func (h *History) listByResource(
 	return result, true
 }
 
-// indexedEntries are the entries one index names, newest first. whole says
-// they are all the ring holds under that ID: its index never wrapped.
-type indexedEntries struct {
-	entries []HistoryEntry
-	whole   bool
+// indexCursor walks one index newest first, one entry ahead: head is the next
+// entry when ok. whole says the index never wrapped, so it names everything
+// the ring holds under its ID.
+type indexCursor struct {
+	history *History
+	ring    *indexRing
+	belongs func(HistoryEntry) bool
+	visited int
+	last    uint64
+
+	head      HistoryEntry
+	ok, whole bool
 }
 
-// indexed reads id's index. A missing index is proof nothing under the ID
-// survives: an index is pruned only once its newest entry is overwritten.
-func (h *History) indexed(id string, belongs func(HistoryEntry) bool) indexedEntries {
+// indexCursor starts on id's index. A missing index is proof nothing under
+// the ID survives: an index is pruned only once its newest entry is overwritten.
+func (h *History) indexCursor(id string, belongs func(HistoryEntry) bool) *indexCursor {
 	ring := h.byResource[id]
-	if ring == nil {
-		return indexedEntries{whole: true}
+	cursor := &indexCursor{
+		history: h,
+		ring:    ring,
+		belongs: belongs,
+		last:    math.MaxUint64,
+		whole:   ring == nil || !ring.full,
+	}
+	cursor.advance()
+
+	return cursor
+}
+
+// next returns head and moves past it.
+func (c *indexCursor) next() HistoryEntry {
+	e := c.head
+	c.advance()
+
+	return e
+}
+
+// advance finds the next entry. Newest first, the entries an index still names
+// have falling IDs; a slot overwritten since it was indexed holds another
+// entry, or a newer one under this ID that an earlier reference yielded.
+func (c *indexCursor) advance() {
+	c.ok = false
+
+	if c.ring == nil {
+		return
 	}
 
-	found := indexedEntries{whole: !ring.full}
+	total := len(c.ring.indices)
+	if !c.ring.full {
+		total = c.ring.cursor
+	}
 
-	// Newest first, the entries an index still names have falling IDs. A slot
-	// overwritten since it was indexed holds another entry, or a newer one
-	// under this ID that an earlier reference already yielded.
-	var last uint64 = math.MaxUint64
-
-	ring.iterNewest(func(idx int) bool {
-		e := h.entries[idx]
-		if belongs(e) && e.ID < last {
-			last = e.ID
-			found.entries = append(found.entries, e)
+	for c.visited < total {
+		index := c.ring.cursor - 1 - c.visited
+		if index < 0 {
+			index += len(c.ring.indices)
 		}
 
-		return true
-	})
+		c.visited++
 
-	return found
+		if e := c.history.entries[c.ring.indices[index]]; c.belongs(e) && e.ID < c.last {
+			c.last, c.head, c.ok = e.ID, e, true
+			return
+		}
+	}
 }

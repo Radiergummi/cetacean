@@ -396,7 +396,8 @@ no such heartbeat, so there are no gaps either.
 A gap names no resource, so it matches every resource: `type`, `resourceId` and `search` keep it in the list. Only
 `kind`, the time window, and the cursor narrow it. `?kind=change` returns the changes alone, which is the list as it
 was before gaps were recorded. Later versions add kinds, so **ignore a kind you don't know** rather than treating it as
-a change. CSV carries a gap as a row, and Atom and JSON Feed as an entry of its own.
+a change. CSV carries a gap as a row, and Atom and JSON Feed as an entry of its own. Every feed
+built from the history carries gaps, the search feed and a type's or a resource's feed included.
 
 ### History pagination
 

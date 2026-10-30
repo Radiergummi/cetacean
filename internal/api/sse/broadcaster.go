@@ -474,24 +474,7 @@ func (b *Broadcaster) replayEvents(
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []frameEvent
 	for _, e := range entries {
-		ev := cache.Event{
-			Type:      e.Type,
-			Action:    e.Action,
-			ID:        e.ResourceID,
-			Name:      e.Name,
-			HistoryID: e.ID,
-			Service:   e.Service,
-			Stack:     e.Stack,
-		}
-
-		if e.Kind == cache.KindGap {
-			ev = cache.Event{
-				Type:      cache.EventGap,
-				HistoryID: e.ID,
-				Timestamp: e.Timestamp,
-				Until:     e.Until,
-			}
-		}
+		ev := replayEvent(e)
 
 		if replayType != ReplayAll && ev.Type != replayType {
 			continue
@@ -509,6 +492,29 @@ func (b *Broadcaster) replayEvents(
 	}
 
 	return replay[len(replay)-1].HistoryID, covered, b.writeFrame(stream, replay)
+}
+
+// replayEvent is the event a history entry was recorded from, without the
+// resource payload the history does not keep.
+func replayEvent(e cache.HistoryEntry) cache.Event {
+	if e.Kind == cache.KindGap {
+		return cache.Event{
+			Type:      cache.EventGap,
+			HistoryID: e.ID,
+			Timestamp: e.Timestamp,
+			Until:     e.Until,
+		}
+	}
+
+	return cache.Event{
+		Type:      e.Type,
+		Action:    e.Action,
+		ID:        e.ResourceID,
+		Name:      e.Name,
+		HistoryID: e.ID,
+		Service:   e.Service,
+		Stack:     e.Stack,
+	}
 }
 
 // writeFrame writes events as one frame under the stream's write deadline.

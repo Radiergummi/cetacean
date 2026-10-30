@@ -28,9 +28,9 @@ type Writer struct {
 	// Each logs its first failure and its recovery once.
 	writeFailing, coverageFailing bool
 
-	// covering is set once coverage opened; until then a ready writer
-	// retries at every tick.
-	ready, covering bool
+	// gapChecked and covering are set once the gap is recorded and coverage
+	// opened; until then a ready writer retries at every tick.
+	ready, gapChecked, covering bool
 }
 
 // NewWriter starts from the ring's count, which Restore set.
@@ -80,26 +80,39 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 	}
 }
 
+// openCoverage records the gap since the previous stretch of watching, then
+// opens this one. The gap is recorded as soon as it is known, so a coverage
+// row that takes long to write does not stretch it over watched time.
 func (w *Writer) openCoverage(ctx context.Context) {
-	now := time.Now()
-
-	previous, ok, err := w.store.OpenCoverage(ctx, now)
-	if err != nil {
-		if !w.coverageFailing {
-			slog.WarnContext(ctx, "could not record the start of coverage; retrying", "error", err)
+	if !w.gapChecked {
+		previous, ok, err := w.store.LastSeen(ctx)
+		if err != nil {
+			w.coverageFailed(ctx, err)
+			return
 		}
 
-		w.coverageFailing = true
+		w.gapChecked = true
 
+		if ok && previous.Before(time.Now()) {
+			w.recordGap(previous)
+		}
+	}
+
+	if err := w.store.OpenCoverage(ctx, time.Now()); err != nil {
+		w.coverageFailed(ctx, err)
 		return
 	}
 
 	w.coverageFailing = false
 	w.covering = true
+}
 
-	if ok && previous.Before(now) {
-		w.recordGap(previous)
+func (w *Writer) coverageFailed(ctx context.Context, err error) {
+	if !w.coverageFailing {
+		slog.WarnContext(ctx, "could not record the start of coverage; retrying", "error", err)
 	}
+
+	w.coverageFailing = true
 }
 
 // flush commits what the ring holds past lastWritten. After an overrun Since

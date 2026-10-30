@@ -227,40 +227,38 @@ func (s *SQLite) Restore(
 	return entries, last, nil
 }
 
-func (s *SQLite) OpenCoverage(
-	ctx context.Context,
-	at time.Time,
-) (previous time.Time, ok bool, err error) {
-	err = inTx(ctx, s.db, func(tx *sql.Tx) error {
-		var seenAt int64
+func (s *SQLite) LastSeen(ctx context.Context) (at time.Time, ok bool, err error) {
+	var seenAt int64
 
-		err := tx.QueryRowContext(
-			ctx,
-			`SELECT seen_at FROM coverage ORDER BY seen_at > started_at DESC, id DESC LIMIT 1`,
-		).Scan(&seenAt)
+	err = s.db.QueryRowContext(
+		ctx,
+		`SELECT seen_at FROM coverage ORDER BY seen_at > started_at DESC, id DESC LIMIT 1`,
+	).Scan(&seenAt)
 
-		switch {
-		case err == nil:
-			previous, ok = time.Unix(0, seenAt), true
-		case !errors.Is(err, sql.ErrNoRows):
-			return err
-		}
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return time.Time{}, false, nil
+	case err != nil:
+		return time.Time{}, false, err
+	default:
+		return time.Unix(0, seenAt), true, nil
+	}
+}
 
-		return tx.QueryRowContext(
-			ctx,
-			`INSERT INTO coverage (id, started_at, seen_at)
-				SELECT coalesce(max(id), 0) + 1, ?, ? FROM coverage
-				RETURNING id`,
-			at.UnixNano(),
-			at.UnixNano(),
-		).Scan(&s.coverage)
-	})
+func (s *SQLite) OpenCoverage(ctx context.Context, at time.Time) error {
+	err := s.db.QueryRowContext(
+		ctx,
+		`INSERT INTO coverage (id, started_at, seen_at)
+			SELECT coalesce(max(id), 0) + 1, ?, ? FROM coverage
+			RETURNING id`,
+		at.UnixNano(),
+		at.UnixNano(),
+	).Scan(&s.coverage)
 	if err != nil {
 		s.coverage = 0
-		return time.Time{}, false, err
 	}
 
-	return previous, ok, nil
+	return err
 }
 
 func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
@@ -272,7 +270,9 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 		if s.coverage != 0 && !batch.SeenAt.IsZero() {
 			if _, err := tx.ExecContext(
 				ctx,
-				`UPDATE coverage SET seen_at = ? WHERE id = ?`,
+				// Past started_at even if the clock stepped back: that is
+				// what tells LastSeen this stretch committed its gap.
+				`UPDATE coverage SET seen_at = max(?, started_at + 1) WHERE id = ?`,
 				batch.SeenAt.UnixNano(),
 				s.coverage,
 			); err != nil {
@@ -295,10 +295,11 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 			return err
 		}
 
-		// The newest row stays: it is where the next gap starts.
+		// The rows LastSeen may pick stay: the newest, and the newest heartbeated.
 		_, err := tx.ExecContext(ctx, `DELETE FROM coverage
 			WHERE seen_at < (SELECT min(at) FROM timeline WHERE `+ringKinds+`)
-				AND id < (SELECT max(id) FROM coverage)`)
+				AND id < (SELECT max(id) FROM coverage)
+				AND id IS NOT (SELECT max(id) FROM coverage WHERE seen_at > started_at)`)
 
 		return err
 	})
