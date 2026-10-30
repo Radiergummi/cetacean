@@ -194,8 +194,8 @@ func Run(t *testing.T, newStore Factory) {
 
 		store := open()
 
-		if _, ok, err := store.OpenCoverage(context.Background(), start); err != nil || ok {
-			t.Fatalf("first OpenCoverage: ok=%v, err=%v; want no previous coverage", ok, err)
+		if _, ok := startCoverage(t, store, start); ok {
+			t.Fatal("first start of coverage found a previous one")
 		}
 
 		seen := start.Add(time.Hour)
@@ -205,9 +205,9 @@ func Run(t *testing.T, newStore Factory) {
 		store = open()
 		defer closeStore(t, store)
 
-		previous, ok, err := store.OpenCoverage(context.Background(), seen.Add(time.Hour))
-		if err != nil || !ok || !previous.Equal(seen) {
-			t.Fatalf("OpenCoverage = %v, ok=%v, err=%v; want %v", previous, ok, err, seen)
+		previous, ok := startCoverage(t, store, seen.Add(time.Hour))
+		if !ok || !previous.Equal(seen) {
+			t.Fatalf("previous coverage = %v, ok=%v; want %v", previous, ok, seen)
 		}
 	})
 
@@ -218,29 +218,78 @@ func Run(t *testing.T, newStore Factory) {
 		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
 
 		store := open()
-		if _, _, err := store.OpenCoverage(context.Background(), start); err != nil {
-			t.Fatal(err)
-		}
+		startCoverage(t, store, start)
 
 		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
 		closeStore(t, store)
 
 		store = open()
-		if _, _, err := store.OpenCoverage(context.Background(), start.Add(time.Hour)); err != nil {
-			t.Fatal(err)
-		}
+		startCoverage(t, store, start.Add(time.Hour))
 
 		closeStore(t, store)
 
 		store = open()
 		defer closeStore(t, store)
 
-		previous, ok, err := store.OpenCoverage(context.Background(), start.Add(2*time.Hour))
-		if err != nil || !ok || !previous.Equal(start.Add(time.Minute)) {
+		previous, ok := startCoverage(t, store, start.Add(2*time.Hour))
+		if !ok || !previous.Equal(start.Add(time.Minute)) {
 			t.Fatalf(
-				"OpenCoverage = %v, ok=%v, err=%v; want the last heartbeat, %v",
-				previous, ok, err, start.Add(time.Minute),
+				"previous coverage = %v, ok=%v; want the last heartbeat, %v",
+				previous, ok, start.Add(time.Minute),
 			)
+		}
+	})
+
+	t.Run("a heartbeat on a clock that stepped back still counts", func(t *testing.T) {
+		open := newStore(t)
+		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+
+		store := open()
+		startCoverage(t, store, start)
+		commit(t, store, timeline.Batch{SeenAt: start.Add(-time.Minute)})
+		closeStore(t, store)
+
+		store = open()
+		startCoverage(t, store, start.Add(time.Hour))
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		if previous, ok := startCoverage(t, store, start.Add(2*time.Hour)); !ok ||
+			previous.Before(start) || previous.After(start.Add(time.Second)) {
+			t.Fatalf("previous coverage = %v, ok=%v; want the heartbeated %v", previous, ok, start)
+		}
+	})
+
+	// Retention may run before the next process opens coverage; the row its
+	// gap starts from must survive, though a newer silent row exists.
+	t.Run("retention keeps the newest heartbeated coverage", func(t *testing.T) {
+		open := newStore(t)
+		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+
+		store := open()
+		startCoverage(t, store, start)
+		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
+		closeStore(t, store)
+
+		store = open()
+		startCoverage(t, store, start.Add(time.Hour))
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		later := entries(1, 2, 3)
+		for i := range later {
+			later[i].Timestamp = start.Add(2 * time.Hour)
+		}
+
+		commit(t, store, timeline.Batch{Entries: later, Keep: 2})
+
+		if previous, ok := startCoverage(t, store, start.Add(3*time.Hour)); !ok ||
+			!previous.Equal(start.Add(time.Minute)) {
+			t.Fatalf("previous coverage = %v, ok=%v; want the last heartbeat", previous, ok)
 		}
 	})
 
@@ -250,8 +299,8 @@ func Run(t *testing.T, newStore Factory) {
 
 		commit(t, store, timeline.Batch{SeenAt: time.Now()})
 
-		if _, ok, err := store.OpenCoverage(context.Background(), time.Now()); err != nil || ok {
-			t.Fatalf("OpenCoverage: ok=%v, err=%v; want no previous coverage", ok, err)
+		if _, ok := startCoverage(t, store, time.Now()); ok {
+			t.Fatal("a heartbeat before coverage opened left a previous one")
 		}
 	})
 
@@ -262,9 +311,7 @@ func Run(t *testing.T, newStore Factory) {
 		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
 
 		store := open()
-		if _, _, err := store.OpenCoverage(context.Background(), start); err != nil {
-			t.Fatal(err)
-		}
+		startCoverage(t, store, start)
 
 		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
 		closeStore(t, store)
@@ -279,16 +326,28 @@ func Run(t *testing.T, newStore Factory) {
 
 		commit(t, store, timeline.Batch{Entries: later, Keep: 2})
 
-		previous, ok, err := store.OpenCoverage(context.Background(), start.Add(2*time.Hour))
-		if err != nil || !ok || !previous.Equal(start.Add(time.Minute)) {
-			t.Fatalf(
-				"OpenCoverage = %v, ok=%v, err=%v; want the previous heartbeat",
-				previous,
-				ok,
-				err,
-			)
+		previous, ok := startCoverage(t, store, start.Add(2*time.Hour))
+		if !ok || !previous.Equal(start.Add(time.Minute)) {
+			t.Fatalf("previous coverage = %v, ok=%v; want the previous heartbeat", previous, ok)
 		}
 	})
+}
+
+// startCoverage does what a writer does once ready: reads when the previous
+// stretch was last seen, then opens its own.
+func startCoverage(t *testing.T, store timeline.Store, at time.Time) (time.Time, bool) {
+	t.Helper()
+
+	previous, ok, err := store.LastSeen(context.Background())
+	if err != nil {
+		t.Fatalf("LastSeen: %v", err)
+	}
+
+	if err := store.OpenCoverage(context.Background(), at); err != nil {
+		t.Fatalf("OpenCoverage: %v", err)
+	}
+
+	return previous, ok
 }
 
 func entries(ids ...uint64) []cache.HistoryEntry {

@@ -108,19 +108,16 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 
 // wrapHistory types each item by its kind: a gap is not a change.
 func wrapHistory(ctx context.Context, entries []cache.HistoryEntry) []Item[cache.HistoryEntry] {
-	items := make([]Item[cache.HistoryEntry], len(entries))
-	for i, e := range entries {
-		typ := "HistoryEntry"
-		if e.Kind == cache.KindGap {
-			typ = "Gap"
-		}
+	return wrapTypedItems(
+		ctx,
+		entries,
+		func(e cache.HistoryEntry) string {
+			if e.Kind == cache.KindGap {
+				return "Gap"
+			}
 
-		items[i] = Item[cache.HistoryEntry]{
-			id:  absPath(ctx, fmt.Sprintf("/history#%d", e.ID)),
-			typ: typ,
-			val: e,
-		}
-	}
-
-	return items
+			return "HistoryEntry"
+		},
+		func(e cache.HistoryEntry) string { return fmt.Sprintf("/history#%d", e.ID) },
+	)
 }

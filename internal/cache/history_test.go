@@ -816,21 +816,26 @@ func TestHistory_Restore(t *testing.T) {
 		{ID: 9, Timestamp: at, Type: EventTask, ResourceID: "t1", ServiceID: "s1"},
 	}, 0)
 
-	if h.Count() != 9 {
-		t.Fatalf("Count() = %d, want the last restored ID 9", h.Count())
+	// A ring's worth past the last ID, which a crash may have handed out.
+	if h.Count() != 19 {
+		t.Fatalf("Count() = %d, want 19, the last restored ID 9 plus the size", h.Count())
 	}
 
-	if id := h.Append(HistoryEntry{Type: EventService, ResourceID: "s1"}); id != 10 {
-		t.Fatalf("Append after Restore = %d, want 10", id)
+	if id := h.Append(HistoryEntry{Type: EventService, ResourceID: "s1"}); id != 20 {
+		t.Fatalf("Append after Restore = %d, want 20", id)
 	}
 
 	if got := entryIDs(
 		h.List(HistoryQuery{ResourceID: "s1"}),
 	); !slices.Equal(
 		got,
-		[]uint64{10, 9, 4},
+		[]uint64{20, 9, 4},
 	) {
-		t.Fatalf("List(s1) = %v, want [10 9 4] through the rebuilt index", got)
+		t.Fatalf("List(s1) = %v, want [20 9 4] through the rebuilt index", got)
+	}
+
+	if entries, ok := h.Since(9); !ok || !slices.Equal(entryIDs(entries), []uint64{20}) {
+		t.Fatalf("Since(9) = %v, ok=%v; want [20] and complete", entryIDs(entries), ok)
 	}
 }
 
@@ -870,8 +875,8 @@ func TestHistory_SinceAcrossRestoredJump(t *testing.T) {
 		t.Fatal("Since(1): ok=false, but the ring still holds the entry after it")
 	}
 
-	if got := entryIDs(entries); !slices.Equal(got, []uint64{2, 3, 50, 51}) {
-		t.Fatalf("Since(1) = %v, want [2 3 50 51]", got)
+	if got := entryIDs(entries); !slices.Equal(got, []uint64{2, 3, 50, 55}) {
+		t.Fatalf("Since(1) = %v, want [2 3 50 55]", got)
 	}
 }
 
@@ -1080,8 +1085,9 @@ func TestRestoreContinuesPastIDsTheRingDoesNotHold(t *testing.T) {
 		t.Fatalf("Since(9) = %v, %t; want caught up", entries, complete)
 	}
 
-	if id := h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"}); id != 10 {
-		t.Fatalf("next ID = %d, want 10", id)
+	// Past the annotation's 9, and a ring's worth past it as after any restore.
+	if id := h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"}); id != 20 {
+		t.Fatalf("next ID = %d, want 20", id)
 	}
 
 	empty := NewHistory(10)

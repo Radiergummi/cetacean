@@ -19,6 +19,7 @@ require (
 	github.com/goccy/go-json v0.11.2
 	github.com/klauspost/compress v1.20.3
 	github.com/mark3labs/mcp-go v1.3.0
+	github.com/ncruces/go-sqlite3 v0.35.6
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
@@ -97,7 +98,6 @@ require (
 	github.com/montanaflynn/stats v0.0.0-20151014174947-eeaced052adb // indirect
 	github.com/morikuni/aec v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/ncruces/go-sqlite3 v0.35.6 // indirect
 	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect

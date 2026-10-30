@@ -151,9 +151,19 @@ func (i Item[T]) MarshalJSON() ([]byte, error) {
 // base path cannot hand out an identifier that 404s -- and a new listing
 // cannot reintroduce that.
 func wrapItems[T any](ctx context.Context, items []T, typ string, id func(T) string) []Item[T] {
+	return wrapTypedItems(ctx, items, func(T) string { return typ }, id)
+}
+
+// wrapTypedItems is wrapItems for a list whose items differ in @type.
+func wrapTypedItems[T any](
+	ctx context.Context,
+	items []T,
+	typ func(T) string,
+	id func(T) string,
+) []Item[T] {
 	out := make([]Item[T], len(items))
 	for index, v := range items {
-		out[index] = Item[T]{id: absPath(ctx, id(v)), typ: typ, val: v}
+		out[index] = Item[T]{id: absPath(ctx, id(v)), typ: typ(v), val: v}
 	}
 	return out
 }

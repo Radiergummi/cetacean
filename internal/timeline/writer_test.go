@@ -19,8 +19,11 @@ type fakeStore struct {
 	batches  []Batch
 	coverage int
 
-	// previous is the heartbeat OpenCoverage reports; zero reports none.
+	// previous is the heartbeat LastSeen reports; zero reports none.
 	previous time.Time
+
+	// coverageErr fails OpenCoverage alone.
+	coverageErr error
 
 	// cancelled records a store call made with a cancelled context.
 	cancelled bool
@@ -30,7 +33,7 @@ func (f *fakeStore) Restore(context.Context, int) ([]cache.HistoryEntry, uint64,
 	return nil, 0, nil
 }
 
-func (f *fakeStore) OpenCoverage(context.Context, time.Time) (time.Time, bool, error) {
+func (f *fakeStore) LastSeen(context.Context) (time.Time, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -38,9 +41,24 @@ func (f *fakeStore) OpenCoverage(context.Context, time.Time) (time.Time, bool, e
 		return time.Time{}, false, f.err
 	}
 
+	return f.previous, !f.previous.IsZero(), nil
+}
+
+func (f *fakeStore) OpenCoverage(context.Context, time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.err != nil {
+		return f.err
+	}
+
+	if f.coverageErr != nil {
+		return f.coverageErr
+	}
+
 	f.coverage++
 
-	return f.previous, !f.previous.IsZero(), nil
+	return nil
 }
 
 func (f *fakeStore) Commit(ctx context.Context, batch Batch) error {
@@ -114,8 +132,8 @@ func TestWriter_StartsAfterTheRestoredEntries(t *testing.T) {
 	appendN(history, 1)
 	w.flush(context.Background())
 
-	if got := store.committed(); !slices.Equal(got, []uint64{42}) {
-		t.Fatalf("committed %v, want only the new [42]", got)
+	if got := store.committed(); !slices.Equal(got, []uint64{52}) {
+		t.Fatalf("committed %v, want only the new [52]", got)
 	}
 }
 
@@ -164,8 +182,9 @@ func TestWriter_RetainsOnTheFirstTickAndAfterInserts(t *testing.T) {
 		keeps = append(keeps, b.Keep)
 	}
 
-	if !slices.Equal(keeps, []int{10, 0, 10}) {
-		t.Fatalf("Keep per batch = %v, want [10 0 10]", keeps)
+	// The quiet second tick, before coverage opens, commits nothing at all.
+	if !slices.Equal(keeps, []int{10, 10}) {
+		t.Fatalf("Keep per batch = %v, want [10 10]", keeps)
 	}
 }
 
@@ -257,4 +276,34 @@ func TestWriter_RecordsNoGapWithoutAPreviousProcess(t *testing.T) {
 	})
 
 	w.openCoverage(context.Background())
+}
+
+// A coverage row that takes long to write must not stretch the gap over the
+// time this process was already watching.
+func TestWriter_RecordsTheGapBeforeCoverageOpens(t *testing.T) {
+	store := &fakeStore{
+		previous:    time.Now().Add(-time.Hour),
+		coverageErr: errors.New("disk full"),
+	}
+
+	var gaps int
+	w := NewWriter(store, cache.NewHistory(10), 10, func(time.Time) { gaps++ })
+
+	w.openCoverage(context.Background())
+	w.openCoverage(context.Background())
+
+	if gaps != 1 || w.covering {
+		t.Fatalf(
+			"gaps = %d, covering = %v; want one gap while coverage keeps failing",
+			gaps,
+			w.covering,
+		)
+	}
+
+	store.coverageErr = nil
+	w.openCoverage(context.Background())
+
+	if gaps != 1 || !w.covering {
+		t.Fatalf("gaps = %d, covering = %v; want still one gap, now covering", gaps, w.covering)
+	}
 }
