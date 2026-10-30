@@ -814,7 +814,7 @@ func TestHistory_Restore(t *testing.T) {
 	h.Restore([]HistoryEntry{
 		{ID: 4, Timestamp: at, Type: EventService, ResourceID: "s1", Name: "web"},
 		{ID: 9, Timestamp: at, Type: EventTask, ResourceID: "t1", ServiceID: "s1"},
-	})
+	}, 0)
 
 	if h.Count() != 9 {
 		t.Fatalf("Count() = %d, want the last restored ID 9", h.Count())
@@ -842,7 +842,7 @@ func TestHistory_RestoreKeepsTheNewestThatFit(t *testing.T) {
 		restored = append(restored, HistoryEntry{ID: id + 1, Type: EventService})
 	}
 
-	h.Restore(restored)
+	h.Restore(restored, 0)
 
 	if got := entryIDs(h.List(HistoryQuery{})); !slices.Equal(got, []uint64{5, 4, 3}) {
 		t.Fatalf("List() = %v, want the newest three", got)
@@ -862,7 +862,7 @@ func TestHistory_SinceAcrossRestoredJump(t *testing.T) {
 		{ID: 2, Type: EventService},
 		{ID: 3, Type: EventService},
 		{ID: 50, Type: EventService},
-	})
+	}, 0)
 	h.Append(HistoryEntry{Type: EventService})
 
 	entries, ok := h.Since(1)
@@ -1042,7 +1042,7 @@ func TestRestoreIndexesGaps(t *testing.T) {
 	h.Restore([]HistoryEntry{
 		{ID: 4, Kind: KindChange, Type: EventService, ResourceID: "svc1"},
 		{ID: 5, Kind: KindGap},
-	})
+	}, 0)
 
 	got := historyIDs(h.List(HistoryQuery{ResourceID: "svc1"}))
 	if !slices.Equal(got, []uint64{5, 4}) {
@@ -1069,5 +1069,25 @@ func TestGapEndsNoEarlierThanTheChangesBeforeIt(t *testing.T) {
 	entries := c.History().List(HistoryQuery{})
 	if gap, change := entries[0], entries[1]; gap.Until.Before(change.Timestamp) {
 		t.Fatalf("gap ends %v, before the change it follows at %v", gap.Until, change.Timestamp)
+	}
+}
+
+func TestRestoreContinuesPastIDsTheRingDoesNotHold(t *testing.T) {
+	h := NewHistory(10)
+	h.Restore([]HistoryEntry{{ID: 5, Kind: KindChange, Type: EventService, ResourceID: "svc1"}}, 9)
+
+	if entries, complete := h.Since(9); len(entries) != 0 || !complete {
+		t.Fatalf("Since(9) = %v, %t; want caught up", entries, complete)
+	}
+
+	if id := h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"}); id != 10 {
+		t.Fatalf("next ID = %d, want 10", id)
+	}
+
+	empty := NewHistory(10)
+	empty.Restore(nil, 9)
+
+	if _, ok := empty.Oldest(); ok {
+		t.Error("an empty ring reports an oldest entry")
 	}
 }

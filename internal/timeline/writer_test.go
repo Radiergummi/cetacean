@@ -26,8 +26,8 @@ type fakeStore struct {
 	cancelled bool
 }
 
-func (f *fakeStore) Restore(context.Context, int) ([]cache.HistoryEntry, error) {
-	return nil, nil
+func (f *fakeStore) Restore(context.Context, int) ([]cache.HistoryEntry, uint64, error) {
+	return nil, 0, nil
 }
 
 func (f *fakeStore) OpenCoverage(context.Context, time.Time) (time.Time, bool, error) {
@@ -108,7 +108,7 @@ func TestWriter_WritesEachEntryOnce(t *testing.T) {
 func TestWriter_StartsAfterTheRestoredEntries(t *testing.T) {
 	store := &fakeStore{}
 	history := cache.NewHistory(10)
-	history.Restore([]cache.HistoryEntry{{ID: 41, Type: cache.EventService}})
+	history.Restore([]cache.HistoryEntry{{ID: 41, Type: cache.EventService}}, 41)
 
 	w := NewWriter(store, history, 10, noGap)
 	appendN(history, 1)

@@ -123,6 +123,22 @@ func Run(t *testing.T, newStore Factory) {
 		}
 	})
 
+	// A newer binary's kinds share the sequence; a rollback that restarted
+	// it below them would reuse their IDs, and the store would drop the new.
+	t.Run("restore reports the largest ID of any kind", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		batch := entries(1, 2, 3)
+		batch[2].Kind = cache.KindAnnotation
+		commit(t, store, timeline.Batch{Entries: batch})
+
+		got, last, err := store.Restore(context.Background(), 10)
+		if err != nil || !slices.Equal(ids(got), []uint64{1, 2}) || last != 3 {
+			t.Fatalf("Restore = %v, last %d, err=%v; want [1 2] and 3", ids(got), last, err)
+		}
+	})
+
 	t.Run("a batch committed again is stored once", func(t *testing.T) {
 		store := newStore(t)()
 		defer closeStore(t, store)
@@ -314,7 +330,7 @@ func commit(t *testing.T, store timeline.Store, batch timeline.Batch) {
 func restore(t *testing.T, store timeline.Store, limit int) []cache.HistoryEntry {
 	t.Helper()
 
-	entries, err := store.Restore(context.Background(), limit)
+	entries, _, err := store.Restore(context.Background(), limit)
 	if err != nil {
 		t.Fatalf("Restore: %v", err)
 	}

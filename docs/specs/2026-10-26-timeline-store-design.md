@@ -202,8 +202,9 @@ At startup, before the watcher starts and so before any `Append`:
 
 1. Open and migrate the database.
 2. Select the newest `storage.history_entries` items, oldest first, into the ring through a new
-   `History.Restore`. It rebuilds the per-resource index and sets the counter to the largest ID,
-   not the row count, so new items continue the sequence. The size used is the one configured
+   `History.Restore`. It rebuilds the per-resource index and sets the counter to the largest ID
+   stored of any kind, not the row count, so new items continue the sequence even past kinds this
+   binary doesn't restore. The size used is the one configured
    now. A smaller size than the database was written under keeps the newest items, and the next
    retention pass deletes the rest.
 3. Start the writer with `lastWritten` at that counter.

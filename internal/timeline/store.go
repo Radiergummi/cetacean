@@ -11,8 +11,9 @@ import (
 // Store holds the timeline. Callers never see its SQL, so another database
 // can implement it; storetest is the suite every implementation passes.
 type Store interface {
-	// Restore returns the newest limit entries, oldest first.
-	Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, error)
+	// Restore returns the newest limit entries of the kinds the ring holds,
+	// oldest first, and the largest ID stored of any kind.
+	Restore(ctx context.Context, limit int) (entries []cache.HistoryEntry, last uint64, err error)
 
 	// OpenCoverage starts this process's stretch of watching at at, and
 	// returns when the previous one was last seen; ok=false when none exists.

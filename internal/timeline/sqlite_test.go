@@ -107,7 +107,7 @@ func TestSQLite_OpensANewerDatabase(t *testing.T) {
 		t.Fatalf("Commit against a newer schema: %v", err)
 	}
 
-	entries, err := store.Restore(ctx, 10)
+	entries, _, err := store.Restore(ctx, 10)
 	if err != nil || len(entries) != 1 || entries[0].ID != 3 {
 		t.Fatalf("Restore = %+v, err=%v; want only the change 3", entries, err)
 	}

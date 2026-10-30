@@ -144,18 +144,19 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (s *SQLite) Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, error) {
+func (s *SQLite) Restore(
+	ctx context.Context,
+	limit int,
+) (entries []cache.HistoryEntry, last uint64, err error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, at, until,
 			type, action, resource_id, name, summary,
 			service, stack, service_id,
 			actor_subject, actor_name, actor_provider, actor_client, actor_transport
 		FROM timeline WHERE `+ringKinds+` ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close() //nolint:errcheck // rows.Err is checked
-
-	var entries []cache.HistoryEntry
 
 	for rows.Next() {
 		var (
@@ -173,7 +174,7 @@ func (s *SQLite) Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, 
 			&service, &stack, &serviceID,
 			&subject, &actorName, &provider, &client, &transport,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		e.Timestamp = time.Unix(0, at)
@@ -204,12 +205,17 @@ func (s *SQLite) Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, 
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	slices.Reverse(entries)
 
-	return entries, nil
+	err = s.db.QueryRowContext(ctx, `SELECT coalesce(max(id), 0) FROM timeline`).Scan(&last)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return entries, last, nil
 }
 
 func (s *SQLite) OpenCoverage(

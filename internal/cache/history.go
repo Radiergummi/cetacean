@@ -169,7 +169,7 @@ func (h *History) Oldest() (time.Time, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if h.count == 0 {
+	if h.cursor == 0 && !h.full {
 		return time.Time{}, false
 	}
 
@@ -241,9 +241,10 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 }
 
 // Restore fills an empty ring with entries recorded by an earlier process,
-// oldest first, keeping the newest that fit. Count continues from the last
-// one's ID, so new entries extend its sequence. It must precede any Append.
-func (h *History) Restore(entries []HistoryEntry) {
+// oldest first, keeping the newest that fit. Count continues from last, the
+// largest ID stored of any kind, so new entries extend the sequence rather
+// than reuse an ID a kind the ring does not hold took. It precedes any Append.
+func (h *History) Restore(entries []HistoryEntry, last uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -266,6 +267,8 @@ func (h *History) Restore(entries []HistoryEntry) {
 
 		h.count = e.ID
 	}
+
+	h.count = max(h.count, last)
 }
 
 func (h *History) Append(e HistoryEntry) uint64 {
