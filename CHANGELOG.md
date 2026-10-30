@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
+- After a restart, the history marks the time Cetacean wasn't watching as a gap, on `/history`, its CSV and feeds, the `/events` stream and `get_events`
 - Service and node pages show a task timeline: each replica's tasks as bars from creation to exit, coloured by state with failures marked, over the metric charts' time range
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
@@ -51,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A failure that stops Cetacean logs `cetacean stopped`, with the cause in `error`, after closing what it opened. Update log queries that matched the failure's own message, such as `server error`.
 - **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
+- **Breaking:** `/history` items carry a `kind`, and gaps appear beside changes; request `?kind=change` to keep the list of changes alone
 
 ### Fixed
 - A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50; on `/history.csv` it returns 200 rows instead of the whole history, which leaving `limit` out still does

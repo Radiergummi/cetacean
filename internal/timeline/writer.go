@@ -16,6 +16,10 @@ type Writer struct {
 	history *cache.History
 	keep    int
 
+	// recordGap records the window between the previous process's last
+	// heartbeat and this one's coverage; it reaches the store through the ring.
+	recordGap func(from, until time.Time)
+
 	// lastWritten is the newest ID committed; a failed commit leaves it, so
 	// the next tick retries from the same place.
 	lastWritten uint64
@@ -29,11 +33,17 @@ type Writer struct {
 }
 
 // NewWriter starts after Restore, so the ring's count is the last ID stored.
-func NewWriter(store Store, history *cache.History, keep int) *Writer {
+func NewWriter(
+	store Store,
+	history *cache.History,
+	keep int,
+	recordGap func(from, until time.Time),
+) *Writer {
 	return &Writer{
 		store:       store,
 		history:     history,
 		keep:        keep,
+		recordGap:   recordGap,
 		lastWritten: history.Count(),
 	}
 }
@@ -70,7 +80,10 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 }
 
 func (w *Writer) openCoverage(ctx context.Context) {
-	if _, _, err := w.store.OpenCoverage(ctx, time.Now()); err != nil {
+	now := time.Now()
+
+	previous, ok, err := w.store.OpenCoverage(ctx, now)
+	if err != nil {
 		if !w.failing {
 			slog.WarnContext(ctx, "could not record the start of coverage; retrying", "error", err)
 		}
@@ -81,6 +94,10 @@ func (w *Writer) openCoverage(ctx context.Context) {
 	}
 
 	w.covering = true
+
+	if ok && previous.Before(now) {
+		w.recordGap(previous, now)
+	}
 }
 
 // flush commits what the ring holds past lastWritten. After an overrun Since

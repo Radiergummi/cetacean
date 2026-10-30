@@ -248,6 +248,7 @@ const ReplayAll cache.EventType = "*"
 
 // TypesFilter matches the event types a ?types= list names, or returns nil
 // when there is none. Sync events always pass: they tell the client to refetch.
+// So do gaps, which name no resource and so belong to every type's timeline.
 func TypesFilter(r *http.Request) func(cache.Event) bool {
 	t := r.URL.Query().Get("types")
 	if t == "" {
@@ -259,7 +260,9 @@ func TypesFilter(r *http.Request) func(cache.Event) bool {
 		types[strings.TrimSpace(typ)] = true
 	}
 
-	return func(e cache.Event) bool { return e.Type == cache.EventSync || types[string(e.Type)] }
+	return func(e cache.Event) bool {
+		return e.Type == cache.EventSync || e.Type == cache.EventGap || types[string(e.Type)]
+	}
 }
 
 // ServeHead answers a HEAD on a stream with the headers a GET opens it with,
@@ -471,10 +474,6 @@ func (b *Broadcaster) replayEvents(
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []frameEvent
 	for _, e := range entries {
-		if replayType != ReplayAll && e.Type != replayType {
-			continue
-		}
-
 		ev := cache.Event{
 			Type:      e.Type,
 			Action:    e.Action,
@@ -483,6 +482,19 @@ func (b *Broadcaster) replayEvents(
 			HistoryID: e.ID,
 			Service:   e.Service,
 			Stack:     e.Stack,
+		}
+
+		if e.Kind == cache.KindGap {
+			ev = cache.Event{
+				Type:      cache.EventGap,
+				HistoryID: e.ID,
+				Timestamp: e.Timestamp,
+				Until:     e.Until,
+			}
+		}
+
+		if replayType != ReplayAll && ev.Type != replayType {
+			continue
 		}
 
 		if match != nil && !match(ev) {
@@ -751,6 +763,10 @@ type Event struct {
 	Action   string `json:"action"`
 	ID       string `json:"id"`
 	Resource any    `json:"resource,omitempty"`
+
+	// Timestamp and Until bound a gap; a change carries neither.
+	Timestamp time.Time `json:"timestamp,omitzero"`
+	Until     time.Time `json:"until,omitzero"`
 }
 
 // SetBasePath sets the prefix every event's @id carries. Called once while the
@@ -759,6 +775,10 @@ func (b *Broadcaster) SetBasePath(p string) { b.basePath = p }
 
 func ToSSEEvent(e cache.Event, basePath string) Event {
 	path := ResourcePath(e.Type, e.ID)
+	if e.Type == cache.EventGap {
+		path = fmt.Sprintf("/history#%d", e.HistoryID)
+	}
+
 	if path != "" {
 		path = basePath + path
 	}
@@ -776,6 +796,9 @@ func ToSSEEvent(e cache.Event, basePath string) Event {
 		Action:   e.Action,
 		ID:       e.ID,
 		Resource: resource,
+
+		Timestamp: e.Timestamp,
+		Until:     e.Until,
 	}
 }
 
@@ -828,6 +851,8 @@ func ResourceType(typ cache.EventType) string {
 		return "Volume"
 	case cache.EventStack:
 		return "Stack"
+	case cache.EventGap:
+		return "Gap"
 	default:
 		return ""
 	}

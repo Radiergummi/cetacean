@@ -209,6 +209,10 @@ func (h *Handlers) aclMatchWrap(
 		if ev.Type == cache.EventSync {
 			return true
 		}
+		// A gap names no resource; whoever may read the stream may read it.
+		if ev.Type == cache.EventGap {
+			return true
+		}
 		return cluster.CanReadEvent(ev, func(resource string) bool {
 			return h.acl.Can(id, "read", resource)
 		})

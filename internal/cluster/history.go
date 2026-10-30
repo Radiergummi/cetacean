@@ -53,9 +53,10 @@ func ReadableTaskName(c *cache.Cache, taskID string, canRead func(resource strin
 }
 
 // HistoryReadable adapts canRead to a cache.HistoryQuery's Visible, keyed on
-// the entry's type and the name it recorded — a task's is its ID.
+// the entry's type and the name it recorded — a task's is its ID. A gap names
+// no resource, so whoever may read the timeline may read it.
 func HistoryReadable(canRead func(resource string) bool) func(cache.HistoryEntry) bool {
 	return func(e cache.HistoryEntry) bool {
-		return canRead(string(e.Type) + ":" + e.Name)
+		return e.Kind == cache.KindGap || canRead(string(e.Type)+":"+e.Name)
 	}
 }

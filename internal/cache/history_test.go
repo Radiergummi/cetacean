@@ -883,3 +883,177 @@ func entryIDs(entries []HistoryEntry) []uint64 {
 
 	return ids
 }
+
+func TestRecordGapGoesThroughNotify(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	from := time.Date(2026, 10, 30, 13, 0, 0, 0, time.UTC)
+	c.RecordGap(from, from.Add(3*time.Hour))
+
+	entries := c.History().List(HistoryQuery{})
+	if len(entries) != 1 {
+		t.Fatalf("history holds %d entries, want the gap", len(entries))
+	}
+
+	gap := entries[0]
+	if gap.Kind != KindGap || !gap.Timestamp.Equal(from) ||
+		!gap.Until.Equal(from.Add(3*time.Hour)) || gap.Type != "" || gap.ResourceID != "" {
+		t.Errorf("gap entry = %+v, want a gap from 13:00 to 16:00 naming no resource", gap)
+	}
+
+	if len(events) != 1 || events[0].Type != EventGap || events[0].HistoryID != gap.ID ||
+		!events[0].Timestamp.Equal(gap.Timestamp) || !events[0].Until.Equal(gap.Until) {
+		t.Errorf("listeners got %+v, want one gap event carrying entry %d", events, gap.ID)
+	}
+}
+
+func TestAppendDefaultsToAChange(t *testing.T) {
+	h := NewHistory(10)
+	h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"})
+
+	if kind := h.List(HistoryQuery{})[0].Kind; kind != KindChange {
+		t.Fatalf("Kind = %q, want %q", kind, KindChange)
+	}
+}
+
+// gapHistory holds a change at 12:00, a gap from 13:00 to 16:00 and a change
+// at 17:00, all on or across svc1's timeline.
+func gapHistory() *History {
+	base := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
+	h := NewHistory(10)
+	h.Append(HistoryEntry{
+		Type: EventService, ResourceID: "svc1", Name: "web", Timestamp: base.Add(12 * time.Hour),
+	})
+	h.Append(HistoryEntry{
+		Kind: KindGap, Timestamp: base.Add(13 * time.Hour), Until: base.Add(16 * time.Hour),
+	})
+	h.Append(HistoryEntry{
+		Type: EventService, ResourceID: "svc1", Name: "web", Timestamp: base.Add(17 * time.Hour),
+	})
+
+	return h
+}
+
+func TestListGapOverlapsTheWindow(t *testing.T) {
+	base := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
+	h := gapHistory()
+
+	for _, tc := range []struct {
+		name          string
+		after, before time.Time
+		want          []uint64
+	}{
+		{"inside the gap", base.Add(14 * time.Hour), base.Add(15 * time.Hour), []uint64{2}},
+		{"from the gap's end", base.Add(16 * time.Hour), time.Time{}, []uint64{3}},
+		{"just before the gap's end", base.Add(16*time.Hour - 1), time.Time{}, []uint64{3, 2}},
+		{"up to the gap's start", time.Time{}, base.Add(13 * time.Hour), []uint64{2, 1}},
+		{"before the gap", time.Time{}, base.Add(13*time.Hour - 1), []uint64{1}},
+	} {
+		for _, resource := range []string{"", "svc1"} {
+			got := historyIDs(h.List(HistoryQuery{
+				ResourceID: resource, After: tc.after, Before: tc.before, Limit: 10,
+			}))
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("%s, resource %q: got %v, want %v", tc.name, resource, got, tc.want)
+			}
+		}
+	}
+}
+
+func TestGapPassesEveryResourceFilter(t *testing.T) {
+	h := gapHistory()
+
+	for _, q := range []HistoryQuery{
+		{Type: EventNode},
+		{ResourceID: "other"},
+		{NameContains: "nothing"},
+		{Types: []EventType{EventTask}},
+		{Kind: KindGap},
+		{Kind: KindGap, ResourceID: "svc1"},
+	} {
+		if got := historyIDs(h.List(q)); !slices.Equal(got, []uint64{2}) {
+			t.Errorf("List(%+v) = %v, want only the gap", q, got)
+		}
+	}
+
+	for _, q := range []HistoryQuery{
+		{Kind: KindChange},
+		{Kind: KindChange, ResourceID: "svc1"},
+		{Visible: func(e HistoryEntry) bool { return e.Kind != KindGap }},
+	} {
+		if got := historyIDs(h.List(q)); !slices.Equal(got, []uint64{3, 1}) {
+			t.Errorf("List(%+v) = %v, want the changes only", q, got)
+		}
+	}
+}
+
+// The index merges gaps into a resource's entries; it must answer exactly
+// what a scan of the ring does, for every page, cursor and wrapped index.
+func TestListByResourceMergesGapsLikeAScan(t *testing.T) {
+	h := NewHistory(2000)
+	for i := range 600 {
+		switch {
+		case i%7 == 0:
+			h.Append(HistoryEntry{Kind: KindGap})
+		case i%3 == 0:
+			h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"})
+		default:
+			h.Append(HistoryEntry{Type: EventService, ResourceID: "svc2"})
+		}
+	}
+
+	scan := func(q HistoryQuery) []uint64 {
+		var want []uint64
+		pastCursor := q.BeforeID == 0
+		for _, e := range h.List(HistoryQuery{Limit: h.Size()}) {
+			if !pastCursor {
+				pastCursor = e.ID == q.BeforeID
+				continue
+			}
+			if q.matches(e) && len(want) < q.Limit {
+				want = append(want, e.ID)
+			}
+		}
+		return want
+	}
+
+	for _, kind := range []string{"", KindChange, KindGap} {
+		for _, limit := range []int{1, 10, 50, 200} {
+			q := HistoryQuery{ResourceID: "svc1", Kind: kind, Limit: limit}
+			for page := range 30 {
+				got := historyIDs(h.List(q))
+				if want := scan(q); !slices.Equal(got, want) {
+					t.Fatalf("kind %q, limit %d, page %d: got %v, want %v",
+						kind, limit, page, got, want)
+				}
+				if len(got) < limit {
+					break
+				}
+				q.BeforeID = got[len(got)-1]
+			}
+		}
+	}
+}
+
+func TestRestoreIndexesGaps(t *testing.T) {
+	h := NewHistory(10)
+	h.Restore([]HistoryEntry{
+		{ID: 4, Kind: KindChange, Type: EventService, ResourceID: "svc1"},
+		{ID: 5, Kind: KindGap},
+	})
+
+	got := historyIDs(h.List(HistoryQuery{ResourceID: "svc1"}))
+	if !slices.Equal(got, []uint64{5, 4}) {
+		t.Fatalf("svc1's timeline after a restore = %v, want [5 4]", got)
+	}
+}
+
+func historyIDs(entries []HistoryEntry) []uint64 {
+	result := make([]uint64, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, e.ID)
+	}
+
+	return result
+}

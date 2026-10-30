@@ -241,7 +241,7 @@ Docker object is what the JSON representation is for.
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
 | `/networks` | `name`, `stack`, `driver`, `used`, `usable`, `id` (the addresses, empty without a figure) |
 | `/volumes` | `name`, `stack`, `driver`, `id` |
-| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport` |
+| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport`, `kind`, `until` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
 ### Pagination differs
@@ -370,6 +370,34 @@ ranges is ignored. `Range: items 0-24`, without the `=`, is still accepted but d
 Every page of a list carries the collection's `ETag`, as does the full answer. With `If-Range` naming it, any
 page is served as long as the list is unchanged; otherwise you get the first page with a `200`.
 
+### Changes and gaps
+
+Every item in `/history` has a `kind`. A `change` is a change Docker reported. A `gap` is a window in which nobody
+was watching the cluster, from its `timestamp` to its `until`: Cetacean wasn't running, so whatever changed then is
+missing from the record. Read a gap as unknown, not as quiet. Cetacean records one when it's watching again after a
+restart, starting at the previous process's last heartbeat. Without [`storage.timeline`][storage.timeline] there's
+no such heartbeat, so there are no gaps either.
+
+```json
+{
+  "@id": "/history#1043",
+  "@type": "Gap",
+  "id": 1043,
+  "kind": "gap",
+  "timestamp": "2026-10-30T13:00:00Z",
+  "until": "2026-10-30T16:00:00Z",
+  "type": "",
+  "action": "",
+  "resourceId": "",
+  "name": ""
+}
+```
+
+A gap names no resource, so it matches every resource: `type`, `resourceId` and `search` keep it in the list. Only
+`kind`, the time window, and the cursor narrow it. `?kind=change` returns the changes alone, which is the list as it
+was before gaps were recorded. Later versions add kinds, so **ignore a kind you don't know** rather than treating it as
+a change. CSV carries a gap as a row, and Atom and JSON Feed as an entry of its own.
+
 ### History pagination
 
 `/history` pages by cursor rather than offset, because new entries arrive at the front while you read. A full page
@@ -392,7 +420,8 @@ curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 `since` and `until` narrow `/history` to a window, as RFC 3339 timestamps: `since` is exclusive and `until`
 inclusive, the same boundaries as the MCP tool `get_events`. Either can be left out. They combine with the other
 filters in JSON and CSV, apply to the Atom and JSON Feed representations too, which read no other filter, and stay
-on the `next` link, so paging never leaves the window. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
+on the `next` link, so paging never leaves the window. A gap is in every window it overlaps, so a window inside an
+outage returns the gap rather than an empty list. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
 
 ```http tab
 GET /history?since=2026-09-05T14:00:00Z&until=2026-09-05T14:30:00Z HTTP/1.1
@@ -754,6 +783,15 @@ The `action` field says what happened:
 | `ref_changed` | A resource this one cross-references changed. |
 | `full_sync` | Sent as a `sync` event when the stream couldn't be replayed from the client's cursor, or the client fell behind and missed events. Refetch. |
 
+`/events` also carries a `gap` event when Cetacean records a [gap](#changes-and-gaps). It names no resource, and its
+`@id` is the gap's history item:
+
+```sse
+id: 1043
+event: gap
+data: {"@id":"/history#1043","@type":"Gap","type":"gap","action":"","id":"","timestamp":"2026-10-30T13:00:00Z","until":"2026-10-30T16:00:00Z"}
+```
+
 Events arriving within the batch interval ([`server.sse.batch_interval`][server.sse.batch_interval], default 100 ms)
 are sent together as a `batch` event:
 
@@ -776,8 +814,8 @@ Accept: text/event-stream
 curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,node"
 ```
 
-Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`. `sync` events always pass the
-filter.
+Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`. `sync` and `gap` events
+always pass the filter.
 
 ### Keepalive
 
@@ -1227,3 +1265,4 @@ it.
 [server.sse.batch_interval]: configuration#server.sse.batch_interval
 [server.trusted_proxies]: configuration#server.trusted_proxies
 [storage.data_dir]: configuration#storage.data_dir
+[storage.timeline]: configuration#storage.timeline

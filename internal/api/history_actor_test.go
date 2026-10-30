@@ -92,17 +92,17 @@ func TestHistoryCSVCarriesTheActor(t *testing.T) {
 
 	wantHeader := []string{
 		"timestamp", "type", "action", "name", "id", "summary",
-		"actor", "provider", "client", "transport",
+		"actor", "provider", "client", "transport", "kind", "until",
 	}
 	if !slices.Equal(records[0], wantHeader) {
 		t.Fatalf("header = %v, want %v", records[0], wantHeader)
 	}
 
-	if got := records[1][6:]; !slices.Equal(got, []string{"alice", "oauth", "claude", "mcp"}) {
+	if got := records[1][6:10]; !slices.Equal(got, []string{"alice", "oauth", "claude", "mcp"}) {
 		t.Errorf("attributed actor columns = %v", got)
 	}
 
-	if got := records[2][6:]; !slices.Equal(got, []string{"", "", "", ""}) {
+	if got := records[2][6:10]; !slices.Equal(got, []string{"", "", "", ""}) {
 		t.Errorf("external actor columns = %v, want them empty", got)
 	}
 }

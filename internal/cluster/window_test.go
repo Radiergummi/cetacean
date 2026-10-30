@@ -76,38 +76,51 @@ func TestTimeWindowOverlaps(t *testing.T) {
 	}
 }
 
-// The history ring applies the window itself, so a moment the window holds
-// and an entry the ring returns for it must be the same set.
+// The history ring applies the window itself, so an item the window holds and
+// an entry the ring returns for it must be the same set, a gap's whole range
+// included. A gap's start may precede the entry before it; its end may not.
 func TestTimeWindowAgreesWithTheHistoryRing(t *testing.T) {
 	base := time.Date(2026, 9, 5, 14, 0, 0, 0, time.UTC)
-	window := TimeWindow{Since: base.Add(time.Minute), Until: base.Add(3 * time.Minute)}
+	at := func(seconds int) time.Time { return base.Add(time.Duration(seconds) * time.Second) }
 
 	history := cache.NewHistory(16)
-	for i := range 5 {
-		history.Append(cache.HistoryEntry{
-			Type:      cache.EventService,
-			Name:      "web",
-			Timestamp: base.Add(time.Duration(i) * time.Minute),
-		})
+	for _, e := range []cache.HistoryEntry{
+		{Type: cache.EventService, Name: "web", Timestamp: at(0)},
+		{Kind: cache.KindGap, Timestamp: at(30), Until: at(90)},
+		{Type: cache.EventService, Name: "web", Timestamp: at(120)},
+		{Kind: cache.KindGap, Timestamp: at(60), Until: at(210)},
+		{Type: cache.EventService, Name: "web", Timestamp: at(240)},
+		{Kind: cache.KindGap, Timestamp: at(210), Until: at(300)},
+	} {
+		history.Append(e)
 	}
 
-	returned := make(map[uint64]bool)
-	for _, e := range history.List(cache.HistoryQuery{
-		Limit:  history.Size(),
-		After:  window.Since,
-		Before: window.Until,
-	}) {
-		returned[e.ID] = true
-	}
-
-	for _, e := range history.List(cache.HistoryQuery{Limit: history.Size()}) {
-		if held := window.Overlaps(e.Timestamp, e.Timestamp); held != returned[e.ID] {
-			t.Errorf("entry at %s: window holds it %t, ring returned it %t",
-				e.Timestamp.Format(time.RFC3339), held, returned[e.ID])
+	for _, window := range []TimeWindow{
+		{Since: at(60), Until: at(180)},
+		{Since: at(90), Until: at(90)},
+		{Since: at(150)},
+		{Until: at(30)},
+		{Since: at(210), Until: at(210)},
+	} {
+		returned := make(map[uint64]bool)
+		for _, e := range history.List(cache.HistoryQuery{
+			Limit:  history.Size(),
+			After:  window.Since,
+			Before: window.Until,
+		}) {
+			returned[e.ID] = true
 		}
-	}
 
-	if len(returned) != 2 {
-		t.Errorf("ring returned %d entries, want the two inside the window", len(returned))
+		for _, e := range history.List(cache.HistoryQuery{Limit: history.Size()}) {
+			end := e.Until
+			if end.IsZero() {
+				end = e.Timestamp
+			}
+
+			if held := window.Overlaps(e.Timestamp, end); held != returned[e.ID] {
+				t.Errorf("window %v, entry %d: window holds it %t, ring returned it %t",
+					window, e.ID, held, returned[e.ID])
+			}
+		}
 	}
 }

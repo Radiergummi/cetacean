@@ -170,6 +170,10 @@ Each of these looks like a simplification and is not.
   `notify`.** A channel there would either block recording on the disk or drop
   entries. IDs are the recorder's, never SQLite's, and the store is opened and
   restored before the watcher starts, so no `Append` precedes the restore.
+  A gap goes through `Cache.RecordGap`, so through `notify`, from the writer
+  goroutine once coverage opens, never from a listener. A gap names no
+  resource: it passes every resource filter and every read check, and the
+  resource index merges it in from the empty ID.
 
 ## Details that bite
 

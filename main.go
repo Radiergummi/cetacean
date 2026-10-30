@@ -344,6 +344,7 @@ func run(s settings) error {
 			timelineStore,
 			stateCache.History(),
 			cfg.HistoryEntries,
+			stateCache.RecordGap,
 		)
 	}
 

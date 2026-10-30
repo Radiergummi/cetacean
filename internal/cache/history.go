@@ -8,9 +8,23 @@ import (
 	"time"
 )
 
+// The kinds of timeline item. A reader skips a kind it does not know.
+const (
+	KindChange = "change"
+	KindGap    = "gap"
+
+	// KindAnnotation is reserved for #498; nothing records it yet.
+	KindAnnotation = "annotation"
+)
+
 type HistoryEntry struct {
-	ID         uint64    `json:"id"`
-	Timestamp  time.Time `json:"timestamp"`
+	ID        uint64    `json:"id"`
+	Kind      string    `json:"kind"`
+	Timestamp time.Time `json:"timestamp"`
+
+	// Until ends a gap, which runs from Timestamp; zero for a change.
+	Until time.Time `json:"until,omitzero"`
+
 	Type       EventType `json:"type"`
 	Action     string    `json:"action"`
 	ResourceID string    `json:"resourceId"`
@@ -42,15 +56,20 @@ type HistoryQuery struct {
 	// what is returned, under the read lock every Append contends with.
 	Types []EventType
 
-	// Before bounds the result at the newer end: only entries at or before it.
-	// Unlike After it cannot end the walk — entries are visited newest-first,
-	// so the ones this excludes come first — so it skips rather than breaks.
+	// Kind narrows to one kind; empty means every kind. It is the only filter
+	// besides the window and Visible that a gap does not pass: a gap names no
+	// resource, and nothing was recorded about any resource while it lasted.
+	Kind string
+
+	// Before bounds the result at the newer end: only entries starting at or
+	// before it. Unlike After it cannot end the walk — entries are visited
+	// newest-first, so the ones this excludes come first — so it skips.
 	// Zero means unbounded.
 	Before time.Time
 
-	// After bounds the walk rather than the result: entries are visited
-	// newest-first, so the first at or before it ends the scan, instead of
-	// copying the whole ring to discard it. Exclusive; zero means unbounded.
+	// After ends the walk at the first entry ending at or before it, instead
+	// of copying the whole ring to discard it: ends never decrease from one ID
+	// to the next, though a gap's start can. Exclusive; zero means unbounded.
 	// Named for the comparison, since "since" here means History.Since.
 	After time.Time
 
@@ -68,10 +87,10 @@ type History struct {
 	count   uint64
 	full    bool
 
-	// byResource maps resource IDs to a ring of entry indices, enabling
-	// fast filtered lookups without scanning the entire buffer. Stale
-	// indices are skipped in listByResource; a resource leaves the map once
-	// the main ring overwrites its newest entry.
+	// byResource maps resource IDs to a ring of entry indices, enabling fast
+	// filtered lookups without a scan. Stale indices are skipped; an ID leaves
+	// the map once the ring overwrites its newest entry. Gaps name no resource
+	// and sit under the empty ID.
 	byResource map[string]*indexRing
 }
 
@@ -142,10 +161,10 @@ func (h *History) Size() int {
 	return h.size
 }
 
-// Oldest is the timestamp of the oldest entry the ring still holds, and so the
-// start of the only window a query over it can honestly answer for: the ring
-// starts with the process and, once it wraps, begins at its oldest survivor.
-// Neither is otherwise visible in a result. ok=false when nothing is recorded.
+// Oldest is the timestamp of the oldest entry the ring still holds, restored
+// ones included, and so the start of the only window a query over it can
+// honestly answer for. Nothing in a result otherwise shows where the record
+// begins. ok=false when nothing is recorded.
 func (h *History) Oldest() (time.Time, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -255,6 +274,9 @@ func (h *History) Append(e HistoryEntry) uint64 {
 
 	h.count++
 	e.ID = h.count
+	if e.Kind == "" {
+		e.Kind = KindChange
+	}
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now()
 	}
@@ -301,6 +323,15 @@ func (e HistoryEntry) about(id string) bool {
 	return e.ResourceID == id || e.ServiceID == id
 }
 
+// end is when an entry stops: a gap's Until, otherwise its Timestamp.
+func (e HistoryEntry) end() time.Time {
+	if e.Until.IsZero() {
+		return e.Timestamp
+	}
+
+	return e.Until
+}
+
 func (h *History) List(q HistoryQuery) []HistoryEntry {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -344,8 +375,8 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 			continue
 		}
 
-		// Newest-first, so everything past this point is older still.
-		if !q.After.IsZero() && !e.Timestamp.After(q.After) {
+		// Newest-first, so everything past this point ends earlier still.
+		if !q.After.IsZero() && !e.end().After(q.After) {
 			break
 		}
 
@@ -367,6 +398,23 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 // two list paths share it so a filter added here is honoured on both, which is
 // the same reason listByResource takes the whole query.
 func (q HistoryQuery) matches(e HistoryEntry) bool {
+	if q.Kind != "" && e.Kind != q.Kind {
+		return false
+	}
+
+	if !q.Before.IsZero() && e.Timestamp.After(q.Before) {
+		return false
+	}
+
+	if e.Kind != KindGap && !q.matchesResource(e) {
+		return false
+	}
+
+	return q.Visible == nil || q.Visible(e)
+}
+
+// matchesResource applies the filters that select by resource.
+func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 	if q.ResourceID != "" && !e.about(q.ResourceID) {
 		return false
 	}
@@ -379,21 +427,9 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 		return false
 	}
 
-	if !q.Before.IsZero() && e.Timestamp.After(q.Before) {
-		return false
-	}
-
-	if q.NameContains != "" && !strings.Contains(
+	return q.NameContains == "" || strings.Contains(
 		strings.ToLower(e.Name), strings.ToLower(q.NameContains),
-	) {
-		return false
-	}
-
-	if q.Visible != nil && !q.Visible(e) {
-		return false
-	}
-
-	return true
+	)
 }
 
 // listByResource answers a query already known to name a resource, taking the
@@ -404,52 +440,85 @@ func (h *History) listByResource(
 	q HistoryQuery,
 	limit int,
 ) (entries []HistoryEntry, complete bool) {
-	ring := h.byResource[q.ResourceID]
-	if ring == nil {
-		// Nothing under this ID survives in the ring: an index is pruned only
-		// once its newest entry is overwritten, so its absence is proof.
-		return nil, true
+	own := h.indexed(q.ResourceID, func(e HistoryEntry) bool { return e.about(q.ResourceID) })
+
+	// Every gap belongs on every resource's timeline, so its index is merged in.
+	gaps := indexedEntries{whole: true}
+	if q.Kind == "" || q.Kind == KindGap {
+		gaps = h.indexed("", func(e HistoryEntry) bool { return e.Kind == KindGap })
 	}
 
 	result := make([]HistoryEntry, 0, min(limit, indexRingSize))
 	pastCursor := q.BeforeID == 0
 
+	for len(result) < limit {
+		// An index that has wrapped may have lost older entries that would
+		// sort between the other's, so running out of one ends the answer.
+		if len(own.entries) == 0 && !own.whole || len(gaps.entries) == 0 && !gaps.whole {
+			return result, false
+		}
+
+		var e HistoryEntry
+
+		switch {
+		case len(own.entries) > 0 &&
+			(len(gaps.entries) == 0 || own.entries[0].ID > gaps.entries[0].ID):
+			e, own.entries = own.entries[0], own.entries[1:]
+		case len(gaps.entries) > 0:
+			e, gaps.entries = gaps.entries[0], gaps.entries[1:]
+		default:
+			return result, true
+		}
+
+		if !pastCursor {
+			pastCursor = e.ID == q.BeforeID
+			continue
+		}
+
+		// Newest-first here too, so this ends the walk rather than skipping.
+		if !q.After.IsZero() && !e.end().After(q.After) {
+			return result, true
+		}
+
+		if q.matches(e) {
+			result = append(result, e)
+		}
+	}
+
+	return result, true
+}
+
+// indexedEntries are the entries one index names, newest first. whole says
+// they are all the ring holds under that ID: its index never wrapped.
+type indexedEntries struct {
+	entries []HistoryEntry
+	whole   bool
+}
+
+// indexed reads id's index. A missing index is proof nothing under the ID
+// survives: an index is pruned only once its newest entry is overwritten.
+func (h *History) indexed(id string, belongs func(HistoryEntry) bool) indexedEntries {
+	ring := h.byResource[id]
+	if ring == nil {
+		return indexedEntries{whole: true}
+	}
+
+	found := indexedEntries{whole: !ring.full}
+
 	// Newest first, the entries an index still names have falling IDs. A slot
-	// overwritten since it was indexed holds another resource's entry, or a
-	// newer one of this resource's that an earlier reference already yielded.
+	// overwritten since it was indexed holds another entry, or a newer one
+	// under this ID that an earlier reference already yielded.
 	var last uint64 = math.MaxUint64
 
 	ring.iterNewest(func(idx int) bool {
 		e := h.entries[idx]
-
-		if !e.about(q.ResourceID) || e.ID >= last {
-			return true
-		}
-		last = e.ID
-
-		if !pastCursor {
-			if e.ID == q.BeforeID {
-				pastCursor = true
-			}
-			return true
+		if belongs(e) && e.ID < last {
+			last = e.ID
+			found.entries = append(found.entries, e)
 		}
 
-		// Newest-first here too, so this ends the walk rather than skipping.
-		if !q.After.IsZero() && !e.Timestamp.After(q.After) {
-			return false
-		}
-
-		if !q.matches(e) {
-			return true
-		}
-
-		result = append(result, e)
-
-		return len(result) < limit
+		return true
 	})
 
-	// A ring that has never wrapped holds every entry this resource ever had,
-	// so a short answer off it is genuinely short. Otherwise only a filled
-	// request proves the window did not cut the answer off.
-	return result, !ring.full || len(result) == limit
+	return found
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 
@@ -319,5 +320,36 @@ func TestGetEventsResolvesANameAcrossTypesOnlyWhenUnique(t *testing.T) {
 	})
 	if len(got.Entries) != 1 {
 		t.Errorf("resource=shared type=secret: entries = %d, want 1", len(got.Entries))
+	}
+}
+
+// A gap is a window nobody watched; an agent reading it as a quiet stretch
+// would conclude nothing changed. It passes the type filter for that reason.
+func TestGetEventsReturnsAGap(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
+	})
+
+	from := time.Date(2026, 10, 30, 13, 0, 0, 0, time.UTC)
+	c.RecordGap(from, from.Add(3*time.Hour))
+
+	got := eventsCall(t, newResourceTestServer(t, c), map[string]any{"types": []any{"service"}})
+
+	if len(got.Entries) != 2 {
+		t.Fatalf("entries = %+v, want the gap and the service", got.Entries)
+	}
+
+	// Sorted by `at`, and the gap started before the service was created.
+	gap := got.Entries[1]
+	if gap.Kind != cache.KindGap ||
+		gap.At != "2026-10-30T13:00:00.000000000Z" ||
+		gap.Until != "2026-10-30T16:00:00.000000000Z" {
+		t.Errorf("gap = %+v, want kind gap from 13:00 to 16:00 in the fixed-width format", gap)
+	}
+
+	if got.Entries[0].Kind != cache.KindChange || got.Entries[0].Until != "" {
+		t.Errorf("change = %+v, want kind change with no until", got.Entries[0])
 	}
 }

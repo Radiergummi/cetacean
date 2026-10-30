@@ -337,9 +337,9 @@ channels:
     address: /events
     title: Global event stream
     description: |
-      Every resource change in one stream. `?types=` narrows it to a
-      comma-separated list of event type names; `sync` always passes the
-      filter.
+      Every resource change in one stream, and every gap in the record.
+      `?types=` narrows it to a comma-separated list of event type names;
+      `sync` and `gap` always pass the filter.
     messages:
       node:
         $ref: "#/components/messages/node"
@@ -357,6 +357,8 @@ channels:
         $ref: "#/components/messages/network"
       volume:
         $ref: "#/components/messages/volume"
+      gap:
+        $ref: "#/components/messages/gap"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -564,7 +566,23 @@ components:
       payload:
         type: array
         items:
-          $ref: "#/components/schemas/SSEEvent"
+          anyOf:
+            - $ref: "#/components/schemas/SSEEvent"
+            - $ref: "#/components/schemas/Gap"
+
+    gap:
+      name: gap
+      title: Gap
+      summary: Nobody watched the cluster from `timestamp` to `until`.
+      description: |
+        Recorded when Cetacean starts watching again after a restart, from the
+        previous process's last heartbeat to the moment this one was ready, and
+        only with `storage.timeline` on. Changes made during a gap produced no
+        event and are in no history entry. A gap names no resource, so it is
+        sent only on `/events`, where it passes every `?types=` filter, and is
+        replayed there like any change. Its `@id` is its history entry.
+      payload:
+        $ref: "#/components/schemas/Gap"
 
     sync:
       name: sync
@@ -646,6 +664,42 @@ components:
             errorType: server_error
 
   schemas:
+    Gap:
+      type: object
+      required: ["@id", "@type", type, timestamp, until]
+      properties:
+        "@id":
+          type: string
+          description: The gap's history entry
+        "@type":
+          type: string
+          const: Gap
+        type:
+          type: string
+          const: gap
+        action:
+          type: string
+          const: ""
+        id:
+          type: string
+          const: ""
+        timestamp:
+          type: string
+          format: date-time
+          description: When the previous process was last seen watching
+        until:
+          type: string
+          format: date-time
+          description: When this process started watching
+      example:
+        "@id": "/history#1043"
+        "@type": Gap
+        type: gap
+        action: ""
+        id: ""
+        timestamp: "2026-10-30T13:00:00Z"
+        until: "2026-10-30T16:00:00Z"
+
     # Copied from api/openapi.yaml#/components/schemas/SSEEvent and held to it
     # by TestAsyncAPISchemasMatchOpenAPI. A $ref cannot be used: the correct
     # spelling differs between the file and the served document.

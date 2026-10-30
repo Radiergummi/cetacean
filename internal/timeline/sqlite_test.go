@@ -98,8 +98,8 @@ func TestSQLite_OpensANewerDatabase(t *testing.T) {
 
 	err := store.Commit(ctx, timeline.Batch{
 		Entries: []cache.HistoryEntry{
-			{ID: 2, Timestamp: time.Now(), Type: cache.EventService},
-			{ID: 3, Timestamp: time.Now(), Type: cache.EventService},
+			{ID: 2, Kind: cache.KindChange, Timestamp: time.Now(), Type: cache.EventService},
+			{ID: 3, Kind: cache.KindChange, Timestamp: time.Now(), Type: cache.EventService},
 		},
 		Keep: 1,
 	})

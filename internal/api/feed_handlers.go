@@ -312,6 +312,11 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 	result := make([]feedEntry, 0, len(entries))
 
 	for _, e := range entries {
+		if e.Kind == cache.KindGap {
+			result = append(result, gapFeedEntry(e))
+			continue
+		}
+
 		verb := actionVerb[e.Action]
 		if verb == "" && e.Action != "" {
 			verb = strings.ToUpper(e.Action[:1]) + e.Action[1:]
@@ -334,6 +339,21 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 	}
 
 	return result
+}
+
+// gapFeedEntry is a gap as a feed entry: it links nowhere, since it names no
+// resource, and it was last updated when it was recorded, at its end.
+func gapFeedEntry(e cache.HistoryEntry) feedEntry {
+	from, until := e.Timestamp.UTC().Format(time.RFC3339), e.Until.UTC().Format(time.RFC3339)
+
+	return feedEntry{
+		ID:    fmt.Sprintf("urn:cetacean:history:%d", e.ID),
+		Title: fmt.Sprintf("Nothing recorded from %s to %s", from, until),
+		ContentHTML: "<p>Cetacean was not watching the cluster from " + from + " to " + until +
+			", so changes made then are missing from this record.</p>",
+		Updated: e.Until,
+		Tags:    []string{cache.KindGap},
+	}
 }
 
 // recommendationToFeedEntry converts a recommendation to a format-agnostic feed entry.
@@ -575,9 +595,12 @@ var emptyFeedEpoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 // historyUpdated returns the timestamp of the most recent history entry,
 // or a fixed epoch if the slice is empty.
 func historyUpdated(entries []cache.HistoryEntry) time.Time {
-	if len(entries) > 0 {
+	switch {
+	case len(entries) == 0:
+		return emptyFeedEpoch
+	case entries[0].Kind == cache.KindGap:
+		return entries[0].Until
+	default:
 		return entries[0].Timestamp
 	}
-
-	return emptyFeedEpoch
 }

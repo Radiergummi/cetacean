@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -57,6 +58,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		ResourceID:   resourceID,
 		BeforeID:     beforeID,
 		NameContains: q.Get("search"),
+		Kind:         q.Get("kind"),
 		Limit:        limit,
 		After:        window.Since,
 		Before:       window.Until,
@@ -96,15 +98,29 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		r,
 		NewCollectionResponse(
 			r.Context(),
-			wrapItems(
-				r.Context(),
-				entries,
-				"HistoryEntry",
-				func(e cache.HistoryEntry) string { return fmt.Sprintf("/history#%d", e.ID) },
-			),
+			wrapHistory(r.Context(), entries),
 			len(entries),
 			len(entries),
 			0,
 		),
 	)
+}
+
+// wrapHistory types each item by its kind: a gap is not a change.
+func wrapHistory(ctx context.Context, entries []cache.HistoryEntry) []Item[cache.HistoryEntry] {
+	items := make([]Item[cache.HistoryEntry], len(entries))
+	for i, e := range entries {
+		typ := "HistoryEntry"
+		if e.Kind == cache.KindGap {
+			typ = "Gap"
+		}
+
+		items[i] = Item[cache.HistoryEntry]{
+			id:  absPath(ctx, fmt.Sprintf("/history#%d", e.ID)),
+			typ: typ,
+			val: e,
+		}
+	}
+
+	return items
 }

@@ -19,6 +19,9 @@ type fakeStore struct {
 	batches  []Batch
 	coverage int
 
+	// previous is the heartbeat OpenCoverage reports; zero reports none.
+	previous time.Time
+
 	// cancelled records a store call made with a cancelled context.
 	cancelled bool
 }
@@ -37,7 +40,7 @@ func (f *fakeStore) OpenCoverage(context.Context, time.Time) (time.Time, bool, e
 
 	f.coverage++
 
-	return time.Time{}, false, nil
+	return f.previous, !f.previous.IsZero(), nil
 }
 
 func (f *fakeStore) Commit(ctx context.Context, batch Batch) error {
@@ -78,6 +81,8 @@ func (f *fakeStore) coverages() int {
 	return f.coverage
 }
 
+func noGap(time.Time, time.Time) {}
+
 func appendN(h *cache.History, n int) {
 	for range n {
 		h.Append(cache.HistoryEntry{Type: cache.EventService, ResourceID: "svc1"})
@@ -87,7 +92,7 @@ func appendN(h *cache.History, n int) {
 func TestWriter_WritesEachEntryOnce(t *testing.T) {
 	store := &fakeStore{}
 	history := cache.NewHistory(10)
-	w := NewWriter(store, history, 10)
+	w := NewWriter(store, history, 10, noGap)
 
 	appendN(history, 2)
 	w.flush(context.Background())
@@ -105,7 +110,7 @@ func TestWriter_StartsAfterTheRestoredEntries(t *testing.T) {
 	history := cache.NewHistory(10)
 	history.Restore([]cache.HistoryEntry{{ID: 41, Type: cache.EventService}})
 
-	w := NewWriter(store, history, 10)
+	w := NewWriter(store, history, 10, noGap)
 	appendN(history, 1)
 	w.flush(context.Background())
 
@@ -117,7 +122,7 @@ func TestWriter_StartsAfterTheRestoredEntries(t *testing.T) {
 func TestWriter_RetriesAFailedCommit(t *testing.T) {
 	store := &fakeStore{err: errors.New("disk full")}
 	history := cache.NewHistory(10)
-	w := NewWriter(store, history, 10)
+	w := NewWriter(store, history, 10, noGap)
 
 	appendN(history, 2)
 	w.flush(context.Background())
@@ -134,7 +139,7 @@ func TestWriter_RetriesAFailedCommit(t *testing.T) {
 func TestWriter_OverrunWritesTheSurvivors(t *testing.T) {
 	store := &fakeStore{}
 	history := cache.NewHistory(3)
-	w := NewWriter(store, history, 3)
+	w := NewWriter(store, history, 3, noGap)
 
 	appendN(history, 5)
 	w.flush(context.Background())
@@ -147,7 +152,7 @@ func TestWriter_OverrunWritesTheSurvivors(t *testing.T) {
 func TestWriter_RetainsOnTheFirstTickAndAfterInserts(t *testing.T) {
 	store := &fakeStore{}
 	history := cache.NewHistory(10)
-	w := NewWriter(store, history, 10)
+	w := NewWriter(store, history, 10, noGap)
 
 	w.flush(context.Background())
 	w.flush(context.Background())
@@ -167,7 +172,7 @@ func TestWriter_RetainsOnTheFirstTickAndAfterInserts(t *testing.T) {
 func TestWriter_HeartbeatsOnlyOnceCovering(t *testing.T) {
 	store := &fakeStore{}
 	history := cache.NewHistory(10)
-	w := NewWriter(store, history, 10)
+	w := NewWriter(store, history, 10, noGap)
 
 	w.flush(context.Background())
 	w.openCoverage(context.Background())
@@ -183,7 +188,7 @@ func TestWriter_Run(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := &fakeStore{}
 		history := cache.NewHistory(10)
-		w := NewWriter(store, history, 10)
+		w := NewWriter(store, history, 10, noGap)
 
 		ready := make(chan struct{})
 		ctx, cancel := context.WithCancel(t.Context())
@@ -221,4 +226,35 @@ func TestWriter_Run(t *testing.T) {
 			t.Fatal("a commit ran under the cancelled context")
 		}
 	})
+}
+
+func TestWriter_RecordsTheGapSinceThePreviousHeartbeat(t *testing.T) {
+	previous := time.Now().Add(-time.Hour)
+	store := &fakeStore{err: errors.New("disk full"), previous: previous}
+
+	var gaps [][2]time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10, func(from, until time.Time) {
+		gaps = append(gaps, [2]time.Time{from, until})
+	})
+
+	w.openCoverage(context.Background())
+
+	if len(gaps) != 0 {
+		t.Fatalf("recorded %v while coverage failed to open, want nothing", gaps)
+	}
+
+	store.err = nil
+	w.openCoverage(context.Background())
+
+	if len(gaps) != 1 || !gaps[0][0].Equal(previous) || !gaps[0][1].After(previous) {
+		t.Fatalf("recorded %v, want one gap from %v to now", gaps, previous)
+	}
+}
+
+func TestWriter_RecordsNoGapWithoutAPreviousProcess(t *testing.T) {
+	w := NewWriter(&fakeStore{}, cache.NewHistory(10), 10, func(from, until time.Time) {
+		t.Fatalf("recorded a gap from %v to %v with no previous coverage", from, until)
+	})
+
+	w.openCoverage(context.Background())
 }

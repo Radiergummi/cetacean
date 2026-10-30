@@ -34,6 +34,7 @@ func Run(t *testing.T, newStore Factory) {
 		want := []cache.HistoryEntry{
 			{
 				ID:         7,
+				Kind:       cache.KindChange,
 				Timestamp:  at,
 				Type:       cache.EventService,
 				Action:     "update",
@@ -52,11 +53,18 @@ func Run(t *testing.T, newStore Factory) {
 			},
 			{
 				ID:         8,
+				Kind:       cache.KindChange,
 				Timestamp:  at.Add(time.Second),
 				Type:       cache.EventTask,
 				Action:     "update",
 				ResourceID: "task1",
 				ServiceID:  "svc1",
+			},
+			{
+				ID:        9,
+				Kind:      cache.KindGap,
+				Timestamp: at.Add(2 * time.Second),
+				Until:     at.Add(time.Hour),
 			},
 		}
 
@@ -82,7 +90,11 @@ func Run(t *testing.T, newStore Factory) {
 				)
 			}
 
-			got[i].Timestamp = want[i].Timestamp
+			if !got[i].Until.Equal(want[i].Until) {
+				t.Errorf("entry %d: Until = %v, want %v", i, got[i].Until, want[i].Until)
+			}
+
+			got[i].Timestamp, got[i].Until = want[i].Timestamp, want[i].Until
 			if !reflect.DeepEqual(got[i], want[i]) {
 				t.Errorf("entry %d:\n got %+v\nwant %+v", i, got[i], want[i])
 			}
@@ -137,6 +149,26 @@ func Run(t *testing.T, newStore Factory) {
 
 		if got := ids(restore(t, store, 10)); !slices.Equal(got, []uint64{3, 4, 5}) {
 			t.Fatalf("after a larger Keep, Restore = %v, want [3 4 5]", got)
+		}
+	})
+
+	t.Run("retention counts gaps with changes", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		batch := entries(1, 2, 3, 4)
+		batch[2] = cache.HistoryEntry{
+			ID:        3,
+			Kind:      cache.KindGap,
+			Timestamp: batch[1].Timestamp,
+			Until:     batch[3].Timestamp,
+		}
+
+		commit(t, store, timeline.Batch{Entries: batch, Keep: 2})
+
+		got := restore(t, store, 10)
+		if !slices.Equal(ids(got), []uint64{3, 4}) || got[0].Kind != cache.KindGap {
+			t.Fatalf("Restore = %+v, want the gap 3 and the change 4", got)
 		}
 	})
 
@@ -217,6 +249,7 @@ func entries(ids ...uint64) []cache.HistoryEntry {
 	for _, id := range ids {
 		result = append(result, cache.HistoryEntry{
 			ID:         id,
+			Kind:       cache.KindChange,
 			Timestamp:  at.Add(time.Duration(id) * time.Second),
 			Type:       cache.EventService,
 			Action:     "update",

@@ -5159,10 +5159,13 @@ paths:
       tags: [History]
       summary: Resource change history
       description: |
-        Returns recent change events from the in-memory ring buffer (10,000 entries),
-        newest first. Can be filtered by resource type, a specific resource, a name
-        and a time window. A full page carries a `Link` with `rel="next"`, which pages
-        by cursor and keeps every filter.
+        Returns the timeline from the in-memory ring buffer (10,000 entries), newest
+        first. An item of kind `change` is a change Docker reported; one of kind `gap`
+        is a window nobody watched, from `timestamp` to `until`, whose changes are
+        missing. Clients must ignore kinds they don't know. Can be filtered by kind,
+        resource type, a specific resource, a name and a time window. A gap names no
+        resource, so only `kind` and the time window narrow it. A full page carries a
+        `Link` with `rel="next"`, which pages by cursor and keeps every filter.
       parameters:
         - name: type
           in: query
@@ -5183,6 +5186,14 @@ paths:
             type: string
           example: r8m2x5nk3p7q
         - $ref: "#/components/parameters/search"
+        - name: kind
+          in: query
+          description: |
+            Return only items of this kind. `change` keeps the list as it was before
+            gaps were recorded. Omit for every kind.
+          schema:
+            type: string
+          example: change
         - name: before
           in: query
           description: Return entries older than this entry ID, as the `next` link sets it
@@ -5193,8 +5204,8 @@ paths:
         - name: since
           in: query
           description: |
-            Return entries recorded after this time, exclusive. An RFC 3339 timestamp;
-            anything else answers `400` (`API016`).
+            Return entries recorded after this time, exclusive, and gaps ending after
+            it. An RFC 3339 timestamp; anything else answers `400` (`API016`).
           schema:
             type: string
             format: date-time
@@ -5202,8 +5213,9 @@ paths:
         - name: until
           in: query
           description: |
-            Return entries recorded at or before this time, inclusive. An RFC 3339
-            timestamp; anything else answers `400` (`API016`).
+            Return entries recorded at or before this time, inclusive, and gaps
+            starting at or before it. An RFC 3339 timestamp; anything else answers
+            `400` (`API016`).
           schema:
             type: string
             format: date-time
@@ -5236,6 +5248,7 @@ paths:
                   - "@id": "/history#1042"
                     "@type": HistoryEntry
                     id: 1042
+                    kind: change
                     type: service
                     action: update
                     resourceId: r8m2x5nk3p7q
@@ -5251,6 +5264,7 @@ paths:
                   - "@id": "/history#1041"
                     "@type": HistoryEntry
                     id: 1041
+                    kind: change
                     type: task
                     action: update
                     resourceId: t7w2k9m4x1p6
@@ -9247,23 +9261,34 @@ components:
           description: JSON-LD item identifier (e.g. /history#8421), a fragment of the collection
         "@type":
           type: string
-          description: JSON-LD type name (HistoryEntry)
+          description: JSON-LD type name (HistoryEntry, or Gap for a gap)
         id:
           type: integer
           format: uint64
+        kind:
+          type: string
+          description: >-
+            `change` for a change Docker reported, `gap` for a window nobody
+            watched. More kinds may follow; ignore one you don't know.
         timestamp:
           type: string
           format: date-time
+          description: When the change was recorded, or when a gap started.
+        until:
+          type: string
+          format: date-time
+          description: When a gap ended. Absent on a change.
         type:
           type: string
-          description: Resource type (node, service, task, etc.)
+          description: Resource type (node, service, task, etc.); empty on a gap
         action:
           type: string
-          enum: [create, update, remove, ref_changed]
+          enum: [create, update, remove, ref_changed, ""]
           description: >-
             Change action. `create` means the resource appeared, `update` that
             an existing one changed, `remove` that it is gone, and
             `ref_changed` that a resource this one cross-references changed.
+            Empty on a gap, as are `resourceId` and `name`.
         resourceId:
           type: string
         name:
@@ -9278,6 +9303,7 @@ components:
           $ref: "#/components/schemas/HistoryActor"
       example:
         id: 8421
+        kind: change
         timestamp: "2026-04-13T08:12:34Z"
         type: service
         action: update
