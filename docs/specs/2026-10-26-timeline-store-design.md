@@ -111,10 +111,10 @@ The file and its WAL are `0600` in the `0700` data directory.
 
 ```sql
 CREATE TABLE timeline (
-    id               BIGINT PRIMARY KEY,  -- assigned by the recorder, never by the database
+    id               INTEGER PRIMARY KEY, -- assigned by the recorder, never by the database
     kind             TEXT    NOT NULL,
-    at               BIGINT  NOT NULL,    -- Unix nanoseconds, UTC
-    until            BIGINT,              -- a range's end; NULL for a point
+    at               INTEGER NOT NULL,    -- Unix nanoseconds, UTC
+    until            INTEGER,             -- a range's end; NULL for a point
     type             TEXT,
     action           TEXT,
     resource_id      TEXT,
@@ -129,17 +129,15 @@ CREATE TABLE timeline (
     actor_client     TEXT,
     actor_transport  TEXT
 );
-CREATE INDEX timeline_resource ON timeline (resource_id, id);
-CREATE INDEX timeline_service  ON timeline (service_id, id);
-CREATE INDEX timeline_at       ON timeline (at);
+CREATE INDEX timeline_at ON timeline (at);
 
 CREATE TABLE coverage (
-    id          BIGINT PRIMARY KEY,
-    started_at  BIGINT NOT NULL,  -- the watcher reported ready
-    seen_at     BIGINT NOT NULL   -- last heartbeat
+    id          INTEGER PRIMARY KEY,
+    started_at  INTEGER NOT NULL,  -- the watcher reported ready
+    seen_at     INTEGER NOT NULL   -- last heartbeat
 );
 
-CREATE TABLE schema_migrations (version BIGINT PRIMARY KEY, applied_at BIGINT NOT NULL);
+CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);
 ```
 
 - `service`, `stack` and `service_id` are fields the API never returns, yet replay authorizes a
@@ -149,7 +147,11 @@ CREATE TABLE schema_migrations (version BIGINT PRIMARY KEY, applied_at BIGINT NO
   which an audit log will want.
 - **`id` is explicit** and never the database's own row counter. The sequence belongs to the
   recorder, which is what makes a shared database possible (see
-  [Multi-instance](#multi-instance)).
+  [Multi-instance](#multi-instance)). It is `INTEGER PRIMARY KEY`, so it is the table's row key
+  rather than a second index beside a hidden one.
+- **Only `at` is indexed,** for retention's coverage cleanup. Reads stay in memory in this change;
+  the indexes a read by resource or service needs arrive with the change that reads them, as
+  migrations may add indexes.
 
 ### Migrations
 
@@ -172,9 +174,10 @@ follows the ring. Every second it:
 
 `notify` is untouched, and the cost is one read lock and one commit per second.
 
-- **Crash window.** A crash loses at most the last second, and the next gap starts at the last
-  `seen_at`. So the record is honest about what it lost, to within a second, even when the cluster
-  was quiet.
+- **Crash window.** A crash loses what was recorded since the last commit, a second while writes
+  succeed, and the next gap starts at the last `seen_at`. So the record is honest about what it
+  lost, even when the cluster was quiet. The IDs the lost entries took were seen by clients, so
+  a restore continues the sequence a ring's worth past the last stored ID.
 - **Overrun.** More than a ring's worth of changes between two ticks makes `Since` answer
   `ok=false`. The writer then inserts what the ring still holds. The entries it missed were also
   evicted from memory, so this is retention that came early, not a gap; the IDs simply jump.

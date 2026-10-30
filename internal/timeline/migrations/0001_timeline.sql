@@ -1,8 +1,8 @@
 CREATE TABLE timeline (
-    id               BIGINT PRIMARY KEY,
+    id               INTEGER PRIMARY KEY,
     kind             TEXT    NOT NULL,
-    at               BIGINT  NOT NULL,
-    until            BIGINT,
+    at               INTEGER NOT NULL,
+    until            INTEGER,
     type             TEXT,
     action           TEXT,
     resource_id      TEXT,
@@ -18,12 +18,10 @@ CREATE TABLE timeline (
     actor_transport  TEXT
 );
 
-CREATE INDEX timeline_resource ON timeline (resource_id, id);
-CREATE INDEX timeline_service ON timeline (service_id, id);
 CREATE INDEX timeline_at ON timeline (at);
 
 CREATE TABLE coverage (
-    id          BIGINT PRIMARY KEY,
-    started_at  BIGINT NOT NULL,
-    seen_at     BIGINT NOT NULL
+    id          INTEGER PRIMARY KEY,
+    started_at  INTEGER NOT NULL,
+    seen_at     INTEGER NOT NULL
 );

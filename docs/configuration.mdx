@@ -455,10 +455,11 @@ Snapshot writes are atomic, so a crash mid-write can't corrupt the file.
 Cetacean records every change Docker reports, newest last, up to
 [`storage.history_entries`][storage.history_entries]. With [`storage.timeline`][storage.timeline]
 on, it commits the history to `${data_dir}/cetacean.db` once a second and restores it on startup,
-so a restart keeps the record; a crash loses at most the last second. The database is SQLite and
-belongs to one process: a second Cetacean pointed at the same data directory logs a warning and
-keeps its history in memory only. A failed write, such as on a full disk, is retried and never
-fails a request.
+so a restart keeps the record; a crash loses what was recorded since the last write. The database
+is SQLite and belongs to one process. A Cetacean that finds it held waits up to 15 seconds, the
+time a replaced task takes to stop, then logs a warning and keeps its history in memory only. A
+failed write, such as on a full disk, is retried and never fails a request; what the history
+drops while writes keep failing isn't written.
 
 ## Health checks
 

@@ -326,8 +326,7 @@ func run(s settings) error {
 		}
 	}
 
-	// Before the watcher starts, so the restore and the writer's starting
-	// point both precede every Append.
+	// Before the watcher starts; see History.Restore.
 	var (
 		timelineStore  timeline.Store
 		timelineWriter *timeline.Writer
@@ -390,6 +389,8 @@ func run(s settings) error {
 			)
 		}
 
+		// A window of its own: a watcher that used up the grace would otherwise
+		// leave no time to write what it recorded last.
 		stopTimeline()
 		select {
 		case <-timelineStopped:
@@ -398,9 +399,16 @@ func run(s settings) error {
 					slog.Warn("could not close the timeline", "error", err)
 				}
 			}
-		case <-grace.Done():
-			slog.Warn("the change history was not written within the shutdown grace")
+		case <-time.After(timelineGrace):
+			slog.Warn("the change history was not written within its shutdown grace")
 		}
+	}()
+
+	// Every return from here on, an early error included, stops the watcher
+	// and waits for the history's last write.
+	defer func() {
+		stop()
+		<-watcherDone
 	}()
 
 	// API — pass ready channel so /-/ready reports sync status
@@ -772,13 +780,32 @@ func run(s settings) error {
 	return nil
 }
 
+// openTimeline opens the timeline, waiting up to timelineHeldWait while
+// another process holds it.
+func openTimeline(ctx context.Context, path string) (*timeline.SQLite, error) {
+	deadline := time.Now().Add(timelineHeldWait)
+
+	for waited := false; ; waited = true {
+		store, err := timeline.OpenSQLite(ctx, path)
+		if !errors.Is(err, timeline.ErrHeld) || time.Now().After(deadline) {
+			return store, err
+		}
+
+		if !waited {
+			slog.InfoContext(ctx, "the timeline is held by another process; waiting", "path", path)
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
 // restoreTimeline opens the timeline and fills the history from it, or returns
 // nil when it cannot: the history then lives in memory only, as it would with
 // storage.timeline off, and startup goes on.
 func restoreTimeline(path string, history *cache.History, keep int) timeline.Store {
 	ctx := context.Background()
 
-	store, err := timeline.OpenSQLite(ctx, path)
+	store, err := openTimeline(ctx, path)
 	if err != nil {
 		slog.Warn("could not open the timeline; the change history will not persist",
 			"error", err, "path", path)
@@ -813,6 +840,13 @@ const (
 // shutdownGrace bounds how long a signalled process waits for in-flight
 // requests, inside the ten seconds an orchestrator allows before SIGKILL.
 const shutdownGrace = 5 * time.Second
+
+// timelineGrace bounds the history's final write, after the watcher stopped.
+const timelineGrace = 2 * time.Second
+
+// timelineHeldWait is how long startup waits for a previous process, such as
+// the task a start-first update replaces, to let go of the timeline.
+const timelineHeldWait = 15 * time.Second
 
 // runHealthcheck probes the server's readiness with the configuration the
 // server itself would load, so a listen address, base path or TLS set in any

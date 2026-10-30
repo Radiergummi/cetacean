@@ -8,9 +8,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// Writer copies the ring into a Store once a second. It follows the ring and
-// is never fed from the cache's notify: a channel there would either block
-// recording on the disk or drop entries.
+// Writer copies the ring into a Store once a second, following the ring
+// rather than fed from notify.
 type Writer struct {
 	store   Store
 	history *cache.History
@@ -21,14 +20,16 @@ type Writer struct {
 	lastWritten uint64
 
 	retained bool
-	failing  bool
+
+	// Each logs its first failure and its recovery once.
+	writeFailing, coverageFailing bool
 
 	// covering is set once coverage opened; until then a ready writer
 	// retries at every tick.
 	ready, covering bool
 }
 
-// NewWriter starts after Restore, so the ring's count is the last ID stored.
+// NewWriter starts from the ring's count, which Restore set.
 func NewWriter(store Store, history *cache.History, keep int) *Writer {
 	return &Writer{
 		store:       store,
@@ -71,15 +72,16 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 
 func (w *Writer) openCoverage(ctx context.Context) {
 	if _, _, err := w.store.OpenCoverage(ctx, time.Now()); err != nil {
-		if !w.failing {
+		if !w.coverageFailing {
 			slog.WarnContext(ctx, "could not record the start of coverage; retrying", "error", err)
 		}
 
-		w.failing = true
+		w.coverageFailing = true
 
 		return
 	}
 
+	w.coverageFailing = false
 	w.covering = true
 }
 
@@ -100,21 +102,26 @@ func (w *Writer) flush(ctx context.Context) {
 		batch.Keep = w.keep
 	}
 
+	// Before coverage opens a quiet tick has nothing to write.
+	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 {
+		return
+	}
+
 	if err := w.store.Commit(ctx, batch); err != nil {
-		if !w.failing {
+		if !w.writeFailing {
 			slog.WarnContext(ctx, "could not persist the change history; retrying", "error", err)
 		}
 
-		w.failing = true
+		w.writeFailing = true
 
 		return
 	}
 
-	if w.failing {
+	if w.writeFailing {
 		slog.InfoContext(ctx, "persisting the change history again")
 	}
 
-	w.failing = false
+	w.writeFailing = false
 	w.retained = true
 
 	if len(entries) > 0 {

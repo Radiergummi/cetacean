@@ -109,8 +109,8 @@ func TestWriter_StartsAfterTheRestoredEntries(t *testing.T) {
 	appendN(history, 1)
 	w.flush(context.Background())
 
-	if got := store.committed(); !slices.Equal(got, []uint64{42}) {
-		t.Fatalf("committed %v, want only the new [42]", got)
+	if got := store.committed(); !slices.Equal(got, []uint64{52}) {
+		t.Fatalf("committed %v, want only the new [52]", got)
 	}
 }
 
@@ -159,8 +159,9 @@ func TestWriter_RetainsOnTheFirstTickAndAfterInserts(t *testing.T) {
 		keeps = append(keeps, b.Keep)
 	}
 
-	if !slices.Equal(keeps, []int{10, 0, 10}) {
-		t.Fatalf("Keep per batch = %v, want [10 0 10]", keeps)
+	// The quiet second tick, before coverage opens, commits nothing at all.
+	if !slices.Equal(keeps, []int{10, 10}) {
+		t.Fatalf("Keep per batch = %v, want [10 10]", keeps)
 	}
 }
 

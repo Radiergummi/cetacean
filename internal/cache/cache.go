@@ -217,12 +217,14 @@ func New(onChange OnChangeFunc, opts ...Option) *Cache {
 		goneServices:   make(map[string]swarm.Service),
 		stacks:         make(map[string]Stack),
 		serviceRef:     newServiceRefIndex(),
-		history:        NewHistory(10000),
 		attributions:   newAttributions(),
 		restarts:       NewRestartTracker(7*24*time.Hour, time.Hour),
 	}
 	for _, opt := range opts {
 		opt(c)
+	}
+	if c.history == nil {
+		c.history = NewHistory(10000)
 	}
 	if onChange != nil {
 		c.AddOnChangeListener(onChange)

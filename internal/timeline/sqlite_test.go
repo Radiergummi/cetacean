@@ -2,6 +2,7 @@ package timeline_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,9 +34,15 @@ func TestSQLite_SecondProcessIsRefused(t *testing.T) {
 	first := openSQLite(t, path)
 	defer first.Close() //nolint:errcheck // test cleanup
 
-	if second, err := timeline.OpenSQLite(context.Background(), path); err == nil {
+	second, err := timeline.OpenSQLite(context.Background(), path)
+	if err == nil {
 		_ = second.Close()
 		t.Fatal("a second open of a held database succeeded")
+	}
+
+	// Startup waits on this error alone, for a process that is letting go.
+	if !errors.Is(err, timeline.ErrHeld) {
+		t.Fatalf("second open: %v, want ErrHeld", err)
 	}
 
 	if err := first.Commit(context.Background(), timeline.Batch{SeenAt: time.Now()}); err != nil {

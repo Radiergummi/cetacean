@@ -197,33 +197,37 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 	// The entry right after afterID has been overwritten — zero included.
 	complete := afterID+1 >= h.entries[oldest].ID
 
-	// Collect entries with ID > afterID in chronological order.
-	// Walk the ring from oldest to newest.
-	total := h.size
+	slots := h.size
 	if !h.full {
-		total = h.cursor
+		slots = h.cursor
 	}
 
 	var result []HistoryEntry
 
-	for i := total - 1; i >= 0; i-- {
-		idx := h.cursor - 1 - i
-		if idx < 0 {
-			idx += h.size
+	// Newest first, so a caller close behind visits only what it lacks.
+	for i := range slots {
+		index := h.cursor - 1 - i
+		if index < 0 {
+			index += h.size
 		}
 
-		e := h.entries[idx]
-		if e.ID > afterID {
-			result = append(result, e)
+		e := h.entries[index]
+		if e.ID <= afterID {
+			break
 		}
+
+		result = append(result, e)
 	}
+
+	slices.Reverse(result)
 
 	return result, complete
 }
 
 // Restore fills an empty ring with entries recorded by an earlier process,
-// oldest first, keeping the newest that fit. Count continues from the last
-// one's ID, so new entries extend its sequence. It must precede any Append.
+// oldest first, keeping the newest that fit. It must precede any Append. Count
+// skips a ring's worth past the last ID: a process that crashed handed out up
+// to a second of IDs it never wrote, and a feed reader has seen them.
 func (h *History) Restore(entries []HistoryEntry) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -246,6 +250,10 @@ func (h *History) Restore(entries []HistoryEntry) {
 		}
 
 		h.count = e.ID
+	}
+
+	if len(entries) > 0 {
+		h.count += uint64(h.size)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ncruces/go-sqlite3"
 	_ "github.com/ncruces/go-sqlite3/driver" // registers "sqlite3"
 	"github.com/ncruces/go-sqlite3/vfs"
 
@@ -27,6 +28,9 @@ var migrations embed.FS
 // kindChange is the only kind this version records, restores and retains;
 // rows of kinds a newer binary added are left alone.
 const kindChange = "change"
+
+// ErrHeld is OpenSQLite's error when another process holds the database.
+var ErrHeld = errors.New("the timeline is held by another process")
 
 // SQLite is the Store on a local SQLite database, owned by one process.
 type SQLite struct {
@@ -58,6 +62,11 @@ func OpenSQLite(ctx context.Context, path string) (*SQLite, error) {
 
 	if err := migrate(ctx, db); err != nil {
 		_ = db.Close()
+
+		if errors.Is(err, sqlite3.BUSY) {
+			return nil, fmt.Errorf("timeline %s: %w: %w", path, ErrHeld, err)
+		}
+
 		return nil, fmt.Errorf("timeline %s: %w", path, err)
 	}
 
@@ -72,7 +81,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 
 	err := inTx(ctx, db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
-			version BIGINT PRIMARY KEY, applied_at BIGINT NOT NULL
+			version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL
 		)`); err != nil {
 			return err
 		}
