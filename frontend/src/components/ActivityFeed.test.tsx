@@ -24,6 +24,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 1,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -45,6 +46,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 2,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -60,6 +62,7 @@ describe("ActivityFeed", () => {
       },
       {
         id: 1,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -86,6 +89,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 1,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -101,5 +105,61 @@ describe("ActivityFeed", () => {
     );
 
     expect(screen.queryByText(/^by /)).not.toBeInTheDocument();
+  });
+
+  it("draws a gap as a divider, not as a change", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 3,
+        kind: "change",
+        timestamp: "2026-10-30T17:00:00Z",
+        type: "service",
+        action: "update",
+        resourceId: "svc1",
+        name: "web-app",
+      },
+      {
+        id: 2,
+        kind: "gap",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed entries={entries} />
+      </MemoryRouter>,
+    );
+
+    const divider = screen.getByRole("separator");
+
+    expect(divider).toHaveTextContent("Not watching for 3h");
+    expect(divider).toHaveAccessibleName(/^Nothing recorded from .+ to .+$/);
+    expect(screen.queryByText("d")).not.toBeInTheDocument();
+    expect(screen.getByText("updated")).toBeInTheDocument();
+  });
+
+  it("skips kinds it does not know", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 1,
+        kind: "annotation",
+        timestamp: new Date().toISOString(),
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "deploy freeze",
+      },
+    ];
+
+    render(<ActivityFeed entries={entries} />);
+
+    expect(screen.queryByText("deploy freeze")).not.toBeInTheDocument();
+    expect(screen.getByText("No recent activity")).toBeInTheDocument();
   });
 });

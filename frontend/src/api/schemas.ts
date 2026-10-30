@@ -191,7 +191,9 @@ export const stackSummarySchema = z.looseObject({
 
 export const historyEntrySchema = z.looseObject({
   id: z.number(),
+  kind: z.string(),
   timestamp: z.string(),
+  until: z.string().optional(),
   type: z.string(),
   action: z.string(),
   resourceId: z.string(),

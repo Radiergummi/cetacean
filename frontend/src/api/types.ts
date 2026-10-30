@@ -367,7 +367,14 @@ export interface HistoryEntry {
   "@id"?: string;
   "@type"?: string;
   id: number;
+
+  /**
+   * `change`, or `gap` for a window nobody watched, from `timestamp` to
+   * `until`. Later servers add kinds; skip one you don't know.
+   */
+  kind: string;
   timestamp: string;
+  until?: string | undefined;
   type: string;
   action: string;
   resourceId: string;
