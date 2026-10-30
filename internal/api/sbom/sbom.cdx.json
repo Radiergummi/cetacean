@@ -1184,6 +1184,93 @@
       }
     },
     {
+      "bom-ref": "pkg:golang/github.com/ncruces/go-sqlite3@v0.35.6?type=module",
+      "type": "library",
+      "name": "github.com/ncruces/go-sqlite3",
+      "version": "v0.35.6",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d091a53277bcf58cca34fd82241ba21f6d4413349036e07ba5fbc26ca067d098"
+        }
+      ],
+      "purl": "pkg:golang/github.com/ncruces/go-sqlite3@v0.35.6?type=module&goos=linux&goarch=amd64",
+      "externalReferences": [
+        {
+          "url": "https://github.com/ncruces/go-sqlite3",
+          "type": "vcs"
+        }
+      ],
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "MIT"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/ncruces/go-sqlite3-wasm/v6@v6.3.35304?type=module",
+      "type": "library",
+      "name": "github.com/ncruces/go-sqlite3-wasm/v6",
+      "version": "v6.3.35304",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "74149995c10576d04cbcd460df8cb9d260a89c13cefe97ad49d752c064159522"
+        }
+      ],
+      "purl": "pkg:golang/github.com/ncruces/go-sqlite3-wasm/v6@v6.3.35304?type=module&goos=linux&goarch=amd64",
+      "externalReferences": [
+        {
+          "url": "https://github.com/ncruces/go-sqlite3-wasm",
+          "type": "vcs"
+        }
+      ],
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "MIT-0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "bom-ref": "pkg:golang/github.com/ncruces/julianday@v1.0.0?type=module",
+      "type": "library",
+      "name": "github.com/ncruces/julianday",
+      "version": "v1.0.0",
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7c7d0e2b06bb356be788642dc5d251c4082404ca259e2d818c31da593c6ab7b3"
+        }
+      ],
+      "purl": "pkg:golang/github.com/ncruces/julianday@v1.0.0?type=module&goos=linux&goarch=amd64",
+      "externalReferences": [
+        {
+          "url": "https://github.com/ncruces/julianday",
+          "type": "vcs"
+        }
+      ],
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "id": "MIT"
+            }
+          }
+        ]
+      }
+    },
+    {
       "bom-ref": "pkg:golang/github.com/opencontainers/go-digest@v1.0.0?type=module",
       "type": "library",
       "name": "github.com/opencontainers/go-digest",
