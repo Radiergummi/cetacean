@@ -1,4 +1,5 @@
 import type { HistoryActor, HistoryEntry } from "../api/types";
+import { activityRows } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import ResourceName from "./ResourceName";
@@ -19,24 +20,47 @@ function attribution({ name, subject, transport }: HistoryActor): string {
 }
 
 /**
- * The kinds this feed draws. The server adds kinds over time, and a client
- * skips the ones it does not know rather than drawing them as changes.
+ * How long a gap lasted, in nanoseconds; zero without a valid end.
  */
-const knownKinds = new Set(["change", "gap"]);
+function gapLength({ timestamp, until }: HistoryEntry): number {
+  const length = new Date(until ?? timestamp).getTime() - new Date(timestamp).getTime();
+
+  return Number.isFinite(length) && length > 0 ? length * 1_000_000 : 0;
+}
 
 /**
- * A window nobody watched: changes made in it are missing, so it reads as a
- * break in the timeline rather than as a quiet stretch.
+ * A run of windows nobody watched, newest first: changes made in them are
+ * missing, so it reads as a break in the timeline rather than a quiet stretch.
  */
-function GapDivider({ timestamp, until }: HistoryEntry) {
-  const end = until ?? timestamp;
-  const length = (new Date(end).getTime() - new Date(timestamp).getTime()) * 1_000_000;
+function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
+  const newest = gaps[0];
+  const oldest = gaps[gaps.length - 1];
+
+  if (newest === undefined || oldest === undefined) {
+    return null;
+  }
+
+  const end = newest.until ?? newest.timestamp;
+  const total = gaps.reduce((sum, gap) => sum + gapLength(gap), 0);
+  const range = `${formatDateTime(oldest.timestamp)} to ${formatDateTime(end)}`;
+  const label =
+    gaps.length === 1
+      ? `Nothing recorded from ${range}`
+      : `Nothing recorded in ${gaps.length} stretches from ${range}`;
+
+  let text = "Not watching";
+
+  if (gaps.length > 1) {
+    text = `Not watching ${gaps.length} times${total > 0 ? `, ${formatDuration(total)} in total` : ""}`;
+  } else if (total > 0) {
+    text = `Not watching for ${formatDuration(total)}`;
+  }
 
   return (
     <div
       role="separator"
-      aria-label={`Nothing recorded from ${formatDateTime(timestamp)} to ${formatDateTime(end)}`}
-      title={`Nothing recorded from ${formatDateTime(timestamp)} to ${formatDateTime(end)}`}
+      aria-label={label}
+      title={label}
       className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3"
     >
       <div className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full border border-dashed border-muted-foreground bg-background ring-2 ring-background" />
@@ -45,9 +69,7 @@ function GapDivider({ timestamp, until }: HistoryEntry) {
         <TimeAgo date={end} />
       </span>
 
-      <span className="text-sm whitespace-nowrap text-muted-foreground">
-        {length > 0 ? `Not watching for ${formatDuration(length)}` : "Not watching"}
-      </span>
+      <span className="text-sm whitespace-nowrap text-muted-foreground">{text}</span>
 
       <span className="h-px flex-1 border-t border-dashed border-muted-foreground/50" />
     </div>
@@ -74,9 +96,9 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
     );
   }
 
-  const shown = entries.filter(({ kind }) => knownKinds.has(kind));
+  const rows = activityRows(entries);
 
-  if (shown.length === 0) {
+  if (rows.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">No recent activity</p>;
   }
 
@@ -84,17 +106,17 @@ export default function ActivityFeed({ entries, loading, hideType }: ActivityFee
     <div className="relative ps-5">
       <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
 
-      {shown.map((entry) => {
-        if (entry.kind === "gap") {
+      {rows.map((row) => {
+        if (row.kind === "gap") {
           return (
             <GapDivider
-              key={entry.id}
-              {...entry}
+              key={`gap-${row.gaps[0]?.id}`}
+              gaps={row.gaps}
             />
           );
         }
 
-        const { action, actor, id, name, resourceId, timestamp, type } = entry;
+        const { action, actor, id, name, resourceId, timestamp, type } = row.entry;
 
         return (
           <div

@@ -128,6 +128,15 @@ describe("ActivityFeed", () => {
         resourceId: "",
         name: "",
       },
+      {
+        id: 1,
+        kind: "change",
+        timestamp: "2026-10-30T12:00:00Z",
+        type: "service",
+        action: "create",
+        resourceId: "svc1",
+        name: "web-app",
+      },
     ];
 
     render(
@@ -161,5 +170,64 @@ describe("ActivityFeed", () => {
 
     expect(screen.queryByText("deploy freeze")).not.toBeInTheDocument();
     expect(screen.getByText("No recent activity")).toBeInTheDocument();
+  });
+
+  it("says there is nothing when only gaps match", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 1,
+        kind: "gap",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+    ];
+
+    render(<ActivityFeed entries={entries} />);
+
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+    expect(screen.getByText("No recent activity")).toBeInTheDocument();
+  });
+
+  it("merges gaps no change separates into one divider", () => {
+    const gapEntry = (id: number, start: string, end: string): HistoryEntry => ({
+      id,
+      kind: "gap",
+      timestamp: start,
+      until: end,
+      type: "",
+      action: "",
+      resourceId: "",
+      name: "",
+    });
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed
+          entries={[
+            gapEntry(3, "2026-10-30T15:00:00Z", "2026-10-30T16:00:00Z"),
+            gapEntry(2, "2026-10-30T13:00:00Z", "2026-10-30T14:00:00Z"),
+            {
+              id: 1,
+              kind: "change",
+              timestamp: "2026-10-30T12:00:00Z",
+              type: "service",
+              action: "create",
+              resourceId: "svc1",
+              name: "web-app",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    const dividers = screen.getAllByRole("separator");
+
+    expect(dividers).toHaveLength(1);
+    expect(dividers[0]).toHaveTextContent("Not watching 2 times, 2h in total");
+    expect(dividers[0]).toHaveAccessibleName(/^Nothing recorded in 2 stretches from .+ to .+$/);
   });
 });

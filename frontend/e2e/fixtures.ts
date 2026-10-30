@@ -88,9 +88,9 @@ export async function authProvider(
 }
 
 /**
- * Whether the SUT holds change history for a resource. It is that process's
- * ring buffer, so a resource unchanged since startup has none however long the
- * dashboard is given — a real precondition, not a wait.
+ * Whether the SUT holds change history for a resource: changes only, since a
+ * gap is on every resource's timeline. A resource unchanged since startup has
+ * none however long the dashboard is given — a real precondition, not a wait.
  */
 export async function hasHistory(
   request: import("@playwright/test").APIRequestContext,
@@ -100,7 +100,7 @@ export async function hasHistory(
   const history = await apiJson(
     request,
     baseURL,
-    `/history?resourceId=${encodeURIComponent(resourceId)}&limit=1`,
+    `/history?resourceId=${encodeURIComponent(resourceId)}&kind=change&limit=1`,
   );
   const items = history.items;
 

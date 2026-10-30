@@ -1,5 +1,6 @@
 import type { FetchResult } from "../api/client";
 import { api } from "../api/client";
+import { keepChanges } from "../lib/activity";
 import { useDebouncedInvalidation } from "./useDebouncedInvalidation";
 import type { SSEEvent } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
@@ -20,6 +21,12 @@ const historyTypes = {
   "/volumes": "volume",
   "/stacks": "stack",
 } as const;
+
+/** How many changes a detail page's Recent Activity shows. */
+const recentChanges = 10;
+
+/** The page asked for to find them, gaps included. */
+const historyPageSize = 50;
 
 export type DetailCollection = keyof typeof historyTypes;
 
@@ -88,10 +95,15 @@ export function useDetailResource<T>(
   // it asks alongside the first fetch rather than behind it.
   const resourceType = historyTypes[collection];
 
+  // Gaps are on every resource's timeline, so a page wide enough for the
+  // changes is asked for and cut back to them, keeping the gaps among them.
   const historyQuery = useQuery({
     queryKey: historyKey,
-    queryFn: ({ signal }) =>
-      api.history({ resourceId: key!, type: resourceType, limit: 10 }, signal),
+    queryFn: async ({ signal }) =>
+      keepChanges(
+        await api.history({ resourceId: key!, type: resourceType, limit: historyPageSize }, signal),
+        recentChanges,
+      ),
     enabled: !!key && fetchHistory,
   });
 
