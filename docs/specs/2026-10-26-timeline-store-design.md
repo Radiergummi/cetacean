@@ -205,8 +205,9 @@ At startup, before the watcher starts and so before any `Append`:
 
 1. Open and migrate the database.
 2. Select the newest `storage.history_entries` items, oldest first, into the ring through a new
-   `History.Restore`. It rebuilds the per-resource index and sets the counter to the largest ID,
-   not the row count, so new items continue the sequence. The size used is the one configured
+   `History.Restore`. It rebuilds the per-resource index and sets the counter to the largest ID
+   stored of any kind, not the row count, so new items continue the sequence even past kinds this
+   binary doesn't restore. The size used is the one configured
    now. A smaller size than the database was written under keeps the newest items, and the next
    retention pass deletes the rest.
 3. Start the writer with `lastWritten` at that counter.
@@ -226,12 +227,17 @@ The opposite problem remains: a restored history followed by new items reads as 
 happened in between.
 
 When the watcher reports ready, Cetacean opens this process's coverage row and, if an earlier row
-exists, records a `gap` item through the cache. The gap runs from that row's `seen_at` to now. It
+exists, records a `gap` item through the cache. The gap runs from that row's `seen_at` to the
+moment it is appended, stamped under `notifyMu`, so no item with a lower ID ends after it. It
 goes through `notify` like any change, so the ring, the writer, SSE and every listing pick it up
-with no path of their own. When the startup sync succeeds, which is the usual case, nothing is
-recorded before it, so the gap is the first item after the restored ones. If Docker was
-unreachable at first, changes the event stream delivered before the first successful sync come
-first. The gap then ends later than it had to: it claims less coverage, never more.
+with no path of their own. Changes the event stream delivers between the watcher becoming ready
+and the gap being appended, and before the first successful sync if Docker was unreachable at
+first, come before it. The gap then ends later than it had to: it claims less coverage, never more.
+
+A heartbeat commits every item before it, so a coverage row whose `seen_at` never moved past its
+`started_at` may not have committed its gap: the process crashed, or every write failed, before its
+first tick. Opening coverage skips such rows for the newest one that heartbeated, and the next gap
+covers both.
 
 A process that never became ready opens no coverage row, so its lifetime falls inside the next
 gap. That is the right answer: it watched nothing.

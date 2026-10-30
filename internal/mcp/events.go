@@ -27,10 +27,10 @@ type eventsResult struct {
 	// by time knows it is looking at a page rather than the whole answer.
 	Truncated bool `json:"truncated"`
 
-	// TrackingSince is the start of the only window this timeline can answer
-	// for: the ring starts with the process and, once it wraps, begins at its
-	// oldest surviving entry. Without it, "nothing changed" and "the record
-	// does not go back that far" are the same answer. Compare it to `since`.
+	// TrackingSince is the oldest entry held, restored ones included: the
+	// timeline cannot answer for anything earlier. Without it, "nothing
+	// changed" and "the record does not go back that far" are the same
+	// answer. Compare it to `since`; gaps after it are entries of their own.
 	TrackingSince string `json:"trackingSince,omitempty"`
 }
 
@@ -99,9 +99,15 @@ func (s *Server) toolGetEvents(
 	timeline := make([]projection.TimelineEntry, 0, len(matched))
 
 	for _, e := range matched {
+		var until string
+		if !e.Until.IsZero() {
+			until = projection.TimelineTime(e.Until)
+		}
+
 		timeline = append(timeline, projection.TimelineEntry{
 			At:         projection.TimelineTime(e.Timestamp),
-			Kind:       "change",
+			Until:      until,
+			Kind:       e.Kind,
 			Type:       string(e.Type),
 			Name:       e.Name,
 			ResourceID: e.ResourceID,

@@ -343,6 +343,7 @@ func run(s settings) error {
 			timelineStore,
 			stateCache.History(),
 			cfg.HistoryEntries,
+			stateCache.RecordGap,
 		)
 	}
 
@@ -812,7 +813,7 @@ func restoreTimeline(path string, history *cache.History, keep int) timeline.Sto
 		return nil
 	}
 
-	entries, err := store.Restore(ctx, keep)
+	entries, last, err := store.Restore(ctx, keep)
 	if err != nil {
 		_ = store.Close()
 		slog.Warn("could not restore the timeline; the change history will not persist",
@@ -820,7 +821,7 @@ func restoreTimeline(path string, history *cache.History, keep int) timeline.Sto
 		return nil
 	}
 
-	history.Restore(entries)
+	history.Restore(entries, last)
 	slog.Info("restored the change history", "entries", len(entries))
 
 	return store

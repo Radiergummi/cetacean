@@ -25,9 +25,9 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// kindChange is the only kind this version records, restores and retains;
-// rows of kinds a newer binary added are left alone.
-const kindChange = "change"
+// ringKinds are the kinds the ring holds, and so the ones this version
+// restores and retains; rows of other kinds are left alone.
+const ringKinds = "kind IN ('" + cache.KindChange + "', '" + cache.KindGap + "')"
 
 // ErrHeld is OpenSQLite's error when another process holds the database.
 var ErrHeld = errors.New("the timeline is held by another process")
@@ -153,36 +153,44 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func (s *SQLite) Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, at, type, action, resource_id, name, summary,
+func (s *SQLite) Restore(
+	ctx context.Context,
+	limit int,
+) (entries []cache.HistoryEntry, last uint64, err error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, at, until,
+			type, action, resource_id, name, summary,
 			service, stack, service_id,
 			actor_subject, actor_name, actor_provider, actor_client, actor_transport
-		FROM timeline WHERE kind = ? ORDER BY id DESC LIMIT ?`, kindChange, limit)
+		FROM timeline WHERE `+ringKinds+` ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close() //nolint:errcheck // rows.Err is checked
-
-	var entries []cache.HistoryEntry
 
 	for rows.Next() {
 		var (
 			e                                               cache.HistoryEntry
 			at                                              int64
+			until                                           sql.NullInt64
 			typ, action, resourceID, name, summary          sql.NullString
 			service, stack, serviceID                       sql.NullString
 			subject, actorName, provider, client, transport sql.NullString
 		)
 
 		if err := rows.Scan(
-			&e.ID, &at, &typ, &action, &resourceID, &name, &summary,
+			&e.ID, &e.Kind, &at, &until,
+			&typ, &action, &resourceID, &name, &summary,
 			&service, &stack, &serviceID,
 			&subject, &actorName, &provider, &client, &transport,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		e.Timestamp = time.Unix(0, at)
+		if until.Valid {
+			e.Until = time.Unix(0, until.Int64)
+		}
+
 		e.Type = cache.EventType(typ.String)
 		e.Action = action.String
 		e.ResourceID = resourceID.String
@@ -206,48 +214,51 @@ func (s *SQLite) Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, 
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	slices.Reverse(entries)
 
-	return entries, nil
-}
-
-func (s *SQLite) OpenCoverage(
-	ctx context.Context,
-	at time.Time,
-) (previous time.Time, ok bool, err error) {
-	err = inTx(ctx, s.db, func(tx *sql.Tx) error {
-		var seenAt int64
-
-		err := tx.QueryRowContext(
-			ctx,
-			`SELECT seen_at FROM coverage ORDER BY id DESC LIMIT 1`,
-		).Scan(&seenAt)
-
-		switch {
-		case err == nil:
-			previous, ok = time.Unix(0, seenAt), true
-		case !errors.Is(err, sql.ErrNoRows):
-			return err
-		}
-
-		return tx.QueryRowContext(
-			ctx,
-			`INSERT INTO coverage (id, started_at, seen_at)
-				SELECT coalesce(max(id), 0) + 1, ?, ? FROM coverage
-				RETURNING id`,
-			at.UnixNano(),
-			at.UnixNano(),
-		).Scan(&s.coverage)
-	})
+	err = s.db.QueryRowContext(ctx, `SELECT coalesce(max(id), 0) FROM timeline`).Scan(&last)
 	if err != nil {
-		s.coverage = 0
-		return time.Time{}, false, err
+		return nil, 0, err
 	}
 
-	return previous, ok, nil
+	return entries, last, nil
+}
+
+func (s *SQLite) LastSeen(ctx context.Context) (at time.Time, ok bool, err error) {
+	var seenAt int64
+
+	err = s.db.QueryRowContext(
+		ctx,
+		`SELECT seen_at FROM coverage ORDER BY seen_at > started_at DESC, id DESC LIMIT 1`,
+	).Scan(&seenAt)
+
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return time.Time{}, false, nil
+	case err != nil:
+		return time.Time{}, false, err
+	default:
+		return time.Unix(0, seenAt), true, nil
+	}
+}
+
+func (s *SQLite) OpenCoverage(ctx context.Context, at time.Time) error {
+	err := s.db.QueryRowContext(
+		ctx,
+		`INSERT INTO coverage (id, started_at, seen_at)
+			SELECT coalesce(max(id), 0) + 1, ?, ? FROM coverage
+			RETURNING id`,
+		at.UnixNano(),
+		at.UnixNano(),
+	).Scan(&s.coverage)
+	if err != nil {
+		s.coverage = 0
+	}
+
+	return err
 }
 
 func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
@@ -259,7 +270,9 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 		if s.coverage != 0 && !batch.SeenAt.IsZero() {
 			if _, err := tx.ExecContext(
 				ctx,
-				`UPDATE coverage SET seen_at = ? WHERE id = ?`,
+				// Past started_at even if the clock stepped back: that is
+				// what tells LastSeen this stretch committed its gap.
+				`UPDATE coverage SET seen_at = max(?, started_at + 1) WHERE id = ?`,
 				batch.SeenAt.UnixNano(),
 				s.coverage,
 			); err != nil {
@@ -274,19 +287,19 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 		// With fewer than Keep entries the subquery is NULL and deletes nothing.
 		if _, err := tx.ExecContext(
 			ctx,
-			`DELETE FROM timeline WHERE kind = ?1 AND id < (
-				SELECT id FROM timeline WHERE kind = ?1 ORDER BY id DESC LIMIT 1 OFFSET ?2
+			`DELETE FROM timeline WHERE `+ringKinds+` AND id < (
+				SELECT id FROM timeline WHERE `+ringKinds+` ORDER BY id DESC LIMIT 1 OFFSET ?
 			)`,
-			kindChange,
 			batch.Keep-1,
 		); err != nil {
 			return err
 		}
 
-		// The newest row stays: it is where the next gap starts.
+		// The rows LastSeen may pick stay: the newest, and the newest heartbeated.
 		_, err := tx.ExecContext(ctx, `DELETE FROM coverage
-			WHERE seen_at < (SELECT min(at) FROM timeline WHERE kind = ?)
-				AND id < (SELECT max(id) FROM coverage)`, kindChange)
+			WHERE seen_at < (SELECT min(at) FROM timeline WHERE `+ringKinds+`)
+				AND id < (SELECT max(id) FROM coverage)
+				AND id IS NOT (SELECT max(id) FROM coverage WHERE seen_at > started_at)`)
 
 		return err
 	})
@@ -298,10 +311,10 @@ func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error
 	}
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO timeline (
-			id, kind, at, type, action, resource_id, name, summary,
+			id, kind, at, until, type, action, resource_id, name, summary,
 			service, stack, service_id,
 			actor_subject, actor_name, actor_provider, actor_client, actor_transport
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO NOTHING`)
 	if err != nil {
 		return err
@@ -318,9 +331,14 @@ func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error
 			transport = sql.NullString{String: string(e.Actor.Transport), Valid: true}
 		}
 
+		var until sql.NullInt64
+		if !e.Until.IsZero() {
+			until = sql.NullInt64{Int64: e.Until.UnixNano(), Valid: true}
+		}
+
 		if _, err := stmt.ExecContext(
 			ctx,
-			e.ID, kindChange, e.Timestamp.UnixNano(),
+			e.ID, e.Kind, e.Timestamp.UnixNano(), until,
 			string(e.Type), e.Action, e.ResourceID, e.Name, e.Summary,
 			e.Service, e.Stack, e.ServiceID,
 			subject, name, provider, client, transport,

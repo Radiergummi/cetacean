@@ -34,6 +34,7 @@ func Run(t *testing.T, newStore Factory) {
 		want := []cache.HistoryEntry{
 			{
 				ID:         7,
+				Kind:       cache.KindChange,
 				Timestamp:  at,
 				Type:       cache.EventService,
 				Action:     "update",
@@ -52,11 +53,18 @@ func Run(t *testing.T, newStore Factory) {
 			},
 			{
 				ID:         8,
+				Kind:       cache.KindChange,
 				Timestamp:  at.Add(time.Second),
 				Type:       cache.EventTask,
 				Action:     "update",
 				ResourceID: "task1",
 				ServiceID:  "svc1",
+			},
+			{
+				ID:        9,
+				Kind:      cache.KindGap,
+				Timestamp: at.Add(2 * time.Second),
+				Until:     at.Add(time.Hour),
 			},
 		}
 
@@ -82,7 +90,11 @@ func Run(t *testing.T, newStore Factory) {
 				)
 			}
 
-			got[i].Timestamp = want[i].Timestamp
+			if !got[i].Until.Equal(want[i].Until) {
+				t.Errorf("entry %d: Until = %v, want %v", i, got[i].Until, want[i].Until)
+			}
+
+			got[i].Timestamp, got[i].Until = want[i].Timestamp, want[i].Until
 			if !reflect.DeepEqual(got[i], want[i]) {
 				t.Errorf("entry %d:\n got %+v\nwant %+v", i, got[i], want[i])
 			}
@@ -108,6 +120,22 @@ func Run(t *testing.T, newStore Factory) {
 
 		if got := ids(restore(t, store, 10)); !slices.Equal(got, []uint64{3, 40, 41}) {
 			t.Fatalf("Restore = %v, want [3 40 41]", got)
+		}
+	})
+
+	// A newer binary's kinds share the sequence; a rollback that restarted
+	// it below them would reuse their IDs, and the store would drop the new.
+	t.Run("restore reports the largest ID of any kind", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		batch := entries(1, 2, 3)
+		batch[2].Kind = cache.KindAnnotation
+		commit(t, store, timeline.Batch{Entries: batch})
+
+		got, last, err := store.Restore(context.Background(), 10)
+		if err != nil || !slices.Equal(ids(got), []uint64{1, 2}) || last != 3 {
+			t.Fatalf("Restore = %v, last %d, err=%v; want [1 2] and 3", ids(got), last, err)
 		}
 	})
 
@@ -140,14 +168,34 @@ func Run(t *testing.T, newStore Factory) {
 		}
 	})
 
+	t.Run("retention counts gaps with changes", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		batch := entries(1, 2, 3, 4)
+		batch[2] = cache.HistoryEntry{
+			ID:        3,
+			Kind:      cache.KindGap,
+			Timestamp: batch[1].Timestamp,
+			Until:     batch[3].Timestamp,
+		}
+
+		commit(t, store, timeline.Batch{Entries: batch, Keep: 2})
+
+		got := restore(t, store, 10)
+		if !slices.Equal(ids(got), []uint64{3, 4}) || got[0].Kind != cache.KindGap {
+			t.Fatalf("Restore = %+v, want the gap 3 and the change 4", got)
+		}
+	})
+
 	t.Run("coverage reports the previous process's last heartbeat", func(t *testing.T) {
 		open := newStore(t)
 		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
 
 		store := open()
 
-		if _, ok, err := store.OpenCoverage(context.Background(), start); err != nil || ok {
-			t.Fatalf("first OpenCoverage: ok=%v, err=%v; want no previous coverage", ok, err)
+		if _, ok := startCoverage(t, store, start); ok {
+			t.Fatal("first start of coverage found a previous one")
 		}
 
 		seen := start.Add(time.Hour)
@@ -157,9 +205,91 @@ func Run(t *testing.T, newStore Factory) {
 		store = open()
 		defer closeStore(t, store)
 
-		previous, ok, err := store.OpenCoverage(context.Background(), seen.Add(time.Hour))
-		if err != nil || !ok || !previous.Equal(seen) {
-			t.Fatalf("OpenCoverage = %v, ok=%v, err=%v; want %v", previous, ok, err, seen)
+		previous, ok := startCoverage(t, store, seen.Add(time.Hour))
+		if !ok || !previous.Equal(seen) {
+			t.Fatalf("previous coverage = %v, ok=%v; want %v", previous, ok, seen)
+		}
+	})
+
+	// Every heartbeat commits the entries before it, a gap included, so a
+	// stretch never heartbeated may have lost its gap; the next one covers it.
+	t.Run("coverage that never heartbeated is skipped", func(t *testing.T) {
+		open := newStore(t)
+		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+
+		store := open()
+		startCoverage(t, store, start)
+
+		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
+		closeStore(t, store)
+
+		store = open()
+		startCoverage(t, store, start.Add(time.Hour))
+
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		previous, ok := startCoverage(t, store, start.Add(2*time.Hour))
+		if !ok || !previous.Equal(start.Add(time.Minute)) {
+			t.Fatalf(
+				"previous coverage = %v, ok=%v; want the last heartbeat, %v",
+				previous, ok, start.Add(time.Minute),
+			)
+		}
+	})
+
+	t.Run("a heartbeat on a clock that stepped back still counts", func(t *testing.T) {
+		open := newStore(t)
+		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+
+		store := open()
+		startCoverage(t, store, start)
+		commit(t, store, timeline.Batch{SeenAt: start.Add(-time.Minute)})
+		closeStore(t, store)
+
+		store = open()
+		startCoverage(t, store, start.Add(time.Hour))
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		if previous, ok := startCoverage(t, store, start.Add(2*time.Hour)); !ok ||
+			previous.Before(start) || previous.After(start.Add(time.Second)) {
+			t.Fatalf("previous coverage = %v, ok=%v; want the heartbeated %v", previous, ok, start)
+		}
+	})
+
+	// Retention may run before the next process opens coverage; the row its
+	// gap starts from must survive, though a newer silent row exists.
+	t.Run("retention keeps the newest heartbeated coverage", func(t *testing.T) {
+		open := newStore(t)
+		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+
+		store := open()
+		startCoverage(t, store, start)
+		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
+		closeStore(t, store)
+
+		store = open()
+		startCoverage(t, store, start.Add(time.Hour))
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		later := entries(1, 2, 3)
+		for i := range later {
+			later[i].Timestamp = start.Add(2 * time.Hour)
+		}
+
+		commit(t, store, timeline.Batch{Entries: later, Keep: 2})
+
+		if previous, ok := startCoverage(t, store, start.Add(3*time.Hour)); !ok ||
+			!previous.Equal(start.Add(time.Minute)) {
+			t.Fatalf("previous coverage = %v, ok=%v; want the last heartbeat", previous, ok)
 		}
 	})
 
@@ -169,8 +299,8 @@ func Run(t *testing.T, newStore Factory) {
 
 		commit(t, store, timeline.Batch{SeenAt: time.Now()})
 
-		if _, ok, err := store.OpenCoverage(context.Background(), time.Now()); err != nil || ok {
-			t.Fatalf("OpenCoverage: ok=%v, err=%v; want no previous coverage", ok, err)
+		if _, ok := startCoverage(t, store, time.Now()); ok {
+			t.Fatal("a heartbeat before coverage opened left a previous one")
 		}
 	})
 
@@ -181,9 +311,7 @@ func Run(t *testing.T, newStore Factory) {
 		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
 
 		store := open()
-		if _, _, err := store.OpenCoverage(context.Background(), start); err != nil {
-			t.Fatal(err)
-		}
+		startCoverage(t, store, start)
 
 		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
 		closeStore(t, store)
@@ -198,16 +326,28 @@ func Run(t *testing.T, newStore Factory) {
 
 		commit(t, store, timeline.Batch{Entries: later, Keep: 2})
 
-		previous, ok, err := store.OpenCoverage(context.Background(), start.Add(2*time.Hour))
-		if err != nil || !ok || !previous.Equal(start.Add(time.Minute)) {
-			t.Fatalf(
-				"OpenCoverage = %v, ok=%v, err=%v; want the previous heartbeat",
-				previous,
-				ok,
-				err,
-			)
+		previous, ok := startCoverage(t, store, start.Add(2*time.Hour))
+		if !ok || !previous.Equal(start.Add(time.Minute)) {
+			t.Fatalf("previous coverage = %v, ok=%v; want the previous heartbeat", previous, ok)
 		}
 	})
+}
+
+// startCoverage does what a writer does once ready: reads when the previous
+// stretch was last seen, then opens its own.
+func startCoverage(t *testing.T, store timeline.Store, at time.Time) (time.Time, bool) {
+	t.Helper()
+
+	previous, ok, err := store.LastSeen(context.Background())
+	if err != nil {
+		t.Fatalf("LastSeen: %v", err)
+	}
+
+	if err := store.OpenCoverage(context.Background(), at); err != nil {
+		t.Fatalf("OpenCoverage: %v", err)
+	}
+
+	return previous, ok
 }
 
 func entries(ids ...uint64) []cache.HistoryEntry {
@@ -217,6 +357,7 @@ func entries(ids ...uint64) []cache.HistoryEntry {
 	for _, id := range ids {
 		result = append(result, cache.HistoryEntry{
 			ID:         id,
+			Kind:       cache.KindChange,
 			Timestamp:  at.Add(time.Duration(id) * time.Second),
 			Type:       cache.EventService,
 			Action:     "update",
@@ -248,7 +389,7 @@ func commit(t *testing.T, store timeline.Store, batch timeline.Batch) {
 func restore(t *testing.T, store timeline.Store, limit int) []cache.HistoryEntry {
 	t.Helper()
 
-	entries, err := store.Restore(context.Background(), limit)
+	entries, _, err := store.Restore(context.Background(), limit)
 	if err != nil {
 		t.Fatalf("Restore: %v", err)
 	}

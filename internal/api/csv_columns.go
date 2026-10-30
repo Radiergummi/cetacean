@@ -104,7 +104,7 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 	table := csvTable{
 		header: []string{
 			"timestamp", "type", "action", "name", "id", "summary",
-			"actor", "provider", "client", "transport",
+			"actor", "provider", "client", "transport", "kind", "until",
 		},
 		records: make([][]string, 0, len(entries)),
 	}
@@ -113,6 +113,11 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 		var actor cache.Actor
 		if entry.Actor != nil {
 			actor = *entry.Actor
+		}
+
+		var until string
+		if !entry.Until.IsZero() {
+			until = entry.Until.UTC().Format(time.RFC3339)
 		}
 
 		table.records = append(table.records, []string{
@@ -126,6 +131,8 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			actor.Provider,
 			actor.Client,
 			string(actor.Transport),
+			entry.Kind,
+			until,
 		})
 	}
 

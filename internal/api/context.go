@@ -10,6 +10,7 @@ const jsonLDContextDoc = `{
     "@vocab": "urn:cetacean:",
     "items": {"@container": "@set"},
     "kind": "urn:cetacean:kind",
+    "until": "urn:cetacean:until",
     "name": "urn:cetacean:name",
     "replicas": "urn:cetacean:replicas",
     "runningReplicas": "urn:cetacean:runningReplicas",

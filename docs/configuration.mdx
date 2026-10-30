@@ -461,6 +461,12 @@ time a replaced task takes to stop, then logs a warning and keeps its history in
 failed write, such as on a full disk, is retried and never fails a request; what the history
 drops while writes keep failing isn't written.
 
+The database also records when Cetacean was last watching. After a restart, the history gains a
+**gap** from that moment to the one the new process is watching again: whatever changed in between
+is missing from the record, and the gap says so instead of reading as a quiet stretch. With
+[`storage.timeline`][storage.timeline] off, there is no record to measure from, so no gap is
+recorded. The [API reference](api#changes-and-gaps) describes how gaps appear.
+
 ## Health checks
 
 Two meta endpoints, exempt from authentication and content negotiation:

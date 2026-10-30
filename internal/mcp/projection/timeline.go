@@ -19,7 +19,11 @@ type TimelineEntry struct {
 	// reason given there.
 	At string `json:"at"`
 
-	// Kind is "change" or "log".
+	// Until ends a gap, which starts at At, in At's format; empty otherwise.
+	Until string `json:"until,omitempty"`
+
+	// Kind is "change", "gap" or "log". A gap is a window nobody watched,
+	// so changes made in it are missing; it names no resource.
 	Kind string `json:"kind"`
 
 	// Type is the resource type for a change ("service", "task", ...), and

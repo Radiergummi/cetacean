@@ -31,6 +31,9 @@ const (
 	EventVolume  EventType = "volume"
 	EventStack   EventType = "stack"
 	EventSync    EventType = "sync"
+
+	// EventGap records a window nobody watched; it names no resource.
+	EventGap EventType = "gap"
 )
 
 type Event struct {
@@ -49,6 +52,10 @@ type Event struct {
 	// cache can no longer resolve once it is gone.
 	Service string `json:"-"`
 	Stack   string `json:"-"`
+
+	// Timestamp and Until are a gap's start and end; zero on any other event.
+	Timestamp time.Time `json:"-"`
+	Until     time.Time `json:"-"`
 }
 
 type Stack struct {
@@ -385,7 +392,18 @@ func (c *Cache) notify(e Event) {
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 
-	if e.Type != EventSync {
+	switch e.Type {
+	case EventSync:
+		e.HistoryID = c.history.Count()
+	case EventGap:
+		// Stamped under notifyMu, so no change with a lower ID ends later.
+		e.Until = time.Now()
+		e.HistoryID = c.history.Append(HistoryEntry{
+			Kind:      KindGap,
+			Timestamp: e.Timestamp,
+			Until:     e.Until,
+		})
+	default:
 		entry := HistoryEntry{
 			Type:       e.Type,
 			Action:     e.Action,
@@ -407,8 +425,6 @@ func (c *Cache) notify(e Event) {
 		if e.Action == "create" || e.Action == "remove" {
 			c.recordResourceCount(e.Type)
 		}
-	} else {
-		e.HistoryID = c.history.Count()
 	}
 
 	// Snapshot listeners under read lock, then call outside it, so a listener
@@ -423,6 +439,13 @@ func (c *Cache) notify(e Event) {
 	for _, fn := range fns {
 		fn(e)
 	}
+}
+
+// RecordGap records that nobody watched the cluster from from until now. It
+// goes through notify, so it reaches the history and every listener the way a
+// change does; it must not be called from a listener.
+func (c *Cache) RecordGap(from time.Time) {
+	c.notify(Event{Type: EventGap, Timestamp: from})
 }
 
 func ExtractName(e Event) string {

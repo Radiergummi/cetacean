@@ -11,12 +11,17 @@ import (
 // Store holds the timeline. Callers never see its SQL, so another database
 // can implement it; storetest is the suite every implementation passes.
 type Store interface {
-	// Restore returns the newest limit entries, oldest first.
-	Restore(ctx context.Context, limit int) ([]cache.HistoryEntry, error)
+	// Restore returns the newest limit entries of the kinds the ring holds,
+	// oldest first, and the largest ID stored of any kind.
+	Restore(ctx context.Context, limit int) (entries []cache.HistoryEntry, last uint64, err error)
 
-	// OpenCoverage starts this process's stretch of watching at at, and
-	// returns when the previous one was last seen; ok=false when none exists.
-	OpenCoverage(ctx context.Context, at time.Time) (previous time.Time, ok bool, err error)
+	// LastSeen is when an earlier stretch of watching was last seen; ok=false
+	// when none exists. A stretch never heartbeated never committed its gap,
+	// so it is skipped for the one before it: the next gap then covers both.
+	LastSeen(ctx context.Context) (at time.Time, ok bool, err error)
+
+	// OpenCoverage starts this process's stretch of watching at at.
+	OpenCoverage(ctx context.Context, at time.Time) error
 
 	// Commit applies a batch in one transaction, or none of it.
 	Commit(ctx context.Context, batch Batch) error
