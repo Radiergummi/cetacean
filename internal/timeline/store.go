@@ -16,6 +16,8 @@ type Store interface {
 
 	// OpenCoverage starts this process's stretch of watching at at, and
 	// returns when the previous one was last seen; ok=false when none exists.
+	// A stretch never heartbeated never committed its gap, so it is skipped
+	// for the one before it: the next gap then covers both.
 	OpenCoverage(ctx context.Context, at time.Time) (previous time.Time, ok bool, err error)
 
 	// Commit applies a batch in one transaction, or none of it.

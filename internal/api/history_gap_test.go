@@ -30,7 +30,7 @@ func gapCache() *cache.Cache {
 		ID:   "s1",
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "web"}},
 	})
-	c.RecordGap(gapFrom, gapUntil)
+	c.History().Append(cache.HistoryEntry{Kind: cache.KindGap, Timestamp: gapFrom, Until: gapUntil})
 	c.SetService(swarm.Service{
 		ID:   "s2",
 		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "api"}},
@@ -237,11 +237,11 @@ func TestReplaySendsAGapOnlyOnEvents(t *testing.T) {
 
 	router, c, broadcaster := streamTestRouter(t, 0)
 	cursor := broadcaster.EventID(c.History().Count())
-	c.RecordGap(gapFrom, gapUntil)
+	c.RecordGap(gapFrom)
 
 	frames := streamUntilIdle(t, router, "/events", cursor, nil)
 	if len(frames) == 0 || frames[0].Event != "gap" ||
-		!strings.Contains(frames[0].Data, `"until":"2026-10-30T16:00:00Z"`) {
+		!strings.Contains(frames[0].Data, `"timestamp":"2026-10-30T13:00:00Z","until":`) {
 		t.Fatalf("/events replay = %+v, want the gap with its until", frames)
 	}
 

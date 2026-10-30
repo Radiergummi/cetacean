@@ -889,7 +889,8 @@ func TestRecordGapGoesThroughNotify(t *testing.T) {
 	c := New(func(e Event) { events = append(events, e) })
 
 	from := time.Date(2026, 10, 30, 13, 0, 0, 0, time.UTC)
-	c.RecordGap(from, from.Add(3*time.Hour))
+	before := time.Now()
+	c.RecordGap(from)
 
 	entries := c.History().List(HistoryQuery{})
 	if len(entries) != 1 {
@@ -898,8 +899,8 @@ func TestRecordGapGoesThroughNotify(t *testing.T) {
 
 	gap := entries[0]
 	if gap.Kind != KindGap || !gap.Timestamp.Equal(from) ||
-		!gap.Until.Equal(from.Add(3*time.Hour)) || gap.Type != "" || gap.ResourceID != "" {
-		t.Errorf("gap entry = %+v, want a gap from 13:00 to 16:00 naming no resource", gap)
+		gap.Until.Before(before) || gap.Type != "" || gap.ResourceID != "" {
+		t.Errorf("gap entry = %+v, want a gap from 13:00 to now naming no resource", gap)
 	}
 
 	if len(events) != 1 || events[0].Type != EventGap || events[0].HistoryID != gap.ID ||
@@ -1056,4 +1057,17 @@ func historyIDs(entries []HistoryEntry) []uint64 {
 	}
 
 	return result
+}
+
+// A change recorded before a gap must not end after it, or a window starting
+// between the two would end the walk at the gap and skip the change.
+func TestGapEndsNoEarlierThanTheChangesBeforeIt(t *testing.T) {
+	c := New(nil)
+	c.History().Append(HistoryEntry{Type: EventService, ResourceID: "svc1"})
+	c.RecordGap(time.Now().Add(-time.Hour))
+
+	entries := c.History().List(HistoryQuery{})
+	if gap, change := entries[0], entries[1]; gap.Until.Before(change.Timestamp) {
+		t.Fatalf("gap ends %v, before the change it follows at %v", gap.Until, change.Timestamp)
+	}
 }

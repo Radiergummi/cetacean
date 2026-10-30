@@ -18,7 +18,7 @@ type Writer struct {
 
 	// recordGap records the window between the previous process's last
 	// heartbeat and this one's coverage; it reaches the store through the ring.
-	recordGap func(from, until time.Time)
+	recordGap func(from time.Time)
 
 	// lastWritten is the newest ID committed; a failed commit leaves it, so
 	// the next tick retries from the same place.
@@ -37,7 +37,7 @@ func NewWriter(
 	store Store,
 	history *cache.History,
 	keep int,
-	recordGap func(from, until time.Time),
+	recordGap func(from time.Time),
 ) *Writer {
 	return &Writer{
 		store:       store,
@@ -96,7 +96,7 @@ func (w *Writer) openCoverage(ctx context.Context) {
 	w.covering = true
 
 	if ok && previous.Before(now) {
-		w.recordGap(previous, now)
+		w.recordGap(previous)
 	}
 }
 

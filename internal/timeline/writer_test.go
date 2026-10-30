@@ -81,7 +81,7 @@ func (f *fakeStore) coverages() int {
 	return f.coverage
 }
 
-func noGap(time.Time, time.Time) {}
+func noGap(time.Time) {}
 
 func appendN(h *cache.History, n int) {
 	for range n {
@@ -232,9 +232,9 @@ func TestWriter_RecordsTheGapSinceThePreviousHeartbeat(t *testing.T) {
 	previous := time.Now().Add(-time.Hour)
 	store := &fakeStore{err: errors.New("disk full"), previous: previous}
 
-	var gaps [][2]time.Time
-	w := NewWriter(store, cache.NewHistory(10), 10, func(from, until time.Time) {
-		gaps = append(gaps, [2]time.Time{from, until})
+	var gaps []time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10, func(from time.Time) {
+		gaps = append(gaps, from)
 	})
 
 	w.openCoverage(context.Background())
@@ -246,14 +246,14 @@ func TestWriter_RecordsTheGapSinceThePreviousHeartbeat(t *testing.T) {
 	store.err = nil
 	w.openCoverage(context.Background())
 
-	if len(gaps) != 1 || !gaps[0][0].Equal(previous) || !gaps[0][1].After(previous) {
-		t.Fatalf("recorded %v, want one gap from %v to now", gaps, previous)
+	if len(gaps) != 1 || !gaps[0].Equal(previous) {
+		t.Fatalf("recorded %v, want one gap from %v", gaps, previous)
 	}
 }
 
 func TestWriter_RecordsNoGapWithoutAPreviousProcess(t *testing.T) {
-	w := NewWriter(&fakeStore{}, cache.NewHistory(10), 10, func(from, until time.Time) {
-		t.Fatalf("recorded a gap from %v to %v with no previous coverage", from, until)
+	w := NewWriter(&fakeStore{}, cache.NewHistory(10), 10, func(from time.Time) {
+		t.Fatalf("recorded a gap from %v with no previous coverage", from)
 	})
 
 	w.openCoverage(context.Background())

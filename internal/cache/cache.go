@@ -394,6 +394,8 @@ func (c *Cache) notify(e Event) {
 	case EventSync:
 		e.HistoryID = c.history.Count()
 	case EventGap:
+		// Stamped under notifyMu, so no change with a lower ID ends later.
+		e.Until = time.Now()
 		e.HistoryID = c.history.Append(HistoryEntry{
 			Kind:      KindGap,
 			Timestamp: e.Timestamp,
@@ -437,11 +439,11 @@ func (c *Cache) notify(e Event) {
 	}
 }
 
-// RecordGap records that nobody watched the cluster from from to until. It
+// RecordGap records that nobody watched the cluster from from until now. It
 // goes through notify, so it reaches the history and every listener the way a
 // change does; it must not be called from a listener.
-func (c *Cache) RecordGap(from, until time.Time) {
-	c.notify(Event{Type: EventGap, Timestamp: from, Until: until})
+func (c *Cache) RecordGap(from time.Time) {
+	c.notify(Event{Type: EventGap, Timestamp: from})
 }
 
 func ExtractName(e Event) string {

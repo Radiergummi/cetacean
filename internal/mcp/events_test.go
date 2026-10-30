@@ -333,7 +333,9 @@ func TestGetEventsReturnsAGap(t *testing.T) {
 	})
 
 	from := time.Date(2026, 10, 30, 13, 0, 0, 0, time.UTC)
-	c.RecordGap(from, from.Add(3*time.Hour))
+	c.History().Append(cache.HistoryEntry{
+		Kind: cache.KindGap, Timestamp: from, Until: from.Add(3 * time.Hour),
+	})
 
 	got := eventsCall(t, newResourceTestServer(t, c), map[string]any{"types": []any{"service"}})
 

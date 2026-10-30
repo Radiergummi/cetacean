@@ -221,7 +221,7 @@ func (s *SQLite) OpenCoverage(
 
 		err := tx.QueryRowContext(
 			ctx,
-			`SELECT seen_at FROM coverage ORDER BY id DESC LIMIT 1`,
+			`SELECT seen_at FROM coverage ORDER BY seen_at > started_at DESC, id DESC LIMIT 1`,
 		).Scan(&seenAt)
 
 		switch {

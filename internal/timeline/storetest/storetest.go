@@ -195,6 +195,39 @@ func Run(t *testing.T, newStore Factory) {
 		}
 	})
 
+	// Every heartbeat commits the entries before it, a gap included, so a
+	// stretch never heartbeated may have lost its gap; the next one covers it.
+	t.Run("coverage that never heartbeated is skipped", func(t *testing.T) {
+		open := newStore(t)
+		start := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
+
+		store := open()
+		if _, _, err := store.OpenCoverage(context.Background(), start); err != nil {
+			t.Fatal(err)
+		}
+
+		commit(t, store, timeline.Batch{SeenAt: start.Add(time.Minute)})
+		closeStore(t, store)
+
+		store = open()
+		if _, _, err := store.OpenCoverage(context.Background(), start.Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		previous, ok, err := store.OpenCoverage(context.Background(), start.Add(2*time.Hour))
+		if err != nil || !ok || !previous.Equal(start.Add(time.Minute)) {
+			t.Fatalf(
+				"OpenCoverage = %v, ok=%v, err=%v; want the last heartbeat, %v",
+				previous, ok, err, start.Add(time.Minute),
+			)
+		}
+	})
+
 	t.Run("a heartbeat before coverage opens is ignored", func(t *testing.T) {
 		store := newStore(t)()
 		defer closeStore(t, store)
