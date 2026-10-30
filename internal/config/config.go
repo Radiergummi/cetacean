@@ -52,6 +52,8 @@ type Config struct {
 	LogFormat         string           // "json", "text"
 	DataDir           string           // CETACEAN_DATA_DIR, default "./data"
 	Snapshot          bool             // CETACEAN_SNAPSHOT, default true
+	Timeline          bool             // CETACEAN_TIMELINE, default true
+	HistoryEntries    int              // CETACEAN_HISTORY_ENTRIES, default 10000
 	SSEBatchInterval  time.Duration    // CETACEAN_SSE_BATCH_INTERVAL, default 100ms
 	Pprof             bool             // CETACEAN_PPROF, default false
 	SelfMetrics       bool             // CETACEAN_SELF_METRICS, default true
@@ -119,6 +121,8 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		fLogFormat         *string
 		fDataDir           *string
 		fSnapshot          *bool
+		fTimeline          *bool
+		fHistoryEntries    *int
 		fOpsLevel          *int
 		fBasePath          *string
 		fPublicURL         *string
@@ -164,6 +168,8 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		if fc.Storage != nil {
 			fDataDir = fc.Storage.DataDir
 			fSnapshot = fc.Storage.Snapshot
+			fTimeline = fc.Storage.Timeline
+			fHistoryEntries = fc.Storage.HistoryEntries
 		}
 		if fc.Tracing != nil {
 			fOTelEndpoint = fc.Tracing.Endpoint
@@ -218,6 +224,25 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 	}
 
 	snapshot, err := resolveBool(flags.Snapshot, "CETACEAN_SNAPSHOT", fSnapshot, true)
+	if err != nil {
+		return nil, err
+	}
+
+	timeline, err := resolveBool(flags.Timeline, "CETACEAN_TIMELINE", fTimeline, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// The ceiling bounds a search with no match, which walks the whole ring
+	// under the read lock every Append waits on.
+	historyEntries, err := resolveInt(
+		flags.HistoryEntries,
+		"CETACEAN_HISTORY_ENTRIES",
+		fHistoryEntries,
+		10_000,
+		1_000,
+		100_000,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +330,8 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		LogFormat:        logFormat,
 		DataDir:          resolve(flags.DataDir, "CETACEAN_DATA_DIR", fDataDir, "./data"),
 		Snapshot:         snapshot,
+		Timeline:         timeline,
+		HistoryEntries:   historyEntries,
 		SSEBatchInterval: batchInterval,
 
 		DockerTaskPollInterval: taskPollInterval,

@@ -1,0 +1,150 @@
+package timeline_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/timeline"
+	"github.com/radiergummi/cetacean/internal/timeline/storetest"
+)
+
+func TestSQLite(t *testing.T) {
+	storetest.Run(t, func(t *testing.T) func() timeline.Store {
+		path := filepath.Join(t.TempDir(), "cetacean.db")
+
+		return func() timeline.Store { return openSQLite(t, path) }
+	})
+}
+
+func TestSQLite_SecondProcessIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+
+	first := openSQLite(t, path)
+	defer first.Close() //nolint:errcheck // test cleanup
+
+	if second, err := timeline.OpenSQLite(context.Background(), path); err == nil {
+		_ = second.Close()
+		t.Fatal("a second open of a held database succeeded")
+	}
+
+	if err := first.Commit(context.Background(), timeline.Batch{SeenAt: time.Now()}); err != nil {
+		t.Fatalf("the first holder cannot commit after the refused open: %v", err)
+	}
+}
+
+func TestSQLite_FilesAreOwnerOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+
+	store := openSQLite(t, path)
+	defer store.Close() //nolint:errcheck // test cleanup
+
+	err := store.Commit(context.Background(), timeline.Batch{
+		Entries: []cache.HistoryEntry{{ID: 1, Timestamp: time.Now(), Type: cache.EventService}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{path, path + "-wal"} {
+		info, err := os.Stat(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if mode := info.Mode().Perm(); mode != 0600 {
+			t.Errorf("%s: mode %o, want 600", filepath.Base(name), mode)
+		}
+	}
+}
+
+// What a newer binary may have done: added a column and a migration this one
+// does not know. Naming every column keeps this one reading and writing.
+func TestSQLite_OpensANewerDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+	ctx := context.Background()
+
+	store := openSQLite(t, path)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	newer := timeline.OpenRaw(t, path)
+	for _, stmt := range []string{
+		`ALTER TABLE timeline ADD COLUMN later TEXT`,
+		`INSERT INTO schema_migrations (version, applied_at) VALUES (9999, 0)`,
+	} {
+		if _, err := newer.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+
+	if err := newer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store = openSQLite(t, path)
+	defer store.Close() //nolint:errcheck // test cleanup
+
+	err := store.Commit(ctx, timeline.Batch{
+		Entries: []cache.HistoryEntry{{ID: 1, Timestamp: time.Now(), Type: cache.EventService}},
+		Keep:    10,
+	})
+	if err != nil {
+		t.Fatalf("Commit against a newer schema: %v", err)
+	}
+
+	entries, err := store.Restore(ctx, 10)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("Restore = %d entries, err=%v; want 1", len(entries), err)
+	}
+}
+
+func TestSQLite_MigratesOnce(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+
+	for range 2 {
+		if err := openSQLite(t, path).Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	db := timeline.OpenRaw(t, path)
+	defer db.Close() //nolint:errcheck // test cleanup
+
+	var versions []int64
+
+	rows, err := db.QueryContext(context.Background(), `SELECT version FROM schema_migrations`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close() //nolint:errcheck // test cleanup
+
+	for rows.Next() {
+		var v int64
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+
+		versions = append(versions, v)
+	}
+
+	if !slices.Equal(versions, []int64{1}) {
+		t.Fatalf("schema_migrations = %v, want [1]", versions)
+	}
+}
+
+func openSQLite(t *testing.T, path string) *timeline.SQLite {
+	t.Helper()
+
+	store, err := timeline.OpenSQLite(context.Background(), path)
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+
+	return store
+}

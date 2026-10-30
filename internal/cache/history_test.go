@@ -789,3 +789,97 @@ func TestHistoryKeepsIndexWhileAnEntrySurvives(t *testing.T) {
 		t.Error("svc's index was pruned while one of its entries survives")
 	}
 }
+
+func TestHistory_Since_OverwrittenReturnsSurvivors(t *testing.T) {
+	h := NewHistory(3)
+
+	for i := range 5 {
+		h.Append(HistoryEntry{Type: "service", Name: names[i]})
+	}
+
+	entries, ok := h.Since(1)
+	if ok {
+		t.Fatal("expected ok=false for overwritten ID")
+	}
+
+	if got := entryIDs(entries); !slices.Equal(got, []uint64{3, 4, 5}) {
+		t.Fatalf("Since(1) = %v, want the survivors [3 4 5]", got)
+	}
+}
+
+func TestHistory_Restore(t *testing.T) {
+	h := NewHistory(10)
+
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	h.Restore([]HistoryEntry{
+		{ID: 4, Timestamp: at, Type: EventService, ResourceID: "s1", Name: "web"},
+		{ID: 9, Timestamp: at, Type: EventTask, ResourceID: "t1", ServiceID: "s1"},
+	})
+
+	if h.Count() != 9 {
+		t.Fatalf("Count() = %d, want the last restored ID 9", h.Count())
+	}
+
+	if id := h.Append(HistoryEntry{Type: EventService, ResourceID: "s1"}); id != 10 {
+		t.Fatalf("Append after Restore = %d, want 10", id)
+	}
+
+	if got := entryIDs(
+		h.List(HistoryQuery{ResourceID: "s1"}),
+	); !slices.Equal(
+		got,
+		[]uint64{10, 9, 4},
+	) {
+		t.Fatalf("List(s1) = %v, want [10 9 4] through the rebuilt index", got)
+	}
+}
+
+func TestHistory_RestoreKeepsTheNewestThatFit(t *testing.T) {
+	h := NewHistory(3)
+
+	var restored []HistoryEntry
+	for id := range uint64(5) {
+		restored = append(restored, HistoryEntry{ID: id + 1, Type: EventService})
+	}
+
+	h.Restore(restored)
+
+	if got := entryIDs(h.List(HistoryQuery{})); !slices.Equal(got, []uint64{5, 4, 3}) {
+		t.Fatalf("List() = %v, want the newest three", got)
+	}
+
+	if entries, ok := h.Since(2); !ok || len(entries) != 3 {
+		t.Fatalf("Since(2) = %d entries, ok=%v; want 3, true", len(entries), ok)
+	}
+}
+
+// IDs restored after an overrun jump, so the oldest one cannot be derived
+// from the count and the size.
+func TestHistory_SinceAcrossRestoredJump(t *testing.T) {
+	h := NewHistory(4)
+
+	h.Restore([]HistoryEntry{
+		{ID: 2, Type: EventService},
+		{ID: 3, Type: EventService},
+		{ID: 50, Type: EventService},
+	})
+	h.Append(HistoryEntry{Type: EventService})
+
+	entries, ok := h.Since(1)
+	if !ok {
+		t.Fatal("Since(1): ok=false, but the ring still holds the entry after it")
+	}
+
+	if got := entryIDs(entries); !slices.Equal(got, []uint64{2, 3, 50, 51}) {
+		t.Fatalf("Since(1) = %v, want [2 3 50 51]", got)
+	}
+}
+
+func entryIDs(entries []HistoryEntry) []uint64 {
+	ids := make([]uint64, 0, len(entries))
+	for _, e := range entries {
+		ids = append(ids, e.ID)
+	}
+
+	return ids
+}

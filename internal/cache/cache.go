@@ -200,7 +200,15 @@ func (c *Cache) Generation() uint64 { return c.generation.Load() }
 // removals alone, the inputs of config and secret version groups.
 func (c *Cache) VersionGeneration() uint64 { return c.versionGeneration.Load() }
 
-func New(onChange OnChangeFunc) *Cache {
+// Option configures a Cache at construction.
+type Option func(*Cache)
+
+// WithHistorySize sizes the change-history ring, 10,000 entries by default.
+func WithHistorySize(size int) Option {
+	return func(c *Cache) { c.history = NewHistory(size) }
+}
+
+func New(onChange OnChangeFunc, opts ...Option) *Cache {
 	c := &Cache{
 		services:       make(map[string]swarm.Service),
 		tasks:          make(map[string]swarm.Task),
@@ -212,6 +220,9 @@ func New(onChange OnChangeFunc) *Cache {
 		history:        NewHistory(10000),
 		attributions:   newAttributions(),
 		restarts:       NewRestartTracker(7*24*time.Hour, time.Hour),
+	}
+	for _, opt := range opts {
+		opt(c)
 	}
 	if onChange != nil {
 		c.AddOnChangeListener(onChange)
