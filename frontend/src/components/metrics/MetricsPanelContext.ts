@@ -1,4 +1,5 @@
 import type { Segment } from "../SegmentedControl";
+import type { TimelineItem } from "@/lib/timeline";
 import { createContext, useContext } from "react";
 
 const ranges = ["1h", "6h", "24h", "7d"] as const;
@@ -18,6 +19,7 @@ export interface MetricsPanelContextValue {
   streaming?: boolean | undefined;
   drillStack?: string | null | undefined;
   setDrillStack?: ((stack: string | null) => void) | undefined;
+  timeline?: TimelineItem[] | undefined;
 }
 
 export const MetricsPanelContext = createContext<MetricsPanelContextValue | null>(null);

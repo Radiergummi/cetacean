@@ -1,4 +1,17 @@
-import type { HistoryEntry } from "../api/types";
+import type { HistoryActor, HistoryEntry } from "../api/types";
+
+const transportLabels: Record<HistoryActor["transport"], string> = {
+  dashboard: "the dashboard",
+  rest: "the API",
+  mcp: "MCP",
+};
+
+/**
+ * The phrase naming who made a change, such as "by alice via MCP".
+ */
+export function attribution({ name, subject, transport }: HistoryActor): string {
+  return `by ${name || subject} via ${transportLabels[transport] ?? transport}`;
+}
 
 /**
  * A row of an activity feed: one change, or a run of gaps no change separates,

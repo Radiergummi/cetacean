@@ -364,9 +364,13 @@ describe("TimeSeriesChart chrome", () => {
     expect(screen.getByText("%")).toBeInTheDocument();
   });
 
-  it("carries both the threshold and the crosshair plugin", async () => {
+  it("carries the marker, threshold and crosshair plugins", async () => {
     await renderChart();
 
-    expect(latestChart().plugins.map(({ id }) => id)).toEqual(["thresholdLines", "crosshair"]);
+    expect(latestChart().plugins.map(({ id }) => id)).toEqual([
+      "timelineMarkers",
+      "thresholdLines",
+      "crosshair",
+    ]);
   });
 });

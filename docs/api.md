@@ -343,8 +343,8 @@ List endpoints page by query parameter or by HTTP `Range` header.
 
 A `limit` or `offset` that isn't a whole number in range, a `dir` other than `asc` or `desc`, or a `sort` the
 list doesn't offer is refused with `400` ([`API016`](api/errors#API016)). The same goes for a malformed
-`before` or `limit` on `/history`, the feeds and `/search`, and a `since` or `until` on `/history` that isn't an
-RFC 3339 timestamp.
+`before` or `limit` on `/history`, the feeds and `/search`, a `since` or `until` on `/history` that isn't an
+RFC 3339 timestamp, and a `tasks` on `/history` that isn't `true` or `false`.
 
 ```http tab
 GET /services?limit=10&offset=20 HTTP/1.1
@@ -404,6 +404,9 @@ built from the history carries gaps, the search feed and a type's or a resource'
 `/history` pages by cursor rather than offset, because new entries arrive at the front while you read. A full page
 carries a `Link` with `rel="next"`, whose `before` names the oldest entry on it. `search` matches names across the
 whole log, not only the page you have, and stays on the `next` link along with `type` and `resourceId`.
+
+With `type=service`, a service's history includes its tasks' entries. Add `tasks=false` for the service's own
+entries alone, so a crash loop's task churn doesn't fill the pages before you reach the change that started it.
 
 ```http tab
 GET /history?search=web&limit=50 HTTP/1.1

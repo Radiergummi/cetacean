@@ -488,3 +488,68 @@ describe("api.recentActivity", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("api.timeline", () => {
+  const page = (items: unknown[], next?: string) =>
+    jsonResponse({
+      "@context": "/api/context.jsonld",
+      items,
+      total: items.length,
+      limit: 200,
+      offset: 0,
+    }).then((response) => {
+      if (next) {
+        response.headers.set("Link", `<${next}>; rel="next"`);
+      }
+
+      return response;
+    });
+
+  const entry = (id: number) => ({
+    id,
+    kind: "change",
+    timestamp: "2026-10-30T12:00:00Z",
+    type: "service",
+    action: "update",
+    resourceId: "svc1",
+    name: "web",
+  });
+
+  const params = { type: "service", resourceId: "svc1", since: "2026-10-30T00:00:00Z" };
+
+  function fullPages() {
+    for (let index = 5; index > 0; index--) {
+      mockFetch.mockReturnValueOnce(page([entry(index)], `/history?before=${index}&limit=200`));
+    }
+  }
+
+  it("asks for the service's own entries", async () => {
+    mockFetch.mockReturnValueOnce(page([entry(1)]));
+
+    const { truncated } = await api.timeline(params);
+    const url = new URL(String(mockFetch.mock.calls[0]?.[0]), "http://localhost");
+
+    expect(url.searchParams.get("tasks")).toBe("false");
+    expect(truncated).toBe(false);
+  });
+
+  it("is not truncated when nothing is left past the last page", async () => {
+    fullPages();
+    mockFetch.mockReturnValueOnce(page([]));
+
+    const { entries, truncated } = await api.timeline(params);
+
+    expect(entries).toHaveLength(5);
+    expect(truncated).toBe(false);
+    expect(
+      new URL(String(mockFetch.mock.calls[5]?.[0]), "http://localhost").searchParams.get("limit"),
+    ).toBe("1");
+  });
+
+  it("is truncated when an entry is left past the last page", async () => {
+    fullPages();
+    mockFetch.mockReturnValueOnce(page([entry(0)]));
+
+    expect((await api.timeline(params)).truncated).toBe(true);
+  });
+});

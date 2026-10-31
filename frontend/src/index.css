@@ -67,6 +67,8 @@
   --chart-reserved: #3b82f6;
   --chart-crosshair: rgba(136, 136, 136, 0.3);
   --chart-zoom: rgba(100, 143, 255, 0.15);
+  --chart-marker: rgba(136, 136, 136, 0.8);
+  --chart-gap: rgba(136, 136, 136, 0.12);
   --radius: 0.625rem;
 }
 

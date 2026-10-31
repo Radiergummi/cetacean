@@ -9,6 +9,13 @@ import {
   computeSuggestedMax,
   type Threshold,
 } from "./chartDatasets";
+import {
+  drawMarkers,
+  layoutMarkers,
+  type MarkerLayout,
+  markersAt,
+  tooltipMarkers,
+} from "./chartMarkers";
 import { useChartSync } from "./ChartSyncProvider";
 import ChartTooltipOverlay, { type TooltipData } from "./ChartTooltipOverlay";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
@@ -134,6 +141,12 @@ export default function TimeSeriesChart({
   dataRef.current = data;
   const stackedRef = useRef(stacked);
   stackedRef.current = stacked;
+  const timelineRef = useRef(panel?.timeline);
+  timelineRef.current = panel?.timeline;
+  const markerLayoutRef = useRef<MarkerLayout | null>(null);
+
+  // The layout only moves with these; a hover redraws every synced chart.
+  const markerInputsRef = useRef<unknown[]>([]);
   const isolationRef = useLatestRef(isolation);
   const onSeriesDoubleClickRef = useLatestRef(onSeriesDoubleClick);
   const onRangeSelectRef = useLatestRef(onRangeSelect);
@@ -212,6 +225,52 @@ export default function TimeSeriesChart({
       },
     }),
     [],
+  );
+
+  useEffect(() => {
+    chartRef.current?.draw();
+  }, [panel?.timeline]);
+
+  const markerPlugin = useMemo<Plugin<"line">>(
+    () => ({
+      id: "timelineMarkers",
+      beforeDatasetsDraw({ ctx, chartArea, scales }) {
+        const items = timelineRef.current;
+        const xScale = scales["x"];
+        const current = dataRef.current;
+
+        if (!items?.length || !xScale || !chartArea || !current) {
+          markerLayoutRef.current = null;
+
+          return;
+        }
+
+        const inputs = [
+          items,
+          current.timestamps,
+          xScale.min,
+          xScale.max,
+          chartArea.left,
+          chartArea.right,
+        ];
+        const previous = markerInputsRef.current;
+        let layout = markerLayoutRef.current;
+
+        if (!layout || inputs.some((input, index) => input !== previous[index])) {
+          layout = layoutMarkers(items, current.timestamps, (index) =>
+            xScale.getPixelForValue(index),
+          );
+          markerLayoutRef.current = layout;
+          markerInputsRef.current = inputs;
+        }
+
+        drawMarkers(ctx, chartArea, layout, {
+          marker: getSemanticChartColor("marker"),
+          gap: getSemanticChartColor("gap"),
+        });
+      },
+    }),
+    [dataRef],
   );
 
   const crosshairPlugin = useMemo<Plugin<"line">>(
@@ -321,6 +380,7 @@ export default function TimeSeriesChart({
 
         const current = dataRef.current;
         const timestamp = current?.timestamps[index];
+        const hit = markersAt(markerLayoutRef.current, x);
 
         tooltipRef.current({
           time: timestamp ? new Date(timestamp * 1000).toLocaleTimeString() : "",
@@ -334,6 +394,7 @@ export default function TimeSeriesChart({
           x,
           chartWidth: chartArea.right,
           top: chartArea.top + 8,
+          markers: tooltipMarkers(hit.cluster, hit.band),
         });
 
         if (timestamp != null) {
@@ -482,8 +543,8 @@ export default function TimeSeriesChart({
   );
 
   const plugins = useMemo(
-    () => [thresholdPlugin, crosshairPlugin],
-    [thresholdPlugin, crosshairPlugin],
+    () => [markerPlugin, thresholdPlugin, crosshairPlugin],
+    [markerPlugin, thresholdPlugin, crosshairPlugin],
   );
 
   return (

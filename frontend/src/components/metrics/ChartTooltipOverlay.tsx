@@ -3,12 +3,19 @@
 import { chartTooltipClasses } from "@/lib/chartTooltip.ts";
 import { useRef } from "react";
 
+export interface TooltipMarkers {
+  changes: { key: number; time: string; text: string }[];
+  more: number;
+  gap: { title: string; detail: string } | undefined;
+}
+
 export interface TooltipData {
   time: string;
   series: { label: string; color: string; value: string; raw: number; dashed?: boolean }[];
   x: number;
   chartWidth: number;
   top: number;
+  markers?: TooltipMarkers | undefined;
 }
 
 const tooltipGap = 20;
@@ -67,6 +74,31 @@ export default function ChartTooltipOverlay({ tooltip, visible }: Props) {
               <span className="ms-auto ps-4 font-semibold text-foreground">{value}</span>
             </div>
           ))}
+
+          {tooltip.markers && (
+            <div className="mt-1.5 flex flex-col gap-1 border-t pt-1.5">
+              {tooltip.markers.gap && (
+                <div>
+                  <div className="font-semibold text-foreground">{tooltip.markers.gap.title}</div>
+                  <div className="text-muted-foreground">{tooltip.markers.gap.detail}</div>
+                </div>
+              )}
+
+              {tooltip.markers.changes.map(({ key, text, time }) => (
+                <div
+                  key={key}
+                  className="flex items-center gap-2 whitespace-nowrap"
+                >
+                  <span className="text-muted-foreground">{time}</span>
+                  <span className="text-foreground">{text}</span>
+                </div>
+              ))}
+
+              {tooltip.markers.more > 0 && (
+                <div className="text-muted-foreground">{tooltip.markers.more} more</div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

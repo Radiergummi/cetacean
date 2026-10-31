@@ -9,6 +9,7 @@ import {
 } from "./MetricsPanelContext";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
+import { type TimelineSource, useTimeline } from "./useTimeline";
 import { useTimeRange } from "./useTimeRange";
 import { AreaChart, Calendar, LineChart, Pause, Play, RefreshCw, X } from "lucide-react";
 import type React from "react";
@@ -56,9 +57,13 @@ interface Props {
   children?: React.ReactNode | undefined;
   header?: React.ReactNode | undefined;
   stackable?: boolean | undefined;
+  /**
+   * The resource whose changes and gaps the charts mark.
+   */
+  timeline?: TimelineSource | undefined;
 }
 
-export default function MetricsPanel({ charts, children, header, stackable }: Props) {
+export default function MetricsPanel({ charts, children, header, stackable, timeline }: Props) {
   const { range, customFrom, customTo, setRange, setCustomRange, clearCustomRange } =
     useTimeRange();
   const isCustomRange = customFrom != null && customTo != null;
@@ -68,6 +73,12 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
   const [startInput, setStartInput] = useState("");
   const [endInput, setEndInput] = useState("");
   const [drillStack, setDrillStack] = useState<string | null>(null);
+  const markers = useTimeline(timeline, {
+    range,
+    from: customFrom ?? undefined,
+    to: customTo ?? undefined,
+    refreshKey,
+  });
 
   useEffect(() => {
     if (!drillStack) {
@@ -96,8 +107,19 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
       streaming,
       drillStack,
       setDrillStack,
+      timeline: markers.items,
     }),
-    [range, customFrom, customTo, refreshKey, setCustomRange, stacked, streaming, drillStack],
+    [
+      range,
+      customFrom,
+      customTo,
+      refreshKey,
+      setCustomRange,
+      stacked,
+      streaming,
+      drillStack,
+      markers.items,
+    ],
   );
 
   const handleCustomApply = (close: () => void) => {
@@ -247,6 +269,11 @@ export default function MetricsPanel({ charts, children, header, stackable }: Pr
                 />
               ))}
           </div>
+          {markers.truncated && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Markers show the newest changes only; narrow the range to see all of them.
+            </p>
+          )}
         </ChartSyncProvider>
       </MetricsPanelContext.Provider>
     </CollapsibleSection>

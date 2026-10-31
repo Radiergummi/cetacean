@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
 - After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
+- The metric charts on service, node and task pages mark each change, naming who made it, and shade the stretches Cetacean wasn't watching
+- `GET /history?tasks=false` leaves a service's task entries out of its timeline
 - Service and node pages show a task timeline: each replica's tasks as bars from creation to exit, coloured by state with failures marked, over the metric charts' time range
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`

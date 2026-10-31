@@ -1,24 +1,12 @@
-import type { HistoryActor, HistoryEntry } from "../api/types";
-import { activityRows } from "../lib/activity";
+import type { HistoryEntry } from "../api/types";
+import { activityRows, attribution } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
+import { describeGap } from "../lib/timeline";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-
-const transportLabels: Record<HistoryActor["transport"], string> = {
-  dashboard: "the dashboard",
-  rest: "the API",
-  mcp: "MCP",
-};
-
-/**
- * The phrase naming who made a change, such as "by alice via MCP".
- */
-function attribution({ name, subject, transport }: HistoryActor): string {
-  return `by ${name || subject} via ${transportLabels[transport] ?? transport}`;
-}
 
 /**
  * How long a gap lasted, in nanoseconds; zero without a valid end.
@@ -71,17 +59,15 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
 
   // Changes a filter hides may sit between merged gaps, so a run names the
   // span it falls in, not one window from its first start to its last end.
-  const range =
-    gaps.length === 1
-      ? `Nothing recorded from ${formatDateTime(oldest.timestamp)} to ${formatDateTime(end)}`
-      : `${gaps.length} stretches between ${formatDateTime(oldest.timestamp)} and ${formatDateTime(end)}`;
+  let range = `${gaps.length} stretches between ${formatDateTime(oldest.timestamp)} and ${formatDateTime(end)}`;
+  let text = `Not watching ${gaps.length} times${total > 0 ? `, ${formatDuration(total)} in total` : ""}`;
 
-  let text = "Not watching";
+  if (gaps.length === 1) {
+    const from = new Date(oldest.timestamp).getTime() / 1000;
+    const gap = describeGap(from, from + total / 1_000_000_000);
 
-  if (gaps.length > 1) {
-    text = `Not watching ${gaps.length} times${total > 0 ? `, ${formatDuration(total)} in total` : ""}`;
-  } else if (total > 0) {
-    text = `Not watching for ${formatDuration(total)}`;
+    range = gap.detail;
+    text = total > 0 ? gap.title : "Not watching";
   }
 
   return (

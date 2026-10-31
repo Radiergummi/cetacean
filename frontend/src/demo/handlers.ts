@@ -1,4 +1,5 @@
 import { randomHex, type Dataset } from "./dataset";
+import { demoHistory, filterHistory } from "./history";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
 import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
@@ -1888,11 +1889,19 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     // ---- History ----
-    get("*/history", () => {
+    get("*/history", ({ request }) => {
+      const url = new URL(request.url);
+      const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 200);
+      const entries = filterHistory(demoHistory(dataset, Date.now()), url.searchParams);
+
       return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
-        items: [],
-        total: 0,
-        limit: 50,
+        items: entries.slice(0, limit).map((entry) => ({
+          ...entry,
+          "@id": `/history#${entry.id}`,
+          "@type": entry.kind === "gap" ? "Gap" : "HistoryEntry",
+        })),
+        total: entries.length,
+        limit,
         offset: 0,
       });
     }),
