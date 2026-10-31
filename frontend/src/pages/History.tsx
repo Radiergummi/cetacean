@@ -107,6 +107,7 @@ export default function History() {
             entries={entries}
             loading={isLoading}
             hideType={resourceType !== undefined}
+            emptyText={hasNextPage ? "No changes among the newest events" : undefined}
           />
         </div>
       )}

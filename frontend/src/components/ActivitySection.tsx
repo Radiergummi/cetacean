@@ -1,4 +1,5 @@
 import type { HistoryEntry } from "../api/types";
+import { hasChanges } from "../lib/activity";
 import ActivityFeed from "./ActivityFeed";
 import CollapsibleSection from "./CollapsibleSection";
 
@@ -9,7 +10,7 @@ export default function ActivitySection({
   entries: HistoryEntry[];
   hideType?: boolean | undefined;
 }) {
-  if (entries.length === 0) {
+  if (!hasChanges(entries)) {
     return null;
   }
 

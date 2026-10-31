@@ -22,6 +22,7 @@ const sseEventTypes = [
   "volume",
   "stack",
   "sync",
+  "gap",
 ] as const;
 
 /**

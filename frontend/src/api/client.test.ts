@@ -435,3 +435,56 @@ describe("editable sub-resources", () => {
     expect(editable).toEqual(new Set(["scale", "labels"]));
   });
 });
+
+describe("api.recentActivity", () => {
+  const page = (items: unknown[]) =>
+    jsonResponse({
+      "@context": "/api/context.jsonld",
+      items,
+      total: items.length,
+      limit: 10,
+      offset: 0,
+    });
+
+  const entry = (id: number, kind: string, timestamp: string) => ({
+    id,
+    kind,
+    timestamp,
+    type: kind === "gap" ? "" : "service",
+    action: kind === "gap" ? "" : "update",
+    resourceId: kind === "gap" ? "" : "svc1",
+    name: kind === "gap" ? "" : "web",
+  });
+
+  it("asks for the changes, then the gaps since the oldest, and merges them newest first", async () => {
+    mockFetch
+      .mockReturnValueOnce(
+        page([
+          entry(9, "change", "2026-10-30T17:00:00Z"),
+          entry(4, "change", "2026-10-30T12:00:00Z"),
+        ]),
+      )
+      .mockReturnValueOnce(page([entry(7, "gap", "2026-10-30T13:00:00Z")]));
+
+    const entries = await api.recentActivity({ resourceId: "svc1", type: "service" }, 2);
+
+    expect(entries.map(({ id }) => id)).toEqual([9, 7, 4]);
+
+    const [first, second] = mockFetch.mock.calls.map(
+      ([url]) => new URL(String(url), "http://localhost"),
+    );
+
+    expect(first?.searchParams.get("kind")).toBe("change");
+    expect(first?.searchParams.get("resourceId")).toBe("svc1");
+    expect(first?.searchParams.get("limit")).toBe("2");
+    expect(second?.searchParams.get("kind")).toBe("gap");
+    expect(second?.searchParams.get("since")).toBe("2026-10-30T12:00:00Z");
+  });
+
+  it("asks for no gaps without a change", async () => {
+    mockFetch.mockReturnValueOnce(page([]));
+
+    expect(await api.recentActivity({}, 25)).toEqual([]);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -46,7 +46,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   api: {
     service: vi.fn<() => Promise<unknown>>(),
     serviceTasks: vi.fn<() => Promise<unknown>>(),
-    history: vi.fn<() => Promise<unknown>>(),
+    recentActivity: vi.fn<() => Promise<unknown>>(),
     allNetworks: vi.fn<() => Promise<unknown>>(),
     metricsQuery: vi.fn<() => Promise<unknown>>(),
   },
@@ -71,7 +71,7 @@ beforeEach(() => {
     canonicalPath: "/services/svc1",
   } as never);
   vi.mocked(api.serviceTasks).mockResolvedValue([] as never);
-  vi.mocked(api.history).mockResolvedValue([] as never);
+  vi.mocked(api.recentActivity).mockResolvedValue([] as never);
   vi.mocked(api.allNetworks).mockResolvedValue([] as never);
   vi.mocked(api.metricsQuery).mockResolvedValue({} as never);
 });
@@ -131,10 +131,11 @@ describe("useServiceDetail", () => {
       wrapper: createWrapper(createTestQueryClient()),
     });
 
-    await waitFor(() => expect(api.history).toHaveBeenCalled());
+    await waitFor(() => expect(api.recentActivity).toHaveBeenCalled());
 
-    expect(api.history).toHaveBeenCalledWith(
+    expect(api.recentActivity).toHaveBeenCalledWith(
       expect.objectContaining({ resourceId: "web_api", type: "service" }),
+      10,
       expect.anything(),
     );
   });
@@ -167,8 +168,9 @@ describe("useServiceDetail", () => {
     });
 
     expect(api.serviceTasks).toHaveBeenCalledWith("web_api", expect.anything());
-    expect(api.history).toHaveBeenCalledWith(
+    expect(api.recentActivity).toHaveBeenCalledWith(
       expect.objectContaining({ resourceId: "web_api" }),
+      10,
       expect.anything(),
     );
     expect(streamPaths.at(-1)).toBe("/services/web_api");

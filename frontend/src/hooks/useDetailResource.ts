@@ -21,6 +21,9 @@ const historyTypes = {
   "/stacks": "stack",
 } as const;
 
+/** How many changes a detail page's Recent Activity shows. */
+const recentChanges = 10;
+
 export type DetailCollection = keyof typeof historyTypes;
 
 export interface DetailResourceOptions<T> {
@@ -91,7 +94,7 @@ export function useDetailResource<T>(
   const historyQuery = useQuery({
     queryKey: historyKey,
     queryFn: ({ signal }) =>
-      api.history({ resourceId: key!, type: resourceType, limit: 10 }, signal),
+      api.recentActivity({ resourceId: key!, type: resourceType }, recentChanges, signal),
     enabled: !!key && fetchHistory,
   });
 

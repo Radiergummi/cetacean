@@ -22,6 +22,7 @@ const mockHistoryPage = vi.mocked(api.historyPage);
 
 const entry = (id: number, type: string, name: string): HistoryEntry => ({
   id,
+  kind: "change",
   type,
   name,
   action: "update",

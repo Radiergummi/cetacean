@@ -16,7 +16,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/client")>()),
   api: {
     node: vi.fn<() => Promise<unknown>>(),
-    history: vi.fn<() => Promise<unknown>>(),
+    recentActivity: vi.fn<() => Promise<unknown>>(),
   },
 }));
 
@@ -35,7 +35,7 @@ beforeEach(() => {
     allowedMethods: new Set<string>(),
     canonicalPath: "/nodes/n0d3id",
   } as never);
-  vi.mocked(api.history).mockResolvedValue([] as never);
+  vi.mocked(api.recentActivity).mockResolvedValue([] as never);
 });
 
 function renderForKey(key: string) {
@@ -50,10 +50,11 @@ describe("useDetailResource", () => {
   it("asks history for the route parameter and the type to resolve it against", async () => {
     renderForKey("worker-2");
 
-    await waitFor(() => expect(api.history).toHaveBeenCalled());
+    await waitFor(() => expect(api.recentActivity).toHaveBeenCalled());
 
-    expect(api.history).toHaveBeenCalledWith(
+    expect(api.recentActivity).toHaveBeenCalledWith(
       expect.objectContaining({ resourceId: "worker-2", type: "node" }),
+      10,
       expect.anything(),
     );
   });
@@ -112,7 +113,7 @@ describe("useDetailResource", () => {
 
     renderForKey("worker-2");
 
-    await waitFor(() => expect(api.history).toHaveBeenCalled());
+    await waitFor(() => expect(api.recentActivity).toHaveBeenCalled());
     expect(streamPaths.at(-1)).toBe("/nodes/worker-2");
 
     settle();

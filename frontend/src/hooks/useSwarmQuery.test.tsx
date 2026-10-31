@@ -614,6 +614,40 @@ describe("useSwarmQuery", () => {
     );
   });
 
+  it("SSE ignores a gap, which moves no row", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "s1", Name: "web" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("gap", {
+        type: "gap",
+        action: "",
+        id: "",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result.current.data).toEqual([{ ID: "s1", Name: "web" }]);
+  });
+
   it("SSE patches a row in place on a list following several types", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

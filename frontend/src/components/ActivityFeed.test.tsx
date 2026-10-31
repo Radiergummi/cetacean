@@ -24,6 +24,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 1,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -45,6 +46,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 2,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -60,6 +62,7 @@ describe("ActivityFeed", () => {
       },
       {
         id: 1,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -86,6 +89,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 1,
+        kind: "change",
         timestamp: new Date().toISOString(),
         type: "service",
         action: "update",
@@ -101,5 +105,130 @@ describe("ActivityFeed", () => {
     );
 
     expect(screen.queryByText(/^by /)).not.toBeInTheDocument();
+  });
+
+  it("draws a gap as a divider, not as a change", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 3,
+        kind: "change",
+        timestamp: "2026-10-30T17:00:00Z",
+        type: "service",
+        action: "update",
+        resourceId: "svc1",
+        name: "web-app",
+      },
+      {
+        id: 2,
+        kind: "gap",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+      {
+        id: 1,
+        kind: "change",
+        timestamp: "2026-10-30T12:00:00Z",
+        type: "service",
+        action: "create",
+        resourceId: "svc1",
+        name: "web-app",
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed entries={entries} />
+      </MemoryRouter>,
+    );
+
+    const divider = screen.getByText(/^Not watching for 3h/);
+
+    expect(divider).toHaveTextContent(/^Not watching for 3h: Nothing recorded from .+ to .+$/);
+    expect(divider).toHaveAttribute("title", expect.stringMatching(/^Nothing recorded from /));
+    expect(screen.queryByText("d")).not.toBeInTheDocument();
+    expect(screen.getByText("updated")).toBeInTheDocument();
+  });
+
+  it("skips kinds it does not know", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 1,
+        kind: "annotation",
+        timestamp: new Date().toISOString(),
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "deploy freeze",
+      },
+    ];
+
+    render(<ActivityFeed entries={entries} />);
+
+    expect(screen.queryByText("deploy freeze")).not.toBeInTheDocument();
+    expect(screen.getByText("No recent activity")).toBeInTheDocument();
+  });
+
+  it("says there is nothing when only gaps match", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 1,
+        kind: "gap",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+    ];
+
+    render(<ActivityFeed entries={entries} />);
+
+    expect(screen.queryByText(/Not watching/)).not.toBeInTheDocument();
+    expect(screen.getByText("No recent activity")).toBeInTheDocument();
+  });
+
+  it("merges gaps no change separates into one divider", () => {
+    const gapEntry = (id: number, start: string, end: string): HistoryEntry => ({
+      id,
+      kind: "gap",
+      timestamp: start,
+      until: end,
+      type: "",
+      action: "",
+      resourceId: "",
+      name: "",
+    });
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed
+          entries={[
+            gapEntry(3, "2026-10-30T15:00:00Z", "2026-10-30T16:00:00Z"),
+            gapEntry(2, "2026-10-30T13:00:00Z", "2026-10-30T14:00:00Z"),
+            {
+              id: 1,
+              kind: "change",
+              timestamp: "2026-10-30T12:00:00Z",
+              type: "service",
+              action: "create",
+              resourceId: "svc1",
+              name: "web-app",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    const dividers = screen.getAllByText(/Not watching/);
+
+    expect(dividers).toHaveLength(1);
+    expect(dividers[0]).toHaveTextContent(
+      /^Not watching 2 times, 2h in total: 2 stretches between .+ and .+$/,
+    );
   });
 });
