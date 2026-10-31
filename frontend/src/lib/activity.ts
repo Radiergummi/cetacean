@@ -10,8 +10,7 @@ export type ActivityRow =
 
 /**
  * Whether entries hold a change. Gaps are on every resource's timeline, so
- * they alone are no reason to show a list, nor may they use up a page meant
- * for changes; `api.recentActivity` fetches the two apart for that reason.
+ * they alone are no reason to show a list.
  */
 export function hasChanges(entries: HistoryEntry[]): boolean {
   return entries.some(({ kind }) => kind === "change");

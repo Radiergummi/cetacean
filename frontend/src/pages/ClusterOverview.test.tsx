@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../api/client", () => ({
   api: {
     cluster: vi.fn<() => void>(),
-    history: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
+    recentActivity: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
     diskUsage: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
     monitoringStatus: vi.fn<() => Promise<unknown>>().mockResolvedValue({
       prometheusConfigured: false,
