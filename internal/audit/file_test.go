@@ -180,3 +180,81 @@ func TestFileQueuesOverlappingWrites(t *testing.T) {
 		t.Errorf("%d records on disk, want %d", got, n)
 	}
 }
+
+// closeTrackingWriter fails a write still running when it is closed, as a
+// file does once its descriptor is gone.
+type closeTrackingWriter struct {
+	started, release chan struct{}
+	closed           atomic.Bool
+}
+
+func (c *closeTrackingWriter) Write(p []byte) (int, error) {
+	close(c.started)
+	<-c.release
+	if c.closed.Load() {
+		return 0, os.ErrClosed
+	}
+
+	return len(p), nil
+}
+
+func (c *closeTrackingWriter) Close() error { c.closed.Store(true); return nil }
+
+func TestReopenWaitsForTheWriteInFlight(t *testing.T) {
+	old := &closeTrackingWriter{started: make(chan struct{}), release: make(chan struct{})}
+	writers := []io.WriteCloser{old, discardWriteCloser{}}
+	f := newFile(func() (io.WriteCloser, error) {
+		w := writers[0]
+		writers = writers[1:]
+		return w, nil
+	}, time.Second)
+	if err := f.reopen(); err != nil {
+		t.Fatal(err)
+	}
+
+	written := make(chan error, 1)
+	go func() { written <- f.Write(Record{Event: "exec.start"}) }()
+	<-old.started
+
+	reopened := make(chan error, 1)
+	go func() { reopened <- f.Reopen() }()
+
+	time.Sleep(20 * time.Millisecond)
+	close(old.release)
+
+	if err := <-written; err != nil {
+		t.Errorf("write across a reopen = %v, want it to land in the old file", err)
+	}
+	if err := <-reopened; err != nil || !old.closed.Load() {
+		t.Errorf(
+			"reopen = %v, old closed = %v; want the old file closed after",
+			err,
+			old.closed.Load(),
+		)
+	}
+}
+
+func TestCloseWaitsForTheWriteInFlight(t *testing.T) {
+	w := &closeTrackingWriter{started: make(chan struct{}), release: make(chan struct{})}
+	f := newFile(func() (io.WriteCloser, error) { return w, nil }, time.Second)
+	if err := f.reopen(); err != nil {
+		t.Fatal(err)
+	}
+
+	written := make(chan error, 1)
+	go func() { written <- f.Write(Record{Event: "exec.end"}) }()
+	<-w.started
+
+	closed := make(chan error, 1)
+	go func() { closed <- f.Close() }()
+
+	time.Sleep(20 * time.Millisecond)
+	close(w.release)
+
+	if err := <-written; err != nil {
+		t.Errorf("write across a close = %v, want it to land", err)
+	}
+	if err := <-closed; err != nil {
+		t.Errorf("close = %v", err)
+	}
+}

@@ -54,10 +54,26 @@ func (f *File) reopen() error {
 	f.mu.Unlock()
 
 	if old != nil {
-		return old.Close()
+		return f.closeIdle(old)
 	}
 
 	return nil
+}
+
+// closeIdle closes w once no write holds it: a write reads the file under the
+// lock but writes outside it. Past the deadline that write has already failed,
+// so w is closed regardless.
+func (f *File) closeIdle(w io.Closer) error {
+	timer := time.NewTimer(f.deadline)
+	defer timer.Stop()
+
+	select {
+	case f.busy <- struct{}{}:
+		defer func() { <-f.busy }()
+	case <-timer.C:
+	}
+
+	return w.Close()
 }
 
 func (f *File) Write(r Record) error {
@@ -100,7 +116,8 @@ func (f *File) Write(r Record) error {
 
 func (f *File) Close() error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
+	w := f.w
+	f.mu.Unlock()
 
-	return f.w.Close()
+	return f.closeIdle(w)
 }
