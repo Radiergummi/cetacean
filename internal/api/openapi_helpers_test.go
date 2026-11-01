@@ -146,6 +146,28 @@ var specFixtureIDs = map[string]string{
 	"/networks/{id}":  "net1",
 	"/volumes/{name}": "vol1",
 	"/plugins/{name}": "plug1",
+
+	"/annotations/{id}": seededAnnotationID,
+}
+
+const seededAnnotationID = "4242"
+
+type nopAnnotationStore struct{}
+
+func (nopAnnotationStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
+func (nopAnnotationStore) DeleteAnnotation(context.Context, uint64) error        { return nil }
+
+// seedAnnotation turns annotations on over a store that keeps nothing, and adds
+// one on service svc1, so every annotation route reaches its handler.
+func seedAnnotation(c *cache.Cache, serviceName string) {
+	at := time.Date(2026, 11, 1, 14, 0, 0, 0, time.UTC)
+
+	c.RestoreAnnotations(nopAnnotationStore{}, []cache.Annotation{{
+		ID: 4242, Version: 4242, Timestamp: at, Created: at, Text: "load test started",
+		Resources: []cache.AnnotationResource{{
+			Type: cache.EventService, ID: "svc1", Name: serviceName, Service: serviceName,
+		}},
+	}})
 }
 
 // populateSpecFixtures seeds the cache with the specFixtureIDs resources, for
@@ -230,6 +252,8 @@ func populateSpecFixtures(c *cache.Cache) {
 	c.SetNetwork(network.Summary{ID: "net1", Name: "net"})
 
 	c.SetVolume(volume.Volume{Name: "vol1", Driver: "local"})
+
+	seedAnnotation(c, "svc")
 }
 
 // newSpecWalkRouter is the router both GET walks drive: the specFixtureIDs cache

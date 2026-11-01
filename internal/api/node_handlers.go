@@ -41,6 +41,7 @@ func (h *Handlers) HandleGetNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "node", cluster.NodeACLName(node))
+	h.linkAnnotations(w, r, "node:"+cluster.NodeACLName(node))
 
 	rep, ok := representationOr404(w, r, "node", id, h.nodeRepresentation)
 	if !ok {

@@ -258,6 +258,15 @@ func (e *Evaluator) HasAnyGrant(id *auth.Identity) bool {
 // anything without a type, which is what an endpoint not filtered per resource
 // exposes.
 func (e *Evaluator) CanReadEverything(id *auth.Identity) bool {
+	return e.canEverything(id, "read")
+}
+
+// CanWriteEverything is CanReadEverything for write.
+func (e *Evaluator) CanWriteEverything(id *auth.Identity) bool {
+	return e.canEverything(id, "write")
+}
+
+func (e *Evaluator) canEverything(id *auth.Identity, permission string) bool {
 	if e == nil {
 		return true
 	}
@@ -267,7 +276,7 @@ func (e *Evaluator) CanReadEverything(id *auth.Identity) bool {
 	}
 
 	for _, g := range e.collectGrants(id, p) {
-		if hasPermission(g, "read") && slices.Contains(g.Resources, "*") {
+		if hasPermission(g, permission) && slices.Contains(g.Resources, "*") {
 			return true
 		}
 	}

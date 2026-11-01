@@ -133,6 +133,7 @@ func (h *Handlers) HandleGetService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "service", svc.Spec.Name)
+	h.linkAnnotations(w, r, "service:"+svc.Spec.Name)
 
 	rep, ok := representationOr404(w, r, "service", svc.ID, h.serviceRepresentation)
 	if !ok {

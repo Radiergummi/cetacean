@@ -206,3 +206,11 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 
 	return nil
 }
+
+// AnnotationsOn reports whether annotation writes have a store to go to.
+func (c *Cache) AnnotationsOn() bool {
+	c.annotations.mu.RLock()
+	defer c.annotations.mu.RUnlock()
+
+	return c.annotations.store != nil
+}

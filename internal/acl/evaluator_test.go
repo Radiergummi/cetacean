@@ -931,3 +931,33 @@ func TestTypeGrantsSeparatesNoPolicyFromNoMatch(t *testing.T) {
 		}
 	})
 }
+
+func TestCanWriteEverything(t *testing.T) {
+	var nilEvaluator *Evaluator
+	if !nilEvaluator.CanWriteEverything(nil) || !NewEvaluator().CanWriteEverything(nil) {
+		t.Fatal("no policy should allow all")
+	}
+
+	alice := &auth.Identity{Subject: "alice"}
+	for name, tc := range map[string]struct {
+		resources   []string
+		permissions []string
+		want        bool
+	}{
+		"bare wildcard write":  {[]string{"*"}, []string{"write"}, true},
+		"bare wildcard read":   {[]string{"*"}, []string{"read"}, false},
+		"every typed wildcard": {[]string{"*:*"}, []string{"write"}, false},
+		"stack":                {[]string{"stack:web"}, []string{"write"}, false},
+	} {
+		e := NewEvaluator()
+		e.SetPolicy(&Policy{Grants: []Grant{{
+			Resources:   tc.resources,
+			Audience:    []string{"user:alice"},
+			Permissions: tc.permissions,
+		}}})
+
+		if got := e.CanWriteEverything(alice); got != tc.want {
+			t.Errorf("%s: CanWriteEverything = %v, want %v", name, got, tc.want)
+		}
+	}
+}

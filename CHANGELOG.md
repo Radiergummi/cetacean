@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Annotations record a note about a moment or range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
 - After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`

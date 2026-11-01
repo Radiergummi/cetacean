@@ -106,6 +106,7 @@ type Handlers struct {
 	systemClient         DockerSystemClient
 	writer               DockerWriteClient
 	writes               *cluster.Writes
+	annotations          *cluster.Annotations
 	pluginClient         DockerPluginClient
 	ready                <-chan struct{}
 	liveness             LivenessReporter
@@ -164,6 +165,7 @@ func NewHandlers(
 		systemClient:    sc,
 		writer:          wc,
 		writes:          cluster.NewWrites(shared.Cache, wc),
+		annotations:     shared.Annotations,
 		pluginClient:    pc,
 		ready:           ready,
 		promClient:      promClient,

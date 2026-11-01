@@ -426,6 +426,7 @@ var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
 		`{"unlockKey":"SWMKEY-x"}`, "application/json"},
 	{"POST", "/tasks/{id}/exec", "/tasks/task1/exec", "", ""},
 	{"DELETE", "/exec/{sid}", "/exec/sess1", "", ""},
+	{"POST", "/annotations", "/annotations", `{"text":"deploy"}`, "application/json"},
 }
 
 // writeEndpointChecksExcluded lists spec operations the behavioural pass cannot

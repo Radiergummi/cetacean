@@ -545,6 +545,7 @@ the manager, so a service whose host access comes only through one isn't held to
 | Operation                                                                     | 0 read-only | 1 operational | 2 configuration | 3 impactful |
 |-------------------------------------------------------------------------------|:-----------:|:-------------:|:---------------:|:-----------:|
 | Browse all resources                                                          |      ✔      |       ✔       |        ✔        |      ✔      |
+| Write, edit, and delete annotations                                           |      ✔      |       ✔       |        ✔        |      ✔      |
 | Scale, restart, roll back, update image                                       |      —      |       ✔       |        ✔        |      ✔      |
 | Edit service definitions (env, labels, resources, ports, placement, policies) |      —      |       —       |        ✔        |      ✔      |
 | Attach configs, secrets, networks, volumes, and tmpfs mounts to a service     |      —      |       —       |        ✔        |      ✔      |
@@ -561,6 +562,9 @@ the manager, so a service whose host access comes only through one isn't held to
 | Install, upgrade, or remove plugins                                           |      —      |       —       |        —        |      ✔      |
 | Manage CA and encryption, read and rotate join tokens, unlock the swarm       |      —      |       —       |        —        |      ✔      |
 | Revoke OAuth clients a user authorized (`DELETE /tokens/{subject}`)           |      —      |       —       |        —        |      ✔      |
+
+Annotations are the one write no level holds back: they change nothing in Docker, and a read-only
+deployment is where incident notes matter most. They still need the write grant on what they name.
 
 Operations level and [grants][interaction-with-operations-level] are independent checks
 and both must pass. Operations level is the global ceiling, grants control per-user scope. Set
