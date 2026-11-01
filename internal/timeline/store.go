@@ -12,8 +12,16 @@ import (
 // can implement it; storetest is the suite every implementation passes.
 type Store interface {
 	// Restore returns the newest limit entries of the kinds the ring holds,
-	// oldest first, and the largest ID stored of any kind.
+	// oldest first, and the largest ID stored of any kind, annotation
+	// versions included.
 	Restore(ctx context.Context, limit int) (entries []cache.HistoryEntry, last uint64, err error)
+
+	// Annotations returns every annotation, by ID. Retention never removes one.
+	Annotations(ctx context.Context) ([]cache.Annotation, error)
+
+	// PutAnnotation stores an annotation, replacing the one under its ID, and
+	// DeleteAnnotation removes one; each commits before it returns.
+	cache.AnnotationStore
 
 	// LastSeen is when an earlier stretch of watching was last seen; ok=false
 	// when none exists. A stretch never heartbeated never committed its gap,

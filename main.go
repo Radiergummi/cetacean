@@ -334,7 +334,7 @@ func run(s settings) error {
 	if cfg.Timeline && dataDirReady {
 		timelineStore = restoreTimeline(
 			filepath.Join(cfg.DataDir, "cetacean.db"),
-			stateCache.History(),
+			stateCache,
 			cfg.HistoryEntries,
 		)
 	}
@@ -800,10 +800,10 @@ func openTimeline(ctx context.Context, path string) (*timeline.SQLite, error) {
 	}
 }
 
-// restoreTimeline opens the timeline and fills the history from it, or returns
-// nil when it cannot: the history then lives in memory only, as it would with
-// storage.timeline off, and startup goes on.
-func restoreTimeline(path string, history *cache.History, keep int) timeline.Store {
+// restoreTimeline opens the timeline and fills the history and the annotations
+// from it, or returns nil when it cannot: the history then lives in memory
+// only, as it would with storage.timeline off, and startup goes on.
+func restoreTimeline(path string, stateCache *cache.Cache, keep int) timeline.Store {
 	ctx := context.Background()
 
 	store, err := openTimeline(ctx, path)
@@ -821,8 +821,18 @@ func restoreTimeline(path string, history *cache.History, keep int) timeline.Sto
 		return nil
 	}
 
-	history.Restore(entries, last)
-	slog.Info("restored the change history", "entries", len(entries))
+	annotations, err := store.Annotations(ctx)
+	if err != nil {
+		_ = store.Close()
+		slog.Warn("could not restore the annotations; the change history will not persist",
+			"error", err, "path", path)
+		return nil
+	}
+
+	stateCache.History().Restore(entries, last)
+	stateCache.RestoreAnnotations(store, annotations)
+	slog.Info("restored the change history",
+		"entries", len(entries), "annotations", len(annotations))
 
 	return store
 }

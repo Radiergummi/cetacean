@@ -163,8 +163,8 @@ func TestSQLite_MigratesOnce(t *testing.T) {
 		versions = append(versions, v)
 	}
 
-	if !slices.Equal(versions, []int64{1}) {
-		t.Fatalf("schema_migrations = %v, want [1]", versions)
+	if !slices.Equal(versions, []int64{1, 2}) {
+		t.Fatalf("schema_migrations = %v, want [1 2]", versions)
 	}
 }
 

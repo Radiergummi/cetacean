@@ -3,6 +3,7 @@ package timeline
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -121,6 +122,16 @@ func (w *Writer) coverageFailed(ctx context.Context, err error) {
 func (w *Writer) flush(ctx context.Context) {
 	entries, _ := w.history.Since(w.lastWritten)
 
+	last := w.lastWritten
+	if len(entries) > 0 {
+		last = entries[len(entries)-1].ID
+	}
+
+	// The annotation tables hold what these items changed, committed already.
+	entries = slices.DeleteFunc(entries, func(e cache.HistoryEntry) bool {
+		return e.Kind == cache.KindAnnotation
+	})
+
 	batch := Batch{Entries: entries}
 	if w.covering {
 		batch.SeenAt = time.Now()
@@ -134,6 +145,7 @@ func (w *Writer) flush(ctx context.Context) {
 
 	// Before coverage opens a quiet tick has nothing to write.
 	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 {
+		w.lastWritten = last
 		return
 	}
 
@@ -153,8 +165,5 @@ func (w *Writer) flush(ctx context.Context) {
 
 	w.writeFailing = false
 	w.retained = true
-
-	if len(entries) > 0 {
-		w.lastWritten = entries[len(entries)-1].ID
-	}
+	w.lastWritten = last
 }

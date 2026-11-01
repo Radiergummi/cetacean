@@ -78,6 +78,12 @@ func (f *fakeStore) Commit(ctx context.Context, batch Batch) error {
 
 func (f *fakeStore) Close() error { return nil }
 
+func (f *fakeStore) Annotations(context.Context) ([]cache.Annotation, error) { return nil, nil }
+
+func (f *fakeStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
+
+func (f *fakeStore) DeleteAnnotation(context.Context, uint64) error { return nil }
+
 func (f *fakeStore) committed() []uint64 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -104,6 +110,29 @@ func noGap(time.Time) {}
 func appendN(h *cache.History, n int) {
 	for range n {
 		h.Append(cache.HistoryEntry{Type: cache.EventService, ResourceID: "svc1"})
+	}
+}
+
+func TestWriter_SkipsAnnotationItems(t *testing.T) {
+	store := &fakeStore{}
+	history := cache.NewHistory(10)
+	w := NewWriter(store, history, 10, noGap)
+
+	appendN(history, 1)
+	history.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create"})
+	w.flush(context.Background())
+
+	history.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "remove"})
+	w.flush(context.Background())
+	appendN(history, 1)
+	w.flush(context.Background())
+
+	if got := store.committed(); !slices.Equal(got, []uint64{1, 4}) {
+		t.Fatalf("committed %v, want [1 4]", got)
+	}
+
+	if w.lastWritten != 4 {
+		t.Fatalf("lastWritten = %d, want 4", w.lastWritten)
 	}
 }
 

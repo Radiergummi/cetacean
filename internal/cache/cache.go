@@ -177,6 +177,7 @@ type Cache struct {
 	notifyMu       sync.Mutex
 	nextListenerID uint64
 	history        *History
+	annotations    annotationIndex
 	attributions   *Attributions
 	serviceRef     serviceRefIndex
 	restarts       *RestartTracker
@@ -226,6 +227,7 @@ func New(onChange OnChangeFunc, opts ...Option) *Cache {
 		serviceRef:     newServiceRefIndex(),
 		attributions:   newAttributions(),
 		restarts:       NewRestartTracker(7*24*time.Hour, time.Hour),
+		annotations:    annotationIndex{byID: make(map[uint64]Annotation)},
 	}
 	for _, opt := range opts {
 		opt(c)

@@ -13,7 +13,8 @@ const (
 	KindChange = "change"
 	KindGap    = "gap"
 
-	// KindAnnotation is reserved for #498; nothing records it yet.
+	// KindAnnotation is a write to an annotation, for SSE and replay alone:
+	// lists read the annotation index, and the writer skips these.
 	KindAnnotation = "annotation"
 )
 
@@ -283,10 +284,13 @@ func (h *History) Append(e HistoryEntry) uint64 {
 
 	h.entries[h.cursor] = e
 
-	// Update the per-resource index, under the owning service as well.
-	h.index(e.ResourceID)
-	if e.ServiceID != "" {
-		h.index(e.ServiceID)
+	// Update the per-resource index, under the owning service as well. An
+	// annotation item's ResourceID is the annotation's, which names no resource.
+	if e.Kind != KindAnnotation {
+		h.index(e.ResourceID)
+		if e.ServiceID != "" {
+			h.index(e.ServiceID)
+		}
 	}
 
 	h.cursor++
@@ -387,7 +391,7 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 // two list paths share it so a filter added here is honoured on both, which is
 // the same reason listByResource takes the whole query.
 func (q HistoryQuery) matches(e HistoryEntry) bool {
-	if q.Kind != "" && e.Kind != q.Kind {
+	if e.Kind == KindAnnotation || q.Kind != "" && e.Kind != q.Kind {
 		return false
 	}
 
