@@ -22,8 +22,8 @@ export type ActivityRow =
   | { kind: "gap"; gaps: HistoryEntry[] };
 
 /**
- * Whether two changes read as the same row: one resource, one action, and the
- * same actor, since the row names who made it.
+ * Whether two changes read as the same row: the same type, name, action and
+ * actor. Tasks restarting in one slot share a name, so they fold together.
  */
 function repeats(previous: HistoryEntry, entry: HistoryEntry): boolean {
   const { actor: previousActor } = previous;
@@ -31,7 +31,7 @@ function repeats(previous: HistoryEntry, entry: HistoryEntry): boolean {
 
   return (
     previous.type === entry.type &&
-    previous.resourceId === entry.resourceId &&
+    previous.name === entry.name &&
     previous.action === entry.action &&
     previousActor?.subject === actor?.subject &&
     previousActor?.name === actor?.name &&

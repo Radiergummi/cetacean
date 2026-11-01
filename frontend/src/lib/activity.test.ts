@@ -63,12 +63,24 @@ describe("activityRows", () => {
     expect(shape([change(3), change(2), change(1)], true)).toEqual([[3, 2, 1]]);
   });
 
-  it("ends a run at another resource, action or actor", () => {
+  it("collapses changes to different resources that read the same", () => {
+    expect(
+      shape(
+        [
+          { ...change(2), type: "task", resourceId: "task-new", name: "web.2" },
+          { ...change(1), type: "task", resourceId: "task-old", name: "web.2" },
+        ],
+        true,
+      ),
+    ).toEqual([[2, 1]]);
+  });
+
+  it("ends a run at another name, action or actor", () => {
     expect(
       shape(
         [
           change(6),
-          { ...change(5), resourceId: "svc2" },
+          { ...change(5), name: "api" },
           change(4),
           { ...change(3), action: "remove" },
           change(2),

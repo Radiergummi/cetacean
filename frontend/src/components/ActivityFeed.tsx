@@ -171,14 +171,28 @@ function ChangeRun({
           id={`activity-run-${id}`}
           className="ms-6 border-l ps-3"
         >
-          {entries.map((entry) => (
-            <li
-              key={entry.id}
-              className="py-0.5 text-xs text-muted-foreground"
-            >
-              <TimeAgo date={entry.timestamp} /> {entry.action}d
-            </li>
-          ))}
+          {entries.map((entry) => {
+            const entryPath = resourcePath(entry.type, entry.resourceId, entry.name);
+
+            return (
+              <li
+                key={entry.id}
+                className="py-0.5 text-xs text-muted-foreground"
+              >
+                {entryPath && entry.action !== "remove" ? (
+                  <Link
+                    to={entryPath}
+                    className="hover:underline"
+                  >
+                    <TimeAgo date={entry.timestamp} />
+                  </Link>
+                ) : (
+                  <TimeAgo date={entry.timestamp} />
+                )}{" "}
+                {entry.action}d
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

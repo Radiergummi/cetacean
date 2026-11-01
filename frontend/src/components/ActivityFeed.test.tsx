@@ -271,6 +271,18 @@ describe("ActivityFeed runs", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 
+  it("folds a slot's restarts and links each to its own task", () => {
+    renderFeed([update(2, { resourceId: "task-new" }), update(1, { resourceId: "task-old" })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "2 times, show each" }));
+
+    const links = screen
+      .getAllByRole("listitem")
+      .map((item) => item.querySelector("a")?.getAttribute("href"));
+
+    expect(links).toEqual(["/tasks/task-new", "/tasks/task-old"]);
+  });
+
   it("ends a run at another actor", () => {
     renderFeed([
       update(2, { actor: { subject: "u-1", provider: "oauth", transport: "mcp" } }),
