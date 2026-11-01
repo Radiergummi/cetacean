@@ -331,6 +331,91 @@ func Run(t *testing.T, newStore Factory) {
 			t.Fatalf("previous coverage = %v, ok=%v; want the previous heartbeat", previous, ok)
 		}
 	})
+	t.Run("annotations survive a restart with every field", func(t *testing.T) {
+		open := newStore(t)
+		want := []cache.Annotation{fullAnnotation(), {
+			ID:        12,
+			Version:   12,
+			Timestamp: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC),
+			Text:      "cluster-wide",
+			Created:   time.Date(2026, 11, 1, 9, 1, 0, 0, time.UTC),
+		}}
+
+		store := open()
+		for _, a := range want {
+			putAnnotation(t, store, a)
+		}
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		assertAnnotations(t, annotations(t, store), want)
+	})
+
+	t.Run("an annotation put again replaces it", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		a := fullAnnotation()
+		putAnnotation(t, store, a)
+
+		a.Version, a.Text, a.Until = 20, "edited", time.Time{}
+		a.Tags = []string{"rollback"}
+		a.Resources = a.Resources[1:]
+		a.Updated = a.Created.Add(time.Hour)
+		a.Editor = &cache.Actor{Subject: "bob", Provider: "oidc", Transport: cache.TransportREST}
+		putAnnotation(t, store, a)
+
+		assertAnnotations(t, annotations(t, store), []cache.Annotation{a})
+	})
+
+	t.Run("a deleted annotation is gone", func(t *testing.T) {
+		open := newStore(t)
+
+		store := open()
+		a := fullAnnotation()
+		putAnnotation(t, store, a)
+
+		if err := store.DeleteAnnotation(context.Background(), a.ID); err != nil {
+			t.Fatalf("DeleteAnnotation: %v", err)
+		}
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		assertAnnotations(t, annotations(t, store), nil)
+	})
+
+	// An annotation's writes take sequence IDs the timeline table never holds.
+	t.Run("restore reports the largest annotation version", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		commit(t, store, timeline.Batch{Entries: entries(1, 2)})
+
+		a := fullAnnotation()
+		a.ID, a.Version = 3, 9
+		putAnnotation(t, store, a)
+
+		if _, last, err := store.Restore(context.Background(), 10); err != nil || last != 9 {
+			t.Fatalf("Restore last = %d, err=%v; want 9", last, err)
+		}
+	})
+
+	t.Run("retention leaves annotations alone", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		a := fullAnnotation()
+		a.ID, a.Version = 1, 1
+		putAnnotation(t, store, a)
+
+		commit(t, store, timeline.Batch{Entries: entries(2, 3, 4), Keep: 1})
+
+		assertAnnotations(t, annotations(t, store), []cache.Annotation{a})
+	})
 }
 
 // startCoverage does what a writer does once ready: reads when the previous
@@ -402,5 +487,80 @@ func closeStore(t *testing.T, store timeline.Store) {
 
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+}
+
+func fullAnnotation() cache.Annotation {
+	at := time.Date(2026, 11, 1, 14, 0, 0, 123456789, time.UTC)
+
+	return cache.Annotation{
+		ID:        10,
+		Version:   11,
+		Timestamp: at,
+		Until:     at.Add(30 * time.Minute),
+		Text:      "load test started",
+		Tags:      []string{"loadtest", "db.failover"},
+		Resources: []cache.AnnotationResource{
+			{Type: cache.EventService, ID: "svc1", Name: "web", Stack: "shop"},
+			{Type: cache.EventStack, ID: "shop", Name: "shop"},
+			{Type: cache.EventNode, ID: "node1", Name: "manager-1"},
+		},
+		Actor: &cache.Actor{
+			Subject:   "alice",
+			Name:      "Alice",
+			Provider:  "oidc",
+			Client:    "claude",
+			Transport: cache.TransportMCP,
+		},
+		Created: at.Add(time.Hour),
+	}
+}
+
+func putAnnotation(t *testing.T, store timeline.Store, a cache.Annotation) {
+	t.Helper()
+
+	if err := store.PutAnnotation(context.Background(), a); err != nil {
+		t.Fatalf("PutAnnotation: %v", err)
+	}
+}
+
+func annotations(t *testing.T, store timeline.Store) []cache.Annotation {
+	t.Helper()
+
+	result, err := store.Annotations(context.Background())
+	if err != nil {
+		t.Fatalf("Annotations: %v", err)
+	}
+
+	return result
+}
+
+// assertAnnotations compares times by instant, since a store need not keep
+// their location.
+func assertAnnotations(t *testing.T, got, want []cache.Annotation) {
+	t.Helper()
+
+	if len(got) != len(want) {
+		t.Fatalf("Annotations = %d, want %d:\n%+v", len(got), len(want), got)
+	}
+
+	for i := range want {
+		g, w := got[i], want[i]
+
+		for _, pair := range [][2]time.Time{
+			{g.Timestamp, w.Timestamp},
+			{g.Until, w.Until},
+			{g.Created, w.Created},
+			{g.Updated, w.Updated},
+		} {
+			if !pair[0].Equal(pair[1]) {
+				t.Errorf("annotation %d: time %v, want %v", w.ID, pair[0], pair[1])
+			}
+		}
+
+		g.Timestamp, g.Until, g.Created, g.Updated = w.Timestamp, w.Until, w.Created, w.Updated
+		if !reflect.DeepEqual(g, w) {
+			t.Errorf("annotation %d:\n got %+v\nwant %+v", w.ID, g, w)
+		}
 	}
 }

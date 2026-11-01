@@ -174,6 +174,14 @@ Each of these looks like a simplification and is not.
   goroutine once coverage opens, never from a listener. A gap names no
   resource: it passes every resource filter and every read check, and the
   resource index merges it in from the empty ID.
+- **The ring's annotation items are never listed or persisted by the writer.**
+  They exist for SSE and replay; the annotation tables and the cache's index
+  hold the state, and lists read the index. A write commits synchronously under
+  `notifyMu`, which is what makes `Count() + 1` the ID its item gets, so the
+  restore counter takes `annotations.version` as well as `timeline.id`. The
+  commit goes straight to the store, not through the writer goroutine: that
+  goroutine records gaps through `notify`, so waiting on it under `notifyMu`
+  deadlocks.
 
 ## Details that bite
 

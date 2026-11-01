@@ -219,7 +219,10 @@ func (s *SQLite) Restore(
 
 	slices.Reverse(entries)
 
-	err = s.db.QueryRowContext(ctx, `SELECT coalesce(max(id), 0) FROM timeline`).Scan(&last)
+	err = s.db.QueryRowContext(ctx, `SELECT max(
+			(SELECT coalesce(max(id), 0) FROM timeline),
+			(SELECT coalesce(max(version), 0) FROM annotations)
+		)`).Scan(&last)
 	if err != nil {
 		return nil, 0, err
 	}
