@@ -31,12 +31,14 @@ import (
 	"github.com/radiergummi/cetacean/internal/api/reqctx"
 	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/attestations"
+	"github.com/radiergummi/cetacean/internal/audit"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/core"
 	"github.com/radiergummi/cetacean/internal/docker"
+	"github.com/radiergummi/cetacean/internal/exec"
 	"github.com/radiergummi/cetacean/internal/imagecheck"
 	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/internal/mcp/tracing"
@@ -486,6 +488,9 @@ func run(s settings) error {
 			"operations_level", cfg.OperationsLevel,
 		)
 	}
+	if cfg.Exec.Enabled && cfg.OperationsLevel < cluster.OpOpenExec.Tier() {
+		slog.Warn("exec.enabled has no effect below server.operations_level 3")
+	}
 	shared := core.New(stateCache, streams)
 	handlers := api.NewHandlers(
 		shared,
@@ -511,6 +516,15 @@ func run(s settings) error {
 
 	if imageAttestations != nil {
 		handlers.SetAttestations(imageAttestations)
+	}
+
+	if cfg.Exec.Enabled {
+		closeExec, err := startExec(ctx, cfg, handlers, dockerClient, aclEval)
+		if err != nil {
+			return err
+		}
+		// Stopped first on an early return too, or the wait would never end.
+		defer func() { stop(); closeExec() }()
 	}
 
 	// SPA
@@ -837,6 +851,10 @@ const (
 	serverReadTimeout = 5 * time.Second
 	serverIdleTimeout = 120 * time.Second
 )
+
+// execShutdownGrace bounds the wait for live shells to be signalled and their
+// ends recorded; it matches the pump's own bound on closing a shell.
+const execShutdownGrace = 10 * time.Second
 
 // shutdownGrace bounds how long a signalled process waits for in-flight
 // requests, inside the ten seconds an orchestrator allows before SIGKILL.
@@ -1306,4 +1324,85 @@ func allowedHosts(listenAddr string, tsnetDomains []string) []string {
 	}
 
 	return hosts
+}
+
+// startExec arms the exec routes. The close it returns waits, once ctx is done,
+// for every shell to be signalled and its end recorded, then closes the audit log.
+func startExec(
+	ctx context.Context,
+	cfg *config.Config,
+	handlers *api.Handlers,
+	dockerClient *docker.Client,
+	aclEval *acl.Evaluator,
+) (func(), error) {
+	auditLog, closeAudit, err := openAuditLog(cfg.Audit)
+	if err != nil {
+		return nil, fmt.Errorf("audit log %s not opened: %w", cfg.Audit.Output, err)
+	}
+
+	self, err := exec.NewSelf()
+	if err != nil {
+		closeAudit()
+		return nil, fmt.Errorf("own addresses not readable; refusing exec: %w", err)
+	}
+
+	manager := exec.NewManager(exec.ManagerConfig{
+		Limits: exec.Limits{
+			MaxSessions:    cfg.Exec.MaxSessions,
+			MaxPerIdentity: cfg.Exec.MaxSessionsPerIdentity,
+			IdleTimeout:    cfg.Exec.IdleTimeout,
+			MaxDuration:    cfg.Exec.MaxDuration,
+		},
+		Audit:            auditLog,
+		PolicyGeneration: aclEval.PolicyGeneration,
+		Authorize:        handlers.ExecAuthorizer(),
+	})
+	go manager.Run(ctx)
+
+	sessionsEnded := make(chan struct{})
+	go func() {
+		defer close(sessionsEnded)
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), execShutdownGrace)
+		defer cancel()
+		manager.Shutdown(shutdownCtx)
+	}()
+
+	handlers.SetExec(api.ExecDeps{
+		Manager:    manager,
+		Transports: []exec.Transport{&exec.Local{Docker: dockerClient}},
+		Self:       self.Is,
+	})
+
+	return func() {
+		<-sessionsEnded
+		closeAudit()
+	}, nil
+}
+
+// openAuditLog opens audit.output, reopening a file on SIGHUP for rotation.
+func openAuditLog(cfg config.AuditConfig) (audit.Logger, func(), error) {
+	if !cfg.Enabled {
+		return audit.Nop{}, func() {}, nil
+	}
+	if cfg.Output == "stdout" {
+		return audit.NewStream(os.Stdout), func() {}, nil
+	}
+
+	file, err := audit.OpenFile(cfg.Output)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		for range hup {
+			if err := file.Reopen(); err != nil {
+				slog.Error("audit log not reopened", "output", cfg.Output, "error", err)
+			}
+		}
+	}()
+
+	return file, func() { signal.Stop(hup); _ = file.Close() }, nil
 }
