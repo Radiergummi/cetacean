@@ -23,18 +23,25 @@ const gap = (id: number): HistoryEntry => ({
   name: "",
 });
 
-const shape = (entries: HistoryEntry[]) =>
-  activityRows(entries).map((row) =>
-    row.kind === "change" ? row.entry.id : row.gaps.map(({ id }) => id),
+const shape = (entries: HistoryEntry[], collapse = false) =>
+  activityRows(entries, collapse).map((row) =>
+    row.kind === "change" ? row.entries.map(({ id }) => id) : `gap ${row.gaps.map(({ id }) => id)}`,
   );
+
+const alice = { subject: "u-1", name: "alice", provider: "oauth", transport: "mcp" } as const;
 
 describe("activityRows", () => {
   it("merges a run of gaps into one row between changes", () => {
-    expect(shape([gap(6), change(5), gap(4), gap(3), change(2)])).toEqual([[6], 5, [4, 3], 2]);
+    expect(shape([gap(6), change(5), gap(4), gap(3), change(2)])).toEqual([
+      "gap 6",
+      [5],
+      "gap 4,3",
+      [2],
+    ]);
   });
 
   it("drops gaps older than the oldest change", () => {
-    expect(shape([change(3), gap(2), gap(1)])).toEqual([3]);
+    expect(shape([change(3), gap(2), gap(1)])).toEqual([[3]]);
   });
 
   it("has no rows without a change", () => {
@@ -42,7 +49,64 @@ describe("activityRows", () => {
   });
 
   it("skips kinds it does not know", () => {
-    expect(shape([{ ...change(3), kind: "annotation" }, gap(2), change(1)])).toEqual([[2], 1]);
+    expect(shape([{ ...change(3), kind: "annotation" }, gap(2), change(1)])).toEqual([
+      "gap 2",
+      [1],
+    ]);
+  });
+
+  it("keeps one row per change unless collapsing", () => {
+    expect(shape([change(2), change(1)])).toEqual([[2], [1]]);
+  });
+
+  it("collapses consecutive changes to one resource with one action", () => {
+    expect(shape([change(3), change(2), change(1)], true)).toEqual([[3, 2, 1]]);
+  });
+
+  it("collapses changes to different resources that read the same", () => {
+    expect(
+      shape(
+        [
+          { ...change(2), type: "task", resourceId: "task-new", name: "web.2" },
+          { ...change(1), type: "task", resourceId: "task-old", name: "web.2" },
+        ],
+        true,
+      ),
+    ).toEqual([[2, 1]]);
+  });
+
+  it("folds one resource's changes whatever the action", () => {
+    expect(
+      shape(
+        [change(3), { ...change(2), action: "create" }, { ...change(1), action: "remove" }],
+        true,
+      ),
+    ).toEqual([[3, 2, 1]]);
+  });
+
+  it("ends a run at another name or actor", () => {
+    expect(
+      shape(
+        [change(4), { ...change(3), name: "api" }, change(2), { ...change(1), actor: alice }],
+        true,
+      ),
+    ).toEqual([[4], [3], [2], [1]]);
+  });
+
+  it("collapses changes by the same actor", () => {
+    expect(
+      shape(
+        [
+          { ...change(2), actor: alice },
+          { ...change(1), actor: { ...alice } },
+        ],
+        true,
+      ),
+    ).toEqual([[2, 1]]);
+  });
+
+  it("ends a run at a gap", () => {
+    expect(shape([change(3), gap(2), change(1)], true)).toEqual([[3], "gap 2", [1]]);
   });
 });
 

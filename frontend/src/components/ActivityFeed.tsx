@@ -1,11 +1,12 @@
 import type { HistoryEntry } from "../api/types";
-import { activityRows, attribution } from "../lib/activity";
+import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { describeGap } from "../lib/timeline";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
-import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -93,10 +94,119 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
   );
 }
 
+/**
+ * A run of changes to one resource name, newest first: one row with a count
+ * that expands to each change. A single change is a plain row.
+ */
+function ChangeRun({
+  entries,
+  hideType,
+}: {
+  entries: [HistoryEntry, ...HistoryEntry[]];
+  hideType?: boolean | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const runId = useId();
+  const [{ action, actor, name, resourceId, timestamp, type }] = entries;
+  const path = resourcePath(type, resourceId, name);
+
+  return (
+    <>
+      <TimelineRow
+        date={timestamp}
+        marker={
+          <div
+            data-action={action}
+            className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-status-ok ring-2 ring-background data-[action=remove]:bg-status-danger"
+          />
+        }
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+          {!hideType && (
+            <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
+              {type}
+            </span>
+          )}
+          {path && action !== "remove" ? (
+            <Link
+              to={path}
+              className="truncate font-medium hover:underline"
+            >
+              <ResourceName name={name} />
+            </Link>
+          ) : (
+            <span className="truncate font-medium">
+              <ResourceName name={name} />
+            </span>
+          )}
+          {entries.length > 1 ? (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={runId}
+              onClick={() => setOpen(!open)}
+              className="flex items-center gap-0.5 rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-muted"
+            >
+              {entries.length} changes
+              <ChevronRight
+                data-open={open || undefined}
+                className="h-3 w-3 transition-transform data-open:rotate-90"
+              />
+            </button>
+          ) : (
+            <span className="text-muted-foreground">{action}d</span>
+          )}
+          {actor && (
+            <span
+              className="truncate text-muted-foreground"
+              title={`${actor.subject} (${actor.provider}${actor.client ? `, client ${actor.client}` : ""})`}
+            >
+              {attribution(actor)}
+            </span>
+          )}
+        </div>
+      </TimelineRow>
+
+      {open && (
+        <ul
+          id={runId}
+          className="ms-6 border-l ps-3"
+        >
+          {entries.map((entry) => {
+            const entryPath = resourcePath(entry.type, entry.resourceId, entry.name);
+
+            return (
+              <li
+                key={entry.id}
+                className="py-0.5 text-xs text-muted-foreground"
+              >
+                {entryPath && entry.action !== "remove" ? (
+                  <Link
+                    to={entryPath}
+                    className="hover:underline"
+                  >
+                    <TimeAgo date={entry.timestamp} />
+                  </Link>
+                ) : (
+                  <TimeAgo date={entry.timestamp} />
+                )}{" "}
+                {entry.action}d
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
+
 interface ActivityFeedProps {
   entries: HistoryEntry[];
   loading?: boolean | undefined;
   hideType?: boolean | undefined;
+
+  /** Whether changes repeating one another share a row; the full log lists each. */
+  collapse?: boolean | undefined;
 
   /** Shown in place of "No recent activity" when the entries hold no change. */
   emptyText?: string | undefined;
@@ -106,6 +216,7 @@ export default function ActivityFeed({
   entries,
   loading,
   hideType,
+  collapse = true,
   emptyText = "No recent activity",
 }: ActivityFeedProps) {
   if (loading) {
@@ -121,7 +232,8 @@ export default function ActivityFeed({
     );
   }
 
-  const rows = activityRows(entries);
+  const rows = activityRows(entries, collapse);
+  const runsSeen = new Map<string, number>();
 
   if (rows.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
@@ -141,51 +253,19 @@ export default function ActivityFeed({
           );
         }
 
-        const { action, actor, id, name, resourceId, timestamp, type } = row.entry;
+        // Changes join a run at its newest end and fall off its oldest, so its
+        // key counts runs alike from the newest: an open run stays open.
+        const signature = runSignature(row.entries[0]);
+        const occurrence = runsSeen.get(signature) ?? 0;
+
+        runsSeen.set(signature, occurrence + 1);
 
         return (
-          <TimelineRow
-            key={id}
-            date={timestamp}
-            marker={
-              <div
-                data-action={action}
-                className="absolute top-1/2 -left-3.25 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-status-ok ring-2 ring-background data-[action=remove]:bg-status-danger"
-              />
-            }
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-              {!hideType && (
-                <span className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground">
-                  {type}
-                </span>
-              )}
-              {(() => {
-                const path = resourcePath(type, resourceId, name);
-                return path && action !== "remove" ? (
-                  <Link
-                    to={path}
-                    className="truncate font-medium hover:underline"
-                  >
-                    <ResourceName name={name} />
-                  </Link>
-                ) : (
-                  <span className="truncate font-medium">
-                    <ResourceName name={name} />
-                  </span>
-                );
-              })()}
-              <span className="text-muted-foreground">{action}d</span>
-              {actor && (
-                <span
-                  className="truncate text-muted-foreground"
-                  title={`${actor.subject} (${actor.provider}${actor.client ? `, client ${actor.client}` : ""})`}
-                >
-                  {attribution(actor)}
-                </span>
-              )}
-            </div>
-          </TimelineRow>
+          <ChangeRun
+            key={`run-${occurrence}-${signature}`}
+            entries={row.entries}
+            hideType={hideType}
+          />
         );
       })}
     </div>

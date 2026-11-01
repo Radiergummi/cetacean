@@ -1,6 +1,6 @@
 import type { HistoryEntry } from "../api/types";
 import ActivityFeed from "./ActivityFeed";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect } from "vitest";
 
@@ -230,5 +230,123 @@ describe("ActivityFeed", () => {
     expect(dividers[0]).toHaveTextContent(
       /^Not watching 2 times, 2h in total: 2 stretches between .+ and .+$/,
     );
+  });
+});
+
+describe("ActivityFeed runs", () => {
+  const update = (id: number, overrides: Partial<HistoryEntry> = {}): HistoryEntry => ({
+    id,
+    kind: "change",
+    timestamp: `2026-10-30T12:0${id}:00Z`,
+    type: "task",
+    action: "update",
+    resourceId: "task1",
+    name: "monitoring/prometheus.2",
+    ...overrides,
+  });
+
+  const renderFeed = (entries: HistoryEntry[], collapse?: boolean) =>
+    render(
+      <MemoryRouter>
+        <ActivityFeed
+          entries={entries}
+          collapse={collapse}
+        />
+      </MemoryRouter>,
+    );
+
+  it("collapses repeated changes into one row with a count that expands", () => {
+    renderFeed([update(3), update(2), update(1)]);
+
+    expect(screen.getAllByText("monitoring/prometheus.2")).toHaveLength(1);
+
+    const toggle = screen.getByRole("button", { name: "3 changes" });
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("keeps an open run open as changes join it and fall off its end", () => {
+    const { rerender } = renderFeed([update(3), update(2), update(1)]);
+
+    fireEvent.click(screen.getByRole("button", { name: "3 changes" }));
+
+    rerender(
+      <MemoryRouter>
+        <ActivityFeed entries={[update(4), update(3), update(2)]} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "3 changes" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("folds a slot's restarts and links each to its own task", () => {
+    renderFeed([update(2, { resourceId: "task-new" }), update(1, { resourceId: "task-old" })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "2 changes" }));
+
+    const links = screen
+      .getAllByRole("listitem")
+      .map((item) => item.querySelector("a")?.getAttribute("href"));
+
+    expect(links).toEqual(["/tasks/task-new", "/tasks/task-old"]);
+  });
+
+  it("lists what each folded change did", () => {
+    renderFeed([update(3), update(2), update(1, { action: "create" })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "3 changes" }));
+
+    expect(screen.getAllByRole("listitem").map(({ textContent }) => textContent?.trim())).toEqual([
+      expect.stringMatching(/updated$/),
+      expect.stringMatching(/updated$/),
+      expect.stringMatching(/created$/),
+    ]);
+  });
+
+  it("ends a run at another actor", () => {
+    renderFeed([
+      update(2, { actor: { subject: "u-1", provider: "oauth", transport: "mcp" } }),
+      update(1),
+    ]);
+
+    expect(screen.getAllByText("monitoring/prometheus.2")).toHaveLength(2);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("ends a run at a gap", () => {
+    renderFeed([
+      update(3),
+      {
+        id: 2,
+        kind: "gap",
+        timestamp: "2026-10-30T11:00:00Z",
+        until: "2026-10-30T11:30:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+      update(1),
+    ]);
+
+    expect(screen.getAllByText("monitoring/prometheus.2")).toHaveLength(2);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("lists every change when not collapsing", () => {
+    renderFeed([update(2), update(1)], false);
+
+    expect(screen.getAllByText("monitoring/prometheus.2")).toHaveLength(2);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });
