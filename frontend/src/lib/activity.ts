@@ -14,12 +14,32 @@ export function attribution({ name, subject, transport }: HistoryActor): string 
 }
 
 /**
- * A row of an activity feed: one change, or a run of gaps no change separates,
- * newest first like the history they come from.
+ * A row of an activity feed: a run of changes, or a run of gaps no change
+ * separates, newest first like the history they come from.
  */
 export type ActivityRow =
-  | { kind: "change"; entry: HistoryEntry }
+  | { kind: "change"; entries: [HistoryEntry, ...HistoryEntry[]] }
   | { kind: "gap"; gaps: HistoryEntry[] };
+
+/**
+ * Whether two changes read as the same row: one resource, one action, and the
+ * same actor, since the row names who made it.
+ */
+function repeats(previous: HistoryEntry, entry: HistoryEntry): boolean {
+  const { actor: previousActor } = previous;
+  const { actor } = entry;
+
+  return (
+    previous.type === entry.type &&
+    previous.resourceId === entry.resourceId &&
+    previous.action === entry.action &&
+    previousActor?.subject === actor?.subject &&
+    previousActor?.name === actor?.name &&
+    previousActor?.provider === actor?.provider &&
+    previousActor?.client === actor?.client &&
+    previousActor?.transport === actor?.transport
+  );
+}
 
 /**
  * Whether entries hold a change. Gaps are on every resource's timeline, so
@@ -32,10 +52,10 @@ export function hasChanges(entries: HistoryEntry[]): boolean {
 /**
  * Groups a newest-first history into rows. Gaps frame changes: a run of them
  * becomes one row, and gaps older than the oldest change are dropped, so a
- * history without changes has no rows. Kinds this client does not know are
- * skipped, as the API asks.
+ * history without changes has no rows. Collapsing, a change repeating the one
+ * before it joins that row. Unknown kinds are skipped, as the API asks.
  */
-export function activityRows(entries: HistoryEntry[]): ActivityRow[] {
+export function activityRows(entries: HistoryEntry[], collapse: boolean): ActivityRow[] {
   const rows: ActivityRow[] = [];
   let run: HistoryEntry[] = [];
 
@@ -50,12 +70,25 @@ export function activityRows(entries: HistoryEntry[]): ActivityRow[] {
       continue;
     }
 
+    const last = rows.at(-1);
+
+    if (
+      collapse &&
+      run.length === 0 &&
+      last?.kind === "change" &&
+      repeats(last.entries[0], entry)
+    ) {
+      last.entries.push(entry);
+
+      continue;
+    }
+
     if (run.length > 0) {
       rows.push({ kind: "gap", gaps: run });
       run = [];
     }
 
-    rows.push({ kind: "change", entry });
+    rows.push({ kind: "change", entries: [entry] });
   }
 
   return rows;

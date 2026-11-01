@@ -58,6 +58,16 @@ describe("History", () => {
     expect(mockHistoryPage).toHaveBeenCalledWith("/history?limit=200", expect.anything());
   });
 
+  it("lists repeated changes one row each", async () => {
+    mockHistoryPage.mockResolvedValue({
+      items: [entry(2, "service", "web"), { ...entry(1, "service", "web"), resourceId: "r2" }],
+    });
+    renderPage();
+
+    expect(await screen.findAllByText("web")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /^×/ })).not.toBeInTheDocument();
+  });
+
   it("filters by type on the server", async () => {
     mockHistoryPage.mockResolvedValue({ items: [] });
     renderPage();
