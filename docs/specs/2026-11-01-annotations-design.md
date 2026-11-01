@@ -54,13 +54,15 @@ Tags and resources are rows, not JSON, for the same reason the actor is in colum
 annotation on service X" stays a query.
 
 - **Writes are synchronous.** The caller is told `201`, so the row must be committed first. The
-  write goes to the writer goroutine, which owns the one connection, and waits for it.
+  write calls the store itself rather than queueing for the writer goroutine, which records gaps
+  through `notifyMu` and would deadlock waiting on it; the store's single connection serializes
+  the two.
 - **The commit happens under `notifyMu`.** The sequence ID is taken under it and held across the
   commit and the ring append, so no item with a lower ID lands after it. A failed commit appends
   nothing and answers `503`. The cost: a slow disk stalls event recording for the commit's
-  duration. Annotations come at the rate people type and a commit takes milliseconds, so step 1
-  measures it. If it matters, `History` gains ID reservation (reserved under its lock, appended
-  in ID order), so the commit can move outside; today `Append` assigns the ID itself.
+  duration. Measured in step 1 on a file-backed database: about 0.1 ms typical and 0.2 ms at
+  p99, a few milliseconds at worst. Should that change, `History` would need ID reservation
+  (reserved under its lock, appended in ID order) before the commit could move outside.
 - **Events and state are separate.** Creating, editing and deleting each append a
   `kind: "annotation"` item to the ring, with `action` `create`, `update` or `remove`. These
   items carry SSE and `Last-Event-ID` replay, and the writer skips them, because the table holds
