@@ -260,7 +260,7 @@ describe("ActivityFeed runs", () => {
 
     expect(screen.getAllByText("monitoring/prometheus.2")).toHaveLength(1);
 
-    const toggle = screen.getByRole("button", { name: "3 times, show each" });
+    const toggle = screen.getByRole("button", { name: "3 changes" });
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
@@ -274,13 +274,25 @@ describe("ActivityFeed runs", () => {
   it("folds a slot's restarts and links each to its own task", () => {
     renderFeed([update(2, { resourceId: "task-new" }), update(1, { resourceId: "task-old" })]);
 
-    fireEvent.click(screen.getByRole("button", { name: "2 times, show each" }));
+    fireEvent.click(screen.getByRole("button", { name: "2 changes" }));
 
     const links = screen
       .getAllByRole("listitem")
       .map((item) => item.querySelector("a")?.getAttribute("href"));
 
     expect(links).toEqual(["/tasks/task-new", "/tasks/task-old"]);
+  });
+
+  it("lists what each folded change did", () => {
+    renderFeed([update(3), update(2), update(1, { action: "create" })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "3 changes" }));
+
+    expect(screen.getAllByRole("listitem").map(({ textContent }) => textContent?.trim())).toEqual([
+      expect.stringMatching(/updated$/),
+      expect.stringMatching(/updated$/),
+      expect.stringMatching(/created$/),
+    ]);
   });
 
   it("ends a run at another actor", () => {

@@ -296,8 +296,8 @@ for offline use.
 
 The history page at `/history`, linked from the recent activity on the cluster overview, lists the latest 200
 changes Cetacean has seen. Filter it by resource type, or by name with the search box. The download button saves
-the whole log Cetacean still holds as CSV. Recent activity elsewhere folds consecutive repeats of one change into
-a single row with a count, but the history page lists every entry.
+the whole log Cetacean still holds as CSV. Recent activity elsewhere folds consecutive changes to one resource
+into a single row with a count, but the history page lists every entry.
 
 A change made through Cetacean names who made it and whether they used the dashboard, the API, or MCP. A change
 with no name came from somewhere else, such as the Docker CLI. The history lives in memory, so it starts empty

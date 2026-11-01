@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Every log line written while serving a request carries its `req_id`, so the `requestId` in an error response finds the lines that explain it
 
 ### Changed
-- Recent Activity folds consecutive repeats of one change, such as a task updated six times, into a single row with a count that expands to each time
+- Recent Activity folds consecutive changes to one resource, such as a replica restarting in place, into a single row with a count that expands to each change
 - Compose files and config contents are syntax-highlighted more accurately, with alternating line backgrounds
 - A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`
 - MCP's `scale_service` refuses a global service as REST does, and its write tools answer a service, node, task, config, secret, network or volume Cetacean doesn't hold as not found rather than passing it to Docker

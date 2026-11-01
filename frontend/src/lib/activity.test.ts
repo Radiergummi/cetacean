@@ -75,20 +75,22 @@ describe("activityRows", () => {
     ).toEqual([[2, 1]]);
   });
 
-  it("ends a run at another name, action or actor", () => {
+  it("folds one resource's changes whatever the action", () => {
     expect(
       shape(
-        [
-          change(6),
-          { ...change(5), name: "api" },
-          change(4),
-          { ...change(3), action: "remove" },
-          change(2),
-          { ...change(1), actor: alice },
-        ],
+        [change(3), { ...change(2), action: "create" }, { ...change(1), action: "remove" }],
         true,
       ),
-    ).toEqual([[6], [5], [4], [3], [2], [1]]);
+    ).toEqual([[3, 2, 1]]);
+  });
+
+  it("ends a run at another name or actor", () => {
+    expect(
+      shape(
+        [change(4), { ...change(3), name: "api" }, change(2), { ...change(1), actor: alice }],
+        true,
+      ),
+    ).toEqual([[4], [3], [2], [1]]);
   });
 
   it("collapses changes by the same actor", () => {

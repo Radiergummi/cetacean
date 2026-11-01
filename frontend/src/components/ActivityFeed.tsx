@@ -95,8 +95,8 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
 }
 
 /**
- * A run of changes repeating one another, newest first: one row with a count
- * that expands to each change's time. A single change is a plain row.
+ * A run of changes to one resource name, newest first: one row with a count
+ * that expands to each change. A single change is a plain row.
  */
 function ChangeRun({
   entries,
@@ -138,22 +138,22 @@ function ChangeRun({
               <ResourceName name={name} />
             </span>
           )}
-          <span className="text-muted-foreground">{action}d</span>
-          {entries.length > 1 && (
+          {entries.length > 1 ? (
             <button
               type="button"
               aria-expanded={open}
               aria-controls={`activity-run-${id}`}
-              aria-label={`${entries.length} times, show each`}
               onClick={() => setOpen(!open)}
-              className="flex items-center rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-muted"
+              className="flex items-center gap-0.5 rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-muted"
             >
-              ×{entries.length}
+              {entries.length} changes
               <ChevronRight
                 data-open={open || undefined}
                 className="h-3 w-3 transition-transform data-open:rotate-90"
               />
             </button>
+          ) : (
+            <span className="text-muted-foreground">{action}d</span>
           )}
           {actor && (
             <span
