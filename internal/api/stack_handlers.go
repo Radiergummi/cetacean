@@ -58,6 +58,7 @@ func (h *Handlers) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setAllow(w, r, "stack", name)
+	h.linkAnnotations(w, r, "stack:"+name)
 
 	// A stack detail walks every service, task, config, secret, network and
 	// volume in it and is request-independent, so it is kept until the cache

@@ -318,6 +318,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	rt.networks()
 	rt.volumes()
 	rt.views()
+	rt.annotations()
 	rt.mounts()
 	rt.fallback()
 
@@ -1165,6 +1166,24 @@ func (rt routes) volumes() {
 	mux.Handle("DELETE /volumes/{name}",
 		volOp(cluster.OpRemoveVolume).Append(h.precond(h.volumeRepresentation)).AnswersNoContent().
 			ThenFunc(h.HandleRemoveVolume))
+}
+
+// annotations registers the annotation routes. Their writes check the ACL in
+// cluster.Annotations, against every resource the annotation names.
+func (rt routes) annotations() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+
+	mux.Handle("POST /annotations",
+		annotationWrite(h.mayAnnotate).AnswersWithABody().ThenFunc(h.HandleCreateAnnotation))
+	mux.HandleFunc(
+		"GET /annotations/{id}",
+		contentNegotiated(h.HandleGetAnnotation, feedHandlers{}, spa),
+	)
+	mux.Handle("PATCH /annotations/{id}",
+		annotationWrite(h.mayEditAnnotation).ThenFunc(h.HandlePatchAnnotation))
+	mux.Handle("DELETE /annotations/{id}",
+		annotationWrite(h.mayEditAnnotation).AnswersNoContent().
+			ThenFunc(h.HandleDeleteAnnotation))
 }
 
 // views registers the views across resources: ports, recommendations, history,

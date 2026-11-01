@@ -25,6 +25,8 @@ type Core struct {
 
 	// Streams ends the metrics stream, log follows and MCP subscriptions.
 	Streams *sse.Lifetime
+
+	Annotations *cluster.Annotations
 }
 
 // New builds the shared state over c.
@@ -35,5 +37,6 @@ func New(c *cache.Cache, streams *sse.Lifetime) *Core {
 		SecretEntries: cluster.NewSecretEntries(),
 		LogReads:      new(sse.Slots),
 		Streams:       streams,
+		Annotations:   cluster.NewAnnotations(c),
 	}
 }

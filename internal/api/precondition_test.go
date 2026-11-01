@@ -161,6 +161,15 @@ type preconditionEndpoint struct {
 // member change. /services/{id}/healthcheck appears twice, for PUT and PATCH.
 var pairedEndpoints = []preconditionEndpoint{
 	{
+		"annotation", "/annotations/" + seededAnnotationID, "PATCH",
+		"/annotations/" + seededAnnotationID,
+		`{"text":"load test stopped"}`, "application/merge-patch+json", http.StatusOK,
+	},
+	{
+		"annotation (DELETE)", "/annotations/" + seededAnnotationID, "DELETE",
+		"/annotations/" + seededAnnotationID, "", "", http.StatusNoContent,
+	},
+	{
 		"service env", "/services/svc1/env", "PATCH", "/services/svc1/env",
 		`{"B":"2"}`, "application/merge-patch+json", http.StatusOK,
 	},
@@ -563,6 +572,7 @@ func newSeededTestRouterWithConfig(
 
 	c := cache.New(nil)
 	c.SetService(seededService())
+	seedAnnotation(c, "web")
 	c.SetNode(swarm.Node{
 		ID:      "node1",
 		Version: swarm.Version{Index: 3},

@@ -52,6 +52,7 @@ var Domains = []Domain{
 	{Prefix: "NET", Label: "Network operations"},
 	{Prefix: "CFG", Label: "Config operations"},
 	{Prefix: "SEC", Label: "Secret operations"},
+	{Prefix: "ANN", Label: "Annotations"},
 }
 
 var registry = map[string]Def{
@@ -715,6 +716,43 @@ var registry = map[string]Def{
 		Status:      http.StatusBadGateway,
 		Description: "The registry served the SBOM or manifest intact, but it cannot be parsed. Content under a digest never changes, so asking again gives the same answer.",
 		Suggestion:  "The detail names what failed to parse. Inspect it with `docker buildx imagetools inspect`, and rebuild the image if it is damaged.",
+	},
+
+	// ── ANN: annotations ──────────────────────────────────────────────
+	"ANN001": {
+		Code:        "ANN001",
+		Title:       "Invalid Annotation",
+		Status:      http.StatusBadRequest,
+		Description: "The annotation in the request body is not valid. The detail names the field at fault.",
+		Suggestion:  "Text is required, up to 1,000 characters. Up to 10 tags of [a-z0-9._-], and up to 20 services, stacks or nodes, each named once. until must be after timestamp.",
+	},
+	"ANN002": {
+		Code:        "ANN002",
+		Title:       "Annotation Limit Reached",
+		Status:      http.StatusConflict,
+		Description: "The cluster already holds 10,000 annotations. A new one is refused rather than removing an older one.",
+		Suggestion:  "Delete annotations that are no longer needed, then try again.",
+	},
+	"ANN003": {
+		Code:        "ANN003",
+		Title:       "Annotations Need The Timeline",
+		Status:      http.StatusConflict,
+		Description: "Annotations are stored in the timeline database, and storage.timeline is off, so an annotation would be lost on restart.",
+		Suggestion:  "Turn storage.timeline on to write annotations.",
+	},
+	"ANN004": {
+		Code:        "ANN004",
+		Title:       "Annotation Not Found",
+		Status:      http.StatusNotFound,
+		Description: "No annotation has this ID, or it names a resource the caller cannot read.",
+		Suggestion:  "Check the annotation ID. It may have been deleted.",
+	},
+	"ANN005": {
+		Code:        "ANN005",
+		Title:       "Annotation Not Stored",
+		Status:      http.StatusServiceUnavailable,
+		Description: "The timeline database did not commit the write, so nothing was changed.",
+		Suggestion:  "Try again. If it keeps failing, check the data directory's disk and Cetacean's log.",
 	},
 
 	// ── VOL: volume operations ────────────────────────────────────────

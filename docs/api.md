@@ -521,6 +521,48 @@ curl "http://localhost:9000/tasks?filter=state+%3D%3D+%22failed%22+%7C%7C+error+
 curl "http://localhost:9000/stacks?filter=services+>+5"
 ```
 
+## Annotations
+
+An annotation is a note that a person or an agent writes about a moment or a range: that a load test started, say,
+or why a deploy was rolled back. Annotations are stored in the timeline database, so they need
+`storage.timeline`; with it off, every write answers `409` (`ANN003`).
+
+```json
+{
+  "timestamp": "2026-11-01T14:00:00Z",
+  "until": "2026-11-01T14:30:00Z",
+  "text": "Load test against the checkout flow",
+  "tags": ["load-test"],
+  "resources": [{ "type": "service", "id": "webapp" }]
+}
+```
+
+- `POST /annotations` creates one and answers `201` with its `Location` and `ETag`. `timestamp` defaults to now and
+  takes any time, the future included. `until` makes it a range and must be after `timestamp`.
+- `text` is plain text, up to 1,000 characters. Up to 10 `tags`, each `[a-z0-9._-]`, up to 40 long.
+- `resources` names up to 20 services, stacks, or nodes. Name each one by its ID or its name. The answer records each by ID, with its name.
+  An annotation with no resources is cluster-wide.
+- `GET /annotations/{id}` returns one. Its `Allow` lists `PATCH` and `DELETE` when the caller may change it.
+- `PATCH /annotations/{id}` takes an `application/merge-patch+json` body. `null` clears `until`, `tags` or
+  `resources`. The `ID` stays the same, and the author is kept; `updated` and `editor` record the edit.
+- `DELETE /annotations/{id}` answers `204`.
+
+The `ETag` is the annotation's version, which every edit advances. `PATCH` and `DELETE` honor `If-Match`, and refuse
+a stale one with `412`.
+
+Who may do what follows the resources an annotation names:
+
+- **Read:** read on every resource it names. A cluster-wide annotation is readable by every caller with a grant.
+  One the caller can't read answers `404` (`ANN004`).
+- **Create:** write on every resource it names; write on `*` for a cluster-wide one.
+- **Edit and delete:** the author, while they can still read it, or anyone who could create it. Changing `resources`
+  also needs what creating it with the new set needs.
+
+An annotation doesn't change anything in Docker, so it needs no [operations level][operations-level]: annotations work
+on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may
+annotate that resource. The cluster holds at most 10,000 annotations; the next one is refused with `409` (`ANN002`)
+rather than removing an older one.
+
 ## Response format
 
 All JSON responses carry [JSON-LD](https://json-ld.org/) annotations (`@context`, `@id`, `@type`). Collection responses
@@ -984,7 +1026,8 @@ stream, and `lastSyncAt` / `lastSyncAgeSeconds` for the last successful read. `/
 ### Writes
 
 Each row gives the minimum [operations level][operations-level] the endpoint needs. Every write also
-passes the per-resource [write grant][authorization] check.
+passes the per-resource [write grant][authorization] check. [Annotations](#annotations) need no level, so they aren't
+listed.
 
 | Endpoint | Level |
 |---|---|
