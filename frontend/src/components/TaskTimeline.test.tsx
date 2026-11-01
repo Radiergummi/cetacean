@@ -103,9 +103,11 @@ describe("TaskTimeline", () => {
       throw new Error("no track");
     }
 
+    HTMLElement.prototype.setPointerCapture = vi.fn<(pointerId: number) => void>();
+
     fireEvent.pointerDown(track, { button: 0, clientX: 300 });
-    fireEvent.pointerMove(window, { clientX: 450 });
-    fireEvent.pointerUp(window);
+    fireEvent.pointerMove(track, { clientX: 450 });
+    fireEvent.pointerUp(track);
 
     const params = currentParams();
 

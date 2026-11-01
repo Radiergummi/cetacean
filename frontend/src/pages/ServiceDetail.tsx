@@ -146,10 +146,7 @@ export default function ServiceDetail() {
 
       <TasksSection
         tasks={detail.tasks}
-        variant="service"
-        timelineVariant={
-          service.Spec.Mode?.Global || service.Spec.Mode?.GlobalJob ? "global" : "service"
-        }
+        variant={service.Spec.Mode?.Global || service.Spec.Mode?.GlobalJob ? "global" : "service"}
         metrics={detail.hasCadvisor ? detail.taskMetrics : undefined}
       />
 

@@ -74,17 +74,28 @@ function startOf(task: Task): number {
   return Number.isFinite(created) && created > 0 ? created : Date.parse(task.Status.Timestamp);
 }
 
-function barOf(task: Task, now: number): Omit<TimelineBar, "lane"> {
-  const { State, Err, ContainerStatus, Timestamp } = task.Status;
+/** From creation to the last state change, or to now while it has not stopped. */
+function spanOf(task: Task, now: number): { start: number; end: number; stopped: boolean } {
   const start = startOf(task);
-  const stopped = isTerminalTaskState(State);
+  const stopped = isTerminalTaskState(task.Status.State);
+
+  return {
+    start,
+    end: Math.max(start, stopped ? Date.parse(task.Status.Timestamp) : now),
+    stopped,
+  };
+}
+
+function barOf(task: Task, now: number): Omit<TimelineBar, "lane"> {
+  const { State, Err, ContainerStatus } = task.Status;
+  const { start, end, stopped } = spanOf(task, now);
   const exitCode = stopped ? ContainerStatus?.ExitCode : undefined;
   const failed = statusTone(State) === "danger";
 
   return {
     task,
     start,
-    end: Math.max(start, stopped ? Date.parse(Timestamp) : now),
+    end,
     ongoing: !stopped,
     failed,
     // A task stopped by an update exits non-zero too; that is no error.
@@ -101,7 +112,7 @@ function overlaps({ start, end }: { start: number; end: number }, timeWindow: Ti
  * timeline draws by, so the list beside it shows the same tasks.
  */
 export function isInWindow(task: Task, timeWindow: TimelineWindow, now: number): boolean {
-  return overlaps(barOf(task, now), timeWindow);
+  return overlaps(spanOf(task, now), timeWindow);
 }
 
 /** Puts each bar in the first lane free at its start. */

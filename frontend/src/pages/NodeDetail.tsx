@@ -261,7 +261,6 @@ export default function NodeDetail() {
       <TasksSection
         tasks={tasks ?? []}
         variant="node"
-        timelineVariant="node"
         metrics={hasCadvisor ? taskMetrics : undefined}
       />
 

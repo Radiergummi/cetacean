@@ -11,7 +11,7 @@ import {
   type TimelineWindow,
 } from "@/lib/taskTimeline";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { Link } from "react-router-dom";
 
@@ -37,7 +37,9 @@ function percentOf(time: number, { start, end }: TimelineWindow): number {
   return Math.min(100, Math.max(0, ((time - start) / (end - start)) * 100));
 }
 
-function Bar({
+// Memoised: a drag re-renders the timeline at pointer rate, and the bars
+// do not change while it lasts.
+const Bar = memo(function Bar({
   bar,
   lanes,
   variant,
@@ -107,16 +109,13 @@ function Bar({
       </TooltipContent>
     </Tooltip>
   );
-}
+});
 
-const prunedNote: Record<TimelineVariant, (limit: number) => string> = {
-  service: (limit) =>
-    `Swarm keeps only the newest ${limit} tasks per replica, so older ones may be missing here.`,
-  global: (limit) =>
-    `Swarm keeps only the newest ${limit} tasks per node, so older ones may be missing here.`,
-  node: (limit) =>
-    `Swarm keeps only the newest ${limit} tasks per replica, so older ones may be missing here.`,
-};
+function prunedNote(variant: TimelineVariant, limit: number): string {
+  const unit = variant === "global" ? "node" : "replica";
+
+  return `Swarm keeps only the newest ${limit} tasks per ${unit}, so older ones may be missing here.`;
+}
 
 interface Selection {
   /** Where the dragged track starts, relative to the timeline. */
@@ -152,77 +151,56 @@ export default function TaskTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const selectionRef = useRef<Selection | null>(null);
-  const dragging = selection !== null;
+  const note = prunedNote(variant, retentionLimit);
 
-  const updateSelection = (next: Selection | null) => {
-    selectionRef.current = next;
-    setSelection(next);
-  };
-
-  useEffect(() => {
-    if (!dragging) {
-      return;
-    }
-
-    const offset = (clientX: number) =>
-      clientX - (containerRef.current?.getBoundingClientRect().left ?? 0);
-
-    const move = (event: PointerEvent) => {
-      const current = selectionRef.current;
-
-      if (current) {
-        const to = Math.min(
-          Math.max(offset(event.clientX), current.trackLeft),
-          current.trackLeft + current.trackWidth,
-        );
-
-        selectionRef.current = { ...current, to };
-        setSelection(selectionRef.current);
-      }
-    };
-
-    const up = () => {
-      const current = selectionRef.current;
-
-      selectionRef.current = null;
-      setSelection(null);
-
-      if (!current || Math.abs(current.to - current.from) <= dragThreshold) {
-        return;
-      }
-
-      const span = timeWindow.end - timeWindow.start;
-      const timeAt = (x: number) =>
-        timeWindow.start + ((x - current.trackLeft) / current.trackWidth) * span;
-
-      suppressClickRef.current = true;
-      setCustomRange(
-        timeAt(Math.min(current.from, current.to)) / 1000,
-        timeAt(Math.max(current.from, current.to)) / 1000,
-      );
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [dragging, timeWindow, setCustomRange]);
+  const offsetX = (clientX: number) =>
+    clientX - (containerRef.current?.getBoundingClientRect().left ?? 0);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return;
     }
 
-    const container = containerRef.current?.getBoundingClientRect().left ?? 0;
     const track = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - container;
+    const x = offsetX(event.clientX);
 
-    event.preventDefault();
-    updateSelection({ trackLeft: track.left - container, trackWidth: track.width, from: x, to: x });
+    setSelection({ trackLeft: offsetX(track.left), trackWidth: track.width, from: x, to: x });
+  };
+
+  // Captured only once it is a drag, so a plain click still reaches its bar.
+  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!selection) {
+      return;
+    }
+
+    const to = Math.min(
+      Math.max(offsetX(event.clientX), selection.trackLeft),
+      selection.trackLeft + selection.trackWidth,
+    );
+
+    if (Math.abs(to - selection.from) > dragThreshold) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+
+    setSelection({ ...selection, to });
+  };
+
+  const endDrag = () => {
+    setSelection(null);
+
+    if (!selection || Math.abs(selection.to - selection.from) <= dragThreshold) {
+      return;
+    }
+
+    const span = timeWindow.end - timeWindow.start;
+    const timeAt = (x: number) =>
+      timeWindow.start + ((x - selection.trackLeft) / selection.trackWidth) * span;
+
+    suppressClickRef.current = true;
+    setCustomRange(
+      timeAt(Math.min(selection.from, selection.to)) / 1000,
+      timeAt(Math.max(selection.from, selection.to)) / 1000,
+    );
   };
 
   return (
@@ -269,19 +247,20 @@ export default function TaskTimeline({
               className="relative flex-1 cursor-crosshair rounded-sm bg-muted/50"
               style={{ height: `${lanes * 1.25}rem` }}
               onPointerDown={startDrag}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={() => setSelection(null)}
             >
               {pruned > 0 && (
                 <Tooltip>
                   <TooltipTrigger
                     render={<div />}
                     role="img"
-                    aria-label={prunedNote[variant](retentionLimit)}
+                    aria-label={note}
                     className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
                     style={{ width: `${pruned}%` }}
                   />
-                  <TooltipContent side="bottom">
-                    {prunedNote[variant](retentionLimit)}
-                  </TooltipContent>
+                  <TooltipContent side="bottom">{note}</TooltipContent>
                 </Tooltip>
               )}
               {bars.map((bar) => (

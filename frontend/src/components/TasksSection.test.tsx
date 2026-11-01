@@ -42,7 +42,6 @@ function renderSection(tasks: Task[], url = "/services/svc1") {
         <TasksSection
           tasks={tasks}
           variant="service"
-          timelineVariant="service"
         />
         <LocationProbe />
       </MemoryRouter>
