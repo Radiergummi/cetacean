@@ -25,6 +25,11 @@ type Evaluator struct {
 	policyGeneration atomic.Uint64
 }
 
+// PermissionExec is the one permission no default grants: a shell is cluster
+// root wherever its target mounts the Docker socket, so it takes an explicit
+// grant, from a policy or from the provider.
+const PermissionExec = "exec"
+
 // PolicyGeneration returns a counter that advances whenever the policy is
 // replaced.
 func (e *Evaluator) PolicyGeneration() uint64 {
@@ -93,9 +98,25 @@ func (e *Evaluator) SetOIDCUserClaims(claims []string) error {
 	return nil
 }
 
+// effectivePolicy is the policy a permission check runs against, nil meaning
+// allow-all. Without a policy, exec runs against no file grants and so
+// against the provider's alone.
+func (e *Evaluator) effectivePolicy(permission string) *Policy {
+	p := e.policy.Load()
+	if p == nil && permission == PermissionExec {
+		return noFileGrants
+	}
+
+	return p
+}
+
+// noFileGrants is shared so the grant sets derived under it stay cached.
+var noFileGrants = &Policy{}
+
 // Can checks if the identity has the given permission on the resource.
 // resource is "type:name", e.g. "service:webapp-api".
-// A nil evaluator or nil policy means allow all.
+// A nil evaluator or nil policy means allow all, except for exec, which
+// nothing grants implicitly.
 func (e *Evaluator) Can(id *auth.Identity, permission string, resource string) bool {
 	grants, allowAll := e.grantsWith(id, permission)
 
@@ -116,15 +137,15 @@ func (e *Evaluator) Checker(id *auth.Identity, permission string) func(resource 
 }
 
 // grantsWith returns the identity's grants that carry permission, or allowAll
-// for a nil evaluator or no policy loaded.
+// for a nil evaluator or no policy loaded; exec is never allowed that way.
 func (e *Evaluator) grantsWith(
 	id *auth.Identity,
 	permission string,
 ) (grants grantSet, allowAll bool) {
 	if e == nil {
-		return grantSet{}, true
+		return grantSet{}, permission != PermissionExec
 	}
-	p := e.policy.Load()
+	p := e.effectivePolicy(permission)
 	if p == nil {
 		return grantSet{}, true
 	}
@@ -337,7 +358,7 @@ func (e *Evaluator) matchesParts(gs grantSet, resType, resID string) bool {
 		return true
 	}
 
-	if e.resolver == nil {
+	if e == nil || e.resolver == nil {
 		return false
 	}
 
@@ -422,7 +443,7 @@ func (t TypeAccess) AllowAll() bool { return t.allowAll }
 // resourceType.
 func (t TypeAccess) Can(permission, resourceType string) bool {
 	if t.allowAll {
-		return true
+		return permission != PermissionExec
 	}
 
 	return t.granted[typeKey{permission, resourceType}] ||
@@ -512,8 +533,8 @@ func hasPermission(g Grant, permission string) bool {
 		if p == permission {
 			return true
 		}
-		// write implies read
-		if permission == "read" && p == "write" {
+		// write and exec both imply read; nothing implies exec.
+		if permission == "read" && (p == "write" || p == PermissionExec) {
 			return true
 		}
 	}
