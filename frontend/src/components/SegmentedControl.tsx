@@ -29,6 +29,10 @@ const sizes = {
 export interface Segment<T extends string> {
   value: T;
   label: string;
+  /**
+   * Shown in place of the label, which stays the segment's accessible name.
+   */
+  icon?: ReactNode | undefined;
   badge?: number | undefined;
   disabled?: boolean | undefined;
 }
@@ -44,6 +48,7 @@ export default function SegmentedControl<T extends string>({
   overflowName = "More options",
   overflowActive,
   overflowContent,
+  className,
 }: {
   segments: Segment<T>[];
   value: T;
@@ -60,6 +65,8 @@ export default function SegmentedControl<T extends string>({
   overflowActive?: boolean | undefined;
   /** Custom popover content. Receives a `close` callback. When provided, the overflow button is always shown. */
   overflowContent?: ((close: () => void) => ReactNode) | undefined;
+  /** Merged into the frame, as for a height that matches its neighbours. */
+  className?: string | undefined;
 }) {
   const actionsRef = useRef<Menu.Root.Actions>(null);
 
@@ -75,8 +82,9 @@ export default function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-md bg-card px-0.5 ring-1 ring-input ring-inset",
+        "inline-flex items-stretch gap-0.5 rounded-md bg-card p-0.5 ring-1 ring-input ring-inset",
         scale.frame,
+        className,
       )}
     >
       <ToggleGroup
@@ -86,19 +94,21 @@ export default function SegmentedControl<T extends string>({
             onChange(values[0] as T);
           }
         }}
-        className="flex items-center gap-0.5"
+        className="flex items-stretch gap-0.5"
       >
-        {visible.map(({ badge, disabled, label, value: segmentValue }) => (
+        {visible.map(({ badge, disabled, icon, label, value: segmentValue }) => (
           <Toggle
             key={segmentValue}
             value={segmentValue}
             disabled={disabled}
+            aria-label={icon ? label : undefined}
+            title={icon ? label : undefined}
             className={cn(
               "group/seg inline-flex cursor-pointer items-center rounded-sm font-medium text-muted-foreground transition outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:text-muted-foreground/40 data-pressed:bg-primary data-pressed:text-primary-foreground data-pressed:shadow-sm",
               scale.segment,
             )}
           >
-            <span>{label}</span>
+            {icon ?? <span>{label}</span>}
             {badge != null && (
               <span className="min-size-4 inline-flex items-center justify-center rounded-full bg-foreground/5 px-1 text-[10px] font-semibold tabular-nums group-data-pressed/seg:bg-accent/25">
                 {badge}

@@ -2,13 +2,12 @@ import type { Task } from "../api/types";
 import type { TaskMetricsData } from "../hooks/useTaskMetrics";
 import { statusColor } from "../lib/statusColor";
 import { isTerminalTaskState } from "../lib/taskState";
-import CollapsibleSection from "./CollapsibleSection";
 import { TaskSparkline } from "./metrics";
 import ResourceName from "./ResourceName";
-import TaskStateFilter, { isActiveTask } from "./TaskStateFilter";
+import { isActiveTask } from "./TaskStateFilter";
 import TaskStatusBadge from "./TaskStatusBadge";
 import TimeAgo from "./TimeAgo";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 type Variant = "node" | "service";
@@ -17,10 +16,17 @@ interface TasksTableProps {
   tasks: Task[];
   variant: Variant;
   metrics?: Record<string, TaskMetricsData> | undefined;
+  stateFilter: string | null;
+  onStateFilterChange: (state: string | null) => void;
 }
 
-export default function TasksTable({ tasks, variant, metrics }: TasksTableProps) {
-  const [stateFilter, setStateFilter] = useState<string | null>(null);
+export default function TasksTable({
+  tasks,
+  variant,
+  metrics,
+  stateFilter,
+  onStateFilterChange,
+}: TasksTableProps) {
   const filteredTasks = useMemo(() => {
     const filtered =
       stateFilter === "__all__"
@@ -58,177 +64,160 @@ export default function TasksTable({ tasks, variant, metrics }: TasksTableProps)
     });
   }, [tasks, stateFilter]);
 
-  if (tasks.length === 0) {
-    return null;
-  }
-
   const failedCount = tasks.filter(({ Status: { State } }) => State === "failed").length;
   const emptyMessage =
     failedCount > 0 ? `No active tasks; ${failedCount} failed.` : "No active tasks.";
 
   return (
-    <CollapsibleSection
-      title="Tasks"
-      controls={
-        <TaskStateFilter
-          tasks={tasks}
-          active={stateFilter}
-          onChange={setStateFilter}
-        />
-      }
-    >
-      <div className="max-h-96 overflow-auto rounded-lg border">
-        <table className="w-full min-w-max whitespace-nowrap">
-          <thead className="sticky top-0 z-10 bg-background">
-            <tr className="border-b bg-muted/50">
-              {variant === "node" && <th className="p-3 text-left text-sm font-medium">Service</th>}
-              <th className="p-3 text-left text-sm font-medium">Task</th>
-              <th className="p-3 text-left text-sm font-medium">State</th>
-              {metrics && <th className="p-3 text-left text-sm font-medium">CPU</th>}
-              {metrics && <th className="p-3 text-left text-sm font-medium">Memory</th>}
-              {variant === "service" && <th className="p-3 text-left text-sm font-medium">Node</th>}
-              <th className="p-3 text-left text-sm font-medium">Image</th>
-              <th className="p-3 text-left text-sm font-medium">Desired</th>
-              <th className="p-3 text-left text-sm font-medium">Error</th>
-              <th className="p-3 text-left text-sm font-medium">Timestamp</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTasks.length === 0 && (
-              <tr>
-                <td
-                  colSpan={
-                    6 +
-                    (variant === "node" ? 1 : 0) +
-                    (variant === "service" ? 1 : 0) +
-                    (metrics ? 2 : 0)
-                  }
-                  className="p-3 text-center text-sm text-muted-foreground"
+    <div className="max-h-96 overflow-auto rounded-lg border">
+      <table className="w-full min-w-max whitespace-nowrap">
+        <thead className="sticky top-0 z-10 bg-background">
+          <tr className="border-b bg-muted/50">
+            {variant === "node" && <th className="p-3 text-left text-sm font-medium">Service</th>}
+            <th className="p-3 text-left text-sm font-medium">Task</th>
+            <th className="p-3 text-left text-sm font-medium">State</th>
+            {metrics && <th className="p-3 text-left text-sm font-medium">CPU</th>}
+            {metrics && <th className="p-3 text-left text-sm font-medium">Memory</th>}
+            {variant === "service" && <th className="p-3 text-left text-sm font-medium">Node</th>}
+            <th className="p-3 text-left text-sm font-medium">Image</th>
+            <th className="p-3 text-left text-sm font-medium">Desired</th>
+            <th className="p-3 text-left text-sm font-medium">Error</th>
+            <th className="p-3 text-left text-sm font-medium">Timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredTasks.length === 0 && (
+            <tr>
+              <td
+                colSpan={
+                  6 +
+                  (variant === "node" ? 1 : 0) +
+                  (variant === "service" ? 1 : 0) +
+                  (metrics ? 2 : 0)
+                }
+                className="p-3 text-center text-sm text-muted-foreground"
+              >
+                {emptyMessage}{" "}
+                <button
+                  type="button"
+                  className="font-medium text-foreground underline underline-offset-2"
+                  onClick={() => onStateFilterChange("__all__")}
                 >
-                  {emptyMessage}{" "}
-                  <button
-                    type="button"
-                    className="font-medium text-foreground underline underline-offset-2"
-                    onClick={() => setStateFilter("__all__")}
-                  >
-                    Show all tasks
-                  </button>
-                </td>
-              </tr>
-            )}
-            {filteredTasks.map(
-              ({
-                DesiredState,
-                ID,
-                NodeHostname,
-                NodeID,
-                ServiceID,
-                ServiceName,
-                Slot,
-                Spec: { ContainerSpec },
-                Status: { ContainerStatus, Err, State, Timestamp },
-              }) => {
-                // Docker reports ExitCode (often -1) even while a task is running;
-                // only surface it once the task has actually terminated.
-                const exitCode = isTerminalTaskState(State) ? ContainerStatus?.ExitCode : undefined;
-                const errorMessage = Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
+                  Show all tasks
+                </button>
+              </td>
+            </tr>
+          )}
+          {filteredTasks.map(
+            ({
+              DesiredState,
+              ID,
+              NodeHostname,
+              NodeID,
+              ServiceID,
+              ServiceName,
+              Slot,
+              Spec: { ContainerSpec },
+              Status: { ContainerStatus, Err, State, Timestamp },
+            }) => {
+              // Docker reports ExitCode (often -1) even while a task is running;
+              // only surface it once the task has actually terminated.
+              const exitCode = isTerminalTaskState(State) ? ContainerStatus?.ExitCode : undefined;
+              const errorMessage = Err || (exitCode && exitCode !== 0 ? `exit ${exitCode}` : "");
 
-                return (
-                  <tr
-                    key={ID}
-                    className="border-b last:border-b-0"
-                  >
-                    {variant === "node" && (
-                      <td className="p-3 text-sm whitespace-nowrap">
+              return (
+                <tr
+                  key={ID}
+                  className="border-b last:border-b-0"
+                >
+                  {variant === "node" && (
+                    <td className="p-3 text-sm whitespace-nowrap">
+                      <Link
+                        to={`/services/${ServiceID}`}
+                        className="text-link hover:underline"
+                      >
+                        <ResourceName name={ServiceName || ServiceID.slice(0, 12)} />
+                      </Link>
+                    </td>
+                  )}
+
+                  <td className="p-3 text-sm">
+                    <span className="inline-flex items-center gap-2">
+                      <span className={`size-2 shrink-0 rounded-full ${statusColor(State)}`} />
+                      <Link
+                        to={`/tasks/${ID}`}
+                        className="text-link hover:underline"
+                      >
+                        {variant === "node" && Slot ? (
+                          `Replica #${Slot}`
+                        ) : (
+                          <span className="font-mono">{ID.slice(0, 12)}</span>
+                        )}
+                      </Link>
+                    </span>
+                  </td>
+
+                  <td className="p-3 text-sm">
+                    <TaskStatusBadge state={State} />
+                  </td>
+
+                  {metrics && (
+                    <td className="p-3 text-sm">
+                      {State === "running" ? (
+                        <TaskSparkline
+                          data={metrics[ID]?.cpu}
+                          currentValue={metrics[ID]?.currentCpu}
+                          type="cpu"
+                        />
+                      ) : (
+                        "\u2014"
+                      )}
+                    </td>
+                  )}
+
+                  {metrics && (
+                    <td className="p-3 text-sm">
+                      {State === "running" ? (
+                        <TaskSparkline
+                          data={metrics[ID]?.memory}
+                          currentValue={metrics[ID]?.currentMemory}
+                          type="memory"
+                        />
+                      ) : (
+                        "\u2014"
+                      )}
+                    </td>
+                  )}
+
+                  {variant === "service" && (
+                    <td className="p-3 text-sm">
+                      {NodeID ? (
                         <Link
-                          to={`/services/${ServiceID}`}
+                          to={`/nodes/${NodeID}`}
                           className="text-link hover:underline"
                         >
-                          <ResourceName name={ServiceName || ServiceID.slice(0, 12)} />
+                          {NodeHostname || NodeID.slice(0, 12)}
                         </Link>
-                      </td>
-                    )}
-
-                    <td className="p-3 text-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <span className={`size-2 shrink-0 rounded-full ${statusColor(State)}`} />
-                        <Link
-                          to={`/tasks/${ID}`}
-                          className="text-link hover:underline"
-                        >
-                          {variant === "node" && Slot ? (
-                            `Replica #${Slot}`
-                          ) : (
-                            <span className="font-mono">{ID.slice(0, 12)}</span>
-                          )}
-                        </Link>
-                      </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
+                  )}
 
-                    <td className="p-3 text-sm">
-                      <TaskStatusBadge state={State} />
-                    </td>
-
-                    {metrics && (
-                      <td className="p-3 text-sm">
-                        {State === "running" ? (
-                          <TaskSparkline
-                            data={metrics[ID]?.cpu}
-                            currentValue={metrics[ID]?.currentCpu}
-                            type="cpu"
-                          />
-                        ) : (
-                          "\u2014"
-                        )}
-                      </td>
-                    )}
-
-                    {metrics && (
-                      <td className="p-3 text-sm">
-                        {State === "running" ? (
-                          <TaskSparkline
-                            data={metrics[ID]?.memory}
-                            currentValue={metrics[ID]?.currentMemory}
-                            type="memory"
-                          />
-                        ) : (
-                          "\u2014"
-                        )}
-                      </td>
-                    )}
-
-                    {variant === "service" && (
-                      <td className="p-3 text-sm">
-                        {NodeID ? (
-                          <Link
-                            to={`/nodes/${NodeID}`}
-                            className="text-link hover:underline"
-                          >
-                            {NodeHostname || NodeID.slice(0, 12)}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    )}
-
-                    <td className="p-3 text-sm">
-                      <span className="font-mono text-xs">
-                        {ContainerSpec?.Image?.split("@")[0]}
-                      </span>
-                    </td>
-                    <td className="p-3 text-sm">{DesiredState}</td>
-                    <td className="p-3 text-sm text-status-danger">{errorMessage}</td>
-                    <td className="p-3 text-sm text-muted-foreground">
-                      {Timestamp ? <TimeAgo date={Timestamp} /> : "\u2014"}
-                    </td>
-                  </tr>
-                );
-              },
-            )}
-          </tbody>
-        </table>
-      </div>
-    </CollapsibleSection>
+                  <td className="p-3 text-sm">
+                    <span className="font-mono text-xs">{ContainerSpec?.Image?.split("@")[0]}</span>
+                  </td>
+                  <td className="p-3 text-sm">{DesiredState}</td>
+                  <td className="p-3 text-sm text-status-danger">{errorMessage}</td>
+                  <td className="p-3 text-sm text-muted-foreground">
+                    {Timestamp ? <TimeAgo date={Timestamp} /> : "\u2014"}
+                  </td>
+                </tr>
+              );
+            },
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }

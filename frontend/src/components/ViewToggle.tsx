@@ -1,32 +1,33 @@
-import type { ViewMode } from "../hooks/useViewMode";
-import { LayoutGrid, TableProperties } from "lucide-react";
+import SegmentedControl from "./SegmentedControl";
+import type { ReactNode } from "react";
 
-interface Props {
-  mode: ViewMode;
-  onChange: (mode: ViewMode) => void;
+export interface View<T extends string> {
+  value: T;
+  label: string;
+  icon: ReactNode;
 }
 
-export default function ViewToggle({ mode, onChange }: Props) {
+/**
+ * Switches between views of the same content, one icon per view; the label is
+ * its accessible name and its title.
+ */
+export default function ViewToggle<T extends string>({
+  views,
+  value,
+  onChange,
+  className,
+}: {
+  views: View<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  className?: string | undefined;
+}) {
   return (
-    <div className="inline-flex shrink-0 rounded-md border">
-      <button
-        type="button"
-        onClick={() => onChange("table")}
-        aria-pressed={mode === "table"}
-        aria-label="Table view"
-        className="flex items-center px-2.5 py-2.5 text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
-      >
-        <TableProperties className="size-4" />
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("grid")}
-        aria-pressed={mode === "grid"}
-        aria-label="Grid view"
-        className="flex items-center border-l px-2.5 py-2.5 text-muted-foreground hover:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
-      >
-        <LayoutGrid className="size-4" />
-      </button>
-    </div>
+    <SegmentedControl
+      segments={views}
+      value={value}
+      onChange={onChange}
+      className={className}
+    />
   );
 }

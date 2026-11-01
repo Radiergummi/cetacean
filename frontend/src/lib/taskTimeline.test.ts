@@ -1,4 +1,4 @@
-import { buildTimeline } from "./taskTimeline";
+import { buildTimeline, isInWindow } from "./taskTimeline";
 import type { Task } from "@/api/types";
 import { describe, expect, it } from "vitest";
 
@@ -236,6 +236,7 @@ describe("buildTimeline", () => {
     );
 
     expect(rows.map(({ earliest }) => earliest)).toEqual([now - 200 * minute, now - 10 * minute]);
+    expect(rows.map(({ count }) => count)).toEqual([2, 1]);
   });
 
   it("gives tasks of one slot that overlap in time a lane each", () => {
@@ -295,5 +296,28 @@ describe("buildTimeline", () => {
     const rows = buildTimeline([task], "service", timeWindow, now);
 
     expect(rows[0]?.bars[0]?.start).toBe(now - 20 * minute);
+  });
+});
+
+describe("isInWindow", () => {
+  it("keeps a task alive at any point inside the window", () => {
+    expect(isInWindow(makeTask({ createdAgo: 600, changedAgo: 599 }), timeWindow, now)).toBe(true);
+    expect(
+      isInWindow(makeTask({ state: "failed", createdAgo: 90, changedAgo: 30 }), timeWindow, now),
+    ).toBe(true);
+  });
+
+  it("keeps a task whose times do not parse, as it cannot be placed", () => {
+    const task = makeTask({ state: "failed", createdAgo: 90, changedAgo: 70 });
+
+    expect(
+      isInWindow({ ...task, Status: { ...task.Status, Timestamp: "" } }, timeWindow, now),
+    ).toBe(true);
+  });
+
+  it("drops a task that stopped before the window began", () => {
+    expect(
+      isInWindow(makeTask({ state: "shutdown", createdAgo: 90, changedAgo: 70 }), timeWindow, now),
+    ).toBe(false);
   });
 });
