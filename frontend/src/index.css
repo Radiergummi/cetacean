@@ -67,12 +67,14 @@
   --chart-reserved: #3b82f6;
   --chart-crosshair: rgba(136, 136, 136, 0.3);
   --chart-zoom: rgba(100, 143, 255, 0.15);
-  --chart-marker: rgba(136, 136, 136, 0.8);
+  --chart-marker: #8a8a8a;
+  --chart-marker-cluster: #4a4a4a;
   --chart-gap: rgba(136, 136, 136, 0.12);
   --radius: 0.625rem;
 }
 
 .dark {
+  --chart-marker-cluster: #c8c8c8;
   --link: oklch(0.695 0.17 254.624);
   /* Lightened so they carry on the dark background, where the same two
      readings are 5.4-8.9:1. All five are restated because :root no longer

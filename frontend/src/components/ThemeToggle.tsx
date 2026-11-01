@@ -1,3 +1,4 @@
+import { forgetSemanticChartColors } from "@/lib/chartColors";
 import { readStoredValue, writeStoredValue } from "@/lib/storage";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -39,6 +40,7 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", resolveTheme(theme) === "dark");
+    forgetSemanticChartColors();
     writeStoredValue("theme", theme);
   }, [theme]);
 
@@ -49,7 +51,10 @@ export default function ThemeToggle() {
     }
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => document.documentElement.classList.toggle("dark", mediaQuery.matches);
+    const handler = () => {
+      document.documentElement.classList.toggle("dark", mediaQuery.matches);
+      forgetSemanticChartColors();
+    };
 
     mediaQuery.addEventListener("change", handler);
 

@@ -17,6 +17,12 @@ export const markerRadius = 6;
 const tooltipChanges = 5;
 
 /**
+ * The radius of the cap on a marker's line. The colours are opaque: a cap
+ * over a translucent line shows where the two overlap.
+ */
+const capRadius = 3.5;
+
+/**
  * The spacing of a gap's hatching, in pixels.
  */
 const hatchSpacing = 6;
@@ -167,13 +173,13 @@ export function markersAt(
 
 /**
  * Draws bands as hatched shading and clusters as vertical lines with a cap;
- * a cluster of several gets a heavier one.
+ * a cluster of several gets a wider line in a stronger colour.
  */
 export function drawMarkers(
   context: CanvasRenderingContext2D,
   area: { top: number; bottom: number; left: number; right: number },
   { clusters, bands }: MarkerLayout,
-  colors: { marker: string; gap: string },
+  colors: { marker: string; cluster: string; gap: string },
 ) {
   const height = area.bottom - area.top;
 
@@ -206,17 +212,18 @@ export function drawMarkers(
     }
 
     const several = items.length > 1;
+    const capTop = area.top + capRadius;
 
     context.save();
-    context.strokeStyle = colors.marker;
-    context.fillStyle = colors.marker;
+    context.strokeStyle = several ? colors.cluster : colors.marker;
+    context.fillStyle = context.strokeStyle;
     context.lineWidth = several ? 2 : 1;
     context.beginPath();
-    context.moveTo(x, area.top);
+    context.moveTo(x, capTop);
     context.lineTo(x, area.bottom);
     context.stroke();
     context.beginPath();
-    context.arc(x, area.top + 4, several ? 4 : 2.5, 0, Math.PI * 2);
+    context.arc(x, capTop, capRadius, 0, Math.PI * 2);
     context.fill();
     context.restore();
   }

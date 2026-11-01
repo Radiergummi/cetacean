@@ -266,6 +266,7 @@ export default function TimeSeriesChart({
 
         drawMarkers(ctx, chartArea, layout, {
           marker: getSemanticChartColor("marker"),
+          cluster: getSemanticChartColor("marker-cluster"),
           gap: getSemanticChartColor("gap"),
         });
       },
