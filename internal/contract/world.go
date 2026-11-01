@@ -2,6 +2,7 @@ package contract
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"io/fs"
@@ -115,6 +116,13 @@ grants:
     permissions: ["read"]
 `
 
+// discardedAnnotations turns annotation writes on without a database; the
+// index the World reads them back from is the cache's own.
+type discardedAnnotations struct{}
+
+func (discardedAnnotations) PutAnnotation(context.Context, cache.Annotation) error { return nil }
+func (discardedAnnotations) DeleteAnnotation(context.Context, uint64) error        { return nil }
+
 // World is one seeded cluster served over every transport Cetacean speaks.
 type World struct {
 	Cache  *cache.Cache
@@ -180,6 +188,7 @@ func newWorld(
 
 	c := cache.New(nil)
 	seedCluster(c)
+	c.RestoreAnnotations(discardedAnnotations{}, nil)
 
 	policy, err := acl.ParsePolicy([]byte(aclPolicy))
 	if err != nil {
