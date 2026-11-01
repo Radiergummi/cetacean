@@ -25,18 +25,8 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 		}
 	}
 
-	if cfg.Enabled() && !cfg.Wildcard() {
-		for _, origin := range cfg.AllowedOrigins {
-			trust("server.cors.origins", origin)
-		}
-	}
-
-	// Our own origin, for the fallback a pre-2023 browser takes: with no
-	// Sec-Fetch-Site the stdlib compares Origin against r.Host, the internal
-	// name behind a proxy that rewrites it. Naming it here also spares
-	// listing it in server.cors.origins, which would switch on CORS reflection.
-	if publicURL != "" {
-		trust("server.public_url", publicURL)
+	for _, origin := range trustedOrigins(cfg, publicURL) {
+		trust("server.cors.origins or server.public_url", origin)
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -57,6 +47,22 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// trustedOrigins is every origin a browser request may come from besides the
+// request's own host, shared by the CSRF check and the WebSocket upgrade. Our
+// public URL covers a pre-2023 browser, which sends no Sec-Fetch-Site from
+// behind a proxy that rewrites Host, without switching on CORS reflection.
+func trustedOrigins(cfg *CORSConfig, publicURL string) []string {
+	var origins []string
+	if cfg.Enabled() && !cfg.Wildcard() {
+		origins = append(origins, cfg.AllowedOrigins...)
+	}
+	if publicURL != "" {
+		origins = append(origins, publicURL)
+	}
+
+	return origins
 }
 
 // carriesItsOwnProof names endpoints that authenticate from the request body

@@ -645,6 +645,43 @@ func (c *Client) RemoveTask(ctx context.Context, id string) error {
 	return err
 }
 
+// ContainerStatPath stats a path inside a container without reading it.
+func (c *Client) ContainerStatPath(
+	ctx context.Context, containerID, path string,
+) (container.PathStat, error) {
+	return c.docker.ContainerStatPath(ctx, containerID, path)
+}
+
+func (c *Client) ContainerExecCreate(
+	ctx context.Context, containerID string, options container.ExecOptions,
+) (container.ExecCreateResponse, error) {
+	return c.docker.ContainerExecCreate(ctx, containerID, options)
+}
+
+func (c *Client) ContainerExecAttach(
+	ctx context.Context, execID string, options container.ExecAttachOptions,
+) (types.HijackedResponse, error) {
+	return c.docker.ContainerExecAttach(ctx, execID, options)
+}
+
+func (c *Client) ContainerExecStart(
+	ctx context.Context, execID string, options container.ExecStartOptions,
+) error {
+	return c.docker.ContainerExecStart(ctx, execID, options)
+}
+
+func (c *Client) ContainerExecResize(
+	ctx context.Context, execID string, options container.ResizeOptions,
+) error {
+	return c.docker.ContainerExecResize(ctx, execID, options)
+}
+
+func (c *Client) ContainerExecInspect(
+	ctx context.Context, execID string,
+) (container.ExecInspect, error) {
+	return c.docker.ContainerExecInspect(ctx, execID)
+}
+
 func (c *Client) RemoveService(ctx context.Context, id string) error {
 	return c.removing(ctx, cache.EventService, id, func() error {
 		return c.docker.ServiceRemove(ctx, id)

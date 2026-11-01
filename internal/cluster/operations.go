@@ -7,7 +7,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/config"
 )
 
-// Operation is a write both transports expose. Its operations tier is stated
+// Operation is a write the transports expose. Its operations tier is stated
 // here once, and the REST routes and MCP tools carrying it out read it.
 type Operation string
 
@@ -30,6 +30,8 @@ const (
 	OpRemoveSecret         Operation = "secret.remove"
 	OpRemoveNetwork        Operation = "network.remove"
 	OpRemoveVolume         Operation = "volume.remove"
+	OpOpenExec             Operation = "exec.open"
+	OpEndExec              Operation = "exec.end"
 )
 
 var operationTiers = map[Operation]config.OperationsLevel{
@@ -51,6 +53,8 @@ var operationTiers = map[Operation]config.OperationsLevel{
 	OpRemoveSecret:         config.OpsImpactful,
 	OpRemoveNetwork:        config.OpsImpactful,
 	OpRemoveVolume:         config.OpsImpactful,
+	OpOpenExec:             config.OpsImpactful,
+	OpEndExec:              config.OpsImpactful,
 }
 
 // Tier is the operations level op requires. An operation missing from the

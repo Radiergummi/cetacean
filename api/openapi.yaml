@@ -68,6 +68,10 @@ tags:
       url: /dashboard
   - name: Tasks
     description: Swarm tasks (enriched with ServiceName and NodeHostname)
+  - name: Exec
+    description: >
+      Shell sessions in running task containers. Every route exists only when
+      `exec.enabled` is set.
   - name: Stacks
     description: Derived stacks (from com.docker.stack.namespace labels)
   - name: Ports
@@ -112,7 +116,7 @@ x-tagGroups:
   - name: Cluster
     tags: [Cluster, Nodes, Plugins]
   - name: Workloads
-    tags: [Services, Tasks, Stacks]
+    tags: [Services, Tasks, Exec, Stacks]
   - name: Resources
     tags: [Configs, Secrets, Networks, Volumes]
   - name: Discovery & Insights
@@ -5151,6 +5155,177 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  /tasks/{id}/exec:
+    get:
+      operationId: listTaskExecSessions
+      tags: [Exec]
+      summary: A task's shell sessions
+      description: |
+        The task's sessions the caller may see: their own, plus every one on a
+        target where they hold `exec`. `Allow` carries `POST` only when a new
+        session would pass every check: operations level 3, an `exec` grant on
+        the task's service, an eligible task, and a transport reaching its node.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated session list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecSessionCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+    post:
+      operationId: createExecSession
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
+      tags: [Exec]
+      summary: Open a shell session
+      description: |
+        Creates a pending session in the task's container. The terminal attaches
+        with a WebSocket upgrade on the `Location` URL within 60 seconds, by the
+        identity that created it; a session nobody attaches to ends.
+      parameters:
+        - $ref: "#/components/parameters/resourceId"
+      responses:
+        "201":
+          description: Session created, waiting to attach
+          headers:
+            Location:
+              description: The session to attach to
+              schema:
+                type: string
+                example: /exec/mfrggzdfmztwq2lk
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ExecSession"
+        "403":
+          description: >
+            The caller holds no `exec` grant on the task's service (ACL003), or
+            is below operations level 3 (OPS001).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            The task cannot take a shell (EXE001), or no transport reaches its
+            node (EXE002).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: >
+            The instance or this identity holds as many sessions as
+            `exec.max_sessions` or `exec.max_sessions_per_identity` allow (EXE003).
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/Retry-After"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /exec:
+    get:
+      operationId: listExecSessions
+      tags: [Exec]
+      summary: List shell sessions
+      description: |
+        Every session the caller may see: their own, plus every one on a target
+        where they hold `exec`. Ended sessions stay listed for five minutes.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: Paginated session list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecSessionCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+
+  /exec/{sid}:
+    get:
+      operationId: getExecSession
+      tags: [Exec]
+      summary: Shell session detail
+      description: |
+        A session the caller may not see answers 404, as one that does not exist.
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "200":
+          description: Session detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Allow:
+              $ref: "#/components/headers/Allow"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DetailEnvelope"
+                  - $ref: "#/components/schemas/ExecSession"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+    delete:
+      operationId: endExecSession
+      x-badges:
+        - name: "operations-level:3"
+          position: after
+          color: red
+      tags: [Exec]
+      summary: End a shell session
+      description: |
+        Ends the session, recording the caller as who ended it. Allowed on the
+        caller's own sessions and on any where they hold `exec` on the target.
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "204":
+          description: Session ended
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ── History ──────────────────────────────────────────────────────────
 
   /history:
@@ -7204,6 +7379,15 @@ components:
   # ── Parameters ───────────────────────────────────────────────────────
 
   parameters:
+    sessionId:
+      name: sid
+      in: path
+      required: true
+      description: Exec session ID
+      schema:
+        type: string
+      example: mfrggzdfmztwq2lk
+
     resourceId:
       name: id
       in: path
@@ -8421,6 +8605,92 @@ components:
             caller may not read; absent for an ingress port, which every node binds
           items:
             type: string
+
+    ExecSessionCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                allOf:
+                  - type: object
+                    properties:
+                      "@id":
+                        type: string
+                      "@type":
+                        type: string
+                  - $ref: "#/components/schemas/ExecSession"
+
+    ExecSession:
+      type: object
+      description: A shell session in a task's container
+      required: [id, owner, target, transport, state, createdAt, bytesIn, bytesOut]
+      properties:
+        id:
+          type: string
+        owner:
+          type: object
+          required: [subject, provider]
+          properties:
+            subject:
+              type: string
+            provider:
+              type: string
+            displayName:
+              type: string
+        target:
+          type: object
+          required: [task, service, serviceName, node, container]
+          properties:
+            task:
+              type: string
+            service:
+              type: string
+            serviceName:
+              type: string
+            stack:
+              type: string
+            node:
+              type: string
+            container:
+              type: string
+        transport:
+          type: string
+          example: local
+        state:
+          type: string
+          enum: [pending, connected, ended]
+        createdAt:
+          type: string
+          format: date-time
+        connectedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          description: Why the session ended, e.g. `exited`, `idle_timeout`, `terminated_by`
+        endedBy:
+          type: string
+          description: The subject that ended the session, when someone did
+        exit:
+          type: object
+          required: [code, outcome]
+          properties:
+            code:
+              type: integer
+              description: The shell's exit code, -1 when it never reported one
+            outcome:
+              type: string
+              enum: [exited, terminated, detached]
+        bytesIn:
+          type: integer
+        bytesOut:
+          type: integer
 
     StackCollection:
       allOf:

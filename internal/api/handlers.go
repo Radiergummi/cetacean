@@ -137,6 +137,11 @@ type Handlers struct {
 	stackDocs    *projectionCache
 
 	versions *cluster.VersionIndex
+
+	// exec is nil unless exec.enabled; execOrigins are the origins besides
+	// the request's own host a terminal WebSocket may be opened from.
+	exec        *ExecDeps
+	execOrigins []string
 }
 
 func NewHandlers(

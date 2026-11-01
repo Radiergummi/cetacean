@@ -93,6 +93,7 @@ one chosen at runtime. Cases within a lane run serially; lanes can run in parall
 | `19026` | The authorization server's opt-in: the configurations the binary refuses, and the mTLS shape that runs without one |
 | `19027` | Conformance: the MCP specification's own requirements against `/mcp`, and the authorization server's metadata document |
 | `19028` | Multi-node: tasks on a worker, reached by the task poll and by event-driven re-lists (runs last, see [below](#the-multi-node-lane)) |
+| `19030` | Exec: shells opened through the real binary, the PID line through a TTY, and what a disconnect leaves running |
 | `19090` | Prometheus (the metrics lane's, published for the host-side SUT) |
 | `19104` | Caddy, mTLS termination |
 

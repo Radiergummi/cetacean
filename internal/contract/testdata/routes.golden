@@ -6,6 +6,7 @@
 /debug/pprof/trace
 /mcp
 DELETE /configs/{id}
+DELETE /exec/{sid}
 DELETE /networks/{id}
 DELETE /nodes/{id}
 DELETE /plugins/{name}
@@ -41,6 +42,8 @@ GET /configs/{id}  Atom HTML JSON JSONFeed SSE
 GET /configs/{id}/labels  HTML JSON
 GET /disk-usage  HTML JSON
 GET /events  Atom HTML JSONFeed SSE
+GET /exec  HTML JSON
+GET /exec/{sid}  HTML JSON
 GET /history  Atom CSV HTML JSON JSONFeed
 GET /index  HTML JSON
 GET /metrics  HTML JSON SSE
@@ -98,6 +101,7 @@ GET /swarm/unlock-key
 GET /tasks  Atom CSV HTML JSON JSONFeed SSE
 GET /tasks/{id}  Atom HTML JSON JSONFeed SSE
 GET /tasks/{id}/dockerfile  HTML
+GET /tasks/{id}/exec  HTML JSON
 GET /tasks/{id}/logs  HTML JSON SSE
 GET /tasks/{id}/provenance
 GET /tasks/{id}/sbom  HTML
@@ -143,6 +147,7 @@ POST /swarm/force-rotate-ca
 POST /swarm/rotate-token
 POST /swarm/rotate-unlock-key
 POST /swarm/unlock
+POST /tasks/{id}/exec
 PUT /nodes/{id}/availability
 PUT /nodes/{id}/role
 PUT /services/{id}/endpoint-mode

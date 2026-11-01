@@ -1,0 +1,38 @@
+source: RFC 6455
+title: The WebSocket Protocol
+reviewed: 2026-11-01
+url: https://www.rfc-editor.org/rfc/rfc6455
+
+inventory:
+  from: >-
+    RFC 6455 §10.2 in full, the origin check the exec terminal makes before it
+    accepts an upgrade. The handshake, framing, masking and closing handshake
+    belong to github.com/coder/websocket and are excluded; the terminal opts
+    out of that library's own origin check only to make this one itself.
+  count: 2
+  sections: ["10.2"]
+
+requirements:
+  - id: servers-verify-the-origin
+    level: SHOULD
+    text: >-
+      Servers that are not intended to process input from any web page but only
+      for certain sites SHOULD verify the |Origin| field is an origin they
+      expect.
+    url: https://www.rfc-editor.org/rfc/rfc6455#section-10.2
+    mutants:
+      - file: internal/api/exec_ws.go
+        replace: "\tif !h.execOriginAllowed(r) {"
+        with: "\tif !h.execOriginAllowed(r) && false {"
+
+  - id: an-unacceptable-origin-gets-403
+    level: SHOULD
+    text: >-
+      If the origin indicated is unacceptable to the server, then it SHOULD
+      respond to the WebSocket handshake with a reply containing HTTP 403
+      Forbidden status code.
+    url: https://www.rfc-editor.org/rfc/rfc6455#section-10.2
+    mutants:
+      - file: internal/api/exec_ws.go
+        replace: "problem.Write(w, r, \"CSR001\", \"this origin may not open a terminal\")"
+        with: "problem.Write(w, r, \"EXE005\", \"this origin may not open a terminal\")"

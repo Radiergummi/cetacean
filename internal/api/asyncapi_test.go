@@ -308,19 +308,8 @@ func TestAsyncAPIIsDiscoverable(t *testing.T) {
 func asyncAPIAddresses(t *testing.T) map[string]string {
 	t.Helper()
 
-	raw, ok := loadAsyncAPIDoc(t)["channels"].(map[string]any)
-	if !ok {
-		t.Fatal("the document declares no channels")
-	}
-
-	addresses := make(map[string]string, len(raw))
-
-	for name, value := range raw {
-		channel, ok := value.(map[string]any)
-		if !ok {
-			t.Fatalf("channel %q is not an object", name)
-		}
-
+	addresses := make(map[string]string)
+	for name, channel := range asyncAPIChannels(t) {
 		address, ok := channel["address"].(string)
 		if !ok {
 			t.Fatalf("channel %q has no address", name)
@@ -330,6 +319,37 @@ func asyncAPIAddresses(t *testing.T) map[string]string {
 	}
 
 	return addresses
+}
+
+// asyncAPIChannels returns every channel object, keyed by channel name.
+func asyncAPIChannels(t *testing.T) map[string]map[string]any {
+	t.Helper()
+
+	raw, ok := loadAsyncAPIDoc(t)["channels"].(map[string]any)
+	if !ok {
+		t.Fatal("the document declares no channels")
+	}
+
+	channels := make(map[string]map[string]any, len(raw))
+
+	for name, value := range raw {
+		channel, ok := value.(map[string]any)
+		if !ok {
+			t.Fatalf("channel %q is not an object", name)
+		}
+
+		channels[name] = channel
+	}
+
+	return channels
+}
+
+// isWebSocketChannel reports a channel opened by an upgrade, not as a stream.
+func isWebSocketChannel(channel map[string]any) bool {
+	bindings, _ := channel["bindings"].(map[string]any)
+	_, ok := bindings["ws"]
+
+	return ok
 }
 
 // TestAsyncAPIChannelsAnswerAsStreams drives every channel address the
@@ -345,7 +365,12 @@ func TestAsyncAPIChannelsAnswerAsStreams(t *testing.T) {
 
 	router, _, _ := streamTestRouter(t, 0, withPromClient(promapi.NewClient(prometheus.URL)))
 
-	for name, address := range asyncAPIAddresses(t) {
+	for name, channel := range asyncAPIChannels(t) {
+		if isWebSocketChannel(channel) {
+			continue
+		}
+
+		address, _ := channel["address"].(string)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 

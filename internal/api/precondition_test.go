@@ -624,6 +624,7 @@ func newSeededTestRouterWithConfig(
 			// The two log routes reach their streamer as soon as the service
 			// or task resolves, and a nil one panics there.
 			withDockerClient(&mockLogStreamer{}),
+			withExec(specExecDeps(t)),
 		}, opts...)...,
 	)
 }

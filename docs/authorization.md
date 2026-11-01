@@ -86,7 +86,7 @@ own terms: Tailscale from the login name, `cert` from the certificate, and `head
 
 ### Permissions
 
-`read` and `write`. `write` implies `read`, so a write grant needs no separate read grant.
+`read`, `write` and `exec`. `write` implies `read`, so a write grant needs no separate read grant.
 
 `read` governs list and detail endpoints, search, history, Atom and JSON feeds, topology,
 [recommendations][recommendations] and SSE streams. `write` governs every mutation. Lists never fail on a missing
@@ -98,6 +98,11 @@ Creating a config or secret needs `write` on the name being created, so `secret:
 inside its own prefix and nowhere else. Installing a plugin needs `write` on `plugin:*`. Attaching a secret, config,
 or network to a service, or mounting a named volume, needs `read` on it as well as `write` on the service, unless
 the service already has it attached.
+
+`exec` opens a shell in a service's containers. It implies `read`, but nothing implies `exec`—not
+`write`, and not the absence of a policy—so a deployment that wants shells grants it by name. A
+shell in a service sees every secret mounted into it, whatever the `secret:` grants say, and a
+shell in a service that mounts the Docker socket controls the whole cluster.
 
 ## Policy configuration
 

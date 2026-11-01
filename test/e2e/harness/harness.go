@@ -6,6 +6,7 @@
 package harness
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -17,8 +18,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 const (
@@ -201,6 +204,34 @@ func (e *Env) SwarmInitCLI() error {
 	}
 
 	return nil
+}
+
+// Exec runs a command in a container on the engine, without a TTY, and
+// returns its stdout.
+func (e *Env) Exec(t *testing.T, containerID string, cmd ...string) string {
+	t.Helper()
+
+	created, err := e.Docker.ContainerExecCreate(t.Context(), containerID, container.ExecOptions{
+		Cmd: cmd, AttachStdout: true, AttachStderr: true,
+	})
+	if err != nil {
+		t.Fatalf("exec create %v: %v", cmd, err)
+	}
+
+	attached, err := e.Docker.ContainerExecAttach(
+		t.Context(), created.ID, container.ExecAttachOptions{},
+	)
+	if err != nil {
+		t.Fatalf("exec attach %v: %v", cmd, err)
+	}
+	defer attached.Close()
+
+	var stdout, stderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, attached.Reader); err != nil {
+		t.Fatalf("exec read %v: %v", cmd, err)
+	}
+
+	return stdout.String()
 }
 
 // repoRoot walks up from this source file to the module root, so the harness

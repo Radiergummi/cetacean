@@ -19,9 +19,13 @@ later.
 
 ## Scope
 
-**v1:** an interactive shell over the local and relay transports, with metadata audit.
+**v1:** an interactive shell over the local transport only, with metadata audit, backend only
+and off by default. A task on any node but the one whose Docker socket Cetacean holds is refused
+(`EXE002`). The dashboard terminal follows in its own change.
 
-**Deferred**, each with the constraints already settled so it does not get redesigned:
+**Next:** the relay transport, which lifts that refusal.
+
+**Deferred** beyond that, each with the constraints already settled so it does not get redesigned:
 
 - **Transcripts.** Output only: asciicast `o` and `r` events, with control keys as markers. No
   printable input, ever. Echoed input is already in the output, so an input stream only adds the
@@ -304,7 +308,7 @@ The WebSocket at `GET /exec/{sid}`:
 - **Text frames,** server → client:
   - `{"type":"status","phase":"scheduling"|"pulling"|"connecting"|"connected"}`
   - `{"type":"exit","code":0,"outcome":"exited"}`, or
-    `{"type":"exit","reason":"idle_timeout"|"max_duration"|"terminated_by"|"revoked","outcome":"…"}`
+    `{"type":"exit","reason":"idle_timeout"|"max_duration"|"terminated_by"|"revoked"|"shutdown","outcome":"…"}`
   - `{"type":"error","code":"no_shell"|"relay_timeout"|"relay_unavailable"|"audit_unavailable"|…,"message":"…"}`
 
 Everything decidable before the session exists (checks, caps, eligibility) fails on the `POST` as

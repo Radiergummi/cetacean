@@ -45,6 +45,7 @@ var Domains = []Domain{
 	{Prefix: "NOD", Label: "Node operations"},
 	{Prefix: "SVC", Label: "Service operations"},
 	{Prefix: "TSK", Label: "Task operations"},
+	{Prefix: "EXE", Label: "Container exec"},
 	{Prefix: "ATT", Label: "Image attestations"},
 	{Prefix: "STK", Label: "Stack operations"},
 	{Prefix: "VOL", Label: "Volume operations"},
@@ -190,6 +191,9 @@ var registry = map[string]Def{
 	"ACL002": {Code: "ACL002", Title: "Write Access Denied", Status: http.StatusForbidden,
 		Description: "You do not have write permission on this resource.",
 		Suggestion:  "Check your ACL policy grants for write permissions."},
+	"ACL003": {Code: "ACL003", Title: "Exec Access Denied", Status: http.StatusForbidden,
+		Description: "You do not hold the exec permission on this task's service.",
+		Suggestion:  "Ask for a grant listing \"exec\"; write does not include it."},
 
 	// ── OPS: operations level ─────────────────────────────────────────
 	"OPS001": {
@@ -613,6 +617,38 @@ var registry = map[string]Def{
 		Description: "The specified task does not exist.",
 		Suggestion:  "Check the task ID and try again. Tasks are ephemeral and may have been cleaned up.",
 	},
+
+	// ── EXE: container exec ───────────────────────────────────────────
+	"EXE001": {
+		Code:        "EXE001",
+		Title:       "Task Not Eligible for Exec",
+		Status:      http.StatusConflict,
+		Description: "The task is not running, its node is not ready and active, or it is Cetacean itself.",
+		Suggestion:  "Pick a running task on an active node.",
+	},
+	"EXE002": {
+		Code:        "EXE002",
+		Title:       "Node Not Reachable for Exec",
+		Status:      http.StatusConflict,
+		Description: "No shell transport reaches the node this task runs on.",
+		Suggestion:  "This release opens shells on the node whose Docker daemon Cetacean talks to.",
+	},
+	"EXE003": {
+		Code:        "EXE003",
+		Title:       "Too Many Exec Sessions",
+		Status:      http.StatusTooManyRequests,
+		Description: "The instance or this identity holds as many shells as exec.max_sessions or exec.max_sessions_per_identity allow.",
+		Suggestion:  "Close a shell, or end one with DELETE /exec/{sid}, and retry.",
+	},
+	"EXE004": {Code: "EXE004", Title: "Not Your Exec Session", Status: http.StatusForbidden,
+		Description: "Only the identity that created a session may attach to it.",
+		Suggestion:  "Open a shell of your own."},
+	"EXE005": {Code: "EXE005", Title: "Exec Session Not Attachable", Status: http.StatusConflict,
+		Description: "The session is already attached, or it has ended.",
+		Suggestion:  "Open a new shell."},
+	"EXE006": {Code: "EXE006", Title: "Exec Session Not Found", Status: http.StatusNotFound,
+		Description: "No exec session with this ID exists, or it is not yours to see.",
+		Suggestion:  "List the sessions you can see at /exec."},
 
 	// ── STK: stack operations ─────────────────────────────────────────
 	"STK001": {

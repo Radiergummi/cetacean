@@ -240,6 +240,10 @@ var pathFixtures = func() map[string]string {
 		"/metrics/labels/{name}": "/metrics/labels/job",
 		"/tokens/{subject}":      "/tokens/alice",
 		"/secret-entries/{id}":   "/secret-entries/none",
+
+		// Session ids are random, so the probe addresses one that does not
+		// exist: it still meets the tier gate before the lookup.
+		"/exec/{sid}": "/exec/sess1",
 	}
 
 	for template, id := range specFixtureIDs {
@@ -420,6 +424,8 @@ var unpreconditionedWriteEndpointChecks = []writeEndpointCheck{
 	{"POST", "/swarm/force-rotate-ca", "/swarm/force-rotate-ca", "", ""},
 	{"POST", "/swarm/unlock", "/swarm/unlock",
 		`{"unlockKey":"SWMKEY-x"}`, "application/json"},
+	{"POST", "/tasks/{id}/exec", "/tasks/task1/exec", "", ""},
+	{"DELETE", "/exec/{sid}", "/exec/sess1", "", ""},
 }
 
 // writeEndpointChecksExcluded lists spec operations the behavioural pass cannot

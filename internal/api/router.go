@@ -296,6 +296,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	h := cfg.Handlers
 	h.refresher = cfg.Refresher
 	h.liveness = cfg.Liveness
+	h.execOrigins = trustedOrigins(cfg.CORS, cfg.PublicURL)
 	if cfg.Broadcaster != nil {
 		cfg.Broadcaster.SetBasePath(cfg.BasePath)
 	}
@@ -310,6 +311,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	rt.nodes()
 	rt.services()
 	rt.tasks()
+	rt.exec()
 	rt.stacks()
 	rt.configs()
 	rt.secrets()
@@ -921,6 +923,40 @@ func (rt routes) tasks() {
 	mux.HandleFunc("GET /tasks/{id}/provenance", h.HandleTaskProvenance)
 	mux.HandleFunc("GET /tasks/{id}/sbom", h.HandleTaskSBOM(spa))
 	mux.HandleFunc("GET /tasks/{id}/dockerfile", h.HandleTaskDockerfile(spa))
+}
+
+// exec registers the shell routes, only once SetExec has run. The write grant
+// does not cover them: each is gated on the exec grant instead.
+func (rt routes) exec() {
+	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
+	if h.exec == nil {
+		return
+	}
+
+	execOp := func(op cluster.Operation, permits func(*http.Request) bool) tieredChain {
+		return tieredChain{
+			gates:   NewChain(h.requireLevel(op.Tier()), attributeWrite),
+			level:   op.Tier(),
+			permits: permits,
+		}
+	}
+
+	mux.HandleFunc(
+		"GET /tasks/{id}/exec",
+		contentNegotiated(h.HandleTaskExec, feedHandlers{}, spa),
+	)
+	mux.Handle("POST /tasks/{id}/exec",
+		execOp(cluster.OpOpenExec, h.mayOpenExec).ThenFunc(h.HandleCreateExecSession))
+	mux.HandleFunc(
+		"GET /exec",
+		contentNegotiated(h.HandleListExecSessions, feedHandlers{}, spa),
+	)
+	mux.HandleFunc("GET /exec/{sid}", h.execSessionEntry(
+		contentNegotiated(h.HandleGetExecSession, feedHandlers{}, spa),
+	))
+	mux.Handle("DELETE /exec/{sid}",
+		execOp(cluster.OpEndExec, h.mayEndExec).AnswersNoContent().
+			ThenFunc(h.HandleDeleteExecSession))
 }
 
 // stacks registers the stack routes.

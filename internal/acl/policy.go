@@ -48,6 +48,7 @@ var validAudienceKinds = map[string]bool{
 var validPermissions = map[string]bool{
 	"read":  true,
 	"write": true,
+	"exec":  true,
 }
 
 // validateGrant checks a single grant for structural errors.

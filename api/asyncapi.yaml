@@ -4,12 +4,15 @@ info:
   title: Cetacean streams
   version: 1.0.0
   description: |
-    Every Server-Sent Events stream Cetacean serves.
+    Every Server-Sent Events stream Cetacean serves, and the exec terminal
+    WebSocket.
 
     A stream is opened by sending `Accept: text/event-stream` to the channel's
     address; the same address answers JSON, HTML and the feed formats under a
     different `Accept`, which is what `/api` describes. This document describes
-    only the streaming representation.
+    only the streaming representation. The terminal is the one exception: it is
+    opened by a WebSocket upgrade of `GET /exec/{sid}`, and is described below
+    under `execSession`.
 
     Three cursor dialects appear below, and all three reach a client as
     `Last-Event-ID`:
@@ -414,6 +417,132 @@ channels:
     x-cetacean-cursor: none
     x-cetacean-replay: none
 
+  execSession:
+    address: /exec/{sid}
+    title: Exec terminal
+    description: |
+      The terminal of one exec session, opened by a WebSocket upgrade of the
+      session's own address. Only the session's owner may attach, and only
+      once: a dropped connection ends the session, and there is no reattach.
+      The upgrade's `Origin` must be the request's own host,
+      `server.public_url` or an entry of `server.cors.origins`.
+
+      Binary frames are terminal bytes in both directions. Text frames are
+      JSON control messages. The server ends every connection with one `exit`
+      or one `error` frame, then closes it.
+    parameters:
+      sid:
+        description: Exec session ID, from the `Location` of `POST /tasks/{id}/exec`.
+    bindings:
+      ws:
+        method: GET
+        bindingVersion: 0.1.0
+    messages:
+      terminal:
+        name: terminal
+        title: Terminal bytes
+        summary: Raw terminal input or output, as a binary frame.
+        description: |
+          A frame from the client may carry at most 64 KiB; a larger one
+          closes the connection, which ends the session. A client splits
+          input, such as a large paste, into frames below that.
+        contentType: application/octet-stream
+        payload:
+          type: string
+          format: binary
+      resize:
+        name: resize
+        title: Resize
+        summary: The client's terminal changed size.
+        payload:
+          type: object
+          required: [type, cols, rows]
+          properties:
+            type:
+              type: string
+              const: resize
+            cols:
+              type: integer
+              minimum: 1
+              maximum: 65535
+            rows:
+              type: integer
+              minimum: 1
+              maximum: 65535
+        examples:
+          - name: aWideTerminal
+            payload: { type: resize, cols: 120, rows: 40 }
+      status:
+        name: status
+        title: Status
+        summary: The shell is being started, then is running.
+        payload:
+          type: object
+          required: [type, phase]
+          properties:
+            type:
+              type: string
+              const: status
+            phase:
+              type: string
+              enum: [connecting, connected]
+        examples:
+          - name: running
+            payload: { type: status, phase: connected }
+      exit:
+        name: exit
+        title: Exit
+        summary: The session ended.
+        description: |
+          `code` is present only when the shell exited on its own, and
+          `reason` only when it did not: `idle_timeout`, `max_duration`,
+          `terminated_by`, `revoked`, `audit_unavailable` or `shutdown`, or
+          `connection_lost` when the connection to the shell was lost while it
+          still ran.
+        payload:
+          type: object
+          required: [type, outcome]
+          properties:
+            type:
+              type: string
+              const: exit
+            code:
+              type: integer
+              description: The shell's exit status.
+            reason:
+              type: string
+              description: Why the session was ended.
+            outcome:
+              type: string
+              enum: [exited, terminated, detached]
+        examples:
+          - name: shellExited
+            payload: { type: exit, code: 0, outcome: exited }
+          - name: endedByAnOperator
+            payload: { type: exit, reason: terminated_by, outcome: terminated }
+      error:
+        name: error
+        title: Error
+        summary: The shell could not be started.
+        description: |
+          `code` is one of `no_shell`, `open_failed`, `start_timeout`,
+          `audit_unavailable` or `not_started`. The session is ended with
+          that reason.
+        payload:
+          type: object
+          required: [type, code, message]
+          properties:
+            type:
+              type: string
+              const: error
+            code:
+              type: string
+            message:
+              type: string
+        examples:
+          - name: noShell
+            payload: { type: error, code: no_shell, message: this container has no /bin/sh }
+
 operations:
   sendNodes:
     action: send
@@ -495,6 +624,22 @@ operations:
     action: send
     channel:
       $ref: "#/channels/metrics"
+  sendExecSession:
+    action: send
+    channel:
+      $ref: "#/channels/execSession"
+    messages:
+      - $ref: "#/channels/execSession/messages/terminal"
+      - $ref: "#/channels/execSession/messages/status"
+      - $ref: "#/channels/execSession/messages/exit"
+      - $ref: "#/channels/execSession/messages/error"
+  receiveExecSession:
+    action: receive
+    channel:
+      $ref: "#/channels/execSession"
+    messages:
+      - $ref: "#/channels/execSession/messages/terminal"
+      - $ref: "#/channels/execSession/messages/resize"
 
 components:
   messages:
