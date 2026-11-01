@@ -114,8 +114,15 @@ func (h *Handlers) HandleGetAnnotation(w http.ResponseWriter, r *http.Request) {
 	}
 	writeAllow(w, offer)
 
-	w.Header().Set("Last-Modified", annotationModified(a).UTC().Format(http.TimeFormat))
-	writeCachedJSONStatusValidated(w, r, http.StatusOK, annotationBody(r, a), annotationETag(a))
+	body, err := json.Marshal(annotationBody(r, a))
+	if err != nil {
+		problem.Write(w, r, "API009", "failed to serialize response")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-cache")
+	writeRenderedJSON(w, r, http.StatusOK,
+		renderedDoc{body: body, etag: annotationETag(a)}, annotationModified(a))
 }
 
 func (h *Handlers) HandleCreateAnnotation(w http.ResponseWriter, r *http.Request) {

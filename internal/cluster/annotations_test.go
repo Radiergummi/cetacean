@@ -234,7 +234,10 @@ func TestAnEditNamingNewResourcesNeedsWriteOnThem(t *testing.T) {
 
 	moved := []cluster.AnnotationRef{ref("service", "web"), ref("node", "worker")}
 	patch := cluster.AnnotationPatch{Resources: &moved}
-	if _, err := s.Update(as("alice"), reader, a.ID, patch, nil); !errors.Is(
+	readsTheNode := cluster.AnnotationCaller{
+		CanRead: grants("service:web", "node:worker"), CanWrite: grants(),
+	}
+	if _, err := s.Update(as("alice"), readsTheNode, a.ID, patch, nil); !errors.Is(
 		err, cluster.ErrAnnotationDenied,
 	) {
 		t.Errorf("author adding a node they cannot write: err = %v, want denied", err)
@@ -334,5 +337,34 @@ func TestAnnotationWritesNeedTheTimeline(t *testing.T) {
 	}
 	if err := s.Delete(as("alice"), everyone, 1, nil); !errors.Is(err, cache.ErrAnnotationsOff) {
 		t.Errorf("delete: err = %v, want annotations off", err)
+	}
+}
+
+func TestAHiddenResourceIsRefusedAsAMissingOneIs(t *testing.T) {
+	s := cluster.NewAnnotations(annotationCache(t))
+	blind := cluster.AnnotationCaller{CanRead: grants(), CanWrite: grants("service:other")}
+
+	_, hidden := s.Create(as("mallory"), blind, onWeb("probe"))
+	_, missing := s.Create(as("mallory"), blind, refs("probe", ref("service", "api")))
+
+	if hidden == nil || missing == nil ||
+		strings.ReplaceAll(hidden.Error(), "web", "api") != missing.Error() {
+		t.Errorf("hidden = %v, missing = %v; want the same refusal", hidden, missing)
+	}
+}
+
+func TestAnEditIsAuthorizedBeforeItsPrecondition(t *testing.T) {
+	s := cluster.NewAnnotations(annotationCache(t))
+
+	a, err := s.Create(as("alice"), everyone, onWeb("x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	text := "y"
+	never := func(cache.Annotation) bool { return false }
+	_, err = s.Update(as("bob"), reader, a.ID, cluster.AnnotationPatch{Text: &text}, never)
+	if !errors.Is(err, cluster.ErrAnnotationDenied) {
+		t.Errorf("a reader with a stale If-Match: err = %v, want denied", err)
 	}
 }

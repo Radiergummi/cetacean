@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/swarm"
 	json "github.com/goccy/go-json"
@@ -338,4 +339,23 @@ func mustParseID(t *testing.T, id string) uint64 {
 	}
 
 	return n
+}
+
+func TestGetAnnotationHonoursIfModifiedSince(t *testing.T) {
+	h := annotationHandlers(t, true)
+	id, _ := createAnnotation(t, h, "alice",
+		`{"text":"x","resources":[{"type":"service","id":"web"}]}`)
+
+	r := newAnnotationRequest("GET", "/annotations/"+id, "alice", "")
+	r.Header.Set("If-Modified-Since", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat))
+
+	w := httptest.NewRecorder()
+	h.HandleGetAnnotation(w, r)
+	if w.Code != http.StatusNotModified || w.Header().Get("Last-Modified") == "" {
+		t.Errorf(
+			"status = %d, Last-Modified = %q; want 304 with the date",
+			w.Code,
+			w.Header().Get("Last-Modified"),
+		)
+	}
 }

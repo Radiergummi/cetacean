@@ -121,7 +121,7 @@ func (s *Annotations) Create(
 		in.Timestamp = time.Now()
 	}
 
-	resources, err := s.resolve(in.Resources, nil)
+	resources, err := s.resolve(in.Resources, nil, c.CanRead)
 	if err != nil {
 		return cache.Annotation{}, err
 	}
@@ -163,7 +163,7 @@ func (s *Annotations) Update(
 			return cache.Annotation{}, err
 		}
 
-		next, err := s.patched(current, patch)
+		next, err := s.patched(c, current, patch)
 		if err != nil {
 			return cache.Annotation{}, err
 		}
@@ -241,18 +241,19 @@ func (s *Annotations) editable(
 		return cache.Annotation{}, err
 	}
 
-	if matches != nil && !matches(current) {
-		return cache.Annotation{}, ErrAnnotationPrecondition
-	}
-
 	if !s.MayEdit(ctx, c, current) {
 		return cache.Annotation{}, ErrAnnotationDenied
+	}
+
+	if matches != nil && !matches(current) {
+		return cache.Annotation{}, ErrAnnotationPrecondition
 	}
 
 	return current, nil
 }
 
 func (s *Annotations) patched(
+	c AnnotationCaller,
 	current cache.Annotation,
 	patch AnnotationPatch,
 ) (cache.Annotation, error) {
@@ -271,7 +272,7 @@ func (s *Annotations) patched(
 		next.Tags = *patch.Tags
 	}
 	if patch.Resources != nil {
-		resources, err := s.resolve(*patch.Resources, current.Resources)
+		resources, err := s.resolve(*patch.Resources, current.Resources, c.CanRead)
 		if err != nil {
 			return cache.Annotation{}, err
 		}
@@ -283,10 +284,12 @@ func (s *Annotations) patched(
 }
 
 // resolve looks each reference up, keeping the record of one already named by
-// kept so an edit can leave a removed resource on the annotation.
+// kept so an edit can leave a removed resource on the annotation. One canRead
+// does not admit is not found, so the refusal does not confirm it exists.
 func (s *Annotations) resolve(
 	refs []AnnotationRef,
 	kept []cache.AnnotationResource,
+	canRead func(string) bool,
 ) ([]cache.AnnotationResource, error) {
 	if len(refs) > MaxAnnotationResources {
 		return nil, invalidAnnotation("resources", "at most %d", MaxAnnotationResources)
@@ -297,7 +300,7 @@ func (s *Annotations) resolve(
 	for i, ref := range refs {
 		field := fmt.Sprintf("resources[%d]", i)
 
-		resource, err := s.resolveOne(ref, kept, field)
+		resource, err := s.resolveOne(ref, kept, canRead, field)
 		if err != nil {
 			return nil, err
 		}
@@ -317,6 +320,7 @@ func (s *Annotations) resolve(
 func (s *Annotations) resolveOne(
 	ref AnnotationRef,
 	kept []cache.AnnotationResource,
+	canRead func(string) bool,
 	field string,
 ) (cache.AnnotationResource, error) {
 	switch cache.EventType(ref.Type) {
@@ -337,11 +341,8 @@ func (s *Annotations) resolveOne(
 		}
 	}
 
-	record, found, err := Lookup(s.cache, ref.Type, ref.ID)
-	if err != nil {
-		return cache.AnnotationResource{}, invalidAnnotation(field+".id", "%v", err)
-	}
-	if !found {
+	record, found, err := LookupAs(s.cache, ref.Type, ref.ID, canRead)
+	if err != nil || !found || !canRead(record.Resource()) {
 		return cache.AnnotationResource{}, invalidAnnotation(
 			field+".id", "%s %q not found", ref.Type, ref.ID,
 		)
