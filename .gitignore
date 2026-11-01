@@ -76,6 +76,8 @@ node_modules/
 cetacean.toml
 .playwright-mcp/
 frontend/test-results/
+website/test-results/
+website/playwright-report/
 
 # Generated locally for an end-to-end run. The certs are real private keys.
 /test/e2e/certs/

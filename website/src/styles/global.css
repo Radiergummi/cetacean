@@ -240,8 +240,14 @@
       @apply my-4;
     }
 
+    /* DocsLayout joins the words inside a link; one longer than the line still
+       breaks, except in a table, which scrolls instead. */
     a {
-      @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors;
+      @apply text-link underline decoration-link/30 underline-offset-2 hover:decoration-link/60 transition-colors wrap-anywhere;
+
+      :is(td, th) & {
+        @apply wrap-normal;
+      }
     }
 
     strong {
@@ -285,8 +291,13 @@
 
     /* region Inline code */
 
+    /* A token longer than the line breaks where it must rather than widen the page. */
     code:not(pre code) {
-      @apply text-sm font-mono font-medium text-code-foreground;
+      @apply text-sm font-mono font-medium text-code-foreground wrap-anywhere box-decoration-clone;
+
+      :is(td, th) & {
+        @apply wrap-normal;
+      }
 
       &:not(a > code) {
         @apply rounded-md px-1.5 py-0.5 bg-code-background;
@@ -572,13 +583,16 @@
 .prose a[href*="api/schema#"]::before,
 .prose a[href*="mcp-tools#"]::before,
 .prose a[href*="api/explorer"]::before {
-  @apply content-[''] inline-block size-[0.95em] align-text-bottom text-muted-foreground bg-current;
+  /* An inline box, not an inline-block, which is a place to break and would
+     strand the icon. The tile spans the box's height because WebKit repeats a
+     mask on an inline box regardless of mask-repeat. */
+  @apply content-[''] text-muted-foreground bg-current;
+  padding-left: 0.95em;
   margin-right: 0.3em;
-  vertical-align: -0.15em;
   mask-image: var(--link-icon);
-  mask-size: contain;
+  mask-size: 0.95em 100%;
   mask-repeat: no-repeat;
-  mask-position: center;
+  mask-position: left center;
 }
 
 /* endregion */

@@ -55,6 +55,7 @@ pnpm --filter frontend exec vitest run
 pnpm --filter website sync-assets       # generates src/data/errors.json; needed before `check` in a clean tree
 pnpm --filter website dev               # Astro on :4321
 pnpm --filter website check             # astro check, covers .astro as well as .ts
+pnpm --filter website test              # layout sweep + tap checks against dist/; WebKit locally only
 ```
 
 Docker: `docker build --build-arg SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) -t cetacean:latest .`

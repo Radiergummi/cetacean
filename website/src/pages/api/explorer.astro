@@ -22,6 +22,11 @@ const {description, title} = generatedPage("/api/explorer");
             height: calc(100% - 24px);
             --scalar-custom-header-height: 4rem;
         }
+
+        /* Scalar draws the "more clients" toggle 18px wide, under the 24px a tap needs. */
+        .scalar-container :global(.client-libraries__select) {
+            min-width: 24px;
+        }
     </style>
 
     <div class="scalar-container" id="main-content"></div>
