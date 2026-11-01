@@ -290,8 +290,10 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 		dockerfile: &attestations.Dockerfile{Lines: []string{"FROM alpine"}},
 	}
 
+	execDeps := specExecDeps(t)
 	h := newTestHandlers(t, withCache(c), withPromClient(promapi.NewClient(prom.URL)),
-		withPluginClient(plugins), withSystemClient(system), withAttestations(attested))
+		withPluginClient(plugins), withSystemClient(system), withAttestations(attested),
+		withExec(execDeps))
 
 	// Seeded, so /-/docker-latest-version answers without calling GitHub.
 	h.dockerVersionCache.version = &DockerLatestVersion{
@@ -313,5 +315,6 @@ func newSpecWalkRouter(t *testing.T, specBytes []byte) (http.Handler, map[string
 	return newTestRouter(t, h, b, specBytes), map[string]string{
 		"/secret-entries/{id}": "/secret-entries/" + entry.ID,
 		"/search":              "/search?q=web",
+		"/exec/{sid}":          "/exec/" + execDeps.Manager.List()[0].ID,
 	}
 }

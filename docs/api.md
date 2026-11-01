@@ -1013,6 +1013,8 @@ passes the per-resource [write grant][authorization] check.
 | `PUT /nodes/{id}/role` | 3 |
 | `DELETE /nodes/{id}` | 3 |
 | `DELETE /tasks/{id}` | 3 |
+| `POST /tasks/{id}/exec` | 3 |
+| `DELETE /exec/{sid}` | 3 |
 | `DELETE /stacks/{name}` | 3 |
 | `POST /configs` | 2 |
 | `PATCH /configs/{id}/labels` | 2 |

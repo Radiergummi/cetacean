@@ -133,6 +133,14 @@ var excusedUncovered = map[string]string{
 	"GET /secret-entries/{id}":         "answers 404 unless an MCP client opened an entry for the caller, which no sweep lane drives; internal/api's TestGetSecretEntry* do",
 	"PUT /services/{id}/endpoint-mode": "mutates through the Docker daemon; covered by the e2e write lane",
 
+	// Exec: registered only once SetExec has run, which world.go never calls,
+	// and a session needs a container the daemon can exec into.
+	"DELETE /exec/{sid}":    "registered only with exec.enabled; covered by internal/api and the e2e exec lane",
+	"GET /exec":             "registered only with exec.enabled; covered by internal/api and the e2e exec lane",
+	"GET /exec/{sid}":       "registered only with exec.enabled; covered by internal/api and the e2e exec lane",
+	"GET /tasks/{id}/exec":  "registered only with exec.enabled; covered by internal/api and the e2e exec lane",
+	"POST /tasks/{id}/exec": "registered only with exec.enabled; covered by internal/api and the e2e exec lane",
+
 	// Genuine gaps: none of the categories above applies.
 	"/debug/pprof/":                       sweepGap,
 	"/debug/pprof/cmdline":                sweepGap,

@@ -17,10 +17,13 @@ const spec = parseYAML(readFileSync(resolve(moduleDir, "../../../api/openapi.yam
   paths: Record<string, Record<string, unknown>>;
 };
 
+// Routed only with exec.enabled, which the demo leaves off.
+const conditionalWrites = new Set(["/tasks/{id}/exec"]);
+
 /** The sub-resources each path template has a write route directly beneath. */
 const writableBelow = new Map<string, string[]>();
 for (const [template, operations] of Object.entries(spec.paths)) {
-  if (!writeMethods.some((method) => method in operations)) {
+  if (conditionalWrites.has(template) || !writeMethods.some((method) => method in operations)) {
     continue;
   }
 

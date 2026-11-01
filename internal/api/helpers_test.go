@@ -38,6 +38,7 @@ type testHandlersConfig struct {
 	aclEval              *acl.Evaluator
 	recEngine            *recommendations.Engine
 	attestations         cluster.AttestationSource
+	exec                 *ExecDeps
 }
 
 type testHandlersOption func(*testHandlersConfig)
@@ -98,6 +99,10 @@ func withRecEngine(e *recommendations.Engine) testHandlersOption {
 	return func(cfg *testHandlersConfig) { cfg.recEngine = e }
 }
 
+func withExec(deps ExecDeps) testHandlersOption {
+	return func(cfg *testHandlersConfig) { cfg.exec = &deps }
+}
+
 // newTestHandlers creates a Handlers instance with sensible test defaults.
 // All dependencies default to nil except cache (empty), ready (closed), and
 // operationsLevel (OpsImpactful). Use option functions to override.
@@ -143,6 +148,10 @@ func newTestHandlers(t testing.TB, opts ...testHandlersOption) *Handlers {
 
 	if cfg.tokenOperationsLevel != nil {
 		handlers.SetTokenOperationsLevel(*cfg.tokenOperationsLevel)
+	}
+
+	if cfg.exec != nil {
+		handlers.SetExec(*cfg.exec)
 	}
 
 	return handlers
@@ -323,7 +332,9 @@ func testRouterConfig(
 func routerPatterns(t testing.TB) []string {
 	t.Helper()
 
-	_, routes := newRouter(testRouterConfig(t, nil, withCache(cache.New(nil))))
+	_, routes := newRouter(testRouterConfig(
+		t, nil, withCache(cache.New(nil)), withExec(specExecDeps(t)),
+	))
 
 	return routes.patterns
 }

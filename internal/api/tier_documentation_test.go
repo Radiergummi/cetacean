@@ -124,6 +124,7 @@ func routersByLevel(t *testing.T) map[config.OperationsLevel]http.Handler {
 			c,
 			withOpsLevel(level),
 			withWriteClient(seededWriteClient()),
+			withExec(specExecDeps(t)),
 		)
 	}
 

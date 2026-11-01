@@ -13,6 +13,7 @@ import (
 
 // exposure is how each transport carries out one shared write: the MCP tool and
 // the REST routes, the latter with their path values filled from the fixture.
+// No tool means REST alone carries the operation.
 type exposure struct {
 	tool   string
 	routes []string
@@ -61,6 +62,10 @@ var operationExposures = map[cluster.Operation]exposure{
 	cluster.OpRemoveSecret:  {"remove_secret", []string{"DELETE /secrets/{id}"}},
 	cluster.OpRemoveNetwork: {"remove_network", []string{"DELETE /networks/{id}"}},
 	cluster.OpRemoveVolume:  {"remove_volume", []string{"DELETE /volumes/{name}"}},
+
+	// REST only, and routed only with exec.enabled, which the world leaves off.
+	cluster.OpOpenExec: {},
+	cluster.OpEndExec:  {},
 }
 
 // Every shared write is refused below its tier and admitted at it, by both
@@ -82,7 +87,7 @@ func TestWriteTiersAgreeAcrossTransports(t *testing.T) {
 		for op, exposed := range operationExposures {
 			admitted := level >= op.Tier()
 
-			if slices.Contains(listed, exposed.tool) != admitted {
+			if exposed.tool != "" && slices.Contains(listed, exposed.tool) != admitted {
 				t.Errorf("level %d: %s listed = %t, want %t",
 					level, exposed.tool, !admitted, admitted)
 			}
