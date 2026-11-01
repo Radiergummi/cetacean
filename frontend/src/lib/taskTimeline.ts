@@ -1,6 +1,6 @@
 import { statusTone } from "./statusColor";
 import { isTerminalTaskState } from "./taskState";
-import type { Task } from "@/api/types";
+import type { RestartPolicy, Task } from "@/api/types";
 
 /** Epoch milliseconds, inclusive at both ends. */
 export interface TimelineWindow {
@@ -30,7 +30,18 @@ export interface TimelineRow {
 
   /** How many tasks the row holds, inside the window or not. */
   count: number;
+
+  unit: TimelineUnit;
+
+  /** The newest task's, which is its service's once an update has rolled out. */
+  restartPolicy: RestartPolicy | undefined;
 }
+
+/**
+ * What Swarm keeps a task history for: a replicated service's slot, or a
+ * global service's node.
+ */
+export type TimelineUnit = "replica" | "node";
 
 /** A replicated service's rows are slots, a global one's nodes. */
 export type TimelineVariant = "service" | "global" | "node";
@@ -39,6 +50,7 @@ interface Group {
   key: string;
   label: string;
   order: [string, number];
+  unit: TimelineUnit;
 }
 
 /**
@@ -53,18 +65,23 @@ function groupOf(task: Task, variant: TimelineVariant): Group {
     const name = task.ServiceName || task.ServiceID.slice(0, 12);
 
     return slot > 0
-      ? { key: `${task.ServiceID}:${slot}`, label: `${name} #${slot}`, order: [name, slot] }
-      : { key: task.ServiceID, label: name, order: [name, 0] };
+      ? {
+          key: `${task.ServiceID}:${slot}`,
+          label: `${name} #${slot}`,
+          order: [name, slot],
+          unit: "replica",
+        }
+      : { key: task.ServiceID, label: name, order: [name, 0], unit: "node" };
   }
 
   if (variant === "service") {
-    return { key: `slot:${slot}`, label: `Replica #${slot}`, order: ["", slot] };
+    return { key: `slot:${slot}`, label: `Replica #${slot}`, order: ["", slot], unit: "replica" };
   }
 
   const nodeID = task.NodeID ?? "";
   const hostname = task.NodeHostname || nodeID.slice(0, 12);
 
-  return { key: `node:${nodeID}`, label: hostname, order: [hostname, 0] };
+  return { key: `node:${nodeID}`, label: hostname, order: [hostname, 0], unit: "node" };
 }
 
 /** Docker's zero time parses to a year-one date, which no task was created at. */
@@ -101,6 +118,19 @@ function barOf(task: Task, now: number): Omit<TimelineBar, "lane"> {
     // A task stopped by an update exits non-zero too; that is no error.
     error: Err || (failed && exitCode ? `exit ${exitCode}` : undefined),
   };
+}
+
+/**
+ * How many tasks Swarm keeps per replica, or per node for a global service; a
+ * negative limit never prunes. A restart policy's attempts override the swarm's.
+ */
+export function retentionLimitOf(
+  clusterLimit: number,
+  restartPolicy: RestartPolicy | undefined,
+): number {
+  const maxAttempts = restartPolicy?.MaxAttempts ?? 0;
+
+  return maxAttempts > 0 ? maxAttempts + 1 : clusterLimit;
 }
 
 function overlaps({ start, end }: { start: number; end: number }, timeWindow: TimelineWindow) {
@@ -146,7 +176,13 @@ export function buildTimeline(
 ): TimelineRow[] {
   const groups = new Map<
     string,
-    Group & { bars: Omit<TimelineBar, "lane">[]; earliest: number; count: number }
+    Group & {
+      bars: Omit<TimelineBar, "lane">[];
+      earliest: number;
+      latest: number;
+      count: number;
+      restartPolicy: RestartPolicy | undefined;
+    }
   >();
 
   for (const task of tasks) {
@@ -155,8 +191,20 @@ export function buildTimeline(
     let existing = groups.get(group.key);
 
     if (!existing) {
-      existing = { ...group, bars: [], earliest: bar.start, count: 0 };
+      existing = {
+        ...group,
+        bars: [],
+        earliest: bar.start,
+        latest: bar.start,
+        count: 0,
+        restartPolicy: task.Spec.RestartPolicy,
+      };
       groups.set(group.key, existing);
+    }
+
+    if (bar.start > existing.latest) {
+      existing.latest = bar.start;
+      existing.restartPolicy = task.Spec.RestartPolicy;
     }
 
     existing.earliest = Math.min(existing.earliest, bar.start);
@@ -172,11 +220,13 @@ export function buildTimeline(
     .sort(({ order: [leftName, leftSlot] }, { order: [rightName, rightSlot] }) =>
       leftName === rightName ? leftSlot - rightSlot : leftName.localeCompare(rightName),
     )
-    .map(({ key, label, bars, earliest, count }) => ({
+    .map(({ key, label, bars, earliest, count, restartPolicy, unit }) => ({
       key,
       label,
       earliest,
       count,
+      restartPolicy,
+      unit,
       ...laneBars(bars),
     }));
 }

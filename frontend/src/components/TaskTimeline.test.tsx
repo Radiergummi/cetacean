@@ -101,6 +101,22 @@ describe("TaskTimeline", () => {
     ).toBeInTheDocument();
   });
 
+  it("hatches by the limit a service's restart policy sets", () => {
+    renderTimeline(
+      [1, 2, 3].map((index) => ({
+        ...makeTask(`task${index}`, 10 - index, "failed"),
+        Spec: { RestartPolicy: { MaxAttempts: 2 } },
+      })),
+      -1,
+    );
+
+    expect(
+      screen.getByRole("img", {
+        name: "Swarm keeps only the newest 3 tasks per replica, so older ones may be missing here.",
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("leaves rows plain where Swarm never prunes", () => {
     renderTimeline(
       [1, 2, 3, 4, 5].map((index) => makeTask(`task${index}`, 10 - index, "failed")),

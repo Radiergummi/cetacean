@@ -1,4 +1,4 @@
-import { buildTimeline, isInWindow } from "./taskTimeline";
+import { buildTimeline, isInWindow, retentionLimitOf } from "./taskTimeline";
 import type { Task } from "@/api/types";
 import { describe, expect, it } from "vitest";
 
@@ -239,6 +239,51 @@ describe("buildTimeline", () => {
     expect(rows.map(({ count }) => count)).toEqual([2, 1]);
   });
 
+  it("counts a global service's history per node, also on a node page", () => {
+    const rows = buildTimeline(
+      [
+        makeTask({ ID: "global", Slot: 0, createdAgo: 10, changedAgo: 9 }),
+        makeTask({
+          ID: "replicated",
+          ServiceID: "service-b",
+          Slot: 2,
+          createdAgo: 10,
+          changedAgo: 9,
+        }),
+      ],
+      "node",
+      timeWindow,
+      now,
+    );
+
+    expect(rows.map(({ unit }) => unit)).toEqual(["node", "replica"]);
+  });
+
+  it("carries the restart policy of each row's newest task", () => {
+    const rows = buildTimeline(
+      [
+        makeTask({
+          ID: "b",
+          createdAgo: 10,
+          changedAgo: 9,
+          Spec: { RestartPolicy: { MaxAttempts: 3 } },
+        }),
+        makeTask({
+          ID: "a",
+          state: "shutdown",
+          createdAgo: 30,
+          changedAgo: 10,
+          Spec: { RestartPolicy: { MaxAttempts: 1 } },
+        }),
+      ],
+      "service",
+      timeWindow,
+      now,
+    );
+
+    expect(rows[0]?.restartPolicy).toEqual({ MaxAttempts: 3 });
+  });
+
   it("gives tasks of one slot that overlap in time a lane each", () => {
     const rows = buildTimeline(
       [
@@ -296,6 +341,28 @@ describe("buildTimeline", () => {
     const rows = buildTimeline([task], "service", timeWindow, now);
 
     expect(rows[0]?.bars[0]?.start).toBe(now - 20 * minute);
+  });
+});
+
+describe("retentionLimitOf", () => {
+  it("keeps the swarm's limit without a restart policy", () => {
+    expect(retentionLimitOf(5, undefined)).toBe(5);
+  });
+
+  it("keeps the swarm's limit when the restart policy sets no attempts", () => {
+    expect(retentionLimitOf(5, { Condition: "any" })).toBe(5);
+  });
+
+  it("keeps a negative limit, which never prunes", () => {
+    expect(retentionLimitOf(-1, undefined)).toBe(-1);
+  });
+
+  it("keeps one more task than the restart policy's attempts", () => {
+    expect(retentionLimitOf(5, { MaxAttempts: 2 })).toBe(3);
+  });
+
+  it("overrides a negative limit with the restart policy's attempts", () => {
+    expect(retentionLimitOf(-1, { MaxAttempts: 9 })).toBe(10);
   });
 });
 
