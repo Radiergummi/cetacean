@@ -68,6 +68,8 @@ type Config struct {
 	ForwardedHeaders  ForwardedHeaders // CETACEAN_FORWARDED_HEADERS
 	MCP               MCPConfig        // [mcp] section / CETACEAN_MCP_* env vars
 	OAuth             OAuthConfig      // [oauth] section / CETACEAN_OAUTH_* env vars
+	Exec              ExecConfig       // [exec] section / CETACEAN_EXEC_* env vars
+	Audit             AuditConfig      // [audit] section / CETACEAN_AUDIT_* env vars
 
 	// OTelEndpoint is the OTLP/HTTP collector to export traces to.
 	// CETACEAN_OTEL_ENDPOINT / [tracing].endpoint; empty disables tracing.
@@ -386,6 +388,20 @@ func Load(fc *fileConfig, flags *Flags) (*Config, error) {
 		return nil, err
 	}
 	cfg.OAuth = oauthCfg
+
+	var (
+		fExec  *fileExec
+		fAudit *fileAudit
+	)
+	if fc != nil {
+		fExec, fAudit = fc.Exec, fc.Audit
+	}
+	if cfg.Exec, err = loadExec(fExec); err != nil {
+		return nil, err
+	}
+	if cfg.Audit, err = loadAudit(fAudit); err != nil {
+		return nil, err
+	}
 
 	trustedProxiesRaw := resolve(
 		flags.TrustedProxies,

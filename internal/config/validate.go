@@ -10,6 +10,10 @@ func Validate(cfg *Config, authCfg AuthConfig, tlsCfg TLSConfig) error {
 		return err
 	}
 
+	if err := cfg.ValidateExec(authCfg.Mode); err != nil {
+		return err
+	}
+
 	if err := ValidateTLS(tlsCfg); err != nil {
 		return fmt.Errorf("TLS configuration error: %w", err)
 	}

@@ -58,6 +58,8 @@ type fileConfig struct {
 	MCP     *fileMCP     `toml:"mcp"`
 	OAuth   *fileOAuth   `toml:"oauth"`
 	Tracing *fileTracing `toml:"tracing"`
+	Exec    *fileExec    `toml:"exec"`
+	Audit   *fileAudit   `toml:"audit"`
 }
 
 // fileTracing mirrors the [tracing] section. An empty endpoint leaves
@@ -212,6 +214,19 @@ type fileAuthHeaders struct {
 	Groups       *string `toml:"groups"`
 	SecretHeader *string `toml:"secret_header"`
 	SecretValue  *string `toml:"secret_value"`
+}
+
+type fileExec struct {
+	Enabled                *bool   `toml:"enabled"`
+	IdleTimeout            *string `toml:"idle_timeout"`
+	MaxDuration            *string `toml:"max_duration"`
+	MaxSessions            *int    `toml:"max_sessions"`
+	MaxSessionsPerIdentity *int    `toml:"max_sessions_per_identity"`
+}
+
+type fileAudit struct {
+	Enabled *bool   `toml:"enabled"`
+	Output  *string `toml:"output"`
 }
 
 type fileACL struct {

@@ -393,6 +393,46 @@ default. When enabled it mounts at `/mcp` and requires an OAuth 2.1 bearer token
 
 See [MCP][mcp] for the tools, resources, prompts, and widgets the server exposes.
 
+## Container exec
+
+Interactive shells in running containers, opened through the API. Off by default. A shell needs
+[operations level][operations-level] 3 and an explicit `exec` grant—see [Authorization][authorization].
+Cetacean refuses to start with exec enabled and `auth.mode = none`. This release reaches containers
+on the node whose Docker daemon Cetacean talks to.
+
+<ConfigParam name="exec.enabled" env="CETACEAN_EXEC" default="false">
+  Allow interactive shells in containers.
+</ConfigParam>
+
+<ConfigParam name="exec.idle_timeout" env="CETACEAN_EXEC_IDLE_TIMEOUT" default="30m">
+  End a shell after this long without input. Output doesn't count: a running `top` is idle.
+</ConfigParam>
+
+<ConfigParam name="exec.max_duration" env="CETACEAN_EXEC_MAX_DURATION" default="4h">
+  End a shell after this long, however busy it is.
+</ConfigParam>
+
+<ConfigParam name="exec.max_sessions" env="CETACEAN_EXEC_MAX_SESSIONS" default="4">
+  Concurrent shells this instance holds.
+</ConfigParam>
+
+<ConfigParam name="exec.max_sessions_per_identity" env="CETACEAN_EXEC_MAX_SESSIONS_PER_IDENTITY" default="2">
+  Concurrent shells one caller may hold.
+</ConfigParam>
+
+## Audit
+
+<ConfigParam name="audit.enabled" env="CETACEAN_AUDIT" default="false">
+  Write a record for every shell opened, ended or refused: who, which container, how it ended.
+</ConfigParam>
+
+<ConfigParam name="audit.output" env="CETACEAN_AUDIT_OUTPUT" default="stdout">
+  `stdout`, or an absolute file path. On `stdout` records are tagged `"log":"audit"` and are part
+  of Cetacean's own service logs, readable by anyone allowed to read that service; delivery is best
+  effort. A file is reopened on `SIGHUP` for rotation, and a shell is refused when its record can't
+  be written.
+</ConfigParam>
+
 ## Recommendation sizing
 
 These tune the resource right-sizing checker, the only [recommendation][recommendations] category
@@ -539,6 +579,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 
 [acl.policy_file]: #acl.policy_file
 [api]: api
+[audit.output]: #audit.output
 [auth.headers.secret_header]: #auth.headers.secret_header
 [auth.mode]: #auth.mode
 [auth.oidc.redirect_url]: #auth.oidc.redirect_url
@@ -553,6 +594,7 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [docker.tls.ca]: #docker.tls.ca
 [docker.tls.cert]: #docker.tls.cert
 [docker.tls.key]: #docker.tls.key
+[exec.enabled]: #exec.enabled
 [interaction-with-operations-level]: authorization#interaction-with-operations-level
 [mcp]: mcp
 [mcp.auth_bypass]: #mcp.auth_bypass
