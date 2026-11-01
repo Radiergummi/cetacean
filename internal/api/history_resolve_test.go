@@ -116,3 +116,34 @@ func TestHandleHistoryKeepsAnIdentifierTheCacheHasForgotten(t *testing.T) {
 		t.Errorf("got %d entries, want 1", len(items))
 	}
 }
+
+// A chart marks the service's own changes; its tasks would fill the pages first.
+func TestHandleHistoryForAServiceWithoutItsTasks(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "shop_flaky"}},
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1"})
+
+	h := newTestHandlers(t, withCache(c))
+	req := httptest.NewRequest("GET", "/history?type=service&resourceId=svc1&tasks=false", nil)
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	items := historyItems(t, w)
+	if len(items) != 1 || items[0].Type != cache.EventService {
+		t.Fatalf("got %+v, want the service's entry alone", items)
+	}
+}
+
+func TestHandleHistoryRejectsAMalformedTasksParameter(t *testing.T) {
+	h := newTestHandlers(t, withCache(cache.New(nil)))
+	req := httptest.NewRequest("GET", "/history?type=service&resourceId=svc1&tasks=maybe", nil)
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", w.Code)
+	}
+}

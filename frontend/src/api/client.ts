@@ -717,12 +717,14 @@ export interface HistoryPage {
 function historyPath(
   params?:
     | {
-        type?: string;
-        resourceId?: string;
-        search?: string;
-        kind?: string;
-        since?: string;
-        limit?: number;
+        type?: string | undefined;
+        resourceId?: string | undefined;
+        search?: string | undefined;
+        kind?: string | undefined;
+        since?: string | undefined;
+        until?: string | undefined;
+        tasks?: boolean | undefined;
+        limit?: number | undefined;
       }
     | undefined,
 ): string {
@@ -746,6 +748,14 @@ function historyPath(
 
   if (params?.since) {
     queryParams.set("since", params.since);
+  }
+
+  if (params?.until) {
+    queryParams.set("until", params.until);
+  }
+
+  if (params?.tasks === false) {
+    queryParams.set("tasks", "false");
   }
 
   if (params?.limit) {
@@ -782,6 +792,48 @@ async function fetchRecentActivity(
   );
 
   return [...changes, ...gaps].sort((first, second) => second.id - first.id);
+}
+
+/**
+ * How many `/history` pages a chart's timeline follows before it stops.
+ */
+const timelinePages = 5;
+
+/**
+ * A resource's own history inside a window, newest first, gaps included. It
+ * stops after `timelinePages` pages and says so in `truncated`.
+ */
+async function fetchTimeline(
+  params: { type: string; resourceId: string; since: string; until?: string | undefined },
+  signal?: AbortSignal | undefined,
+): Promise<{ entries: HistoryEntry[]; truncated: boolean }> {
+  const entries: HistoryEntry[] = [];
+  let path: string | undefined = historyPath({
+    ...params,
+    tasks: false,
+    limit: maximumPageSize,
+  });
+
+  for (let page = 0; path !== undefined && page < timelinePages; page++) {
+    // eslint-disable-next-line no-await-in-loop
+    const { items, next }: HistoryPage = await fetchHistoryPage(path, signal);
+
+    entries.push(...items);
+    path = next;
+  }
+
+  if (path === undefined) {
+    return { entries, truncated: false };
+  }
+
+  // A full last page carries a next link even when nothing is left behind it.
+  const probe = new URL(path, window.location.origin);
+
+  probe.searchParams.set("limit", "1");
+
+  const { items } = await fetchHistoryPage(`${probe.pathname}${probe.search}`, signal);
+
+  return { entries, truncated: items.length > 0 };
 }
 
 /**
@@ -1023,6 +1075,7 @@ export const api = {
     options?: { after?: string | undefined; stream?: string | undefined },
   ) => buildLogStreamURL(`/tasks/${id}/logs`, options),
   recentActivity: fetchRecentActivity,
+  timeline: fetchTimeline,
   historyPath,
   historyPage: fetchHistoryPage,
   topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),

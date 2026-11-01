@@ -274,6 +274,7 @@ export default function NodeDetail() {
         <ErrorBoundary inline>
           <MetricsPanel
             header="Metrics"
+            timeline={{ type: "node", resourceId: node.ID }}
             charts={[
               {
                 title: "CPU Usage",

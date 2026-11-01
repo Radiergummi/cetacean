@@ -162,6 +162,7 @@ export default function ServiceDetail() {
           <MetricsPanel
             header="Metrics"
             charts={detail.metricsCharts}
+            timeline={{ type: "service", resourceId: service.ID }}
           />
         </ErrorBoundary>
       )}

@@ -1,4 +1,5 @@
 import MetricsPanel from "./MetricsPanel";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -14,7 +15,11 @@ vi.mock("./TimeSeriesChart", () => ({
 }));
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <MemoryRouter>{children}</MemoryRouter>;
+  return (
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 describe("MetricsPanel", () => {

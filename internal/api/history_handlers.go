@@ -65,9 +65,17 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		Visible:      h.readableHistory(r),
 	}
 
+	includeTasks := true
+	if value := q.Get("tasks"); value != "" {
+		if includeTasks, err = strconv.ParseBool(value); err != nil {
+			problem.Write(w, r, "API016", "tasks must be true or false")
+			return
+		}
+	}
+
 	// The type names what resourceId is, and a service's timeline holds its
-	// tasks' entries too.
-	if query.Type == cache.EventService && resourceID != "" {
+	// tasks' entries too, unless the caller turns that off.
+	if includeTasks && query.Type == cache.EventService && resourceID != "" {
 		query.Type = ""
 		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
 	}

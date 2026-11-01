@@ -5185,6 +5185,15 @@ paths:
           schema:
             type: string
           example: r8m2x5nk3p7q
+        - name: tasks
+          in: query
+          description: |
+            With `false`, a service's timeline leaves out its tasks' entries.
+            Has no effect unless `type=service` and `resourceId` are set.
+          schema:
+            type: boolean
+            default: true
+          example: false
         - $ref: "#/components/parameters/search"
         - name: kind
           in: query

@@ -73,3 +73,10 @@ export function getSemanticChartColor(name: string): string {
 
   return value;
 }
+
+/**
+ * Drops the cached semantic colors, which differ between the themes.
+ */
+export function forgetSemanticChartColors(): void {
+  semanticCache.clear();
+}

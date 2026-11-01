@@ -295,6 +295,7 @@ export default function TaskDetail() {
         <ErrorBoundary inline>
           <MetricsPanel
             header="Task Metrics"
+            timeline={{ type: "task", resourceId: task.ID }}
             charts={[
               {
                 title: "CPU Usage",
