@@ -1,6 +1,12 @@
 import type { ViewMode } from "../hooks/useViewMode";
 import { SearchInput } from "./search";
-import ViewToggle from "./ViewToggle";
+import ViewToggle, { type View } from "./ViewToggle";
+import { LayoutGrid, TableProperties } from "lucide-react";
+
+const listViews: View<ViewMode>[] = [
+  { value: "table", label: "Table view", icon: <TableProperties className="size-4" /> },
+  { value: "grid", label: "Grid view", icon: <LayoutGrid className="size-4" /> },
+];
 
 interface Props {
   search: string;
@@ -25,10 +31,12 @@ export default function ListToolbar({
         placeholder={placeholder}
       />
       {viewMode != null && onViewModeChange && (
-        <div className="hidden md:block">
+        <div className="hidden md:flex">
           <ViewToggle
-            mode={viewMode}
+            views={listViews}
+            value={viewMode}
             onChange={onViewModeChange}
+            className="h-auto"
           />
         </div>
       )}

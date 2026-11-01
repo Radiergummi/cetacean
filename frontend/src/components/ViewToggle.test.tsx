@@ -1,12 +1,18 @@
-import ViewToggle from "./ViewToggle";
+import ViewToggle, { type View } from "./ViewToggle";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
+
+const views: View<string>[] = [
+  { value: "table", label: "Table view", icon: <span /> },
+  { value: "grid", label: "Grid view", icon: <span /> },
+];
 
 describe("ViewToggle", () => {
   it("renders table and grid buttons", () => {
     render(
       <ViewToggle
-        mode="table"
+        views={views}
+        value="table"
         onChange={vi.fn<(mode: string) => void>()}
       />,
     );
@@ -18,7 +24,8 @@ describe("ViewToggle", () => {
     const onChange = vi.fn<(mode: string) => void>();
     render(
       <ViewToggle
-        mode="table"
+        views={views}
+        value="table"
         onChange={onChange}
       />,
     );
@@ -30,7 +37,8 @@ describe("ViewToggle", () => {
     const onChange = vi.fn<(mode: string) => void>();
     render(
       <ViewToggle
-        mode="grid"
+        views={views}
+        value="grid"
         onChange={onChange}
       />,
     );
@@ -41,7 +49,8 @@ describe("ViewToggle", () => {
   it("highlights active mode", () => {
     render(
       <ViewToggle
-        mode="table"
+        views={views}
+        value="table"
         onChange={vi.fn<(mode: string) => void>()}
       />,
     );

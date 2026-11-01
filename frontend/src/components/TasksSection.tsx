@@ -5,23 +5,28 @@ import { SectionToggle, useSectionCollapse } from "./CollapsibleSection";
 import TimeRangeControl from "./metrics/TimeRangeControl";
 import { rangeSeconds } from "./metrics/useMetricsSeries";
 import { useTimeRange } from "./metrics/useTimeRange";
-import SegmentedControl, { type Segment } from "./SegmentedControl";
 import TasksTable from "./TasksTable";
 import TaskStateFilter from "./TaskStateFilter";
 import TaskTimeline from "./TaskTimeline";
+import ViewToggle, { type View } from "./ViewToggle";
 import { api } from "@/api/client";
 import { isInWindow, type TimelineVariant, type TimelineWindow } from "@/lib/taskTimeline";
 import { useQuery } from "@tanstack/react-query";
-import { ChartGantt, List } from "lucide-react";
+import { ChartNoAxesGantt, TableProperties } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type TaskView = "list" | "timeline";
 
-const viewSegments: Segment<TaskView>[] = [
-  { value: "list", label: "List", icon: <List className="size-3.5" /> },
-  { value: "timeline", label: "Timeline", icon: <ChartGantt className="size-3.5" /> },
+const taskViews: View<TaskView>[] = [
+  { value: "list", label: "List", icon: <TableProperties className="size-4" /> },
+  { value: "timeline", label: "Timeline", icon: <ChartNoAxesGantt className="size-4" /> },
 ];
+
+/**
+ * The section keeps its own range in the URL, apart from the charts'.
+ */
+const rangeScope = "task";
 
 /**
  * Swarm's own default, used while the swarm's setting is unknown or unset.
@@ -68,10 +73,11 @@ function OpenTasks({
   variant: TimelineVariant;
   metrics: Record<string, TaskMetricsData> | undefined;
   view: TaskView;
-  onViewChange: (view: string) => void;
+  onViewChange: (view: TaskView) => void;
   header: (controls: ReactNode) => ReactNode;
 }) {
-  const { range, customFrom, customTo } = useTimeRange();
+  const { range, customFrom, customTo, setCustomRange, clearCustomRange } =
+    useTimeRange(rangeScope);
   const now = useNow(30_000);
   const [stateFilter, setStateFilter] = useState<string | null>(null);
   const timeWindow = useMemo<TimelineWindow>(
@@ -103,9 +109,9 @@ function OpenTasks({
               onChange={setStateFilter}
             />
           )}
-          <TimeRangeControl />
-          <SegmentedControl
-            segments={viewSegments}
+          <TimeRangeControl scope={rangeScope} />
+          <ViewToggle
+            views={taskViews}
             value={view}
             onChange={onViewChange}
           />
@@ -121,6 +127,9 @@ function OpenTasks({
           retentionLimit={
             swarm?.data.swarm.Spec.Orchestration.TaskHistoryRetentionLimit ?? defaultRetentionLimit
           }
+          isCustomRange={customFrom != null && customTo != null}
+          onZoom={setCustomRange}
+          onResetZoom={clearCustomRange}
         />
       ) : (
         <TasksTable

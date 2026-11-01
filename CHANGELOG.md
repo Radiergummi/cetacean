@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
 - The metric charts on service, node and task pages mark each change, naming who made it, and shade the stretches Cetacean wasn't watching
 - `GET /history?tasks=false` leaves a service's task entries out of its timeline
-- The **Tasks** section on service and node pages follows the charts' time range and switches to a timeline: each replica's tasks as bars showing their ID, in their state's color; drag across it to zoom
+- The **Tasks** section on service and node pages has its own time range and switches to a timeline: each replica's tasks as bars showing their ID, in their state's color; drag across it to zoom
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
 - A published ports page at `/ports` (`g` `o`, or from the networks list) lists every port the services publish, with the service, stack and publish mode; `GET /ports` and the MCP tool `get_published_ports` serve the same list

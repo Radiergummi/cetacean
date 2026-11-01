@@ -5,13 +5,16 @@ const maxEpochSeconds = 8.64e12;
 
 /**
  * The time range in the URL: a named `range`, or `from`/`to` in epoch seconds.
- * Every panel on a page reads it from here, so their windows line up.
+ * A `scope` keeps a section's range apart: "task" reads `taskRange` and so on.
  */
-export function useTimeRange() {
+export function useTimeRange(scope?: string | undefined) {
   const [params, setParams] = useSearchParams();
-  const range = params.get("range") ?? "1h";
-  const fromParam = params.get("from");
-  const toParam = params.get("to");
+  const rangeKey = scope ? `${scope}Range` : "range";
+  const fromKey = scope ? `${scope}From` : "from";
+  const toKey = scope ? `${scope}To` : "to";
+  const range = params.get(rangeKey) ?? "1h";
+  const fromParam = params.get(fromKey);
+  const toParam = params.get(toKey);
   // A window that is not one — unparseable, empty, reversed, or past what a
   // Date holds — is no custom range at all, rather than a crash downstream.
   const from = fromParam ? Number(fromParam) : Number.NaN;
@@ -27,20 +30,20 @@ export function useTimeRange() {
           const next = new URLSearchParams(previous);
 
           if (value === "1h") {
-            next.delete("range");
+            next.delete(rangeKey);
           } else {
-            next.set("range", value);
+            next.set(rangeKey, value);
           }
 
-          next.delete("from");
-          next.delete("to");
+          next.delete(fromKey);
+          next.delete(toKey);
 
           return next;
         },
         { replace: true },
       );
     },
-    [setParams],
+    [setParams, rangeKey, fromKey, toKey],
   );
 
   const setCustomRange = useCallback(
@@ -49,16 +52,16 @@ export function useTimeRange() {
         (previous) => {
           const next = new URLSearchParams(previous);
 
-          next.set("from", String(Math.floor(from)));
-          next.set("to", String(Math.floor(to)));
-          next.delete("range");
+          next.set(fromKey, String(Math.floor(from)));
+          next.set(toKey, String(Math.floor(to)));
+          next.delete(rangeKey);
 
           return next;
         },
         { replace: true },
       );
     },
-    [setParams],
+    [setParams, rangeKey, fromKey, toKey],
   );
 
   const clearCustomRange = useCallback(() => {
@@ -66,14 +69,14 @@ export function useTimeRange() {
       (previous) => {
         const next = new URLSearchParams(previous);
 
-        next.delete("from");
-        next.delete("to");
+        next.delete(fromKey);
+        next.delete(toKey);
 
         return next;
       },
       { replace: true },
     );
-  }, [setParams]);
+  }, [setParams, fromKey, toKey]);
 
   return { range, customFrom, customTo, setRange, setCustomRange, clearCustomRange };
 }

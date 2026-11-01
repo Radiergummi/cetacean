@@ -75,6 +75,14 @@ describe("TasksSection", () => {
     expect(screen.getAllByText("exit 1")).toHaveLength(1);
   });
 
+  it("keeps its time range apart from the charts' range", () => {
+    renderSection([makeTask("old", "failed", 120)], "/?range=24h");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all tasks" }));
+
+    expect(screen.queryByText("exit 1")).toBeNull();
+  });
+
   it("switches to the timeline through the URL and drops the state filter", () => {
     renderSection([makeTask("t1", "failed", 5)]);
 

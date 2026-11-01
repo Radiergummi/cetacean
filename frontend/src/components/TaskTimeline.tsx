@@ -1,5 +1,4 @@
 import type { Task } from "@/api/types";
-import { useTimeRange } from "@/components/metrics/useTimeRange";
 import TaskStatusBadge from "@/components/TaskStatusBadge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDateTime, formatDuration } from "@/lib/format";
@@ -135,15 +134,20 @@ export default function TaskTimeline({
   timeWindow,
   now,
   retentionLimit,
+  isCustomRange,
+  onZoom,
+  onResetZoom,
 }: {
   tasks: Task[];
   variant: TimelineVariant;
   timeWindow: TimelineWindow;
   now: number;
   retentionLimit: number;
+  isCustomRange: boolean;
+  /** Takes epoch seconds, as the URL range does. */
+  onZoom: (from: number, to: number) => void;
+  onResetZoom: () => void;
 }) {
-  const { customFrom, customTo, setCustomRange, clearCustomRange } = useTimeRange();
-  const isCustomRange = customFrom != null && customTo != null;
   const rows = useMemo(
     () => buildTimeline(tasks, variant, timeWindow, now),
     [tasks, variant, timeWindow, now],
@@ -197,7 +201,7 @@ export default function TaskTimeline({
       timeWindow.start + ((x - selection.trackLeft) / selection.trackWidth) * span;
 
     suppressClickRef.current = true;
-    setCustomRange(
+    onZoom(
       timeAt(Math.min(selection.from, selection.to)) / 1000,
       timeAt(Math.max(selection.from, selection.to)) / 1000,
     );
@@ -216,7 +220,7 @@ export default function TaskTimeline({
       }}
       onDoubleClick={() => {
         if (isCustomRange) {
-          clearCustomRange();
+          onResetZoom();
         }
       }}
     >

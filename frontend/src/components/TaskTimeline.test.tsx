@@ -1,7 +1,7 @@
 import TaskTimeline from "./TaskTimeline";
 import type { Task } from "@/api/types";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const minute = 60_000;
@@ -30,13 +30,7 @@ function makeTask(id: string, createdAgo: number, state = "running"): Task {
   };
 }
 
-function LocationProbe() {
-  return <output aria-label="location">{useLocation().search}</output>;
-}
-
-function currentParams() {
-  return new URLSearchParams(screen.getByRole("status", { name: "location" }).textContent ?? "");
-}
+const onZoom = vi.fn<(from: number, to: number) => void>();
 
 function renderTimeline(tasks: Task[], retentionLimit = 5) {
   return render(
@@ -47,8 +41,10 @@ function renderTimeline(tasks: Task[], retentionLimit = 5) {
         timeWindow={timeWindow}
         now={now}
         retentionLimit={retentionLimit}
+        isCustomRange={false}
+        onZoom={onZoom}
+        onResetZoom={vi.fn<() => void>()}
       />
-      <LocationProbe />
     </MemoryRouter>,
   );
 }
@@ -109,9 +105,6 @@ describe("TaskTimeline", () => {
     fireEvent.pointerMove(track, { clientX: 450 });
     fireEvent.pointerUp(track);
 
-    const params = currentParams();
-
-    expect(Number(params.get("from")) * 1000).toBe(now - 30 * minute);
-    expect(Number(params.get("to")) * 1000).toBe(now - 15 * minute);
+    expect(onZoom).toHaveBeenCalledWith((now - 30 * minute) / 1000, (now - 15 * minute) / 1000);
   });
 });

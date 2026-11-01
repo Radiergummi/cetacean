@@ -48,6 +48,7 @@ export default function SegmentedControl<T extends string>({
   overflowName = "More options",
   overflowActive,
   overflowContent,
+  className,
 }: {
   segments: Segment<T>[];
   value: T;
@@ -64,6 +65,8 @@ export default function SegmentedControl<T extends string>({
   overflowActive?: boolean | undefined;
   /** Custom popover content. Receives a `close` callback. When provided, the overflow button is always shown. */
   overflowContent?: ((close: () => void) => ReactNode) | undefined;
+  /** Merged into the frame, as for a height that matches its neighbours. */
+  className?: string | undefined;
 }) {
   const actionsRef = useRef<Menu.Root.Actions>(null);
 
@@ -79,8 +82,9 @@ export default function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-md bg-card px-0.5 ring-1 ring-input ring-inset",
+        "inline-flex items-stretch gap-0.5 rounded-md bg-card p-0.5 ring-1 ring-input ring-inset",
         scale.frame,
+        className,
       )}
     >
       <ToggleGroup
@@ -90,7 +94,7 @@ export default function SegmentedControl<T extends string>({
             onChange(values[0] as T);
           }
         }}
-        className="flex items-center gap-0.5"
+        className="flex items-stretch gap-0.5"
       >
         {visible.map(({ badge, disabled, icon, label, value: segmentValue }) => (
           <Toggle

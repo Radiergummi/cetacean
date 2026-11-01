@@ -35,9 +35,9 @@ const quickPresets = [
  * The time range presets and a custom from/to picker, reading and writing the
  * range in the URL that every panel on the page shares.
  */
-export default function TimeRangeControl() {
+export default function TimeRangeControl({ scope }: { scope?: string | undefined }) {
   const { range, customFrom, customTo, setRange, setCustomRange, clearCustomRange } =
-    useTimeRange();
+    useTimeRange(scope);
   const isCustomRange = customFrom != null && customTo != null;
   const [startInput, setStartInput] = useState("");
   const [endInput, setEndInput] = useState("");
