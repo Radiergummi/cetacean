@@ -223,6 +223,7 @@ export interface Task {
     ContainerSpec?: {
       Image?: string | undefined;
     } | null;
+    RestartPolicy?: RestartPolicy | undefined;
   };
   NetworksAttachments?: { Network: { ID: string } }[] | undefined;
 }
@@ -886,6 +887,7 @@ export type PortConfig = NonNullable<
 >;
 export type UpdateConfig = NonNullable<Service["Spec"]["UpdateConfig"]>;
 export type LogDriver = NonNullable<TaskTemplate["LogDriver"]>;
+export type RestartPolicy = NonNullable<TaskTemplate["RestartPolicy"]>;
 
 export interface ContainerConfig {
   command?: string[] | null | undefined;

@@ -5,7 +5,9 @@ import { formatDateTime, formatDuration } from "@/lib/format";
 import { statusColor } from "@/lib/statusColor";
 import {
   buildTimeline,
+  retentionLimitOf,
   type TimelineBar,
+  type TimelineUnit,
   type TimelineVariant,
   type TimelineWindow,
 } from "@/lib/taskTimeline";
@@ -110,9 +112,7 @@ const Bar = memo(function Bar({
   );
 });
 
-function prunedNote(variant: TimelineVariant, limit: number): string {
-  const unit = variant === "global" ? "node" : "replica";
-
+function prunedNote(unit: TimelineUnit, limit: number): string {
   return `Swarm keeps only the newest ${limit} tasks per ${unit}, so older ones may be missing here.`;
 }
 
@@ -143,6 +143,7 @@ export default function TaskTimeline({
   variant: TimelineVariant;
   timeWindow: TimelineWindow;
   now: number;
+  /** The swarm's, before a service's restart policy overrides it. */
   retentionLimit: number;
   isCustomRange: boolean;
   /** Takes whole epoch seconds, as the URL range does. */
@@ -156,7 +157,6 @@ export default function TaskTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const note = prunedNote(variant, retentionLimit);
 
   const offsetX = (clientX: number) =>
     clientX - (containerRef.current?.getBoundingClientRect().left ?? 0);
@@ -248,9 +248,11 @@ export default function TaskTimeline({
         </p>
       )}
 
-      {rows.map(({ key, label, bars, lanes, earliest, count }) => {
+      {rows.map(({ key, label, bars, lanes, earliest, count, restartPolicy, unit }) => {
+        const limit = retentionLimitOf(retentionLimit, restartPolicy);
+        const note = prunedNote(unit, limit);
         const pruned =
-          retentionLimit >= 0 && count >= retentionLimit && earliest > timeWindow.start
+          limit >= 0 && count >= limit && earliest > timeWindow.start
             ? percentOf(earliest, timeWindow)
             : 0;
 
