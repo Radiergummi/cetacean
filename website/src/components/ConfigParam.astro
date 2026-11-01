@@ -17,6 +17,9 @@ const lastDot = name.lastIndexOf(".");
 const prefix = lastDot === -1 ? "" : name.slice(0, lastDot + 1);
 const leaf = lastDot === -1 ? name : name.slice(lastDot + 1);
 
+/** Break opportunities after each separator, so a long name wraps at a word. */
+const breakable = (value: string) => value.split(/(?<=[._])/);
+
 const facts: { label: string; value: string }[] = [];
 
 if (flag) {
@@ -39,7 +42,7 @@ if (defaultValue !== undefined) {
     anchor
 >
     <Fragment slot="heading">
-        <code>{prefix && <span class="font-normal text-muted-foreground">{prefix}</span>}{leaf}</code>
+        <code>{prefix && <span class="font-normal text-muted-foreground">{breakable(prefix).map((part) => <>{part}<wbr /></>)}</span>}{breakable(leaf).map((part, index) => <>{index > 0 && <wbr />}{part}</>)}</code>
         {required && <Badge tone="accent">required</Badge>}
         {deprecated && <Badge tone="muted">deprecated</Badge>}
     </Fragment>
@@ -54,7 +57,7 @@ if (defaultValue !== undefined) {
             {facts.map(({label, value}) => (
                 <li class="inline-flex items-baseline gap-1.5 m-0">
                     <span class="font-medium text-muted-foreground">{label}</span>
-                    <code>{value}</code>
+                    <code>{breakable(value).map((part, index) => <>{index > 0 && <wbr />}{part}</>)}</code>
                 </li>
             ))}
         </ul>

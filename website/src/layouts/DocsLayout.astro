@@ -93,7 +93,7 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : undefined;
 
     <script is:inline>
         const copyClass =
-            "cursor-pointer px-1 py-0.25 text-2xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground select-none";
+            "inline-flex min-h-6 items-center cursor-pointer px-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground select-none";
 
         function copyWithFeedback(button, text) {
             navigator.clipboard.writeText(text).then(() => {
@@ -125,6 +125,33 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : undefined;
                     }
                 });
 
+            // A link is one target: it moves to the next line whole instead of
+            // splitting between its words. One longer than the line still breaks.
+            document
+                .querySelectorAll(".prose a:not([data-initialized])")
+                .forEach((link) => {
+                    link.setAttribute("data-initialized", "");
+
+                    const walker = document.createTreeWalker(link, NodeFilter.SHOW_TEXT);
+                    const nodes = [];
+
+                    while (walker.nextNode()) {
+                        nodes.push(walker.currentNode);
+                    }
+
+                    // Whitespace at either end stays collapsible, as markup indents it.
+                    nodes.forEach((node, index) => {
+                        node.nodeValue = node.nodeValue
+                            .replace(/\s+/g, (match, offset, value) =>
+                                (index === 0 && offset === 0) ||
+                                (index === nodes.length - 1 && offset + match.length === value.length)
+                                    ? match
+                                    : "\u00a0",
+                            )
+                            .replaceAll("-", "-\u2060");
+                    });
+                });
+
             document
                 .querySelectorAll(".prose table:not([data-initialized])")
                 .forEach((table) => {
@@ -146,8 +173,9 @@ const editUrl = sourcePath ? `${repoUrl}/edit/main/${sourcePath}` : undefined;
                         return;
                     }
 
+                    // The button sits above the first line, not over it.
                     const wrapper = document.createElement("div");
-                    wrapper.className = "relative";
+                    wrapper.className = "relative [&>pre]:pt-9";
 
                     pre.parentNode.insertBefore(wrapper, pre);
                     wrapper.appendChild(pre);

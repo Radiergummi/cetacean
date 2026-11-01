@@ -17,7 +17,9 @@
     "check": "astro check",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "test": "playwright test",
+    "audit-layout": "node e2e/audit-page.ts"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.4",
@@ -43,6 +45,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@playwright/test": "^1.64.1",
     "@types/unist": "^3.0.3",
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",

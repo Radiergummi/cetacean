@@ -234,6 +234,15 @@ jobs:
           name: website-dist
           path: website/dist
           retention-days: 7
+      # The layout sweep and interaction checks, Chromium only; WebKit runs locally.
+      - run: pnpm --filter website exec playwright install --with-deps chromium
+      - run: pnpm --filter website test
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: website-playwright-report
+          path: website/playwright-report
+          retention-days: 7
 
   test-frontend:
     runs-on: ubuntu-latest
