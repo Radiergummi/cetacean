@@ -22,22 +22,20 @@ export type ActivityRow =
   | { kind: "gap"; gaps: HistoryEntry[] };
 
 /**
- * Whether two changes share a row: the same type, name and actor, whatever the
- * action. A replica restarting in place keeps its name, so its churn folds.
+ * What decides whether two changes share a row: the same type, name and actor,
+ * whatever the action. A replica restarting in place keeps its name, so its
+ * churn folds.
  */
-function repeats(previous: HistoryEntry, entry: HistoryEntry): boolean {
-  const { actor: previousActor } = previous;
-  const { actor } = entry;
-
-  return (
-    previous.type === entry.type &&
-    previous.name === entry.name &&
-    previousActor?.subject === actor?.subject &&
-    previousActor?.name === actor?.name &&
-    previousActor?.provider === actor?.provider &&
-    previousActor?.client === actor?.client &&
-    previousActor?.transport === actor?.transport
-  );
+export function runSignature({ actor, name, type }: HistoryEntry): string {
+  return JSON.stringify([
+    type,
+    name,
+    actor?.subject,
+    actor?.name,
+    actor?.provider,
+    actor?.client,
+    actor?.transport,
+  ]);
 }
 
 /**
@@ -75,7 +73,7 @@ export function activityRows(entries: HistoryEntry[], collapse: boolean): Activi
       collapse &&
       run.length === 0 &&
       last?.kind === "change" &&
-      repeats(last.entries[0], entry)
+      runSignature(last.entries[0]) === runSignature(entry)
     ) {
       last.entries.push(entry);
 

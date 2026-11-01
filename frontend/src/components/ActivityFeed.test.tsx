@@ -271,6 +271,24 @@ describe("ActivityFeed runs", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 
+  it("keeps an open run open as changes join it and fall off its end", () => {
+    const { rerender } = renderFeed([update(3), update(2), update(1)]);
+
+    fireEvent.click(screen.getByRole("button", { name: "3 changes" }));
+
+    rerender(
+      <MemoryRouter>
+        <ActivityFeed entries={[update(4), update(3), update(2)]} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "3 changes" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
   it("folds a slot's restarts and links each to its own task", () => {
     renderFeed([update(2, { resourceId: "task-new" }), update(1, { resourceId: "task-old" })]);
 

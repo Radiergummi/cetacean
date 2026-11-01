@@ -1,12 +1,12 @@
 import type { HistoryEntry } from "../api/types";
-import { activityRows, attribution } from "../lib/activity";
+import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { describeGap } from "../lib/timeline";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { ChevronRight } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -106,7 +106,8 @@ function ChangeRun({
   hideType?: boolean | undefined;
 }) {
   const [open, setOpen] = useState(false);
-  const [{ action, actor, id, name, resourceId, timestamp, type }] = entries;
+  const runId = useId();
+  const [{ action, actor, name, resourceId, timestamp, type }] = entries;
   const path = resourcePath(type, resourceId, name);
 
   return (
@@ -142,7 +143,7 @@ function ChangeRun({
             <button
               type="button"
               aria-expanded={open}
-              aria-controls={`activity-run-${id}`}
+              aria-controls={runId}
               onClick={() => setOpen(!open)}
               className="flex items-center gap-0.5 rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-muted"
             >
@@ -168,7 +169,7 @@ function ChangeRun({
 
       {open && (
         <ul
-          id={`activity-run-${id}`}
+          id={runId}
           className="ms-6 border-l ps-3"
         >
           {entries.map((entry) => {
@@ -232,6 +233,7 @@ export default function ActivityFeed({
   }
 
   const rows = activityRows(entries, collapse);
+  const runsSeen = new Map<string, number>();
 
   if (rows.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
@@ -251,9 +253,16 @@ export default function ActivityFeed({
           );
         }
 
+        // Changes join a run at its newest end and fall off its oldest, so its
+        // key counts runs alike from the newest: an open run stays open.
+        const signature = runSignature(row.entries[0]);
+        const occurrence = runsSeen.get(signature) ?? 0;
+
+        runsSeen.set(signature, occurrence + 1);
+
         return (
           <ChangeRun
-            key={row.entries[0].id}
+            key={`run-${occurrence}-${signature}`}
             entries={row.entries}
             hideType={hideType}
           />

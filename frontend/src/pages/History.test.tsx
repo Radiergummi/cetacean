@@ -65,7 +65,7 @@ describe("History", () => {
     renderPage();
 
     expect(await screen.findAllByText("web")).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /^×/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /changes$/ })).not.toBeInTheDocument();
   });
 
   it("filters by type on the server", async () => {
