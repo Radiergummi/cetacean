@@ -1,9 +1,5 @@
 import type { Task } from "@/api/types";
-import CollapsibleSection from "@/components/CollapsibleSection";
-import { rangeSegments } from "@/components/metrics/MetricsPanelContext";
-import { rangeSeconds } from "@/components/metrics/useMetricsSeries";
 import { useTimeRange } from "@/components/metrics/useTimeRange";
-import SegmentedControl from "@/components/SegmentedControl";
 import TaskStatusBadge from "@/components/TaskStatusBadge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDateTime, formatDuration } from "@/lib/format";
@@ -15,35 +11,18 @@ import {
   type TimelineWindow,
 } from "@/lib/taskTimeline";
 import { cn } from "@/lib/utils";
-import { X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { Link } from "react-router-dom";
 
 const labelWidth = "w-24 shrink-0 sm:w-40";
 const day = 86_400_000;
 
-/** Skips ticks while the tab is hidden and catches up when it is shown again. */
-function useNow(intervalMilliseconds: number): number {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const tick = () => {
-      if (document.visibilityState === "visible") {
-        setNow(Date.now());
-      }
-    };
-    const id = setInterval(tick, intervalMilliseconds);
-
-    document.addEventListener("visibilitychange", tick);
-
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", tick);
-    };
-  }, [intervalMilliseconds]);
-
-  return now;
-}
+/**
+ * How far the pointer has to travel before a press on the tracks is a drag
+ * rather than a click on a bar.
+ */
+const dragThreshold = 4;
 
 function formatAxisTime(time: number, timeWindow: TimelineWindow): string {
   return formatDateTime(
@@ -72,6 +51,7 @@ function Bar({
   const { task, start, end, lane, ongoing, failed, error } = bar;
   const left = percentOf(start, timeWindow);
   const width = percentOf(end, timeWindow) - left;
+  const shortID = task.ID.slice(0, 12);
   const context =
     variant !== "node"
       ? task.NodeHostname || task.NodeID?.slice(0, 12)
@@ -80,10 +60,15 @@ function Bar({
   return (
     <Tooltip>
       <TooltipTrigger
-        render={<Link to={`/tasks/${task.ID}`} />}
-        aria-label={`Task ${task.ID.slice(0, 12)}, ${task.Status.State}`}
+        render={
+          <Link
+            to={`/tasks/${task.ID}`}
+            draggable={false}
+          />
+        }
+        aria-label={`Task ${shortID}, ${task.Status.State}`}
         className={cn(
-          "absolute min-w-0.5 rounded-sm outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring",
+          "@container absolute min-w-0.5 rounded-sm outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring",
           statusColor(task.Status.State),
           ongoing && "rounded-r-none",
         )}
@@ -94,6 +79,12 @@ function Bar({
           height: `calc(${100 / lanes}% - 4px)`,
         }}
       >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 hidden items-center justify-center px-1 font-mono text-[10px] leading-none text-background @min-[2.5rem]:flex"
+        >
+          <span className="truncate">{shortID}</span>
+        </span>
         {failed && (
           <span className="absolute -inset-y-0.5 -right-px w-0.5 rounded-full bg-status-danger" />
         )}
@@ -103,7 +94,7 @@ function Bar({
         className="flex flex-col gap-1"
       >
         <span className="flex items-center gap-2">
-          <span className="font-mono">{task.ID.slice(0, 12)}</span>
+          <span className="font-mono">{shortID}</span>
           <TaskStatusBadge state={task.Status.State} />
         </span>
         {context && <span className="text-muted-foreground">{context}</span>}
@@ -118,39 +109,150 @@ function Bar({
   );
 }
 
-const unseenNote: Record<TimelineVariant, string> = {
-  service: "Hatched: no task in that slot before its first bar.",
-  global: "Hatched: no task on that node before its first bar.",
-  node: "Hatched: no task of that slot on this node before its first bar.",
+const prunedNote: Record<TimelineVariant, (limit: number) => string> = {
+  service: (limit) =>
+    `Swarm keeps only the newest ${limit} tasks per replica, so older ones may be missing here.`,
+  global: (limit) =>
+    `Swarm keeps only the newest ${limit} tasks per node, so older ones may be missing here.`,
+  node: (limit) =>
+    `Swarm keeps only the newest ${limit} tasks per replica, so older ones may be missing here.`,
 };
 
-/** Mounted only while the section is open, so a collapsed one does not tick. */
-function TimelineTracks({ tasks, variant }: { tasks: Task[]; variant: TimelineVariant }) {
-  const { range, customFrom, customTo } = useTimeRange();
+interface Selection {
+  /** Where the dragged track starts, relative to the timeline. */
+  trackLeft: number;
+  trackWidth: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * Task lifetimes as bars over the page's time range. Dragging across the
+ * tracks zooms that range, and a double-click resets it.
+ */
+export default function TaskTimeline({
+  tasks,
+  variant,
+  timeWindow,
+  now,
+  retentionLimit,
+}: {
+  tasks: Task[];
+  variant: TimelineVariant;
+  timeWindow: TimelineWindow;
+  now: number;
+  retentionLimit: number;
+}) {
+  const { customFrom, customTo, setCustomRange, clearCustomRange } = useTimeRange();
   const isCustomRange = customFrom != null && customTo != null;
-  const now = useNow(30_000);
-  const timeWindow = useMemo<TimelineWindow>(
-    () =>
-      isCustomRange
-        ? { start: customFrom * 1000, end: customTo * 1000 }
-        : { start: now - rangeSeconds(range) * 1000, end: now },
-    [isCustomRange, customFrom, customTo, range, now],
-  );
   const rows = useMemo(
     () => buildTimeline(tasks, variant, timeWindow, now),
     [tasks, variant, timeWindow, now],
   );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const suppressClickRef = useRef(false);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const selectionRef = useRef<Selection | null>(null);
+  const dragging = selection !== null;
+
+  const updateSelection = (next: Selection | null) => {
+    selectionRef.current = next;
+    setSelection(next);
+  };
+
+  useEffect(() => {
+    if (!dragging) {
+      return;
+    }
+
+    const offset = (clientX: number) =>
+      clientX - (containerRef.current?.getBoundingClientRect().left ?? 0);
+
+    const move = (event: PointerEvent) => {
+      const current = selectionRef.current;
+
+      if (current) {
+        const to = Math.min(
+          Math.max(offset(event.clientX), current.trackLeft),
+          current.trackLeft + current.trackWidth,
+        );
+
+        selectionRef.current = { ...current, to };
+        setSelection(selectionRef.current);
+      }
+    };
+
+    const up = () => {
+      const current = selectionRef.current;
+
+      selectionRef.current = null;
+      setSelection(null);
+
+      if (!current || Math.abs(current.to - current.from) <= dragThreshold) {
+        return;
+      }
+
+      const span = timeWindow.end - timeWindow.start;
+      const timeAt = (x: number) =>
+        timeWindow.start + ((x - current.trackLeft) / current.trackWidth) * span;
+
+      suppressClickRef.current = true;
+      setCustomRange(
+        timeAt(Math.min(current.from, current.to)) / 1000,
+        timeAt(Math.max(current.from, current.to)) / 1000,
+      );
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [dragging, timeWindow, setCustomRange]);
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const container = containerRef.current?.getBoundingClientRect().left ?? 0;
+    const track = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - container;
+
+    event.preventDefault();
+    updateSelection({ trackLeft: track.left - container, trackWidth: track.width, from: x, to: x });
+  };
 
   return (
-    <div className="flex flex-col gap-1 rounded-lg border bg-card p-3">
+    <div
+      ref={containerRef}
+      className="relative flex flex-col gap-1 rounded-lg border bg-card p-3 select-none"
+      onClickCapture={(event) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onDoubleClick={() => {
+        if (isCustomRange) {
+          clearCustomRange();
+        }
+      }}
+    >
       {rows.length === 0 && (
         <p className="py-2 text-center text-sm text-muted-foreground">
           No tasks in this time range
         </p>
       )}
 
-      {rows.map(({ key, label, bars, lanes, earliest }) => {
-        const unseen = earliest > timeWindow.start ? percentOf(earliest, timeWindow) : 0;
+      {rows.map(({ key, label, bars, lanes, earliest, count }) => {
+        const pruned =
+          count >= retentionLimit && earliest > timeWindow.start
+            ? percentOf(earliest, timeWindow)
+            : 0;
 
         return (
           <div
@@ -164,14 +266,23 @@ function TimelineTracks({ tasks, variant }: { tasks: Task[]; variant: TimelineVa
               {label}
             </span>
             <div
-              className="relative flex-1 rounded-sm bg-muted/50"
+              className="relative flex-1 cursor-crosshair rounded-sm bg-muted/50"
               style={{ height: `${lanes * 1.25}rem` }}
+              onPointerDown={startDrag}
             >
-              {unseen > 0 && (
-                <div
-                  className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
-                  style={{ width: `${unseen}%` }}
-                />
+              {pruned > 0 && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={<div />}
+                    role="img"
+                    aria-label={prunedNote[variant](retentionLimit)}
+                    className="absolute inset-y-0 left-0 rounded-l-sm bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_5px)]"
+                    style={{ width: `${pruned}%` }}
+                  />
+                  <TooltipContent side="bottom">
+                    {prunedNote[variant](retentionLimit)}
+                  </TooltipContent>
+                </Tooltip>
               )}
               {bars.map((bar) => (
                 <Bar
@@ -199,60 +310,15 @@ function TimelineTracks({ tasks, variant }: { tasks: Task[]; variant: TimelineVa
         </div>
       </div>
 
-      {rows.some(({ earliest }) => earliest > timeWindow.start) && (
-        <p className="text-xs text-muted-foreground">{unseenNote[variant]}</p>
+      {selection && (
+        <div
+          className="pointer-events-none absolute inset-y-0 bg-[var(--chart-zoom)]"
+          style={{
+            left: Math.min(selection.from, selection.to),
+            width: Math.abs(selection.to - selection.from),
+          }}
+        />
       )}
     </div>
-  );
-}
-
-/**
- * Task lifetimes as bars over the same URL time range as the metric charts.
- */
-export default function TaskTimeline({
-  tasks,
-  variant,
-}: {
-  tasks: Task[];
-  variant: TimelineVariant;
-}) {
-  const { range, customFrom, customTo, setRange, clearCustomRange } = useTimeRange();
-  const isCustomRange = customFrom != null && customTo != null;
-
-  if (tasks.length === 0) {
-    return null;
-  }
-
-  const controls = (
-    <>
-      {isCustomRange && (
-        <button
-          type="button"
-          onClick={clearCustomRange}
-          className="flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-          title="Clear custom range"
-        >
-          Custom range
-          <X className="size-3" />
-        </button>
-      )}
-      <SegmentedControl
-        segments={rangeSegments}
-        value={isCustomRange ? "" : range}
-        onChange={setRange}
-      />
-    </>
-  );
-
-  return (
-    <CollapsibleSection
-      title="Task Timeline"
-      controls={controls}
-    >
-      <TimelineTracks
-        tasks={tasks}
-        variant={variant}
-      />
-    </CollapsibleSection>
   );
 }

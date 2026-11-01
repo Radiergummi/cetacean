@@ -33,8 +33,7 @@ import { IntegrationPanels } from "../components/service-detail/IntegrationPanel
 import { ServiceStatusCard } from "../components/service-detail/ServiceStatusCard";
 import ServiceLinks from "../components/ServiceLinks";
 import { SizingBanner } from "../components/SizingBanner";
-import TasksTable from "../components/TasksTable";
-import TaskTimeline from "../components/TaskTimeline";
+import TasksSection from "../components/TasksSection";
 import { useEditVersion } from "../hooks/useEditVersion";
 import { useServiceDetail } from "../hooks/useServiceDetail";
 import { hasChanges } from "../lib/activity";
@@ -145,16 +144,13 @@ export default function ServiceDetail() {
         />
       </ErrorBoundary>
 
-      {/* Tasks */}
-      <TasksTable
+      <TasksSection
         tasks={detail.tasks}
         variant="service"
+        timelineVariant={
+          service.Spec.Mode?.Global || service.Spec.Mode?.GlobalJob ? "global" : "service"
+        }
         metrics={detail.hasCadvisor ? detail.taskMetrics : undefined}
-      />
-
-      <TaskTimeline
-        tasks={detail.tasks}
-        variant={service.Spec.Mode?.Global || service.Spec.Mode?.GlobalJob ? "global" : "service"}
       />
 
       {detail.hasPrometheus && (

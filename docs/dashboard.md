@@ -117,10 +117,13 @@ stands for, and a service shows its running tasks against the number wanted. A n
 drawn dashed; a resource nothing references is dimmed. Hovering or focusing a node dims everything more than one
 edge away and names it in the URL.
 
-Service and node pages carry a **Task Timeline**: a row per replica (per node for a global service, per
-service replica on a node page), each task a bar from its creation to its exit, coloured by state. A failed task's
-bar ends in a mark, and hovering shows its error; clicking opens the task. The timeline uses the same `?range=`, or
-`?from=` and `?to=`, as the [charts](#charts), and reaches back only as far as Swarm's task history retention.
+Service and node pages list their **Tasks** over the same `?range=`, or `?from=` and `?to=`, as the
+[charts](#charts): a task shows when it was alive at some point in that range. **Timeline** switches the list to a
+row per replica (per node for a global service, per service replica on a node page), each task a bar from its
+creation to its exit. A bar carries the task's ID, and its color shows the state. A failed task's bar ends in a
+mark, hovering shows its error, and clicking opens the task. Drag across the timeline to zoom into a stretch, and double-click to go back;
+the charts follow. `?taskView=timeline` opens the section on the timeline. Swarm keeps only the newest few tasks of
+each replica, so where older ones may have been pruned, the start of a row is hatched.
 
 Where the operations level and your grants allow it, detail pages carry actions: scale, update image, rollback and
 restart on a service, plus inline editors for environment variables, resource reservations and limits, placement,

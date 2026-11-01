@@ -19,8 +19,7 @@ import {
   StatusCard,
 } from "../components/node-detail";
 import PageHeader from "../components/PageHeader";
-import TasksTable from "../components/TasksTable";
-import TaskTimeline from "../components/TaskTimeline";
+import TasksSection from "../components/TasksSection";
 import { useDetailResource } from "../hooks/useDetailResource";
 import { useEditVersion } from "../hooks/useEditVersion";
 import { useGaugeValue } from "../hooks/useGaugeValue";
@@ -259,15 +258,11 @@ export default function NodeDetail() {
         />
       )}
 
-      <TasksTable
+      <TasksSection
         tasks={tasks ?? []}
         variant="node"
+        timelineVariant="node"
         metrics={hasCadvisor ? taskMetrics : undefined}
-      />
-
-      <TaskTimeline
-        tasks={tasks ?? []}
-        variant="node"
       />
 
       {hasPrometheus && (

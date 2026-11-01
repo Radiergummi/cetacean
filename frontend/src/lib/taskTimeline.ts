@@ -27,6 +27,9 @@ export interface TimelineRow {
 
   /** When the row's earliest known task was created; only tasks of this row count. */
   earliest: number;
+
+  /** How many tasks the row holds, inside the window or not. */
+  count: number;
 }
 
 /** A replicated service's rows are slots, a global one's nodes. */
@@ -89,6 +92,18 @@ function barOf(task: Task, now: number): Omit<TimelineBar, "lane"> {
   };
 }
 
+function overlaps({ start, end }: { start: number; end: number }, timeWindow: TimelineWindow) {
+  return end >= timeWindow.start && start <= timeWindow.end;
+}
+
+/**
+ * Whether a task was alive at some point inside the window: the rule the
+ * timeline draws by, so the list beside it shows the same tasks.
+ */
+export function isInWindow(task: Task, timeWindow: TimelineWindow, now: number): boolean {
+  return overlaps(barOf(task, now), timeWindow);
+}
+
 /** Puts each bar in the first lane free at its start. */
 function laneBars(bars: Omit<TimelineBar, "lane">[]): { bars: TimelineBar[]; lanes: number } {
   const laneEnds: number[] = [];
@@ -115,7 +130,10 @@ export function buildTimeline(
   timeWindow: TimelineWindow,
   now: number,
 ): TimelineRow[] {
-  const groups = new Map<string, Group & { bars: Omit<TimelineBar, "lane">[]; earliest: number }>();
+  const groups = new Map<
+    string,
+    Group & { bars: Omit<TimelineBar, "lane">[]; earliest: number; count: number }
+  >();
 
   for (const task of tasks) {
     const bar = barOf(task, now);
@@ -123,13 +141,14 @@ export function buildTimeline(
     let existing = groups.get(group.key);
 
     if (!existing) {
-      existing = { ...group, bars: [], earliest: bar.start };
+      existing = { ...group, bars: [], earliest: bar.start, count: 0 };
       groups.set(group.key, existing);
     }
 
     existing.earliest = Math.min(existing.earliest, bar.start);
+    existing.count++;
 
-    if (bar.end >= timeWindow.start && bar.start <= timeWindow.end) {
+    if (overlaps(bar, timeWindow)) {
       existing.bars.push(bar);
     }
   }
@@ -139,5 +158,11 @@ export function buildTimeline(
     .sort(({ order: [leftName, leftSlot] }, { order: [rightName, rightSlot] }) =>
       leftName === rightName ? leftSlot - rightSlot : leftName.localeCompare(rightName),
     )
-    .map(({ key, label, bars, earliest }) => ({ key, label, earliest, ...laneBars(bars) }));
+    .map(({ key, label, bars, earliest, count }) => ({
+      key,
+      label,
+      earliest,
+      count,
+      ...laneBars(bars),
+    }));
 }
