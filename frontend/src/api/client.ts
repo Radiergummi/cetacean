@@ -1022,14 +1022,6 @@ export const api = {
     id: string,
     options?: { after?: string | undefined; stream?: string | undefined },
   ) => buildLogStreamURL(`/tasks/${id}/logs`, options),
-  history: async (
-    params?: { type?: string; resourceId?: string; limit?: number } | undefined,
-    signal?: AbortSignal | undefined,
-  ) => {
-    const { items } = await fetchHistoryPage(historyPath(params), signal);
-
-    return items;
-  },
   recentActivity: fetchRecentActivity,
   historyPath,
   historyPage: fetchHistoryPage,
