@@ -29,6 +29,12 @@ const taskViews: View<TaskView>[] = [
 const rangeScope = "task";
 
 /**
+ * The preset the empty list offers: Swarm keeps few tasks, so they rarely reach
+ * further back.
+ */
+const widestRange = "7d";
+
+/**
  * Swarm's own default, used while the swarm's setting is unknown or unset.
  */
 const defaultRetentionLimit = 5;
@@ -76,16 +82,17 @@ function OpenTasks({
   onViewChange: (view: TaskView) => void;
   header: (controls: ReactNode) => ReactNode;
 }) {
-  const { range, customFrom, customTo, setCustomRange, clearCustomRange } =
+  const { range, customFrom, customTo, setRange, setCustomRange, clearCustomRange } =
     useTimeRange(rangeScope);
+  const isCustomRange = customFrom != null && customTo != null;
   const now = useNow(30_000);
   const [stateFilter, setStateFilter] = useState<string | null>(null);
   const timeWindow = useMemo<TimelineWindow>(
     () =>
-      customFrom != null && customTo != null
+      isCustomRange
         ? { start: customFrom * 1000, end: customTo * 1000 }
         : { start: now - rangeSeconds(range) * 1000, end: now },
-    [customFrom, customTo, range, now],
+    [isCustomRange, customFrom, customTo, range, now],
   );
   const inWindow = useMemo(
     () => (view === "list" ? tasks.filter((task) => isInWindow(task, timeWindow, now)) : tasks),
@@ -127,10 +134,23 @@ function OpenTasks({
           retentionLimit={
             swarm?.data.swarm.Spec.Orchestration.TaskHistoryRetentionLimit ?? defaultRetentionLimit
           }
-          isCustomRange={customFrom != null && customTo != null}
+          isCustomRange={isCustomRange}
           onZoom={setCustomRange}
           onResetZoom={clearCustomRange}
         />
+      ) : inWindow.length === 0 ? (
+        <div className="rounded-lg border p-3 text-center text-sm text-muted-foreground">
+          No tasks in this time range.{" "}
+          {(isCustomRange || range !== widestRange) && (
+            <button
+              type="button"
+              className="font-medium text-foreground underline underline-offset-2"
+              onClick={() => setRange(widestRange)}
+            >
+              Show the last 7 days
+            </button>
+          )}
+        </div>
       ) : (
         <TasksTable
           tasks={inWindow}
@@ -145,7 +165,7 @@ function OpenTasks({
 }
 
 /**
- * A resource's tasks over the page's time range, as a list or as a timeline.
+ * A resource's tasks over a time range of their own, as a list or as a timeline.
  * The view is in the URL as `taskView`, so a link can open on either.
  */
 export default function TasksSection({

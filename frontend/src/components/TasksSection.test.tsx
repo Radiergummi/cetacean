@@ -78,9 +78,16 @@ describe("TasksSection", () => {
   it("keeps its time range apart from the charts' range", () => {
     renderSection([makeTask("old", "failed", 120)], "/?range=24h");
 
-    fireEvent.click(screen.getByRole("button", { name: "Show all tasks" }));
+    expect(screen.getByText(/No tasks in this time range/)).toBeInTheDocument();
+  });
 
-    expect(screen.queryByText("exit 1")).toBeNull();
+  it("offers the last 7 days when no task was alive in the range", () => {
+    renderSection([makeTask("old", "failed", 120)]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show the last 7 days" }));
+
+    expect(currentParams().get("taskRange")).toBe("7d");
+    expect(screen.getByText(/No active tasks; 1 failed\./)).toBeInTheDocument();
   });
 
   it("switches to the timeline through the URL and drops the state filter", () => {

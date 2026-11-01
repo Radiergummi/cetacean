@@ -33,7 +33,7 @@ const quickPresets = [
 
 /**
  * The time range presets and a custom from/to picker, reading and writing the
- * range in the URL that every panel on the page shares.
+ * range in the URL: the page's, or a section's own under `scope`.
  */
 export default function TimeRangeControl({ scope }: { scope?: string | undefined }) {
   const { range, customFrom, customTo, setRange, setCustomRange, clearCustomRange } =

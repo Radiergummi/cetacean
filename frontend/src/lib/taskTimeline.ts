@@ -112,7 +112,10 @@ function overlaps({ start, end }: { start: number; end: number }, timeWindow: Ti
  * timeline draws by, so the list beside it shows the same tasks.
  */
 export function isInWindow(task: Task, timeWindow: TimelineWindow, now: number): boolean {
-  return overlaps(spanOf(task, now), timeWindow);
+  const span = spanOf(task, now);
+
+  // A task whose times do not parse cannot be placed, so it is not hidden.
+  return !Number.isFinite(span.end) || overlaps(span, timeWindow);
 }
 
 /** Puts each bar in the first lane free at its start. */

@@ -122,10 +122,11 @@ interface Selection {
   trackWidth: number;
   from: number;
   to: number;
+  captured: boolean;
 }
 
 /**
- * Task lifetimes as bars over the page's time range. Dragging across the
+ * Task lifetimes as bars over the section's time range. Dragging across the
  * tracks zooms that range, and a double-click resets it.
  */
 export default function TaskTimeline({
@@ -144,7 +145,7 @@ export default function TaskTimeline({
   now: number;
   retentionLimit: number;
   isCustomRange: boolean;
-  /** Takes epoch seconds, as the URL range does. */
+  /** Takes whole epoch seconds, as the URL range does. */
   onZoom: (from: number, to: number) => void;
   onResetZoom: () => void;
 }) {
@@ -168,7 +169,15 @@ export default function TaskTimeline({
     const track = event.currentTarget.getBoundingClientRect();
     const x = offsetX(event.clientX);
 
-    setSelection({ trackLeft: offsetX(track.left), trackWidth: track.width, from: x, to: x });
+    // A drag that no click followed, as on touch, must not swallow this one.
+    suppressClickRef.current = false;
+    setSelection({
+      trackLeft: offsetX(track.left),
+      trackWidth: track.width,
+      from: x,
+      to: x,
+      captured: false,
+    });
   };
 
   // Captured only once it is a drag, so a plain click still reaches its bar.
@@ -177,16 +186,24 @@ export default function TaskTimeline({
       return;
     }
 
+    // Released off the track before the drag was captured.
+    if (event.buttons === 0) {
+      setSelection(null);
+
+      return;
+    }
+
     const to = Math.min(
       Math.max(offsetX(event.clientX), selection.trackLeft),
       selection.trackLeft + selection.trackWidth,
     );
+    const captured = selection.captured || Math.abs(to - selection.from) > dragThreshold;
 
-    if (Math.abs(to - selection.from) > dragThreshold) {
+    if (captured && !selection.captured) {
       event.currentTarget.setPointerCapture(event.pointerId);
     }
 
-    setSelection({ ...selection, to });
+    setSelection({ ...selection, to, captured });
   };
 
   const endDrag = () => {
@@ -200,11 +217,12 @@ export default function TaskTimeline({
     const timeAt = (x: number) =>
       timeWindow.start + ((x - selection.trackLeft) / selection.trackWidth) * span;
 
+    // The URL holds whole seconds; a range must span at least one.
+    const from = Math.floor(timeAt(Math.min(selection.from, selection.to)) / 1000);
+    const to = Math.max(Math.ceil(timeAt(Math.max(selection.from, selection.to)) / 1000), from + 1);
+
     suppressClickRef.current = true;
-    onZoom(
-      timeAt(Math.min(selection.from, selection.to)) / 1000,
-      timeAt(Math.max(selection.from, selection.to)) / 1000,
-    );
+    onZoom(from, to);
   };
 
   return (
@@ -232,7 +250,7 @@ export default function TaskTimeline({
 
       {rows.map(({ key, label, bars, lanes, earliest, count }) => {
         const pruned =
-          count >= retentionLimit && earliest > timeWindow.start
+          retentionLimit >= 0 && count >= retentionLimit && earliest > timeWindow.start
             ? percentOf(earliest, timeWindow)
             : 0;
 
@@ -248,7 +266,7 @@ export default function TaskTimeline({
               {label}
             </span>
             <div
-              className="relative flex-1 cursor-crosshair rounded-sm bg-muted/50"
+              className="relative flex-1 cursor-crosshair touch-pan-y rounded-sm bg-muted/50"
               style={{ height: `${lanes * 1.25}rem` }}
               onPointerDown={startDrag}
               onPointerMove={moveDrag}

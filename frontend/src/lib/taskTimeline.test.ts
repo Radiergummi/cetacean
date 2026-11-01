@@ -307,6 +307,14 @@ describe("isInWindow", () => {
     ).toBe(true);
   });
 
+  it("keeps a task whose times do not parse, as it cannot be placed", () => {
+    const task = makeTask({ state: "failed", createdAgo: 90, changedAgo: 70 });
+
+    expect(
+      isInWindow({ ...task, Status: { ...task.Status, Timestamp: "" } }, timeWindow, now),
+    ).toBe(true);
+  });
+
   it("drops a task that stopped before the window began", () => {
     expect(
       isInWindow(makeTask({ state: "shutdown", createdAgo: 90, changedAgo: 70 }), timeWindow, now),
