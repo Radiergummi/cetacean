@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 function show(scopes: Parameters<typeof AnnotationForm>[0]["scopes"] = [service]) {
-  const onDone = vi.fn();
+  const onDone = vi.fn<() => void>();
 
   render(
     <AnnotationForm
