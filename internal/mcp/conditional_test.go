@@ -216,8 +216,8 @@ func TestEditingToolsTakeAnOptionalVersion(t *testing.T) {
 
 		annotations := td.tool.Annotations
 		writes := annotations.ReadOnlyHint != nil && !*annotations.ReadOnlyHint
-		if writes && !edits &&
-			!strings.HasPrefix(name, "remove_") && !strings.HasPrefix(name, "create_") {
+		creates := strings.HasPrefix(name, "create_") || name == "add_annotation"
+		if writes && !edits && !strings.HasPrefix(name, "remove_") && !creates {
 			t.Errorf("%s writes but is neither a removal, a create nor a conditional edit", name)
 		}
 	}

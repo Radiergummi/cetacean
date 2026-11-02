@@ -53,6 +53,7 @@ Cetacean's vocabulary, that is the finding — record the phrasing that failed.
 | 5 | Are any nodes down or draining? | ✓ | Unreachable nodes separated from deliberately drained ones | `get_cluster_status` |
 | 6 | Are we near capacity anywhere? | ✓ | Reserved against total in named units, both CPU and memory | `get_cluster_status` |
 | 7 | Give me the morning summary. | ✓ | Health, overnight changes, and anything still degraded | `get_cluster_status` → `get_events` |
+| 81 | Did anyone leave a note about what happened last night? | ✓ | The annotations in that window, with who wrote them, beside the changes | `get_events` with `since` |
 
 ---
 
@@ -157,6 +158,7 @@ Cetacean's vocabulary, that is the finding — record the phrasing that failed.
 | 50 | Drain node N for maintenance, then bring it back. | ✓ | The impact assessment *before* the drain, then the drain | `drain_node` → `update_node` |
 | 51 | Promote / demote a node. | ✓ | The resulting role | `update_node` section `role` |
 | 52 | Label node N so demo_stuck can schedule. | ✓ | The resulting labels, and that the task then placed | `update_node_labels` → `watch` |
+| 80 | Note that we're starting a load test on checkout, for the next half hour. | ✓ | The note, as a range on the service, attributed to the caller | `find` → `add_annotation` |
 
 ---
 

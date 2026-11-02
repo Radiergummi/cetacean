@@ -163,6 +163,7 @@ type Server struct {
 	versions       *cluster.VersionIndex
 	writeClient    DockerWriteClient
 	writes         *cluster.Writes
+	annotations    *cluster.Annotations
 	logs           LogStreamer
 	acl            *acl.Evaluator
 	config         config.MCPConfig
@@ -349,6 +350,7 @@ func New(shared *core.Core, opts Options) (*Server, error) {
 		cache:          shared.Cache,
 		writeClient:    opts.WriteClient,
 		writes:         cluster.NewWrites(shared.Cache, opts.WriteClient),
+		annotations:    shared.Annotations,
 		logs:           opts.Logs,
 		acl:            opts.ACL,
 		config:         opts.Config,

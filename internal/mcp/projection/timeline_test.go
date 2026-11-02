@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -41,7 +42,7 @@ func TestSortTimelineIsDeterministicOnTies(t *testing.T) {
 	SortTimeline(b)
 
 	for i := range a {
-		if a[i] != b[i] {
+		if !reflect.DeepEqual(a[i], b[i]) {
 			t.Fatalf("entry %d differs: %+v vs %+v", i, a[i], b[i])
 		}
 	}

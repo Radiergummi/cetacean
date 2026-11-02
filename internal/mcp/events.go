@@ -77,13 +77,15 @@ func (s *Server) toolGetEvents(
 	// Every filter is pushed into the walk, so the ring copies what matched
 	// rather than everything it holds. The limit stays the whole ring on
 	// purpose: `total` counts everything the caller may read.
-	matched := history.List(cache.HistoryQuery{
+	matched := s.cache.Timeline(cache.HistoryQuery{
 		ResourceID: resource,
 		Types:      types,
-		Limit:      history.Size(),
+		Limit:      history.Size() + cache.MaxAnnotations,
 		After:      window.Since,
 		Before:     window.Until,
 		Visible:    cluster.HistoryReadable(s.readPredicate(ctx)),
+
+		ReadableAnnotation: s.annotationCaller(ctx).MayRead,
 	})
 
 	// Task naming runs after the cut, because a name only matters for an entry
@@ -113,6 +115,8 @@ func (s *Server) toolGetEvents(
 			ResourceID: e.ResourceID,
 			Message:    e.Action,
 			Actor:      e.Actor,
+			Text:       e.Text,
+			Tags:       e.Tags,
 		})
 	}
 

@@ -312,7 +312,7 @@ func (s *Server) readTools() []toolDef {
 				"get_events",
 				mcplib.WithToolTitle("Read the cluster change timeline"),
 				mcplib.WithDescription(
-					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, whose lines carry timestamps in the same format, to read changes and output on one timeline — merge the two on time, not by field name, since an event is `at`/`kind`/`type`/`name`/`resourceId`/`message` and a log line is `timestamp`/`message`/`stream`/`attrs`. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else. An entry of kind `gap` is a window from `at` to `until` when Cetacean was not watching: changes made then are missing, so read it as unknown, not as quiet. A gap names no resource and passes every filter but the time window. `trackingSince` is the oldest entry held; the timeline says nothing about earlier.",
+					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, whose lines carry timestamps in the same format, to read changes and output on one timeline — merge the two on time, not by field name, since an event is `at`/`kind`/`type`/`name`/`resourceId`/`message` and a log line is `timestamp`/`message`/`stream`/`attrs`. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else. An entry of kind `gap` is a window from `at` to `until` when Cetacean was not watching: changes made then are missing, so read it as unknown, not as quiet. A gap names no resource and passes every filter but the time window. An entry of kind `annotation` is a note a person or agent wrote, with `text` and `tags`, about the moment at `at` or the range to `until` — a load test, a deploy, why something was rolled back; it is listed with its resources' changes and, when it names none, with every resource's. `trackingSince` is the oldest change held; the timeline says nothing about earlier, though an annotation may be older.",
 				),
 				mcplib.WithOutputSchema[eventsResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -331,14 +331,15 @@ func (s *Server) readTools() []toolDef {
 				),
 				mcplib.WithArray("types",
 					mcplib.Description(
-						"Resource types to include: node, service, task, stack, config, secret, network, volume. Omit for all. Gaps are included whatever this says.",
+						"Resource types to include: node, service, task, stack, config, secret, network, volume. Omit for all. Gaps are included whatever this says, and so are annotations naming no resource.",
 					),
 					mcplib.Items(map[string]any{"type": "string"}),
 				),
 				mcplib.WithString("resource",
 					mcplib.Description(
 						"Only entries for this resource, named by its ID or its name. "+
-							"A service's include its tasks' unless `types` leaves out task. "+
+							"A service's include its tasks' unless `types` leaves out task, "+
+							"and the annotations on its stack. "+
 							"A name is resolved against `types` when exactly one is given, "+
 							"and otherwise only when no other type claims it.",
 					),
