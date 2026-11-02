@@ -59,6 +59,7 @@ export default function NodeDetail() {
     retry,
     allowedMethods,
     editable,
+    annotatable,
   } = useDetailResource<Node>(id, api.node, "/nodes", { extraQueryKeys });
 
   const { data: tasks } = useQuery({
@@ -312,6 +313,11 @@ export default function NodeDetail() {
       <ActivitySection
         entries={history}
         hideType
+        annotate={
+          annotatable
+            ? { type: "node", id: node.ID, name: node.Description.Hostname ?? node.ID }
+            : undefined
+        }
       />
     </div>
   );

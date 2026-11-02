@@ -1,10 +1,12 @@
 import { api } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
+import AddAnnotationButton from "../components/annotations/AddAnnotationButton";
 import FetchError from "../components/FetchError";
 import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import { Button, buttonVariants } from "../components/ui/button";
+import { useAnnotationCapabilities } from "../hooks/useAnnotationCapabilities";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useUrlParam } from "../hooks/useUrlParam";
@@ -36,6 +38,7 @@ function isTypeFilter(value: string | null): value is TypeFilter {
 
 export default function History() {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
+  const { create } = useAnnotationCapabilities();
   const [requestedType, setType] = useUrlParam("type", "all");
   const type: TypeFilter = isTypeFilter(requestedType) ? requestedType : "all";
   const resourceType = type === "all" ? undefined : type;
@@ -71,14 +74,17 @@ export default function History() {
       <PageHeader
         title="History"
         actions={
-          <a
-            href={csvHref}
-            download
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <Download className="size-3.5" />
-            Download CSV
-          </a>
+          <div className="flex items-center gap-2">
+            {create && <AddAnnotationButton />}
+            <a
+              href={csvHref}
+              download
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Download className="size-3.5" />
+              Download CSV
+            </a>
+          </div>
         }
       />
 

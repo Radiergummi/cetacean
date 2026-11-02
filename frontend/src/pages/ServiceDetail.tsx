@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
+import AddAnnotationButton from "../components/annotations/AddAnnotationButton";
 import BuildSection from "../components/build/BuildSection";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection from "../components/ComposeSection";
@@ -160,7 +161,7 @@ export default function ServiceDetail() {
         </ErrorBoundary>
       )}
 
-      {(detail.changes.length > 0 || hasActivity(detail.history)) && (
+      {(detail.changes.length > 0 || hasActivity(detail.history) || detail.annotatable) && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {detail.changes.length > 0 && (
             <CollapsibleSection
@@ -173,8 +174,17 @@ export default function ServiceDetail() {
               />
             </CollapsibleSection>
           )}
-          {hasActivity(detail.history) && (
-            <CollapsibleSection title="Recent Activity">
+          {(hasActivity(detail.history) || detail.annotatable) && (
+            <CollapsibleSection
+              title="Recent Activity"
+              controls={
+                detail.annotatable && (
+                  <AddAnnotationButton
+                    scope={{ type: "service", id: service.ID, name: service.Spec.Name }}
+                  />
+                )
+              }
+            >
               <ActivityFeed entries={detail.history} />
             </CollapsibleSection>
           )}
