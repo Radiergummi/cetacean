@@ -9,13 +9,14 @@ vi.mock("@/hooks/useAnnotationCapabilities", () => ({
 
 const service = { type: "service", id: "svc1", name: "web" } as const;
 
-function show(timeFor: (x: number) => number = (x) => 1_000_000 + x * 60) {
+function show(timeFor: (x: number) => number = (x) => 1_000_000 + x * 60, capturing = true) {
   const onDone = vi.fn<() => void>();
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
       <AnnotateOverlay
         timeFor={timeFor}
         scope={service}
+        capturing={capturing}
         onDone={onDone}
       />
     </QueryClientProvider>,
@@ -91,6 +92,27 @@ describe("AnnotateOverlay", () => {
     click(overlay, 100);
     await screen.findByLabelText("Note");
     unmount();
+
+    expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+  });
+
+  it("leaves the mark where it is while the form is used", async () => {
+    const { overlay } = show();
+
+    click(overlay, 100);
+
+    const note = await screen.findByLabelText("Note");
+
+    fireEvent.pointerDown(note, { clientX: 400, pointerType: "mouse" });
+    fireEvent.pointerUp(note, { clientX: 400, pointerType: "mouse" });
+
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px" });
+  });
+
+  it("takes no mark while it does not capture the pointer", () => {
+    const { overlay } = show(undefined, false);
+
+    click(overlay, 100);
 
     expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
   });

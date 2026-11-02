@@ -11,7 +11,7 @@ import type { AnnotationScope } from "@/api/types";
 import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { AreaChart, LineChart, MessageSquarePlus, Pause, Play, RefreshCw, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface ChartDef {
   title: string;
@@ -54,6 +54,34 @@ export default function MetricsPanel({
   const [streaming, setStreaming] = useState(true);
   const [drillStack, setDrillStack] = useState<string | null>(null);
   const [annotating, setAnnotating] = useState(false);
+  const [modifierHeld, setModifierHeld] = useState(false);
+  const [openMarks, setOpenMarks] = useState(0);
+  const onMarkOpen = useCallback(
+    (open: boolean) => setOpenMarks((count) => count + (open ? 1 : -1)),
+    [],
+  );
+
+  // Holding Ctrl or Cmd annotates for as long as it is held, as in Grafana.
+  useEffect(() => {
+    if (!annotate) {
+      return;
+    }
+
+    const isModifier = ({ key }: KeyboardEvent) => key === "Control" || key === "Meta";
+    const down = (event: KeyboardEvent) => isModifier(event) && setModifierHeld(true);
+    const up = (event: KeyboardEvent) => isModifier(event) && setModifierHeld(false);
+    const release = () => setModifierHeld(false);
+
+    document.addEventListener("keydown", down);
+    document.addEventListener("keyup", up);
+    window.addEventListener("blur", release);
+
+    return () => {
+      document.removeEventListener("keydown", down);
+      document.removeEventListener("keyup", up);
+      window.removeEventListener("blur", release);
+    };
+  }, [annotate]);
   const markers = useTimeline(timeline, {
     range,
     from: customFrom ?? undefined,
@@ -92,8 +120,10 @@ export default function MetricsPanel({
       setDrillStack,
       timeline: markers.items,
       annotate,
-      annotating: annotating && annotate !== undefined,
+      annotating: (annotating || modifierHeld) && annotate !== undefined,
       setAnnotating,
+      markOpen: openMarks > 0,
+      onMarkOpen,
     }),
     [
       range,
@@ -107,6 +137,9 @@ export default function MetricsPanel({
       markers.items,
       annotate,
       annotating,
+      modifierHeld,
+      openMarks,
+      onMarkOpen,
     ],
   );
 

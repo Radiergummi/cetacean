@@ -3,7 +3,7 @@ import type { AnnotationScope } from "@/api/types";
 import AnnotationForm from "@/components/annotations/AnnotationForm";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { useAnnotationCapabilities } from "@/hooks/useAnnotationCapabilities";
-import { type PointerEvent, useReducer, useRef } from "react";
+import { type PointerEvent, useEffect, useReducer, useRef } from "react";
 
 interface OverlayState {
   gesture: Gesture;
@@ -30,23 +30,39 @@ function overlayReducer(state: OverlayState, action: GestureEvent | { type: "cle
 }
 
 /**
- * Takes the pointer over a chart in annotate mode, so zoom, isolation and the
+ * Takes the pointer over a chart while `capturing`, so zoom, isolation and the
  * tooltip never see the gesture, and opens the form at the mark it makes.
- * `timeFor` turns a pixel into epoch seconds.
+ * `timeFor` turns a pixel into epoch seconds; `onMarkOpen` hears a form open
+ * and close, so the overlay can outlive the mode that made the mark.
  */
 export default function AnnotateOverlay({
   timeFor,
   scope,
+  capturing,
+  onMarkOpen,
   onDone,
 }: {
   timeFor: (x: number) => number | null;
   scope: Exclude<AnnotationScope, "cluster">;
+  capturing: boolean;
+  onMarkOpen?: ((open: boolean) => void) | undefined;
   onDone: () => void;
 }) {
   const [{ gesture, mark, marks }, dispatch] = useReducer(overlayReducer, initialState);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const { clusterWide } = useAnnotationCapabilities();
+  const markOpen = mark !== null;
+
+  useEffect(() => {
+    if (!markOpen) {
+      return;
+    }
+
+    onMarkOpen?.(true);
+
+    return () => onMarkOpen?.(false);
+  }, [markOpen, onMarkOpen]);
 
   const offset = (event: PointerEvent<HTMLDivElement>) =>
     event.clientX - event.currentTarget.getBoundingClientRect().left;
@@ -62,49 +78,60 @@ export default function AnnotateOverlay({
       : null;
 
   return (
-    <div
-      ref={overlayRef}
-      data-testid="annotate-overlay"
-      className="absolute inset-0 z-10 cursor-crosshair touch-none"
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        dispatch({ type: "down", x: offset(event), touch: event.pointerType === "touch" });
-      }}
-      onPointerMove={(event) => {
-        if (gesture.kind === "dragging") {
-          dispatch({ type: "move", x: offset(event) });
-        }
-      }}
-      onPointerUp={(event) =>
-        dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" })
-      }
-      onPointerCancel={() => dispatch({ type: "cancel" })}
-    >
-      {dragged && (
-        <div
-          className="absolute inset-y-0 bg-annotation/15"
-          style={dragged}
-        />
-      )}
+    <>
+      <div
+        ref={overlayRef}
+        data-testid="annotate-overlay"
+        data-capturing={capturing || undefined}
+        className="pointer-events-none absolute inset-0 z-10 data-capturing:pointer-events-auto data-capturing:cursor-crosshair data-capturing:touch-none"
+        onPointerDown={(event) => {
+          if (!capturing) {
+            return;
+          }
 
-      {gesture.kind === "tapped" && (
-        <div
-          className="absolute inset-y-0 w-px bg-annotation"
-          style={{ left: gesture.at }}
-        />
-      )}
-
-      <span
-        ref={anchorRef}
-        data-testid="annotate-mark"
-        className="absolute inset-y-0 data-point:w-px data-point:bg-annotation data-range:bg-annotation/15"
-        data-point={mark && mark.to === undefined ? "" : undefined}
-        data-range={mark?.to === undefined ? undefined : ""}
-        style={{
-          left: mark?.from ?? 0,
-          width: mark?.to === undefined ? undefined : mark.to - mark.from,
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+          dispatch({ type: "down", x: offset(event), touch: event.pointerType === "touch" });
         }}
-      />
+        onPointerMove={(event) => {
+          if (gesture.kind === "dragging") {
+            dispatch({ type: "move", x: offset(event) });
+          }
+        }}
+        onPointerUp={(event) => {
+          if (capturing) {
+            dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" });
+          }
+        }}
+        onPointerCancel={() => dispatch({ type: "cancel" })}
+        // Ctrl-click opens the context menu on macOS; here it marks the chart.
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        {dragged && (
+          <div
+            className="absolute inset-y-0 bg-annotation/15"
+            style={dragged}
+          />
+        )}
+
+        {gesture.kind === "tapped" && (
+          <div
+            className="absolute inset-y-0 w-px bg-annotation"
+            style={{ left: gesture.at }}
+          />
+        )}
+
+        <span
+          ref={anchorRef}
+          data-testid="annotate-mark"
+          className="absolute inset-y-0 data-point:w-px data-point:bg-annotation data-range:bg-annotation/15"
+          data-point={mark && mark.to === undefined ? "" : undefined}
+          data-range={mark?.to === undefined ? undefined : ""}
+          style={{
+            left: mark?.from ?? 0,
+            width: mark?.to === undefined ? undefined : mark.to - mark.from,
+          }}
+        />
+      </div>
 
       <Popover
         open={mark !== null && from !== null}
@@ -122,7 +149,7 @@ export default function AnnotateOverlay({
       >
         <PopoverContent
           anchor={anchorRef}
-          className="w-80"
+          className="w-80 shadow-xl ring-foreground/15"
         >
           {mark && from !== null && (
             <AnnotationForm
@@ -137,6 +164,6 @@ export default function AnnotateOverlay({
           )}
         </PopoverContent>
       </Popover>
-    </div>
+    </>
   );
 }

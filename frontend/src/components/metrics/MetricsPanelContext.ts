@@ -24,8 +24,13 @@ export interface MetricsPanelContextValue {
 
   /** The resource a note marked on these charts is about, when one may be made. */
   annotate?: Exclude<AnnotationScope, "cluster"> | undefined;
+  /** Whether the charts take the pointer to mark a note: the toggle, or Ctrl/Cmd held. */
   annotating?: boolean | undefined;
   setAnnotating?: ((annotating: boolean) => void) | undefined;
+
+  /** Whether a note's form is open on any chart, which keeps its overlay mounted. */
+  markOpen?: boolean | undefined;
+  onMarkOpen?: ((open: boolean) => void) | undefined;
 }
 
 export const MetricsPanelContext = createContext<MetricsPanelContextValue | null>(null);

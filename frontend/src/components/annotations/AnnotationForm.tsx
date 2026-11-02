@@ -184,6 +184,7 @@ export default function AnnotationForm({
               value={tagInput}
               onChange={(event) => setTagInput(event.target.value)}
               onKeyDown={onTagKey}
+              onBlur={commitTag}
               className="min-w-24 flex-1 bg-transparent px-1 text-sm outline-none"
             />
           </div>

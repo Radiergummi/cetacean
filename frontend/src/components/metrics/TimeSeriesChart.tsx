@@ -638,10 +638,12 @@ export default function TimeSeriesChart({
                 plugins={plugins}
               />
 
-              {panel?.annotating && panel.annotate && (
+              {panel?.annotate && (panel.annotating || panel.markOpen) && (
                 <AnnotateOverlay
                   timeFor={timeFor}
                   scope={panel.annotate}
+                  capturing={panel.annotating ?? false}
+                  onMarkOpen={panel.onMarkOpen}
                   onDone={() => panel.setAnnotating?.(false)}
                 />
               )}

@@ -6,13 +6,24 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi } from "vitest";
 
 // Mock TimeSeriesChart since it uses Chart.js, which needs a real DOM
-vi.mock("./TimeSeriesChart", () => ({
-  default: ({ title, range }: { title: string; range: string }) => (
-    <div data-testid={`chart-${title}`}>
-      {title} ({range})
-    </div>
-  ),
-}));
+vi.mock("./TimeSeriesChart", async () => {
+  const { useMetricsPanelContext } = await import("./MetricsPanelContext");
+
+  return {
+    default: function ChartStub({ title, range }: { title: string; range: string }) {
+      const panel = useMetricsPanelContext();
+
+      return (
+        <div
+          data-testid={`chart-${title}`}
+          data-annotating={String(panel?.annotating ?? false)}
+        >
+          {title} ({range})
+        </div>
+      );
+    },
+  };
+});
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
@@ -96,5 +107,31 @@ describe("MetricsPanel", () => {
 
     fireEvent.keyDown(document.body, { key: "Escape" });
     expect(toggle).not.toHaveAttribute("aria-pressed");
+  });
+
+  it.each(["Meta", "Control"])("annotates while %s is held", (key) => {
+    render(
+      <MetricsPanel
+        charts={charts}
+        annotate={{ type: "service", id: "svc1", name: "web" }}
+      />,
+      { wrapper },
+    );
+
+    const chart = screen.getByTestId("chart-CPU");
+
+    fireEvent.keyDown(document.body, { key });
+    expect(chart).toHaveAttribute("data-annotating", "true");
+
+    fireEvent.keyUp(document.body, { key });
+    expect(chart).toHaveAttribute("data-annotating", "false");
+  });
+
+  it("ignores the modifier where nothing may be annotated", () => {
+    render(<MetricsPanel charts={charts} />, { wrapper });
+
+    fireEvent.keyDown(document.body, { key: "Meta" });
+
+    expect(screen.getByTestId("chart-CPU")).toHaveAttribute("data-annotating", "false");
   });
 });

@@ -137,4 +137,15 @@ describe("AnnotationForm", () => {
 
     expect(screen.getByRole("radio", { name: "webshop/frontend" })).toBeChecked();
   });
+
+  it("adds a typed tag when the field is left", async () => {
+    const user = userEvent.setup();
+
+    show();
+    await user.type(screen.getByLabelText("Tags"), "deploy");
+    await user.click(screen.getByLabelText("Note"));
+
+    expect(screen.getByText("#deploy")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tags")).toHaveValue("");
+  });
 });
