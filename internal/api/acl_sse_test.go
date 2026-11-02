@@ -308,3 +308,28 @@ func TestAclMatchWrap_ReplayedStackRemovesInheritStackGrant(t *testing.T) {
 		}
 	}
 }
+
+func TestAclMatchWrapReadsAnnotationsAgainstTheLivePolicy(t *testing.T) {
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources: []string{"service:web"}, Audience: []string{"user:bob"}, Permissions: []string{"read"},
+	}}})
+
+	h := newTestHandlers(t, withACL(e))
+	r := httptest.NewRequest("GET", "/events", nil)
+	r = r.WithContext(auth.ContextWithIdentity(r.Context(), &auth.Identity{Subject: "bob"}))
+
+	matcher := h.aclMatchWrap(r, nil)
+	ev := cache.Event{Type: cache.EventAnnotation, ID: "7", Resource: cache.Annotation{
+		ID:        7,
+		Resources: []cache.AnnotationResource{{Type: cache.EventService, ID: "svc1", Name: "web"}},
+	}}
+	if !matcher(ev) {
+		t.Fatal("bob may read service web, so its annotation should pass")
+	}
+
+	e.SetPolicy(&acl.Policy{})
+	if matcher(ev) {
+		t.Fatal("after his grant is revoked, an open stream still sends bob the annotation")
+	}
+}

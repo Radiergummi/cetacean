@@ -99,3 +99,27 @@ func TestHistoryFeedEscapesAnAnnotationsText(t *testing.T) {
 		t.Errorf("content_html = %s, want the text escaped", html)
 	}
 }
+
+func TestHistoryFeedTitlesAnAnnotationByItsFirstLine(t *testing.T) {
+	h := annotationHandlers(t, true)
+	createAnnotation(t, h, "carol", `{"text":"Deploy freeze\r\nuntil Monday"}`)
+
+	req := withContentType(
+		newAnnotationRequest("GET", "/history", "carol", ""),
+		ContentTypeJSONFeed,
+	)
+	w := httptest.NewRecorder()
+	h.feedHistoryHandler(renderJSONFeed)(w, req)
+
+	var feed struct {
+		Items []struct {
+			Title string `json:"title"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &feed); err != nil || len(feed.Items) == 0 {
+		t.Fatalf("feed: %v\n%s", err, w.Body)
+	}
+	if title := feed.Items[0].Title; title != "Deploy freeze" {
+		t.Errorf("title = %q, want the first line without its carriage return", title)
+	}
+}

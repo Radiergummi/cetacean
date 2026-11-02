@@ -368,6 +368,7 @@ func annotationFeedEntry(r *http.Request, e cache.HistoryEntry) feedEntry {
 	href := absURL(r, annotationPath(e.ID))
 
 	title, _, _ := strings.Cut(strings.TrimSpace(e.Text), "\n")
+	title = strings.TrimSpace(title)
 	if runes := []rune(title); len(runes) > 80 {
 		title = string(runes[:79]) + "…"
 	}
@@ -656,10 +657,10 @@ func historyEntryUpdated(e cache.HistoryEntry) time.Time {
 	switch {
 	case e.Kind == cache.KindGap:
 		return e.Until
+	case e.Kind == cache.KindAnnotation && e.Annotation != nil:
+		return annotationModified(*e.Annotation)
 	case e.Kind == cache.KindAnnotation && !e.Updated.IsZero():
 		return e.Updated
-	case e.Kind == cache.KindAnnotation && e.Annotation != nil:
-		return e.Annotation.Created
 	default:
 		return e.Timestamp
 	}

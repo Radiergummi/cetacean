@@ -202,7 +202,6 @@ func (h *Handlers) aclMatchWrap(
 	inner func(cache.Event) bool,
 ) func(cache.Event) bool {
 	id := auth.IdentityFromContext(r.Context())
-	annotations := h.annotationCaller(r)
 
 	return func(ev cache.Event) bool {
 		if inner != nil && !inner(ev) {
@@ -220,7 +219,8 @@ func (h *Handlers) aclMatchWrap(
 			return true
 		}
 		if a, ok := ev.Resource.(cache.Annotation); ok && ev.Type == cache.EventAnnotation {
-			return annotations.MayRead(a)
+			// Per event, as the other checks are: a reloaded policy reaches open streams.
+			return h.annotationCaller(r).MayRead(a)
 		}
 		return cluster.CanReadEvent(ev, func(resource string) bool {
 			return h.acl.Can(id, "read", resource)
