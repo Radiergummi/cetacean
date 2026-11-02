@@ -320,6 +320,7 @@ describe("drawMarkers", () => {
       cluster: "several",
       gap: "gap",
       annotation: "note",
+      annotationCluster: "everywhere",
     });
 
     expect(fills).toEqual([]);
