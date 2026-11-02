@@ -587,8 +587,8 @@ entry whose ID never changes and whose `updated` (`date_modified`) is its last e
 an update to the entry rather than as a new one.
 
 An `annotation` event reports each create, edit, and delete as it happens. It is sent on `/events`, and on the
-[service, node and stack streams](#per-resource-streams) of each resource the annotation belongs on, by the same rule
-as `resourceId` above. `resource` carries the annotation, and is absent on `remove`:
+[stream](#per-resource-streams) of each resource the annotation belongs on, by the same rule as `resourceId` above: a
+cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`:
 
 ```sse
 id: 4182

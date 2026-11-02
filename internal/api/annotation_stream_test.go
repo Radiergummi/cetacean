@@ -8,6 +8,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -146,5 +147,21 @@ func TestHistoryFeedTakesTheTagAndKindItsJSONDoes(t *testing.T) {
 	}
 	if len(feed.Items) != 1 || feed.Items[0].Title != "tagged" {
 		t.Errorf("items = %+v, want only the note tagged deploy", feed.Items)
+	}
+}
+
+func TestEveryDetailStreamHearsClusterWideAnnotations(t *testing.T) {
+	h := annotationHandlers(t, true)
+	clusterWide := cache.Event{
+		Type: cache.EventAnnotation, Action: "create", Resource: cache.Annotation{ID: 1},
+	}
+
+	for _, typ := range []cache.EventType{
+		cache.EventTask, cache.EventConfig, cache.EventSecret, cache.EventNetwork, cache.EventVolume,
+	} {
+		match := h.detailStreamMatch("x", sse.ResourceMatcher(typ, "x"))
+		if !match(clusterWide) {
+			t.Errorf("a %s's stream misses a cluster-wide annotation its history lists", typ)
+		}
 	}
 }

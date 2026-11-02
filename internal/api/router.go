@@ -1114,7 +1114,8 @@ func (rt routes) networks() {
 			h.HandleGetNetwork,
 			func(w http.ResponseWriter, r *http.Request) {
 				// Per-resource streams have no replay; see streamResource.
-				networkMatch := sse.NetworkMatcher(h.cache, r.PathValue("id"))
+				id := r.PathValue("id")
+				networkMatch := h.detailStreamMatch(id, sse.NetworkMatcher(h.cache, id))
 				h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, networkMatch), "")
 			},
 			h.detailFeeds(cache.EventNetwork, "id", func(id string) string {
