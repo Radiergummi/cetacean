@@ -36,7 +36,7 @@ import { SizingBanner } from "../components/SizingBanner";
 import TasksSection from "../components/TasksSection";
 import { useEditVersion } from "../hooks/useEditVersion";
 import { useServiceDetail } from "../hooks/useServiceDetail";
-import { hasChanges } from "../lib/activity";
+import { hasActivity } from "../lib/activity";
 import { isReservedLabelKey, validateLabelKey } from "../lib/labelValidation";
 import { stackNamespaceLabel } from "../lib/parseStackLabels";
 import { resourceBreadcrumbs } from "../lib/resourceBreadcrumbs";
@@ -160,7 +160,7 @@ export default function ServiceDetail() {
         </ErrorBoundary>
       )}
 
-      {(detail.changes.length > 0 || hasChanges(detail.history)) && (
+      {(detail.changes.length > 0 || hasActivity(detail.history)) && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {detail.changes.length > 0 && (
             <CollapsibleSection
@@ -173,7 +173,7 @@ export default function ServiceDetail() {
               />
             </CollapsibleSection>
           )}
-          {hasChanges(detail.history) && (
+          {hasActivity(detail.history) && (
             <CollapsibleSection title="Recent Activity">
               <ActivityFeed entries={detail.history} />
             </CollapsibleSection>

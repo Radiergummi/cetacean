@@ -14,11 +14,12 @@ export function attribution({ name, subject, transport }: HistoryActor): string 
 }
 
 /**
- * A row of an activity feed: a run of changes, or a run of gaps no change
- * separates, newest first like the history they come from.
+ * A row of an activity feed: a run of changes, an annotation, or a run of
+ * gaps nothing else separates, newest first like the history they come from.
  */
 export type ActivityRow =
   | { kind: "change"; entries: [HistoryEntry, ...HistoryEntry[]] }
+  | { kind: "annotation"; entry: HistoryEntry }
   | { kind: "gap"; gaps: HistoryEntry[] };
 
 /**
@@ -39,18 +40,18 @@ export function runSignature({ actor, name, type }: HistoryEntry): string {
 }
 
 /**
- * Whether entries hold a change. Gaps are on every resource's timeline, so
- * they alone are no reason to show a list.
+ * Whether entries hold a change or an annotation. Gaps are on every
+ * resource's timeline, so they alone are no reason to show a list.
  */
-export function hasChanges(entries: HistoryEntry[]): boolean {
-  return entries.some(({ kind }) => kind === "change");
+export function hasActivity(entries: HistoryEntry[]): boolean {
+  return entries.some(({ kind }) => kind === "change" || kind === "annotation");
 }
 
 /**
- * Groups a newest-first history into rows. Gaps frame changes: a run of them
- * becomes one row, and gaps older than the oldest change are dropped, so a
- * history without changes has no rows. Collapsing, a change repeating the one
- * before it joins that row. Unknown kinds are skipped, as the API asks.
+ * Groups a newest-first history into rows. Gaps frame changes and annotations:
+ * a run of them becomes one row, and gaps older than the oldest of those are
+ * dropped. Collapsing, a change repeating the one before it joins that row.
+ * Unknown kinds are skipped, as the API asks.
  */
 export function activityRows(entries: HistoryEntry[], collapse: boolean): ActivityRow[] {
   const rows: ActivityRow[] = [];
@@ -59,6 +60,17 @@ export function activityRows(entries: HistoryEntry[], collapse: boolean): Activi
   for (const entry of entries) {
     if (entry.kind === "gap") {
       run.push(entry);
+
+      continue;
+    }
+
+    if (entry.kind === "annotation") {
+      if (run.length > 0) {
+        rows.push({ kind: "gap", gaps: run });
+        run = [];
+      }
+
+      rows.push({ kind: "annotation", entry });
 
       continue;
     }
