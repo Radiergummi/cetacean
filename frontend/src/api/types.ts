@@ -370,8 +370,9 @@ export interface HistoryEntry {
   id: number;
 
   /**
-   * `change`, or `gap` for a window nobody watched, from `timestamp` to
-   * `until`. Later servers add kinds; skip one you don't know.
+   * `change`; `gap` for a window nobody watched, from `timestamp` to
+   * `until`; or `annotation` for a note, a range when it has `until`. Later
+   * servers add kinds; skip one you don't know.
    */
   kind: string;
   timestamp: string;
@@ -382,6 +383,22 @@ export interface HistoryEntry {
   name: string;
   summary?: string | undefined;
   actor?: HistoryActor | undefined;
+
+  /** An annotation's fields; absent on other kinds. */
+  text?: string | undefined;
+  tags?: string[] | undefined;
+  resources?: AnnotationResource[] | undefined;
+  updated?: string | undefined;
+  editor?: HistoryActor | undefined;
+}
+
+/**
+ * A resource an annotation names; a stack's ID is its name.
+ */
+export interface AnnotationResource {
+  type: "service" | "stack" | "node";
+  id: string;
+  name: string;
 }
 
 /**
