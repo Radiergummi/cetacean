@@ -45,7 +45,11 @@ export default function AnnotateOverlay({
     event.clientX - event.currentTarget.getBoundingClientRect().left;
 
   const from = mark ? timeFor(mark.from) : null;
-  const to = mark?.to === undefined ? undefined : (timeFor(mark.to) ?? undefined);
+  const end = mark?.to === undefined ? null : timeFor(mark.to);
+  // Times snap to samples and the form shows minutes, so a range inside one
+  // minute would arrive with its end equal to its start; it is a point.
+  const to =
+    end !== null && from !== null && Math.floor(end / 60) > Math.floor(from / 60) ? end : undefined;
   const dragged =
     gesture.kind === "dragging"
       ? {

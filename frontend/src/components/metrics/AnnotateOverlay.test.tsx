@@ -9,12 +9,12 @@ vi.mock("@/hooks/useAnnotationCapabilities", () => ({
 
 const service = { type: "service", id: "svc1", name: "web" } as const;
 
-function show() {
+function show(timeFor: (x: number) => number = (x) => 1_000_000 + x * 60) {
   const onDone = vi.fn<() => void>();
   const view = render(
     <QueryClientProvider client={new QueryClient()}>
       <AnnotateOverlay
-        timeFor={(x) => 1_000_000 + x * 60}
+        timeFor={timeFor}
         scope={service}
         onDone={onDone}
       />
@@ -63,6 +63,15 @@ describe("AnnotateOverlay", () => {
     await screen.findByLabelText("Note");
 
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px", width: "200px" });
+  });
+
+  it("makes a point of a drag shorter than the form's minute", async () => {
+    const { overlay } = show((x) => 1_000_020 + Math.round(x / 10) * 15);
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 110, pointerType: "mouse" });
+
+    expect(await screen.findByLabelText("Until")).toHaveValue("");
   });
 
   it("replaces an open mark with a new one", async () => {
