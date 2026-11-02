@@ -254,10 +254,12 @@ function AnnotationCard({
                     to={path}
                     className="font-medium text-foreground hover:underline"
                   >
-                    {name}
+                    <ResourceName name={name} />
                   </Link>
                 ) : (
-                  <span key={`${type}-${id}`}>{name}</span>
+                  <span key={`${type}-${id}`}>
+                    <ResourceName name={name} />
+                  </span>
                 );
               })
             ))}

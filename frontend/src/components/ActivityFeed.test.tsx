@@ -391,6 +391,15 @@ describe("ActivityFeed runs", () => {
       expect(screen.getByRole("link", { name: "web" })).toHaveAttribute("href", "/services/svc1");
     });
 
+    it("names a stacked resource as the change rows do", () => {
+      show(note({ resources: [{ type: "service", id: "svc1", name: "webshop_frontend" }] }));
+
+      const link = screen.getByRole("link", { name: /frontend/ });
+
+      expect(link).toHaveAttribute("href", "/services/svc1");
+      expect(link.textContent).not.toContain("webshop_frontend");
+    });
+
     it("marks an edited annotation", () => {
       const updated = "2026-11-01T15:00:00Z";
 
