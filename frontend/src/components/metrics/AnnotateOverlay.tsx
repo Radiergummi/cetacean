@@ -22,13 +22,17 @@ export default function AnnotateOverlay({
   onDone: () => void;
 }) {
   const [gesture, setGesture] = useState<Gesture>(idle);
+  // Pointer events can outrun a render, so each builds on the last one's
+  // gesture rather than on the one this render saw.
+  const gestureRef = useRef<Gesture>(idle);
   const [mark, setMark] = useState<(Mark & { key: number }) | null>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const { clusterWide } = useAnnotationCapabilities();
 
   const feed = (event: GestureEvent) => {
-    const next = step(gesture, event);
+    const next = step(gestureRef.current, event);
 
+    gestureRef.current = next.gesture;
     setGesture(next.gesture);
 
     if (next.mark) {
@@ -79,10 +83,13 @@ export default function AnnotateOverlay({
 
       <span
         ref={anchorRef}
-        className="absolute top-0 h-full"
+        data-testid="annotate-mark"
+        className="absolute inset-y-0 data-point:w-px data-point:bg-annotation data-range:bg-annotation/15"
+        data-point={mark && mark.to === undefined ? "" : undefined}
+        data-range={mark?.to === undefined ? undefined : ""}
         style={{
           left: mark?.from ?? 0,
-          width: mark?.to === undefined ? 0 : mark.to - mark.from,
+          width: mark?.to === undefined ? undefined : mark.to - mark.from,
         }}
       />
 

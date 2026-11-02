@@ -2,6 +2,7 @@ import { annotationBody, parseTag, toLocalInput } from "./annotationFields";
 import ResourcePicker from "./ResourcePicker";
 import { api, ApiError } from "@/api/client";
 import type { AnnotationScope } from "@/api/types";
+import ResourceName from "@/components/ResourceName";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,8 @@ type ResourceScope = Exclude<AnnotationScope, "cluster">;
 
 const maximumTags = 10;
 
-function scopeLabel(scope: AnnotationScope): string {
-  return scope === "cluster" ? "Cluster-wide" : scope.name;
+function scopeLabel(scope: AnnotationScope) {
+  return scope === "cluster" ? "Cluster-wide" : <ResourceName name={scope.name} />;
 }
 
 /**

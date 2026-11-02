@@ -1,6 +1,6 @@
 import AnnotateOverlay from "./AnnotateOverlay";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/useAnnotationCapabilities", () => ({
@@ -37,6 +37,29 @@ describe("AnnotateOverlay", () => {
 
     expect(await screen.findByLabelText("Note")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "web" })).toBeChecked();
+  });
+
+  it("follows a drag whose events arrive before a render", async () => {
+    const { overlay } = show();
+
+    act(() => {
+      fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+      fireEvent.pointerMove(overlay, { clientX: 200, pointerType: "mouse" });
+      fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
+    });
+
+    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+    expect(screen.getByLabelText("Until")).not.toHaveValue("");
+  });
+
+  it("keeps the marked range shaded while the form is open", async () => {
+    const { overlay } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
+    await screen.findByLabelText("Note");
+
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px", width: "200px" });
   });
 
   it("replaces an open mark with a new one", async () => {

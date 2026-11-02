@@ -131,4 +131,10 @@ describe("AnnotationForm", () => {
     await waitFor(() => expect(createAnnotation).toHaveBeenCalled());
     expect(createAnnotation.mock.calls[0]?.[0]).not.toHaveProperty("resources");
   });
+
+  it("names a stacked resource as the rest of the dashboard does", () => {
+    show([{ type: "service", id: "svc2", name: "webshop_frontend" }]);
+
+    expect(screen.getByRole("radio", { name: "webshop/frontend" })).toBeChecked();
+  });
 });
