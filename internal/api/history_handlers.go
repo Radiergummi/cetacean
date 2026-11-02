@@ -20,6 +20,12 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 
 // HandleAnnotations lists the annotations: the history narrowed to them.
 func (h *Handlers) HandleAnnotations(w http.ResponseWriter, r *http.Request) {
+	offer := readOnly
+	if h.mayAnnotate(r) {
+		offer = offeredWrites{methods: []string{"GET", "HEAD", "POST"}}
+	}
+	writeAllow(w, offer)
+
 	h.serveHistory(w, r, cache.KindAnnotation)
 }
 

@@ -98,6 +98,14 @@ func (h *Handlers) linkAnnotations(w http.ResponseWriter, r *http.Request, resou
 	}
 }
 
+// linkClusterAnnotations links /annotations as rel="edit" when the caller may
+// annotate the whole cluster, which takes write on everything.
+func (h *Handlers) linkClusterAnnotations(w http.ResponseWriter, r *http.Request) {
+	if h.annotations.Enabled() && h.acl.CanWriteEverything(auth.IdentityFromContext(r.Context())) {
+		w.Header().Add("Link", `<`+absPath(r.Context(), "/annotations")+`>; rel="edit"`)
+	}
+}
+
 func (h *Handlers) HandleGetAnnotation(w http.ResponseWriter, r *http.Request) {
 	a, ok := h.annotationOr404(w, r)
 	if !ok {

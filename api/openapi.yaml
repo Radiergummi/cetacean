@@ -1189,7 +1189,9 @@ paths:
       operationId: getCluster
       tags: [Cluster]
       summary: Cluster overview
-      description: Aggregated counts and status of all swarm resources.
+      description: >-
+        Aggregated counts and status of all swarm resources. Links `/annotations`
+        with `rel="edit"` when the caller may create a cluster-wide annotation.
       responses:
         "200":
           description: Cluster snapshot
@@ -5337,7 +5339,8 @@ paths:
       summary: List annotations
       description: >-
         The history narrowed to annotations, as `/history?kind=annotation` lists
-        them, with the same filters, cursor paging and CSV rendering.
+        them, with the same filters, cursor paging and CSV rendering. `Allow`
+        lists `POST` when the caller may create an annotation.
       parameters:
         - name: type
           in: query

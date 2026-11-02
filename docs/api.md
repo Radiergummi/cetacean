@@ -565,7 +565,8 @@ Who may do what follows the resources an annotation names:
 
 An annotation doesn't change anything in Docker, so it needs no [operations level][operations-level]: annotations work
 on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may
-annotate that resource. The cluster holds at most 10,000 annotations; the next one is refused with `409` (`ANN002`)
+annotate that resource, and `GET /cluster` links it when the caller may create a cluster-wide one. `GET /annotations`
+lists `POST` in `Allow` when the caller may create any annotation. The cluster holds at most 10,000 annotations; the next one is refused with `409` (`ANN002`)
 rather than removing an older one.
 
 ### Annotations on the history

@@ -77,6 +77,7 @@ func (h *Handlers) HandleCluster(w http.ResponseWriter, r *http.Request) {
 		PrometheusConfigured: h.promClient != nil,
 		LocalNodeID:          h.getLocalNodeID(r.Context()),
 	}
+	h.linkClusterAnnotations(w, r)
 	writeCachedJSON(w, r, NewDetailResponse(r.Context(), "/cluster", "Cluster", overview))
 }
 
