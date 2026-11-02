@@ -31,6 +31,9 @@ type lockPackage struct {
 	Resolution struct {
 		Integrity string `yaml:"integrity"`
 	} `yaml:"resolution"`
+	PeerDependenciesMeta map[string]struct {
+		Optional bool `yaml:"optional"`
+	} `yaml:"peerDependenciesMeta"`
 }
 
 type lockSnapshot struct {
@@ -67,7 +70,8 @@ func loadLockfile(path, want string) (*lockfile, error) {
 
 // closure walks the production graph from one importer's direct dependencies.
 // Development dependencies are absent from the importer entry we read, so they
-// never enter; optional dependencies do, because an installed one ships.
+// never enter; optional dependencies do, because an installed one ships. An
+// optional peer does not: pnpm fills it from dev tooling as readily as not.
 func (l *lockfile) closure(imp string) []string {
 	seen := map[string]bool{}
 	queue := []string{}
@@ -91,9 +95,16 @@ func (l *lockfile) closure(imp string) []string {
 			continue
 		}
 
+		name, version := splitKey(key)
+		peers := l.Packages[name+"@"+version].PeerDependenciesMeta
+
 		for _, deps := range []map[string]string{snapshot.Dependencies, snapshot.OptionalDependencies} {
-			for name, version := range deps {
-				queue = append(queue, name+"@"+version)
+			for dep, depVersion := range deps {
+				if peers[dep].Optional {
+					continue
+				}
+
+				queue = append(queue, dep+"@"+depVersion)
 			}
 		}
 	}

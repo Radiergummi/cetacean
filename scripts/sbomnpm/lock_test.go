@@ -140,6 +140,62 @@ snapshots:
 	}
 }
 
+// pnpm satisfies an optional peer from whatever the workspace installs, dev
+// tooling included, and records it in the snapshot like any dependency.
+func TestClosureSkipsOptionalPeers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pnpm-lock.yaml")
+	write(t, path, `lockfileVersion: '9.0'
+importers:
+  frontend:
+    dependencies:
+      plugin:
+        specifier: ^1.0.0
+        version: 1.0.0(bundler@4.0.0)(framework@5.0.0)(shared@6.0.0)
+packages:
+  plugin@1.0.0:
+    peerDependencies:
+      bundler: '*'
+      framework: '*'
+      shared: '*'
+    peerDependenciesMeta:
+      bundler:
+        optional: true
+      shared:
+        optional: true
+snapshots:
+  plugin@1.0.0(bundler@4.0.0)(framework@5.0.0)(shared@6.0.0):
+    dependencies:
+      bundler: 4.0.0
+      framework: 5.0.0
+      helper: 7.0.0
+      shared: 6.0.0
+  helper@7.0.0:
+    dependencies:
+      shared: 6.0.0
+  bundler@4.0.0: {}
+  framework@5.0.0: {}
+  shared@6.0.0: {}
+`)
+
+	lock, err := loadLockfile(path, "frontend")
+	if err != nil {
+		t.Fatalf("loadLockfile: %v", err)
+	}
+
+	got := lock.closure("frontend")
+	slices.Sort(got)
+
+	want := []string{
+		"framework@5.0.0",
+		"helper@7.0.0",
+		"plugin@1.0.0(bundler@4.0.0)(framework@5.0.0)(shared@6.0.0)",
+		"shared@6.0.0",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("closure = %v; want %v", got, want)
+	}
+}
+
 func write(t *testing.T, path, content string) {
 	t.Helper()
 
