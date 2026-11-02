@@ -34,6 +34,10 @@ const (
 
 	// EventGap records a window nobody watched; it names no resource.
 	EventGap EventType = "gap"
+
+	// EventAnnotation is a write to an annotation; its Resource is the
+	// Annotation, as the write left it or, on a remove, as it was.
+	EventAnnotation EventType = "annotation"
 )
 
 type Event struct {
@@ -429,6 +433,12 @@ func (c *Cache) notify(e Event) {
 		}
 	}
 
+	c.dispatch(e)
+}
+
+// dispatch calls every listener with e, under notifyMu so they see events in
+// history order.
+func (c *Cache) dispatch(e Event) {
 	// Snapshot listeners under read lock, then call outside it, so a listener
 	// may read the cache.
 	c.listenerMu.RLock()

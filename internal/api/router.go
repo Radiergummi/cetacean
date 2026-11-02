@@ -986,7 +986,8 @@ func (rt routes) stacks() {
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
-			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
+			name := r.PathValue("name")
+			stackMatch := sse.AnnotationsOn(h.cache, name, sse.StackMatcher(h.cache, name))
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
 		}, stackFeeds, spa),
 	)

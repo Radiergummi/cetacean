@@ -444,6 +444,10 @@ entries, so a data source that doesn't follow the `next` link shows only the new
 rows from `items`, the time from `timestamp`, and the text from `name` and `action`. Grafana sees only the entries
 the token's identity may read.
 
+[Annotations](#annotations-on-the-history) carry `text` and `tags` under the names Grafana expects, so they map as
+they are. Map `until` to `timeEnd` to draw a range annotation as a region. Add `kind=annotation` to draw only
+annotations.
+
 ### Who made a change
 
 An entry for a change made through Cetacean carries an `actor`: the identity that made it and how it arrived. An
@@ -578,7 +582,19 @@ The filters apply to annotations as follows:
 - `resourceId` keeps the annotations that name the resource, those on a service's stack, and cluster-wide ones.
   `type` without `resourceId` keeps those naming a resource of that type, and cluster-wide ones.
 
-The CSV adds `text` and `tags` columns, the tags separated by commas.
+The CSV adds `text` and `tags` columns, the tags separated by commas. In Atom and JSON Feed, an annotation is one
+entry whose ID never changes and whose `updated` (`date_modified`) is its last edit, so a feed reader shows an edit as
+an update to the entry rather than as a new one.
+
+An `annotation` event reports each create, edit, and delete as it happens. It is sent on `/events`, and on the
+[service, node and stack streams](#per-resource-streams) of each resource the annotation belongs on, by the same rule
+as `resourceId` above. `resource` carries the annotation, and is absent on `remove`:
+
+```sse
+id: 4182
+event: annotation
+data: {"@id":"/annotations/4182","@type":"Annotation","type":"annotation","action":"create","id":"4182","resource":{"id":4182,"timestamp":"2026-11-01T14:00:00Z","text":"Load test against the checkout flow","tags":["load-test"],"resources":[...]}}
+```
 
 ## Response format
 
@@ -877,8 +893,8 @@ Accept: text/event-stream
 curl -H "Accept: text/event-stream" "http://localhost:9000/events?types=service,node"
 ```
 
-Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`. `sync` and `gap` events
-always pass the filter.
+Valid types: `node`, `service`, `task`, `config`, `secret`, `network`, `volume`, `stack`, `annotation`. `sync` and
+`gap` events always pass the filter.
 
 ### Keepalive
 

@@ -35,7 +35,8 @@ info:
 
     A replayed event carries no `resource`: replay reads the change history,
     which stores identity and not payload. A client that assumes `resource` is
-    present breaks only after a reconnection.
+    present breaks only after a reconnection. An `annotation` event is the
+    exception: its replay carries the annotation as that write left it.
   license:
     name: MIT
     url: https://github.com/Radiergummi/cetacean/blob/main/LICENSE
@@ -80,6 +81,8 @@ channels:
         $ref: "#/components/messages/node"
       task:
         $ref: "#/components/messages/task"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -120,6 +123,8 @@ channels:
         $ref: "#/components/messages/service"
       task:
         $ref: "#/components/messages/task"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -195,6 +200,8 @@ channels:
         $ref: "#/components/messages/network"
       volume:
         $ref: "#/components/messages/volume"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -340,9 +347,9 @@ channels:
     address: /events
     title: Global event stream
     description: |
-      Every resource change in one stream, and every gap in the record.
-      `?types=` narrows it to a comma-separated list of event type names;
-      `sync` and `gap` always pass the filter.
+      Every resource change in one stream, every gap in the record, and every
+      annotation write. `?types=` narrows it to a comma-separated list of event
+      type names; `sync` and `gap` always pass the filter.
     messages:
       node:
         $ref: "#/components/messages/node"
@@ -362,6 +369,8 @@ channels:
         $ref: "#/components/messages/volume"
       gap:
         $ref: "#/components/messages/gap"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -714,6 +723,7 @@ components:
           anyOf:
             - $ref: "#/components/schemas/SSEEvent"
             - $ref: "#/components/schemas/Gap"
+            - $ref: "#/components/schemas/AnnotationEvent"
 
     gap:
       name: gap
@@ -728,6 +738,20 @@ components:
         replayed there like any change. Its `@id` is its history entry.
       payload:
         $ref: "#/components/schemas/Gap"
+
+    annotation:
+      name: annotation
+      title: Annotation event
+      summary: An annotation was created, edited or deleted.
+      description: |
+        Sent on `/events`, and on each service, node and stack detail stream
+        whose timeline the annotation belongs on, as `/history?resourceId=`
+        lists it there: one that names the resource, one on a service's stack,
+        or a cluster-wide one. Sent only to a caller who may read every
+        resource it names. `resource` is the annotation as the write left it,
+        absent on `remove`; a replay carries it too.
+      payload:
+        $ref: "#/components/schemas/AnnotationEvent"
 
     sync:
       name: sync
@@ -844,6 +868,130 @@ components:
         id: ""
         timestamp: "2026-10-30T13:00:00Z"
         until: "2026-10-30T16:00:00Z"
+
+    AnnotationEvent:
+      type: object
+      required: ["@id", "@type", type, action, id]
+      properties:
+        "@id":
+          type: string
+          description: The annotation's path
+        "@type":
+          type: string
+          const: Annotation
+        type:
+          type: string
+          const: annotation
+        action:
+          type: string
+          enum: [create, update, remove]
+        id:
+          type: string
+          description: The annotation's ID
+        resource:
+          $ref: "#/components/schemas/Annotation"
+      example:
+        "@id": /annotations/4182
+        "@type": Annotation
+        type: annotation
+        action: create
+        id: "4182"
+        resource:
+          id: 4182
+          timestamp: "2026-11-01T14:00:00Z"
+          until: "2026-11-01T14:30:00Z"
+          text: Load test against the checkout flow
+          tags: [load-test]
+          resources:
+            - type: service
+              id: r8m2x5nk3p7q
+              name: webapp
+
+    # Copied from api/openapi.yaml and held to it by
+    # TestAsyncAPISchemasMatchOpenAPI, as SSEEvent below is.
+    Annotation:
+      type: object
+      required: [id, timestamp, text, tags, resources]
+      properties:
+        id:
+          type: integer
+          description: The sequence ID of the item that created it; an edit keeps it
+        timestamp:
+          type: string
+          format: date-time
+          description: The moment it describes, or the start of the range
+        until:
+          type: string
+          format: date-time
+          description: The end of the range; absent for a point
+        text:
+          type: string
+          maxLength: 1000
+          description: Plain text
+        tags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            pattern: "^[a-z0-9._-]{1,40}$"
+        resources:
+          type: array
+          maxItems: 20
+          description: The resources it is about; empty for a cluster-wide annotation
+          items:
+            $ref: "#/components/schemas/AnnotationResource"
+        actor:
+          $ref: "#/components/schemas/HistoryActor"
+        updated:
+          type: string
+          format: date-time
+          description: When it was last edited; absent until it is
+        editor:
+          $ref: "#/components/schemas/HistoryActor"
+
+    AnnotationResource:
+      type: object
+      required: [type, id, name]
+      properties:
+        type:
+          type: string
+          enum: [service, stack, node]
+        id:
+          type: string
+          description: The resource's ID; a stack's is its name
+        name:
+          type: string
+          description: Its name when the annotation named it
+
+    HistoryActor:
+      type: object
+      description: >-
+        Who made the change through Cetacean. Absent on an entry for a change
+        made elsewhere, such as with the Docker CLI. Shown to every caller who
+        may read the entry.
+      required: [subject, provider, transport]
+      properties:
+        subject:
+          type: string
+          description: The identity's subject
+        name:
+          type: string
+          description: Its display name, when the provider sent one
+        provider:
+          type: string
+          description: >-
+            The auth provider that established the identity, or `oauth` for a
+            token this deployment issued
+        client:
+          type: string
+          description: The OAuth client ID, when the call carried a token this deployment issued
+        transport:
+          type: string
+          enum: [dashboard, rest, mcp]
+          description: >-
+            How the write arrived. `dashboard` is a request the browser marked
+            `Sec-Fetch-Site: same-origin` without a bearer token; any other
+            request to the web API is `rest`. A label, not a credential.
 
     # Copied from api/openapi.yaml#/components/schemas/SSEEvent and held to it
     # by TestAsyncAPISchemasMatchOpenAPI. A $ref cannot be used: the correct

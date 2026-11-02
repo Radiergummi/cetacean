@@ -155,7 +155,7 @@ func (c *Cache) DeleteAnnotation(
 		return err
 	}
 
-	return c.commitAnnotation(ctx, Annotation{ID: id}, "remove")
+	return c.commitAnnotation(ctx, current, "remove")
 }
 
 func (c *Cache) annotationCount() int {
@@ -200,10 +200,20 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 	}
 	c.annotations.mu.Unlock()
 
-	c.history.Append(HistoryEntry{
+	id := strconv.FormatUint(a.ID, 10)
+	historyID := c.history.Append(HistoryEntry{
 		Kind:       KindAnnotation,
 		Action:     action,
-		ResourceID: strconv.FormatUint(a.ID, 10),
+		ResourceID: id,
+		Annotation: &a,
+	})
+
+	c.dispatch(Event{
+		Type:      EventAnnotation,
+		Action:    action,
+		ID:        id,
+		Resource:  a,
+		HistoryID: historyID,
 	})
 
 	return nil
@@ -250,10 +260,7 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 
 // annotationEntries returns the newest q.Limit annotations q admits.
 func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
-	var stack string
-	if svc, ok := c.GetService(q.ResourceID); ok {
-		stack = svc.Spec.Labels[StackLabel]
-	}
+	stack := c.serviceStack(q.ResourceID)
 
 	c.annotations.mu.RLock()
 	found := make([]Annotation, 0, len(c.annotations.byID))
@@ -308,18 +315,40 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
-	if len(a.Resources) == 0 {
-		return true
+	if q.ResourceID != "" {
+		return a.About(q.ResourceID, stack)
 	}
 
-	return slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
-		if q.ResourceID != "" {
-			return r.ID == q.ResourceID || stack != "" && r.Type == EventStack && r.ID == stack
-		}
+	return len(a.Resources) == 0 ||
+		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+			return (q.Type == "" || r.Type == q.Type) &&
+				(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
+		})
+}
 
-		return (q.Type == "" || r.Type == q.Type) &&
-			(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
-	})
+// AnnotationOn reports whether a belongs on the timeline of the resource with
+// id, as a list filtered by that resource finds it.
+func (c *Cache) AnnotationOn(a Annotation, id string) bool {
+	return a.About(id, c.serviceStack(id))
+}
+
+// serviceStack is the stack of the service with id, or empty.
+func (c *Cache) serviceStack(id string) string {
+	svc, ok := c.GetService(id)
+	if !ok {
+		return ""
+	}
+
+	return svc.Spec.Labels[StackLabel]
+}
+
+// About reports whether a belongs on the timeline of the resource with id:
+// it names it, it is cluster-wide, or it names stack, the resource's stack.
+func (a Annotation) About(id, stack string) bool {
+	return len(a.Resources) == 0 ||
+		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+			return r.ID == id || stack != "" && r.Type == EventStack && r.ID == stack
+		})
 }
 
 func (a Annotation) entry() HistoryEntry {
@@ -334,5 +363,7 @@ func (a Annotation) entry() HistoryEntry {
 		Resources: a.Resources,
 		Updated:   a.Updated,
 		Editor:    a.Editor,
+
+		Annotation: &a,
 	}
 }

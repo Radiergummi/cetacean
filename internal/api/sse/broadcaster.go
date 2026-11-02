@@ -474,11 +474,6 @@ func (b *Broadcaster) replayEvents(
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []frameEvent
 	for _, e := range entries {
-		// An annotation item has no event shape yet; its readers come with them.
-		if e.Kind == cache.KindAnnotation {
-			continue
-		}
-
 		ev := replayEvent(e)
 
 		if replayType != ReplayAll && ev.Type != replayType {
@@ -500,8 +495,18 @@ func (b *Broadcaster) replayEvents(
 }
 
 // replayEvent is the event a history entry was recorded from, without the
-// resource payload the history does not keep.
+// resource payload the history does not keep, but for an annotation's.
 func replayEvent(e cache.HistoryEntry) cache.Event {
+	if e.Kind == cache.KindAnnotation && e.Annotation != nil {
+		return cache.Event{
+			Type:      cache.EventAnnotation,
+			Action:    e.Action,
+			ID:        e.ResourceID,
+			Resource:  *e.Annotation,
+			HistoryID: e.ID,
+		}
+	}
+
 	if e.Kind == cache.KindGap {
 		return cache.Event{
 			Type:      cache.EventGap,
@@ -766,6 +771,18 @@ func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 	}
 }
 
+// AnnotationsOn extends match with the annotations on the timeline of the
+// resource with id, which /history lists for it.
+func AnnotationsOn(c *cache.Cache, id string, match func(cache.Event) bool) func(cache.Event) bool {
+	return func(e cache.Event) bool {
+		if a, ok := e.Resource.(cache.Annotation); ok && e.Type == cache.EventAnnotation {
+			return c.AnnotationOn(a, id)
+		}
+
+		return match(e)
+	}
+}
+
 // Event is the JSON-LD enriched wire format for SSE event payloads.
 type Event struct {
 	AtID     string `json:"@id,omitempty"`
@@ -838,6 +855,8 @@ func ResourcePath(typ cache.EventType, id string) string {
 		return "/volumes/" + id
 	case cache.EventStack:
 		return "/stacks/" + id
+	case cache.EventAnnotation:
+		return "/annotations/" + id
 	default:
 		return ""
 	}
@@ -864,6 +883,8 @@ func ResourceType(typ cache.EventType) string {
 		return "Stack"
 	case cache.EventGap:
 		return "Gap"
+	case cache.EventAnnotation:
+		return "Annotation"
 	default:
 		return ""
 	}

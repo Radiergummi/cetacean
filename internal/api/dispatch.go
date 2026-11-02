@@ -178,6 +178,10 @@ func (h *Handlers) streamResource(
 	// No replay for per-resource streams: cross-resource matchers can't be
 	// reconstructed from history, so reconnects fall back to a sync event.
 	resMatch := sse.ResourceMatcher(typ, id)
+	if typ == cache.EventService || typ == cache.EventNode {
+		resMatch = sse.AnnotationsOn(h.cache, id, resMatch)
+	}
+
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
 }
 
@@ -198,6 +202,8 @@ func (h *Handlers) aclMatchWrap(
 	inner func(cache.Event) bool,
 ) func(cache.Event) bool {
 	id := auth.IdentityFromContext(r.Context())
+	annotations := h.annotationCaller(r)
+
 	return func(ev cache.Event) bool {
 		if inner != nil && !inner(ev) {
 			return false
@@ -212,6 +218,9 @@ func (h *Handlers) aclMatchWrap(
 		// A gap names no resource; whoever may read the stream may read it.
 		if ev.Type == cache.EventGap {
 			return true
+		}
+		if a, ok := ev.Resource.(cache.Annotation); ok && ev.Type == cache.EventAnnotation {
+			return annotations.MayRead(a)
 		}
 		return cluster.CanReadEvent(ev, func(resource string) bool {
 			return h.acl.Can(id, "read", resource)
