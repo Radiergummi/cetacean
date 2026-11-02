@@ -48,6 +48,16 @@ func annotationHandlers(t *testing.T, timeline bool) *Handlers {
 			Audience:    []string{"user:carol"},
 			Permissions: []string{"write"},
 		},
+		{
+			Resources:   []string{"service:web", "config:*"},
+			Audience:    []string{"user:dave"},
+			Permissions: []string{"read"},
+		},
+		{
+			Resources:   []string{"config:*"},
+			Audience:    []string{"user:dave"},
+			Permissions: []string{"write"},
+		},
 	}})
 
 	return newTestHandlers(t, withCache(c), withACL(e))
@@ -369,6 +379,7 @@ func TestListAnnotationsAllowsPostToWhoMayAnnotate(t *testing.T) {
 		{true, "alice", "GET, HEAD, POST"},
 		{true, "carol", "GET, HEAD, POST"},
 		{true, "bob", "GET, HEAD"},
+		{true, "dave", "GET, HEAD"},
 		{false, "alice", "GET, HEAD"},
 	} {
 		h := annotationHandlers(t, tc.timeline)
