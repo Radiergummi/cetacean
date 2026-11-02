@@ -456,36 +456,80 @@ describe("api.recentActivity", () => {
     name: kind === "gap" ? "" : "web",
   });
 
+  const route = (pages: Record<string, unknown[]>) =>
+    mockFetch.mockImplementation((url) =>
+      page(pages[new URL(String(url), "http://localhost").searchParams.get("kind") ?? ""] ?? []),
+    );
+
+  const requests = () =>
+    new Map(
+      mockFetch.mock.calls.map(([url]) => {
+        const parsed = new URL(String(url), "http://localhost");
+
+        return [parsed.searchParams.get("kind"), parsed.searchParams] as const;
+      }),
+    );
+
   it("asks for the changes, then the gaps since the oldest, and merges them newest first", async () => {
-    mockFetch
-      .mockReturnValueOnce(
-        page([
-          entry(9, "change", "2026-10-30T17:00:00Z"),
-          entry(4, "change", "2026-10-30T12:00:00Z"),
-        ]),
-      )
-      .mockReturnValueOnce(page([entry(7, "gap", "2026-10-30T13:00:00Z")]));
+    route({
+      change: [
+        entry(9, "change", "2026-10-30T17:00:00Z"),
+        entry(4, "change", "2026-10-30T12:00:00Z"),
+      ],
+      gap: [entry(7, "gap", "2026-10-30T13:00:00Z")],
+    });
 
     const entries = await api.recentActivity({ resourceId: "svc1", type: "service" }, 2);
 
     expect(entries.map(({ id }) => id)).toEqual([9, 7, 4]);
 
-    const [first, second] = mockFetch.mock.calls.map(
-      ([url]) => new URL(String(url), "http://localhost"),
-    );
+    const sent = requests();
 
-    expect(first?.searchParams.get("kind")).toBe("change");
-    expect(first?.searchParams.get("resourceId")).toBe("svc1");
-    expect(first?.searchParams.get("limit")).toBe("2");
-    expect(second?.searchParams.get("kind")).toBe("gap");
-    expect(second?.searchParams.get("since")).toBe("2026-10-30T12:00:00Z");
+    expect(sent.get("change")?.get("resourceId")).toBe("svc1");
+    expect(sent.get("change")?.get("limit")).toBe("2");
+    expect(sent.get("gap")?.get("since")).toBe("2026-10-30T12:00:00Z");
   });
 
-  it("asks for no gaps without a change", async () => {
-    mockFetch.mockReturnValueOnce(page([]));
+  it("merges the newest changes and annotations", async () => {
+    route({
+      change: [
+        entry(9, "change", "2026-10-30T17:00:00Z"),
+        entry(7, "change", "2026-10-30T15:00:00Z"),
+        entry(2, "change", "2026-10-30T10:00:00Z"),
+      ],
+      annotation: [
+        { ...entry(8, "annotation", "2026-10-30T11:00:00Z"), type: "", text: "note" },
+        { ...entry(1, "annotation", "2026-10-30T09:00:00Z"), type: "", text: "old" },
+      ],
+      gap: [entry(6, "gap", "2026-10-30T14:00:00Z")],
+    });
+
+    const entries = await api.recentActivity({ resourceId: "svc1", type: "service" }, 3);
+
+    expect(entries.map(({ id }) => id)).toEqual([9, 8, 7, 6]);
+
+    const sent = requests();
+
+    expect(sent.get("annotation")?.get("resourceId")).toBe("svc1");
+    expect(sent.get("annotation")?.get("type")).toBe("service");
+    expect(sent.get("annotation")?.get("limit")).toBe("3");
+    expect(sent.get("gap")?.get("since")).toBe("2026-10-30T11:00:00Z");
+  });
+
+  it("returns annotations when there are no changes", async () => {
+    route({
+      annotation: [{ ...entry(3, "annotation", "2026-10-30T11:00:00Z"), type: "", text: "note" }],
+      gap: [entry(2, "gap", "2026-10-30T12:00:00Z")],
+    });
+
+    expect((await api.recentActivity({}, 25)).map(({ id }) => id)).toEqual([3, 2]);
+  });
+
+  it("asks for no gaps without a change or an annotation", async () => {
+    route({});
 
     expect(await api.recentActivity({}, 25)).toEqual([]);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(requests().has("gap")).toBe(false);
   });
 });
 

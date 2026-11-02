@@ -648,6 +648,39 @@ describe("useSwarmQuery", () => {
     expect(result.current.data).toEqual([{ ID: "s1", Name: "web" }]);
   });
 
+  it("SSE ignores an annotation, which moves no row", async () => {
+    const fetchFn = vi
+      .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()
+      .mockResolvedValue(makeFetchResult([{ ID: "s1", Name: "web" }], 1));
+
+    const { result } = renderHook(
+      () =>
+        useSwarmQuery({
+          queryKey: ["services"],
+          fetchFn,
+          sseType: "service",
+          getId: ({ ID }: Item) => ID,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() =>
+      MockEventSource.instance.simulateEvent("annotation", {
+        type: "annotation",
+        action: "create",
+        id: "4182",
+        resource: { id: 4182, timestamp: "2026-11-01T14:00:00Z", text: "note", tags: [] },
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result.current.data).toEqual([{ ID: "s1", Name: "web" }]);
+  });
+
   it("SSE patches a row in place on a list following several types", async () => {
     const fetchFn = vi
       .fn<(offset: number, signal: AbortSignal) => Promise<ReturnType<typeof makeFetchResult>>>()

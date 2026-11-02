@@ -23,6 +23,7 @@ const sseEventTypes = [
   "stack",
   "sync",
   "gap",
+  "annotation",
 ] as const;
 
 /**

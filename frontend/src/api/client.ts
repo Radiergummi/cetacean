@@ -768,30 +768,40 @@ function historyPath(
 }
 
 /**
- * The newest `limit` changes, and the gaps since the oldest of them, newest
- * first. One page holding both could fill up with gaps and show no change.
+ * The newest `limit` changes and annotations, and the gaps since the earliest
+ * time among them, newest first. An annotation's time need not follow its ID,
+ * and one page holding everything could fill up with gaps.
  */
 async function fetchRecentActivity(
   params: { type?: string; resourceId?: string },
   limit: number,
   signal?: AbortSignal | undefined,
 ): Promise<HistoryEntry[]> {
-  const { items: changes } = await fetchHistoryPage(
-    historyPath({ ...params, kind: "change", limit }),
-    signal,
+  const [{ items: changes }, { items: annotations }] = await Promise.all([
+    fetchHistoryPage(historyPath({ ...params, kind: "change", limit }), signal),
+    fetchHistoryPage(historyPath({ ...params, kind: "annotation", limit }), signal),
+  ]);
+  const kept = [...changes, ...annotations]
+    .sort((first, second) => second.id - first.id)
+    .slice(0, limit);
+  const earliest = kept.reduce<HistoryEntry | undefined>(
+    (found, entry) =>
+      found === undefined || Date.parse(entry.timestamp) < Date.parse(found.timestamp)
+        ? entry
+        : found,
+    undefined,
   );
-  const oldest = changes.at(-1);
 
-  if (oldest === undefined) {
+  if (earliest === undefined) {
     return [];
   }
 
   const { items: gaps } = await fetchHistoryPage(
-    historyPath({ kind: "gap", since: oldest.timestamp, limit: maximumPageSize }),
+    historyPath({ kind: "gap", since: earliest.timestamp, limit: maximumPageSize }),
     signal,
   );
 
-  return [...changes, ...gaps].sort((first, second) => second.id - first.id);
+  return [...kept, ...gaps].sort((first, second) => second.id - first.id);
 }
 
 /**

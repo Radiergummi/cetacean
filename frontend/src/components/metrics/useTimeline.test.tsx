@@ -11,14 +11,21 @@ const timeline = vi.fn<
     truncated: boolean;
   }>
 >();
-const invalidation = vi.fn<(path: string | undefined) => void>();
+const invalidation =
+  vi.fn<(path: string | undefined, filter?: (event: { type: string }) => boolean) => void>();
 
 vi.mock("@/api/client", () => ({
   api: { timeline: (params: Record<string, string | undefined>) => timeline(params) },
 }));
 
 vi.mock("@/hooks/useDebouncedInvalidation", () => ({
-  useDebouncedInvalidation: (path: string | undefined) => invalidation(path),
+  useDebouncedInvalidation: (
+    path: string | undefined,
+    _keys: unknown,
+    _delay: unknown,
+    _onEvent: unknown,
+    filter?: (event: { type: string }) => boolean,
+  ) => invalidation(path, filter),
 }));
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -57,7 +64,7 @@ describe("useTimeline", () => {
       until: "1970-01-01T00:33:20.000Z",
     });
     expect(result.current.truncated).toBe(true);
-    expect(invalidation).toHaveBeenCalledWith("/services/svc1");
+    expect(invalidation).toHaveBeenCalledWith("/services/svc1", expect.any(Function));
   });
 
   it("keeps the markers up while a refresh loads", async () => {
@@ -75,6 +82,21 @@ describe("useTimeline", () => {
     rerender({ refreshKey: 1 });
 
     expect(result.current.items).toHaveLength(1);
+  });
+
+  it("refetches on an annotation event", () => {
+    timeline.mockResolvedValue({ entries: [], truncated: false });
+
+    renderHook(
+      () => useTimeline({ type: "service", resourceId: "svc1" }, { range: "1h", refreshKey: 0 }),
+      { wrapper },
+    );
+
+    const filter = invalidation.mock.lastCall?.[1];
+
+    expect(filter?.({ type: "annotation" })).toBe(true);
+    expect(filter?.({ type: "service" })).toBe(true);
+    expect(filter?.({ type: "task" })).toBe(false);
   });
 
   it("fetches nothing without a resource", () => {
