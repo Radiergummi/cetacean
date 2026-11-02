@@ -541,7 +541,7 @@ var historyWindowParams = []string{"since", "until"}
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "search", "before", "limit"}, historyWindowParams,
+	[]string{"type", "resourceId", "search", "tag", "before", "limit"}, historyWindowParams,
 )
 
 // echoingFeedRequest opts r out of compression when the feed's links will echo

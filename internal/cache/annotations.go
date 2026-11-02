@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -213,4 +215,124 @@ func (c *Cache) AnnotationsOn() bool {
 	defer c.annotations.mu.RUnlock()
 
 	return c.annotations.store != nil
+}
+
+// Timeline lists the history ring merged with the annotations, newest first by
+// ID. An annotation sits at its creation ID with its current fields, and may be
+// older than anything the ring still holds.
+func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
+	if q.Limit <= 0 {
+		q.Limit = 50
+	}
+
+	var ring []HistoryEntry
+	if q.Kind != KindAnnotation {
+		ring = c.history.List(q)
+	}
+
+	if q.Kind != "" && q.Kind != KindAnnotation {
+		return ring
+	}
+
+	notes := c.annotationEntries(q)
+	merged := make([]HistoryEntry, 0, min(q.Limit, len(ring)+len(notes)))
+
+	for len(merged) < q.Limit && (len(ring) > 0 || len(notes) > 0) {
+		if len(notes) == 0 || len(ring) > 0 && ring[0].ID > notes[0].ID {
+			merged, ring = append(merged, ring[0]), ring[1:]
+		} else {
+			merged, notes = append(merged, notes[0]), notes[1:]
+		}
+	}
+
+	return merged
+}
+
+// annotationEntries returns the newest q.Limit annotations q admits.
+func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
+	var stack string
+	if svc, ok := c.GetService(q.ResourceID); ok {
+		stack = svc.Spec.Labels[StackLabel]
+	}
+
+	c.annotations.mu.RLock()
+	found := make([]Annotation, 0, len(c.annotations.byID))
+	for _, a := range c.annotations.byID {
+		if q.matchesAnnotation(a, stack) {
+			found = append(found, a)
+		}
+	}
+	c.annotations.mu.RUnlock()
+
+	slices.SortFunc(found, func(a, b Annotation) int { return cmp.Compare(b.ID, a.ID) })
+
+	entries := make([]HistoryEntry, 0, min(q.Limit, len(found)))
+	for _, a := range found {
+		if len(entries) == q.Limit {
+			break
+		}
+
+		if q.ReadableAnnotation == nil || q.ReadableAnnotation(a) {
+			entries = append(entries, a.entry())
+		}
+	}
+
+	return entries
+}
+
+// matchesAnnotation applies q to a. A resource filter admits an annotation
+// naming the resource, one on a service's stack, and a cluster-wide one;
+// without a resource ID, the type is matched against the resources named.
+func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
+	if q.BeforeID != 0 && a.ID >= q.BeforeID {
+		return false
+	}
+
+	end := a.Timestamp
+	if !a.Until.IsZero() {
+		end = a.Until
+	}
+
+	if !q.After.IsZero() && !end.After(q.After) ||
+		!q.Before.IsZero() && a.Timestamp.After(q.Before) {
+		return false
+	}
+
+	if q.Tag != "" && !slices.Contains(a.Tags, q.Tag) {
+		return false
+	}
+
+	if q.NameContains != "" && !strings.Contains(
+		strings.ToLower(a.Text), strings.ToLower(q.NameContains),
+	) {
+		return false
+	}
+
+	if len(a.Resources) == 0 {
+		return true
+	}
+
+	return slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+		if q.ResourceID != "" {
+			return r.ID == q.ResourceID || stack != "" && r.Type == EventStack && r.ID == stack
+		}
+
+		return (q.Type == "" || r.Type == q.Type) &&
+			(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
+	})
+}
+
+func (a Annotation) entry() HistoryEntry {
+	return HistoryEntry{
+		ID:        a.ID,
+		Kind:      KindAnnotation,
+		Timestamp: a.Timestamp,
+		Until:     a.Until,
+		Actor:     a.Actor,
+		Text:      a.Text,
+		Tags:      a.Tags,
+		Resources: a.Resources,
+		Updated:   a.Updated,
+		Editor:    a.Editor,
+	}
 }

@@ -15,6 +15,15 @@ import (
 // --- History ---
 
 func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
+	h.serveHistory(w, r, r.URL.Query().Get("kind"))
+}
+
+// HandleAnnotations lists the annotations: the history narrowed to them.
+func (h *Handlers) HandleAnnotations(w http.ResponseWriter, r *http.Request) {
+	h.serveHistory(w, r, cache.KindAnnotation)
+}
+
+func (h *Handlers) serveHistory(w http.ResponseWriter, r *http.Request, kind string) {
 	if !h.requireAnyGrant(w, r) {
 		return
 	}
@@ -58,11 +67,14 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		ResourceID:   resourceID,
 		BeforeID:     beforeID,
 		NameContains: q.Get("search"),
-		Kind:         q.Get("kind"),
+		Kind:         kind,
 		Limit:        limit,
 		After:        window.Since,
 		Before:       window.Until,
 		Visible:      h.readableHistory(r),
+		Tag:          q.Get("tag"),
+
+		ReadableAnnotation: h.annotationCaller(r).MayRead,
 	}
 
 	includeTasks := true
@@ -80,7 +92,7 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
 	}
 
-	entries := h.cache.History().List(query)
+	entries := h.cache.Timeline(query)
 	if entries == nil {
 		entries = []cache.HistoryEntry{}
 	}
@@ -120,12 +132,21 @@ func wrapHistory(ctx context.Context, entries []cache.HistoryEntry) []Item[cache
 		ctx,
 		entries,
 		func(e cache.HistoryEntry) string {
-			if e.Kind == cache.KindGap {
+			switch e.Kind {
+			case cache.KindGap:
 				return "Gap"
+			case cache.KindAnnotation:
+				return "Annotation"
+			default:
+				return "HistoryEntry"
+			}
+		},
+		func(e cache.HistoryEntry) string {
+			if e.Kind == cache.KindAnnotation {
+				return annotationPath(e.ID)
 			}
 
-			return "HistoryEntry"
+			return fmt.Sprintf("/history#%d", e.ID)
 		},
-		func(e cache.HistoryEntry) string { return fmt.Sprintf("/history#%d", e.ID) },
 	)
 }

@@ -42,12 +42,19 @@ type HistoryEntry struct {
 	// ServiceID is the owning service of a task entry. A query for the service
 	// returns it too, since a crash loop changes nothing on the service itself.
 	ServiceID string `json:"-"`
+
+	// The annotation's own fields, set on the entry a list makes of one.
+	Text      string               `json:"text,omitempty"`
+	Tags      []string             `json:"tags,omitempty"`
+	Resources []AnnotationResource `json:"resources,omitempty"`
+	Updated   time.Time            `json:"updated,omitzero"`
+	Editor    *Actor               `json:"editor,omitempty"`
 }
 
 type HistoryQuery struct {
 	Type         EventType
 	ResourceID   string
-	BeforeID     uint64
+	BeforeID     uint64 // keeps the entries below it; zero means unbounded
 	NameContains string // case-insensitive substring match on Name
 	Limit        int
 
@@ -78,6 +85,13 @@ type HistoryQuery struct {
 	// BeforeID page over what the caller may read. It runs under the history
 	// lock and must not call back into History.
 	Visible func(HistoryEntry) bool
+
+	// Tag narrows to annotations carrying it; a gap passes, as it does search.
+	Tag string
+
+	// ReadableAnnotation, when set, keeps only the annotations it admits. It
+	// runs outside every cache lock.
+	ReadableAnnotation func(Annotation) bool
 }
 
 type History struct {
@@ -352,8 +366,6 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		slots = h.cursor
 	}
 
-	pastCursor := q.BeforeID == 0
-
 	for i := range slots {
 		idx := h.cursor - 1 - i
 		if idx < 0 {
@@ -361,10 +373,7 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		}
 
 		e := h.entries[idx]
-		if !pastCursor {
-			if e.ID == q.BeforeID {
-				pastCursor = true
-			}
+		if q.BeforeID != 0 && e.ID >= q.BeforeID {
 			continue
 		}
 
@@ -396,6 +405,10 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 	}
 
 	if !q.Before.IsZero() && e.Timestamp.After(q.Before) {
+		return false
+	}
+
+	if e.Kind == KindChange && q.Tag != "" {
 		return false
 	}
 
@@ -442,7 +455,6 @@ func (h *History) listByResource(
 	}
 
 	result := make([]HistoryEntry, 0, min(limit, indexRingSize))
-	pastCursor := q.BeforeID == 0
 
 	for len(result) < limit {
 		// An index that has wrapped may have lost older entries that would
@@ -462,8 +474,7 @@ func (h *History) listByResource(
 			return result, true
 		}
 
-		if !pastCursor {
-			pastCursor = e.ID == q.BeforeID
+		if q.BeforeID != 0 && e.ID >= q.BeforeID {
 			continue
 		}
 
