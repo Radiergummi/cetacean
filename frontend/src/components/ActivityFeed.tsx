@@ -213,13 +213,7 @@ function seconds(timestamp: string): number {
  * A note someone wrote, as a card: its text, when it says it happened, what
  * it is about, its tags, and who wrote it.
  */
-function AnnotationCard({
-  entry,
-  hideType,
-}: {
-  entry: HistoryEntry;
-  hideType?: boolean | undefined;
-}) {
+function AnnotationCard({ entry }: { entry: HistoryEntry }) {
   const { actor, editor, resources = [], tags = [], text, timestamp, until, updated } = entry;
 
   return (
@@ -241,28 +235,27 @@ function AnnotationCard({
             )}
           </span>
 
-          {!hideType &&
-            (resources.length === 0 ? (
-              <span>Cluster-wide</span>
-            ) : (
-              resources.map(({ type, id, name }) => {
-                const path = resourcePath(type, id, name);
+          {resources.length === 0 ? (
+            <span>Cluster-wide</span>
+          ) : (
+            resources.map(({ type, id, name }) => {
+              const path = resourcePath(type, id, name);
 
-                return path ? (
-                  <Link
-                    key={`${type}-${id}`}
-                    to={path}
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    <ResourceName name={name} />
-                  </Link>
-                ) : (
-                  <span key={`${type}-${id}`}>
-                    <ResourceName name={name} />
-                  </span>
-                );
-              })
-            ))}
+              return path ? (
+                <Link
+                  key={`${type}-${id}`}
+                  to={path}
+                  className="font-medium text-foreground hover:underline"
+                >
+                  <ResourceName name={name} />
+                </Link>
+              ) : (
+                <span key={`${type}-${id}`}>
+                  <ResourceName name={name} />
+                </span>
+              );
+            })
+          )}
 
           {tags.map((tag) => (
             <span
@@ -346,7 +339,6 @@ export default function ActivityFeed({
             <AnnotationCard
               key={`annotation-${row.entry.id}`}
               entry={row.entry}
-              hideType={hideType}
             />
           );
         }

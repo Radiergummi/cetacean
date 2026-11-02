@@ -425,7 +425,13 @@ describe("ActivityFeed runs", () => {
       show(note({ resources: [{ type: "service", id: "svc1", name: "web" }] }), true);
 
       expect(screen.queryByText("Cluster-wide")).not.toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "web" })).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "web" })).toBeInTheDocument();
+    });
+
+    it("keeps a note's scope where the feed hides the type", () => {
+      show(note({}), true);
+
+      expect(screen.getByText("Cluster-wide")).toBeInTheDocument();
     });
   });
 });
