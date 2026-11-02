@@ -15,6 +15,7 @@ const groups: ShortcutGroup[] = [
       { keys: ["/"], description: "Open search palette" },
       { keys: ["⌘", "K"], description: "Toggle search palette" },
       { keys: ["Esc"], description: "Close overlay / go back" },
+      { keys: ["⌘", "⏎"], description: "Submit the form or save the editor you are in" },
     ],
   },
   {
