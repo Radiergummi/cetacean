@@ -1,4 +1,5 @@
 import type { TooltipMarkers } from "./ChartTooltipOverlay";
+import type { HistoryEntry } from "@/api/types";
 import { attribution } from "@/lib/activity";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -53,6 +54,10 @@ export interface MarkerBand {
   left: number;
   right: number;
   item: RangeItem;
+
+  /** Whether the range starts and ends inside the samples, not clipped to them. */
+  opens: boolean;
+  closes: boolean;
 }
 
 /**
@@ -153,6 +158,7 @@ export function layoutMarkers(
   const last = timestamps.at(-1);
   const changes: { x: number; item: PointItem }[] = [];
   const notes: { x: number; item: PointItem }[] = [];
+  const clusterNotes: { x: number; item: PointItem }[] = [];
   const layout: MarkerLayout = { clusters: [], bands: [], flags: [], regions: [] };
 
   if (first === undefined || last === undefined) {
@@ -164,7 +170,10 @@ export function layoutMarkers(
       const index = fractionalIndex(timestamps, item.at);
 
       if (index !== null) {
-        (item.kind === "annotation" ? notes : changes).push({ x: pixelFor(index), item });
+        const target =
+          item.kind !== "annotation" ? changes : isClusterWide(item) ? clusterNotes : notes;
+
+        target.push({ x: pixelFor(index), item });
       }
 
       continue;
@@ -181,13 +190,23 @@ export function layoutMarkers(
       left: pixelFor(left),
       right: pixelFor(right),
       item,
+      opens: item.from >= first,
+      closes: item.to <= last,
     });
   }
 
   layout.clusters = cluster(changes);
-  layout.flags = cluster(notes);
+  layout.flags = [...cluster(notes), ...cluster(clusterNotes)];
 
   return layout;
+}
+
+/**
+ * Whether an annotation is about the whole cluster rather than named resources;
+ * the two are drawn in different colours and never share a flag.
+ */
+export function isClusterWide({ entry }: { entry: HistoryEntry }): boolean {
+  return (entry.resources?.length ?? 0) === 0;
 }
 
 function cluster(points: { x: number; item: PointItem }[]): MarkerCluster[] {
@@ -250,7 +269,13 @@ export function drawMarkers(
   context: CanvasRenderingContext2D,
   area: { top: number; bottom: number; left: number; right: number },
   { clusters, bands, flags, regions }: MarkerLayout,
-  colors: { marker: string; cluster: string; gap: string; annotation: string },
+  colors: {
+    marker: string;
+    cluster: string;
+    gap: string;
+    annotation: string;
+    annotationCluster: string;
+  },
 ) {
   const height = area.bottom - area.top;
 
@@ -277,13 +302,16 @@ export function drawMarkers(
     context.restore();
   }
 
-  for (const { left, right } of regions) {
+  const noteColor = (item: TimelineItem) =>
+    isClusterWide(item) ? colors.annotationCluster : colors.annotation;
+
+  for (const { left, right, item } of regions) {
     const clippedLeft = Math.max(left, area.left);
     const clippedRight = Math.min(right, area.right);
 
     context.save();
     context.globalAlpha = rangeAlpha;
-    context.fillStyle = colors.annotation;
+    context.fillStyle = noteColor(item);
     context.beginPath();
     context.rect(clippedLeft, area.top, clippedRight - clippedLeft, height);
     context.fill();
@@ -312,27 +340,61 @@ export function drawMarkers(
     context.restore();
   }
 
-  for (const { x, items } of flags) {
-    if (x < area.left || x > area.right) {
-      continue;
+  // A range is drawn as two instants with the span between them: the start
+  // carries the pennant, so both read as the same kind of note.
+  for (const { left, right, item, opens, closes } of regions) {
+    if (opens) {
+      drawNoteLine(context, area, left, noteColor(item), 1.5, true);
     }
 
-    context.save();
-    context.strokeStyle = colors.annotation;
-    context.fillStyle = colors.annotation;
-    context.lineWidth = items.length > 1 ? 2 : 1.5;
-    context.beginPath();
-    context.moveTo(x, area.top);
-    context.lineTo(x, area.bottom);
-    context.stroke();
+    if (closes) {
+      drawNoteLine(context, area, right, noteColor(item), 1.5, false);
+    }
+  }
+
+  for (const { x, items } of flags) {
+    const [item] = items;
+
+    if (item) {
+      drawNoteLine(context, area, x, noteColor(item), items.length > 1 ? 2 : 1.5, true);
+    }
+  }
+}
+
+/**
+ * An annotation's line across the plot, with the pennant on top when `pennant`.
+ */
+function drawNoteLine(
+  context: CanvasRenderingContext2D,
+  area: { top: number; bottom: number; left: number; right: number },
+  x: number,
+  color: string,
+  width: number,
+  pennant: boolean,
+) {
+  if (x < area.left || x > area.right) {
+    return;
+  }
+
+  context.save();
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = width;
+  context.beginPath();
+  context.moveTo(x, area.top);
+  context.lineTo(x, area.bottom);
+  context.stroke();
+
+  if (pennant) {
     context.beginPath();
     context.moveTo(x, area.top);
     context.lineTo(x + flagSize, area.top + flagSize / 2);
     context.lineTo(x, area.top + flagSize);
     context.closePath();
     context.fill();
-    context.restore();
   }
+
+  context.restore();
 }
 
 /**
@@ -377,6 +439,7 @@ export function tooltipMarkers({
       ]
         .filter(Boolean)
         .join(" · "),
+      clusterWide: isClusterWide({ entry }),
     })),
     moreAnnotations: Math.max(0, notes.length - tooltipChanges),
     gap: band ? describeGap(band.item.from, band.item.to) : undefined,

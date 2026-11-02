@@ -417,9 +417,10 @@ describe("ActivityFeed runs", () => {
     });
 
     it("says when an annotation is cluster-wide", () => {
-      const { unmount } = show(note({}));
+      const { container, unmount } = show(note({}));
 
       expect(screen.getByText("Cluster-wide")).toBeInTheDocument();
+      expect(container.querySelector("[data-cluster-wide]")).not.toBeNull();
       unmount();
 
       show(note({ resources: [{ type: "service", id: "svc1", name: "web" }] }), true);

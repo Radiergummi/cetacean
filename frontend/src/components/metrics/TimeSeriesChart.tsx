@@ -279,6 +279,7 @@ export default function TimeSeriesChart({
           cluster: getSemanticChartColor("marker-cluster"),
           gap: getSemanticChartColor("gap"),
           annotation: getSemanticChartColor("annotation"),
+          annotationCluster: getSemanticChartColor("annotation-cluster"),
         });
       },
     }),

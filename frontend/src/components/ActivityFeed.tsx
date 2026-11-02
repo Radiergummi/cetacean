@@ -217,10 +217,16 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
       top
       date={timestamp}
       marker={
-        <div className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background" />
+        <div
+          data-cluster-wide={resources.length === 0 || undefined}
+          className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
+        />
       }
     >
-      <div className="min-w-0 flex-1 rounded-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm">
+      <div
+        data-cluster-wide={resources.length === 0 || undefined}
+        className="min-w-0 flex-1 rounded-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
+      >
         <p className="break-words whitespace-pre-wrap">{text}</p>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">

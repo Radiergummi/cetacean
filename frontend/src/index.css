@@ -71,7 +71,9 @@
   --chart-marker-cluster: #a8a8a8;
   --chart-gap: rgba(136, 136, 136, 0.12);
   --annotation: #c026d3;
+  --annotation-cluster: #0284c7;
   --chart-annotation: var(--annotation);
+  --chart-annotation-cluster: var(--annotation-cluster);
   --radius: 0.625rem;
 }
 
@@ -79,6 +81,7 @@
   --chart-marker: #3c3c3c;
   --chart-marker-cluster: #5e5e5e;
   --annotation: #e879f9;
+  --annotation-cluster: #38bdf8;
   --link: oklch(0.695 0.17 254.624);
   /* Lightened so they carry on the dark background, where the same two
      readings are 5.4-8.9:1. All five are restated because :root no longer
@@ -138,6 +141,7 @@
   --color-status-neutral: var(--status-neutral);
   --color-status-foreground: var(--status-foreground);
   --color-annotation: var(--annotation);
+  --color-annotation-cluster: var(--annotation-cluster);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
