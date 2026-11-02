@@ -181,7 +181,10 @@ Each of these looks like a simplification and is not.
   restore counter takes `annotations.version` as well as `timeline.id`. The
   commit goes straight to the store, not through the writer goroutine: that
   goroutine records gaps through `notify`, so waiting on it under `notifyMu`
-  deadlocks.
+  deadlocks. Listeners hear the write through `dispatch`, not `notify`, with
+  the `Annotation` as `Resource` (as it was, on a remove); the item keeps that
+  copy, the one payload SSE replay sends. Annotation events are read-checked by
+  `AnnotationCaller.MayRead`, not `CanReadEvent`, and MCP ignores them.
 
 ## Details that bite
 

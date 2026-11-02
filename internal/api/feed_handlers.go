@@ -149,7 +149,8 @@ func (h *Handlers) queryHistoryFeed(
 	query.Limit = limit
 	query.Visible = h.readableHistory(r)
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
-	entries := cluster.NameHistoryTasks(h.cache, h.cache.History().List(query), canRead)
+	query.ReadableAnnotation = h.annotationCaller(r).MayRead
+	entries := cluster.NameHistoryTasks(h.cache, h.cache.Timeline(query), canRead)
 
 	return entries, beforeID, limit, true
 }
@@ -247,6 +248,8 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		}
 
 		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{
+			Kind:   q.Get("kind"),
+			Tag:    q.Get("tag"),
 			After:  window.Since,
 			Before: window.Until,
 		})
@@ -255,7 +258,7 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		}
 
 		data := historyFeedData(r, "History", entries, beforeID, limit)
-		data.QueryParams = historyWindowParams
+		data.QueryParams = historyFeedParams
 
 		render(w, r, data)
 	}
@@ -317,6 +320,11 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 			continue
 		}
 
+		if e.Kind == cache.KindAnnotation {
+			result = append(result, annotationFeedEntry(r, e))
+			continue
+		}
+
 		verb := actionVerb[e.Action]
 		if verb == "" && e.Action != "" {
 			verb = strings.ToUpper(e.Action[:1]) + e.Action[1:]
@@ -353,6 +361,41 @@ func gapFeedEntry(e cache.HistoryEntry) feedEntry {
 			", so changes made then are missing from this record.</p>",
 		Updated: e.Until,
 		Tags:    []string{cache.KindGap},
+	}
+}
+
+// annotationFeedEntry is an annotation as a feed entry. Its ID stays fixed and
+// it is updated at its last edit, so a reader shows an edit as an update.
+func annotationFeedEntry(r *http.Request, e cache.HistoryEntry) feedEntry {
+	href := absURL(r, annotationPath(e.ID))
+
+	title, _, _ := strings.Cut(strings.TrimSpace(e.Text), "\n")
+	title = strings.TrimSpace(title)
+	if runes := []rune(title); len(runes) > 80 {
+		title = string(runes[:79]) + "…"
+	}
+
+	var b strings.Builder
+	b.WriteString("<p>")
+	b.WriteString(html.EscapeString(e.Text))
+	b.WriteString("</p><p>")
+	b.WriteString(html.EscapeString(e.Timestamp.UTC().Format(time.RFC3339)))
+	if !e.Until.IsZero() {
+		b.WriteString(" to ")
+		b.WriteString(html.EscapeString(e.Until.UTC().Format(time.RFC3339)))
+	}
+	b.WriteString(`</p><p><a href="`)
+	b.WriteString(html.EscapeString(href))
+	b.WriteString(`">View in Cetacean</a></p>`)
+
+	return feedEntry{
+		ID:          fmt.Sprintf("urn:cetacean:annotation:%d", e.ID),
+		Title:       title,
+		ContentHTML: b.String(),
+		URL:         href,
+		Updated:     historyEntryUpdated(e),
+		Tags:        append([]string{cache.KindAnnotation}, e.Tags...),
+		Author:      actorName(e.Actor),
 	}
 }
 
@@ -535,14 +578,13 @@ var searchFeedParams = []string{"q"}
 // its JSON handler prepared, so the alternate link has to carry them.
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
-// historyWindowParams names what /history's feeds read beyond the pagination
+// historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyWindowParams = []string{"since", "until"}
+var historyFeedParams = []string{"kind", "tag", "since", "until"}
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "kind", "tasks", "search", "tag", "before", "limit"},
-	historyWindowParams,
+	[]string{"type", "resourceId", "tasks", "search", "before", "limit"}, historyFeedParams,
 )
 
 // echoingFeedRequest opts r out of compression when the feed's links will echo
@@ -593,15 +635,35 @@ func feedHref(base string, query url.Values) string {
 // deterministic (time.Now would produce a different ETag every request).
 var emptyFeedEpoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-// historyUpdated returns the timestamp of the most recent history entry,
-// or a fixed epoch if the slice is empty.
+// historyUpdated returns when the most recent history entry was updated, or a
+// fixed epoch if the slice is empty. An annotation may be edited long after
+// the entries listed above it.
 func historyUpdated(entries []cache.HistoryEntry) time.Time {
-	switch {
-	case len(entries) == 0:
+	if len(entries) == 0 {
 		return emptyFeedEpoch
-	case entries[0].Kind == cache.KindGap:
-		return entries[0].Until
+	}
+
+	var updated time.Time
+	for _, e := range entries {
+		if at := historyEntryUpdated(e); at.After(updated) {
+			updated = at
+		}
+	}
+
+	return updated
+}
+
+// historyEntryUpdated is when an entry last changed: a gap at its end, an
+// annotation at its last edit or creation, a change when it was recorded.
+func historyEntryUpdated(e cache.HistoryEntry) time.Time {
+	switch {
+	case e.Kind == cache.KindGap:
+		return e.Until
+	case e.Kind == cache.KindAnnotation && e.Annotation != nil:
+		return annotationModified(*e.Annotation)
+	case e.Kind == cache.KindAnnotation && !e.Updated.IsZero():
+		return e.Updated
 	default:
-		return entries[0].Timestamp
+		return e.Timestamp
 	}
 }

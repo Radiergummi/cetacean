@@ -145,7 +145,8 @@ func (s *Server) eventKeys(event cache.Event) []eventKey {
 			keys = append(keys, refKeys(cache.EventSecret, secrets)...)
 		}
 
-	case cache.EventNode, cache.EventStack, cache.EventSync, cache.EventGap:
+	case cache.EventNode, cache.EventStack, cache.EventSync, cache.EventGap,
+		cache.EventAnnotation:
 	}
 
 	return keys
@@ -311,7 +312,8 @@ func (s *Server) cachedResource(typ cache.EventType, id string) any {
 		resource, ok = s.cache.GetNetwork(id)
 	case cache.EventVolume:
 		resource, ok = s.cache.GetVolume(id)
-	case cache.EventNode, cache.EventTask, cache.EventStack, cache.EventSync, cache.EventGap:
+	case cache.EventNode, cache.EventTask, cache.EventStack, cache.EventSync, cache.EventGap,
+		cache.EventAnnotation:
 	}
 
 	if !ok {

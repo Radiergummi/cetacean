@@ -390,6 +390,11 @@ func (s *Server) startNotifications() func() {
 // resources/list_changed, which carries no URI. Deliveries are ACL-checked, so
 // a policy tightened after a subscription still applies.
 func (s *Server) dispatchCacheEvent(event cache.Event) {
+	// No MCP resource is an annotation, nor lists them.
+	if event.Type == cache.EventAnnotation {
+		return
+	}
+
 	hasResource := eventNamesResource(event)
 	for _, d := range s.notifications.matchingDeliveries(event) {
 		canRead := func(resource string) bool { return s.canRead(d.identity, resource) }

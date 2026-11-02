@@ -962,10 +962,15 @@ func TestSSE_ReplayAllReplaysEveryType(t *testing.T) {
 	}
 }
 
-func TestSSE_ReplaySkipsAnnotationItems(t *testing.T) {
+func TestSSE_ReplaysAnAnnotationWriteAsItLeftIt(t *testing.T) {
 	h := cache.NewHistory(100)
 	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s0"})
-	h.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create", ResourceID: "42"})
+	h.Append(cache.HistoryEntry{
+		Kind:       cache.KindAnnotation,
+		Action:     "create",
+		ResourceID: "2",
+		Annotation: &cache.Annotation{ID: 2, Text: "load test"},
+	})
 	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
 
 	b := NewBroadcaster(10*time.Millisecond, h)
@@ -987,8 +992,43 @@ func TestSSE_ReplaySkipsAnnotationItems(t *testing.T) {
 	b.Close()
 	<-done
 
-	if body := w.bodyString(); strings.Contains(body, `"42"`) {
-		t.Errorf("replay sent an annotation item: %s", body)
+	body := w.bodyString()
+	for _, want := range []string{
+		`"@id":"/annotations/2"`, `"@type":"Annotation"`, `"text":"load test"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("replay lacks %s: %s", want, body)
+		}
+	}
+}
+
+func TestSSE_SkipsAnAnnotationItemWithoutItsAnnotation(t *testing.T) {
+	h := cache.NewHistory(100)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s0"})
+	h.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create", ResourceID: "2"})
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
+
+	b := NewBroadcaster(10*time.Millisecond, h)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	req.Header.Set("Last-Event-ID", b.EventID(1))
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil, ReplayAll)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, `"n1"`)
+
+	b.Close()
+	<-done
+
+	if body := w.bodyString(); strings.Contains(body, `"2"`) {
+		t.Errorf("replay sent the annotation item with no annotation: %s", body)
 	}
 }
 
@@ -1141,5 +1181,40 @@ func TestStackMatcherSeesStackRemoves(t *testing.T) {
 		if want := e.ID != "t2"; match(e) != want {
 			t.Errorf("%s remove of %s: match = %v, want %v", e.Type, e.ID, !want, want)
 		}
+	}
+}
+
+func TestAnnotationsOn(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{
+		Name: "web", Labels: map[string]string{cache.StackLabel: "shop"},
+	}}})
+	match := AnnotationsOn(c, "svc1", ResourceMatcher(cache.EventService, "svc1"))
+
+	annotation := func(resources ...cache.AnnotationResource) cache.Event {
+		return cache.Event{
+			Type:     cache.EventAnnotation,
+			Action:   "create",
+			Resource: cache.Annotation{Resources: resources},
+		}
+	}
+
+	for _, tt := range []struct {
+		name string
+		ev   cache.Event
+		want bool
+	}{
+		{"its own change", cache.Event{Type: cache.EventService, ID: "svc1"}, true},
+		{"another service's change", cache.Event{Type: cache.EventService, ID: "svc2"}, false},
+		{"on it", annotation(cache.AnnotationResource{Type: cache.EventService, ID: "svc1"}), true},
+		{"on its stack", annotation(cache.AnnotationResource{Type: cache.EventStack, ID: "shop"}), true},
+		{"cluster-wide", annotation(), true},
+		{"on a node", annotation(cache.AnnotationResource{Type: cache.EventNode, ID: "n1"}), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := match(tt.ev); got != tt.want {
+				t.Errorf("match = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

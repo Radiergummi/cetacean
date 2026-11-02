@@ -986,7 +986,8 @@ func (rt routes) stacks() {
 	mux.HandleFunc(
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
-			stackMatch := sse.StackMatcher(h.cache, r.PathValue("name"))
+			name := r.PathValue("name")
+			stackMatch := sse.AnnotationsOn(h.cache, name, sse.StackMatcher(h.cache, name))
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
 		}, stackFeeds, spa),
 	)
@@ -1113,7 +1114,8 @@ func (rt routes) networks() {
 			h.HandleGetNetwork,
 			func(w http.ResponseWriter, r *http.Request) {
 				// Per-resource streams have no replay; see streamResource.
-				networkMatch := sse.NetworkMatcher(h.cache, r.PathValue("id"))
+				id := r.PathValue("id")
+				networkMatch := h.detailStreamMatch(id, sse.NetworkMatcher(h.cache, id))
 				h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, networkMatch), "")
 			},
 			h.detailFeeds(cache.EventNetwork, "id", func(id string) string {
@@ -1214,7 +1216,7 @@ func (rt routes) views() {
 		jsonFeed:    h.feedHistoryHandler(renderJSONFeed),
 		csv:         true,
 		csvParams:   historyCSVParams,
-		queryParams: historyWindowParams,
+		queryParams: historyFeedParams,
 	}, spa))
 
 	// Search

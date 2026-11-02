@@ -188,3 +188,73 @@ func TestTimeline_FiltersAnnotations(t *testing.T) {
 		})
 	}
 }
+
+func TestAnnotationWrites_ReachListenersAndTheRing(t *testing.T) {
+	c := timelineCache(t, 100)
+
+	var events []Event
+	c.AddOnChangeListener(func(e Event) { events = append(events, e) })
+
+	onService := []AnnotationResource{{Type: EventService, ID: "svc1", Name: "web"}}
+	id := c.note(t, Annotation{Text: "load test", Resources: onService})
+	if _, err := c.UpdateAnnotation(context.Background(), id, func(a *Annotation) error {
+		a.Text = "stopped early"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteAnnotation(context.Background(), id, func(Annotation) error {
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, _ := c.history.Since(id - 1)
+	if len(events) != 3 || len(items) != 3 {
+		t.Fatalf("%d events and %d ring items, want 3 of each", len(events), len(items))
+	}
+
+	for i, want := range []struct{ action, text string }{
+		{"create", "load test"}, {"update", "stopped early"}, {"remove", "stopped early"},
+	} {
+		e, item := events[i], items[i]
+		a, ok := e.Resource.(Annotation)
+		if e.Type != EventAnnotation || e.Action != want.action || !ok || a.Text != want.text ||
+			len(a.Resources) != 1 || e.HistoryID != item.ID {
+			t.Errorf(
+				"event %d = %+v, want %s carrying %q at %d",
+				i,
+				e,
+				want.action,
+				want.text,
+				item.ID,
+			)
+		}
+		if item.Annotation == nil || item.Annotation.Text != want.text {
+			t.Errorf("ring item %d = %+v, want the annotation as %s left it", i, item, want.action)
+		}
+	}
+}
+
+func TestAnnotationOn_TheTimelineAListFindsItOn(t *testing.T) {
+	c := timelineCache(t, 100)
+
+	for _, tt := range []struct {
+		name      string
+		resources []AnnotationResource
+		id        string
+		want      bool
+	}{
+		{"cluster-wide", nil, "node9", true},
+		{"named", []AnnotationResource{{Type: EventNode, ID: "node1"}}, "node1", true},
+		{"another", []AnnotationResource{{Type: EventNode, ID: "node1"}}, "node2", false},
+		{"its service's stack", []AnnotationResource{{Type: EventStack, ID: "shop"}}, "svc1", true},
+		{"the stack itself", []AnnotationResource{{Type: EventStack, ID: "shop"}}, "shop", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := c.AnnotationOn(Annotation{Resources: tt.resources}, tt.id); got != tt.want {
+				t.Errorf("AnnotationOn(%s) = %v, want %v", tt.id, got, tt.want)
+			}
+		})
+	}
+}

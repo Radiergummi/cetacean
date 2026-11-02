@@ -177,8 +177,16 @@ func (h *Handlers) streamResource(
 ) {
 	// No replay for per-resource streams: cross-resource matchers can't be
 	// reconstructed from history, so reconnects fall back to a sync event.
-	resMatch := sse.ResourceMatcher(typ, id)
+	resMatch := h.detailStreamMatch(id, sse.ResourceMatcher(typ, id))
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
+}
+
+// detailStreamMatch adds to a detail stream the annotations its resource's
+// history lists: those naming it, on a service's stack, and cluster-wide ones.
+func (h *Handlers) detailStreamMatch(
+	id string, match func(cache.Event) bool,
+) func(cache.Event) bool {
+	return sse.AnnotationsOn(h.cache, id, match)
 }
 
 // streamVersioned is streamResource for a config or secret, whose stream also
@@ -186,7 +194,7 @@ func (h *Handlers) streamResource(
 func (h *Handlers) streamVersioned(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
-	match := sse.VersionMatcher(h.versions, typ, id)
+	match := h.detailStreamMatch(id, sse.VersionMatcher(h.versions, typ, id))
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, match), "")
 }
 
@@ -198,6 +206,7 @@ func (h *Handlers) aclMatchWrap(
 	inner func(cache.Event) bool,
 ) func(cache.Event) bool {
 	id := auth.IdentityFromContext(r.Context())
+
 	return func(ev cache.Event) bool {
 		if inner != nil && !inner(ev) {
 			return false
@@ -212,6 +221,10 @@ func (h *Handlers) aclMatchWrap(
 		// A gap names no resource; whoever may read the stream may read it.
 		if ev.Type == cache.EventGap {
 			return true
+		}
+		if a, ok := ev.Resource.(cache.Annotation); ok && ev.Type == cache.EventAnnotation {
+			// Per event, as the other checks are: a reloaded policy reaches open streams.
+			return h.annotationCaller(r).MayRead(a)
 		}
 		return cluster.CanReadEvent(ev, func(resource string) bool {
 			return h.acl.Can(id, "read", resource)

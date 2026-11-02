@@ -88,7 +88,9 @@ func TestAsyncAPISchemasMatchOpenAPI(t *testing.T) {
 	openAPI := loadYAMLDocument(t, "openapi.yaml", specYAML)
 	asyncAPI := loadAsyncAPIDoc(t)
 
-	for _, name := range []string{"SSEEvent", "LogLine"} {
+	for _, name := range []string{
+		"SSEEvent", "LogLine", "Annotation", "AnnotationResource", "HistoryActor",
+	} {
 		t.Run(name, func(t *testing.T) {
 			want := schemaNamed(t, openAPI, name)
 			got := schemaNamed(t, asyncAPI, name)

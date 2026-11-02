@@ -49,6 +49,10 @@ type HistoryEntry struct {
 	Resources []AnnotationResource `json:"resources,omitempty"`
 	Updated   time.Time            `json:"updated,omitzero"`
 	Editor    *Actor               `json:"editor,omitempty"`
+
+	// Annotation is the one an annotation entry stands for: on a ring item,
+	// as its write left it or, on a remove, as it was.
+	Annotation *Annotation `json:"-"`
 }
 
 type HistoryQuery struct {
