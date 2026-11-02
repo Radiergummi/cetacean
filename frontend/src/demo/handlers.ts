@@ -8,7 +8,7 @@ import {
   writeAnnotation,
 } from "./history";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
-import { broadcast, type SSEClients } from "./sseHandlers";
+import { broadcast, broadcastToStreams, type SSEClients } from "./sseHandlers";
 import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
 import type {
   ClusterCapacity,
@@ -1165,13 +1165,25 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
   }
 
   /**
-   * Sends the `annotation` event on the stream of the first resource the
-   * note names, or on the global one; a removal carries no resource.
+   * Sends the `annotation` event where the server would: on each stream whose
+   * history lists the note, every one for a cluster-wide note and a stack's
+   * services for a stack's. A removal carries no resource.
    */
   function announceAnnotation(action: string, entry: HistoryEntry) {
-    const [named] = entry.resources ?? [];
+    const named = entry.resources ?? [];
+    const streams =
+      named.length === 0
+        ? [...clients.byId.keys()]
+        : named.flatMap(({ type, id }) => [
+            `${type}s/${id}`,
+            ...(type === "stack"
+              ? dataset.services
+                  .filter(({ Spec }) => Spec.Labels?.[stackLabel] === id)
+                  .map(({ ID }) => `services/${ID}`)
+              : []),
+          ]);
 
-    broadcast(clients, "annotation", named ? `${named.type}s` : "annotations", named?.id ?? "", {
+    broadcastToStreams(clients, "annotation", streams, {
       "@id": `/annotations/${entry.id}`,
       "@type": "Annotation",
       type: "annotation",

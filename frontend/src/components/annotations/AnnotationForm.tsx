@@ -20,6 +20,15 @@ type ResourceScope = Exclude<AnnotationScope, "cluster">;
 
 const maximumTags = 10;
 
+/**
+ * A scope's radio value, so a choice outlives the list of choices changing.
+ */
+function scopeKey(scope: AnnotationScope) {
+  return scope === "cluster" ? "cluster" : `${scope.type}-${scope.id}`;
+}
+
+const pickerKey = "picker";
+
 function scopeLabel(scope: AnnotationScope) {
   return scope === "cluster" ? "Cluster-wide" : <ResourceName name={scope.name} />;
 }
@@ -75,15 +84,15 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
   const [from, setFrom] = useState(start.from);
   const [to, setTo] = useState(start.to);
   const [edited, setEdited] = useState(target.editing);
-  const [choice, setChoice] = useState(0);
+  const [choice, setChoice] = useState(() => (scopes[0] ? scopeKey(scopes[0]) : pickerKey));
   const [picked, setPicked] = useState<ResourceScope | null>(null);
   const [error, setError] = useState<{ message: string; field?: "tags" | "until" } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const scopeName = useId();
   const errorId = useId();
-  const pickerChoice = scopes.length;
-  const scope = choice === pickerChoice ? picked : scopes[choice];
+  const scope =
+    choice === pickerKey ? picked : scopes.find((option) => scopeKey(option) === choice);
 
   /**
    * A control's ARIA, naming the error when it is about this field.
@@ -333,16 +342,16 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-xs font-medium">About</legend>
 
-          {scopes.map((option, index) => (
+          {scopes.map((option) => (
             <label
-              key={option === "cluster" ? "cluster" : `${option.type}-${option.id}`}
+              key={scopeKey(option)}
               className="flex items-center gap-2 text-sm"
             >
               <input
                 type="radio"
                 name={scopeName}
-                checked={choice === index}
-                onChange={() => setChoice(index)}
+                checked={choice === scopeKey(option)}
+                onChange={() => setChoice(scopeKey(option))}
               />
               {scopeLabel(option)}
             </label>
@@ -355,14 +364,14 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
                   <input
                     type="radio"
                     name={scopeName}
-                    checked={choice === pickerChoice}
-                    onChange={() => setChoice(pickerChoice)}
+                    checked={choice === pickerKey}
+                    onChange={() => setChoice(pickerKey)}
                   />
                   A service, stack or node
                 </label>
               )}
 
-              {choice === pickerChoice && (
+              {choice === pickerKey && (
                 <ResourcePicker
                   value={picked}
                   onChange={setPicked}

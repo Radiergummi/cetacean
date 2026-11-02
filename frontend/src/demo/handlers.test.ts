@@ -454,6 +454,28 @@ describe("annotations in the demo", () => {
     expect(sent.map(({ event }) => event)).toContain("annotation");
   });
 
+  it("announces a note on every stream whose history lists it", async () => {
+    const service = dataset.services.find(
+      ({ Spec }) => Spec.Labels?.["com.docker.stack.namespace"] === "webshop",
+    )!;
+    const heard: string[] = [];
+    const client = { send: ({ event }: { event: string }) => heard.push(event) };
+    const key = `services/${service.ID}`;
+    const post = (body: object) =>
+      fetch("http://localhost/annotations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ timestamp: "2026-11-02T10:00:00Z", tags: [], ...body }),
+      });
+
+    clients.byId.set(key, new Set([client as never]));
+    await post({ text: "cluster-wide" });
+    await post({ text: "on the stack", resources: [{ type: "stack", id: "webshop" }] });
+    clients.byId.delete(key);
+
+    expect(heard.filter((event) => event === "annotation")).toHaveLength(2);
+  });
+
   it("leaves a module served from an annotations folder alone", async () => {
     const response = await fetch(
       "http://localhost/demo/src/components/annotations/AnnotationMenu.tsx",

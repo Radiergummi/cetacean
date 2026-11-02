@@ -127,6 +127,24 @@ describe("MetricsPanel", () => {
     expect(chart).toHaveAttribute("data-annotating", "false");
   });
 
+  it("keeps its key listeners across renders that pass an equal resource", () => {
+    const listen = vi.spyOn(document, "addEventListener");
+    const panel = () => (
+      <MetricsPanel
+        charts={charts}
+        annotate={{ type: "service", id: "svc1", name: "web" }}
+      />
+    );
+    const { rerender } = render(panel(), { wrapper });
+    const keydowns = () => listen.mock.calls.filter(([type]) => type === "keydown").length;
+    const before = keydowns();
+
+    rerender(panel());
+
+    expect(keydowns()).toBe(before);
+    listen.mockRestore();
+  });
+
   it("ignores the modifier where nothing may be annotated", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
 

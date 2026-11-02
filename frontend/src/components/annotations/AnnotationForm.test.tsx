@@ -1,6 +1,7 @@
 import AnnotationForm from "./AnnotationForm";
 import { ApiError } from "@/api/client";
-import type { Annotation, HistoryEntry, NewAnnotation } from "@/api/types";
+import type { Annotation, AnnotationScope, HistoryEntry, NewAnnotation } from "@/api/types";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -146,6 +147,27 @@ describe("AnnotationForm", () => {
     show([{ type: "service", id: "svc2", name: "webshop_frontend" }]);
 
     expect(screen.getByRole("radio", { name: "webshop/frontend" })).toBeChecked();
+  });
+
+  it("keeps the chosen scope when the choices around it change", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient();
+    const form = (scopes: AnnotationScope[]) => (
+      <QueryClientProvider client={client}>
+        <AnnotationForm
+          scopes={scopes}
+          pickResource
+          initial={{ from: start }}
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(form(["cluster"]));
+
+    await user.click(screen.getByRole("radio", { name: "A service, stack or node" }));
+    rerender(form([]));
+
+    expect(screen.getByLabelText("Service, stack or node")).toBeInTheDocument();
   });
 
   it("adds a typed tag when the field is left", async () => {

@@ -112,6 +112,34 @@ describe("AnnotateOverlay", () => {
     expect(screen.getByTestId("annotate-mark")).toHaveAttribute("data-point");
   });
 
+  it("finishes a drag whose mode ended before the button came up", async () => {
+    const { overlay, rerender } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 0 });
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x * 60}
+          scope={service}
+          capturing={false}
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse", button: 0 });
+
+    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+  });
+
+  it("leaves a secondary button to the context menu", () => {
+    const { overlay } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 2 });
+    fireEvent.pointerUp(overlay, { clientX: 100, pointerType: "mouse", button: 2 });
+
+    expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+  });
+
   it("makes a point of a drag shorter than the form's minute", async () => {
     const { overlay } = show((x) => 1_000_020 + Math.round(x / 10) * 15);
 

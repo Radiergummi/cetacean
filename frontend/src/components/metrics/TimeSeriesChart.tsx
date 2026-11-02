@@ -13,6 +13,7 @@ import {
 import {
   drawMarkers,
   fractionalIndex,
+  indexAtPixel,
   layoutMarkers,
   type MarkerLayout,
   markersAt,
@@ -145,12 +146,19 @@ export default function TimeSeriesChart({
   const stackedRef = useRef(stacked);
   stackedRef.current = stacked;
 
-  // The overlay's pixels are the canvas's, so the x scale reads them directly.
+  // The overlay's pixels are the canvas's, so the x scale's pixels place them.
   const timeFor = useCallback((x: number) => {
     const xScale = chartRef.current?.scales["x"];
-    const timestamps = dataRef.current?.timestamps;
+    const timestamps = dataRef.current?.timestamps ?? [];
+    const last = timestamps.length - 1;
 
-    return xScale && timestamps ? timeAtIndex(timestamps, xScale.getValueForPixel(x) ?? 0) : null;
+    if (!xScale || last < 0) {
+      return null;
+    }
+
+    const index = indexAtPixel(x, xScale.getPixelForValue(0), xScale.getPixelForValue(last), last);
+
+    return timeAtIndex(timestamps, index);
   }, []);
   // The form holds minutes, so a mark is drawn at the minute it will save.
   const snapToMinute = useCallback(

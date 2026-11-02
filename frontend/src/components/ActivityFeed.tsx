@@ -5,6 +5,7 @@ import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
 import AnnotationMenu from "./annotations/AnnotationMenu";
+import { isClusterWide } from "./metrics/chartMarkers";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { Badge } from "./ui/badge";
@@ -221,19 +222,21 @@ function AnnotationCard({
 }) {
   const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
 
+  const clusterWide = isClusterWide({ entry });
+
   return (
     <TimelineRow
       top
       date={timestamp}
       marker={
         <div
-          data-cluster-wide={resources.length === 0 || undefined}
+          data-cluster-wide={clusterWide || undefined}
           className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
         />
       }
     >
       <div
-        data-cluster-wide={resources.length === 0 || undefined}
+        data-cluster-wide={clusterWide || undefined}
         className="min-w-0 flex-1 rounded-r-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
       >
         <div className="flex items-start gap-2">
@@ -252,7 +255,7 @@ function AnnotationCard({
             )}
           </span>
 
-          {resources.length === 0 ? (
+          {clusterWide ? (
             <span>Cluster-wide</span>
           ) : (
             resources.map(({ type, id, name }) => {

@@ -126,6 +126,14 @@ export function fractionalIndex(timestamps: number[], time: number): number | nu
 }
 
 /**
+ * The fractional sample index at pixel `x`, between the pixels of the first
+ * and the `last` sample. A category scale's own reading rounds to a sample.
+ */
+export function indexAtPixel(x: number, first: number, end: number, last: number): number {
+  return end === first ? 0 : ((x - first) / (end - first)) * last;
+}
+
+/**
  * The time at a fractional sample index, the inverse of `fractionalIndex`,
  * clamped to the first and last sample.
  */
@@ -251,11 +259,17 @@ function nearest(clusters: MarkerCluster[], x: number): MarkerCluster | undefine
  */
 export function markersAt(layout: MarkerLayout | null, x: number): MarkerHit {
   const within = ({ left, right }: MarkerBand) => x >= left && x <= right;
+  const flags = layout?.flags ?? [];
+  const closest = nearest(flags, x);
 
   return {
     cluster: nearest(layout?.clusters ?? [], x),
     band: layout?.bands.find(within),
-    flag: nearest(layout?.flags ?? [], x),
+    // Resource and cluster-wide notes cluster apart, so one moment may hold a flag of each.
+    flag: closest && {
+      ...closest,
+      items: flags.filter(({ x: at }) => at === closest.x).flatMap(({ items }) => items),
+    },
     regions: layout?.regions.filter(within) ?? [],
   };
 }

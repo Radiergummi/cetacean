@@ -239,10 +239,10 @@ export function filterHistory(
         overlaps &&
         (!tag || (entry.tags ?? []).includes(tag)) &&
         (named.length === 0 ||
-          named.some((resource) =>
+          named.some(({ type: namedType, id }) =>
             resourceId
-              ? resource.id === resourceId || (resource.type === "stack" && resource.id === stack)
-              : !type || resource.type === type,
+              ? id === resourceId || (namedType === "stack" && id === stack)
+              : !type || namedType === type,
           ))
       );
     }

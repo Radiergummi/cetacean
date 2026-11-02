@@ -24,6 +24,10 @@ function overlayReducer(state: OverlayState, action: GestureEvent | { type: "cle
 
   const next = step(state.gesture, action);
 
+  if (!next.mark && next.gesture === state.gesture) {
+    return state;
+  }
+
   return next.mark
     ? { gesture: next.gesture, mark: next.mark, marks: state.marks + 1 }
     : { ...state, gesture: next.gesture };
@@ -88,26 +92,28 @@ export default function AnnotateOverlay({
         data-capturing={capturing || undefined}
         className="pointer-events-none absolute inset-0 z-10 data-capturing:pointer-events-auto data-capturing:cursor-crosshair data-capturing:touch-none"
         onPointerDown={(event) => {
-          if (!capturing) {
+          // A Ctrl-click on macOS arrives as the secondary button.
+          const primary = event.button === 0 || (event.button === 2 && event.ctrlKey);
+
+          if (!capturing || !primary) {
             return;
           }
 
           event.currentTarget.setPointerCapture?.(event.pointerId);
           dispatch({ type: "down", x: offset(event), touch: event.pointerType === "touch" });
         }}
-        onPointerMove={(event) => {
-          if (gesture.kind === "dragging") {
-            dispatch({ type: "move", x: offset(event) });
-          }
-        }}
-        onPointerUp={(event) => {
-          if (capturing) {
-            dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" });
-          }
-        }}
+        onPointerMove={(event) => dispatch({ type: "move", x: offset(event) })}
+        // Not gated on capturing: a drag outlives a mode released mid-drag.
+        onPointerUp={(event) =>
+          dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" })
+        }
         onPointerCancel={() => dispatch({ type: "cancel" })}
         // Ctrl-click opens the context menu on macOS; here it marks the chart.
-        onContextMenu={(event) => event.preventDefault()}
+        onContextMenu={(event) => {
+          if (event.ctrlKey) {
+            event.preventDefault();
+          }
+        }}
       >
         {dragged && (
           <div
