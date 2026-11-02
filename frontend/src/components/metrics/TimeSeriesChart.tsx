@@ -268,6 +268,7 @@ export default function TimeSeriesChart({
           marker: getSemanticChartColor("marker"),
           cluster: getSemanticChartColor("marker-cluster"),
           gap: getSemanticChartColor("gap"),
+          annotation: getSemanticChartColor("annotation"),
         });
       },
     }),
@@ -395,7 +396,7 @@ export default function TimeSeriesChart({
           x,
           chartWidth: chartArea.right,
           top: chartArea.top + 8,
-          markers: tooltipMarkers(hit.cluster, hit.band),
+          markers: tooltipMarkers(hit),
         });
 
         if (timestamp != null) {
