@@ -310,6 +310,36 @@ describe("drawMarkers", () => {
       "fill note 1",
     ]);
   });
+
+  it("draws no band for a range outside the plot", () => {
+    const fills: string[] = [];
+    const nothing = () => {};
+    const style = { fillStyle: "", strokeStyle: "", lineWidth: 1, globalAlpha: 1 };
+    const context = Object.assign(style, {
+      save: nothing,
+      beginPath: nothing,
+      closePath: nothing,
+      rect: nothing,
+      clip: nothing,
+      moveTo: nothing,
+      lineTo: nothing,
+      arc: nothing,
+      restore: nothing,
+      stroke: nothing,
+      fill: () => fills.push(style.fillStyle),
+    }) as unknown as CanvasRenderingContext2D;
+    const layout = layoutMarkers([gap(100, 200), region(1, 200, 300)], timestamps, pixelFor);
+
+    drawMarkers(context, { top: 0, bottom: 100, left: 1000, right: 1300 }, layout, {
+      marker: "change",
+      cluster: "several",
+      gap: "gap",
+      annotation: "note",
+      annotationCluster: "everywhere",
+    });
+
+    expect(fills).toEqual([]);
+  });
 });
 
 describe("timeAtIndex", () => {

@@ -8,6 +8,7 @@ import (
 
 	json "github.com/goccy/go-json"
 
+	"github.com/radiergummi/cetacean/internal/api/sse"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -97,5 +98,70 @@ func TestHistoryFeedEscapesAnAnnotationsText(t *testing.T) {
 	if html := feed.Items[0].ContentHTML; strings.Contains(html, "<script>") ||
 		!strings.Contains(html, "&lt;script&gt;") {
 		t.Errorf("content_html = %s, want the text escaped", html)
+	}
+}
+
+func TestHistoryFeedTitlesAnAnnotationByItsFirstLine(t *testing.T) {
+	h := annotationHandlers(t, true)
+	createAnnotation(t, h, "carol", `{"text":"Deploy freeze\r\nuntil Monday"}`)
+
+	req := withContentType(
+		newAnnotationRequest("GET", "/history", "carol", ""),
+		ContentTypeJSONFeed,
+	)
+	w := httptest.NewRecorder()
+	h.feedHistoryHandler(renderJSONFeed)(w, req)
+
+	var feed struct {
+		Items []struct {
+			Title string `json:"title"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &feed); err != nil || len(feed.Items) == 0 {
+		t.Fatalf("feed: %v\n%s", err, w.Body)
+	}
+	if title := feed.Items[0].Title; title != "Deploy freeze" {
+		t.Errorf("title = %q, want the first line without its carriage return", title)
+	}
+}
+
+func TestHistoryFeedTakesTheTagAndKindItsJSONDoes(t *testing.T) {
+	h := annotationHandlers(t, true)
+	createAnnotation(t, h, "carol", `{"text":"tagged","tags":["deploy"]}`)
+	createAnnotation(t, h, "carol", `{"text":"untagged"}`)
+
+	req := withContentType(
+		newAnnotationRequest("GET", "/history?kind=annotation&tag=deploy", "carol", ""),
+		ContentTypeJSONFeed,
+	)
+	w := httptest.NewRecorder()
+	h.feedHistoryHandler(renderJSONFeed)(w, req)
+
+	var feed struct {
+		Items []struct {
+			Title string `json:"title"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("feed: %v\n%s", err, w.Body)
+	}
+	if len(feed.Items) != 1 || feed.Items[0].Title != "tagged" {
+		t.Errorf("items = %+v, want only the note tagged deploy", feed.Items)
+	}
+}
+
+func TestEveryDetailStreamHearsClusterWideAnnotations(t *testing.T) {
+	h := annotationHandlers(t, true)
+	clusterWide := cache.Event{
+		Type: cache.EventAnnotation, Action: "create", Resource: cache.Annotation{ID: 1},
+	}
+
+	for _, typ := range []cache.EventType{
+		cache.EventTask, cache.EventConfig, cache.EventSecret, cache.EventNetwork, cache.EventVolume,
+	} {
+		match := h.detailStreamMatch("x", sse.ResourceMatcher(typ, "x"))
+		if !match(clusterWide) {
+			t.Errorf("a %s's stream misses a cluster-wide annotation its history lists", typ)
+		}
 	}
 }

@@ -474,6 +474,11 @@ func (b *Broadcaster) replayEvents(
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []frameEvent
 	for _, e := range entries {
+		// An annotation item replays its annotation; without one it has nothing to send.
+		if e.Kind == cache.KindAnnotation && e.Annotation == nil {
+			continue
+		}
+
 		ev := replayEvent(e)
 
 		if replayType != ReplayAll && ev.Type != replayType {

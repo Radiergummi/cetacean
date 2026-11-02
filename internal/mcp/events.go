@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -88,8 +89,13 @@ func (s *Server) toolGetEvents(
 		ReadableAnnotation: s.annotationCaller(ctx).MayRead,
 	})
 
-	// Task naming runs after the cut, because a name only matters for an entry
-	// that is returned and every lookup takes the cache's read lock.
+	// Cut by time, as the result is ordered: an annotation's ID follows its
+	// creation, not its time. Task naming runs after the cut, because a name
+	// only matters for an entry that is returned.
+	slices.SortStableFunc(matched, func(a, b cache.HistoryEntry) int {
+		return b.Timestamp.Compare(a.Timestamp)
+	})
+
 	total := len(matched)
 	truncated := total > limit
 	if truncated {
@@ -117,6 +123,7 @@ func (s *Server) toolGetEvents(
 			Actor:      e.Actor,
 			Text:       e.Text,
 			Tags:       e.Tags,
+			Resources:  e.Resources,
 		})
 	}
 
