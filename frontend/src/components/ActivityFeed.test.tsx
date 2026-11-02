@@ -453,10 +453,12 @@ describe("ActivityFeed runs", () => {
       rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));
 
       expect(screen.queryByText("Newer note")).not.toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("Updates paused");
 
       await user.keyboard("{Escape}");
 
       expect(await screen.findByText("Newer note")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toBeEmptyDOMElement();
     });
 
     it("keeps a note's scope where the feed hides the type", () => {

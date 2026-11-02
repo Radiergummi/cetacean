@@ -7,7 +7,7 @@ import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
 import AnnotationMenu from "./annotations/AnnotationMenu";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pause } from "lucide-react";
 import { useCallback, useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -346,44 +346,59 @@ export default function ActivityFeed({
   }
 
   return (
-    <div className="relative ps-5">
-      <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
+    <>
+      <div className="relative ps-5">
+        <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
 
-      {rows.map((row) => {
-        if (row.kind === "gap") {
+        {rows.map((row) => {
+          if (row.kind === "gap") {
+            return (
+              <GapDivider
+                key={`gap-${row.gaps[0]?.id}`}
+                gaps={row.gaps}
+              />
+            );
+          }
+
+          if (row.kind === "annotation") {
+            return (
+              <AnnotationCard
+                key={`annotation-${row.entry.id}`}
+                entry={row.entry}
+                onHold={hold}
+              />
+            );
+          }
+
+          // Changes join a run at its newest end and fall off its oldest, so its
+          // key counts runs alike from the newest: an open run stays open.
+          const signature = runSignature(row.entries[0]);
+          const occurrence = runsSeen.get(signature) ?? 0;
+
+          runsSeen.set(signature, occurrence + 1);
+
           return (
-            <GapDivider
-              key={`gap-${row.gaps[0]?.id}`}
-              gaps={row.gaps}
+            <ChangeRun
+              key={`run-${occurrence}-${signature}`}
+              entries={row.entries}
+              hideType={hideType}
             />
           );
-        }
+        })}
+      </div>
 
-        if (row.kind === "annotation") {
-          return (
-            <AnnotationCard
-              key={`annotation-${row.entry.id}`}
-              entry={row.entry}
-              onHold={hold}
-            />
-          );
-        }
-
-        // Changes join a run at its newest end and fall off its oldest, so its
-        // key counts runs alike from the newest: an open run stays open.
-        const signature = runSignature(row.entries[0]);
-        const occurrence = runsSeen.get(signature) ?? 0;
-
-        runsSeen.set(signature, occurrence + 1);
-
-        return (
-          <ChangeRun
-            key={`run-${occurrence}-${signature}`}
-            entries={row.entries}
-            hideType={hideType}
-          />
-        );
-      })}
-    </div>
+      {/* Below the rows, so it shows without moving them. */}
+      <div
+        role="status"
+        className="pointer-events-none sticky bottom-3 flex justify-center"
+      >
+        {held && (
+          <span className="mt-2 flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground shadow-sm">
+            <Pause className="size-3" />
+            Updates paused while a note is open
+          </span>
+        )}
+      </div>
+    </>
   );
 }
