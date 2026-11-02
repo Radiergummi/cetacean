@@ -80,8 +80,10 @@ describe("AnnotationMenu", () => {
     render(<AnnotationMenu id={7} />);
     await user.click(screen.getByRole("button", { name: "Note actions" }));
 
-    expect(await screen.findByText("You can't change this note")).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("menuitem", { name: "You can't change this note" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
   });
 
   it("opens the form on the note", async () => {
@@ -128,5 +130,27 @@ describe("AnnotationMenu", () => {
       "This note changed since you opened it",
     );
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("stays closed when cancelled before a stale delete answers", async () => {
+    const user = userEvent.setup();
+    let refuse: (failure: unknown) => void = () => {};
+
+    allowing("DELETE");
+    deleteAnnotation.mockReturnValue(
+      new Promise((_, reject) => {
+        refuse = reject;
+      }),
+    );
+    render(<AnnotationMenu id={7} />);
+    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    refuse(new ApiError("/api/errors/API013", "Precondition Failed", 412, "stale"));
+
+    await waitFor(() => expect(readAnnotation).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   });
 });

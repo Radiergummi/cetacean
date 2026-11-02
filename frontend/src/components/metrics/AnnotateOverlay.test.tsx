@@ -90,6 +90,28 @@ describe("AnnotateOverlay", () => {
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "93px", width: "200px" });
   });
 
+  it("draws a drag that snaps to one minute as a point", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x}
+          snap={() => 50}
+          scope={service}
+          capturing
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const overlay = screen.getByTestId("annotate-overlay");
+
+    fireEvent.pointerDown(overlay, { clientX: 40, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 60, pointerType: "mouse" });
+    await screen.findByLabelText("Note");
+
+    expect(screen.getByTestId("annotate-mark")).toHaveAttribute("data-point");
+  });
+
   it("makes a point of a drag shorter than the form's minute", async () => {
     const { overlay } = show((x) => 1_000_020 + Math.round(x / 10) * 15);
 

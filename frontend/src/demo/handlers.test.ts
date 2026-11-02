@@ -454,6 +454,14 @@ describe("annotations in the demo", () => {
     expect(sent.map(({ event }) => event)).toContain("annotation");
   });
 
+  it("leaves a module served from an annotations folder alone", async () => {
+    const response = await fetch(
+      "http://localhost/demo/src/components/annotations/AnnotationMenu.tsx",
+    ).catch(() => null);
+
+    expect(response?.status).not.toBe(404);
+  });
+
   it("edits and deletes an annotation on its version, and announces both", async () => {
     const sent: { event: string; data: string }[] = [];
     const client = { send: (message: { event: string; data: string }) => sent.push(message) };

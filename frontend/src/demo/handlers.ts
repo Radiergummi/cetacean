@@ -60,7 +60,7 @@ import type {
   JGFEdge,
   JGFHyperedge,
 } from "@/api/types";
-import { http, HttpResponse, type JsonBodyType, type PathParams } from "msw";
+import { http, HttpResponse, passthrough, type JsonBodyType, type PathParams } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
 
@@ -354,6 +354,14 @@ function annotationResponse({
   response.headers.set("ETag", annotationETag(id));
 
   return response;
+}
+
+/**
+ * Whether a path segment is an annotation's ID; the dev server's modules
+ * under `components/annotations/` match the same pattern and must pass.
+ */
+function isAnnotationId(id: PathParams[string]) {
+  return typeof id === "string" && /^\d+$/.test(id);
 }
 
 function matchesVersion(request: Request, entry: HistoryEntry) {
@@ -2006,12 +2014,20 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     get("*/annotations/:id", ({ params }) => {
+      if (!isAnnotationId(params.id)) {
+        return passthrough();
+      }
+
       const entry = annotationAt(String(params.id));
 
       return entry ? annotationResponse(entry) : notFound();
     }),
 
     http.patch("*/annotations/:id", async ({ params, request }) => {
+      if (!isAnnotationId(params.id)) {
+        return passthrough();
+      }
+
       const entry = annotationAt(String(params.id));
 
       if (!entry) {
@@ -2033,6 +2049,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.delete("*/annotations/:id", ({ params, request }) => {
+      if (!isAnnotationId(params.id)) {
+        return passthrough();
+      }
+
       const entry = annotationAt(String(params.id));
 
       if (!entry) {

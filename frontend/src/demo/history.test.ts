@@ -108,3 +108,14 @@ describe("filterHistory on annotations", () => {
     expect(kept.some(({ kind }) => kind === "change")).toBe(false);
   });
 });
+
+describe("demo annotation IDs", () => {
+  it("stay put when a service goes away", () => {
+    const ids = (services: typeof dataset.services) =>
+      demoHistory({ ...dataset, services }, now)
+        .filter(({ kind }) => kind === "annotation")
+        .map(({ id }) => id);
+
+    expect(ids(dataset.services.slice(0, -1))).toEqual(ids(dataset.services));
+  });
+});

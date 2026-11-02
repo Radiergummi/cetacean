@@ -223,7 +223,7 @@ describe("AnnotationForm, editing", () => {
       new ApiError("/api/errors/API013", "Precondition Failed", 412, "stale"),
     );
     readAnnotation.mockResolvedValue({
-      data: { ...note, text: "Load test, round 2" },
+      data: { ...note, text: "Load test, round 2", tags: ["load", "soak"] },
       etag: '"4"',
     });
 
@@ -238,12 +238,34 @@ describe("AnnotationForm, editing", () => {
     );
     expect(readAnnotation).toHaveBeenCalledWith(7);
     expect(screen.getByLabelText("Note")).toHaveValue("Soak test");
+    expect(screen.getByText("#soak")).toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(updateAnnotation).toHaveBeenLastCalledWith(7, { text: "Soak test" }, '"4"');
+  });
+
+  it("saves a note whose range is inside one minute without touching its times", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AnnotationForm
+        editing={{
+          note: { ...note, timestamp: "2026-11-02T13:00:10Z", until: "2026-11-02T13:00:40Z" },
+          etag: '"3"',
+        }}
+        onDone={vi.fn<() => void>()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Note"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateAnnotation).toHaveBeenCalledWith(7, { text: "Load test!" }, '"3"'),
+    );
   });
 
   it("links an error to the field it is about", async () => {

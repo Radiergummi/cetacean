@@ -2,6 +2,7 @@ import {
   annotationBody,
   annotationInputs,
   annotationPatch,
+  type AnnotationInputs,
   parseTag,
   toLocalInput,
 } from "./annotationFields";
@@ -144,12 +145,30 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
   };
 
   /**
-   * Takes up the note's current version after a stale write, keeping the
-   * input, so saving again applies it over what changed.
+   * Takes up the note's current version after a stale write: a field the user
+   * changed keeps their input, any other shows the newer value.
    */
-  const reload = async (id: number) => {
+  const reload = async (opened: Annotation, inputs: AnnotationInputs) => {
     try {
-      const { data, etag } = await api.annotation(id);
+      const { data, etag } = await api.annotation(opened.id);
+      const was = annotationInputs(opened);
+      const now = annotationInputs(data);
+
+      if (inputs.text === was.text) {
+        setText(now.text);
+      }
+
+      if (inputs.tags.join(",") === was.tags.join(",")) {
+        setTags(now.tags);
+      }
+
+      if (inputs.from === was.from) {
+        setFrom(now.from);
+      }
+
+      if (inputs.to === was.to) {
+        setTo(now.to);
+      }
 
       setEdited({ note: data, etag });
       setError({
@@ -174,7 +193,14 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       return;
     }
 
-    if (to !== "" && new Date(to) <= new Date(from)) {
+    const shown = edited && annotationInputs(edited.note);
+
+    // Times shown to the minute may meet; untouched, the server's seconds hold.
+    if (
+      (!shown || from !== shown.from || to !== shown.to) &&
+      to !== "" &&
+      new Date(to) <= new Date(from)
+    ) {
       setError({ field: "until", message: "The end must be after the start." });
 
       return;
@@ -198,7 +224,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       onDone();
     } catch (failure) {
       if (edited && failure instanceof ApiError && failure.status === 412) {
-        await reload(edited.note.id);
+        await reload(edited.note, { text, tags: finalTags, from, to });
       } else {
         setError({
           message:

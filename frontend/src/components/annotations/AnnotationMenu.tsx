@@ -27,7 +27,7 @@ type Loaded =
   | { status: "ready"; edited: EditedNote; methods: Set<string> };
 
 const itemClass =
-  "flex w-full cursor-default rounded-sm px-2 py-1.5 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground";
+  "flex w-full cursor-default rounded-sm px-2 py-1.5 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:text-muted-foreground";
 
 function failureMessage(failure: unknown) {
   return failure instanceof ApiError ? failure.detail || failure.message : String(failure);
@@ -72,14 +72,15 @@ export default function AnnotationMenu({ id }: { id: number }) {
       setDeleting(null);
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 412) {
-        setDeleteError("This note changed since you opened it. Delete it anyway?");
+        try {
+          const { data, etag } = await api.annotation(target.note.id);
 
-        const { data, etag } = await api.annotation(target.note.id).catch(() => ({
-          data: target.note,
-          etag: undefined,
-        }));
-
-        setDeleting({ note: data, etag });
+          // Cancelled meanwhile, the confirmation stays closed.
+          setDeleting((current) => current && { note: data, etag });
+          setDeleteError("This note changed since you opened it. Delete it anyway?");
+        } catch (reason) {
+          setDeleteError(failureMessage(reason));
+        }
       } else {
         setDeleteError(failureMessage(failure));
       }
@@ -116,12 +117,13 @@ export default function AnnotationMenu({ id }: { id: number }) {
             className="z-50"
           >
             <Menu.Popup className="min-w-36 rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-hidden">
-              {loaded.status === "loading" && (
-                <p className="px-2 py-1.5 text-sm text-muted-foreground">Loading…</p>
-              )}
-
-              {loaded.status === "failed" && (
-                <p className="px-2 py-1.5 text-sm text-status-danger">{loaded.message}</p>
+              {loaded.status !== "ready" && (
+                <Menu.Item
+                  disabled
+                  className={itemClass}
+                >
+                  {loaded.status === "loading" ? "Loading…" : loaded.message}
+                </Menu.Item>
               )}
 
               {ready && canEdit && (
@@ -146,9 +148,12 @@ export default function AnnotationMenu({ id }: { id: number }) {
               )}
 
               {ready && !canEdit && !canDelete && (
-                <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                <Menu.Item
+                  disabled
+                  className={itemClass}
+                >
                   You can't change this note
-                </p>
+                </Menu.Item>
               )}
             </Menu.Popup>
           </Menu.Positioner>

@@ -105,7 +105,8 @@ export function removeAnnotation(id: number) {
  * relative to `now` so the metric charts of every range have something to mark.
  */
 export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
-  const entries: Omit<HistoryEntry, "id">[] = [
+  // Notes keep their IDs whatever the dataset holds, as edits are kept by ID.
+  const entries: (Omit<HistoryEntry, "id"> & { id?: number })[] = [
     {
       kind: "gap",
       timestamp: new Date(now - 9 * 60 * minute).toISOString(),
@@ -121,6 +122,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
   entries.push({
     kind: "annotation",
+    id: 90001,
     timestamp: new Date(now - 3 * 60 * minute).toISOString(),
     until: new Date(now - 3 * 60 * minute + 40 * minute).toISOString(),
     type: "",
@@ -137,6 +139,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
   if (first) {
     entries.push({
       kind: "annotation",
+      id: 90002,
       timestamp: new Date(now - 50 * minute).toISOString(),
       type: "",
       action: "",
@@ -182,7 +185,10 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
   entries.sort((one, other) => other.timestamp.localeCompare(one.timestamp));
 
-  return [...written, ...entries.map((entry, index) => ({ ...entry, id: entries.length - index }))]
+  return [
+    ...written,
+    ...entries.map((entry, index) => ({ ...entry, id: entry.id ?? entries.length - index })),
+  ]
     .filter(({ id }) => !removed.has(id))
     .map((entry) => edits.get(entry.id) ?? entry);
 }
