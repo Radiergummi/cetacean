@@ -20,8 +20,9 @@ function isoSeconds(seconds: number): string {
 }
 
 /**
- * A resource's changes and gaps inside the panel's window. Its stream's
- * changes refetch it, and so does a sync, which is how a new gap arrives.
+ * A resource's changes, gaps and annotations inside the panel's window. Its
+ * stream's changes and annotations refetch it, and so does a sync, which is
+ * how a new gap arrives.
  */
 export function useTimeline(
   source: TimelineSource | undefined,
@@ -73,7 +74,7 @@ export function useTimeline(
     [queryKey],
     500,
     undefined,
-    (event) => event.type === type,
+    (event) => event.type === type || event.type === "annotation",
   );
 
   const items = useMemo(

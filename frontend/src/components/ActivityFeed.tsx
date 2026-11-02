@@ -2,7 +2,7 @@ import type { HistoryEntry } from "../api/types";
 import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
-import { describeGap } from "../lib/timeline";
+import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { ChevronRight } from "lucide-react";
@@ -24,14 +24,19 @@ function gapLength({ timestamp, until }: HistoryEntry): number {
 function TimelineRow({
   marker,
   date,
+  top,
   children,
 }: {
   marker: ReactNode;
   date: string;
+  top?: boolean | undefined;
   children: ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3">
+    <div
+      data-top={top || undefined}
+      className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3 data-top:items-start"
+    >
       {marker}
 
       <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">
@@ -200,6 +205,78 @@ function ChangeRun({
   );
 }
 
+/**
+ * A note someone wrote, as a card: its text, when it says it happened, what
+ * it is about, its tags, and who wrote it.
+ */
+function AnnotationCard({ entry }: { entry: HistoryEntry }) {
+  const { actor, editor, resources = [], tags = [], text, timestamp, until, updated } = entry;
+
+  return (
+    <TimelineRow
+      top
+      date={timestamp}
+      marker={
+        <div className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background" />
+      }
+    >
+      <div className="min-w-0 flex-1 rounded-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm">
+        <p className="break-words whitespace-pre-wrap">{text}</p>
+
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            {describeAnnotationTime(
+              seconds(timestamp),
+              until === undefined ? undefined : seconds(until),
+            )}
+          </span>
+
+          {resources.length === 0 ? (
+            <span>Cluster-wide</span>
+          ) : (
+            resources.map(({ type, id, name }) => {
+              const path = resourcePath(type, id, name);
+
+              return path ? (
+                <Link
+                  key={`${type}-${id}`}
+                  to={path}
+                  className="font-medium text-foreground hover:underline"
+                >
+                  <ResourceName name={name} />
+                </Link>
+              ) : (
+                <span key={`${type}-${id}`}>
+                  <ResourceName name={name} />
+                </span>
+              );
+            })
+          )}
+
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded border px-1"
+            >
+              #{tag}
+            </span>
+          ))}
+
+          {actor && <span>{attribution(actor)}</span>}
+
+          {updated && (
+            <span
+              title={`Edited ${editor ? `${attribution(editor)} ` : ""}${formatDateTime(updated)}`}
+            >
+              edited
+            </span>
+          )}
+        </div>
+      </div>
+    </TimelineRow>
+  );
+}
+
 interface ActivityFeedProps {
   entries: HistoryEntry[];
   loading?: boolean | undefined;
@@ -208,7 +285,7 @@ interface ActivityFeedProps {
   /** Whether changes repeating one another share a row; the full log lists each. */
   collapse?: boolean | undefined;
 
-  /** Shown in place of "No recent activity" when the entries hold no change. */
+  /** Shown in place of "No recent activity" when the entries hold no change or note. */
   emptyText?: string | undefined;
 }
 
@@ -249,6 +326,15 @@ export default function ActivityFeed({
             <GapDivider
               key={`gap-${row.gaps[0]?.id}`}
               gaps={row.gaps}
+            />
+          );
+        }
+
+        if (row.kind === "annotation") {
+          return (
+            <AnnotationCard
+              key={`annotation-${row.entry.id}`}
+              entry={row.entry}
             />
           );
         }

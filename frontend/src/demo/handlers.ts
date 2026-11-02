@@ -1084,6 +1084,11 @@ function serviceListItem(dataset: Dataset, service: Service): ServiceListItem {
   return { ...service, RunningTasks, DesiredTasks };
 }
 
+/**
+ * The JSON-LD type of a history item by kind; a change is a HistoryEntry.
+ */
+const historyTypes: Record<string, string> = { gap: "Gap", annotation: "Annotation" };
+
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
   function broadcastServiceUpdate(service: Service) {
     broadcast(clients, "service", "services", service.ID, {
@@ -1897,8 +1902,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
         items: entries.slice(0, limit).map((entry) => ({
           ...entry,
-          "@id": `/history#${entry.id}`,
-          "@type": entry.kind === "gap" ? "Gap" : "HistoryEntry",
+          "@id": entry.kind === "annotation" ? `/annotations/${entry.id}` : `/history#${entry.id}`,
+          "@type": historyTypes[entry.kind] ?? "HistoryEntry",
         })),
         total: entries.length,
         limit,

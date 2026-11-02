@@ -1,4 +1,6 @@
 import type { HistoryEntry } from "../api/types";
+import { formatDateTime } from "../lib/format";
+import { describeAnnotationTime } from "../lib/timeline";
 import ActivityFeed from "./ActivityFeed";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -157,7 +159,7 @@ describe("ActivityFeed", () => {
     const entries: HistoryEntry[] = [
       {
         id: 1,
-        kind: "annotation",
+        kind: "note",
         timestamp: new Date().toISOString(),
         type: "",
         action: "",
@@ -348,5 +350,88 @@ describe("ActivityFeed runs", () => {
 
     expect(screen.getAllByText("monitoring/prometheus.2")).toHaveLength(2);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  describe("annotations", () => {
+    const timestamp = "2026-11-01T14:00:00Z";
+    const note = (overrides: Partial<HistoryEntry>): HistoryEntry => ({
+      id: 7,
+      kind: "annotation",
+      timestamp,
+      type: "",
+      action: "",
+      resourceId: "",
+      name: "",
+      text: "Load test\nagainst checkout",
+      tags: ["load-test"],
+      actor: { subject: "u1", name: "alice", provider: "oidc", transport: "dashboard" },
+      ...overrides,
+    });
+    const show = (entry: HistoryEntry, hideType?: boolean) =>
+      render(
+        <MemoryRouter>
+          <ActivityFeed
+            entries={[entry]}
+            hideType={hideType}
+          />
+        </MemoryRouter>,
+      );
+
+    it("renders an annotation as a note card", () => {
+      show(note({ resources: [{ type: "service", id: "svc1", name: "web" }] }));
+
+      expect(
+        screen.getByText((_, element) => element?.textContent === "Load test\nagainst checkout"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("#load-test")).toBeInTheDocument();
+      expect(screen.getByText("by alice via the dashboard")).toBeInTheDocument();
+      expect(
+        screen.getByText(describeAnnotationTime(new Date(timestamp).getTime() / 1000)),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "web" })).toHaveAttribute("href", "/services/svc1");
+    });
+
+    it("names a stacked resource as the change rows do", () => {
+      show(note({ resources: [{ type: "service", id: "svc1", name: "webshop_frontend" }] }));
+
+      const link = screen.getByRole("link", { name: /frontend/ });
+
+      expect(link).toHaveAttribute("href", "/services/svc1");
+      expect(link.textContent).not.toContain("webshop_frontend");
+    });
+
+    it("marks an edited annotation", () => {
+      const updated = "2026-11-01T15:00:00Z";
+
+      show(
+        note({
+          updated,
+          editor: { subject: "u2", name: "bob", provider: "oidc", transport: "rest" },
+        }),
+      );
+
+      expect(screen.getByText("edited")).toHaveAttribute(
+        "title",
+        `Edited by bob via the API ${formatDateTime(updated)}`,
+      );
+    });
+
+    it("says when an annotation is cluster-wide", () => {
+      const { unmount } = show(note({}));
+
+      expect(screen.getByText("Cluster-wide")).toBeInTheDocument();
+      unmount();
+
+      show(note({ resources: [{ type: "service", id: "svc1", name: "web" }] }), true);
+
+      expect(screen.queryByText("Cluster-wide")).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "web" })).toBeInTheDocument();
+    });
+
+    it("keeps a note's scope where the feed hides the type", () => {
+      show(note({}), true);
+
+      expect(screen.getByText("Cluster-wide")).toBeInTheDocument();
+    });
   });
 });

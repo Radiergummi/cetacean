@@ -1,5 +1,5 @@
 import type { HistoryEntry } from "../api/types";
-import { activityRows, hasChanges } from "./activity";
+import { activityRows, hasActivity } from "./activity";
 import { describe, expect, it } from "vitest";
 
 const change = (id: number): HistoryEntry => ({
@@ -23,10 +23,23 @@ const gap = (id: number): HistoryEntry => ({
   name: "",
 });
 
+const annotation = (id: number): HistoryEntry => ({
+  ...gap(id),
+  kind: "annotation",
+  until: undefined,
+  text: "note",
+});
+
 const shape = (entries: HistoryEntry[], collapse = false) =>
-  activityRows(entries, collapse).map((row) =>
-    row.kind === "change" ? row.entries.map(({ id }) => id) : `gap ${row.gaps.map(({ id }) => id)}`,
-  );
+  activityRows(entries, collapse).map((row) => {
+    if (row.kind === "change") {
+      return row.entries.map(({ id }) => id);
+    }
+
+    return row.kind === "annotation"
+      ? `annotation ${row.entry.id}`
+      : `gap ${row.gaps.map(({ id }) => id)}`;
+  });
 
 const alice = { subject: "u-1", name: "alice", provider: "oauth", transport: "mcp" } as const;
 
@@ -49,10 +62,7 @@ describe("activityRows", () => {
   });
 
   it("skips kinds it does not know", () => {
-    expect(shape([{ ...change(3), kind: "annotation" }, gap(2), change(1)])).toEqual([
-      "gap 2",
-      [1],
-    ]);
+    expect(shape([{ ...change(3), kind: "note" }, gap(2), change(1)])).toEqual(["gap 2", [1]]);
   });
 
   it("keeps one row per change unless collapsing", () => {
@@ -110,9 +120,26 @@ describe("activityRows", () => {
   });
 });
 
-describe("hasChanges", () => {
-  it("counts changes only", () => {
-    expect(hasChanges([gap(1)])).toBe(false);
-    expect(hasChanges([gap(2), change(1)])).toBe(true);
+describe("activityRows on annotations", () => {
+  it("gives an annotation its own row and ends a run at it", () => {
+    expect(shape([change(5), annotation(4), change(3)], true)).toEqual([[5], "annotation 4", [3]]);
+  });
+
+  it("keeps gaps an annotation frames and drops those older than it", () => {
+    expect(shape([gap(5), annotation(4), gap(3), change(2), gap(1)])).toEqual([
+      "gap 5",
+      "annotation 4",
+      "gap 3",
+      [2],
+    ]);
+    expect(shape([gap(3), annotation(2), gap(1)])).toEqual(["gap 3", "annotation 2"]);
+  });
+});
+
+describe("hasActivity", () => {
+  it("counts changes and annotations, not gaps", () => {
+    expect(hasActivity([gap(1)])).toBe(false);
+    expect(hasActivity([gap(2), change(1)])).toBe(true);
+    expect(hasActivity([annotation(1), gap(2)])).toBe(true);
   });
 });

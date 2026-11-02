@@ -18,9 +18,15 @@ describe("filterHistory", () => {
       }),
     );
 
-    expect(result.map(({ kind }) => kind).sort()).toEqual(["change", "change", "gap"]);
+    expect(result.map(({ kind }) => kind).sort()).toEqual([
+      "annotation",
+      "annotation",
+      "change",
+      "change",
+      "gap",
+    ]);
     expect(
-      result.every(({ kind, resourceId }) => kind === "gap" || resourceId === service?.ID),
+      result.every(({ kind, resourceId }) => kind !== "change" || resourceId === service?.ID),
     ).toBe(true);
   });
 
@@ -31,5 +37,33 @@ describe("filterHistory", () => {
     );
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("demo annotations", () => {
+  const annotations = entries.filter(({ kind }) => kind === "annotation");
+  const ids = (params: Record<string, string>) =>
+    filterHistory(entries, new URLSearchParams({ kind: "annotation", ...params })).map(
+      ({ text }) => text,
+    );
+
+  it("seeds one point and one range annotation", () => {
+    expect(annotations.map(({ until }) => until === undefined).sort()).toEqual([false, true]);
+    expect(annotations.every(({ text, actor }) => text && actor)).toBe(true);
+    expect(annotations.some(({ updated, editor }) => updated && editor)).toBe(true);
+  });
+
+  it("filters annotations as /history does", () => {
+    const [first, second] = dataset.services;
+    const point = annotations.find(({ until }) => until === undefined)?.text;
+    const range = annotations.find(({ until }) => until !== undefined)?.text;
+
+    expect(ids({}).sort()).toEqual([point, range].sort());
+    expect(ids({ type: "service", resourceId: first?.ID ?? "" }).sort()).toEqual(
+      [point, range].sort(),
+    );
+    expect(ids({ type: "service", resourceId: second?.ID ?? "" })).toEqual([range]);
+    expect(ids({ type: "node" })).toEqual([range]);
+    expect(ids({ since: "2026-10-31T09:10:00Z", until: "2026-10-31T09:20:00Z" })).toEqual([range]);
   });
 });

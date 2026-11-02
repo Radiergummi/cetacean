@@ -198,6 +198,9 @@ export const historyEntrySchema = z.looseObject({
   action: z.string(),
   resourceId: z.string(),
   name: z.string(),
+  text: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  updated: z.string().optional(),
 });
 
 export const diskUsageSchema = z.looseObject({

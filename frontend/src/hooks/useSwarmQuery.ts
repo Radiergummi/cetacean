@@ -147,8 +147,8 @@ export function useSwarmQuery<T>({
           }, refetchDelay);
         };
 
-        // A gap names no resource, so no list row moved.
-        if (event.type === "gap") {
+        // Gaps and annotations are not list rows, so no row moved.
+        if (event.type === "gap" || event.type === "annotation") {
           return;
         }
 
