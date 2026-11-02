@@ -1,3 +1,4 @@
+import AnnotateOverlay from "./AnnotateOverlay";
 // oxlint-disable react/refs -- Chart.js plugins are memoized once and read
 // live state through refs so their callbacks never close over a stale render.
 // That is the documented architecture for this chart (crosshair sync,
@@ -14,6 +15,7 @@ import {
   layoutMarkers,
   type MarkerLayout,
   markersAt,
+  timeAtIndex,
   tooltipMarkers,
 } from "./chartMarkers";
 import { useChartSync } from "./ChartSyncProvider";
@@ -37,7 +39,7 @@ import {
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
 import { AreaChart, BarChart3, LineChart, RefreshCw } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Line } from "react-chartjs-2";
 
 ChartJS.register(
@@ -141,6 +143,14 @@ export default function TimeSeriesChart({
   dataRef.current = data;
   const stackedRef = useRef(stacked);
   stackedRef.current = stacked;
+
+  // The overlay's pixels are the canvas's, so the x scale reads them directly.
+  const timeFor = useCallback((x: number) => {
+    const xScale = chartRef.current?.scales["x"];
+    const timestamps = dataRef.current?.timestamps;
+
+    return xScale && timestamps ? timeAtIndex(timestamps, xScale.getValueForPixel(x) ?? 0) : null;
+  }, []);
   const timelineRef = useRef(panel?.timeline);
   timelineRef.current = panel?.timeline;
   const markerLayoutRef = useRef<MarkerLayout | null>(null);
@@ -620,13 +630,21 @@ export default function TimeSeriesChart({
           hidden={state !== "data"}
         >
           {chartData && (
-            <div className="h-50">
+            <div className="relative h-50">
               <Line
                 ref={chartRef}
                 data={chartData}
                 options={options}
                 plugins={plugins}
               />
+
+              {panel?.annotating && panel.annotate && (
+                <AnnotateOverlay
+                  timeFor={timeFor}
+                  scope={panel.annotate}
+                  onDone={() => panel.setAnnotating?.(false)}
+                />
+              )}
             </div>
           )}
         </div>

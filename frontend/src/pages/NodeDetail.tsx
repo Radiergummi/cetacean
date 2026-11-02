@@ -270,6 +270,11 @@ export default function NodeDetail() {
           <MetricsPanel
             header="Metrics"
             timeline={{ type: "node", resourceId: node.ID }}
+            annotate={
+              annotatable
+                ? { type: "node", id: node.ID, name: node.Description.Hostname ?? node.ID }
+                : undefined
+            }
             charts={[
               {
                 title: "CPU Usage",

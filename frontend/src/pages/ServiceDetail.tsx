@@ -157,6 +157,11 @@ export default function ServiceDetail() {
             header="Metrics"
             charts={detail.metricsCharts}
             timeline={{ type: "service", resourceId: service.ID }}
+            annotate={
+              detail.annotatable
+                ? { type: "service", id: service.ID, name: service.Spec.Name }
+                : undefined
+            }
           />
         </ErrorBoundary>
       )}

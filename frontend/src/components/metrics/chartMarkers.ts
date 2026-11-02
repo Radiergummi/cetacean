@@ -121,6 +121,25 @@ export function fractionalIndex(timestamps: number[], time: number): number | nu
 }
 
 /**
+ * The time at a fractional sample index, the inverse of `fractionalIndex`,
+ * clamped to the first and last sample.
+ */
+export function timeAtIndex(timestamps: number[], index: number): number | null {
+  const last = timestamps.length - 1;
+
+  if (last < 0) {
+    return null;
+  }
+
+  const clamped = Math.min(Math.max(index, 0), last);
+  const low = Math.floor(clamped);
+  const start = timestamps[low] ?? 0;
+  const end = timestamps[Math.min(low + 1, last)] ?? start;
+
+  return start + (end - start) * (clamped - low);
+}
+
+/**
  * Places timeline items in pixels. Points outside the samples are dropped, and
  * ranges are clipped to them: a gap that began before the window still covers
  * its start.

@@ -2,6 +2,7 @@ import {
   drawMarkers,
   fractionalIndex,
   layoutMarkers,
+  timeAtIndex,
   type MarkerHit,
   markersAt,
   tooltipMarkers,
@@ -260,5 +261,14 @@ describe("drawMarkers", () => {
       "stroke note 1",
       "fill note 1",
     ]);
+  });
+});
+
+describe("timeAtIndex", () => {
+  it("finds the time at a fractional index, clamped to the samples", () => {
+    expect(timeAtIndex([100, 200, 300], 1.5)).toBe(250);
+    expect(timeAtIndex([100, 200, 300], -1)).toBe(100);
+    expect(timeAtIndex([100, 200, 300], 9)).toBe(300);
+    expect(timeAtIndex([], 0)).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import type { Segment } from "../SegmentedControl";
+import type { AnnotationScope } from "@/api/types";
 import type { TimelineItem } from "@/lib/timeline";
 import { createContext, useContext } from "react";
 
@@ -20,6 +21,11 @@ export interface MetricsPanelContextValue {
   drillStack?: string | null | undefined;
   setDrillStack?: ((stack: string | null) => void) | undefined;
   timeline?: TimelineItem[] | undefined;
+
+  /** The resource a note marked on these charts is about, when one may be made. */
+  annotate?: Exclude<AnnotationScope, "cluster"> | undefined;
+  annotating?: boolean | undefined;
+  setAnnotating?: ((annotating: boolean) => void) | undefined;
 }
 
 export const MetricsPanelContext = createContext<MetricsPanelContextValue | null>(null);

@@ -7,7 +7,8 @@ import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { type TimelineSource, useTimeline } from "./useTimeline";
 import { useTimeRange } from "./useTimeRange";
-import { AreaChart, LineChart, Pause, Play, RefreshCw, X } from "lucide-react";
+import type { AnnotationScope } from "@/api/types";
+import { AreaChart, LineChart, MessageSquarePlus, Pause, Play, RefreshCw, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -30,14 +31,28 @@ interface Props {
    * The resource whose changes and gaps the charts mark.
    */
   timeline?: TimelineSource | undefined;
+
+  /**
+   * The resource a note marked on these charts is about; set only when the
+   * caller may annotate it and the charts draw its timeline.
+   */
+  annotate?: Exclude<AnnotationScope, "cluster"> | undefined;
 }
 
-export default function MetricsPanel({ charts, children, header, stackable, timeline }: Props) {
+export default function MetricsPanel({
+  charts,
+  children,
+  header,
+  stackable,
+  timeline,
+  annotate,
+}: Props) {
   const { range, customFrom, customTo, setCustomRange } = useTimeRange();
   const [refreshKey, setRefreshKey] = useState(0);
   const [stacked, setStacked] = useState(false);
   const [streaming, setStreaming] = useState(true);
   const [drillStack, setDrillStack] = useState<string | null>(null);
+  const [annotating, setAnnotating] = useState(false);
   const markers = useTimeline(timeline, {
     range,
     from: customFrom ?? undefined,
@@ -61,6 +76,22 @@ export default function MetricsPanel({ charts, children, header, stackable, time
     return () => document.removeEventListener("keydown", handler);
   }, [drillStack]);
 
+  useEffect(() => {
+    if (!annotating) {
+      return;
+    }
+
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAnnotating(false);
+      }
+    };
+
+    document.addEventListener("keydown", handler);
+
+    return () => document.removeEventListener("keydown", handler);
+  }, [annotating]);
+
   const panelCtx = useMemo<MetricsPanelContextValue>(
     () => ({
       range,
@@ -73,6 +104,9 @@ export default function MetricsPanel({ charts, children, header, stackable, time
       drillStack,
       setDrillStack,
       timeline: markers.items,
+      annotate,
+      annotating: annotating && annotate !== undefined,
+      setAnnotating,
     }),
     [
       range,
@@ -84,6 +118,8 @@ export default function MetricsPanel({ charts, children, header, stackable, time
       streaming,
       drillStack,
       markers.items,
+      annotate,
+      annotating,
     ],
   );
 
@@ -105,6 +141,15 @@ export default function MetricsPanel({ charts, children, header, stackable, time
           onClick={() => setStacked((v) => !v)}
           title={stacked ? "Switch to line chart" : "Switch to stacked area"}
           icon={stacked ? <AreaChart className="size-3.5" /> : <LineChart className="size-3.5" />}
+        />
+      )}
+
+      {annotate && (
+        <IconButton
+          onClick={() => setAnnotating((value) => !value)}
+          title="Annotate"
+          icon={<MessageSquarePlus className="size-3.5" />}
+          active={annotating}
         />
       )}
 

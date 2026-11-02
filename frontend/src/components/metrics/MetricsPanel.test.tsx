@@ -62,4 +62,39 @@ describe("MetricsPanel", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
     expect(screen.getByRole("button", { name: "Custom range" })).toBeInTheDocument();
   });
+
+  it("offers Annotate only with a scope", () => {
+    const { unmount } = render(<MetricsPanel charts={charts} />, { wrapper });
+
+    expect(screen.queryByRole("button", { name: "Annotate" })).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <MetricsPanel
+        charts={charts}
+        annotate={{ type: "service", id: "svc1", name: "web" }}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByRole("button", { name: "Annotate" })).toBeInTheDocument();
+  });
+
+  it("leaves annotate mode on Escape", () => {
+    render(
+      <MetricsPanel
+        charts={charts}
+        annotate={{ type: "service", id: "svc1", name: "web" }}
+      />,
+      { wrapper },
+    );
+
+    const toggle = screen.getByRole("button", { name: "Annotate" });
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(toggle).not.toHaveAttribute("aria-pressed");
+  });
 });
