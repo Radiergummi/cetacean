@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -77,17 +78,24 @@ func (s *Server) toolGetEvents(
 	// Every filter is pushed into the walk, so the ring copies what matched
 	// rather than everything it holds. The limit stays the whole ring on
 	// purpose: `total` counts everything the caller may read.
-	matched := history.List(cache.HistoryQuery{
+	matched := s.cache.Timeline(cache.HistoryQuery{
 		ResourceID: resource,
 		Types:      types,
-		Limit:      history.Size(),
+		Limit:      history.Size() + cache.MaxAnnotations,
 		After:      window.Since,
 		Before:     window.Until,
 		Visible:    cluster.HistoryReadable(s.readPredicate(ctx)),
+
+		ReadableAnnotation: s.annotationCaller(ctx).MayRead,
 	})
 
-	// Task naming runs after the cut, because a name only matters for an entry
-	// that is returned and every lookup takes the cache's read lock.
+	// Cut by time, as the result is ordered: an annotation's ID follows its
+	// creation, not its time. Task naming runs after the cut, because a name
+	// only matters for an entry that is returned.
+	slices.SortStableFunc(matched, func(a, b cache.HistoryEntry) int {
+		return b.Timestamp.Compare(a.Timestamp)
+	})
+
 	total := len(matched)
 	truncated := total > limit
 	if truncated {
@@ -113,6 +121,9 @@ func (s *Server) toolGetEvents(
 			ResourceID: e.ResourceID,
 			Message:    e.Action,
 			Actor:      e.Actor,
+			Text:       e.Text,
+			Tags:       e.Tags,
+			Resources:  e.Resources,
 		})
 	}
 

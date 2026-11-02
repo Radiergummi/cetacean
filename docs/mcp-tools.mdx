@@ -9,7 +9,7 @@ import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
-This page is the catalog an agent sees over Cetacean's MCP server: 20 resources, 28 tools, 6 prompts, and 5
+This page is the catalog an agent sees over Cetacean's MCP server: 20 resources, 29 tools, 6 prompts, and 5
 widgets. For enabling the server, authorization, and configuration, see [MCP server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] isn't
@@ -124,6 +124,10 @@ What the cluster is doing now, and what it did recently.
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
     tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
     made it, as the [history][api.history-actor] does.
+
+    [Annotations][api.annotations] appear as entries of kind `annotation`, with their `text`, `tags` and the
+    `resources` they name, at the time they describe. One is listed with the changes of the resources it names, a service's with those on its stack,
+    and a cluster-wide one with every resource's. Only the annotations the caller may read are returned.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
@@ -380,6 +384,22 @@ Where work is allowed to run, and who votes in Raft.
     [`update_node_labels`](#update_node_labels), at level 2, so a deployment that lets an agent relabel a node doesn't also let it demote a manager.
 </McpTool>
 
+### Annotations
+
+Notes on the timeline that people and agents read back later.
+
+<McpTool name="add_annotation" level={0}>
+    <Fragment slot="arguments">`text` (required), `at`, `until`, `tags`, `resources`</Fragment>
+
+    Records an [annotation][api.annotations] about a moment, or a range ending at `until`: a load test, a deploy,
+    what an incident turned out to be. `resources` names the services, stacks, and nodes it's about as objects
+    with a `type` and an `id`, which takes a name as readily as an ID; without any it's cluster-wide. It needs
+    write on every resource it names, or on everything for a cluster-wide one, and `storage.timeline`.
+
+    An annotation changes nothing in the cluster, so the tool is registered at every level. It's attributed to the
+    caller via MCP, and editing or deleting one is left to the [API][api.annotations].
+</McpTool>
+
 ## Resources
 
 Resources are read-only views returned as `application/json`. Three are static, seventeen are URI templates.
@@ -575,6 +595,7 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 
 [api]:  api
 [api.compatibility]:  api#compatibility
+[api.annotations]:  api#annotations
 [api.history-actor]:  api#who-made-a-change
 [authentication]:  authentication
 [custom-links]:  integrations#custom-links

@@ -71,6 +71,8 @@ var toolIconCategory = map[string]string{
 	"find":                "search",
 	"describe":            "read",
 
+	"add_annotation": "edit",
+
 	"scale_service": "scale",
 
 	"create_secret":          "edit",
@@ -212,6 +214,7 @@ func (s *Server) toolCatalog() []toolDef {
 		s.operationalTools(),
 		s.configurationTools(),
 		s.impactfulTools(),
+		s.annotationTools(),
 	)
 }
 

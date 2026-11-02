@@ -547,12 +547,14 @@ func TestToolAnnotationsCompleteness(t *testing.T) {
 
 // A tool that writes takes its tier from a shared operation; without one it
 // would register at tier 0. internal/contract holds both transports to that tier.
+// An annotation writes only Cetacean's own timeline, so it has no tier anywhere.
 func TestEveryWriteToolCarriesAnOperation(t *testing.T) {
 	srv := newResourceTestServer(t, cache.New(nil))
 
 	for _, def := range srv.toolCatalog() {
 		hint := def.tool.Annotations.ReadOnlyHint
-		if writes := hint != nil && !*hint; writes != (def.op != "") {
+		writes := hint != nil && !*hint && def.tool.Name != "add_annotation"
+		if writes != (def.op != "") {
 			t.Errorf("%s: writes = %t, but op = %q", def.tool.Name, writes, def.op)
 		}
 	}

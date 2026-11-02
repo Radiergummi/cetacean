@@ -1,3 +1,11 @@
+tool add_annotation
+  add_annotation.at: string
+  add_annotation.resources: object[]
+  add_annotation.resources[].id: string required
+  add_annotation.resources[].type: string enum(node,service,stack) required
+  add_annotation.tags: string[]
+  add_annotation.text: string required
+  add_annotation.until: string
 tool create_config
   create_config.data: string required
   create_config.encoding: string enum(base64,utf8)
