@@ -248,6 +248,8 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		}
 
 		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{
+			Kind:   q.Get("kind"),
+			Tag:    q.Get("tag"),
 			After:  window.Since,
 			Before: window.Until,
 		})
@@ -256,7 +258,7 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		}
 
 		data := historyFeedData(r, "History", entries, beforeID, limit)
-		data.QueryParams = historyWindowParams
+		data.QueryParams = historyFeedParams
 
 		render(w, r, data)
 	}
@@ -576,14 +578,13 @@ var searchFeedParams = []string{"q"}
 // its JSON handler prepared, so the alternate link has to carry them.
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
-// historyWindowParams names what /history's feeds read beyond the pagination
+// historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyWindowParams = []string{"since", "until"}
+var historyFeedParams = []string{"kind", "tag", "since", "until"}
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "kind", "tasks", "search", "tag", "before", "limit"},
-	historyWindowParams,
+	[]string{"type", "resourceId", "tasks", "search", "before", "limit"}, historyFeedParams,
 )
 
 // echoingFeedRequest opts r out of compression when the feed's links will echo

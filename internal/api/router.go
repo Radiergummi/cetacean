@@ -1215,7 +1215,7 @@ func (rt routes) views() {
 		jsonFeed:    h.feedHistoryHandler(renderJSONFeed),
 		csv:         true,
 		csvParams:   historyCSVParams,
-		queryParams: historyWindowParams,
+		queryParams: historyFeedParams,
 	}, spa))
 
 	// Search

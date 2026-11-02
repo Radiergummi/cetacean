@@ -123,3 +123,28 @@ func TestHistoryFeedTitlesAnAnnotationByItsFirstLine(t *testing.T) {
 		t.Errorf("title = %q, want the first line without its carriage return", title)
 	}
 }
+
+func TestHistoryFeedTakesTheTagAndKindItsJSONDoes(t *testing.T) {
+	h := annotationHandlers(t, true)
+	createAnnotation(t, h, "carol", `{"text":"tagged","tags":["deploy"]}`)
+	createAnnotation(t, h, "carol", `{"text":"untagged"}`)
+
+	req := withContentType(
+		newAnnotationRequest("GET", "/history?kind=annotation&tag=deploy", "carol", ""),
+		ContentTypeJSONFeed,
+	)
+	w := httptest.NewRecorder()
+	h.feedHistoryHandler(renderJSONFeed)(w, req)
+
+	var feed struct {
+		Items []struct {
+			Title string `json:"title"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("feed: %v\n%s", err, w.Body)
+	}
+	if len(feed.Items) != 1 || feed.Items[0].Title != "tagged" {
+		t.Errorf("items = %+v, want only the note tagged deploy", feed.Items)
+	}
+}

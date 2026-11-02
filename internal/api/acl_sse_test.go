@@ -311,9 +311,15 @@ func TestAclMatchWrap_ReplayedStackRemovesInheritStackGrant(t *testing.T) {
 
 func TestAclMatchWrapReadsAnnotationsAgainstTheLivePolicy(t *testing.T) {
 	e := acl.NewEvaluator()
-	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
-		Resources: []string{"service:web"}, Audience: []string{"user:bob"}, Permissions: []string{"read"},
-	}}})
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{
+		{
+			Resources: []string{
+				"service:web",
+			},
+			Audience:    []string{"user:bob"},
+			Permissions: []string{"read"},
+		},
+	}})
 
 	h := newTestHandlers(t, withACL(e))
 	r := httptest.NewRequest("GET", "/events", nil)
