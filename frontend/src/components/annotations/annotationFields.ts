@@ -1,4 +1,5 @@
 import type { AnnotationScope, NewAnnotation } from "@/api/types";
+import { toLocalInput as isoToLocalInput } from "@/components/log/log-utils";
 
 const tagPattern = /^[a-z0-9._-]{1,40}$/;
 
@@ -11,17 +12,11 @@ export function parseTag(input: string): string | null {
   return tagPattern.test(tag) ? tag : null;
 }
 
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
 /**
  * Epoch seconds as a `datetime-local` value, in local time, to the minute.
  */
 export function toLocalInput(seconds: number): string {
-  const date = new Date(seconds * 1000);
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return isoToLocalInput(new Date(seconds * 1000).toISOString());
 }
 
 /**

@@ -3,9 +3,31 @@ import type { AnnotationScope } from "@/api/types";
 import AnnotationForm from "@/components/annotations/AnnotationForm";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { useAnnotationCapabilities } from "@/hooks/useAnnotationCapabilities";
-import { type PointerEvent, useRef, useState } from "react";
+import { type PointerEvent, useReducer, useRef } from "react";
 
-const idle: Gesture = { kind: "idle" };
+interface OverlayState {
+  gesture: Gesture;
+  mark: Mark | null;
+
+  /** Counts marks, so each opens a fresh form. */
+  marks: number;
+}
+
+const initialState: OverlayState = { gesture: { kind: "idle" }, mark: null, marks: 0 };
+
+// A reducer, not state read in the handler: pointer events can outrun a
+// render, and each must build on the gesture the one before it left.
+function overlayReducer(state: OverlayState, action: GestureEvent | { type: "clear" }) {
+  if (action.type === "clear") {
+    return { ...state, mark: null };
+  }
+
+  const next = step(state.gesture, action);
+
+  return next.mark
+    ? { gesture: next.gesture, mark: next.mark, marks: state.marks + 1 }
+    : { ...state, gesture: next.gesture };
+}
 
 /**
  * Takes the pointer over a chart in annotate mode, so zoom, isolation and the
@@ -21,35 +43,16 @@ export default function AnnotateOverlay({
   scope: Exclude<AnnotationScope, "cluster">;
   onDone: () => void;
 }) {
-  const [gesture, setGesture] = useState<Gesture>(idle);
-  // Pointer events can outrun a render, so each builds on the last one's
-  // gesture rather than on the one this render saw.
-  const gestureRef = useRef<Gesture>(idle);
-  const [mark, setMark] = useState<(Mark & { key: number }) | null>(null);
+  const [{ gesture, mark, marks }, dispatch] = useReducer(overlayReducer, initialState);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const { clusterWide } = useAnnotationCapabilities();
-
-  const feed = (event: GestureEvent) => {
-    const next = step(gestureRef.current, event);
-
-    gestureRef.current = next.gesture;
-    setGesture(next.gesture);
-
-    if (next.mark) {
-      setMark({ ...next.mark, key: Date.now() });
-    }
-  };
 
   const offset = (event: PointerEvent<HTMLDivElement>) =>
     event.clientX - event.currentTarget.getBoundingClientRect().left;
 
   const from = mark ? timeFor(mark.from) : null;
-  const end = mark?.to === undefined ? null : timeFor(mark.to);
-  // Times snap to samples and the form shows minutes, so a range inside one
-  // minute would arrive with its end equal to its start; it is a point.
-  const to =
-    end !== null && from !== null && Math.floor(end / 60) > Math.floor(from / 60) ? end : undefined;
+  const to = mark?.to === undefined ? undefined : (timeFor(mark.to) ?? undefined);
   const dragged =
     gesture.kind === "dragging"
       ? {
@@ -65,13 +68,17 @@ export default function AnnotateOverlay({
       className="absolute inset-0 z-10 cursor-crosshair touch-none"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture?.(event.pointerId);
-        feed({ type: "down", x: offset(event), touch: event.pointerType === "touch" });
+        dispatch({ type: "down", x: offset(event), touch: event.pointerType === "touch" });
       }}
-      onPointerMove={(event) => feed({ type: "move", x: offset(event) })}
+      onPointerMove={(event) => {
+        if (gesture.kind === "dragging") {
+          dispatch({ type: "move", x: offset(event) });
+        }
+      }}
       onPointerUp={(event) =>
-        feed({ type: "up", x: offset(event), touch: event.pointerType === "touch" })
+        dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" })
       }
-      onPointerCancel={() => feed({ type: "cancel" })}
+      onPointerCancel={() => dispatch({ type: "cancel" })}
     >
       {dragged && (
         <div
@@ -109,7 +116,7 @@ export default function AnnotateOverlay({
             overlayRef.current?.contains(event.target);
 
           if (!open && !onChart) {
-            setMark(null);
+            dispatch({ type: "clear" });
           }
         }}
       >
@@ -119,11 +126,11 @@ export default function AnnotateOverlay({
         >
           {mark && from !== null && (
             <AnnotationForm
-              key={mark.key}
+              key={marks}
               scopes={clusterWide ? [scope, "cluster"] : [scope]}
               initial={{ from, to }}
               onDone={() => {
-                setMark(null);
+                dispatch({ type: "clear" });
                 onDone();
               }}
             />

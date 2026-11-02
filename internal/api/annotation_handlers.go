@@ -91,16 +91,17 @@ func attributedRead(r *http.Request) context.Context {
 // linkAnnotations links /annotations as rel="edit" when the caller may annotate
 // resource, so the dashboard offers it from the server's answer, not its own.
 func (h *Handlers) linkAnnotations(w http.ResponseWriter, r *http.Request, resource string) {
-	if h.annotations.Enabled() &&
-		h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resource) {
-		w.Header().Add("Link", `<`+absPath(r.Context(), "/annotations")+`>; rel="edit"`)
-	}
+	h.linkAnnotationsWhen(w, r, h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resource))
 }
 
 // linkClusterAnnotations links /annotations as rel="edit" when the caller may
 // annotate the whole cluster, which takes write on everything.
 func (h *Handlers) linkClusterAnnotations(w http.ResponseWriter, r *http.Request) {
-	if h.annotations.Enabled() && h.acl.CanWriteEverything(auth.IdentityFromContext(r.Context())) {
+	h.linkAnnotationsWhen(w, r, h.acl.CanWriteEverything(auth.IdentityFromContext(r.Context())))
+}
+
+func (h *Handlers) linkAnnotationsWhen(w http.ResponseWriter, r *http.Request, allowed bool) {
+	if allowed && h.annotations.Enabled() {
 		w.Header().Add("Link", `<`+absPath(r.Context(), "/annotations")+`>; rel="edit"`)
 	}
 }

@@ -20,11 +20,9 @@ const searchedTypes = [
  * is addressed by its name.
  */
 export default function ResourcePicker({
-  id,
   value,
   onChange,
 }: {
-  id?: string | undefined;
   value: ResourceScope | null;
   onChange: (scope: ResourceScope | null) => void;
 }) {
@@ -71,7 +69,6 @@ export default function ResourcePicker({
   return (
     <div className="flex flex-col gap-1">
       <Input
-        id={id}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search services, stacks and nodes…"

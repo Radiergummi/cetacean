@@ -66,6 +66,9 @@ export default function ServiceDetail() {
   const taskTemplate = service.Spec.TaskTemplate;
   const containerSpec = taskTemplate?.ContainerSpec;
   const labels = service.Spec.Labels;
+  const annotate = detail.annotatable
+    ? ({ type: "service", id: service.ID, name: service.Spec.Name } as const)
+    : undefined;
 
   const hasHealthcheckContent =
     detail.healthcheck != null &&
@@ -157,16 +160,12 @@ export default function ServiceDetail() {
             header="Metrics"
             charts={detail.metricsCharts}
             timeline={{ type: "service", resourceId: service.ID }}
-            annotate={
-              detail.annotatable
-                ? { type: "service", id: service.ID, name: service.Spec.Name }
-                : undefined
-            }
+            annotate={annotate}
           />
         </ErrorBoundary>
       )}
 
-      {(detail.changes.length > 0 || hasActivity(detail.history) || detail.annotatable) && (
+      {(detail.changes.length > 0 || hasActivity(detail.history) || annotate) && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {detail.changes.length > 0 && (
             <CollapsibleSection
@@ -179,16 +178,10 @@ export default function ServiceDetail() {
               />
             </CollapsibleSection>
           )}
-          {(hasActivity(detail.history) || detail.annotatable) && (
+          {(hasActivity(detail.history) || annotate) && (
             <CollapsibleSection
               title="Recent Activity"
-              controls={
-                detail.annotatable && (
-                  <AddAnnotationButton
-                    scope={{ type: "service", id: service.ID, name: service.Spec.Name }}
-                  />
-                )
-              }
+              controls={annotate && <AddAnnotationButton scope={annotate} />}
             >
               <ActivityFeed entries={detail.history} />
             </CollapsibleSection>

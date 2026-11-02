@@ -37,7 +37,13 @@ export default function AnnotationForm({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [from, setFrom] = useState(() => toLocalInput(initial.from));
-  const [to, setTo] = useState(() => (initial.to === undefined ? "" : toLocalInput(initial.to)));
+  // The inputs hold minutes, so a range inside one minute would arrive with
+  // its end on its start; it starts as a point instead.
+  const [to, setTo] = useState(() =>
+    initial.to === undefined || Math.floor(initial.to / 60) <= Math.floor(initial.from / 60)
+      ? ""
+      : toLocalInput(initial.to),
+  );
   const [choice, setChoice] = useState(0);
   const [picked, setPicked] = useState<ResourceScope | null>(null);
   const [error, setError] = useState<string | null>(null);

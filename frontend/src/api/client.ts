@@ -111,8 +111,7 @@ function editableOf(response: Response): Set<string> {
   const self = new URL(base).pathname;
   const names = new Set<string>();
 
-  for (const target of linkTargets(response.headers.get("Link"), "edit")) {
-    const path = new URL(target, base).pathname;
+  for (const path of editPaths(response)) {
     const name = path.slice(self.length + 1);
 
     if (path.startsWith(`${self}/`) && name !== "" && !name.includes("/")) {
@@ -128,10 +127,18 @@ function editableOf(response: Response): Set<string> {
  * server's word that the caller may annotate what the response describes.
  */
 function annotatableOf(response: Response): boolean {
+  return editPaths(response).some((path) => stripBasePath(path) === "/annotations");
+}
+
+/**
+ * The pathnames a response links with `rel="edit"`, resolved against the URL
+ * it was served from.
+ */
+function editPaths(response: Response): string[] {
   const base = response.url || window.location.href;
 
-  return linkTargets(response.headers.get("Link"), "edit").some(
-    (target) => stripBasePath(new URL(target, base).pathname) === "/annotations",
+  return linkTargets(response.headers.get("Link"), "edit").map(
+    (target) => new URL(target, base).pathname,
   );
 }
 

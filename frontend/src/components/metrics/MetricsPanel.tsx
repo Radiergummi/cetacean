@@ -8,6 +8,7 @@ import TimeSeriesChart from "./TimeSeriesChart";
 import { type TimelineSource, useTimeline } from "./useTimeline";
 import { useTimeRange } from "./useTimeRange";
 import type { AnnotationScope } from "@/api/types";
+import { useEscapeCancel } from "@/hooks/useEscapeCancel";
 import { AreaChart, LineChart, MessageSquarePlus, Pause, Play, RefreshCw, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -76,21 +77,7 @@ export default function MetricsPanel({
     return () => document.removeEventListener("keydown", handler);
   }, [drillStack]);
 
-  useEffect(() => {
-    if (!annotating) {
-      return;
-    }
-
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setAnnotating(false);
-      }
-    };
-
-    document.addEventListener("keydown", handler);
-
-    return () => document.removeEventListener("keydown", handler);
-  }, [annotating]);
+  useEscapeCancel(annotating, () => setAnnotating(false));
 
   const panelCtx = useMemo<MetricsPanelContextValue>(
     () => ({

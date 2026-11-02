@@ -94,7 +94,7 @@ describe("MetricsPanel", () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.keyDown(document.body, { key: "Escape" });
     expect(toggle).not.toHaveAttribute("aria-pressed");
   });
 });

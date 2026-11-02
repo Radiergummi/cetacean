@@ -143,6 +143,9 @@ export default function NodeDetail() {
   const engineVersion = node.Description?.Engine?.EngineVersion;
   const platformOS = node.Description?.Platform?.OS;
   const platformArch = node.Description?.Platform?.Architecture;
+  const annotate = annotatable
+    ? ({ type: "node", id: node.ID, name: displayHostname } as const)
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -270,11 +273,7 @@ export default function NodeDetail() {
           <MetricsPanel
             header="Metrics"
             timeline={{ type: "node", resourceId: node.ID }}
-            annotate={
-              annotatable
-                ? { type: "node", id: node.ID, name: node.Description.Hostname ?? node.ID }
-                : undefined
-            }
+            annotate={annotate}
             charts={[
               {
                 title: "CPU Usage",
@@ -318,11 +317,7 @@ export default function NodeDetail() {
       <ActivitySection
         entries={history}
         hideType
-        annotate={
-          annotatable
-            ? { type: "node", id: node.ID, name: node.Description.Hostname ?? node.ID }
-            : undefined
-        }
+        annotate={annotate}
       />
     </div>
   );
