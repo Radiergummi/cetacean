@@ -150,5 +150,7 @@ export function useDetailResource<T>(
     }
   }, [queryClient, detailKey, historyKey, fetchHistory, extraQueryKeys]);
 
-  return { data, history, error, retry, setData, allowedMethods, editable };
+  const annotatable = resourceQuery.data?.annotatable ?? false;
+
+  return { data, history, error, retry, setData, allowedMethods, editable, annotatable };
 }

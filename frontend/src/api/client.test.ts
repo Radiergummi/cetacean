@@ -207,7 +207,12 @@ describe("api client", () => {
   it("fetches a single node (unwraps JSON-LD wrapper)", async () => {
     mockFetch.mockReturnValue(jsonResponse({ node: { ID: "n1" } }));
     const result = await api.node("n1");
-    expect(result).toEqual({ data: { ID: "n1" }, allowedMethods: new Set(), editable: new Set() });
+    expect(result).toEqual({
+      data: { ID: "n1" },
+      allowedMethods: new Set(),
+      editable: new Set(),
+      annotatable: false,
+    });
     expect(mockFetch).toHaveBeenCalledWith(
       "/nodes/n1",
       expect.objectContaining({ headers: { Accept: "application/json" } }),
@@ -595,5 +600,60 @@ describe("api.timeline", () => {
     mockFetch.mockReturnValueOnce(page([entry(0)]));
 
     expect((await api.timeline(params)).truncated).toBe(true);
+  });
+});
+
+describe("annotation capabilities", () => {
+  const headed = (headers: Record<string, string>, url = "http://localhost/services/x") =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      url,
+      json: () => Promise.resolve({ service: { ID: "x" } }),
+      headers: new Headers(headers),
+    });
+
+  it("reads whether a response links annotations for editing", async () => {
+    mockFetch.mockReturnValueOnce(
+      headed({ Link: '</annotations>; rel="edit", </services/x/scale>; rel="edit"' }),
+    );
+
+    const linked = await api.service("x");
+
+    expect(linked.annotatable).toBe(true);
+    expect(linked.editable).toEqual(new Set(["scale"]));
+
+    mockFetch.mockReturnValueOnce(headed({ Link: '</services/x/scale>; rel="edit"' }));
+
+    expect((await api.service("x")).annotatable).toBe(false);
+  });
+
+  it("asks what annotations the caller may create", async () => {
+    mockFetch.mockImplementation((url) =>
+      String(url).endsWith("/annotations")
+        ? headed({ Allow: "GET, HEAD, POST" }, "http://localhost/annotations")
+        : headed({}, "http://localhost/cluster"),
+    );
+
+    expect(await api.annotationCapabilities()).toEqual({ create: true, clusterWide: false });
+    expect(mockFetch.mock.calls.map(([, init]) => (init as RequestInit).method)).toEqual([
+      "HEAD",
+      "HEAD",
+    ]);
+  });
+
+  it("creates an annotation", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse({ id: 7, kind: "annotation" }, 201));
+
+    const body = { text: "load test", tags: [], timestamp: "2026-11-02T10:00:00Z" };
+
+    expect(await api.createAnnotation(body)).toEqual({ id: 7, kind: "annotation" });
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe("/annotations");
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(String(init.body))).toEqual(body);
   });
 });
