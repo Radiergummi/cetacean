@@ -356,14 +356,6 @@ function annotationResponse({
   return response;
 }
 
-/**
- * Whether a path segment is an annotation's ID; the dev server's modules
- * under `components/annotations/` match the same pattern and must pass.
- */
-function isAnnotationId(id: PathParams[string]) {
-  return typeof id === "string" && /^\d+$/.test(id);
-}
-
 function matchesVersion(request: Request, entry: HistoryEntry) {
   const ifMatch = request.headers.get("If-Match");
 
@@ -371,9 +363,9 @@ function matchesVersion(request: Request, entry: HistoryEntry) {
 }
 
 function preconditionFailed() {
-  return HttpResponse.json(
+  return jsonResponse(
     { type: "/api/errors/API013", title: "Precondition Failed", status: 412 },
-    { status: 412 },
+    412,
   );
 }
 
@@ -1197,6 +1189,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
   }
 
   return [
+    // The dev server's modules sit under the same base as the API, and
+    // `*/<resource>/:id` would claim `src/components/<resource>/` files.
+    http.all("*/demo/src/*", () => passthrough()),
+
     // ---- Health & meta ----
     get("*/-/health", () => {
       const data: HealthInfo = {
@@ -2014,20 +2010,12 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     get("*/annotations/:id", ({ params }) => {
-      if (!isAnnotationId(params.id)) {
-        return passthrough();
-      }
-
       const entry = annotationAt(String(params.id));
 
       return entry ? annotationResponse(entry) : notFound();
     }),
 
     http.patch("*/annotations/:id", async ({ params, request }) => {
-      if (!isAnnotationId(params.id)) {
-        return passthrough();
-      }
-
       const entry = annotationAt(String(params.id));
 
       if (!entry) {
@@ -2049,10 +2037,6 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
     }),
 
     http.delete("*/annotations/:id", ({ params, request }) => {
-      if (!isAnnotationId(params.id)) {
-        return passthrough();
-      }
-
       const entry = annotationAt(String(params.id));
 
       if (!entry) {

@@ -2,7 +2,6 @@ import {
   annotationBody,
   annotationInputs,
   annotationPatch,
-  type AnnotationInputs,
   parseTag,
   toLocalInput,
 } from "./annotationFields";
@@ -13,6 +12,7 @@ import ResourceName from "@/components/ResourceName";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { getErrorMessage } from "@/lib/utils";
 import { X } from "lucide-react";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
@@ -83,7 +83,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
   const scopeName = useId();
   const errorId = useId();
   const pickerChoice = scopes.length;
-  const scope = edited ? "cluster" : choice === pickerChoice ? picked : scopes[choice];
+  const scope = choice === pickerChoice ? picked : scopes[choice];
 
   /**
    * A control's ARIA, naming the error when it is about this field.
@@ -148,25 +148,24 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
    * Takes up the note's current version after a stale write: a field the user
    * changed keeps their input, any other shows the newer value.
    */
-  const reload = async (opened: Annotation, inputs: AnnotationInputs) => {
+  const reload = async (id: number, changed: Record<string, unknown>) => {
     try {
-      const { data, etag } = await api.annotation(opened.id);
-      const was = annotationInputs(opened);
+      const { data, etag } = await api.annotation(id);
       const now = annotationInputs(data);
 
-      if (inputs.text === was.text) {
+      if (!("text" in changed)) {
         setText(now.text);
       }
 
-      if (inputs.tags.join(",") === was.tags.join(",")) {
+      if (!("tags" in changed)) {
         setTags(now.tags);
       }
 
-      if (inputs.from === was.from) {
+      if (!("timestamp" in changed)) {
         setFrom(now.from);
       }
 
-      if (inputs.to === was.to) {
+      if (!("until" in changed)) {
         setTo(now.to);
       }
 
@@ -176,14 +175,12 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
           "This note changed since you opened it. Your edits are kept; save again to apply them.",
       });
     } catch (failure) {
-      setError({
-        message: failure instanceof ApiError ? failure.detail || failure.message : String(failure),
-      });
+      setError({ message: getErrorMessage(failure, "The note could not be reloaded.") });
     }
   };
 
   const submit = async () => {
-    if (submittingRef.current || !scope || text.trim() === "") {
+    if (submittingRef.current || (!edited && !scope) || text.trim() === "") {
       return;
     }
 
@@ -193,11 +190,11 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       return;
     }
 
-    const shown = edited && annotationInputs(edited.note);
+    const patch = edited && annotationPatch(edited.note, { text, tags: finalTags, from, to });
 
     // Times shown to the minute may meet; untouched, the server's seconds hold.
     if (
-      (!shown || from !== shown.from || to !== shown.to) &&
+      (!patch || "timestamp" in patch || "until" in patch) &&
       to !== "" &&
       new Date(to) <= new Date(from)
     ) {
@@ -211,27 +208,20 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
     setError(null);
 
     try {
-      if (edited) {
-        const patch = annotationPatch(edited.note, { text, tags: finalTags, from, to });
-
+      if (edited && patch) {
         if (Object.keys(patch).length > 0) {
           await api.updateAnnotation(edited.note.id, patch, edited.etag);
         }
-      } else {
+      } else if (scope) {
         await api.createAnnotation(annotationBody({ text, tags: finalTags, from, to, scope }));
       }
 
       onDone();
     } catch (failure) {
-      if (edited && failure instanceof ApiError && failure.status === 412) {
-        await reload(edited.note, { text, tags: finalTags, from, to });
+      if (edited && patch && failure instanceof ApiError && failure.status === 412) {
+        await reload(edited.note.id, patch);
       } else {
-        setError({
-          message:
-            failure instanceof ApiError
-              ? failure.detail || failure.message
-              : "The note could not be saved.",
-        });
+        setError({ message: getErrorMessage(failure, "The note could not be saved.") });
       }
     } finally {
       submittingRef.current = false;
@@ -397,7 +387,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         <Button
           type="submit"
           size="sm"
-          disabled={submitting || text.trim() === "" || !scope}
+          disabled={submitting || text.trim() === "" || (!edited && !scope)}
         >
           {submitting ? "Saving…" : edited ? "Save" : "Add annotation"}
         </Button>

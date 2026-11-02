@@ -11,8 +11,14 @@ const alice = {
 } as const;
 
 /**
+ * The seeded notes' IDs, fixed whatever the dataset holds, as edits are kept
+ * by ID; the other seeded entries count up from 1 below them.
+ */
+const seededNoteIds = [90001, 90002] as const;
+
+/**
  * Annotations the visitor wrote this session, newest first. Their IDs start
- * high so they never meet the seeded ones, which count up from 1.
+ * above every seeded one.
  */
 const written: HistoryEntry[] = [];
 let nextWrittenId = 100000;
@@ -97,7 +103,6 @@ export function editAnnotation(
 
 export function removeAnnotation(id: number) {
   removed.add(id);
-  versions.set(id, annotationVersion(id) + 1);
 }
 
 /**
@@ -105,7 +110,6 @@ export function removeAnnotation(id: number) {
  * relative to `now` so the metric charts of every range have something to mark.
  */
 export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
-  // Notes keep their IDs whatever the dataset holds, as edits are kept by ID.
   const entries: (Omit<HistoryEntry, "id"> & { id?: number })[] = [
     {
       kind: "gap",
@@ -122,7 +126,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
   entries.push({
     kind: "annotation",
-    id: 90001,
+    id: seededNoteIds[0],
     timestamp: new Date(now - 3 * 60 * minute).toISOString(),
     until: new Date(now - 3 * 60 * minute + 40 * minute).toISOString(),
     type: "",
@@ -139,7 +143,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
   if (first) {
     entries.push({
       kind: "annotation",
-      id: 90002,
+      id: seededNoteIds[1],
       timestamp: new Date(now - 50 * minute).toISOString(),
       type: "",
       action: "",

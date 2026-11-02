@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getErrorMessage } from "@/lib/utils";
 import { Menu } from "@base-ui/react/menu";
 import { Ellipsis } from "lucide-react";
 import { useRef, useState } from "react";
@@ -28,10 +29,6 @@ type Loaded =
 
 const itemClass =
   "flex w-full cursor-default rounded-sm px-2 py-1.5 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:text-muted-foreground";
-
-function failureMessage(failure: unknown) {
-  return failure instanceof ApiError ? failure.detail || failure.message : String(failure);
-}
 
 /**
  * A note card's "…" menu. Opening it reads the note, whose `Allow` decides
@@ -58,7 +55,10 @@ export default function AnnotationMenu({ id }: { id: number }) {
       }
     } catch (failure) {
       if (request === latest.current) {
-        setLoaded({ status: "failed", message: failureMessage(failure) });
+        setLoaded({
+          status: "failed",
+          message: getErrorMessage(failure, "The note could not be read."),
+        });
       }
     }
   };
@@ -79,19 +79,15 @@ export default function AnnotationMenu({ id }: { id: number }) {
           setDeleting((current) => current && { note: data, etag });
           setDeleteError("This note changed since you opened it. Delete it anyway?");
         } catch (reason) {
-          setDeleteError(failureMessage(reason));
+          setDeleteError(getErrorMessage(reason, "The note could not be read."));
         }
       } else {
-        setDeleteError(failureMessage(failure));
+        setDeleteError(getErrorMessage(failure, "The note could not be deleted."));
       }
     } finally {
       setRemoving(false);
     }
   };
-
-  const ready = loaded.status === "ready" ? loaded : null;
-  const canEdit = ready?.methods.has("PATCH") ?? false;
-  const canDelete = ready?.methods.has("DELETE") ?? false;
 
   return (
     <>
@@ -117,42 +113,44 @@ export default function AnnotationMenu({ id }: { id: number }) {
             className="z-50"
           >
             <Menu.Popup className="min-w-36 rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-hidden">
-              {loaded.status !== "ready" && (
+              {loaded.status === "ready" ? (
+                <>
+                  {loaded.methods.has("PATCH") && (
+                    <Menu.Item
+                      className={itemClass}
+                      onClick={() => setEditing(loaded.edited)}
+                    >
+                      Edit
+                    </Menu.Item>
+                  )}
+
+                  {loaded.methods.has("DELETE") && (
+                    <Menu.Item
+                      className={`${itemClass} text-status-danger`}
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleting(loaded.edited);
+                      }}
+                    >
+                      Delete
+                    </Menu.Item>
+                  )}
+
+                  {!loaded.methods.has("PATCH") && !loaded.methods.has("DELETE") && (
+                    <Menu.Item
+                      disabled
+                      className={itemClass}
+                    >
+                      You can't change this note
+                    </Menu.Item>
+                  )}
+                </>
+              ) : (
                 <Menu.Item
                   disabled
                   className={itemClass}
                 >
                   {loaded.status === "loading" ? "Loading…" : loaded.message}
-                </Menu.Item>
-              )}
-
-              {ready && canEdit && (
-                <Menu.Item
-                  className={itemClass}
-                  onClick={() => setEditing(ready.edited)}
-                >
-                  Edit
-                </Menu.Item>
-              )}
-
-              {ready && canDelete && (
-                <Menu.Item
-                  className={`${itemClass} text-status-danger`}
-                  onClick={() => {
-                    setDeleteError(null);
-                    setDeleting(ready.edited);
-                  }}
-                >
-                  Delete
-                </Menu.Item>
-              )}
-
-              {ready && !canEdit && !canDelete && (
-                <Menu.Item
-                  disabled
-                  className={itemClass}
-                >
-                  You can't change this note
                 </Menu.Item>
               )}
             </Menu.Popup>
