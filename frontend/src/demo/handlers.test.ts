@@ -410,3 +410,47 @@ describe("Allow", () => {
     expect(await allow(`/volumes/${dataset.volumes[0]!.Name}`, "HEAD")).toBe("GET, HEAD, DELETE");
   });
 });
+
+describe("annotations in the demo", () => {
+  it("advertises that the visitor may annotate", async () => {
+    const service = dataset.services[0]!;
+    const annotations = await fetch("http://localhost/annotations", { method: "HEAD" });
+    const detail = await fetch(`http://localhost/services/${service.ID}`, {
+      headers: { Accept: "application/json" },
+    });
+    const cluster = await fetch("http://localhost/cluster", { method: "HEAD" });
+
+    expect(annotations.headers.get("Allow")).toContain("POST");
+    expect(detail.headers.get("Link")).toContain('</annotations>; rel="edit"');
+    expect(cluster.headers.get("Link")).toContain('</annotations>; rel="edit"');
+  });
+
+  it("creates an annotation and announces it", async () => {
+    const sent: { event: string; data: string }[] = [];
+    const client = { send: (message: { event: string; data: string }) => sent.push(message) };
+
+    clients.global.add(client as never);
+
+    const response = await fetch("http://localhost/annotations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        text: "Load test",
+        tags: ["load-test"],
+        timestamp: "2026-11-02T10:00:00Z",
+      }),
+    });
+    const created = (await response.json()) as { id: number; kind: string; text: string };
+
+    clients.global.delete(client as never);
+
+    expect(response.status).toBe(201);
+    expect(created).toMatchObject({ kind: "annotation", text: "Load test" });
+    expect(created.id).toBeGreaterThanOrEqual(100000);
+
+    const listed = await fetchJSON("/history?kind=annotation");
+
+    expect(listed.items.map(({ id }: { id: number }) => id)).toContain(created.id);
+    expect(sent.map(({ event }) => event)).toContain("annotation");
+  });
+});

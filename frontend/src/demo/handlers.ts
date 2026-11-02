@@ -1,5 +1,5 @@
 import { randomHex, type Dataset } from "./dataset";
-import { demoHistory, filterHistory } from "./history";
+import { demoHistory, filterHistory, writeAnnotation } from "./history";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
 import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
@@ -15,6 +15,7 @@ import type {
   ImageProvenance,
   ImageSBOM,
   HistoryEntry,
+  NewAnnotation,
   LogDriver,
   MonitoringStatus,
   Network,
@@ -218,7 +219,7 @@ const writesByPath: [RegExp, string][] = [
   [/\/services\/[^/]+\/endpoint-mode$/, "PUT"],
   [/\/nodes\/[^/]+$/, "DELETE"],
   [/\/(configs|secrets)\/[^/]+$/, "DELETE"],
-  [/\/(configs|secrets|plugins)$/, "POST"],
+  [/\/(configs|secrets|plugins|annotations)$/, "POST"],
   [/\/plugins\/[^/]+$/, "DELETE"],
   [/\/(tasks|stacks|networks|volumes)\/[^/]+$/, "DELETE"],
 ];
@@ -274,12 +275,20 @@ function allowFor(url: string) {
   return writes ? `GET, HEAD, ${writes}` : "GET, HEAD";
 }
 
+/** The details whose resource the visitor may annotate, and the cluster for cluster-wide notes. */
+const annotatablePath = /\/((services|nodes|stacks)\/[^/]+|cluster)$/;
+
 /** The `rel="edit"` links the server sends on a detail response. */
 function editLinksFor(url: string) {
   const { pathname } = new URL(url);
   const names = editableByPath.find(([pattern]) => pattern.test(pathname))?.[1] ?? [];
+  const links = names.map((name) => `<${pathname}/${name}>; rel="edit"`);
 
-  return names.map((name) => `<${pathname}/${name}>; rel="edit"`).join(", ");
+  if (annotatablePath.test(pathname)) {
+    links.push('</annotations>; rel="edit"');
+  }
+
+  return links.join(", ");
 }
 
 /**
@@ -1891,6 +1900,44 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
       const { results, counts, total } = searchDataset(dataset, query, limit);
       return jsonResponse<SearchResponse>({ query, results, counts, total });
+    }),
+
+    // ---- Annotations ----
+    http.post("*/annotations", async ({ request }) => {
+      const body = (await request.json()) as NewAnnotation;
+      const entry = writeAnnotation(body, (type, id) => {
+        if (type === "service") {
+          return dataset.services.find(({ ID }) => ID === id)?.Spec.Name ?? id;
+        }
+
+        if (type === "node") {
+          return dataset.nodes.find(({ ID }) => ID === id)?.Description.Hostname ?? id;
+        }
+
+        return id;
+      });
+      const [named] = entry.resources ?? [];
+      const event = {
+        "@id": `/annotations/${entry.id}`,
+        "@type": "Annotation",
+        type: "annotation",
+        action: "create",
+        id: String(entry.id),
+        resource: entry,
+      };
+
+      broadcast(
+        clients,
+        "annotation",
+        named ? `${named.type}s` : "annotations",
+        named?.id ?? "",
+        event,
+      );
+
+      return HttpResponse.json(
+        { ...entry, "@id": `/annotations/${entry.id}`, "@type": "Annotation" },
+        { status: 201, headers: { Location: `/annotations/${entry.id}` } },
+      );
     }),
 
     // ---- History ----
