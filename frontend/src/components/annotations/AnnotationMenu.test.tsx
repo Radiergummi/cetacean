@@ -51,7 +51,12 @@ describe("AnnotationMenu", () => {
     const user = userEvent.setup();
 
     allowing("PATCH", "DELETE");
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
 
     expect(readAnnotation).not.toHaveBeenCalled();
 
@@ -66,7 +71,12 @@ describe("AnnotationMenu", () => {
     const user = userEvent.setup();
 
     allowing("DELETE");
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
 
     expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
@@ -77,7 +87,12 @@ describe("AnnotationMenu", () => {
     const user = userEvent.setup();
 
     allowing();
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
 
     expect(
@@ -90,7 +105,12 @@ describe("AnnotationMenu", () => {
     const user = userEvent.setup();
 
     allowing("PATCH");
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
 
@@ -102,7 +122,12 @@ describe("AnnotationMenu", () => {
     const user = userEvent.setup();
 
     allowing("DELETE");
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
 
@@ -121,7 +146,12 @@ describe("AnnotationMenu", () => {
     deleteAnnotation.mockRejectedValue(
       new ApiError("/api/errors/API013", "Precondition Failed", 412, "stale"),
     );
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     await user.click(await screen.findByRole("button", { name: "Delete" }));
@@ -142,7 +172,12 @@ describe("AnnotationMenu", () => {
         refuse = reject;
       }),
     );
-    render(<AnnotationMenu id={7} />);
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     await user.click(await screen.findByRole("button", { name: "Delete" }));

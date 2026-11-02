@@ -40,7 +40,7 @@ export default function AnnotationMenu({
   onActiveChange,
 }: {
   id: number;
-  onActiveChange?: ((active: boolean) => void) | undefined;
+  onActiveChange: (active: boolean) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
@@ -56,9 +56,9 @@ export default function AnnotationMenu({
       return;
     }
 
-    onActiveChange?.(true);
+    onActiveChange(true);
 
-    return () => onActiveChange?.(false);
+    return () => onActiveChange(false);
   }, [active, onActiveChange]);
 
   const load = async () => {

@@ -1219,15 +1219,12 @@ export const api = {
   annotationCapabilities: fetchAnnotationCapabilities,
   createAnnotation: (body: NewAnnotation) =>
     mutationFetch<HistoryEntry>("/annotations", "POST", body, "application/json"),
-  annotation: async (id: number, signal?: AbortSignal) => {
-    const result = await fetchJSON<{ annotation: Annotation }>(
+  annotation: (id: number, signal?: AbortSignal) =>
+    fetchJSON<{ annotation: Annotation }>(
       `/annotations/${id}`,
       signal,
       schema.annotationDetailSchema,
-    );
-
-    return { ...result, data: result.data.annotation };
-  },
+    ).then(({ data, ...rest }) => ({ data: data.annotation, ...rest })),
   updateAnnotation: (id: number, patch: Record<string, unknown>, etag?: string | undefined) =>
     mutationFetch<{ annotation: Annotation }>(
       `/annotations/${id}`,

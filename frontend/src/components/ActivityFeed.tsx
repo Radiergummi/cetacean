@@ -7,8 +7,9 @@ import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
 import AnnotationMenu from "./annotations/AnnotationMenu";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
+import { Badge } from "./ui/badge";
 import { ChevronRight, Pause } from "lucide-react";
-import { useCallback, useId, useState, type ReactNode } from "react";
+import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -213,10 +214,10 @@ function ChangeRun({
  */
 function AnnotationCard({
   entry,
-  onHold,
+  onActiveChange,
 }: {
   entry: HistoryEntry;
-  onHold: (active: boolean) => void;
+  onActiveChange: (active: boolean) => void;
 }) {
   const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
 
@@ -239,7 +240,7 @@ function AnnotationCard({
           <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</p>
           <AnnotationMenu
             id={id}
-            onActiveChange={onHold}
+            onActiveChange={onActiveChange}
           />
         </div>
 
@@ -324,6 +325,8 @@ export default function ActivityFeed({
     (active: boolean) => setHeld(active ? entriesRef.current : null),
     [entriesRef],
   );
+  const shown = held ?? entries;
+  const rows = useMemo(() => activityRows(shown, collapse), [shown, collapse]);
 
   if (loading) {
     return (
@@ -338,7 +341,6 @@ export default function ActivityFeed({
     );
   }
 
-  const rows = activityRows(held ?? entries, collapse);
   const runsSeen = new Map<string, number>();
 
   if (rows.length === 0) {
@@ -365,7 +367,7 @@ export default function ActivityFeed({
               <AnnotationCard
                 key={`annotation-${row.entry.id}`}
                 entry={row.entry}
-                onHold={hold}
+                onActiveChange={hold}
               />
             );
           }
@@ -393,10 +395,13 @@ export default function ActivityFeed({
         className="pointer-events-none sticky bottom-3 flex justify-center"
       >
         {held && (
-          <span className="mt-2 flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground shadow-sm">
-            <Pause className="size-3" />
+          <Badge
+            variant="outline"
+            className="mt-2 bg-background text-muted-foreground shadow-sm"
+          >
+            <Pause />
             Updates paused while a note is open
-          </span>
+          </Badge>
         )}
       </div>
     </>

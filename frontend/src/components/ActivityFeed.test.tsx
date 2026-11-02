@@ -10,7 +10,18 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/api/client", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/api/client")>();
 
-  return { ...original, api: { ...original.api, annotation: () => new Promise(() => {}) } };
+  return {
+    ...original,
+    api: {
+      ...original.api,
+      annotation: () =>
+        Promise.resolve({
+          data: { id: 7, timestamp: "2026-11-01T14:00:00Z", text: "x", tags: [], resources: [] },
+          allowedMethods: new Set(["GET", "PATCH"]),
+          etag: '"1"',
+        }),
+    },
+  };
 });
 
 describe("ActivityFeed", () => {
@@ -459,6 +470,24 @@ describe("ActivityFeed runs", () => {
 
       expect(await screen.findByText("Newer note")).toBeInTheDocument();
       expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    });
+
+    it("keeps holding when the menu hands over to a dialog", async () => {
+      const user = userEvent.setup();
+      const feed = (entries: HistoryEntry[]) => (
+        <MemoryRouter>
+          <ActivityFeed entries={entries} />
+        </MemoryRouter>
+      );
+      const { rerender } = render(feed([note({})]));
+
+      await user.click(screen.getByRole("button", { name: "Note actions" }));
+      await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+      await screen.findByRole("dialog");
+      rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));
+
+      expect(screen.queryByText("Newer note")).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 
     it("keeps a note's scope where the feed hides the type", () => {
