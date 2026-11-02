@@ -663,7 +663,12 @@ describe("annotation capabilities", () => {
         ok: true,
         status: 200,
         url: "http://localhost/annotations/7",
-        json: () => Promise.resolve({ id: 7, text: "load test" }),
+        json: () =>
+          Promise.resolve({
+            "@id": "/annotations/7",
+            "@type": "Annotation",
+            annotation: { id: 7, text: "load test" },
+          }),
         headers: new Headers({ Allow: "GET, HEAD, PATCH, DELETE", ETag: '"12"' }),
       }),
     );

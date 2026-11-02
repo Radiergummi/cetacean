@@ -411,16 +411,15 @@ export interface NewAnnotation {
 }
 
 /**
- * One annotation as `GET /annotations/{id}` returns it; the server sends
- * `null` for no tags or no resources.
+ * One annotation, as `GET /annotations/{id}` returns it under `annotation`.
  */
 export interface Annotation {
   id: number;
   timestamp: string;
   until?: string | undefined;
   text: string;
-  tags: string[] | null;
-  resources: AnnotationResource[] | null;
+  tags: string[];
+  resources: AnnotationResource[];
   actor?: HistoryActor | undefined;
   updated?: string | undefined;
   editor?: HistoryActor | undefined;

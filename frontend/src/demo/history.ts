@@ -14,7 +14,7 @@ const alice = {
  * The seeded notes' IDs, fixed whatever the dataset holds, as edits are kept
  * by ID; the other seeded entries count up from 1 below them.
  */
-const seededNoteIds = [90001, 90002] as const;
+export const seededNoteIds = [90001, 90002] as const;
 
 /**
  * Annotations the visitor wrote this session, newest first. Their IDs start

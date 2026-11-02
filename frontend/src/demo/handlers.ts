@@ -338,18 +338,20 @@ function annotationResponse({
   updated,
   editor,
 }: HistoryEntry) {
-  const response = HttpResponse.json({
-    "@id": `/annotations/${id}`,
-    "@type": "Annotation",
-    id,
-    timestamp,
-    ...(until ? { until } : {}),
-    text: text ?? "",
-    tags: tags?.length ? tags : null,
-    resources: resources?.length ? resources : null,
-    ...(actor ? { actor } : {}),
-    ...(updated ? { updated, editor } : {}),
-  });
+  const response = HttpResponse.json(
+    detailEnvelope(`/annotations/${id}`, "Annotation", {
+      annotation: {
+        id,
+        timestamp,
+        ...(until ? { until } : {}),
+        text: text ?? "",
+        tags: tags ?? [],
+        resources: resources ?? [],
+        ...(actor ? { actor } : {}),
+        ...(updated ? { updated, editor } : {}),
+      },
+    }),
+  );
 
   response.headers.set("ETag", annotationETag(id));
 

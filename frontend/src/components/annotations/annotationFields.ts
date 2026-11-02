@@ -67,7 +67,7 @@ export interface AnnotationInputs {
 export function annotationInputs({ text, tags, timestamp, until }: Annotation): AnnotationInputs {
   return {
     text,
-    tags: tags ?? [],
+    tags,
     from: isoToLocalInput(timestamp),
     to: until ? isoToLocalInput(until) : "",
   };

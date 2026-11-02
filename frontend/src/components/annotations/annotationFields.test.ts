@@ -69,7 +69,7 @@ describe("annotationPatch", () => {
     until: "2026-11-02T14:00:00Z",
     text: "load test",
     tags: ["load"],
-    resources: null,
+    resources: [],
   };
   const inputs = annotationInputs(note);
 
@@ -80,8 +80,7 @@ describe("annotationPatch", () => {
       from: toLocalInput(Date.UTC(2026, 10, 2, 13, 0) / 1000),
       to: toLocalInput(Date.UTC(2026, 10, 2, 14, 0) / 1000),
     });
-    expect(annotationInputs({ ...note, until: undefined, tags: null }).to).toBe("");
-    expect(annotationInputs({ ...note, tags: null }).tags).toEqual([]);
+    expect(annotationInputs({ ...note, until: undefined }).to).toBe("");
   });
 
   it("sends nothing when nothing changed, so the seconds of the start survive", () => {

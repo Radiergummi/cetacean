@@ -319,7 +319,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-medium">About</p>
           <p className="flex flex-wrap gap-x-2 text-sm">
-            {edited.note.resources?.length
+            {edited.note.resources.length > 0
               ? edited.note.resources.map(({ type, id, name }) => (
                   <ResourceName
                     key={`${type}-${id}`}

@@ -28,8 +28,8 @@ const note: Annotation = {
   id: 7,
   timestamp: "2026-11-02T13:00:00Z",
   text: "Load test",
-  tags: null,
-  resources: null,
+  tags: [],
+  resources: [],
 };
 
 function allowing(...methods: string[]) {

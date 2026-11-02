@@ -3,8 +3,15 @@ import { formatDateTime } from "../lib/format";
 import { describeAnnotationTime } from "../lib/timeline";
 import ActivityFeed from "./ActivityFeed";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/api/client", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/client")>();
+
+  return { ...original, api: { ...original.api, annotation: () => new Promise(() => {}) } };
+});
 
 describe("ActivityFeed", () => {
   it("shows loading skeleton", () => {
@@ -430,6 +437,26 @@ describe("ActivityFeed runs", () => {
 
       expect(screen.queryByText("Cluster-wide")).not.toBeInTheDocument();
       expect(screen.getByRole("link", { name: "web" })).toBeInTheDocument();
+    });
+
+    it("holds its rows while a note's menu is open", async () => {
+      const user = userEvent.setup();
+      const feed = (entries: HistoryEntry[]) => (
+        <MemoryRouter>
+          <ActivityFeed entries={entries} />
+        </MemoryRouter>
+      );
+      const { rerender } = render(feed([note({})]));
+
+      await user.click(screen.getByRole("button", { name: "Note actions" }));
+      await screen.findByRole("menu");
+      rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));
+
+      expect(screen.queryByText("Newer note")).not.toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+
+      expect(await screen.findByText("Newer note")).toBeInTheDocument();
     });
 
     it("keeps a note's scope where the feed hides the type", () => {

@@ -477,7 +477,9 @@ describe("annotations in the demo", () => {
     const etag = read.headers.get("ETag") ?? "";
 
     expect(read.headers.get("Allow")).toBe("GET, HEAD, PATCH, DELETE");
-    expect(await read.json()).toMatchObject({ id: created.id, text: "Soak", resources: null });
+    expect(await read.json()).toMatchObject({
+      annotation: { id: created.id, text: "Soak", resources: [] },
+    });
 
     clients.global.add(client as never);
 
@@ -489,8 +491,7 @@ describe("annotations in the demo", () => {
 
     expect(patched.status).toBe(200);
     expect(await patched.json()).toMatchObject({
-      text: "Soak test",
-      until: "2026-11-02T11:00:00Z",
+      annotation: { text: "Soak test", until: "2026-11-02T11:00:00Z" },
     });
 
     const stale = await fetch(path, { method: "DELETE", headers: { "If-Match": etag } });

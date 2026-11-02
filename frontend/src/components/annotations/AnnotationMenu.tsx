@@ -20,7 +20,7 @@ import {
 import { getErrorMessage } from "@/lib/utils";
 import { Menu } from "@base-ui/react/menu";
 import { Ellipsis } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Loaded =
   | { status: "loading" }
@@ -33,14 +33,33 @@ const itemClass =
 /**
  * A note card's "…" menu. Opening it reads the note, whose `Allow` decides
  * what is offered and whose `ETag` every write from here sends back.
+ * `onActiveChange` hears while the menu or one of its dialogs is open.
  */
-export default function AnnotationMenu({ id }: { id: number }) {
+export default function AnnotationMenu({
+  id,
+  onActiveChange,
+}: {
+  id: number;
+  onActiveChange?: ((active: boolean) => void) | undefined;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [editing, setEditing] = useState<EditedNote | null>(null);
   const [deleting, setDeleting] = useState<EditedNote | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const latest = useRef(0);
+  const active = menuOpen || editing !== null || deleting !== null;
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    onActiveChange?.(true);
+
+    return () => onActiveChange?.(false);
+  }, [active, onActiveChange]);
 
   const load = async () => {
     const request = ++latest.current;
@@ -94,6 +113,8 @@ export default function AnnotationMenu({ id }: { id: number }) {
       <Menu.Root
         modal={false}
         onOpenChange={(open) => {
+          setMenuOpen(open);
+
           if (open) {
             void load();
           }

@@ -1,4 +1,5 @@
 import type { HistoryEntry } from "../api/types";
+import { useLatestRef } from "../hooks/useLatestRef";
 import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
@@ -7,7 +8,7 @@ import AnnotationMenu from "./annotations/AnnotationMenu";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { ChevronRight } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useCallback, useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -210,7 +211,13 @@ function ChangeRun({
  * A note someone wrote, as a card: its text, when it says it happened, what
  * it is about, its tags, and who wrote it.
  */
-function AnnotationCard({ entry }: { entry: HistoryEntry }) {
+function AnnotationCard({
+  entry,
+  onHold,
+}: {
+  entry: HistoryEntry;
+  onHold: (active: boolean) => void;
+}) {
   const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
 
   return (
@@ -226,11 +233,14 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
     >
       <div
         data-cluster-wide={resources.length === 0 || undefined}
-        className="min-w-0 flex-1 rounded-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
+        className="min-w-0 flex-1 rounded-r-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
       >
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</p>
-          <AnnotationMenu id={id} />
+          <AnnotationMenu
+            id={id}
+            onActiveChange={onHold}
+          />
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -306,6 +316,15 @@ export default function ActivityFeed({
   collapse = true,
   emptyText = "No recent activity",
 }: ActivityFeedProps) {
+  // While a note's menu or dialog is open the rows hold still, so updates
+  // can't move the note away or push it, and its dialog, out of the feed.
+  const [held, setHeld] = useState<HistoryEntry[] | null>(null);
+  const entriesRef = useLatestRef(entries);
+  const hold = useCallback(
+    (active: boolean) => setHeld(active ? entriesRef.current : null),
+    [entriesRef],
+  );
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -319,7 +338,7 @@ export default function ActivityFeed({
     );
   }
 
-  const rows = activityRows(entries, collapse);
+  const rows = activityRows(held ?? entries, collapse);
   const runsSeen = new Map<string, number>();
 
   if (rows.length === 0) {
@@ -345,6 +364,7 @@ export default function ActivityFeed({
             <AnnotationCard
               key={`annotation-${row.entry.id}`}
               entry={row.entry}
+              onHold={hold}
             />
           );
         }
