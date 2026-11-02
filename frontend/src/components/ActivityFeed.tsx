@@ -2,7 +2,7 @@ import type { HistoryEntry } from "../api/types";
 import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
-import { describeAnnotationTime, describeGap } from "../lib/timeline";
+import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { ChevronRight } from "lucide-react";
@@ -203,10 +203,6 @@ function ChangeRun({
       )}
     </>
   );
-}
-
-function seconds(timestamp: string): number {
-  return new Date(timestamp).getTime() / 1000;
 }
 
 /**

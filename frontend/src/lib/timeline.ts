@@ -18,7 +18,10 @@ const pastTense: Record<string, string> = {
   remove: "Removed",
 };
 
-function seconds(timestamp: string): number {
+/**
+ * An RFC 3339 timestamp in epoch seconds; NaN when it does not parse.
+ */
+export function seconds(timestamp: string): number {
   return new Date(timestamp).getTime() / 1000;
 }
 
@@ -43,18 +46,15 @@ export function timelineItems(entries: HistoryEntry[], type: string): TimelineIt
 
     if (entry.kind === "annotation") {
       const from = seconds(entry.timestamp);
+      const to = seconds(entry.until ?? entry.timestamp);
 
-      if (entry.until === undefined) {
-        if (Number.isFinite(from)) {
-          items.push({ shape: "point", kind: "annotation", at: from, entry });
-        }
-
+      if (!Number.isFinite(from) || !Number.isFinite(to)) {
         continue;
       }
 
-      const to = seconds(entry.until);
-
-      if (Number.isFinite(from) && Number.isFinite(to) && to > from) {
+      if (entry.until === undefined) {
+        items.push({ shape: "point", kind: "annotation", at: from, entry });
+      } else if (to > from) {
         items.push({ shape: "range", kind: "annotation", from, to, entry });
       }
 
@@ -95,7 +95,12 @@ export function describeGap(from: number, to: number): { title: string; detail: 
   };
 }
 
-const dayAndTime = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" } as const;
+export const dayAndTime = {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+} as const;
 
 /**
  * When an annotation says it happened, hedged because a person wrote it:

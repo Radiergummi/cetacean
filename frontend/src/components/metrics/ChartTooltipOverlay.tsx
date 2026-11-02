@@ -6,14 +6,7 @@ import { useRef } from "react";
 export interface TooltipMarkers {
   changes: { key: number; time: string; text: string }[];
   more: number;
-  annotations: {
-    key: number;
-    time: string;
-    text: string;
-    tags: string[];
-    byline: string | undefined;
-    edited: boolean;
-  }[];
+  annotations: { key: number; text: string; detail: string }[];
   moreAnnotations: number;
   gap: { title: string; detail: string } | undefined;
 }
@@ -86,7 +79,7 @@ export default function ChartTooltipOverlay({ tooltip, visible }: Props) {
 
           {tooltip.markers && (
             <div className="mt-1.5 flex flex-col gap-1 border-t pt-1.5">
-              {tooltip.markers.annotations.map(({ key, time, text, tags, byline, edited }) => (
+              {tooltip.markers.annotations.map(({ key, text, detail }) => (
                 <div
                   key={`annotation-${key}`}
                   className="border-l-2 border-annotation ps-1.5"
@@ -94,11 +87,7 @@ export default function ChartTooltipOverlay({ tooltip, visible }: Props) {
                   <div className="line-clamp-3 max-w-64 whitespace-pre-wrap text-foreground">
                     {text}
                   </div>
-                  <div className="text-muted-foreground">
-                    {[time, ...tags.map((tag) => `#${tag}`), byline, edited ? "edited" : undefined]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
+                  <div className="text-muted-foreground">{detail}</div>
                 </div>
               ))}
 

@@ -56,6 +56,12 @@ export function hasActivity(entries: HistoryEntry[]): boolean {
 export function activityRows(entries: HistoryEntry[], collapse: boolean): ActivityRow[] {
   const rows: ActivityRow[] = [];
   let run: HistoryEntry[] = [];
+  const flush = () => {
+    if (run.length > 0) {
+      rows.push({ kind: "gap", gaps: run });
+      run = [];
+    }
+  };
 
   for (const entry of entries) {
     if (entry.kind === "gap") {
@@ -65,11 +71,7 @@ export function activityRows(entries: HistoryEntry[], collapse: boolean): Activi
     }
 
     if (entry.kind === "annotation") {
-      if (run.length > 0) {
-        rows.push({ kind: "gap", gaps: run });
-        run = [];
-      }
-
+      flush();
       rows.push({ kind: "annotation", entry });
 
       continue;
@@ -92,11 +94,7 @@ export function activityRows(entries: HistoryEntry[], collapse: boolean): Activi
       continue;
     }
 
-    if (run.length > 0) {
-      rows.push({ kind: "gap", gaps: run });
-      run = [];
-    }
-
+    flush();
     rows.push({ kind: "change", entries: [entry] });
   }
 

@@ -196,21 +196,11 @@ describe("tooltipMarkers", () => {
     const markers = tooltipMarkers(hit({ flag: flags[0] }));
 
     expect(markers?.annotations).toEqual([
-      {
-        key: 2,
-        time: describeAnnotationTime(201),
-        text: "note 2",
-        tags: [],
-        byline: undefined,
-        edited: false,
-      },
+      { key: 2, text: "note 2", detail: describeAnnotationTime(201) },
       {
         key: 1,
-        time: describeAnnotationTime(200),
         text: "Deployed the fix",
-        tags: ["deploy"],
-        byline: "by alice via the dashboard",
-        edited: true,
+        detail: `${describeAnnotationTime(200)} · #deploy · by alice via the dashboard · edited`,
       },
     ]);
   });
@@ -231,27 +221,22 @@ describe("tooltipMarkers", () => {
 describe("drawMarkers", () => {
   it("draws a range under the changes and a flag over them", () => {
     const calls: string[] = [];
-    const state = { fillStyle: "", strokeStyle: "", globalAlpha: 1 };
-    const context = new Proxy(state, {
-      get: (target, name) =>
-        name in target
-          ? target[name as keyof typeof target]
-          : () => {
-              if (name === "fill" || name === "stroke") {
-                const style = name === "fill" ? target.fillStyle : target.strokeStyle;
-
-                calls.push(`${name} ${style} ${target.globalAlpha}`);
-              }
-
-              if (name === "restore") {
-                target.globalAlpha = 1;
-              }
-            },
-      set: (target, name, value) => {
-        Reflect.set(target, name, value);
-
-        return true;
+    const nothing = () => {};
+    const style = { fillStyle: "", strokeStyle: "", lineWidth: 1, globalAlpha: 1 };
+    const context = Object.assign(style, {
+      save: nothing,
+      beginPath: nothing,
+      closePath: nothing,
+      rect: nothing,
+      clip: nothing,
+      moveTo: nothing,
+      lineTo: nothing,
+      arc: nothing,
+      restore: () => {
+        style.globalAlpha = 1;
       },
+      fill: () => calls.push(`fill ${style.fillStyle} ${style.globalAlpha}`),
+      stroke: () => calls.push(`stroke ${style.strokeStyle} ${style.globalAlpha}`),
     }) as unknown as CanvasRenderingContext2D;
     const layout = layoutMarkers(
       [gap(100, 200), region(1, 200, 300), point(2, 250), flag(3, 260)],

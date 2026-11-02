@@ -2,6 +2,7 @@ import type { TooltipMarkers } from "./ChartTooltipOverlay";
 import { attribution } from "@/lib/activity";
 import { formatDateTime } from "@/lib/format";
 import {
+  dayAndTime,
   describeAnnotationTime,
   describeChange,
   describeGap,
@@ -315,13 +316,6 @@ export function drawMarkers(
   }
 }
 
-const shortTime = {
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-} as const;
-
 /**
  * What the tooltip says about what is under the pointer: annotations and
  * changes newest first, each list capped and the rest counted.
@@ -341,7 +335,7 @@ export function tooltipMarkers({
     ...(flag?.items ?? []).map(({ at, entry }) => ({ start: at, end: undefined, entry })),
     ...regions.map(({ item }) => ({
       start: item.from,
-      end: item.shape === "range" ? item.to : undefined,
+      end: item.to,
       entry: item.entry,
     })),
   ].sort((one, other) => other.start - one.start);
@@ -349,17 +343,21 @@ export function tooltipMarkers({
   return {
     changes: newest.slice(0, tooltipChanges).map(({ at, entry }) => ({
       key: entry.id,
-      time: formatDateTime(new Date(at * 1000), shortTime),
+      time: formatDateTime(new Date(at * 1000), dayAndTime),
       text: describeChange(entry),
     })),
     more: Math.max(0, newest.length - tooltipChanges),
     annotations: notes.slice(0, tooltipChanges).map(({ start, end, entry }) => ({
       key: entry.id,
-      time: describeAnnotationTime(start, end),
       text: entry.text ?? "",
-      tags: entry.tags ?? [],
-      byline: entry.actor ? attribution(entry.actor) : undefined,
-      edited: entry.updated !== undefined,
+      detail: [
+        describeAnnotationTime(start, end),
+        ...(entry.tags ?? []).map((tag) => `#${tag}`),
+        entry.actor ? attribution(entry.actor) : undefined,
+        entry.updated === undefined ? undefined : "edited",
+      ]
+        .filter(Boolean)
+        .join(" · "),
     })),
     moreAnnotations: Math.max(0, notes.length - tooltipChanges),
     gap: band ? describeGap(band.item.from, band.item.to) : undefined,
