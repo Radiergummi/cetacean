@@ -156,6 +156,8 @@ channels:
     messages:
       task:
         $ref: "#/components/messages/task"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -233,6 +235,8 @@ channels:
     messages:
       config:
         $ref: "#/components/messages/config"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -266,6 +270,8 @@ channels:
     messages:
       secret:
         $ref: "#/components/messages/secret"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -305,6 +311,8 @@ channels:
         $ref: "#/components/messages/service"
       node:
         $ref: "#/components/messages/node"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
@@ -336,6 +344,8 @@ channels:
     messages:
       volume:
         $ref: "#/components/messages/volume"
+      annotation:
+        $ref: "#/components/messages/annotation"
       batch:
         $ref: "#/components/messages/batch"
       sync:
