@@ -11,8 +11,14 @@ const alice = {
 } as const;
 
 /**
+ * The seeded notes' IDs, fixed whatever the dataset holds, as edits are kept
+ * by ID; the other seeded entries count up from 1 below them.
+ */
+export const seededNoteIds = [90001, 90002] as const;
+
+/**
  * Annotations the visitor wrote this session, newest first. Their IDs start
- * high so they never meet the seeded ones, which count up from 1.
+ * above every seeded one.
  */
 const written: HistoryEntry[] = [];
 let nextWrittenId = 100000;
@@ -40,7 +46,7 @@ export function writeAnnotation(
           resources: body.resources.map(({ type, id }) => ({ type, id, name: nameOf(type, id) })),
         }
       : {}),
-    actor: { subject: "demo", name: "demo", provider: "demo", transport: "dashboard" },
+    actor: visitor,
   };
 
   written.unshift(entry);
@@ -49,11 +55,62 @@ export function writeAnnotation(
 }
 
 /**
+ * Edits and deletes the visitor made this session, of any annotation, with
+ * each one's version for its ETag; a note never written to is at version 1.
+ */
+const edits = new Map<number, HistoryEntry>();
+const removed = new Set<number>();
+const versions = new Map<number, number>();
+
+const visitor = {
+  subject: "demo",
+  name: "demo",
+  provider: "demo",
+  transport: "dashboard",
+} as const;
+
+export function annotationVersion(id: number): number {
+  return versions.get(id) ?? 1;
+}
+
+/**
+ * Applies a merge patch's text, tags and times to an annotation and keeps it.
+ */
+export function editAnnotation(
+  entry: HistoryEntry,
+  patch: { text?: string; tags?: string[] | null; timestamp?: string; until?: string | null },
+): HistoryEntry {
+  const next: HistoryEntry = {
+    ...entry,
+    ...(patch.text === undefined ? {} : { text: patch.text }),
+    ...("tags" in patch ? { tags: patch.tags ?? [] } : {}),
+    ...(patch.timestamp === undefined ? {} : { timestamp: patch.timestamp }),
+    updated: new Date().toISOString(),
+    editor: visitor,
+  };
+
+  if (patch.until) {
+    next.until = patch.until;
+  } else if ("until" in patch) {
+    delete next.until;
+  }
+
+  edits.set(entry.id, next);
+  versions.set(entry.id, annotationVersion(entry.id) + 1);
+
+  return next;
+}
+
+export function removeAnnotation(id: number) {
+  removed.add(id);
+}
+
+/**
  * A few changes per service and node, one gap, and two annotations, placed
  * relative to `now` so the metric charts of every range have something to mark.
  */
 export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
-  const entries: Omit<HistoryEntry, "id">[] = [
+  const entries: (Omit<HistoryEntry, "id"> & { id?: number })[] = [
     {
       kind: "gap",
       timestamp: new Date(now - 9 * 60 * minute).toISOString(),
@@ -69,6 +126,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
   entries.push({
     kind: "annotation",
+    id: seededNoteIds[0],
     timestamp: new Date(now - 3 * 60 * minute).toISOString(),
     until: new Date(now - 3 * 60 * minute + 40 * minute).toISOString(),
     type: "",
@@ -85,6 +143,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
   if (first) {
     entries.push({
       kind: "annotation",
+      id: seededNoteIds[1],
       timestamp: new Date(now - 50 * minute).toISOString(),
       type: "",
       action: "",
@@ -130,17 +189,29 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
   entries.sort((one, other) => other.timestamp.localeCompare(one.timestamp));
 
-  return [...written, ...entries.map((entry, index) => ({ ...entry, id: entries.length - index }))];
+  return [
+    ...written,
+    ...entries.map((entry, index) => ({ ...entry, id: entry.id ?? entries.length - index })),
+  ]
+    .filter(({ id }) => !removed.has(id))
+    .map((entry) => edits.get(entry.id) ?? entry);
 }
 
 /**
- * Applies `/history`'s filters: a gap matches every resource filter, and
- * every window it overlaps. An annotation overlaps windows the same way and
- * matches the resources it names; a cluster-wide one matches every filter.
+ * Applies `/history`'s filters: a gap matches every resource filter and tag,
+ * and every window it overlaps. An annotation overlaps windows the same way
+ * and matches what it names, or the stack of the service named by
+ * `resourceId`; a cluster-wide one matches every resource filter.
  */
-export function filterHistory(entries: HistoryEntry[], params: URLSearchParams): HistoryEntry[] {
+export function filterHistory(
+  entries: HistoryEntry[],
+  params: URLSearchParams,
+  stackOf: (id: string) => string | undefined = () => undefined,
+): HistoryEntry[] {
   const type = params.get("type");
   const resourceId = params.get("resourceId");
+  const tag = params.get("tag");
+  const stack = resourceId ? stackOf(resourceId) : undefined;
   const kind = params.get("kind");
   const since = params.get("since");
   const until = params.get("until");
@@ -166,12 +237,18 @@ export function filterHistory(entries: HistoryEntry[], params: URLSearchParams):
 
       return (
         overlaps &&
+        (!tag || (entry.tags ?? []).includes(tag)) &&
         (named.length === 0 ||
-          named.some(
-            (resource) =>
-              (!type || resource.type === type) && (!resourceId || resource.id === resourceId),
+          named.some(({ type: namedType, id }) =>
+            resourceId
+              ? id === resourceId || (namedType === "stack" && id === stack)
+              : !type || namedType === type,
           ))
       );
+    }
+
+    if (tag) {
+      return false;
     }
 
     return (

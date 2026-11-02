@@ -172,3 +172,28 @@ export function broadcast(
     }
   }
 }
+
+/**
+ * Sends an event on /events and on each detail stream `keys` names, once.
+ */
+export function broadcastToStreams(
+  clients: SSEClients,
+  eventType: string,
+  keys: Iterable<string>,
+  data: Record<string, unknown>,
+) {
+  const message = { event: eventType, data: JSON.stringify(data) };
+  const sets = [clients.global, ...new Set(keys)].map((key) =>
+    typeof key === "string" ? clients.byId.get(key) : key,
+  );
+
+  for (const set of sets) {
+    for (const client of set ?? []) {
+      try {
+        client.send(message);
+      } catch {
+        set?.delete(client);
+      }
+    }
+  }
+}

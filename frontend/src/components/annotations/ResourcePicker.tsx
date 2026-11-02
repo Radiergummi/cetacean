@@ -71,6 +71,7 @@ export default function ResourcePicker({
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        aria-label="Service, stack or node"
         placeholder="Search services, stacks and nodes…"
         autoComplete="off"
       />

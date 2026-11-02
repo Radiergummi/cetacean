@@ -1,4 +1,12 @@
-import { annotationBody, fromLocalInput, parseTag, toLocalInput } from "./annotationFields";
+import {
+  annotationBody,
+  annotationInputs,
+  annotationPatch,
+  fromLocalInput,
+  parseTag,
+  toLocalInput,
+} from "./annotationFields";
+import type { Annotation } from "@/api/types";
 import { describe, expect, it } from "vitest";
 
 describe("parseTag", () => {
@@ -50,6 +58,60 @@ describe("annotationBody", () => {
       text: "x",
       tags: [],
       timestamp: "2026-11-02T13:00:00.000Z",
+    });
+  });
+});
+
+describe("annotationPatch", () => {
+  const note: Annotation = {
+    id: 7,
+    timestamp: "2026-11-02T13:00:30Z",
+    until: "2026-11-02T14:00:00Z",
+    text: "load test",
+    tags: ["load"],
+    resources: [],
+  };
+  const inputs = annotationInputs(note);
+
+  it("fills the form from a note, to the minute", () => {
+    expect(inputs).toEqual({
+      text: "load test",
+      tags: ["load"],
+      from: toLocalInput(Date.UTC(2026, 10, 2, 13, 0) / 1000),
+      to: toLocalInput(Date.UTC(2026, 10, 2, 14, 0) / 1000),
+    });
+    expect(annotationInputs({ ...note, until: undefined }).to).toBe("");
+  });
+
+  it("sends nothing when nothing changed, so the seconds of the start survive", () => {
+    expect(annotationPatch(note, inputs)).toEqual({});
+  });
+
+  it("sends only what changed", () => {
+    const later = toLocalInput(Date.UTC(2026, 10, 2, 13, 30) / 1000);
+
+    expect(annotationPatch(note, { ...inputs, text: "soak test", from: later })).toEqual({
+      text: "soak test",
+      timestamp: "2026-11-02T13:30:00.000Z",
+    });
+    expect(annotationPatch(note, { ...inputs, tags: ["load", "soak"] })).toEqual({
+      tags: ["load", "soak"],
+    });
+  });
+
+  it("clears the end with null, and an emptied tag list with an empty one", () => {
+    expect(annotationPatch(note, { ...inputs, to: "", tags: [] })).toEqual({
+      until: null,
+      tags: [],
+    });
+  });
+
+  it("gives a point an end", () => {
+    const point = { ...note, until: undefined };
+    const to = toLocalInput(Date.UTC(2026, 10, 2, 15, 0) / 1000);
+
+    expect(annotationPatch(point, { ...annotationInputs(point), to })).toEqual({
+      until: "2026-11-02T15:00:00.000Z",
     });
   });
 });

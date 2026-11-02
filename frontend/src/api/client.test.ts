@@ -656,4 +656,57 @@ describe("annotation capabilities", () => {
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
     expect(JSON.parse(String(init.body))).toEqual(body);
   });
+
+  it("reads one annotation with what the caller may do and its version", async () => {
+    mockFetch.mockReturnValueOnce(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        url: "http://localhost/annotations/7",
+        json: () =>
+          Promise.resolve({
+            "@id": "/annotations/7",
+            "@type": "Annotation",
+            annotation: { id: 7, text: "load test" },
+          }),
+        headers: new Headers({ Allow: "GET, HEAD, PATCH, DELETE", ETag: '"12"' }),
+      }),
+    );
+
+    const { data, allowedMethods, etag } = await api.annotation(7);
+
+    expect(data).toEqual({ id: 7, text: "load test" });
+    expect(allowedMethods).toEqual(new Set(["GET", "HEAD", "PATCH", "DELETE"]));
+    expect(etag).toBe('"12"');
+    expect(mockFetch.mock.calls[0]?.[0]).toBe("/annotations/7");
+  });
+
+  it("patches an annotation as a merge patch on its version", async () => {
+    mockFetch.mockReturnValueOnce(jsonResponse({ id: 7 }));
+
+    await api.updateAnnotation(7, { until: null }, '"12"');
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const sent = new Headers(init.headers);
+
+    expect(url).toBe("/annotations/7");
+    expect(init.method).toBe("PATCH");
+    expect(sent.get("Content-Type")).toBe("application/merge-patch+json");
+    expect(sent.get("If-Match")).toBe('"12"');
+    expect(JSON.parse(String(init.body))).toEqual({ until: null });
+  });
+
+  it("deletes an annotation on its version", async () => {
+    mockFetch.mockReturnValueOnce(
+      Promise.resolve({ ok: true, status: 204, headers: new Headers() }),
+    );
+
+    await api.deleteAnnotation(7, '"12"');
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+
+    expect(url).toBe("/annotations/7");
+    expect(init.method).toBe("DELETE");
+    expect(new Headers(init.headers).get("If-Match")).toBe('"12"');
+  });
 });

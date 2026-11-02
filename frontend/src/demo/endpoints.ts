@@ -6,6 +6,7 @@
  * When you add a new demo handler in `handlers.ts`, add its path here.
  */
 import type { Dataset } from "./dataset";
+import { seededNoteIds } from "./history";
 
 export function buildDemoEndpoints(dataset: Dataset): string[] {
   // The demo dataset is always fully populated; the fallbacks only exist so
@@ -84,6 +85,7 @@ export function buildDemoEndpoints(dataset: Dataset): string[] {
 
     // Other
     "/history",
+    `/annotations/${seededNoteIds[0]}`,
     "/recommendations",
     "/disk-usage",
     "/plugins",

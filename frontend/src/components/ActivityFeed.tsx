@@ -3,10 +3,13 @@ import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
+import AnnotationMenu from "./annotations/AnnotationMenu";
+import { isClusterWide } from "./metrics/chartMarkers";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
-import { ChevronRight } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { Badge } from "./ui/badge";
+import { ChevronRight, Pause } from "lucide-react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -209,8 +212,16 @@ function ChangeRun({
  * A note someone wrote, as a card: its text, when it says it happened, what
  * it is about, its tags, and who wrote it.
  */
-function AnnotationCard({ entry }: { entry: HistoryEntry }) {
-  const { actor, editor, resources = [], tags = [], text, timestamp, until, updated } = entry;
+function AnnotationCard({
+  entry,
+  onActiveChange,
+}: {
+  entry: HistoryEntry;
+  onActiveChange: (active: boolean) => void;
+}) {
+  const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
+
+  const clusterWide = isClusterWide({ entry });
 
   return (
     <TimelineRow
@@ -218,16 +229,22 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
       date={timestamp}
       marker={
         <div
-          data-cluster-wide={resources.length === 0 || undefined}
+          data-cluster-wide={clusterWide || undefined}
           className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
         />
       }
     >
       <div
-        data-cluster-wide={resources.length === 0 || undefined}
-        className="min-w-0 flex-1 rounded-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
+        data-cluster-wide={clusterWide || undefined}
+        className="min-w-0 flex-1 rounded-r-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
       >
-        <p className="break-words whitespace-pre-wrap">{text}</p>
+        <div className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</p>
+          <AnnotationMenu
+            id={id}
+            onActiveChange={onActiveChange}
+          />
+        </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span>
@@ -237,7 +254,7 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
             )}
           </span>
 
-          {resources.length === 0 ? (
+          {clusterWide ? (
             <span>Cluster-wide</span>
           ) : (
             resources.map(({ type, id, name }) => {
@@ -259,9 +276,9 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
             })
           )}
 
-          {tags.map((tag) => (
+          {tags.map((tag, index) => (
             <span
-              key={tag}
+              key={`${index}-${tag}`}
               className="rounded border px-1"
             >
               #{tag}
@@ -302,6 +319,19 @@ export default function ActivityFeed({
   collapse = true,
   emptyText = "No recent activity",
 }: ActivityFeedProps) {
+  // While a note's menu or dialog is open the rows hold still, so updates
+  // can't move the note away or push it, and its dialog, out of the feed.
+  // The snapshot is taken while rendering, so it is always the rows on screen.
+  const [held, setHeld] = useState(false);
+  const [onScreen, setOnScreen] = useState(entries);
+
+  if (!held && onScreen !== entries) {
+    setOnScreen(entries);
+  }
+
+  const shown = held ? onScreen : entries;
+  const rows = useMemo(() => activityRows(shown, collapse), [shown, collapse]);
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -315,7 +345,6 @@ export default function ActivityFeed({
     );
   }
 
-  const rows = activityRows(entries, collapse);
   const runsSeen = new Map<string, number>();
 
   if (rows.length === 0) {
@@ -323,43 +352,62 @@ export default function ActivityFeed({
   }
 
   return (
-    <div className="relative ps-5">
-      <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
+    <>
+      <div className="relative ps-5">
+        <div className="absolute top-2.5 bottom-2.5 left-[11.5px] w-px bg-border" />
 
-      {rows.map((row) => {
-        if (row.kind === "gap") {
+        {rows.map((row) => {
+          if (row.kind === "gap") {
+            return (
+              <GapDivider
+                key={`gap-${row.gaps[0]?.id}`}
+                gaps={row.gaps}
+              />
+            );
+          }
+
+          if (row.kind === "annotation") {
+            return (
+              <AnnotationCard
+                key={`annotation-${row.entry.id}`}
+                entry={row.entry}
+                onActiveChange={setHeld}
+              />
+            );
+          }
+
+          // Changes join a run at its newest end and fall off its oldest, so its
+          // key counts runs alike from the newest: an open run stays open.
+          const signature = runSignature(row.entries[0]);
+          const occurrence = runsSeen.get(signature) ?? 0;
+
+          runsSeen.set(signature, occurrence + 1);
+
           return (
-            <GapDivider
-              key={`gap-${row.gaps[0]?.id}`}
-              gaps={row.gaps}
+            <ChangeRun
+              key={`run-${occurrence}-${signature}`}
+              entries={row.entries}
+              hideType={hideType}
             />
           );
-        }
+        })}
+      </div>
 
-        if (row.kind === "annotation") {
-          return (
-            <AnnotationCard
-              key={`annotation-${row.entry.id}`}
-              entry={row.entry}
-            />
-          );
-        }
-
-        // Changes join a run at its newest end and fall off its oldest, so its
-        // key counts runs alike from the newest: an open run stays open.
-        const signature = runSignature(row.entries[0]);
-        const occurrence = runsSeen.get(signature) ?? 0;
-
-        runsSeen.set(signature, occurrence + 1);
-
-        return (
-          <ChangeRun
-            key={`run-${occurrence}-${signature}`}
-            entries={row.entries}
-            hideType={hideType}
-          />
-        );
-      })}
-    </div>
+      {/* Below the rows, so it shows without moving them. */}
+      <div
+        role="status"
+        className="pointer-events-none sticky bottom-3 flex justify-center"
+      >
+        {held && (
+          <Badge
+            variant="outline"
+            className="mt-2 bg-background text-muted-foreground shadow-sm"
+          >
+            <Pause />
+            Updates paused while a note is open
+          </Badge>
+        )}
+      </div>
+    </>
   );
 }

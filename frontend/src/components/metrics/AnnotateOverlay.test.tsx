@@ -66,6 +66,101 @@ describe("AnnotateOverlay", () => {
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px", width: "200px" });
   });
 
+  it("draws the mark where its time will be saved", async () => {
+    const onDone = vi.fn<() => void>();
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x * 60}
+          snap={(x) => x - 7}
+          scope={service}
+          capturing
+          onDone={onDone}
+        />
+      </QueryClientProvider>,
+    );
+
+    const overlay = screen.getByTestId("annotate-overlay");
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
+    await screen.findByLabelText("Note");
+
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "93px", width: "200px" });
+  });
+
+  it("draws the drag under way where its mark will land", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x * 60}
+          snap={(x) => x - 7}
+          scope={service}
+          capturing
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const overlay = screen.getByTestId("annotate-overlay");
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 0 });
+    fireEvent.pointerMove(overlay, { clientX: 200, pointerType: "mouse" });
+
+    expect(screen.getByTestId("annotate-drag")).toHaveStyle({ left: "93px", width: "100px" });
+  });
+
+  it("draws a drag that snaps to one minute as a point", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x}
+          snap={() => 50}
+          scope={service}
+          capturing
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const overlay = screen.getByTestId("annotate-overlay");
+
+    fireEvent.pointerDown(overlay, { clientX: 40, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 60, pointerType: "mouse" });
+    await screen.findByLabelText("Note");
+
+    expect(screen.getByTestId("annotate-mark")).toHaveAttribute("data-point");
+  });
+
+  it("finishes a drag whose mode ended before the button came up", async () => {
+    const { overlay, rerender } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 0 });
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x * 60}
+          scope={service}
+          capturing={false}
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse", button: 0 });
+
+    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+  });
+
+  it("leaves a secondary button to the context menu", () => {
+    const { overlay } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 2 });
+    fireEvent.pointerUp(overlay, { clientX: 100, pointerType: "mouse", button: 2 });
+
+    expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+  });
+
   it("makes a point of a drag shorter than the form's minute", async () => {
     const { overlay } = show((x) => 1_000_020 + Math.round(x / 10) * 15);
 

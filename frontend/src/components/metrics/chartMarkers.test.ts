@@ -1,5 +1,6 @@
 import {
   drawMarkers,
+  indexAtPixel,
   fractionalIndex,
   layoutMarkers,
   timeAtIndex,
@@ -171,6 +172,20 @@ describe("markersAt", () => {
     expect(markersAt(layout, 200).band).toBeDefined();
   });
 
+  it("lists a resource note and a cluster-wide one made at the same moment", () => {
+    const layout = layoutMarkers(
+      [flag(1, 200, { resources: [{ type: "service", id: "svc1", name: "web" }] }), flag(2, 200)],
+      timestamps,
+      pixelFor,
+    );
+
+    expect(
+      tooltipMarkers(markersAt(layout, 100))
+        ?.annotations.map(({ key }) => key)
+        .sort(),
+    ).toEqual([1, 2]);
+  });
+
   it("finds every range under the pointer", () => {
     const layout = layoutMarkers(
       [gap(150, 350), region(1, 150, 300), region(2, 220, 380)],
@@ -333,5 +348,16 @@ describe("timeAtIndex", () => {
     expect(timeAtIndex([100, 200, 300], -1)).toBe(100);
     expect(timeAtIndex([100, 200, 300], 9)).toBe(300);
     expect(timeAtIndex([], 0)).toBeNull();
+  });
+});
+
+describe("indexAtPixel", () => {
+  it("reads a fractional index between two samples", () => {
+    expect(indexAtPixel(150, 100, 300, 4)).toBe(1);
+    expect(indexAtPixel(125, 100, 300, 4)).toBe(0.5);
+  });
+
+  it("reads the first sample on a chart of one", () => {
+    expect(indexAtPixel(150, 100, 100, 0)).toBe(0);
   });
 });

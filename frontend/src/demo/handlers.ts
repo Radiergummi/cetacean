@@ -1,7 +1,14 @@
 import { randomHex, type Dataset } from "./dataset";
-import { demoHistory, filterHistory, writeAnnotation } from "./history";
+import {
+  annotationVersion,
+  demoHistory,
+  editAnnotation,
+  filterHistory,
+  removeAnnotation,
+  writeAnnotation,
+} from "./history";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
-import { broadcast, type SSEClients } from "./sseHandlers";
+import { broadcast, broadcastToStreams, type SSEClients } from "./sseHandlers";
 import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
 import type {
   ClusterCapacity,
@@ -53,7 +60,7 @@ import type {
   JGFEdge,
   JGFHyperedge,
 } from "@/api/types";
-import { http, HttpResponse, type JsonBodyType, type PathParams } from "msw";
+import { http, HttpResponse, passthrough, type JsonBodyType, type PathParams } from "msw";
 
 const stackLabel = "com.docker.stack.namespace";
 
@@ -220,6 +227,7 @@ const writesByPath: [RegExp, string][] = [
   [/\/nodes\/[^/]+$/, "DELETE"],
   [/\/(configs|secrets)\/[^/]+$/, "DELETE"],
   [/\/(configs|secrets|plugins|annotations)$/, "POST"],
+  [/\/annotations\/[^/]+$/, "PATCH, DELETE"],
   [/\/plugins\/[^/]+$/, "DELETE"],
   [/\/(tasks|stacks|networks|volumes)\/[^/]+$/, "DELETE"],
 ];
@@ -310,6 +318,57 @@ function get(
 
     return response;
   });
+}
+
+function annotationETag(id: number) {
+  return `"${annotationVersion(id)}"`;
+}
+
+/**
+ * An annotation as `GET /annotations/{id}` sends it, with its version.
+ */
+function annotationResponse({
+  id,
+  timestamp,
+  until,
+  text,
+  tags,
+  resources,
+  actor,
+  updated,
+  editor,
+}: HistoryEntry) {
+  const response = HttpResponse.json(
+    detailEnvelope(`/annotations/${id}`, "Annotation", {
+      annotation: {
+        id,
+        timestamp,
+        ...(until ? { until } : {}),
+        text: text ?? "",
+        tags: tags ?? [],
+        resources: resources ?? [],
+        ...(actor ? { actor } : {}),
+        ...(updated ? { updated, editor } : {}),
+      },
+    }),
+  );
+
+  response.headers.set("ETag", annotationETag(id));
+
+  return response;
+}
+
+function matchesVersion(request: Request, entry: HistoryEntry) {
+  const ifMatch = request.headers.get("If-Match");
+
+  return ifMatch === null || ifMatch === "*" || ifMatch === annotationETag(entry.id);
+}
+
+function preconditionFailed() {
+  return jsonResponse(
+    { type: "/api/errors/API013", title: "Precondition Failed", status: 412 },
+    412,
+  );
 }
 
 function detailEnvelope<T extends object>(id: string, type: string, extra: T) {
@@ -1099,6 +1158,41 @@ function serviceListItem(dataset: Dataset, service: Service): ServiceListItem {
 const historyTypes: Record<string, string> = { gap: "Gap", annotation: "Annotation" };
 
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
+  function annotationAt(id: string) {
+    return demoHistory(dataset, Date.now()).find(
+      (entry) => entry.kind === "annotation" && String(entry.id) === id,
+    );
+  }
+
+  /**
+   * Sends the `annotation` event where the server would: on each stream whose
+   * history lists the note, every one for a cluster-wide note and a stack's
+   * services for a stack's. A removal carries no resource.
+   */
+  function announceAnnotation(action: string, entry: HistoryEntry) {
+    const named = entry.resources ?? [];
+    const streams =
+      named.length === 0
+        ? [...clients.byId.keys()]
+        : named.flatMap(({ type, id }) => [
+            `${type}s/${id}`,
+            ...(type === "stack"
+              ? dataset.services
+                  .filter(({ Spec }) => Spec.Labels?.[stackLabel] === id)
+                  .map(({ ID }) => `services/${ID}`)
+              : []),
+          ]);
+
+    broadcastToStreams(clients, "annotation", streams, {
+      "@id": `/annotations/${entry.id}`,
+      "@type": "Annotation",
+      type: "annotation",
+      action,
+      id: String(entry.id),
+      ...(action === "remove" ? {} : { resource: entry }),
+    });
+  }
+
   function broadcastServiceUpdate(service: Service) {
     broadcast(clients, "service", "services", service.ID, {
       type: "service",
@@ -1109,6 +1203,10 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
   }
 
   return [
+    // The dev server's modules sit under the same base as the API, and
+    // `*/<resource>/:id` would claim `src/components/<resource>/` files.
+    http.all("*/demo/src/*", () => passthrough()),
+
     // ---- Health & meta ----
     get("*/-/health", () => {
       const data: HealthInfo = {
@@ -1916,23 +2014,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
         return id;
       });
-      const [named] = entry.resources ?? [];
-      const event = {
-        "@id": `/annotations/${entry.id}`,
-        "@type": "Annotation",
-        type: "annotation",
-        action: "create",
-        id: String(entry.id),
-        resource: entry,
-      };
 
-      broadcast(
-        clients,
-        "annotation",
-        named ? `${named.type}s` : "annotations",
-        named?.id ?? "",
-        event,
-      );
+      announceAnnotation("create", entry);
 
       return HttpResponse.json(
         { ...entry, "@id": `/annotations/${entry.id}`, "@type": "Annotation" },
@@ -1940,11 +2023,59 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
+    get("*/annotations/:id", ({ params }) => {
+      const entry = annotationAt(String(params.id));
+
+      return entry ? annotationResponse(entry) : notFound();
+    }),
+
+    http.patch("*/annotations/:id", async ({ params, request }) => {
+      const entry = annotationAt(String(params.id));
+
+      if (!entry) {
+        return notFound();
+      }
+
+      if (!matchesVersion(request, entry)) {
+        return preconditionFailed();
+      }
+
+      const edited = editAnnotation(
+        entry,
+        (await request.json()) as Parameters<typeof editAnnotation>[1],
+      );
+
+      announceAnnotation("update", edited);
+
+      return annotationResponse(edited);
+    }),
+
+    http.delete("*/annotations/:id", ({ params, request }) => {
+      const entry = annotationAt(String(params.id));
+
+      if (!entry) {
+        return notFound();
+      }
+
+      if (!matchesVersion(request, entry)) {
+        return preconditionFailed();
+      }
+
+      removeAnnotation(entry.id);
+      announceAnnotation("remove", entry);
+
+      return new HttpResponse(null, { status: 204 });
+    }),
+
     // ---- History ----
     get("*/history", ({ request }) => {
       const url = new URL(request.url);
       const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 200);
-      const entries = filterHistory(demoHistory(dataset, Date.now()), url.searchParams);
+      const entries = filterHistory(
+        demoHistory(dataset, Date.now()),
+        url.searchParams,
+        (id) => dataset.services.find(({ ID }) => ID === id)?.Spec.Labels?.[stackLabel],
+      );
 
       return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
         items: entries.slice(0, limit).map((entry) => ({

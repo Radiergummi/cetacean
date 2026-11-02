@@ -1,5 +1,5 @@
 import { buildDataset } from "./dataset";
-import { demoHistory, filterHistory } from "./history";
+import { demoHistory, filterHistory, writeAnnotation } from "./history";
 import { describe, expect, it } from "vitest";
 
 const now = Date.parse("2026-10-31T12:00:00Z");
@@ -65,5 +65,57 @@ describe("demo annotations", () => {
     expect(ids({ type: "service", resourceId: second?.ID ?? "" })).toEqual([range]);
     expect(ids({ type: "node" })).toEqual([range]);
     expect(ids({ since: "2026-10-31T09:10:00Z", until: "2026-10-31T09:20:00Z" })).toEqual([range]);
+  });
+});
+
+describe("filterHistory on annotations", () => {
+  const webshop = dataset.services.find(
+    ({ Spec }) => Spec.Labels?.["com.docker.stack.namespace"] === "webshop",
+  );
+  const stackOf = (id: string) =>
+    dataset.services.find(({ ID }) => ID === id)?.Spec.Labels?.["com.docker.stack.namespace"];
+
+  writeAnnotation(
+    {
+      text: "Webshop freeze",
+      tags: ["freeze"],
+      timestamp: "2026-10-31T11:00:00Z",
+      resources: [{ type: "stack", id: "webshop" }],
+    },
+    (_, id) => id,
+  );
+
+  const texts = (params: Record<string, string>) =>
+    filterHistory(demoHistory(dataset, now), new URLSearchParams(params), stackOf)
+      .filter(({ kind }) => kind === "annotation")
+      .map(({ text }) => text);
+
+  it("keeps a note on a service's stack for that service", () => {
+    expect(texts({ type: "service", resourceId: webshop?.ID ?? "" })).toContain("Webshop freeze");
+  });
+
+  it("keeps the notes carrying a tag, the gaps, and no change", () => {
+    const kept = filterHistory(
+      demoHistory(dataset, now),
+      new URLSearchParams({ tag: "freeze" }),
+      stackOf,
+    );
+
+    expect(kept.filter(({ kind }) => kind === "annotation").map(({ text }) => text)).toEqual([
+      "Webshop freeze",
+    ]);
+    expect(kept.some(({ kind }) => kind === "gap")).toBe(true);
+    expect(kept.some(({ kind }) => kind === "change")).toBe(false);
+  });
+});
+
+describe("demo annotation IDs", () => {
+  it("stay put when a service goes away", () => {
+    const ids = (services: typeof dataset.services) =>
+      demoHistory({ ...dataset, services }, now)
+        .filter(({ kind }) => kind === "annotation")
+        .map(({ id }) => id);
+
+    expect(ids(dataset.services.slice(0, -1))).toEqual(ids(dataset.services));
   });
 });

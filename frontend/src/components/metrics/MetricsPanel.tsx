@@ -46,8 +46,17 @@ export default function MetricsPanel({
   header,
   stackable,
   timeline,
-  annotate,
+  annotate: annotateProp,
 }: Props) {
+  // Pages build the resource inline; held by value, it keeps the listeners and context still.
+  const { type: annotateType, id: annotateId, name: annotateName } = annotateProp ?? {};
+  const annotate = useMemo(
+    () =>
+      annotateType && annotateId !== undefined
+        ? { type: annotateType, id: annotateId, name: annotateName ?? "" }
+        : undefined,
+    [annotateType, annotateId, annotateName],
+  );
   const { range, customFrom, customTo, setCustomRange } = useTimeRange();
   const [refreshKey, setRefreshKey] = useState(0);
   const [stacked, setStacked] = useState(false);

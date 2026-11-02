@@ -24,25 +24,30 @@ function overlayReducer(state: OverlayState, action: GestureEvent | { type: "cle
 
   const next = step(state.gesture, action);
 
+  if (!next.mark && next.gesture === state.gesture) {
+    return state;
+  }
+
   return next.mark
     ? { gesture: next.gesture, mark: next.mark, marks: state.marks + 1 }
     : { ...state, gesture: next.gesture };
 }
 
 /**
- * Takes the pointer over a chart while `capturing`, so zoom, isolation and the
- * tooltip never see the gesture, and opens the form at the mark it makes.
- * `timeFor` turns a pixel into epoch seconds; `onMarkOpen` hears a form open
- * and close, so the overlay can outlive the mode that made the mark.
+ * Takes the pointer over a chart while `capturing`, opening the form at the
+ * mark it makes. `timeFor` turns a pixel into epoch seconds and `snap` moves
+ * it to the saved minute; `onMarkOpen` lets the overlay outlive the mode.
  */
 export default function AnnotateOverlay({
   timeFor,
+  snap = (x) => x,
   scope,
   capturing,
   onMarkOpen,
   onDone,
 }: {
   timeFor: (x: number) => number | null;
+  snap?: ((x: number) => number) | undefined;
   scope: Exclude<AnnotationScope, "cluster">;
   capturing: boolean;
   onMarkOpen?: ((open: boolean) => void) | undefined;
@@ -68,12 +73,16 @@ export default function AnnotateOverlay({
     event.clientX - event.currentTarget.getBoundingClientRect().left;
 
   const from = mark ? timeFor(mark.from) : null;
+  const left = mark ? snap(mark.from) : 0;
+  const right = mark?.to === undefined ? left : snap(mark.to);
   const to = mark?.to === undefined ? undefined : (timeFor(mark.to) ?? undefined);
   const dragged =
     gesture.kind === "dragging"
       ? {
-          left: Math.min(gesture.start, gesture.current),
-          width: Math.abs(gesture.current - gesture.start),
+          left: snap(Math.min(gesture.start, gesture.current)),
+          width:
+            snap(Math.max(gesture.start, gesture.current)) -
+            snap(Math.min(gesture.start, gesture.current)),
         }
       : null;
 
@@ -85,30 +94,33 @@ export default function AnnotateOverlay({
         data-capturing={capturing || undefined}
         className="pointer-events-none absolute inset-0 z-10 data-capturing:pointer-events-auto data-capturing:cursor-crosshair data-capturing:touch-none"
         onPointerDown={(event) => {
-          if (!capturing) {
+          // A Ctrl-click on macOS arrives as the secondary button.
+          const primary = event.button === 0 || (event.button === 2 && event.ctrlKey);
+
+          if (!capturing || !primary) {
             return;
           }
 
           event.currentTarget.setPointerCapture?.(event.pointerId);
           dispatch({ type: "down", x: offset(event), touch: event.pointerType === "touch" });
         }}
-        onPointerMove={(event) => {
-          if (gesture.kind === "dragging") {
-            dispatch({ type: "move", x: offset(event) });
-          }
-        }}
-        onPointerUp={(event) => {
-          if (capturing) {
-            dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" });
-          }
-        }}
+        onPointerMove={(event) => dispatch({ type: "move", x: offset(event) })}
+        // Not gated on capturing: a drag outlives a mode released mid-drag.
+        onPointerUp={(event) =>
+          dispatch({ type: "up", x: offset(event), touch: event.pointerType === "touch" })
+        }
         onPointerCancel={() => dispatch({ type: "cancel" })}
         // Ctrl-click opens the context menu on macOS; here it marks the chart.
-        onContextMenu={(event) => event.preventDefault()}
+        onContextMenu={(event) => {
+          if (event.ctrlKey) {
+            event.preventDefault();
+          }
+        }}
       >
         {dragged && (
           <div
             className="absolute inset-y-0 bg-annotation/15"
+            data-testid="annotate-drag"
             style={dragged}
           />
         )}
@@ -116,7 +128,7 @@ export default function AnnotateOverlay({
         {gesture.kind === "tapped" && (
           <div
             className="absolute inset-y-0 w-px bg-annotation"
-            style={{ left: gesture.at }}
+            style={{ left: snap(gesture.at) }}
           />
         )}
 
@@ -124,12 +136,9 @@ export default function AnnotateOverlay({
           ref={anchorRef}
           data-testid="annotate-mark"
           className="absolute inset-y-0 data-point:w-px data-point:bg-annotation data-range:bg-annotation/15"
-          data-point={mark && mark.to === undefined ? "" : undefined}
-          data-range={mark?.to === undefined ? undefined : ""}
-          style={{
-            left: mark?.from ?? 0,
-            width: mark?.to === undefined ? undefined : mark.to - mark.from,
-          }}
+          data-point={mark && right <= left ? "" : undefined}
+          data-range={mark && right > left ? "" : undefined}
+          style={{ left, width: right > left ? right - left : undefined }}
         />
       </div>
 

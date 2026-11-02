@@ -8408,6 +8408,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/DetailEnvelope"
         - type: object
+          required: [annotation]
           properties:
             annotation:
               $ref: "#/components/schemas/Annotation"

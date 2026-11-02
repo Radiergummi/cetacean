@@ -4,13 +4,19 @@
 const rangeThreshold = 5;
 
 /**
+ * How far, in pixels, a finger may drift between press and lift and still tap.
+ */
+const tapSlop = 10;
+
+/**
  * A gesture in annotate mode, in pixels: nothing yet, a mouse drag under way,
- * or the first of two taps.
+ * or the first of two taps. `pressed` is where a touch went down, so a lift
+ * far from it, a swipe, is not taken for a tap.
  */
 export type Gesture =
-  | { kind: "idle" }
+  | { kind: "idle"; pressed?: number | undefined }
   | { kind: "dragging"; start: number; current: number }
-  | { kind: "tapped"; at: number };
+  | { kind: "tapped"; at: number; pressed?: number | undefined };
 
 export type GestureEvent =
   | { type: "down"; x: number; touch: boolean }
@@ -42,7 +48,9 @@ export function step(gesture: Gesture, event: GestureEvent): { gesture: Gesture;
 
     case "down":
       if (event.touch) {
-        return { gesture };
+        return gesture.kind === "dragging"
+          ? { gesture }
+          : { gesture: { ...gesture, pressed: event.x } };
       }
 
       return { gesture: { kind: "dragging", start: event.x, current: event.x } };
@@ -54,6 +62,16 @@ export function step(gesture: Gesture, event: GestureEvent): { gesture: Gesture;
 
     case "up":
       if (event.touch) {
+        if (gesture.kind === "dragging") {
+          return { gesture };
+        }
+
+        const { pressed, ...rest } = gesture;
+
+        if (pressed === undefined || Math.abs(event.x - pressed) > tapSlop) {
+          return { gesture: rest };
+        }
+
         return gesture.kind === "tapped"
           ? { gesture: idle, mark: mark(gesture.at, event.x) }
           : { gesture: { kind: "tapped", at: event.x } };

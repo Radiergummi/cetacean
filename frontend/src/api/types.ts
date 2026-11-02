@@ -411,6 +411,21 @@ export interface NewAnnotation {
 }
 
 /**
+ * One annotation, as `GET /annotations/{id}` returns it under `annotation`.
+ */
+export interface Annotation {
+  id: number;
+  timestamp: string;
+  until?: string | undefined;
+  text: string;
+  tags: string[];
+  resources: AnnotationResource[];
+  actor?: HistoryActor | undefined;
+  updated?: string | undefined;
+  editor?: HistoryActor | undefined;
+}
+
+/**
  * A resource an annotation names; a stack's ID is its name.
  */
 export interface AnnotationResource {

@@ -203,6 +203,17 @@ export const historyEntrySchema = z.looseObject({
   updated: z.string().optional(),
 });
 
+export const annotationDetailSchema = z.looseObject({
+  annotation: z.looseObject({
+    id: z.number(),
+    timestamp: z.string(),
+    until: z.string().optional(),
+    text: z.string(),
+    tags: z.array(z.string()),
+    resources: z.array(z.looseObject({ type: z.string(), id: z.string() })),
+  }),
+});
+
 export const diskUsageSchema = z.looseObject({
   type: z.string(),
   count: z.number(),
