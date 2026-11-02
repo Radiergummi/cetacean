@@ -1,12 +1,17 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	json "github.com/goccy/go-json"
+
+	"github.com/radiergummi/cetacean/internal/acl"
+	"github.com/radiergummi/cetacean/internal/cache"
 )
 
 func TestListAnnotationsKeepsWhatTheCallerMayRead(t *testing.T) {
@@ -60,5 +65,49 @@ func TestHistoryCSVCarriesAnAnnotationsTextAndTags(t *testing.T) {
 	records := csvRecords(t, w.Body.String())
 	if got := records[1][12:]; !slices.Equal(got, []string{"'=1+1", "deploy,rollback"}) {
 		t.Fatalf("text and tags = %q, want the formula neutralised and the tags joined", got)
+	}
+}
+
+func TestUnpagedHistoryCSVKeepsTheRingAndEveryAnnotation(t *testing.T) {
+	c := cache.New(nil, cache.WithHistorySize(3))
+	c.RestoreAnnotations(nopAnnotationStore{}, nil)
+	e := acl.NewEvaluator()
+	e.SetPolicy(&acl.Policy{Grants: []acl.Grant{{
+		Resources: []string{"*"}, Audience: []string{"user:carol"}, Permissions: []string{"write"},
+	}}})
+	h := newTestHandlers(t, withCache(c), withACL(e))
+
+	createAnnotation(t, h, "carol", `{"text":"one"}`)
+	createAnnotation(t, h, "carol", `{"text":"two"}`)
+	for i := range 3 {
+		c.History().Append(cache.HistoryEntry{
+			Type: cache.EventService, Action: "update", ResourceID: fmt.Sprint("svc", i),
+		})
+	}
+
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, withContentType(
+		newAnnotationRequest("GET", "/history", "carol", ""), ContentTypeCSV,
+	))
+
+	if rows := len(csvRecords(t, w.Body.String())) - 1; rows != 5 {
+		t.Fatalf("%d rows, want the ring's 3 changes and both annotations", rows)
+	}
+}
+
+func TestHistoryCSVAlternateKeepsTheKind(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := contentNegotiated(ok, feedHandlers{csv: true, csvParams: historyCSVParams}, ok)
+	w := httptest.NewRecorder()
+	handler(w, withContentType(
+		httptest.NewRequest("GET", "/history?kind=annotation", nil), ContentTypeJSON,
+	))
+
+	if links := strings.Join(w.Header().Values("Link"), ", "); !strings.Contains(
+		links, "kind=annotation",
+	) {
+		t.Fatalf("the CSV alternate drops the kind: %q", links)
 	}
 }

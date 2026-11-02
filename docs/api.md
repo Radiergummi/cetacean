@@ -568,8 +568,8 @@ rather than removing an older one.
 
 `/history` lists each annotation as an item of kind `annotation`, at the ID that created it and with its current
 fields, so an edit changes what it says without moving it. Its `@id` is `/annotations/{id}`, and its `text`, `tags`,
-`resources`, `updated` and `editor` sit beside the usual fields. Annotations outlive the history's 10,000 entries:
-paging past the oldest entry goes on through older annotations. Only the annotations the caller may read are listed.
+`resources`, `updated` and `editor` sit beside the usual fields. Annotations outlive the entries the history holds
+(`storage.history_entries`): paging past the oldest entry goes on through older annotations. Only the annotations the caller may read are listed.
 
 The filters apply to annotations as follows:
 
