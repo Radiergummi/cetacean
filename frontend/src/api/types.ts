@@ -393,6 +393,24 @@ export interface HistoryEntry {
 }
 
 /**
+ * Where a new annotation belongs: one resource, or the whole cluster.
+ */
+export type AnnotationScope =
+  | { type: "service" | "stack" | "node"; id: string; name: string }
+  | "cluster";
+
+/**
+ * The body of `POST /annotations`; no `resources` makes it cluster-wide.
+ */
+export interface NewAnnotation {
+  text: string;
+  tags: string[];
+  timestamp: string;
+  until?: string | undefined;
+  resources?: { type: "service" | "stack" | "node"; id: string }[] | undefined;
+}
+
+/**
  * A resource an annotation names; a stack's ID is its name.
  */
 export interface AnnotationResource {

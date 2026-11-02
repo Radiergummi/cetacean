@@ -1,5 +1,5 @@
 import type { Dataset } from "./dataset";
-import type { HistoryEntry } from "@/api/types";
+import type { HistoryEntry, NewAnnotation } from "@/api/types";
 
 const minute = 60_000;
 
@@ -9,6 +9,44 @@ const alice = {
   provider: "oidc",
   transport: "dashboard",
 } as const;
+
+/**
+ * Annotations the visitor wrote this session, newest first. Their IDs start
+ * high so they never meet the seeded ones, which count up from 1.
+ */
+const written: HistoryEntry[] = [];
+let nextWrittenId = 100000;
+
+/**
+ * Records an annotation the visitor wrote, naming each resource by `nameOf`.
+ */
+export function writeAnnotation(
+  body: NewAnnotation,
+  nameOf: (type: string, id: string) => string,
+): HistoryEntry {
+  const entry: HistoryEntry = {
+    id: nextWrittenId++,
+    kind: "annotation",
+    timestamp: body.timestamp,
+    ...(body.until ? { until: body.until } : {}),
+    type: "",
+    action: "",
+    resourceId: "",
+    name: "",
+    text: body.text,
+    tags: body.tags,
+    ...(body.resources?.length
+      ? {
+          resources: body.resources.map(({ type, id }) => ({ type, id, name: nameOf(type, id) })),
+        }
+      : {}),
+    actor: { subject: "demo", name: "demo", provider: "demo", transport: "dashboard" },
+  };
+
+  written.unshift(entry);
+
+  return entry;
+}
 
 /**
  * A few changes per service and node, one gap, and two annotations, placed
@@ -92,7 +130,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
   entries.sort((one, other) => other.timestamp.localeCompare(one.timestamp));
 
-  return entries.map((entry, index) => ({ ...entry, id: entries.length - index }));
+  return [...written, ...entries.map((entry, index) => ({ ...entry, id: entries.length - index }))];
 }
 
 /**

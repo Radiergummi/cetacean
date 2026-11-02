@@ -11,6 +11,7 @@ import type {
   DrainImpact,
   Healthcheck,
   HistoryEntry,
+  NewAnnotation,
   ImageDockerfile,
   ImageProvenance,
   ImageSBOM,
@@ -89,6 +90,9 @@ export interface FetchResult<T> {
    */
   editable?: Set<string> | undefined;
 
+  /** Whether the caller may annotate the resource: it links `/annotations` for editing. */
+  annotatable?: boolean | undefined;
+
   /**
    * The resource's canonical path, read from the response's JSON-LD `@id`.
    * Absent where the response carries none, which the demo handlers and the
@@ -107,8 +111,7 @@ function editableOf(response: Response): Set<string> {
   const self = new URL(base).pathname;
   const names = new Set<string>();
 
-  for (const target of linkTargets(response.headers.get("Link"), "edit")) {
-    const path = new URL(target, base).pathname;
+  for (const path of editPaths(response)) {
     const name = path.slice(self.length + 1);
 
     if (path.startsWith(`${self}/`) && name !== "" && !name.includes("/")) {
@@ -117,6 +120,26 @@ function editableOf(response: Response): Set<string> {
   }
 
   return names;
+}
+
+/**
+ * Whether a response links the API's `/annotations` with `rel="edit"`, the
+ * server's word that the caller may annotate what the response describes.
+ */
+function annotatableOf(response: Response): boolean {
+  return editPaths(response).some((path) => stripBasePath(path) === "/annotations");
+}
+
+/**
+ * The pathnames a response links with `rel="edit"`, resolved against the URL
+ * it was served from.
+ */
+function editPaths(response: Response): string[] {
+  const base = response.url || window.location.href;
+
+  return linkTargets(response.headers.get("Link"), "edit").map(
+    (target) => new URL(target, base).pathname,
+  );
 }
 
 function parseAllowHeader(response: Response): Set<string> {
@@ -300,6 +323,7 @@ async function fetchJSON<T>(
     data,
     allowedMethods,
     editable: editableOf(response),
+    annotatable: annotatableOf(response),
     canonicalPath: canonicalPathOf(data),
   };
 }
@@ -468,6 +492,9 @@ export interface Capabilities {
 
   /** The sub-resources the caller may write, from `rel="edit"` links. */
   editable: Set<string>;
+
+  /** Whether the caller may annotate the resource. */
+  annotatable?: boolean | undefined;
 }
 
 export async function headCapabilities(path: string): Promise<Capabilities> {
@@ -477,7 +504,24 @@ export async function headCapabilities(path: string): Promise<Capabilities> {
     signal: AbortSignal.timeout(defaultTimeoutMilliseconds),
   });
 
-  return { methods: parseAllowHeader(response), editable: editableOf(response) };
+  return {
+    methods: parseAllowHeader(response),
+    editable: editableOf(response),
+    annotatable: annotatableOf(response),
+  };
+}
+
+/**
+ * What annotations the caller may create: any, as `/annotations` allows a
+ * `POST`, and cluster-wide ones, as `/cluster` links `/annotations`.
+ */
+async function fetchAnnotationCapabilities(): Promise<{ create: boolean; clusterWide: boolean }> {
+  const [annotations, cluster] = await Promise.all([
+    headCapabilities("/annotations"),
+    headCapabilities("/cluster"),
+  ]);
+
+  return { create: annotations.methods.has("POST"), clusterWide: cluster.annotatable ?? false };
 }
 
 export interface LogLine {
@@ -1167,6 +1211,9 @@ export const api = {
       signal,
       schema.searchSchema,
     ).then(({ data }) => data),
+  annotationCapabilities: fetchAnnotationCapabilities,
+  createAnnotation: (body: NewAnnotation) =>
+    mutationFetch<HistoryEntry>("/annotations", "POST", body, "application/json"),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
   updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr", ifMatch?: string | undefined) =>

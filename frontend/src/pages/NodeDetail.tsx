@@ -59,6 +59,7 @@ export default function NodeDetail() {
     retry,
     allowedMethods,
     editable,
+    annotatable,
   } = useDetailResource<Node>(id, api.node, "/nodes", { extraQueryKeys });
 
   const { data: tasks } = useQuery({
@@ -142,6 +143,9 @@ export default function NodeDetail() {
   const engineVersion = node.Description?.Engine?.EngineVersion;
   const platformOS = node.Description?.Platform?.OS;
   const platformArch = node.Description?.Platform?.Architecture;
+  const annotate = annotatable
+    ? ({ type: "node", id: node.ID, name: displayHostname } as const)
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -269,6 +273,7 @@ export default function NodeDetail() {
           <MetricsPanel
             header="Metrics"
             timeline={{ type: "node", resourceId: node.ID }}
+            annotate={annotate}
             charts={[
               {
                 title: "CPU Usage",
@@ -312,6 +317,7 @@ export default function NodeDetail() {
       <ActivitySection
         entries={history}
         hideType
+        annotate={annotate}
       />
     </div>
   );

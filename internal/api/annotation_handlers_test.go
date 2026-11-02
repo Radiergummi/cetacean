@@ -48,6 +48,16 @@ func annotationHandlers(t *testing.T, timeline bool) *Handlers {
 			Audience:    []string{"user:carol"},
 			Permissions: []string{"write"},
 		},
+		{
+			Resources:   []string{"service:web", "config:*"},
+			Audience:    []string{"user:dave"},
+			Permissions: []string{"read"},
+		},
+		{
+			Resources:   []string{"config:*"},
+			Audience:    []string{"user:dave"},
+			Permissions: []string{"write"},
+		},
 	}})
 
 	return newTestHandlers(t, withCache(c), withACL(e))
@@ -357,5 +367,59 @@ func TestGetAnnotationHonoursIfModifiedSince(t *testing.T) {
 			w.Code,
 			w.Header().Get("Last-Modified"),
 		)
+	}
+}
+
+func TestListAnnotationsAllowsPostToWhoMayAnnotate(t *testing.T) {
+	for _, tc := range []struct {
+		timeline bool
+		subject  string
+		want     string
+	}{
+		{true, "alice", "GET, HEAD, POST"},
+		{true, "carol", "GET, HEAD, POST"},
+		{true, "bob", "GET, HEAD"},
+		{true, "dave", "GET, HEAD"},
+		{false, "alice", "GET, HEAD"},
+	} {
+		h := annotationHandlers(t, tc.timeline)
+
+		for _, path := range []string{"/annotations", "/annotations.csv"} {
+			r := newAnnotationRequest("GET", path, tc.subject, "")
+			if strings.HasSuffix(path, ".csv") {
+				r = withContentType(r, ContentTypeCSV)
+			}
+
+			w := httptest.NewRecorder()
+			h.HandleAnnotations(w, r)
+
+			if got := w.Header().Get("Allow"); got != tc.want {
+				t.Errorf("%s %s (timeline %v): Allow = %q, want %q",
+					tc.subject, path, tc.timeline, got, tc.want)
+			}
+		}
+	}
+}
+
+func TestClusterLinksAnnotationsForClusterWideWriters(t *testing.T) {
+	for _, tc := range []struct {
+		timeline bool
+		subject  string
+		want     bool
+	}{
+		{true, "carol", true},
+		{true, "alice", false},
+		{true, "bob", false},
+		{false, "carol", false},
+	} {
+		h := annotationHandlers(t, tc.timeline)
+		w := httptest.NewRecorder()
+		h.HandleCluster(w, newAnnotationRequest("GET", "/cluster", tc.subject, ""))
+
+		got := strings.Contains(w.Header().Get("Link"), `</annotations>; rel="edit"`)
+		if w.Code != http.StatusOK || got != tc.want {
+			t.Errorf("%s (timeline %v): %d, links annotations = %v, want %v",
+				tc.subject, tc.timeline, w.Code, got, tc.want)
+		}
 	}
 }

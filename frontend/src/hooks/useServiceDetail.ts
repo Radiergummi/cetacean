@@ -138,6 +138,7 @@ export function useServiceDetail(id: string | undefined) {
     setData,
     allowedMethods,
     editable,
+    annotatable,
   } = useDetailResource<ServiceDetail>(id, api.service, "/services", {
     onEvent,
     extraQueryKeys,
@@ -321,6 +322,7 @@ export function useServiceDetail(id: string | undefined) {
     imageUpdate,
     allowedMethods,
     editable,
+    annotatable,
     hasPrometheus,
     hasCadvisor,
     error,

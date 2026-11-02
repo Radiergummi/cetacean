@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"time"
 
@@ -53,20 +52,20 @@ func (h *Handlers) annotationCaller(r *http.Request) cluster.AnnotationCaller {
 	}
 }
 
-// mayAnnotate reports whether the caller holds a write grant on anything, the
-// least a create needs; which resources it covers is the use case's to check.
+// mayAnnotate reports whether the caller may write some service, stack or node,
+// the least a create needs; which resources it covers is the use case's to check.
 func (h *Handlers) mayAnnotate(r *http.Request) bool {
 	if !h.annotations.Enabled() {
 		return false
 	}
 
-	for _, permissions := range h.acl.PermissionsFor(auth.IdentityFromContext(r.Context())) {
-		if slices.Contains(permissions, "write") {
-			return true
-		}
-	}
+	id := auth.IdentityFromContext(r.Context())
+	access := h.acl.TypeGrants(id)
 
-	return h.acl.CanWriteEverything(auth.IdentityFromContext(r.Context()))
+	return h.acl.CanWriteEverything(id) ||
+		access.Can("write", "service") ||
+		access.Can("write", "stack") ||
+		access.Can("write", "node")
 }
 
 // mayEditAnnotation is whether the caller may edit the annotation the path names.
@@ -92,8 +91,17 @@ func attributedRead(r *http.Request) context.Context {
 // linkAnnotations links /annotations as rel="edit" when the caller may annotate
 // resource, so the dashboard offers it from the server's answer, not its own.
 func (h *Handlers) linkAnnotations(w http.ResponseWriter, r *http.Request, resource string) {
-	if h.annotations.Enabled() &&
-		h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resource) {
+	h.linkAnnotationsWhen(w, r, h.acl.Can(auth.IdentityFromContext(r.Context()), "write", resource))
+}
+
+// linkClusterAnnotations links /annotations as rel="edit" when the caller may
+// annotate the whole cluster, which takes write on everything.
+func (h *Handlers) linkClusterAnnotations(w http.ResponseWriter, r *http.Request) {
+	h.linkAnnotationsWhen(w, r, h.acl.CanWriteEverything(auth.IdentityFromContext(r.Context())))
+}
+
+func (h *Handlers) linkAnnotationsWhen(w http.ResponseWriter, r *http.Request, allowed bool) {
+	if allowed && h.annotations.Enabled() {
 		w.Header().Add("Link", `<`+absPath(r.Context(), "/annotations")+`>; rel="edit"`)
 	}
 }

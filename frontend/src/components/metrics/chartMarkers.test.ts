@@ -2,6 +2,7 @@ import {
   drawMarkers,
   fractionalIndex,
   layoutMarkers,
+  timeAtIndex,
   type MarkerHit,
   markersAt,
   tooltipMarkers,
@@ -138,6 +139,29 @@ describe("layoutMarkers on annotations", () => {
   });
 });
 
+describe("layoutMarkers on annotation scopes", () => {
+  const scoped = { resources: [{ type: "service" as const, id: "svc1", name: "web" }] };
+
+  it("keeps cluster-wide notes apart from resource notes", () => {
+    const { flags } = layoutMarkers([flag(1, 200), flag(2, 201, scoped)], timestamps, pixelFor);
+
+    expect(flags.map(({ items }) => items.map(({ entry: { id } }) => id))).toEqual([[2], [1]]);
+  });
+
+  it("knows which ends of a range are in view", () => {
+    const { regions } = layoutMarkers(
+      [region(1, 0, 900), region(2, 150, 300)],
+      timestamps,
+      pixelFor,
+    );
+
+    expect(regions.map(({ opens, closes }) => [opens, closes])).toEqual([
+      [false, false],
+      [true, true],
+    ]);
+  });
+});
+
 describe("markersAt", () => {
   it("finds the nearest marker within reach and the band under the pointer", () => {
     const layout = layoutMarkers([point(1, 200), gap(250, 350)], timestamps, pixelFor);
@@ -196,11 +220,12 @@ describe("tooltipMarkers", () => {
     const markers = tooltipMarkers(hit({ flag: flags[0] }));
 
     expect(markers?.annotations).toEqual([
-      { key: 2, text: "note 2", detail: describeAnnotationTime(201) },
+      { key: 2, text: "note 2", detail: describeAnnotationTime(201), clusterWide: true },
       {
         key: 1,
         text: "Deployed the fix",
         detail: `${describeAnnotationTime(200)} · #deploy · by alice via the dashboard · edited`,
+        clusterWide: true,
       },
     ]);
   });
@@ -239,7 +264,12 @@ describe("drawMarkers", () => {
       stroke: () => calls.push(`stroke ${style.strokeStyle} ${style.globalAlpha}`),
     }) as unknown as CanvasRenderingContext2D;
     const layout = layoutMarkers(
-      [gap(100, 200), region(1, 200, 300), point(2, 250), flag(3, 260)],
+      [
+        gap(100, 200),
+        region(1, 200, 300),
+        point(2, 250),
+        flag(3, 260, { resources: [{ type: "service", id: "svc1", name: "web" }] }),
+      ],
       timestamps,
       pixelFor,
     );
@@ -249,14 +279,18 @@ describe("drawMarkers", () => {
       cluster: "several",
       gap: "gap",
       annotation: "note",
+      annotationCluster: "everywhere",
     });
 
     expect(calls).toEqual([
       "fill gap 1",
       "stroke gap 1",
-      "fill note 0.15",
+      "fill everywhere 0.15",
       "stroke change 1",
       "fill change 1",
+      "stroke everywhere 1",
+      "fill everywhere 1",
+      "stroke everywhere 1",
       "stroke note 1",
       "fill note 1",
     ]);
@@ -286,8 +320,18 @@ describe("drawMarkers", () => {
       cluster: "several",
       gap: "gap",
       annotation: "note",
+      annotationCluster: "everywhere",
     });
 
     expect(fills).toEqual([]);
+  });
+});
+
+describe("timeAtIndex", () => {
+  it("finds the time at a fractional index, clamped to the samples", () => {
+    expect(timeAtIndex([100, 200, 300], 1.5)).toBe(250);
+    expect(timeAtIndex([100, 200, 300], -1)).toBe(100);
+    expect(timeAtIndex([100, 200, 300], 9)).toBe(300);
+    expect(timeAtIndex([], 0)).toBeNull();
   });
 });
