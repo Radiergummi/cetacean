@@ -49,6 +49,9 @@ type TimelineEntry struct {
 	// moment at At, or the range to Until.
 	Text string   `json:"text,omitempty"`
 	Tags []string `json:"tags,omitempty"`
+
+	// Resources are what an annotation is about; none for a cluster-wide one.
+	Resources []cache.AnnotationResource `json:"resources,omitempty"`
 }
 
 // timelineTimeFormat is RFC 3339 at fixed nanosecond width, the layout

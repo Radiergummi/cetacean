@@ -573,8 +573,8 @@ rather than removing an older one.
 
 `/history` lists each annotation as an item of kind `annotation`, at the ID that created it and with its current
 fields, so an edit changes what it says without moving it. Its `@id` is `/annotations/{id}`, and its `text`, `tags`,
-`resources`, `updated` and `editor` sit beside the usual fields. Annotations outlive the history's 10,000 entries:
-paging past the oldest entry goes on through older annotations. Only the annotations the caller may read are listed.
+`resources`, `updated` and `editor` sit beside the usual fields. Annotations outlive the entries the history holds
+(`storage.history_entries`): paging past the oldest entry goes on through older annotations. Only the annotations the caller may read are listed.
 
 The filters apply to annotations as follows:
 
@@ -588,8 +588,8 @@ entry whose ID never changes and whose `updated` (`date_modified`) is its last e
 an update to the entry rather than as a new one.
 
 An `annotation` event reports each create, edit, and delete as it happens. It is sent on `/events`, and on the
-[service, node and stack streams](#per-resource-streams) of each resource the annotation belongs on, by the same rule
-as `resourceId` above. `resource` carries the annotation, and is absent on `remove`:
+[stream](#per-resource-streams) of each resource the annotation belongs on, by the same rule as `resourceId` above: a
+cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`:
 
 ```sse
 id: 4182

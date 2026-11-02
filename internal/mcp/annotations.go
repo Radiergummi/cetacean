@@ -105,6 +105,11 @@ func (s *Server) toolAddAnnotation(
 		return "", err
 	}
 
+	tags, err := annotationTags(req.GetArguments()["tags"])
+	if err != nil {
+		return "", err
+	}
+
 	var resources []cluster.AnnotationRef
 	if raw, ok := req.GetArguments()["resources"]; ok {
 		encoded, _ := json.Marshal(raw)
@@ -117,7 +122,7 @@ func (s *Server) toolAddAnnotation(
 		Timestamp: at,
 		Until:     until,
 		Text:      text,
-		Tags:      req.GetStringSlice("tags", nil),
+		Tags:      tags,
 		Resources: resources,
 	})
 	if errors.Is(err, cluster.ErrAnnotationDenied) {
@@ -142,6 +147,27 @@ func (s *Server) toolAddAnnotation(
 	}
 
 	return marshalResult(result)
+}
+
+// annotationTags reads `tags`, refusing anything but a list of strings rather
+// than dropping it, so a note is never stored without the tags it was given.
+func annotationTags(raw any) ([]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+
+	items, ok := raw.([]any)
+	tags := make([]string, 0, len(items))
+	for _, item := range items {
+		tag, isString := item.(string)
+		ok = ok && isString
+		tags = append(tags, tag)
+	}
+	if !ok {
+		return nil, errors.New("tags: must be a list of strings")
+	}
+
+	return tags, nil
 }
 
 func annotationTime(name, raw string) (time.Time, error) {

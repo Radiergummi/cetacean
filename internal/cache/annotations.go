@@ -90,7 +90,7 @@ func (c *Cache) CreateAnnotation(ctx context.Context, a Annotation) (Annotation,
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 
-	if c.annotationCount() >= MaxAnnotations {
+	if c.AnnotationCount() >= MaxAnnotations {
 		return Annotation{}, ErrAnnotationLimit
 	}
 
@@ -158,7 +158,8 @@ func (c *Cache) DeleteAnnotation(
 	return c.commitAnnotation(ctx, current, "remove")
 }
 
-func (c *Cache) annotationCount() int {
+// AnnotationCount is how many annotations the cache holds.
+func (c *Cache) AnnotationCount() int {
 	c.annotations.mu.RLock()
 	defer c.annotations.mu.RUnlock()
 

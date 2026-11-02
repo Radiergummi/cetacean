@@ -248,6 +248,8 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		}
 
 		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{
+			Kind:   q.Get("kind"),
+			Tag:    q.Get("tag"),
 			After:  window.Since,
 			Before: window.Until,
 		})
@@ -256,7 +258,7 @@ func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 		}
 
 		data := historyFeedData(r, "History", entries, beforeID, limit)
-		data.QueryParams = historyWindowParams
+		data.QueryParams = historyFeedParams
 
 		render(w, r, data)
 	}
@@ -368,6 +370,7 @@ func annotationFeedEntry(r *http.Request, e cache.HistoryEntry) feedEntry {
 	href := absURL(r, annotationPath(e.ID))
 
 	title, _, _ := strings.Cut(strings.TrimSpace(e.Text), "\n")
+	title = strings.TrimSpace(title)
 	if runes := []rune(title); len(runes) > 80 {
 		title = string(runes[:79]) + "…"
 	}
@@ -575,13 +578,13 @@ var searchFeedParams = []string{"q"}
 // its JSON handler prepared, so the alternate link has to carry them.
 var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset"}
 
-// historyWindowParams names what /history's feeds read beyond the pagination
+// historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyWindowParams = []string{"since", "until"}
+var historyFeedParams = []string{"kind", "tag", "since", "until"}
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "search", "tag", "before", "limit"}, historyWindowParams,
+	[]string{"type", "resourceId", "tasks", "search", "before", "limit"}, historyFeedParams,
 )
 
 // echoingFeedRequest opts r out of compression when the feed's links will echo
@@ -656,10 +659,10 @@ func historyEntryUpdated(e cache.HistoryEntry) time.Time {
 	switch {
 	case e.Kind == cache.KindGap:
 		return e.Until
+	case e.Kind == cache.KindAnnotation && e.Annotation != nil:
+		return annotationModified(*e.Annotation)
 	case e.Kind == cache.KindAnnotation && !e.Updated.IsZero():
 		return e.Updated
-	case e.Kind == cache.KindAnnotation && e.Annotation != nil:
-		return e.Annotation.Created
 	default:
 		return e.Timestamp
 	}
