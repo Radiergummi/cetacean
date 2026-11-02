@@ -277,7 +277,10 @@ export function ResourcesEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div
+      data-submit-scope
+      className="space-y-3"
+    >
       {header}
       {capacity ? (
         <div className="space-y-3">
@@ -328,6 +331,7 @@ export function ResourcesEditor({
 
       <footer className="flex items-center justify-end gap-2">
         <Button
+          submitShortcut
           size="sm"
           onClick={() => {
             void save();

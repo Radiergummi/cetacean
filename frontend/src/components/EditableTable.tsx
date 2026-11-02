@@ -153,7 +153,10 @@ export function EditableTable<T>({
           renderReadOnly(items)
         )
       ) : (
-        <div className="flex flex-col gap-3">
+        <div
+          data-submit-scope
+          className="flex flex-col gap-3"
+        >
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full whitespace-nowrap">
               <thead className="sticky top-0 z-10 bg-background/50">
@@ -235,6 +238,7 @@ export function EditableTable<T>({
               </Button>
               <div className="ms-auto flex gap-2">
                 <Button
+                  submitShortcut
                   size="sm"
                   onClick={() => {
                     void save();

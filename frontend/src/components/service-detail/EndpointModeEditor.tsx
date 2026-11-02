@@ -48,7 +48,10 @@ export function EndpointModeEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div
+      data-submit-scope
+      className="space-y-3"
+    >
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
           Endpoint Mode
@@ -91,6 +94,7 @@ export function EndpointModeEditor({
 
           <footer className="flex items-center justify-end gap-2">
             <Button
+              submitShortcut
               size="sm"
               onClick={() => {
                 void save();

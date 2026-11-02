@@ -179,7 +179,10 @@ export function IntegrationSection({
           }}
         />
       ) : editing && editContent ? (
-        <div className="rounded-lg border p-3">
+        <div
+          data-submit-scope
+          className="rounded-lg border p-3"
+        >
           <div className="space-y-4">
             {editContent}
 
@@ -188,6 +191,7 @@ export function IntegrationSection({
             <footer className="flex items-center gap-2">
               <div className="ms-auto flex gap-2">
                 <Button
+                  submitShortcut
                   size="sm"
                   // Without a writer, Save keeps the editor open as it was.
                   onClick={onSave ? save : undefined}

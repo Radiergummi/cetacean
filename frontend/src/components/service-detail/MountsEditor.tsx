@@ -129,7 +129,10 @@ export function MountsEditor({
       controls={controls}
     >
       {editing ? (
-        <div className="space-y-3 rounded-lg border p-3">
+        <div
+          data-submit-scope
+          className="space-y-3 rounded-lg border p-3"
+        >
           {draft.length === 0 ? (
             <button
               type="button"
@@ -392,6 +395,7 @@ export function MountsEditor({
 
             <div className="ms-auto flex gap-2">
               <Button
+                submitShortcut
                 size="sm"
                 onClick={save}
                 disabled={saving}

@@ -85,7 +85,10 @@ export function EditablePanel({
 
   if (editing) {
     return (
-      <div className={wrapperClass}>
+      <div
+        data-submit-scope
+        className={wrapperClass}
+      >
         <div className="space-y-4">
           {titleRow}
           {edit}
@@ -97,6 +100,7 @@ export function EditablePanel({
             <div className="ml-auto flex gap-2">
               <Button
                 size="sm"
+                submitShortcut
                 onClick={() => {
                   void save();
                 }}
