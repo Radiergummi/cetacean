@@ -26,7 +26,10 @@ function show() {
 
 function click(overlay: HTMLElement, x: number) {
   fireEvent.pointerDown(overlay, { clientX: x, pointerType: "mouse" });
+  fireEvent.mouseDown(overlay, { clientX: x });
   fireEvent.pointerUp(overlay, { clientX: x, pointerType: "mouse" });
+  fireEvent.mouseUp(overlay, { clientX: x });
+  fireEvent.click(overlay, { clientX: x });
 }
 
 describe("AnnotateOverlay", () => {
@@ -70,6 +73,7 @@ describe("AnnotateOverlay", () => {
     click(overlay, 300);
 
     expect(await screen.findAllByLabelText("Note")).toHaveLength(1);
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "300px" });
   });
 
   it("closes the form when the mode ends", async () => {

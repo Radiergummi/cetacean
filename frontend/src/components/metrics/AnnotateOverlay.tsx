@@ -27,6 +27,7 @@ export default function AnnotateOverlay({
   const gestureRef = useRef<Gesture>(idle);
   const [mark, setMark] = useState<(Mark & { key: number }) | null>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const { clusterWide } = useAnnotationCapabilities();
 
   const feed = (event: GestureEvent) => {
@@ -55,6 +56,7 @@ export default function AnnotateOverlay({
 
   return (
     <div
+      ref={overlayRef}
       data-testid="annotate-overlay"
       className="absolute inset-0 z-10 cursor-crosshair touch-none"
       onPointerDown={(event) => {
@@ -95,8 +97,14 @@ export default function AnnotateOverlay({
 
       <Popover
         open={mark !== null && from !== null}
-        onOpenChange={(open) => {
-          if (!open) {
+        onOpenChange={(open, { event, reason }) => {
+          // A press on the chart makes the next mark; it must not also dismiss it.
+          const onChart =
+            reason === "outside-press" &&
+            event.target instanceof Node &&
+            overlayRef.current?.contains(event.target);
+
+          if (!open && !onChart) {
             setMark(null);
           }
         }}
