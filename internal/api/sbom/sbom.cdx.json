@@ -6144,78 +6144,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@types/react-dom@19.3.0",
-      "type": "library",
-      "group": "@types",
-      "name": "react-dom",
-      "version": "19.3.0",
-      "description": "TypeScript definitions for react-dom",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40types/react-dom@19.3.0",
-      "externalReferences": [
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-dom",
-          "type": "website"
-        },
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/@types/react-dom/-/react-dom-19.3.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "648edb538da66575ca1e7fea34b130d88adb888354ed7e7ebdf81d8b10479023696165e32a07d0fcffaec866f90a338b07d51c9d37a0debca542d5768729b8e1"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|@types/react@19.3.0",
-      "type": "library",
-      "group": "@types",
-      "name": "react",
-      "version": "19.3.0",
-      "description": "TypeScript definitions for react",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40types/react@19.3.0",
-      "externalReferences": [
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react",
-          "type": "website"
-        },
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/@types/react/-/react-19.3.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "374ac50ae1fd628c46f7f9bad65f4c7e924a7e62ce554d1e9bb8a9233e9346049292f45e2c1f6f2fce4607ecabf01b3995eaa9be0f7a252c05e194b5b38be242"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|@types/unist@3.0.3",
       "type": "library",
       "group": "@types",
@@ -6317,47 +6245,6 @@
             {
               "alg": "SHA-512",
               "content": "a0840b0865ad705672d895bbee3f64f271f300ea6a3072d07a30c0e3c5d73161fab630901f3e51085cf56f3b2644ec8be8f526f8b2e75222380429f6db58a7c4"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|@typescript/typescript-linux-x64@7.0.2",
-      "type": "library",
-      "author": "Microsoft Corp.",
-      "group": "@typescript",
-      "name": "typescript-linux-x64",
-      "version": "7.0.2",
-      "description": "TypeScript is a language for application scale JavaScript development",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40typescript/typescript-linux-x64@7.0.2",
-      "externalReferences": [
-        {
-          "url": "https://www.typescriptlang.org/",
-          "type": "website"
-        },
-        {
-          "url": "https://github.com/microsoft/TypeScript.git",
-          "type": "vcs"
-        },
-        {
-          "url": "https://github.com/microsoft/TypeScript/issues",
-          "type": "issue-tracker"
-        },
-        {
-          "url": "https://registry.npmjs.org/@typescript/typescript-linux-x64/-/typescript-linux-x64-7.0.2.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "11875fd9c360eeb8025899f109d27e177577f4ef2285bdfb78702ed4b2bca00162ce04d06cf38aef31c75db3edf2b5f6e023aa3835de237b087f47c25c6ec7fc"
             }
           ],
           "type": "distribution"
@@ -13731,46 +13618,6 @@
             {
               "alg": "SHA-512",
               "content": "c80366dc9af71a2275aa0265c46015c533887043a4d6b8501da9a55ed9eb08aec41cfe0778cf4e1b1b4c83f5bb1c576b573c3f65624a195209bac547f39b0bb7"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|typescript@7.0.2",
-      "type": "library",
-      "author": "Microsoft Corp.",
-      "name": "typescript",
-      "version": "7.0.2",
-      "description": "TypeScript is a language for application scale JavaScript development",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
-      "purl": "pkg:npm/typescript@7.0.2",
-      "externalReferences": [
-        {
-          "url": "https://www.typescriptlang.org/",
-          "type": "website"
-        },
-        {
-          "url": "https://github.com/microsoft/TypeScript.git",
-          "type": "vcs"
-        },
-        {
-          "url": "https://github.com/microsoft/TypeScript/issues",
-          "type": "issue-tracker"
-        },
-        {
-          "url": "https://registry.npmjs.org/typescript/-/typescript-7.0.2.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "f0561abbdea8dcd28e85b8ca8bfa8dbc6fd6e63873c646dd9b9b23f406d9ff94f9b16aa7de12602df1b1dbbb11299593bf2cc23fc74b4414dfe6d05349155434"
             }
           ],
           "type": "distribution"
