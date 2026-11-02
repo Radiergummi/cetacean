@@ -107,6 +107,13 @@ func TestAddAnnotationRefusals(t *testing.T) {
 		},
 		{"a malformed time", "alice", `{"text":"x","at":"yesterday"}`, "at: must be an RFC 3339", true},
 		{
+			"tags that are not a list of strings",
+			"alice",
+			`{"text":"x","tags":"load-test","resources":[{"type":"service","id":"web"}]}`,
+			"tags: must be a list of strings",
+			true,
+		},
+		{
 			"no timeline",
 			"alice",
 			`{"text":"x","resources":[{"type":"service","id":"web"}]}`,
@@ -166,12 +173,68 @@ func TestGetEventsListsTheAnnotationsTheCallerMayRead(t *testing.T) {
 	for _, e := range got.Entries {
 		if e.Kind == cache.KindAnnotation {
 			notes = append(notes, e.Text)
-			if e.At != "2026-11-01T14:00:00.000000000Z" || len(e.Tags) != 1 {
+			if e.At != "2026-11-01T14:00:00.000000000Z" || len(e.Tags) != 1 ||
+				len(e.Resources) != 1 || e.Resources[0].Name != "web" {
 				t.Errorf("entry = %+v", e)
 			}
 		}
 	}
 	if len(notes) != 1 || notes[0] != "load test" {
 		t.Errorf("bob reads annotations %q, want only the one on web", notes)
+	}
+}
+
+func TestGetEventsCutsItsLimitByTimeNotByCreation(t *testing.T) {
+	srv, c := annotationServer(t, true)
+	now := time.Now().UTC()
+
+	if _, err := c.CreateAnnotation(context.Background(), cache.Annotation{
+		Timestamp: now.Add(-72 * time.Hour),
+		Text:      "three days ago",
+		Resources: []cache.AnnotationResource{{Type: cache.EventService, ID: "svc1", Name: "web"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, at := range []time.Duration{-2 * time.Minute, -time.Minute} {
+		c.History().Append(cache.HistoryEntry{
+			Timestamp: now.Add(at), Type: cache.EventService, Action: "update",
+			ResourceID: "svc1", Name: "web",
+		})
+	}
+
+	ctx := auth.ContextWithIdentity(context.Background(), &auth.Identity{Subject: "bob"})
+	body, err := srv.toolGetEvents(ctx, toolRequest(t, "get_events", map[string]any{"limit": 2}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got eventsResult
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range got.Entries {
+		if e.Kind == cache.KindAnnotation {
+			t.Errorf("the newest two by time are the changes, got %+v", got.Entries)
+		}
+	}
+}
+
+func TestHistoryResourceListsAnnotations(t *testing.T) {
+	srv, c := annotationServer(t, true)
+	if _, err := c.CreateAnnotation(context.Background(), cache.Annotation{
+		Timestamp: time.Now(),
+		Text:      "load test",
+		Resources: []cache.AnnotationResource{{Type: cache.EventService, ID: "svc1", Name: "web"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := auth.ContextWithIdentity(context.Background(), &auth.Identity{Subject: "bob"})
+	body, err := srv.readResource(ctx, "cetacean://history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "load test") {
+		t.Errorf("cetacean://history leaves out the annotation get_events lists: %s", body)
 	}
 }

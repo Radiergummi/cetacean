@@ -1002,6 +1002,36 @@ func TestSSE_ReplaysAnAnnotationWriteAsItLeftIt(t *testing.T) {
 	}
 }
 
+func TestSSE_SkipsAnAnnotationItemWithoutItsAnnotation(t *testing.T) {
+	h := cache.NewHistory(100)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s0"})
+	h.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create", ResourceID: "2"})
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
+
+	b := NewBroadcaster(10*time.Millisecond, h)
+	defer b.Close()
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	req.Header.Set("Last-Event-ID", b.EventID(1))
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, nil, ReplayAll)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, `"n1"`)
+
+	b.Close()
+	<-done
+
+	if body := w.bodyString(); strings.Contains(body, `"2"`) {
+		t.Errorf("replay sent the annotation item with no annotation: %s", body)
+	}
+}
+
 func TestTypesFilter(t *testing.T) {
 	if TypesFilter(httptest.NewRequest("GET", "/events", nil)) != nil {
 		t.Error("no ?types= should mean no filter")

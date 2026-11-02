@@ -125,8 +125,8 @@ What the cluster is doing now, and what it did recently.
     tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
     made it, as the [history][api.history-actor] does.
 
-    [Annotations][api.annotations] appear as entries of kind `annotation`, with their `text` and `tags`, at the time
-    they describe. One is listed with the changes of the resources it names, a service's with those on its stack,
+    [Annotations][api.annotations] appear as entries of kind `annotation`, with their `text`, `tags` and the
+    `resources` they name, at the time they describe. One is listed with the changes of the resources it names, a service's with those on its stack,
     and a cluster-wide one with every resource's. Only the annotations the caller may read are returned.
 </McpTool>
 
