@@ -124,6 +124,22 @@ func TestAnnotationsOverRESTFollowTheGrants(t *testing.T) {
 		t.Errorf("edited = %+v, want ops as author and oncall as editor", body.Annotation)
 	}
 
+	listed := annotate(t, w, "viewers", "GET", "/annotations?resourceId="+SeededServiceName,
+		"", "", "")
+	var list struct {
+		Items []struct {
+			ID   string `json:"@id"`
+			Text string `json:"text"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listed.Body, &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Items) != 1 || !strings.HasSuffix(list.Items[0].ID, path) ||
+		list.Items[0].Text != "load test, stopped early" {
+		t.Errorf("viewers list: %d %s, want the edited annotation", listed.StatusCode, listed.Body)
+	}
+
 	if resp := annotate(
 		t,
 		w,

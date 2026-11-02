@@ -89,7 +89,7 @@ func (s *Annotations) Enabled() bool { return s != nil && s.cache.AnnotationsOn(
 // Get returns an annotation the caller may read; one they may not is not found.
 func (s *Annotations) Get(c AnnotationCaller, id uint64) (cache.Annotation, error) {
 	a, ok := s.cache.Annotation(id)
-	if !ok || !c.mayRead(a) {
+	if !ok || !c.MayRead(a) {
 		return cache.Annotation{}, cache.ErrAnnotationNotFound
 	}
 
@@ -99,7 +99,7 @@ func (s *Annotations) Get(c AnnotationCaller, id uint64) (cache.Annotation, erro
 // MayEdit reports whether the caller may edit or delete a; the author may
 // while they can still read it, anyone else only if they could create it.
 func (s *Annotations) MayEdit(ctx context.Context, c AnnotationCaller, a cache.Annotation) bool {
-	if authored(ctx, a) && c.mayRead(a) {
+	if authored(ctx, a) && c.MayRead(a) {
 		return true
 	}
 
@@ -396,9 +396,9 @@ func validateAnnotation(a cache.Annotation) error {
 	return nil
 }
 
-// mayRead needs every named resource readable: with any, one readable name
+// MayRead needs every named resource readable: with any, one readable name
 // would reveal what was written about a resource the caller cannot read.
-func (c AnnotationCaller) mayRead(a cache.Annotation) bool {
+func (c AnnotationCaller) MayRead(a cache.Annotation) bool {
 	if len(a.Resources) == 0 {
 		return c.AnyGrant
 	}

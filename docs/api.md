@@ -546,6 +546,7 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
 - `PATCH /annotations/{id}` takes an `application/merge-patch+json` body. `null` clears `until`, `tags` or
   `resources`. The `ID` stays the same, and the author is kept; `updated` and `editor` record the edit.
 - `DELETE /annotations/{id}` answers `204`.
+- `GET /annotations` lists them, newest first, as `/history?kind=annotation` does.
 
 The `ETag` is the annotation's version, which every edit advances. `PATCH` and `DELETE` honor `If-Match`, and refuse
 a stale one with `412`.
@@ -562,6 +563,22 @@ An annotation doesn't change anything in Docker, so it needs no [operations leve
 on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may
 annotate that resource. The cluster holds at most 10,000 annotations; the next one is refused with `409` (`ANN002`)
 rather than removing an older one.
+
+### Annotations on the history
+
+`/history` lists each annotation as an item of kind `annotation`, at the ID that created it and with its current
+fields, so an edit changes what it says without moving it. Its `@id` is `/annotations/{id}`, and its `text`, `tags`,
+`resources`, `updated` and `editor` sit beside the usual fields. Annotations outlive the entries the history holds
+(`storage.history_entries`): paging past the oldest entry goes on through older annotations. Only the annotations the caller may read are listed.
+
+The filters apply to annotations as follows:
+
+- `search` matches the text, and `tag` keeps the annotations carrying a tag. Gaps stay with both; changes don't with `tag`.
+- `since` and `until` keep a range annotation that overlaps the window.
+- `resourceId` keeps the annotations that name the resource, those on a service's stack, and cluster-wide ones.
+  `type` without `resourceId` keeps those naming a resource of that type, and cluster-wide ones.
+
+The CSV adds `text` and `tags` columns, the tags separated by commas.
 
 ## Response format
 

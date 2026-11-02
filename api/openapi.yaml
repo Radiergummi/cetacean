@@ -5331,6 +5331,114 @@ paths:
   # ── History ──────────────────────────────────────────────────────────
 
   /annotations:
+    get:
+      operationId: listAnnotations
+      tags: [Annotations]
+      summary: List annotations
+      description: >-
+        The history narrowed to annotations, as `/history?kind=annotation` lists
+        them, with the same filters, cursor paging and CSV rendering.
+      parameters:
+        - name: type
+          in: query
+          description: Only annotations naming a resource of this type, and cluster-wide ones
+          schema:
+            type: string
+          example: service
+        - name: resourceId
+          in: query
+          description: >-
+            Only annotations naming this resource, by ID or name, on its stack when
+            it is a service, and cluster-wide ones
+          schema:
+            type: string
+          example: r8m2x5nk3p7q
+        - name: search
+          in: query
+          description: Case-insensitive substring search on the text
+          schema:
+            type: string
+          example: load test
+        - $ref: "#/components/parameters/annotationTag"
+        - name: before
+          in: query
+          description: Return annotations older than this ID, as the `next` link sets it
+          schema:
+            type: integer
+            minimum: 1
+          example: 4182
+        - name: since
+          in: query
+          description: Return annotations ending after this time, exclusive
+          schema:
+            type: string
+            format: date-time
+          example: "2026-11-01T14:00:00Z"
+        - name: until
+          in: query
+          description: Return annotations starting at or before this time, inclusive
+          schema:
+            type: string
+            format: date-time
+          example: "2026-11-01T15:00:00Z"
+        - name: limit
+          in: query
+          description: Max annotations to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          example: 50
+      responses:
+        "200":
+          description: Annotations
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - "@id": /annotations/4182
+                    "@type": Annotation
+                    id: 4182
+                    kind: annotation
+                    timestamp: "2026-11-01T14:00:00Z"
+                    until: "2026-11-01T14:30:00Z"
+                    type: ""
+                    action: ""
+                    resourceId: ""
+                    name: ""
+                    text: Load test against the checkout flow
+                    tags: [load-test]
+                    resources:
+                      - type: service
+                        id: r8m2x5nk3p7q
+                        name: webapp
+                    actor:
+                      subject: 3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90
+                      name: Alice
+                      provider: oidc
+                      transport: dashboard
+                total: 1
+                limit: 1
+                offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
     post:
       operationId: createAnnotation
       tags: [Annotations]
@@ -5519,6 +5627,13 @@ paths:
         resource type, a specific resource, a name and a time window. A gap names no
         resource, so only `kind` and the time window narrow it. A full page carries a
         `Link` with `rel="next"`, which pages by cursor and keeps every filter.
+
+        Annotations are merged in at the ID that created them, with their current
+        fields, including ones older than anything the ring still holds. One is
+        listed when the caller may read every resource it names. `search` matches
+        its text, the time window matches a range that overlaps it, and a resource
+        filter matches one that names the resource, one on a service's stack, and a
+        cluster-wide one.
       parameters:
         - name: type
           in: query
@@ -5556,6 +5671,7 @@ paths:
           schema:
             type: string
           example: change
+        - $ref: "#/components/parameters/annotationTag"
         - name: before
           in: query
           description: Return entries older than this entry ID, as the `next` link sets it
@@ -7639,6 +7755,16 @@ components:
         every write endpoint, this one included, and is not documented per
         endpoint.
       example: wait=30
+
+    annotationTag:
+      name: tag
+      in: query
+      description: |
+        Return only annotations carrying this tag. Changes are left out; gaps stay,
+        as they do with `search`.
+      schema:
+        type: string
+      example: deploy
 
     search:
       name: search
@@ -9862,10 +9988,12 @@ components:
       properties:
         "@id":
           type: string
-          description: JSON-LD item identifier (e.g. /history#8421), a fragment of the collection
+          description: >-
+            JSON-LD item identifier (e.g. /history#8421), a fragment of the
+            collection; an annotation's is /annotations/{id}
         "@type":
           type: string
-          description: JSON-LD type name (HistoryEntry, or Gap for a gap)
+          description: JSON-LD type name (HistoryEntry, Gap for a gap, Annotation for an annotation)
         id:
           type: integer
           format: uint64
@@ -9873,7 +10001,8 @@ components:
           type: string
           description: >-
             `change` for a change Docker reported, `gap` for a window nobody
-            watched. More kinds may follow; ignore one you don't know.
+            watched, `annotation` for a note someone wrote. More kinds may
+            follow; ignore one you don't know.
         timestamp:
           type: string
           format: date-time
@@ -9881,7 +10010,7 @@ components:
         until:
           type: string
           format: date-time
-          description: When a gap ended. Absent on a change.
+          description: When a gap or a range annotation ended. Absent on a change.
         type:
           type: string
           description: Resource type (node, service, task, etc.); empty on a gap
@@ -9892,7 +10021,7 @@ components:
             Change action. `create` means the resource appeared, `update` that
             an existing one changed, `remove` that it is gone, and
             `ref_changed` that a resource this one cross-references changed.
-            Empty on a gap, as are `resourceId` and `name`.
+            Empty on a gap and an annotation, as are `resourceId` and `name`.
         resourceId:
           type: string
         name:
@@ -9904,6 +10033,25 @@ components:
         summary:
           type: string
         actor:
+          $ref: "#/components/schemas/HistoryActor"
+        text:
+          type: string
+          description: An annotation's text
+        tags:
+          type: array
+          items:
+            type: string
+          description: An annotation's tags
+        resources:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnnotationResource"
+          description: The resources an annotation names; absent for a cluster-wide one
+        updated:
+          type: string
+          format: date-time
+          description: When an annotation was last edited
+        editor:
           $ref: "#/components/schemas/HistoryActor"
       example:
         id: 8421

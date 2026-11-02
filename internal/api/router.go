@@ -1173,6 +1173,10 @@ func (rt routes) volumes() {
 func (rt routes) annotations() {
 	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
 
+	mux.HandleFunc("GET /annotations", contentNegotiated(h.HandleAnnotations, feedHandlers{
+		csv:       true,
+		csvParams: historyCSVParams,
+	}, spa))
 	mux.Handle("POST /annotations",
 		annotationWrite(h.mayAnnotate).AnswersWithABody().ThenFunc(h.HandleCreateAnnotation))
 	mux.HandleFunc(

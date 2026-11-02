@@ -137,7 +137,7 @@ func TestHistoryShowsAGapToEveryReader(t *testing.T) {
 func TestHistoryCSVCarriesAGapAsARow(t *testing.T) {
 	records := csvRecords(t, getHistory(t, newTestRouterWithCache(t, gapCache()), "/history.csv"))
 
-	if got := records[0][10:]; !slices.Equal(got, []string{"kind", "until"}) {
+	if got := records[0][10:12]; !slices.Equal(got, []string{"kind", "until"}) {
 		t.Fatalf("trailing columns = %v, want [kind until]", got)
 	}
 

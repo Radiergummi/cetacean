@@ -26,6 +26,7 @@ GET /-/notices
 GET /-/ready
 GET /-/sbom.cdx
 GET /.well-known/api-catalog
+GET /annotations  CSV HTML JSON
 GET /annotations/{id}  HTML JSON
 GET /api
 GET /api/asyncapi

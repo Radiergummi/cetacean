@@ -2,6 +2,7 @@ package api
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -105,6 +106,7 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 		header: []string{
 			"timestamp", "type", "action", "name", "id", "summary",
 			"actor", "provider", "client", "transport", "kind", "until",
+			"text", "tags",
 		},
 		records: make([][]string, 0, len(entries)),
 	}
@@ -133,6 +135,8 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			string(actor.Transport),
 			entry.Kind,
 			until,
+			entry.Text,
+			strings.Join(entry.Tags, ","),
 		})
 	}
 

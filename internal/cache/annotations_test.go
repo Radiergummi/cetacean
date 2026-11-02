@@ -104,8 +104,8 @@ func TestAnnotationWrite_FailedCommitRecordsNothing(t *testing.T) {
 		t.Fatal("create succeeded on a failing store")
 	}
 
-	if c.history.Count() != 0 || c.annotationCount() != 0 {
-		t.Fatalf("count %d, %d indexed; want nothing", c.history.Count(), c.annotationCount())
+	if c.history.Count() != 0 || c.AnnotationCount() != 0 {
+		t.Fatalf("count %d, %d indexed; want nothing", c.history.Count(), c.AnnotationCount())
 	}
 }
 
