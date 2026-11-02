@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Annotations appear on `/history`, its CSV and feeds, which take a `tag` filter; `GET /annotations` lists them with the same filters
 - An `annotation` event on `/events` and on service, node and stack streams reports each annotation as it's written, edited, or deleted
 - The MCP tool `add_annotation` records an annotation at any operations level, and `get_events` returns annotations with their `text` and `tags`
+- The metric charts flag annotations and shade their ranges, and the History page, the overview and each resource's Recent Activity show them as notes
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
 - After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`

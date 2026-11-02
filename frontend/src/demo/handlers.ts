@@ -1897,8 +1897,13 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
         items: entries.slice(0, limit).map((entry) => ({
           ...entry,
-          "@id": `/history#${entry.id}`,
-          "@type": entry.kind === "gap" ? "Gap" : "HistoryEntry",
+          "@id": entry.kind === "annotation" ? `/annotations/${entry.id}` : `/history#${entry.id}`,
+          "@type":
+            entry.kind === "gap"
+              ? "Gap"
+              : entry.kind === "annotation"
+                ? "Annotation"
+                : "HistoryEntry",
         })),
         total: entries.length,
         limit,

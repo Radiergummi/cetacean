@@ -3,9 +3,16 @@ import type { HistoryEntry } from "@/api/types";
 
 const minute = 60_000;
 
+const alice = {
+  subject: "alice",
+  name: "alice",
+  provider: "oidc",
+  transport: "dashboard",
+} as const;
+
 /**
- * A few changes per service and node, and one gap, placed relative to `now`
- * so the metric charts of every range have something to mark.
+ * A few changes per service and node, one gap, and two annotations, placed
+ * relative to `now` so the metric charts of every range have something to mark.
  */
 export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
   const entries: Omit<HistoryEntry, "id">[] = [
@@ -20,6 +27,38 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
     },
   ];
 
+  const first = dataset.services[0];
+
+  entries.push({
+    kind: "annotation",
+    timestamp: new Date(now - 3 * 60 * minute).toISOString(),
+    until: new Date(now - 3 * 60 * minute + 40 * minute).toISOString(),
+    type: "",
+    action: "",
+    resourceId: "",
+    name: "",
+    text: "Maintenance window on the storage network",
+    tags: ["maintenance"],
+    actor: alice,
+    updated: new Date(now - 2 * 60 * minute).toISOString(),
+    editor: { subject: "bob", name: "bob", provider: "oidc", transport: "rest" },
+  });
+
+  if (first) {
+    entries.push({
+      kind: "annotation",
+      timestamp: new Date(now - 50 * minute).toISOString(),
+      type: "",
+      action: "",
+      resourceId: "",
+      name: "",
+      text: "Raised replicas ahead of the launch",
+      tags: ["capacity"],
+      resources: [{ type: "service", id: first.ID, name: first.Spec.Name }],
+      actor: alice,
+    });
+  }
+
   dataset.services.forEach(({ ID, Spec }, index) => {
     const offsets = [35 + index * 7, 4 * 60 + index * 11, 30 * 60 + index * 13];
 
@@ -33,12 +72,7 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
         name: Spec.Name,
         ...(position === 0
           ? {
-              actor: {
-                subject: "alice",
-                name: "alice",
-                provider: "oidc",
-                transport: "dashboard" as const,
-              },
+              actor: alice,
             }
           : {}),
       });
@@ -63,7 +97,8 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 
 /**
  * Applies `/history`'s filters: a gap matches every resource filter, and
- * every window it overlaps.
+ * every window it overlaps. An annotation overlaps windows the same way and
+ * matches the resources it names; a cluster-wide one matches every filter.
  */
 export function filterHistory(entries: HistoryEntry[], params: URLSearchParams): HistoryEntry[] {
   const type = params.get("type");
@@ -81,8 +116,24 @@ export function filterHistory(entries: HistoryEntry[], params: URLSearchParams):
 
     const start = new Date(entry.timestamp).getTime();
 
+    const overlaps =
+      new Date(entry.until ?? entry.timestamp).getTime() > sinceTime && start <= untilTime;
+
     if (entry.kind === "gap") {
-      return new Date(entry.until ?? entry.timestamp).getTime() > sinceTime && start <= untilTime;
+      return overlaps;
+    }
+
+    if (entry.kind === "annotation") {
+      const named = entry.resources ?? [];
+
+      return (
+        overlaps &&
+        (named.length === 0 ||
+          named.some(
+            (resource) =>
+              (!type || resource.type === type) && (!resourceId || resource.id === resourceId),
+          ))
+      );
     }
 
     return (
