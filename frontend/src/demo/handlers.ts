@@ -1,5 +1,12 @@
 import { randomHex, type Dataset } from "./dataset";
-import { demoHistory, filterHistory, writeAnnotation } from "./history";
+import {
+  annotationVersion,
+  demoHistory,
+  editAnnotation,
+  filterHistory,
+  removeAnnotation,
+  writeAnnotation,
+} from "./history";
 import { handleInstantQuery, handleRangeQuery } from "./prometheus";
 import { broadcast, type SSEClients } from "./sseHandlers";
 import type { ClusterSnapshot, HealthInfo, LogResponse, ManagerQuorum } from "@/api/client";
@@ -220,6 +227,7 @@ const writesByPath: [RegExp, string][] = [
   [/\/nodes\/[^/]+$/, "DELETE"],
   [/\/(configs|secrets)\/[^/]+$/, "DELETE"],
   [/\/(configs|secrets|plugins|annotations)$/, "POST"],
+  [/\/annotations\/[^/]+$/, "PATCH, DELETE"],
   [/\/plugins\/[^/]+$/, "DELETE"],
   [/\/(tasks|stacks|networks|volumes)\/[^/]+$/, "DELETE"],
 ];
@@ -310,6 +318,55 @@ function get(
 
     return response;
   });
+}
+
+function annotationETag(id: number) {
+  return `"${annotationVersion(id)}"`;
+}
+
+/**
+ * An annotation as `GET /annotations/{id}` sends it, with its version.
+ */
+function annotationResponse({
+  id,
+  timestamp,
+  until,
+  text,
+  tags,
+  resources,
+  actor,
+  updated,
+  editor,
+}: HistoryEntry) {
+  const response = HttpResponse.json({
+    "@id": `/annotations/${id}`,
+    "@type": "Annotation",
+    id,
+    timestamp,
+    ...(until ? { until } : {}),
+    text: text ?? "",
+    tags: tags?.length ? tags : null,
+    resources: resources?.length ? resources : null,
+    ...(actor ? { actor } : {}),
+    ...(updated ? { updated, editor } : {}),
+  });
+
+  response.headers.set("ETag", annotationETag(id));
+
+  return response;
+}
+
+function matchesVersion(request: Request, entry: HistoryEntry) {
+  const ifMatch = request.headers.get("If-Match");
+
+  return ifMatch === null || ifMatch === "*" || ifMatch === annotationETag(entry.id);
+}
+
+function preconditionFailed() {
+  return HttpResponse.json(
+    { type: "/api/errors/API013", title: "Precondition Failed", status: 412 },
+    { status: 412 },
+  );
 }
 
 function detailEnvelope<T extends object>(id: string, type: string, extra: T) {
@@ -1099,6 +1156,29 @@ function serviceListItem(dataset: Dataset, service: Service): ServiceListItem {
 const historyTypes: Record<string, string> = { gap: "Gap", annotation: "Annotation" };
 
 export function createHandlers(dataset: Dataset, clients: SSEClients) {
+  function annotationAt(id: string) {
+    return demoHistory(dataset, Date.now()).find(
+      (entry) => entry.kind === "annotation" && String(entry.id) === id,
+    );
+  }
+
+  /**
+   * Sends the `annotation` event on the stream of the first resource the
+   * note names, or on the global one; a removal carries no resource.
+   */
+  function announceAnnotation(action: string, entry: HistoryEntry) {
+    const [named] = entry.resources ?? [];
+
+    broadcast(clients, "annotation", named ? `${named.type}s` : "annotations", named?.id ?? "", {
+      "@id": `/annotations/${entry.id}`,
+      "@type": "Annotation",
+      type: "annotation",
+      action,
+      id: String(entry.id),
+      ...(action === "remove" ? {} : { resource: entry }),
+    });
+  }
+
   function broadcastServiceUpdate(service: Service) {
     broadcast(clients, "service", "services", service.ID, {
       type: "service",
@@ -1916,23 +1996,8 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
 
         return id;
       });
-      const [named] = entry.resources ?? [];
-      const event = {
-        "@id": `/annotations/${entry.id}`,
-        "@type": "Annotation",
-        type: "annotation",
-        action: "create",
-        id: String(entry.id),
-        resource: entry,
-      };
 
-      broadcast(
-        clients,
-        "annotation",
-        named ? `${named.type}s` : "annotations",
-        named?.id ?? "",
-        event,
-      );
+      announceAnnotation("create", entry);
 
       return HttpResponse.json(
         { ...entry, "@id": `/annotations/${entry.id}`, "@type": "Annotation" },
@@ -1940,11 +2005,59 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
       );
     }),
 
+    get("*/annotations/:id", ({ params }) => {
+      const entry = annotationAt(String(params.id));
+
+      return entry ? annotationResponse(entry) : notFound();
+    }),
+
+    http.patch("*/annotations/:id", async ({ params, request }) => {
+      const entry = annotationAt(String(params.id));
+
+      if (!entry) {
+        return notFound();
+      }
+
+      if (!matchesVersion(request, entry)) {
+        return preconditionFailed();
+      }
+
+      const edited = editAnnotation(
+        entry,
+        (await request.json()) as Parameters<typeof editAnnotation>[1],
+      );
+
+      announceAnnotation("update", edited);
+
+      return annotationResponse(edited);
+    }),
+
+    http.delete("*/annotations/:id", ({ params, request }) => {
+      const entry = annotationAt(String(params.id));
+
+      if (!entry) {
+        return notFound();
+      }
+
+      if (!matchesVersion(request, entry)) {
+        return preconditionFailed();
+      }
+
+      removeAnnotation(entry.id);
+      announceAnnotation("remove", entry);
+
+      return new HttpResponse(null, { status: 204 });
+    }),
+
     // ---- History ----
     get("*/history", ({ request }) => {
       const url = new URL(request.url);
       const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 200);
-      const entries = filterHistory(demoHistory(dataset, Date.now()), url.searchParams);
+      const entries = filterHistory(
+        demoHistory(dataset, Date.now()),
+        url.searchParams,
+        (id) => dataset.services.find(({ ID }) => ID === id)?.Spec.Labels?.[stackLabel],
+      );
 
       return jsonResponse<CollectionResponse<HistoryEntry & { "@id": string; "@type": string }>>({
         items: entries.slice(0, limit).map((entry) => ({

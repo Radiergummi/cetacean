@@ -453,4 +453,55 @@ describe("annotations in the demo", () => {
     expect(listed.items.map(({ id }: { id: number }) => id)).toContain(created.id);
     expect(sent.map(({ event }) => event)).toContain("annotation");
   });
+
+  it("edits and deletes an annotation on its version, and announces both", async () => {
+    const sent: { event: string; data: string }[] = [];
+    const client = { send: (message: { event: string; data: string }) => sent.push(message) };
+    const created = (await (
+      await fetch("http://localhost/annotations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ text: "Soak", tags: [], timestamp: "2026-11-02T10:00:00Z" }),
+      })
+    ).json()) as { id: number };
+    const path = `http://localhost/annotations/${created.id}`;
+    const read = await fetch(path, { headers: { Accept: "application/json" } });
+    const etag = read.headers.get("ETag") ?? "";
+
+    expect(read.headers.get("Allow")).toBe("GET, HEAD, PATCH, DELETE");
+    expect(await read.json()).toMatchObject({ id: created.id, text: "Soak", resources: null });
+
+    clients.global.add(client as never);
+
+    const patched = await fetch(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/merge-patch+json", "If-Match": etag },
+      body: JSON.stringify({ text: "Soak test", until: "2026-11-02T11:00:00Z" }),
+    });
+
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      text: "Soak test",
+      until: "2026-11-02T11:00:00Z",
+    });
+
+    const stale = await fetch(path, { method: "DELETE", headers: { "If-Match": etag } });
+
+    expect(stale.status).toBe(412);
+
+    const removed = await fetch(path, {
+      method: "DELETE",
+      headers: { "If-Match": patched.headers.get("ETag") ?? "" },
+    });
+
+    clients.global.delete(client as never);
+
+    expect(removed.status).toBe(204);
+    expect((await fetch(path)).status).toBe(404);
+    expect(
+      sent
+        .filter(({ event }) => event === "annotation")
+        .map(({ data }) => (JSON.parse(data) as { action: string }).action),
+    ).toEqual(["update", "remove"]);
+  });
 });

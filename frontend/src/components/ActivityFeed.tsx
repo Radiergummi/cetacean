@@ -3,6 +3,7 @@ import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
+import AnnotationMenu from "./annotations/AnnotationMenu";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { ChevronRight } from "lucide-react";
@@ -210,7 +211,7 @@ function ChangeRun({
  * it is about, its tags, and who wrote it.
  */
 function AnnotationCard({ entry }: { entry: HistoryEntry }) {
-  const { actor, editor, resources = [], tags = [], text, timestamp, until, updated } = entry;
+  const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
 
   return (
     <TimelineRow
@@ -227,7 +228,10 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
         data-cluster-wide={resources.length === 0 || undefined}
         className="min-w-0 flex-1 rounded-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
       >
-        <p className="break-words whitespace-pre-wrap">{text}</p>
+        <div className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</p>
+          <AnnotationMenu id={id} />
+        </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span>
@@ -259,9 +263,9 @@ function AnnotationCard({ entry }: { entry: HistoryEntry }) {
             })
           )}
 
-          {tags.map((tag) => (
+          {tags.map((tag, index) => (
             <span
-              key={tag}
+              key={`${index}-${tag}`}
               className="rounded border px-1"
             >
               #{tag}

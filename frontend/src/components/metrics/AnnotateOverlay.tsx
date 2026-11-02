@@ -32,17 +32,20 @@ function overlayReducer(state: OverlayState, action: GestureEvent | { type: "cle
 /**
  * Takes the pointer over a chart while `capturing`, so zoom, isolation and the
  * tooltip never see the gesture, and opens the form at the mark it makes.
- * `timeFor` turns a pixel into epoch seconds; `onMarkOpen` hears a form open
- * and close, so the overlay can outlive the mode that made the mark.
+ * `timeFor` turns a pixel into epoch seconds, and `snap` moves a pixel to
+ * where the time the form will save sits; `onMarkOpen` hears a form open and
+ * close, so the overlay can outlive the mode that made the mark.
  */
 export default function AnnotateOverlay({
   timeFor,
+  snap = (x) => x,
   scope,
   capturing,
   onMarkOpen,
   onDone,
 }: {
   timeFor: (x: number) => number | null;
+  snap?: ((x: number) => number) | undefined;
   scope: Exclude<AnnotationScope, "cluster">;
   capturing: boolean;
   onMarkOpen?: ((open: boolean) => void) | undefined;
@@ -68,6 +71,7 @@ export default function AnnotateOverlay({
     event.clientX - event.currentTarget.getBoundingClientRect().left;
 
   const from = mark ? timeFor(mark.from) : null;
+  const left = mark ? snap(mark.from) : 0;
   const to = mark?.to === undefined ? undefined : (timeFor(mark.to) ?? undefined);
   const dragged =
     gesture.kind === "dragging"
@@ -127,8 +131,8 @@ export default function AnnotateOverlay({
           data-point={mark && mark.to === undefined ? "" : undefined}
           data-range={mark?.to === undefined ? undefined : ""}
           style={{
-            left: mark?.from ?? 0,
-            width: mark?.to === undefined ? undefined : mark.to - mark.from,
+            left,
+            width: mark?.to === undefined ? undefined : snap(mark.to) - left,
           }}
         />
       </div>

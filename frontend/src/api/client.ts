@@ -1,5 +1,6 @@
 import * as schema from "./schemas";
 import type {
+  Annotation,
   PublishedPort,
   ClusterCapacity,
   CollectionResponse,
@@ -92,6 +93,9 @@ export interface FetchResult<T> {
 
   /** Whether the caller may annotate the resource: it links `/annotations` for editing. */
   annotatable?: boolean | undefined;
+
+  /** The response's `ETag`, to send back as `If-Match` on a write. */
+  etag?: string | undefined;
 
   /**
    * The resource's canonical path, read from the response's JSON-LD `@id`.
@@ -324,6 +328,7 @@ async function fetchJSON<T>(
     allowedMethods,
     editable: editableOf(response),
     annotatable: annotatableOf(response),
+    etag: response.headers.get("ETag") ?? undefined,
     canonicalPath: canonicalPathOf(data),
   };
 }
@@ -1214,6 +1219,18 @@ export const api = {
   annotationCapabilities: fetchAnnotationCapabilities,
   createAnnotation: (body: NewAnnotation) =>
     mutationFetch<HistoryEntry>("/annotations", "POST", body, "application/json"),
+  annotation: (id: number, signal?: AbortSignal) =>
+    fetchJSON<Annotation>(`/annotations/${id}`, signal, schema.annotationSchema),
+  updateAnnotation: (id: number, patch: Record<string, unknown>, etag?: string | undefined) =>
+    mutationFetch<Annotation>(
+      `/annotations/${id}`,
+      "PATCH",
+      patch,
+      "application/merge-patch+json",
+      etag,
+    ),
+  deleteAnnotation: (id: number, etag?: string | undefined) =>
+    mutationFetch<void>(`/annotations/${id}`, "DELETE", undefined, undefined, etag),
   scaleService: (id: string, replicas: number) =>
     put<ServiceDetail>(`/services/${id}/scale`, { replicas }),
   updateServiceEndpointMode: (id: string, mode: "vip" | "dnsrr", ifMatch?: string | undefined) =>

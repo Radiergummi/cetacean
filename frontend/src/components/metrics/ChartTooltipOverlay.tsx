@@ -85,7 +85,7 @@ export default function ChartTooltipOverlay({ tooltip, visible }: Props) {
                   data-cluster-wide={clusterWide || undefined}
                   className="border-l-2 border-annotation ps-1.5 data-cluster-wide:border-annotation-cluster"
                 >
-                  <div className="line-clamp-3 max-w-64 whitespace-pre-wrap text-foreground">
+                  <div className="line-clamp-3 max-w-64 break-words whitespace-pre-wrap text-foreground">
                     {text}
                   </div>
                   <div className="text-muted-foreground">{detail}</div>
@@ -94,7 +94,8 @@ export default function ChartTooltipOverlay({ tooltip, visible }: Props) {
 
               {tooltip.markers.moreAnnotations > 0 && (
                 <div className="text-muted-foreground">
-                  {tooltip.markers.moreAnnotations} more notes
+                  {tooltip.markers.moreAnnotations} more{" "}
+                  {tooltip.markers.moreAnnotations === 1 ? "note" : "notes"}
                 </div>
               )}
 

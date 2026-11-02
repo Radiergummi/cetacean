@@ -66,6 +66,30 @@ describe("AnnotateOverlay", () => {
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px", width: "200px" });
   });
 
+  it("draws the mark where its time will be saved", async () => {
+    const onDone = vi.fn<() => void>();
+
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x * 60}
+          snap={(x) => x - 7}
+          scope={service}
+          capturing
+          onDone={onDone}
+        />
+      </QueryClientProvider>,
+    );
+
+    const overlay = screen.getByTestId("annotate-overlay");
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
+    await screen.findByLabelText("Note");
+
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "93px", width: "200px" });
+  });
+
   it("makes a point of a drag shorter than the form's minute", async () => {
     const { overlay } = show((x) => 1_000_020 + Math.round(x / 10) * 15);
 

@@ -381,7 +381,10 @@ describe("ActivityFeed runs", () => {
       show(note({ resources: [{ type: "service", id: "svc1", name: "web" }] }));
 
       expect(
-        screen.getByText((_, element) => element?.textContent === "Load test\nagainst checkout"),
+        screen.getByText(
+          (_, element) =>
+            element?.tagName === "P" && element.textContent === "Load test\nagainst checkout",
+        ),
       ).toBeInTheDocument();
       expect(screen.getByText("#load-test")).toBeInTheDocument();
       expect(screen.getByText("by alice via the dashboard")).toBeInTheDocument();

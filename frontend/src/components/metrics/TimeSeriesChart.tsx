@@ -1,9 +1,9 @@
-import AnnotateOverlay from "./AnnotateOverlay";
 // oxlint-disable react/refs -- Chart.js plugins are memoized once and read
 // live state through refs so their callbacks never close over a stale render.
 // That is the documented architecture for this chart (crosshair sync,
 // click-to-isolate, brush-to-zoom); the reads happen inside plugin callbacks
 // that Chart.js invokes outside React's render, not during render itself.
+import AnnotateOverlay from "./AnnotateOverlay";
 import {
   buildChartDatasets,
   buildTooltipSeries,
@@ -12,6 +12,7 @@ import {
 } from "./chartDatasets";
 import {
   drawMarkers,
+  fractionalIndex,
   layoutMarkers,
   type MarkerLayout,
   markersAt,
@@ -151,6 +152,20 @@ export default function TimeSeriesChart({
 
     return xScale && timestamps ? timeAtIndex(timestamps, xScale.getValueForPixel(x) ?? 0) : null;
   }, []);
+  // The form holds minutes, so a mark is drawn at the minute it will save.
+  const snapToMinute = useCallback(
+    (x: number) => {
+      const time = timeFor(x);
+      const xScale = chartRef.current?.scales["x"];
+      const index =
+        time === null
+          ? null
+          : fractionalIndex(dataRef.current?.timestamps ?? [], Math.floor(time / 60) * 60);
+
+      return xScale && index !== null ? xScale.getPixelForValue(index) : x;
+    },
+    [timeFor],
+  );
   const timelineRef = useRef(panel?.timeline);
   timelineRef.current = panel?.timeline;
   const markerLayoutRef = useRef<MarkerLayout | null>(null);
@@ -642,6 +657,7 @@ export default function TimeSeriesChart({
               {panel?.annotate && (panel.annotating || panel.markOpen) && (
                 <AnnotateOverlay
                   timeFor={timeFor}
+                  snap={snapToMinute}
                   scope={panel.annotate}
                   capturing={panel.annotating ?? false}
                   onMarkOpen={panel.onMarkOpen}

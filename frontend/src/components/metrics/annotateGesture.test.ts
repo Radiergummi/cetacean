@@ -73,6 +73,23 @@ describe("annotate gestures", () => {
     ).toEqual({ from: 250 });
   });
 
+  it("takes a swipe on touch for scrolling, not a tap", () => {
+    expect(
+      run([
+        { type: "down", x: 250, touch: true },
+        { type: "up", x: 250, touch: true },
+        { type: "down", x: 120, touch: true },
+        { type: "up", x: 60, touch: true },
+      ]),
+    ).toEqual({ gesture: { kind: "tapped", at: 250 }, mark: undefined });
+    expect(
+      run([
+        { type: "down", x: 100, touch: true },
+        { type: "up", x: 200, touch: true },
+      ]).gesture,
+    ).toEqual(idle);
+  });
+
   it("forgets a gesture on cancel", () => {
     expect(
       run([

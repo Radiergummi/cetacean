@@ -1,4 +1,4 @@
-import type { AnnotationScope, NewAnnotation } from "@/api/types";
+import type { Annotation, AnnotationScope, NewAnnotation } from "@/api/types";
 import { toLocalInput as isoToLocalInput } from "@/components/log/log-utils";
 
 const tagPattern = /^[a-z0-9._-]{1,40}$/;
@@ -49,4 +49,53 @@ export function annotationBody({
     ...(to ? { until: fromLocalInput(to) } : {}),
     ...(scope === "cluster" ? {} : { resources: [{ type: scope.type, id: scope.id }] }),
   };
+}
+
+/**
+ * What the form edits, as the form holds it.
+ */
+export interface AnnotationInputs {
+  text: string;
+  tags: string[];
+  from: string;
+  to: string;
+}
+
+/**
+ * A note's fields as the form shows them.
+ */
+export function annotationInputs({ text, tags, timestamp, until }: Annotation): AnnotationInputs {
+  return {
+    text,
+    tags: tags ?? [],
+    from: isoToLocalInput(timestamp),
+    to: until ? isoToLocalInput(until) : "",
+  };
+}
+
+/**
+ * The merge patch taking `note` to `inputs`: only the fields that differ, as
+ * shown, so an untouched time keeps the seconds the form cannot show.
+ */
+export function annotationPatch(note: Annotation, inputs: AnnotationInputs) {
+  const shown = annotationInputs(note);
+  const patch: Record<string, unknown> = {};
+
+  if (inputs.text !== shown.text) {
+    patch.text = inputs.text;
+  }
+
+  if (inputs.tags.join(",") !== shown.tags.join(",")) {
+    patch.tags = inputs.tags;
+  }
+
+  if (inputs.from !== shown.from) {
+    patch.timestamp = fromLocalInput(inputs.from);
+  }
+
+  if (inputs.to !== shown.to) {
+    patch.until = inputs.to ? fromLocalInput(inputs.to) : null;
+  }
+
+  return patch;
 }
