@@ -24,6 +24,11 @@ export const markerRadius = 6;
 const tooltipChanges = 5;
 
 /**
+ * How many notes the tooltip lists before it counts the rest.
+ */
+const tooltipNotes = 5;
+
+/**
  * The radius of the cap on a marker's line. The colours are opaque: a cap
  * over a translucent line shows where the two overlap.
  */
@@ -225,7 +230,8 @@ export function markersAt(layout: MarkerLayout | null, x: number): MarkerHit {
 /**
  * Draws gaps as hatched shading, annotation ranges as plain shading over them,
  * changes as lines with a round cap, and annotation points as lines with a
- * pennant on top. A cluster of several gets a wider line.
+ * pennant on top. A cluster of several gets a wider line, and of changes a
+ * stronger colour.
  */
 export function drawMarkers(
   context: CanvasRenderingContext2D,
@@ -238,6 +244,10 @@ export function drawMarkers(
   for (const { left, right } of bands) {
     const clippedLeft = Math.max(left, area.left);
     const clippedRight = Math.min(right, area.right);
+
+    if (clippedRight <= clippedLeft) {
+      continue;
+    }
 
     context.save();
     context.beginPath();
@@ -261,6 +271,10 @@ export function drawMarkers(
   for (const { left, right } of regions) {
     const clippedLeft = Math.max(left, area.left);
     const clippedRight = Math.min(right, area.right);
+
+    if (clippedRight <= clippedLeft) {
+      continue;
+    }
 
     context.save();
     context.globalAlpha = rangeAlpha;
@@ -347,7 +361,7 @@ export function tooltipMarkers({
       text: describeChange(entry),
     })),
     more: Math.max(0, newest.length - tooltipChanges),
-    annotations: notes.slice(0, tooltipChanges).map(({ start, end, entry }) => ({
+    annotations: notes.slice(0, tooltipNotes).map(({ start, end, entry }) => ({
       key: entry.id,
       text: entry.text ?? "",
       detail: [
@@ -359,7 +373,7 @@ export function tooltipMarkers({
         .filter(Boolean)
         .join(" · "),
     })),
-    moreAnnotations: Math.max(0, notes.length - tooltipChanges),
+    moreAnnotations: Math.max(0, notes.length - tooltipNotes),
     gap: band ? describeGap(band.item.from, band.item.to) : undefined,
   };
 }

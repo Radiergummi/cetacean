@@ -285,7 +285,7 @@ interface ActivityFeedProps {
   /** Whether changes repeating one another share a row; the full log lists each. */
   collapse?: boolean | undefined;
 
-  /** Shown in place of "No recent activity" when the entries hold no change. */
+  /** Shown in place of "No recent activity" when the entries hold no change or note. */
   emptyText?: string | undefined;
 }
 
