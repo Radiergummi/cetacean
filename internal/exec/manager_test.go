@@ -509,6 +509,34 @@ func TestManagerShutdownEndsSessionsAndWaitsForTheirPumps(t *testing.T) {
 	}
 }
 
+func TestManagerShutdownWaitsForTheEndRecord(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	s, _ := m.Create(alice, "", target, "local")
+	ctx, _ := m.Attach(s.ID, alice)
+	_ = m.Connected(s.ID)
+	var written atomic.Bool
+	rec.onWrite = func(r audit.Record) {
+		if r.Event == "exec.end" {
+			time.Sleep(50 * time.Millisecond)
+			written.Store(true)
+		}
+	}
+
+	go func() {
+		<-ctx.Done()
+		m.Finish(s.ID, Exit{Code: 129, Outcome: OutcomeTerminated})
+	}()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	m.Shutdown(shutdownCtx)
+
+	// Read without the recorder's lock, which a write in progress holds.
+	if !written.Load() {
+		t.Error("Shutdown returned before the session's end record was written")
+	}
+}
+
 func TestManagerShutdownGivesUpWhenItsContextExpires(t *testing.T) {
 	m, _, _ := newTestManager(t, Limits{})
 	s := connect(t, m, alice)

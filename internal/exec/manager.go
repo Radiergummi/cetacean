@@ -118,6 +118,10 @@ type Manager struct {
 	mu             sync.Mutex
 	sessions       map[string]*entry
 	lastGeneration uint64
+
+	// endWrites counts end records being written after their session ended,
+	// which Shutdown waits for as it does for the sessions themselves.
+	endWrites int
 }
 
 func NewManager(cfg ManagerConfig) *Manager {
@@ -353,10 +357,17 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 	}
 	rec := m.record("exec.end", e)
 	snapshot := e.Session
+	if wasConnected {
+		m.endWrites++
+	}
 	m.mu.Unlock()
 
 	if wasConnected {
 		_ = m.write(rec)
+
+		m.mu.Lock()
+		m.endWrites--
+		m.mu.Unlock()
 	}
 
 	return snapshot
@@ -476,7 +487,8 @@ func (m *Manager) Sweep() {
 }
 
 // Shutdown ends every session with reason "shutdown" and waits, until ctx
-// expires, for the pumps of those already attached to finish them.
+// expires, for the pumps of those already attached to finish them and for
+// their end records to be written.
 func (m *Manager) Shutdown(ctx context.Context) {
 	for _, s := range m.List() {
 		m.End(s.ID, "shutdown", "")
@@ -485,7 +497,7 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
-	for m.attachedLive() {
+	for m.settling() {
 		select {
 		case <-ctx.Done():
 			return
@@ -494,9 +506,15 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	}
 }
 
-func (m *Manager) attachedLive() bool {
+// settling reports whether an attached session is still live or an end record
+// is still being written.
+func (m *Manager) settling() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if m.endWrites > 0 {
+		return true
+	}
 
 	for _, e := range m.sessions {
 		if e.attached && e.State != StateEnded {
