@@ -99,4 +99,13 @@ describe("annotate gestures", () => {
       ]),
     ).toEqual({ gesture: idle, mark: undefined });
   });
+
+  it("takes a tap whose finger drifted a little as a tap", () => {
+    expect(
+      run([
+        { type: "down", x: 250, touch: true },
+        { type: "up", x: 258, touch: true },
+      ]).gesture,
+    ).toEqual({ kind: "tapped", at: 258 });
+  });
 });

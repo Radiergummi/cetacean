@@ -4,6 +4,11 @@
 const rangeThreshold = 5;
 
 /**
+ * How far, in pixels, a finger may drift between press and lift and still tap.
+ */
+const tapSlop = 10;
+
+/**
  * A gesture in annotate mode, in pixels: nothing yet, a mouse drag under way,
  * or the first of two taps. `pressed` is where a touch went down, so a lift
  * far from it, a swipe, is not taken for a tap.
@@ -63,7 +68,7 @@ export function step(gesture: Gesture, event: GestureEvent): { gesture: Gesture;
 
         const { pressed, ...rest } = gesture;
 
-        if (pressed === undefined || Math.abs(event.x - pressed) >= rangeThreshold) {
+        if (pressed === undefined || Math.abs(event.x - pressed) > tapSlop) {
           return { gesture: rest };
         }
 

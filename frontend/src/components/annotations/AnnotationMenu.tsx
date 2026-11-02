@@ -90,7 +90,10 @@ export default function AnnotationMenu({
       await api.deleteAnnotation(target.note.id, target.etag);
       setDeleting(null);
     } catch (failure) {
-      if (failure instanceof ApiError && failure.status === 412) {
+      if (failure instanceof ApiError && failure.status === 404) {
+        // Someone else deleted it: what was asked for is done.
+        setDeleting(null);
+      } else if (failure instanceof ApiError && failure.status === 412) {
         try {
           const { data, etag } = await api.annotation(target.note.id);
 

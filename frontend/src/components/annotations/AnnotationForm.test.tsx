@@ -1,3 +1,4 @@
+import { toLocalInput } from "./annotationFields";
 import AnnotationForm from "./AnnotationForm";
 import { ApiError } from "@/api/client";
 import type { Annotation, AnnotationScope, HistoryEntry, NewAnnotation } from "@/api/types";
@@ -300,5 +301,34 @@ describe("AnnotationForm, editing", () => {
 
     expect(tags).toHaveAttribute("aria-invalid", "true");
     expect(tags.getAttribute("aria-describedby")).toContain(screen.getByRole("alert").id);
+  });
+
+  it("checks a moved start against the end's own seconds", async () => {
+    const user = userEvent.setup();
+    const ranged = {
+      ...note,
+      timestamp: "2026-11-02T12:00:10Z",
+      until: "2026-11-02T12:05:40Z",
+    };
+
+    render(
+      <AnnotationForm
+        editing={{ note: ranged, etag: '"3"' }}
+        onDone={vi.fn<() => void>()}
+      />,
+    );
+
+    const moved = toLocalInput(Date.UTC(2026, 10, 2, 12, 5) / 1000);
+
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: moved } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateAnnotation).toHaveBeenCalledWith(
+        7,
+        { timestamp: "2026-11-02T12:05:00.000Z" },
+        '"3"',
+      ),
+    );
   });
 });

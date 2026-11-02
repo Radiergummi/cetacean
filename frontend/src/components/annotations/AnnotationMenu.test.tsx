@@ -188,4 +188,24 @@ describe("AnnotationMenu", () => {
     await waitFor(() => expect(readAnnotation).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   });
+
+  it("takes a note already deleted as deleted", async () => {
+    const user = userEvent.setup();
+
+    allowing("DELETE");
+    deleteAnnotation.mockRejectedValue(
+      new ApiError("/api/errors/ANN004", "Not Found", 404, 'annotation "7" not found'),
+    );
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
 });

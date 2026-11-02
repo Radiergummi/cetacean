@@ -79,8 +79,10 @@ export default function AnnotateOverlay({
   const dragged =
     gesture.kind === "dragging"
       ? {
-          left: Math.min(gesture.start, gesture.current),
-          width: Math.abs(gesture.current - gesture.start),
+          left: snap(Math.min(gesture.start, gesture.current)),
+          width:
+            snap(Math.max(gesture.start, gesture.current)) -
+            snap(Math.min(gesture.start, gesture.current)),
         }
       : null;
 
@@ -118,6 +120,7 @@ export default function AnnotateOverlay({
         {dragged && (
           <div
             className="absolute inset-y-0 bg-annotation/15"
+            data-testid="annotate-drag"
             style={dragged}
           />
         )}
@@ -125,7 +128,7 @@ export default function AnnotateOverlay({
         {gesture.kind === "tapped" && (
           <div
             className="absolute inset-y-0 w-px bg-annotation"
-            style={{ left: gesture.at }}
+            style={{ left: snap(gesture.at) }}
           />
         )}
 

@@ -1,5 +1,4 @@
 import type { HistoryEntry } from "../api/types";
-import { useLatestRef } from "../hooks/useLatestRef";
 import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
@@ -10,7 +9,7 @@ import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
 import { Badge } from "./ui/badge";
 import { ChevronRight, Pause } from "lucide-react";
-import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 /**
@@ -322,13 +321,15 @@ export default function ActivityFeed({
 }: ActivityFeedProps) {
   // While a note's menu or dialog is open the rows hold still, so updates
   // can't move the note away or push it, and its dialog, out of the feed.
-  const [held, setHeld] = useState<HistoryEntry[] | null>(null);
-  const entriesRef = useLatestRef(entries);
-  const hold = useCallback(
-    (active: boolean) => setHeld(active ? entriesRef.current : null),
-    [entriesRef],
-  );
-  const shown = held ?? entries;
+  // The snapshot is taken while rendering, so it is always the rows on screen.
+  const [held, setHeld] = useState(false);
+  const [onScreen, setOnScreen] = useState(entries);
+
+  if (!held && onScreen !== entries) {
+    setOnScreen(entries);
+  }
+
+  const shown = held ? onScreen : entries;
   const rows = useMemo(() => activityRows(shown, collapse), [shown, collapse]);
 
   if (loading) {
@@ -370,7 +371,7 @@ export default function ActivityFeed({
               <AnnotationCard
                 key={`annotation-${row.entry.id}`}
                 entry={row.entry}
-                onActiveChange={hold}
+                onActiveChange={setHeld}
               />
             );
           }

@@ -90,6 +90,27 @@ describe("AnnotateOverlay", () => {
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "93px", width: "200px" });
   });
 
+  it("draws the drag under way where its mark will land", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AnnotateOverlay
+          timeFor={(x) => 1_000_000 + x * 60}
+          snap={(x) => x - 7}
+          scope={service}
+          capturing
+          onDone={vi.fn<() => void>()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const overlay = screen.getByTestId("annotate-overlay");
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 0 });
+    fireEvent.pointerMove(overlay, { clientX: 200, pointerType: "mouse" });
+
+    expect(screen.getByTestId("annotate-drag")).toHaveStyle({ left: "93px", width: "100px" });
+  });
+
   it("draws a drag that snaps to one minute as a point", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

@@ -201,12 +201,12 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
 
     const patch = edited && annotationPatch(edited.note, { text, tags: finalTags, from, to });
 
-    // Times shown to the minute may meet; untouched, the server's seconds hold.
-    if (
-      (!patch || "timestamp" in patch || "until" in patch) &&
-      to !== "" &&
-      new Date(to) <= new Date(from)
-    ) {
+    // An untouched time is checked by the seconds it keeps, which the form cannot show.
+    const startAt =
+      edited && patch && !("timestamp" in patch) ? edited.note.timestamp : new Date(from);
+    const endAt = edited && patch && !("until" in patch) ? edited.note.until : to || undefined;
+
+    if (endAt !== undefined && new Date(endAt) <= new Date(startAt)) {
       setError({ field: "until", message: "The end must be after the start." });
 
       return;
