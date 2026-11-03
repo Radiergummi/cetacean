@@ -7,6 +7,7 @@ import {
   type MarkerHit,
   markersAt,
   annotationsAt,
+  markerX,
   tooltipMarkers,
 } from "./chartMarkers";
 import type { HistoryEntry } from "@/api/types";
@@ -381,5 +382,18 @@ describe("indexAtPixel", () => {
 
   it("reads the first sample on a chart of one", () => {
     expect(indexAtPixel(150, 100, 100, 0)).toBe(0);
+  });
+});
+
+describe("markerX", () => {
+  it("finds a flag or a range holding a note where the layout puts it now", () => {
+    const items = [flag(1, 200), region(2, 250, 350)];
+    const layout = layoutMarkers(items, timestamps, pixelFor);
+    const shifted = layoutMarkers(items, timestamps, (index) => pixelFor(index) - 20);
+
+    expect(markerX(shifted, [1])).toBe((markerX(layout, [1]) ?? 0) - 20);
+    expect(markerX(shifted, [2])).toBe((markerX(layout, [2]) ?? 0) - 20);
+    expect(markerX(layout, [3])).toBeUndefined();
+    expect(markerX(null, [1])).toBeUndefined();
   });
 });

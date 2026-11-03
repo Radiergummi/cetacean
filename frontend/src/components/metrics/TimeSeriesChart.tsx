@@ -17,6 +17,7 @@ import {
   layoutMarkers,
   type MarkerLayout,
   markersAt,
+  markerX,
   annotationsAt,
   timeAtIndex,
   tooltipMarkers,
@@ -108,8 +109,10 @@ export default function TimeSeriesChart({
   const isMobile = useMatchesBreakpoint("md", "below");
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
-  const [pin, setPin] = useState<NotePin | null>(null);
+  // `offset` is the click's distance from its marker, kept as the marker moves.
+  const [pin, setPin] = useState<(NotePin & { offset: number }) | null>(null);
   const unpin = useCallback(() => setPin(null), []);
+  const pinRef = useRef(pin);
   const plotRef = useRef<HTMLDivElement>(null);
   const chartId = useId();
   const sync = useChartSync();
@@ -269,6 +272,10 @@ export default function TimeSeriesChart({
     chartRef.current?.draw();
   }, [panel?.timeline]);
 
+  useEffect(() => {
+    pinRef.current = pin;
+  }, [pin]);
+
   const markerPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "timelineMarkers",
@@ -300,6 +307,14 @@ export default function TimeSeriesChart({
           );
           markerLayoutRef.current = layout;
           markerInputsRef.current = inputs;
+
+          // A pinned popover follows its marker as new samples move the axis.
+          const pinned = pinRef.current;
+          const at = pinned ? markerX(layout, pinned.ids) : undefined;
+
+          if (pinned && at !== undefined && at + pinned.offset !== pinned.x) {
+            setPin({ ...pinned, x: at + pinned.offset });
+          }
         }
 
         drawMarkers(ctx, chartArea, layout, {
@@ -376,6 +391,7 @@ export default function TimeSeriesChart({
           // A flag's or a range's annotations open pinned; the rest of the plot isolates a series.
           if (onFlag && y != null) {
             const notes = annotationsAt(markerLayoutRef.current, x, y, chart.chartArea.top);
+            const ids = notes.map(({ entry }) => entry.id);
 
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
@@ -383,7 +399,12 @@ export default function TimeSeriesChart({
             }
 
             tooltipRef.current(null);
-            setPin({ x, y: chart.chartArea.top, ids: notes.map(({ entry }) => entry.id) });
+            setPin({
+              x,
+              y: chart.chartArea.top,
+              ids,
+              offset: x - (markerX(markerLayoutRef.current, ids) ?? x),
+            });
 
             return;
           }

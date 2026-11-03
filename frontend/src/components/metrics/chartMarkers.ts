@@ -316,6 +316,19 @@ export function annotationsAt(
 }
 
 /**
+ * Where the marker holding any of `ids` sits now: its flag, or its range's
+ * left edge; undefined once it has left the chart.
+ */
+export function markerX(layout: MarkerLayout | null, ids: number[]): number | undefined {
+  const holds = ({ entry }: TimelineItem) => ids.includes(entry.id);
+
+  return (
+    layout?.flags.find(({ items }) => items.some(holds))?.x ??
+    layout?.regions.find(({ item }) => holds(item))?.left
+  );
+}
+
+/**
  * Draws gaps as hatched shading, annotation ranges as plain shading over them,
  * changes as lines with a round cap, and annotation points as lines with a
  * pennant on top. A cluster of several gets a wider line, and of changes a
