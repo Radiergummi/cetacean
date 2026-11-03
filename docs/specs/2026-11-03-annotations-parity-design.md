@@ -63,10 +63,13 @@ It currently reuses `/history`'s handler and quirks (#592).
 - **A stack's timeline includes notes on its services.** The rule becomes symmetric: a service
   matches notes on its stack, and a stack matches notes on its services. Each note stores its
   service's stack already.
-- **A removed service keeps its stack's notes.** The stack is read from the
-  `AnnotationResource.Stack` stored with a note, not from the live service, which is gone.
+- **A removed service keeps its stack's notes.** The stack is read from the service's removal
+  entry in the ring, which records it, and once that is evicted from the `AnnotationResource.Stack`
+  of a note that named the service. The live service is gone.
 - **A removed resource is marked.** A note's resource carries `"removed": true` when the cache
   no longer holds it. The dashboard renders its name without a link.
+  - That changes the representation without a write, so the detail's `ETag` adds a bitmask of
+    the removed resources to the version. Preconditions are checked against the same value.
 
 ### CSV
 
@@ -183,8 +186,9 @@ The demo handlers serve the three pages' endpoints, the tag list and the new fil
 Each step is one PR with its CHANGELOG entry.
 
 1. **Server:** the filters, `/annotations/tags`, `/annotations`'s semantics and feeds, the
-   timeline and removal rules, CSV, the signals, the index and the cleanup. OpenAPI, JSON-LD
-   context (`AnnotationTag`), spec claims, `docs/api.md` with the CI recipe.
+   timeline and removal rules, CSV, the signals, the index and the cleanup. OpenAPI, the
+   AsyncAPI copy of the resource schema, spec claims, `docs/api.md` with the CI recipe. The
+   JSON-LD context's `@vocab` already covers `AnnotationTag`.
 2. **MCP:** the two tools, the resources, the `get_events` arguments, the #592 items, the
    evaluation set.
 3. **Dashboard groundwork:** the #592 items.
