@@ -333,7 +333,10 @@ function EditMode({
   onCancel: () => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div
+      data-submit-scope
+      className="space-y-4"
+    >
       <div className="flex items-center gap-4">
         <ToggleButton
           label="Enabled"
@@ -463,6 +466,7 @@ function EditMode({
 
       <footer className="flex items-center justify-end gap-2">
         <Button
+          submitShortcut
           size="sm"
           onClick={onSave}
           disabled={saving}

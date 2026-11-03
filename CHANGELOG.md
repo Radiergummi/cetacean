@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record a note about a moment or range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
 - Annotations appear on `/history`, its CSV and feeds, which take a `tag` filter; `GET /annotations` lists them with the same filters
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted

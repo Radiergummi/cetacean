@@ -14,6 +14,7 @@ import { AuthProvider } from "./hooks/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useRecommendations } from "./hooks/useRecommendations";
+import { useSubmitShortcut } from "./hooks/useSubmitShortcut";
 import { basePath } from "./lib/basePath";
 import { queryClient } from "./lib/queryClient";
 import { navigationShortcuts } from "./lib/shortcuts";
@@ -82,6 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("cetacean:show-shortcuts", handler);
   }, []);
 
+  useSubmitShortcut();
   useHotkeys({
     "?": useCallback(() => setShortcutsOpen((o) => !o), []),
     "/": useCallback(() => searchRef.current?.open(), []),

@@ -1,3 +1,4 @@
+import { submitShortcutLabel } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -55,18 +56,40 @@ const buttonVariants = cva(
   },
 );
 
+/**
+ * `submitShortcut` shows Ctrl/Cmd+Enter in front of the label and lets the
+ * shortcut press the button from inside its editor; a submit button has it
+ * unless it opts out.
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
+  submitShortcut,
+  children,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & { submitShortcut?: boolean | undefined }) {
+  const shortcut = submitShortcut ?? props.type === "submit";
+
   return (
     <ButtonPrimitive
       data-slot="button"
+      data-submit-shortcut={shortcut || undefined}
+      aria-keyshortcuts={shortcut ? "Meta+Enter Control+Enter" : undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {shortcut && (
+        <kbd
+          aria-hidden="true"
+          className="font-sans text-[10px] font-medium tracking-tight opacity-70"
+        >
+          {submitShortcutLabel}
+        </kbd>
+      )}
+      {children}
+    </ButtonPrimitive>
   );
 }
 
