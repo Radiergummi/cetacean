@@ -141,10 +141,7 @@ describe("Annotations", () => {
       "href",
       "/annotations?tag=load",
     );
-    expect(screen.getByRole("link", { name: /^about / })).toHaveAttribute(
-      "href",
-      "/annotations/7",
-    );
+    expect(screen.getByRole("link", { name: /^about / })).toHaveAttribute("href", "/annotations/7");
   });
 });
 
