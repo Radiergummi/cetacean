@@ -691,18 +691,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/goccy/go-json@v0.11.2?type=module",
+      "bom-ref": "pkg:golang/github.com/goccy/go-json@v0.12.0?type=module",
       "type": "library",
       "name": "github.com/goccy/go-json",
-      "version": "v0.11.2",
+      "version": "v0.12.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8dd66ff774ede22a11f325b50a836cbd2c6b7199425c0514d5a65737b8295d40"
+          "content": "a43fa85a8b808b3e32aeec1722dfe24fe94e31eca1af5693b71cda30ffd18152"
         }
       ],
-      "purl": "pkg:golang/github.com/goccy/go-json@v0.11.2?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/goccy/go-json@v0.12.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/goccy/go-json",
@@ -1010,18 +1010,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v1.3.0?type=module",
+      "bom-ref": "pkg:golang/github.com/mark3labs/mcp-go@v1.4.0?type=module",
       "type": "library",
       "name": "github.com/mark3labs/mcp-go",
-      "version": "v1.3.0",
+      "version": "v1.4.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d27a9e827c1a4d42d5575a4240b0660e30f6fb4fe549746de9e4c74bb6c7d68d"
+          "content": "804584bfb60e4c98d6e0af5cc6ec1faf414b44581258e135063bb54b13e572d2"
         }
       ],
-      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v1.3.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/mark3labs/mcp-go@v1.4.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/mark3labs/mcp-go",
@@ -1184,18 +1184,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/ncruces/go-sqlite3@v0.35.6?type=module",
+      "bom-ref": "pkg:golang/github.com/ncruces/go-sqlite3@v0.36.0?type=module",
       "type": "library",
       "name": "github.com/ncruces/go-sqlite3",
-      "version": "v0.35.6",
+      "version": "v0.36.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d091a53277bcf58cca34fd82241ba21f6d4413349036e07ba5fbc26ca067d098"
+          "content": "fed99eb4f07eefcf56029cd45967d75650d1b6b68f2a29768a8a579506c44f80"
         }
       ],
-      "purl": "pkg:golang/github.com/ncruces/go-sqlite3@v0.35.6?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/ncruces/go-sqlite3@v0.36.0?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/ncruces/go-sqlite3",
@@ -1213,18 +1213,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/github.com/ncruces/go-sqlite3-wasm/v6@v6.3.35304?type=module",
+      "bom-ref": "pkg:golang/github.com/ncruces/go-sqlite3-wasm/v6@v6.4.35401?type=module",
       "type": "library",
       "name": "github.com/ncruces/go-sqlite3-wasm/v6",
-      "version": "v6.3.35304",
+      "version": "v6.4.35401",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "74149995c10576d04cbcd460df8cb9d260a89c13cefe97ad49d752c064159522"
+          "content": "089ec29529a6f38c5669e7dc5526e232553796e0a231f0bf789d2f68f9ed6e14"
         }
       ],
-      "purl": "pkg:golang/github.com/ncruces/go-sqlite3-wasm/v6@v6.3.35304?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/github.com/ncruces/go-sqlite3-wasm/v6@v6.4.35401?type=module&goos=linux&goarch=amd64",
       "externalReferences": [
         {
           "url": "https://github.com/ncruces/go-sqlite3-wasm",
@@ -2086,18 +2086,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/golang.org/x/net@v0.61.0?type=module",
+      "bom-ref": "pkg:golang/golang.org/x/net@v0.62.0?type=module",
       "type": "library",
       "name": "golang.org/x/net",
-      "version": "v0.61.0",
+      "version": "v0.62.0",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "451fba8ff053042ae080e2ee8316beeba47c16fa0de8c1e5cc395921b37d605c"
+          "content": "d7c10b6a57cce7e5cd470cccda762a5ec650f41c92d6e863d8efd4efee63a916"
         }
       ],
-      "purl": "pkg:golang/golang.org/x/net@v0.61.0?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/golang.org/x/net@v0.62.0?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {
@@ -2391,18 +2391,18 @@
       }
     },
     {
-      "bom-ref": "pkg:golang/tailscale.com@v1.104.2?type=module",
+      "bom-ref": "pkg:golang/tailscale.com@v1.104.4?type=module",
       "type": "library",
       "name": "tailscale.com",
-      "version": "v1.104.2",
+      "version": "v1.104.4",
       "scope": "required",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cc16d25b4b48e178b63e1ad9125f72b7aa166b2de5f00f8cf2c72c4e7669c809"
+          "content": "dd45e36630dd0f7a3715361c7450110f564bc87387761418a9d60e8ef6c74a99"
         }
       ],
-      "purl": "pkg:golang/tailscale.com@v1.104.2?type=module&goos=linux&goarch=amd64",
+      "purl": "pkg:golang/tailscale.com@v1.104.4?type=module&goos=linux&goarch=amd64",
       "evidence": {
         "licenses": [
           {

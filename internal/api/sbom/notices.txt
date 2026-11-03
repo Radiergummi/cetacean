@@ -2769,7 +2769,7 @@ License: Apache-2.0
 
 ------------------------------------------------------------------------------
 
-github.com/goccy/go-json v0.11.2
+github.com/goccy/go-json v0.12.0
 https://github.com/goccy/go-json
 License: MIT
 
@@ -3736,7 +3736,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ------------------------------------------------------------------------------
 
-github.com/mark3labs/mcp-go v1.3.0
+github.com/mark3labs/mcp-go v1.4.0
 https://github.com/mark3labs/mcp-go
 License: MIT
 
@@ -4076,7 +4076,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-github.com/ncruces/go-sqlite3 v0.35.6
+github.com/ncruces/go-sqlite3 v0.36.0
 https://github.com/ncruces/go-sqlite3
 License: MIT
 
@@ -4105,7 +4105,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304
+github.com/ncruces/go-sqlite3-wasm/v6 v6.4.35401
 https://github.com/ncruces/go-sqlite3-wasm
 License: MIT-0
 
@@ -9357,7 +9357,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------
 
-golang.org/x/net v0.61.0
+golang.org/x/net v0.62.0
 License: BSD-3-Clause
 
 Copyright 2009 The Go Authors.
@@ -10608,7 +10608,7 @@ Some files carry the "BSD" license, noted at the top of each file:
 
 ------------------------------------------------------------------------------
 
-tailscale.com v1.104.2
+tailscale.com v1.104.4
 License: BSD-3-Clause
 
 BSD 3-Clause License
