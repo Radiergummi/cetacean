@@ -31,7 +31,9 @@ export interface PaletteStep {
   resourceType?: string | undefined;
   label: string;
   placeholder?: string | undefined;
-  /** A choice step's options, or how to load them when the step opens. */
+  /**
+   * A choice step's options, or how to load them when the step opens.
+   */
   choices?:
     | { label: string; value: string }[]
     | (() => Promise<{ label: string; value: string }[]>)
@@ -129,6 +131,13 @@ const swarmActions: PaletteAction[] = [
     destructive: true,
     note: "The current key stops working; read the new one on the Swarm page and save it.",
     execute: async () => {
+      const { data } = await api.swarm();
+
+      // Without autolock the managers hold no key, as the Swarm page shows by offering none.
+      if (!data.swarm.Spec.EncryptionConfig.AutoLockManagers) {
+        throw new Error("Autolock is off, so there is no unlock key to rotate.");
+      }
+
       await api.rotateUnlockKey();
     },
   },

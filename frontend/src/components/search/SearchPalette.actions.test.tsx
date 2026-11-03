@@ -114,6 +114,54 @@ describe("SearchPalette actions without a resource step", () => {
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith("vieux/sshfs:latest"));
   });
 
+  it("acts on the plugin picked after a cancelled confirmation, not the first", async () => {
+    vi.mocked(api.plugins).mockResolvedValue({
+      data: [
+        { Name: "a/one:latest", Enabled: true },
+        { Name: "b/two:latest", Enabled: true },
+      ] as Plugin[],
+      allowedMethods: new Set(["GET"]),
+    });
+    vi.mocked(headCapabilities).mockResolvedValue({
+      methods: new Set(["GET"]),
+      editable: new Set(["disable"]),
+    });
+    vi.mocked(api.disablePlugin).mockResolvedValue(undefined as never);
+
+    const { user, input } = open();
+
+    await user.type(input, "disable plugin");
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("option", { name: "a/one:latest" }));
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("option", { name: "b/two:latest" }));
+    await user.click(await screen.findByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith("b/two:latest"));
+    expect(api.disablePlugin).not.toHaveBeenCalledWith("a/one:latest");
+  });
+
+  it("goes back to searching after a step-less action is cancelled", async () => {
+    vi.mocked(headCapabilities).mockResolvedValue({
+      methods: new Set(["GET"]),
+      editable: new Set(["rotate-token"]),
+    });
+
+    const { user, input } = open();
+
+    await user.type(input, "rotate worker token");
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(input).toHaveAttribute("placeholder", "Search resources…");
+
+    await user.type(input, "web");
+
+    await waitFor(() =>
+      expect(api.search).toHaveBeenCalledWith("web", undefined, expect.anything()),
+    );
+  });
+
   it("opens the annotation form where the caller may annotate, and says so where not", async () => {
     const opened = vi.fn<() => void>();
 
