@@ -34,6 +34,21 @@ func PresentHistory(
 	return named
 }
 
+// ReadTimeline lists q for one caller: its text filters find a task by the
+// name its row shows, and present names the entries returned from the same
+// lookups. Present only what is returned; each name takes the cache's lock.
+func ReadTimeline(
+	c *cache.Cache,
+	q cache.HistoryQuery,
+	canRead func(resource string) bool,
+) ([]cache.HistoryEntry, func([]cache.HistoryEntry) []cache.HistoryEntry) {
+	q.TaskName = ReadableTaskNames(c, canRead)
+
+	return c.Timeline(q), func(entries []cache.HistoryEntry) []cache.HistoryEntry {
+		return PresentHistory(c, entries, q.TaskName)
+	}
+}
+
 // ReadableTaskNames names a task entry for one caller as ReadableTaskName
 // does, from the replica the entry recorded once Swarm has pruned the task. It
 // remembers each name, since every lookup takes the cache's read lock and a
