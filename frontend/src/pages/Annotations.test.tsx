@@ -19,6 +19,7 @@ vi.mock("../api/client", async (importOriginal) => {
     ...original,
     api: {
       annotationsPath: original.api.annotationsPath,
+      annotationTagsPath: original.api.annotationTagsPath,
       annotationsPage: vi.fn<() => Promise<Page<Annotation>>>(),
       annotationTagsPage: vi.fn<() => Promise<Page<AnnotationTag>>>(),
       annotation: vi.fn<typeof original.api.annotation>(),

@@ -752,17 +752,28 @@ export interface Page<T> {
 
 export type HistoryPage = Page<HistoryEntry>;
 
+/**
+ * Writes a tag filter into a query: `tag` once for each, and `matchAny` only
+ * while it widens two or more.
+ */
+export function setTagParams(params: URLSearchParams, tags: string[], matchAny: boolean) {
+  params.delete("tag");
+  params.delete("matchAny");
+
+  for (const tag of tags) {
+    params.append("tag", tag);
+  }
+
+  if (matchAny && tags.length > 1) {
+    params.set("matchAny", "true");
+  }
+}
+
 /** The path of the first `/annotations` page for these filters. */
 function annotationsPath(filters: AnnotationFilters): string {
   const queryParams = new URLSearchParams();
 
-  for (const tag of filters.tags ?? []) {
-    queryParams.append("tag", tag);
-  }
-
-  if (filters.matchAny && (filters.tags?.length ?? 0) > 1) {
-    queryParams.set("matchAny", "true");
-  }
+  setTagParams(queryParams, filters.tags ?? [], filters.matchAny ?? false);
 
   for (const author of filters.authors ?? []) {
     queryParams.append("author", author);
@@ -781,6 +792,13 @@ function annotationsPath(filters: AnnotationFilters): string {
   return `/annotations${query ? `?${query}` : ""}`;
 }
 
+/**
+ * The path of the first `/annotations/tags` page matching `q`.
+ */
+function annotationTagsPath(q: string, limit: number): string {
+  return `/annotations/tags?${new URLSearchParams({ limit: String(limit), ...(q ? { q } : {}) }).toString()}`;
+}
+
 /** The path of the first `/history` page for these filters. */
 function historyPath(
   params?:
@@ -789,6 +807,8 @@ function historyPath(
         resourceId?: string | undefined;
         search?: string | undefined;
         kind?: string | undefined;
+        tags?: string[] | undefined;
+        matchAny?: boolean | undefined;
         since?: string | undefined;
         until?: string | undefined;
         tasks?: boolean | undefined;
@@ -813,6 +833,8 @@ function historyPath(
   if (params?.kind) {
     queryParams.set("kind", params.kind);
   }
+
+  setTagParams(queryParams, params?.tags ?? [], params?.matchAny ?? false);
 
   if (params?.since) {
     queryParams.set("since", params.since);
@@ -1163,6 +1185,7 @@ export const api = {
   annotationsPath,
   annotationsPage: (path: string, signal?: AbortSignal) =>
     fetchPage<Annotation>(path, schema.annotationSchema, signal),
+  annotationTagsPath,
   annotationTagsPage: (path: string, signal?: AbortSignal) =>
     fetchPage<AnnotationTag>(path, schema.annotationTagSchema, signal),
   topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),

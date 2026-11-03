@@ -1,6 +1,7 @@
 import AnnotationMenu from "./AnnotationMenu";
 import { ApiError } from "@/api/client";
 import type { Annotation } from "@/api/types";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +21,7 @@ vi.mock("@/api/client", async (importOriginal) => {
       ...original.api,
       annotation: (id: number) => readAnnotation(id),
       deleteAnnotation: (id: number, etag?: string) => deleteAnnotation(id, etag),
+      annotationTagsPage: () => Promise.resolve({ items: [] }),
     },
   };
 });
@@ -110,6 +112,7 @@ describe("AnnotationMenu", () => {
         id={7}
         onActiveChange={() => {}}
       />,
+      { wrapper: createWrapper(createTestQueryClient(), { withRouter: false }) },
     );
     await user.click(screen.getByRole("button", { name: "Note actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));

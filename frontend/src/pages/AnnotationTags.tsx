@@ -19,16 +19,11 @@ const tagLimit = 200;
 export default function AnnotationTags() {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
 
-  const query = new URLSearchParams({
-    limit: String(tagLimit),
-    ...(debouncedSearch ? { q: debouncedSearch } : {}),
-  });
-
   const { data, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =
     useInfiniteQuery({
       queryKey: ["annotations", "tags", debouncedSearch],
       queryFn: ({ pageParam, signal }) => api.annotationTagsPage(pageParam, signal),
-      initialPageParam: `/annotations/tags?${query.toString()}`,
+      initialPageParam: api.annotationTagsPath(debouncedSearch, tagLimit),
       getNextPageParam: ({ next }) => next,
       placeholderData: keepPreviousData,
     });

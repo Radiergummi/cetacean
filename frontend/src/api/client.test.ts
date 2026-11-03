@@ -1,4 +1,4 @@
-import { api, currentETag } from "./client";
+import { api, currentETag, setTagParams } from "./client";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockFetch = vi.fn<(...args: unknown[]) => unknown>();
@@ -713,5 +713,17 @@ describe("annotation capabilities", () => {
     expect(url).toBe("/annotations/7");
     expect(init.method).toBe("DELETE");
     expect(new Headers(init.headers).get("If-Match")).toBe('"12"');
+  });
+});
+
+describe("setTagParams", () => {
+  it("repeats tag and sets matchAny only for two or more", () => {
+    const params = new URLSearchParams("q=x&tag=old&matchAny=true");
+
+    setTagParams(params, ["deploy"], true);
+    expect(params.toString()).toBe("q=x&tag=deploy");
+
+    setTagParams(params, ["deploy", "db"], true);
+    expect(params.toString()).toBe("q=x&tag=deploy&tag=db&matchAny=true");
   });
 });
