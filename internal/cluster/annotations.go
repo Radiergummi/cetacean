@@ -388,7 +388,7 @@ func validateAnnotation(a cache.Annotation) error {
 	}
 
 	if !a.Until.IsZero() && !a.Until.After(a.Timestamp) {
-		return invalidAnnotation("until", "must be after timestamp")
+		return invalidAnnotation("until", "must be after the start")
 	}
 
 	if len(a.Tags) > MaxAnnotationTags {

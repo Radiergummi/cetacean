@@ -188,7 +188,7 @@ func callConditional(
 
 // Every tool editing an existing record takes `version`, optionally, and no
 // other tool does: a removal names no version to the engine, and a create
-// has none to name.
+// has none to name. An annotation's is Cetacean's own, checked on removal too.
 func TestEditingToolsTakeAnOptionalVersion(t *testing.T) {
 	srv := newToolTestServer(t, cache.New(nil), &fakeWriteClient{}, config.OpsImpactful)
 
@@ -201,6 +201,14 @@ func TestEditingToolsTakeAnOptionalVersion(t *testing.T) {
 		name := td.tool.Name
 		_, has := td.tool.InputSchema.Properties["version"]
 		kind, edits := editing[name]
+
+		if name == "update_annotation" || name == "delete_annotation" {
+			if !has || slices.Contains(td.tool.InputSchema.Required, "version") {
+				t.Errorf("%s: takes version = %v, want it optional", name, has)
+			}
+
+			continue
+		}
 
 		if has != edits {
 			t.Errorf("%s: takes version = %v, want %v", name, has, edits)

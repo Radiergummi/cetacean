@@ -52,6 +52,10 @@ type TimelineEntry struct {
 
 	// Resources are what an annotation is about; none for a cluster-wide one.
 	Resources []cache.AnnotationResource `json:"resources,omitempty"`
+
+	// ID and Version address an annotation, for the tools that edit one.
+	ID      uint64 `json:"id,omitempty"`
+	Version uint64 `json:"version,omitempty"`
 }
 
 // timelineTimeFormat is RFC 3339 at fixed nanosecond width, the layout

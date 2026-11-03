@@ -159,6 +159,9 @@ Cetacean's vocabulary, that is the finding — record the phrasing that failed.
 | 51 | Promote / demote a node. | ✓ | The resulting role | `update_node` section `role` |
 | 52 | Label node N so demo_stuck can schedule. | ✓ | The resulting labels, and that the task then placed | `update_node_labels` → `watch` |
 | 80 | Note that we're starting a load test on checkout, for the next half hour. | ✓ | The note, as a range on the service, attributed to the caller | `find` → `add_annotation` |
+| 82 | The load test ended early; fix the note. | ✓ | The same note, its range now ending when it did, with the caller as its editor | `get_events` (kinds `annotation`, tags) → `update_annotation` with `version` |
+| 83 | Delete the duplicate deploy note I left this morning. | ✓ | Which note was removed, after naming the one kept | `get_events` (authors, tags) → `delete_annotation` |
+| 84 | Show me every deploy note on the shop stack this week. | ✓ | The notes on the stack and its services, tag spelled as stored | `cetacean://annotations/tags` → `get_events` (resource, tags, since) |
 
 ---
 
