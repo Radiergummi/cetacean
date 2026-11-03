@@ -34,6 +34,7 @@ export default function ClusterOverview() {
   } = useQuery({
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
+    select: ({ data }) => data,
   });
 
   const { data: history = [], isLoading: historyLoading } = useQuery({
@@ -49,7 +50,10 @@ export default function ClusterOverview() {
     };
   }, [snapshot]);
 
-  useDebouncedInvalidation("/events", [["cluster"], ["history"]], 2_000);
+  useDebouncedInvalidation("/events", [["cluster"]], {
+    timelineKeys: [["history"]],
+    delay: 2_000,
+  });
 
   const monitoring = useMonitoringStatus();
   const hasPrometheus = isPrometheusReady(monitoring);

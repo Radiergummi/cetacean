@@ -365,7 +365,7 @@ export default function DiskUsageSection({ nodeId }: { nodeId?: string }) {
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
     enabled: !!nodeId,
-    select: (snapshot) => snapshot.localNodeID,
+    select: ({ data: snapshot }) => snapshot.localNodeID,
   });
 
   const visible = !nodeId || (!!localNodeID && localNodeID === nodeId);

@@ -285,7 +285,7 @@ export default function Topology() {
   // A network that has since gone, or was never readable, selects nothing.
   const selectedNetwork = networks.some(({ id }) => id === network) ? network : null;
 
-  useDebouncedInvalidation("/events", [["topology"]], 2_000);
+  useDebouncedInvalidation("/events", [["topology"]], { delay: 2_000 });
 
   return (
     <div>

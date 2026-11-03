@@ -3,6 +3,7 @@ import type { CollectionResponse } from "../api/types";
 import { useLatestRef } from "./useLatestRef";
 import { type SSEEvent, useResourceStream } from "./useResourceStream";
 import { useStableMethods } from "./useStableMethods";
+import { isResourceEvent } from "@/lib/resourceEvents";
 import type { InfiniteData } from "@tanstack/react-query";
 import { keepPreviousData, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -147,8 +148,9 @@ export function useSwarmQuery<T>({
           }, refetchDelay);
         };
 
-        // Gaps and annotations are not list rows, so no row moved.
-        if (event.type === "gap" || event.type === "annotation") {
+        // Only a resource's event can move a row: not a gap, an annotation,
+        // or a kind a later server adds.
+        if (event.type !== "sync" && !isResourceEvent(event)) {
           return;
         }
 

@@ -518,19 +518,6 @@ export async function headCapabilities(path: string): Promise<Capabilities> {
   };
 }
 
-/**
- * What annotations the caller may create: any, as `/annotations` allows a
- * `POST`, and cluster-wide ones, as `/cluster` links `/annotations`.
- */
-async function fetchAnnotationCapabilities(): Promise<{ create: boolean; clusterWide: boolean }> {
-  const [annotations, cluster] = await Promise.all([
-    headCapabilities("/annotations"),
-    headCapabilities("/cluster"),
-  ]);
-
-  return { create: annotations.methods.has("POST"), clusterWide: cluster.annotatable ?? false };
-}
-
 export interface LogLine {
   timestamp: string;
   message: string;
@@ -762,6 +749,9 @@ export interface Page<T> {
 
   /** The path of the next page, while the server says one exists. */
   next?: string | undefined;
+
+  /** Whether the caller may create an annotation: the list links `/annotations` for editing. */
+  annotatable?: boolean | undefined;
 }
 
 export type HistoryPage = Page<HistoryEntry>;
@@ -948,14 +938,15 @@ async function fetchPage<T>(
   checkShape(path, schema.collectionOf(itemSchema), data);
 
   const target = linkTarget(response.headers.get("Link"), "next");
+  const annotatable = annotatableOf(response);
 
   if (target === undefined) {
-    return { items: data.items };
+    return { items: data.items, annotatable };
   }
 
   const next = new URL(target, response.url || window.location.href);
 
-  return { items: data.items, next: stripBasePath(next.pathname) + next.search };
+  return { items: data.items, next: stripBasePath(next.pathname) + next.search, annotatable };
 }
 
 /** Reads the total out of an unsatisfied range response's Content-Range header. */
@@ -982,10 +973,7 @@ export const api = {
     ).then(({ data }) => data),
   whoami: () =>
     fetchJSON<Identity>("/profile", undefined, schema.identitySchema).then(({ data }) => data),
-  cluster: () =>
-    fetchJSON<ClusterSnapshot>("/cluster", undefined, schema.clusterSchema).then(
-      ({ data }) => data,
-    ),
+  cluster: () => fetchJSON<ClusterSnapshot>("/cluster", undefined, schema.clusterSchema),
   resync: () =>
     mutationFetch<{ status: string; durationMs?: number }>(
       "/-/resync",
@@ -1260,7 +1248,6 @@ export const api = {
       signal,
       schema.searchSchema,
     ).then(({ data }) => data),
-  annotationCapabilities: fetchAnnotationCapabilities,
   createAnnotation: (body: NewAnnotation) =>
     mutationFetch<HistoryEntry>("/annotations", "POST", body, "application/json"),
   annotation: (id: number, signal?: AbortSignal) =>

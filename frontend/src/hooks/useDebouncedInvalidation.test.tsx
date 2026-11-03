@@ -28,7 +28,7 @@ describe("useDebouncedInvalidation", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    renderHook(() => useDebouncedInvalidation("/services/s1", [["service", "s1"]], 500), {
+    renderHook(() => useDebouncedInvalidation("/services/s1", [["service", "s1"]]), {
       wrapper: createWrapper(client),
     });
 
@@ -46,13 +46,9 @@ describe("useDebouncedInvalidation", () => {
 
     renderHook(
       () =>
-        useDebouncedInvalidation(
-          "/tasks",
-          [["job-outcomes"]],
-          500,
-          undefined,
-          ({ id }) => id === "wanted",
-        ),
+        useDebouncedInvalidation("/tasks", [["job-outcomes"]], {
+          relevant: ({ id }) => id === "wanted",
+        }),
       { wrapper: createWrapper(client) },
     );
 
@@ -71,7 +67,7 @@ describe("useDebouncedInvalidation", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    renderHook(() => useDebouncedInvalidation("/services/s1", [["service", "s1"]], 500), {
+    renderHook(() => useDebouncedInvalidation("/services/s1", [["service", "s1"]]), {
       wrapper: createWrapper(client),
     });
 
@@ -85,5 +81,48 @@ describe("useDebouncedInvalidation", () => {
     vi.advanceTimersByTime(200);
 
     expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("refetches only the timeline on a note or a gap", () => {
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    renderHook(
+      () =>
+        useDebouncedInvalidation("/services/s1", [["service", "s1"]], {
+          timelineKeys: [["history", "s1"]],
+        }),
+      { wrapper: createWrapper(client) },
+    );
+
+    listener?.({ type: "annotation", action: "create", id: "7" });
+    listener?.({ type: "gap", action: "create", id: "" });
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history", "s1"] });
+
+    invalidate.mockClear();
+    listener?.({ type: "annotation", action: "create", id: "8" });
+    listener?.(event);
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["service", "s1"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history", "s1"] });
+  });
+
+  it("does nothing for an event of a kind it does not know", () => {
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    renderHook(() => useDebouncedInvalidation("/events", [["cluster"]]), {
+      wrapper: createWrapper(client),
+    });
+
+    listener?.({ type: "annotation", action: "create", id: "7" });
+    listener?.({ type: "forecast", action: "create", id: "1" });
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => ({ create: true, clusterWide: false }),
+  useAnnotationCapabilities: () => ({ clusterWide: false }),
 }));
 
 const service = { type: "service", id: "svc1", name: "web" } as const;

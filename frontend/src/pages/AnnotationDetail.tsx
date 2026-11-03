@@ -26,7 +26,10 @@ export default function AnnotationDetail() {
       !(failure instanceof ApiError && failure.status === 404) && count < 2,
   });
 
-  useDebouncedInvalidation("/events", [["annotations", "detail", noteId]], 1_000);
+  useDebouncedInvalidation("/events", [], {
+    timelineKeys: [["annotations", "detail", noteId]],
+    delay: 1_000,
+  });
 
   const breadcrumbs = [
     { label: "History", to: "/history" },

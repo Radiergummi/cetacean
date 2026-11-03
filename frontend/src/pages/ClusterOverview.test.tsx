@@ -68,22 +68,25 @@ describe("ClusterOverview", () => {
 
   it("renders snapshot data", async () => {
     mockCluster.mockResolvedValue({
-      nodeCount: 3,
-      serviceCount: 12,
-      taskCount: 47,
-      stackCount: 8,
-      tasksByState: { running: 39, failed: 2 },
-      nodesReady: 3,
-      nodesDown: 0,
-      nodesDraining: 0,
-      servicesConverged: 12,
-      servicesDegraded: 0,
-      reservedCPU: 0,
-      reservedMemory: 0,
-      totalCPU: 8,
-      totalMemory: 17179869184,
-      quorum: { managers: 3, reachable: 3, size: 2, held: true, canLose: 1 },
-      prometheusConfigured: true,
+      allowedMethods: new Set(["GET", "HEAD"]),
+      data: {
+        nodeCount: 3,
+        serviceCount: 12,
+        taskCount: 47,
+        stackCount: 8,
+        tasksByState: { running: 39, failed: 2 },
+        nodesReady: 3,
+        nodesDown: 0,
+        nodesDraining: 0,
+        servicesConverged: 12,
+        servicesDegraded: 0,
+        reservedCPU: 0,
+        reservedMemory: 0,
+        totalCPU: 8,
+        totalMemory: 17179869184,
+        quorum: { managers: 3, reachable: 3, size: 2, held: true, canLose: 1 },
+        prometheusConfigured: true,
+      },
     });
 
     render(<ClusterOverview />, { wrapper });

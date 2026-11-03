@@ -27,7 +27,7 @@ vi.mock("../api/client", async (importOriginal) => {
 });
 
 vi.mock("../hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => ({ create: false, clusterWide: false }),
+  useAnnotationCapabilities: () => ({ clusterWide: false }),
 }));
 
 import { api } from "../api/client";

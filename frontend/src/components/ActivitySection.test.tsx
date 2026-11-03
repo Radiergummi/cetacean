@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => ({ create: true, clusterWide: false }),
+  useAnnotationCapabilities: () => ({ clusterWide: false }),
 }));
 
 describe("ActivitySection", () => {

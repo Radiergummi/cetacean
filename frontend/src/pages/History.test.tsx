@@ -17,10 +17,8 @@ vi.mock("../api/client", async (importOriginal) => {
   };
 });
 
-const capabilities = vi.hoisted(() => ({ create: false, clusterWide: false }));
-
 vi.mock("../hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => capabilities,
+  useAnnotationCapabilities: () => ({ clusterWide: false }),
 }));
 
 import { api } from "../api/client";
@@ -137,16 +135,14 @@ describe("History", () => {
   });
 
   it("offers Add annotation when the caller may create one", async () => {
-    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")] });
-    capabilities.create = true;
+    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")], annotatable: true });
     renderPage();
 
     expect(await screen.findByRole("button", { name: "Add annotation" })).toBeInTheDocument();
   });
 
   it("offers no Add annotation to a caller who may not create one", async () => {
-    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")] });
-    capabilities.create = false;
+    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")], annotatable: false });
     renderPage();
 
     expect(await screen.findByText("web")).toBeInTheDocument();

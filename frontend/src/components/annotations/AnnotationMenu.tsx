@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { getErrorMessage } from "@/lib/utils";
 import { Menu } from "@base-ui/react/menu";
 import { Ellipsis } from "lucide-react";
@@ -27,9 +28,6 @@ type Loaded =
   | { status: "loading" }
   | { status: "failed"; message: string }
   | { status: "ready"; edited: EditedNote; methods: Set<string> };
-
-const itemClass =
-  "flex w-full cursor-default rounded-sm px-2 py-1.5 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:text-muted-foreground";
 
 /**
  * A note card's "…" menu. Opening it reads the note, whose `Allow` decides
@@ -147,56 +145,35 @@ export default function AnnotationMenu({
           <Ellipsis className="size-4" />
         </Menu.Trigger>
 
-        <Menu.Portal>
-          <Menu.Positioner
-            align="end"
-            sideOffset={4}
-            className="z-50"
-          >
-            <Menu.Popup className="min-w-36 rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-hidden">
-              {loaded.status === "ready" ? (
-                <>
-                  {loaded.methods.has("PATCH") && (
-                    <Menu.Item
-                      className={itemClass}
-                      onClick={() => setEditing(loaded.edited)}
-                    >
-                      Edit
-                    </Menu.Item>
-                  )}
-
-                  {loaded.methods.has("DELETE") && (
-                    <Menu.Item
-                      className={`${itemClass} text-status-danger`}
-                      onClick={() => {
-                        setDeleteError(null);
-                        setDeleting(loaded.edited);
-                      }}
-                    >
-                      Delete
-                    </Menu.Item>
-                  )}
-
-                  {!loaded.methods.has("PATCH") && !loaded.methods.has("DELETE") && (
-                    <Menu.Item
-                      disabled
-                      className={itemClass}
-                    >
-                      You can't change this note
-                    </Menu.Item>
-                  )}
-                </>
-              ) : (
-                <Menu.Item
-                  disabled
-                  className={itemClass}
-                >
-                  {loaded.status === "loading" ? "Loading…" : loaded.message}
-                </Menu.Item>
+        <MenuContent>
+          {loaded.status === "ready" ? (
+            <>
+              {loaded.methods.has("PATCH") && (
+                <MenuItem onClick={() => setEditing(loaded.edited)}>Edit</MenuItem>
               )}
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
+
+              {loaded.methods.has("DELETE") && (
+                <MenuItem
+                  className="text-status-danger"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeleting(loaded.edited);
+                  }}
+                >
+                  Delete
+                </MenuItem>
+              )}
+
+              {!loaded.methods.has("PATCH") && !loaded.methods.has("DELETE") && (
+                <MenuItem disabled>You can't change this note</MenuItem>
+              )}
+            </>
+          ) : (
+            <MenuItem disabled>
+              {loaded.status === "loading" ? "Loading…" : loaded.message}
+            </MenuItem>
+          )}
+        </MenuContent>
       </Menu.Root>
 
       <Dialog
