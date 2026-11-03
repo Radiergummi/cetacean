@@ -154,7 +154,7 @@ func TestTimeline_FiltersAnnotations(t *testing.T) {
 		},
 		{"a type", HistoryQuery{Type: EventNode}, []uint64{backdatedRange, clusterWide, onNode}},
 		{"a tag", HistoryQuery{Tags: []string{"load-test"}}, []uint64{onService}},
-		{"search on the text", HistoryQuery{NameContains: "load"}, []uint64{onService}},
+		{"search on the text", HistoryQuery{TitleContains: "load"}, []uint64{onService}},
 		{
 			"a window overlapping the range",
 			HistoryQuery{
@@ -490,10 +490,13 @@ func TestTimeline_SearchFindsWhatARowShows(t *testing.T) {
 		return c.history.Append(e)
 	}
 	task := record(HistoryEntry{
-		Type: EventTask, Action: "update", ResourceID: "x7k2task", Name: "web.1",
+		Type: EventTask, Action: "update", ResourceID: "x7k2task", Name: "x7k2task",
 	})
 	stacked := record(HistoryEntry{
 		Type: EventService, Action: "update", ResourceID: "svc9", Name: "shop_checkout",
+	})
+	unstacked := record(HistoryEntry{
+		Type: EventConfig, Action: "update", ResourceID: "cfg1", Name: "_private",
 	})
 	byAlice := record(HistoryEntry{
 		Type: EventVolume, Action: "remove", ResourceID: "data", Name: "data",
@@ -506,7 +509,11 @@ func TestTimeline_SearchFindsWhatARowShows(t *testing.T) {
 
 	for search, want := range map[string][]uint64{
 		"X7K2":          {task},
+		"7k2":           nil,
+		"shop/web.1":    {task},
 		"shop/checkout": {tagged, stacked},
+		"/private":      nil,
+		"_private":      {unstacked},
 		"alice":         {byAlice},
 		"u-17":          {byAlice},
 		"volume":        {byAlice},
@@ -515,9 +522,28 @@ func TestTimeline_SearchFindsWhatARowShows(t *testing.T) {
 	} {
 		got := timelineIDs(c.Timeline(HistoryQuery{
 			Search: search, Kinds: []string{KindChange, KindAnnotation},
+			TaskName: func(id string) string {
+				if id == "x7k2task" {
+					return "shop_web.1"
+				}
+
+				return id
+			},
 		}))
 		if !slices.Equal(got, want) {
 			t.Errorf("search %q = %v, want %v", search, got, want)
 		}
+	}
+}
+
+func TestHistoryQuery_MatchersFoldTheirOwnSearch(t *testing.T) {
+	q := HistoryQuery{Search: "X7K2"}
+
+	if !q.matches(HistoryEntry{Kind: KindChange, Type: EventTask, ResourceID: "x7k2task"}) {
+		t.Error("a change missed a search in capitals, called without a walk to fold it")
+	}
+
+	if !(HistoryQuery{TitleContains: "LOAD"}).matchesAnnotation(Annotation{Text: "Load test"}, "") {
+		t.Error("an annotation missed a title filter in capitals")
 	}
 }

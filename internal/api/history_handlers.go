@@ -200,6 +200,7 @@ func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 // timeline lists query as the caller sees it, through cluster.PresentHistory.
 func (h *Handlers) timeline(r *http.Request, query cache.HistoryQuery) []cache.HistoryEntry {
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+	query.TaskName = cluster.ReadableTaskNames(h.cache, canRead)
 
 	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), canRead)
 }

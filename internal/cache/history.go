@@ -59,16 +59,23 @@ type HistoryEntry struct {
 }
 
 type HistoryQuery struct {
-	Type         EventType
-	ResourceID   string
-	BeforeID     uint64 // keeps the entries below it; zero means unbounded
-	NameContains string // case-insensitive substring match on Name
+	Type       EventType
+	ResourceID string
+	BeforeID   uint64 // keeps the entries below it; zero means unbounded
+
+	// TitleContains narrows, ignoring case, to a change whose name holds it or
+	// an annotation whose text does: what heads the row.
+	TitleContains string
 
 	// Search narrows to the entries that mention it, ignoring case, anywhere a
-	// timeline row shows: a change's name, ID, type, action and actor, or an
-	// annotation's text, tags, resources and author. A gap passes.
+	// timeline row shows: a change's name, ID prefix, type, action and actor, or
+	// an annotation's text, tags, resources and author. A gap passes.
 	Search string
 	Limit  int
+
+	// TaskName, when set, names a task as its row does, for the text filters
+	// above: a task records its ID as its name. It may take the cache's lock.
+	TaskName func(taskID string) string
 
 	// Types narrows to entries of any of these types, where Type narrows to
 	// exactly one; empty means every type, and both set means the intersection.
@@ -377,6 +384,8 @@ func (e HistoryEntry) end() time.Time {
 }
 
 func (h *History) List(q HistoryQuery) []HistoryEntry {
+	q = q.folded()
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -496,40 +505,56 @@ func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 		return false
 	}
 
-	if q.NameContains != "" && !strings.Contains(
-		strings.ToLower(e.Name), strings.ToLower(q.NameContains),
-	) {
+	if q.TitleContains == "" && q.Search == "" {
+		return true
+	}
+
+	q = q.folded()
+
+	name := e.Name
+	if e.Type == EventTask && q.TaskName != nil {
+		name = q.TaskName(e.ResourceID)
+	}
+
+	if q.TitleContains != "" && !strings.Contains(strings.ToLower(name), q.TitleContains) {
 		return false
 	}
 
-	return q.Search == "" || q.mentions(append(
-		actorFields(e.Actor), e.Name, stackDisplay(e.Name), e.ResourceID, string(e.Type), e.Action,
-	)...)
+	return q.Search == "" || q.mentionsName(name) || strings.HasPrefix(e.ResourceID, q.Search) ||
+		q.mentions(string(e.Type)) || q.mentions(e.Action) || q.mentionsActor(e.Actor)
 }
 
-// mentions reports whether any of fields holds q.Search, ignoring case. A
-// caller tests for an empty Search first, to spare building the fields.
-func (q HistoryQuery) mentions(fields ...string) bool {
-	needle := strings.ToLower(q.Search)
+// folded lowercases q's text filters. A walk folds once, on entry, so the
+// matchers' own folding finds nothing to change and allocates nothing.
+func (q HistoryQuery) folded() HistoryQuery {
+	q.TitleContains, q.Search = strings.ToLower(q.TitleContains), strings.ToLower(q.Search)
 
-	return slices.ContainsFunc(fields, func(field string) bool {
-		return strings.Contains(strings.ToLower(field), needle)
-	})
+	return q
 }
 
-// actorFields are what a reader may search an actor by.
-func actorFields(actor *Actor) []string {
-	if actor == nil {
-		return nil
+// mentions reports whether field holds q.Search, which is folded.
+func (q HistoryQuery) mentions(field string) bool {
+	return strings.Contains(strings.ToLower(field), q.Search)
+}
+
+// mentionsName reports whether q.Search is in name as stored or as shown.
+func (q HistoryQuery) mentionsName(name string) bool {
+	return q.mentions(name) || strings.Contains(q.Search, "/") && q.mentions(stackDisplay(name))
+}
+
+// mentionsActor reports whether q.Search names actor.
+func (q HistoryQuery) mentionsActor(actor *Actor) bool {
+	return actor != nil && (q.mentions(actor.Name) || q.mentions(actor.Subject))
+}
+
+// stackDisplay is a name as the dashboard's timeline shows it: split at its
+// first underscore, past the first character, into a stack and the rest.
+func stackDisplay(name string) string {
+	if i := strings.IndexByte(name, '_'); i > 0 {
+		return name[:i] + "/" + name[i+1:]
 	}
 
-	return []string{actor.Name, actor.Subject}
-}
-
-// stackDisplay is a stack's resource name as the dashboard shows it, its
-// stack and name split by a slash, so what a reader sees is what they find.
-func stackDisplay(name string) string {
-	return strings.Replace(name, "_", "/", 1)
+	return name
 }
 
 // listByResource answers a query already known to name a resource, taking the

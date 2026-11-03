@@ -346,13 +346,13 @@ func TestHistoryListBeforeIDWithTypeFilter(t *testing.T) {
 	}
 }
 
-func TestHistoryListNameContains(t *testing.T) {
+func TestHistoryListTitleContains(t *testing.T) {
 	h := NewHistory(10)
 	h.Append(HistoryEntry{Type: EventService, Name: "web-frontend"})
 	h.Append(HistoryEntry{Type: EventService, Name: "api-backend"})
 	h.Append(HistoryEntry{Type: EventService, Name: "WEB-PROXY"})
 
-	result := h.List(HistoryQuery{NameContains: "web", Limit: 10})
+	result := h.List(HistoryQuery{TitleContains: "web", Limit: 10})
 	if len(result) != 2 {
 		t.Fatalf("got %d entries, want 2", len(result))
 	}
@@ -973,7 +973,7 @@ func TestGapPassesEveryResourceFilter(t *testing.T) {
 	for _, q := range []HistoryQuery{
 		{Type: EventNode},
 		{ResourceID: "other"},
-		{NameContains: "nothing"},
+		{TitleContains: "nothing"},
 		{Types: []EventType{EventTask}},
 		{Kinds: []string{KindGap}},
 		{Kinds: []string{KindGap}, ResourceID: "svc1"},

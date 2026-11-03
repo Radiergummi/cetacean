@@ -14,9 +14,7 @@ func PresentHistory(
 	named := make([]cache.HistoryEntry, len(entries))
 	copy(named, entries)
 
-	// A restarting service produces runs of events for the same few tasks, and
-	// each lookup takes the cache's read lock, so resolved names are reused.
-	names := make(map[string]string)
+	taskName := ReadableTaskNames(c, canRead)
 
 	for i, e := range named {
 		if e.Annotation != nil {
@@ -28,16 +26,30 @@ func PresentHistory(
 			continue
 		}
 
-		name, ok := names[e.ResourceID]
-		if !ok {
-			name = ReadableTaskName(c, e.ResourceID, canRead)
-			names[e.ResourceID] = name
-		}
-
-		named[i].Name = name
+		named[i].Name = taskName(e.ResourceID)
 	}
 
 	return named
+}
+
+// ReadableTaskNames is ReadableTaskName for one caller, remembering each name:
+// a restarting service produces runs of events for the same few tasks, and
+// each lookup takes the cache's read lock. It is not safe for concurrent use.
+func ReadableTaskNames(
+	c *cache.Cache,
+	canRead func(resource string) bool,
+) func(taskID string) string {
+	names := make(map[string]string)
+
+	return func(taskID string) string {
+		name, ok := names[taskID]
+		if !ok {
+			name = ReadableTaskName(c, taskID, canRead)
+			names[taskID] = name
+		}
+
+		return name
+	}
 }
 
 // ReadableTaskName resolves one task ID to "<service>.<slot>", naming the

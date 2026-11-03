@@ -34,9 +34,10 @@ export function useTagSuggestions(typed: string, chosen: string[]) {
     staleTime: 30_000,
   });
 
+  // The fetched list trails the typing, so it is narrowed to what is typed now.
   const suggestions = (data?.items ?? [])
     .map(({ tag }) => tag)
-    .filter((tag) => !chosen.includes(tag));
+    .filter((tag) => tag.startsWith(normalize(typed)) && !chosen.includes(tag));
 
   const picked = ({ nativeEvent, target: { value } }: ChangeEvent<HTMLInputElement>) =>
     (!(nativeEvent instanceof InputEvent) || nativeEvent.inputType === "insertReplacementText") &&

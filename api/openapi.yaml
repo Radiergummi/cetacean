@@ -5806,7 +5806,8 @@ paths:
           in: query
           description: >-
             Case-insensitive substring search on what an entry shows: a change's
-            resource name (also as stack/name), ID, type, action and actor, or an
+            resource name (also as stack/name, and a task's as service.slot), the
+            start of its ID, its type, action and actor, or an
             annotation's text, tags, resource names and author
           schema:
             type: string

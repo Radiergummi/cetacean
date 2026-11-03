@@ -387,6 +387,8 @@ func (c *Cache) stackMembers(stack string) []string {
 // q.BeforeID. ReadableAnnotation runs outside the lock, so the walk takes its
 // matches in batches, each resuming below the last annotation it visited.
 func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
+	q = q.folded()
+
 	var stack string
 	if t := q.subjectType(); t == "" || t == EventService {
 		stack = c.serviceStack(q.ResourceID)
@@ -467,14 +469,13 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
-	if q.NameContains != "" && !strings.Contains(
-		strings.ToLower(a.Text), strings.ToLower(q.NameContains),
-	) {
-		return false
-	}
+	if q.TitleContains != "" || q.Search != "" {
+		q = q.folded()
 
-	if q.Search != "" && !q.mentions(annotationFields(a)...) {
-		return false
+		if !strings.Contains(strings.ToLower(a.Text), q.TitleContains) ||
+			q.Search != "" && !q.mentionsAnnotation(a) {
+			return false
+		}
 	}
 
 	if q.ResourceID != "" {
@@ -488,16 +489,13 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		})
 }
 
-// annotationFields are what a reader may search an annotation by.
-func annotationFields(a Annotation) []string {
-	fields := append(actorFields(a.Actor), a.Text)
-	fields = append(fields, a.Tags...)
-
-	for _, r := range a.Resources {
-		fields = append(fields, r.Name, stackDisplay(r.Name))
-	}
-
-	return fields
+// mentionsAnnotation reports whether q.Search is in anything a reader sees of a.
+func (q HistoryQuery) mentionsAnnotation(a Annotation) bool {
+	return q.mentions(a.Text) || slices.ContainsFunc(a.Tags, q.mentions) ||
+		q.mentionsActor(a.Actor) ||
+		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+			return q.mentionsName(r.Name)
+		})
 }
 
 // subjectType is the type of the resource q's ResourceID names, when q says

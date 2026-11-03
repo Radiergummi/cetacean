@@ -1,5 +1,6 @@
 import type { Dataset } from "./dataset";
 import type { HistoryEntry, NewAnnotation } from "@/api/types";
+import { splitStackPrefix } from "@/lib/searchConstants";
 
 const minute = 60_000;
 
@@ -217,6 +218,11 @@ export function filterHistory(
   const mentions = (...fields: (string | undefined)[]) =>
     !search || fields.some((field) => field?.toLowerCase().includes(search));
   const actorFields = ({ actor }: HistoryEntry) => [actor?.name, actor?.subject];
+  const stackDisplay = (name: string) => {
+    const { prefix, name: rest } = splitStackPrefix(name);
+
+    return prefix === null ? name : `${prefix}/${rest}`;
+  };
   const stack = resourceId ? stackOf(resourceId) : undefined;
   const kinds = params.getAll("kind").filter(Boolean);
   const carries = (entry: HistoryEntry) => {
@@ -255,7 +261,7 @@ export function filterHistory(
         mentions(
           entry.text,
           ...(entry.tags ?? []),
-          ...(entry.resources ?? []).flatMap(({ name }) => [name, name.replace("_", "/")]),
+          ...(entry.resources ?? []).flatMap(({ name }) => [name, stackDisplay(name)]),
           ...actorFields(entry),
         ) &&
         (named.length === 0 ||
@@ -280,14 +286,14 @@ export function filterHistory(
     return (
       (!type || entry.type === type || member) &&
       (!resourceId || entry.resourceId === resourceId || member) &&
-      mentions(
+      (mentions(
         entry.name,
-        entry.name.replace("_", "/"),
-        entry.resourceId,
+        stackDisplay(entry.name),
         entry.type,
         entry.action,
         ...actorFields(entry),
-      ) &&
+      ) ||
+        entry.resourceId.startsWith(search ?? "")) &&
       start > sinceTime &&
       start <= untilTime
     );

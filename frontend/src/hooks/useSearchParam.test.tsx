@@ -1,7 +1,7 @@
 import { useSearchParam } from "./useSearchParam";
 import { renderHook, act } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 beforeEach(() => {
@@ -18,6 +18,19 @@ describe("useSearchParam", () => {
     const [input, debounced] = result.current;
     expect(input).toBe("");
     expect(debounced).toBe("");
+  });
+
+  it("drops a write still waiting when the URL changes elsewhere", () => {
+    const { result } = renderHook(() => ({ param: useSearchParam("q"), navigate: useNavigate() }), {
+      wrapper,
+    });
+
+    act(() => result.current.param[2]("typed"));
+    act(() => void result.current.navigate("/?q=back"));
+    act(() => vi.advanceTimersByTime(300));
+
+    expect(result.current.param[1]).toBe("back");
+    expect(result.current.param[0]).toBe("back");
   });
 
   it("updates input immediately but debounces URL param", () => {

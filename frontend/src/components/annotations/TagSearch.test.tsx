@@ -16,8 +16,10 @@ vi.mock("@/api/client", async (importOriginal) => {
       annotationTagsPage: (path: string) =>
         Promise.resolve({
           items: [
+            { tag: "web-prod", count: 5 },
             { tag: "deploy", count: 4 },
             { tag: "db", count: 2 },
+            { tag: "web", count: 1 },
           ].filter(({ tag }) =>
             tag.startsWith(new URL(path, "http://x").searchParams.get("q") ?? ""),
           ),
@@ -94,6 +96,56 @@ describe("TagSearch", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(/lowercase letters/);
     expect(params().getAll("tag")).toEqual(["deploy"]);
+  });
+
+  it("takes a tag typed in full over a longer one used more, and nothing on a bare #", async () => {
+    const { user, input, params } = show();
+
+    await user.type(input, "#web");
+    await screen.findByRole("option", { name: "#web-prod" });
+    await user.keyboard("{Enter}");
+
+    expect(params().getAll("tag")).toEqual(["web"]);
+
+    await user.type(input, "#");
+    await screen.findByRole("option", { name: "#web-prod" });
+    await user.keyboard("{Enter}");
+
+    expect(params().getAll("tag")).toEqual(["web"]);
+  });
+
+  it("types a space before the caret rather than taking the tag at the end", async () => {
+    const { user, input, params } = show();
+
+    await user.type(input, "chekout #dep");
+    await user.type(input, " ", { initialSelectionStart: 4, initialSelectionEnd: 4 });
+
+    expect(input).toHaveValue("chek out #dep");
+    expect(params().getAll("tag")).toEqual([]);
+  });
+
+  it("makes a chip of a # word anywhere a space ends it", async () => {
+    const { user, input, params } = show();
+
+    await user.click(input);
+    await user.paste("#db web");
+
+    expect(params().getAll("tag")).toEqual(["db"]);
+    await waitFor(() => expect(params().get("q")).toBe("web"));
+  });
+
+  it("offers the tags again on focus after a blur closed them", async () => {
+    const { user, input } = show();
+
+    await user.type(input, "#de");
+    await screen.findByRole("option", { name: "#deploy" });
+    await user.click(document.body);
+
+    expect(screen.queryByRole("option", { name: "#deploy" })).not.toBeInTheDocument();
+
+    await user.click(input);
+
+    expect(screen.getByRole("option", { name: "#deploy" })).toBeInTheDocument();
   });
 
   it("offers every tag or any tag once two are set", () => {

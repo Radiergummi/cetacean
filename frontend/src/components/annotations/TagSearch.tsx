@@ -2,8 +2,7 @@ import { parseTag } from "./annotationFields";
 import { useTagFilterParams } from "./useTagFilterParams";
 import { useTagSuggestions } from "./useTagSuggestions";
 import SegmentedControl from "@/components/SegmentedControl";
-import { useSearchParam } from "@/hooks/useSearchParam";
-import { useUrlParam } from "@/hooks/useUrlParam";
+import { useDebouncedUrlParam } from "@/hooks/useSearchParam";
 import { Search, X } from "lucide-react";
 import { useId, useState, type KeyboardEvent } from "react";
 
@@ -13,13 +12,51 @@ import { useId, useState, type KeyboardEvent } from "react";
 const tagToken = /(?:^|\s)#(\S*)$/;
 
 /**
- * The input without the tag being typed or a lone `#`: the free-text search.
+ * A tag typed out in full: a word starting with `#` that a space ends.
+ */
+const finishedTag = /(^|\s)#(\S+)(?=\s)/g;
+
+/**
+ * The input without its `#` words: the free-text search.
  */
 function freeText(input: string): string {
   return input
-    .replace(tagToken, "")
-    .replace(/(^|\s)#(?=\s|$)/g, "$1")
+    .replace(/(^|\s)#\S*/g, "$1")
+    .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * The input's finished tags made chips: what is left to type, the tags taken,
+ * and whether a word was no tag and stays as typed.
+ */
+function takeFinishedTags(input: string) {
+  const taken: string[] = [];
+  let rejected = false;
+
+  const rest = input.replace(finishedTag, (word: string, before: string, typed: string) => {
+    const tag = parseTag(typed);
+
+    if (tag === null) {
+      rejected = true;
+
+      return word;
+    }
+
+    taken.push(tag);
+
+    return before;
+  });
+
+  return { rest, taken, rejected };
+}
+
+/**
+ * The highlight a token starts with: none on a bare `#`, so Enter there
+ * searches rather than taking the most used tag.
+ */
+function firstHighlight(input: string): number {
+  return tagToken.exec(input)?.[1] === "" ? -1 : 0;
 }
 
 /**
@@ -29,8 +66,7 @@ function freeText(input: string): string {
  */
 export default function TagSearch({ placeholder }: { placeholder: string }) {
   const { tags, matchAny, setTagFilter } = useTagFilterParams();
-  const [urlText] = useUrlParam("q", "");
-  const [, , setSearch] = useSearchParam("q");
+  const [urlText, setSearch] = useDebouncedUrlParam("q");
   const [input, setInput] = useState(urlText);
   const [seenText, setSeenText] = useState(urlText);
   const [highlight, setHighlight] = useState(0);
@@ -50,21 +86,35 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
 
   const token = tagToken.exec(input)?.[1];
   const { suggestions } = useTagSuggestions(token ?? "", tags);
-  // The fetched list trails the typing, so it is narrowed to what is typed now.
+  const typedTag = token?.toLowerCase() ?? "";
+  // A tag typed in full leads, so Enter takes it over a longer one used more.
   const options =
     token === undefined || dismissed
       ? []
-      : suggestions.filter((tag) => tag.includes(token.toLowerCase()));
+      : suggestions.includes(typedTag)
+        ? [typedTag, ...suggestions.filter((tag) => tag !== typedTag)]
+        : suggestions;
   const open = options.length > 0;
   const active = Math.min(highlight, options.length - 1);
   const optionId = (index: number) => `${listboxId}-${index}`;
 
   const change = (value: string) => {
-    setInput(value);
-    setHighlight(0);
+    const { rest, taken, rejected } = takeFinishedTags(value);
+    const added = taken.filter((tag, index) => !tags.includes(tag) && taken.indexOf(tag) === index);
+
+    if (added.length > 0) {
+      setTagFilter([...tags, ...added], matchAny);
+    }
+
+    setInput(rest);
+    setHighlight(firstHighlight(rest));
     setDismissed(false);
-    setInvalid(false);
-    setSearch(freeText(value));
+    setInvalid(rejected);
+
+    // Typing a tag leaves the text alone, and an unchanged URL still re-renders the page.
+    if (freeText(rest) !== freeText(input)) {
+      setSearch(freeText(rest));
+    }
   };
 
   const commit = (typed: string) => {
@@ -81,7 +131,7 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
     }
 
     setInput(input.replace(/#\S*$/, ""));
-    setHighlight(0);
+    setHighlight(-1);
     setInvalid(false);
   };
 
@@ -92,7 +142,17 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
       return;
     }
 
-    if (token === undefined) {
+    const { selectionStart, selectionEnd } = event.currentTarget;
+
+    // A key acts on the tag being typed only with the caret after it.
+    if (token === undefined || selectionStart !== input.length || selectionEnd !== input.length) {
+      return;
+    }
+
+    if (event.key === "ArrowDown" && dismissed) {
+      event.preventDefault();
+      setDismissed(false);
+
       return;
     }
 
@@ -164,13 +224,14 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
             aria-expanded={open}
             aria-controls={listboxId}
             aria-autocomplete="list"
-            aria-activedescendant={open ? optionId(active) : undefined}
+            aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
             aria-invalid={invalid || undefined}
             autoComplete="off"
             spellCheck={false}
             value={input}
             onChange={(event) => change(event.target.value)}
             onKeyDown={onKeyDown}
+            onFocus={() => setDismissed(false)}
             onBlur={() => setDismissed(true)}
             placeholder={tags.length === 0 ? placeholder : undefined}
             className="min-w-32 flex-1 bg-transparent py-0.5 outline-none placeholder:text-muted-foreground aria-invalid:text-status-danger"
