@@ -612,14 +612,14 @@ var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset
 
 // historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyFeedParams = []string{"kind", "tag", "matchAny", "author", "since", "until"}
+var historyFeedParams = []string{"search", "kind", "tag", "matchAny", "author", "since", "until"}
 
 // annotationFeedParams names what /annotations' feeds read, which take no kind.
 var annotationFeedParams = withoutParams(historyFeedParams, "kind")
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "tasks", "search", "before", "limit"}, historyFeedParams,
+	[]string{"type", "resourceId", "tasks", "before", "limit"}, historyFeedParams,
 )
 
 // annotationCSVParams names what HandleAnnotations reads.

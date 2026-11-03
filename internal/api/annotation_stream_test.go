@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -162,6 +163,33 @@ func TestEveryDetailStreamHearsClusterWideAnnotations(t *testing.T) {
 		match := h.detailStreamMatch(typ, "x", sse.ResourceMatcher(typ, "x"))
 		if !match(clusterWide) {
 			t.Errorf("a %s's stream misses a cluster-wide annotation its history lists", typ)
+		}
+	}
+}
+
+func TestTimelineFeedsTakeTheSearchTheirJSONDoes(t *testing.T) {
+	h := annotationHandlers(t, true)
+	createAnnotation(t, h, "carol", `{"text":"Deploy freeze","tags":["deploy"]}`)
+	createAnnotation(t, h, "carol", `{"text":"Load test"}`)
+
+	for path, handler := range map[string]http.HandlerFunc{
+		"/history?kind=annotation&search=freeze": h.feedHistoryHandler(renderJSONFeed),
+		"/annotations?search=freeze":             h.feedAnnotationsHandler(renderJSONFeed),
+	} {
+		req := withContentType(newAnnotationRequest("GET", path, "carol", ""), ContentTypeJSONFeed)
+		w := httptest.NewRecorder()
+		handler(w, req)
+
+		var feed struct {
+			Items []struct {
+				Title string `json:"title"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &feed); err != nil {
+			t.Fatalf("%s: %v\n%s", path, err, w.Body)
+		}
+		if len(feed.Items) != 1 || feed.Items[0].Title != "Deploy freeze" {
+			t.Errorf("%s: items = %+v, want only the note mentioning freeze", path, feed.Items)
 		}
 	}
 }

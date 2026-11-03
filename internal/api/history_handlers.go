@@ -150,7 +150,6 @@ func (h *Handlers) timelineQuery(
 		Type:       cache.EventType(resourceType),
 		ResourceID: resourceID,
 		BeforeID:   beforeID,
-		Search:     q.Get("search"),
 		Limit:      limit,
 		After:      window.Since,
 		Before:     window.Until,
@@ -168,12 +167,14 @@ func (h *Handlers) timelineQuery(
 }
 
 // timelineFilters reads the filters the timeline's JSON, CSV and feeds share:
-// `kind`, `tag` and `author` repeat, and `matchAny` widens the tags to any of
-// them. An empty value is no filter.
+// `search`; `kind`, `tag` and `author`, which repeat; and `matchAny`, which
+// widens the tags to any of them. An empty value is no filter.
 func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 	present := func(name string) []string {
 		return slices.DeleteFunc(slices.Clone(q[name]), func(v string) bool { return v == "" })
 	}
+
+	query.Search = q.Get("search")
 
 	query.Kinds = present("kind")
 	query.Tags = present("tag")

@@ -91,8 +91,12 @@ func (s *Server) toolGetEvents(
 		}
 	}
 
+	taskName := cluster.ReadableTaskNames(s.cache, s.readPredicate(ctx))
+
 	matched := s.cache.Timeline(cache.HistoryQuery{
 		ResourceID: resource,
+		Search:     req.GetString("search", ""),
+		TaskName:   taskName,
 		Types:      types,
 		Kinds:      kinds,
 		Tags:       req.GetStringSlice("tags", nil),
@@ -119,9 +123,7 @@ func (s *Server) toolGetEvents(
 		matched = matched[:limit]
 	}
 
-	matched = cluster.PresentHistory(
-		s.cache, matched, cluster.ReadableTaskNames(s.cache, s.readPredicate(ctx)),
-	)
+	matched = cluster.PresentHistory(s.cache, matched, taskName)
 
 	timeline := make([]projection.TimelineEntry, 0, len(matched))
 

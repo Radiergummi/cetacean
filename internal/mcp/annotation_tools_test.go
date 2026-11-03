@@ -249,6 +249,12 @@ func TestGetEventsFiltersAnnotations(t *testing.T) {
 	if got := read(map[string]any{"kinds": []any{"change"}}); len(got) != 0 {
 		t.Errorf("changes alone = %v, want no notes", got)
 	}
+	if got := read(map[string]any{"search": "LOAD alice"}); len(got) != 2 {
+		t.Errorf("a search every note's text and author hold = %v, want both", got)
+	}
+	if got := read(map[string]any{"search": "load rollback"}); len(got) != 0 {
+		t.Errorf("a search with a word no note holds = %v, want none", got)
+	}
 
 	if _, err := srv.toolGetEvents(
 		ctx, toolRequest(t, "get_events", map[string]any{"kinds": []any{"changes"}}),

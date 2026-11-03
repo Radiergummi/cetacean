@@ -42,6 +42,7 @@ tool get_events
   get_events.limit: number
   get_events.matchAny: boolean
   get_events.resource: string
+  get_events.search: string
   get_events.since: string
   get_events.tags: string[]
   get_events.types: string[]
