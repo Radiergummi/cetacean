@@ -267,8 +267,21 @@ func TestAnEditKeepsARemovedResource(t *testing.T) {
 		cluster.AnnotationPatch{Resources: &kept},
 		nil,
 	)
-	if err != nil || len(edited.Resources) != 1 || edited.Resources[0] != a.Resources[0] {
-		t.Errorf("edited = %+v, %v; want the recorded service kept", edited.Resources, err)
+	if err != nil || len(edited.Resources) != 1 {
+		t.Fatalf("edited = %+v, %v; want the recorded service kept", edited.Resources, err)
+	}
+
+	kept0 := edited.Resources[0]
+	kept0.Removed = false
+	if kept0 != a.Resources[0] || !edited.Resources[0].Removed {
+		t.Errorf(
+			"edited = %+v, want the recorded service kept and marked removed",
+			edited.Resources,
+		)
+	}
+
+	if stored, _ := c.Annotation(a.ID); stored.Resources[0].Removed {
+		t.Error("the stored annotation carries the removal mark, which is never stored")
 	}
 }
 

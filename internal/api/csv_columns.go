@@ -127,12 +127,8 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 		// resource is in its own columns.
 		id, resources := entry.ResourceID, ""
 		if entry.Kind == cache.KindAnnotation {
-			id, resources = strconv.FormatUint(
-				entry.ID,
-				10,
-			), csvAnnotationResources(
-				entry.Resources,
-			)
+			id = strconv.FormatUint(entry.ID, 10)
+			resources = csvAnnotationResources(entry.Resources)
 		}
 
 		table.records = append(table.records, []string{

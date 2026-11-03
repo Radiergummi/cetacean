@@ -5561,21 +5561,19 @@ paths:
           schema:
             type: string
           example: dep
-        - name: limit
-          in: query
-          description: Max tags to return; `total` counts them all
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 1000
-            default: 100
-          example: 20
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
       responses:
         "200":
           description: Tags
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
           content:
             application/json:
               schema:
@@ -5593,17 +5591,32 @@ paths:
                     tag: load-test
                     count: 3
                 total: 2
-                limit: 100
+                limit: 50
                 offset: 0
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationTagCollection"
         "304":
           $ref: "#/components/responses/NotModified"
         "400":
           $ref: "#/components/responses/BadRequest"
         "406":
           $ref: "#/components/responses/NotAcceptable"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
         "409":
           description: "`storage.timeline` is off (`ANN003`)"
           content:

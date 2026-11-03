@@ -107,15 +107,14 @@ func (h *Handlers) linkAnnotationsWhen(w http.ResponseWriter, r *http.Request, a
 }
 
 func (h *Handlers) HandleGetAnnotation(w http.ResponseWriter, r *http.Request) {
-	stored, ok := h.annotationOr404(w, r)
+	a, ok := h.annotationOr404(w, r)
 	if !ok {
 		return
 	}
-	a := h.cache.WithRemovals(stored)
 
 	offer := readOnly
 	if h.annotations.Enabled() &&
-		h.annotations.MayEdit(attributedRead(r), h.annotationCaller(r), stored) {
+		h.annotations.MayEdit(attributedRead(r), h.annotationCaller(r), a) {
 		offer = offeredWrites{
 			methods:     []string{"GET", "HEAD", "PATCH", "DELETE"},
 			acceptPatch: AcceptMergePatch,
@@ -141,29 +140,22 @@ func (h *Handlers) HandleAnnotationTags(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if !h.annotations.Enabled() {
-		problem.Write(w, r, "ANN003", cache.ErrAnnotationsOff.Error())
+	if !h.requireAnnotations(w, r) {
 		return
 	}
 
-	limit := defaultTagLimit
-	if value := r.URL.Query().Get("limit"); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < 1 || parsed > maxTagLimit {
-			problem.Write(w, r, "API016", "limit must be between 1 and "+strconv.Itoa(maxTagLimit))
-			return
-		}
-
-		limit = parsed
+	p, err := parsePagination(r)
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
 	}
 
 	tags := h.cache.AnnotationTags(r.URL.Query().Get("q"), h.annotationCaller(r).MayRead)
-	total := len(tags)
-	tags = tags[:min(limit, total)]
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
-		table := csvTable{header: []string{"tag", "count"}, records: make([][]string, len(tags))}
-		for i, t := range tags {
+		page := csvPage(tags, p)
+		table := csvTable{header: []string{"tag", "count"}, records: make([][]string, len(page))}
+		for i, t := range page {
 			table.records[i] = []string{t.Tag, strconv.Itoa(t.Count)}
 		}
 
@@ -171,22 +163,34 @@ func (h *Handlers) HandleAnnotationTags(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeCachedJSON(w, r, NewCollectionResponse(
-		r.Context(),
-		wrapTypedItems(
-			r.Context(),
-			tags,
-			func(cache.AnnotationTag) string { return "AnnotationTag" },
-			func(t cache.AnnotationTag) string { return "/annotations?tag=" + url.QueryEscape(t.Tag) },
-		),
-		total, limit, 0,
-	))
+	writeListPage(w, r, tags, p, "", "AnnotationTag",
+		func(t cache.AnnotationTag) string { return "/annotations?tag=" + url.QueryEscape(t.Tag) },
+		func(page []cache.AnnotationTag) []cache.AnnotationTag { return page },
+	)
 }
 
-const (
-	defaultTagLimit = 100
-	maxTagLimit     = 1000
-)
+// requireAnnotations refuses a request with ANN003 when annotations are off.
+func (h *Handlers) requireAnnotations(w http.ResponseWriter, r *http.Request) bool {
+	if h.annotations.Enabled() {
+		return true
+	}
+
+	writeAnnotationError(w, r, cache.ErrAnnotationsOff)
+
+	return false
+}
+
+// refuseParams answers 400 for the first of names the request carries.
+func refuseParams(w http.ResponseWriter, r *http.Request, names ...string) bool {
+	for _, name := range names {
+		if r.URL.Query().Has(name) {
+			problem.Write(w, r, "API016", "annotations take no "+name+" parameter")
+			return true
+		}
+	}
+
+	return false
+}
 
 func (h *Handlers) HandleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	limitWriteBody(w, r)
@@ -214,7 +218,6 @@ func (h *Handlers) HandleCreateAnnotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	a = h.cache.WithRemovals(a)
 	w.Header().Set("Location", absPath(r.Context(), annotationPath(a.ID)))
 	w.Header().Set("ETag", annotationETag(a))
 	writeJSONStatus(w, http.StatusCreated, annotationBody(r, a))
@@ -238,14 +241,13 @@ func (h *Handlers) HandlePatchAnnotation(w http.ResponseWriter, r *http.Request)
 	}
 
 	a, err := h.annotations.Update(
-		r.Context(), h.annotationCaller(r), id, patch, h.annotationPreconditions(r),
+		r.Context(), h.annotationCaller(r), id, patch, annotationPreconditions(r),
 	)
 	if err != nil {
 		writeAnnotationError(w, r, err)
 		return
 	}
 
-	a = h.cache.WithRemovals(a)
 	w.Header().Set("ETag", annotationETag(a))
 	writeMutationResponse(w, r, annotationBody(r, a))
 }
@@ -257,7 +259,7 @@ func (h *Handlers) HandleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 	}
 
 	err := h.annotations.Delete(
-		r.Context(), h.annotationCaller(r), id, h.annotationPreconditions(r),
+		r.Context(), h.annotationCaller(r), id, annotationPreconditions(r),
 	)
 	if err != nil {
 		writeAnnotationError(w, r, err)
@@ -298,7 +300,7 @@ func annotationID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 // annotationPreconditions evaluates RFC 9110 §13.2.2 against the annotation
 // the write finds, inside the use case, so no other write lands between the
 // check and the commit. Nil when the request names none.
-func (h *Handlers) annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
+func annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
 	ifNoneMatch := r.Header.Get("If-None-Match")
 	if r.Header.Get("If-Match") == "" && ifNoneMatch == "" &&
 		r.Header.Get("If-Unmodified-Since") == "" {
@@ -306,7 +308,7 @@ func (h *Handlers) annotationPreconditions(r *http.Request) func(cache.Annotatio
 	}
 
 	return func(a cache.Annotation) bool {
-		etag := annotationETag(h.cache.WithRemovals(a))
+		etag := annotationETag(a)
 		if preconditionFailed(r, etag, annotationModified(a)) != "" {
 			return false
 		}

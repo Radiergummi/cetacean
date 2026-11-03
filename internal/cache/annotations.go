@@ -267,7 +267,7 @@ func (c *Cache) AnnotationTags(prefix string, readable func(Annotation) bool) []
 
 	counts := map[string]int{}
 	for _, a := range candidates {
-		if readable != nil && !readable(a) {
+		if !readable(a) {
 			continue
 		}
 
@@ -290,12 +290,17 @@ func (c *Cache) AnnotationTags(prefix string, readable func(Annotation) bool) []
 	return tags
 }
 
-// WithRemovals returns a copy of a marking each resource the cache no longer
-// holds as removed.
+// WithRemovals returns a marking each resource the cache no longer holds as
+// removed; its resources are copied only when one is.
 func (c *Cache) WithRemovals(a Annotation) Annotation {
+	gone := slices.IndexFunc(a.Resources, func(r AnnotationResource) bool { return !c.holds(r) })
+	if gone < 0 {
+		return a
+	}
+
 	resources := slices.Clone(a.Resources)
-	for i, r := range resources {
-		resources[i].Removed = !c.holds(r)
+	for i := range resources {
+		resources[i].Removed = i == gone || i > gone && !c.holds(resources[i])
 	}
 	a.Resources = resources
 
@@ -310,7 +315,9 @@ func (c *Cache) holds(r AnnotationResource) bool {
 	case EventNode:
 		_, ok = c.GetNode(r.ID)
 	case EventStack:
-		_, ok = c.GetStack(r.ID)
+		c.mu.RLock()
+		_, ok = c.stacks[r.ID]
+		c.mu.RUnlock()
 	default:
 		ok = true
 	}
@@ -361,7 +368,11 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 // q.BeforeID. ReadableAnnotation runs outside the lock, so the walk takes its
 // matches in batches, each resuming below the last annotation it visited.
 func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
-	stack := c.serviceStack(q.ResourceID)
+	var stack string
+	if t := q.subjectType(); t == "" || t == EventService {
+		stack = c.serviceStack(q.ResourceID)
+	}
+
 	entries := []HistoryEntry{}
 
 	for cursor := q.BeforeID; len(entries) < q.Limit; {
@@ -404,6 +415,10 @@ func (c *Cache) annotationBatch(
 		a := c.annotations.ordered[i]
 		if !q.matchesAnnotation(a, stack) {
 			continue
+		}
+
+		if batch == nil {
+			batch = make([]Annotation, 0, min(n, 64))
 		}
 
 		if batch = append(batch, a); len(batch) == n {
@@ -465,14 +480,21 @@ func (q HistoryQuery) subjectType() EventType {
 }
 
 // AnnotationOn reports whether a belongs on the timeline of the resource of
-// typ with id, as a list filtered by that resource finds it.
+// typ with id, as a list filtered by that resource finds it. A service's stack
+// is looked up only for an annotation naming a stack.
 func (c *Cache) AnnotationOn(a Annotation, typ EventType, id string) bool {
-	return a.About(typ, id, c.serviceStack(id))
+	var stack string
+	if typ == EventService && slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+		return r.Type == EventStack
+	}) {
+		stack = c.serviceStack(id)
+	}
+
+	return a.About(typ, id, stack)
 }
 
 // serviceStack is the stack of the service with id, or empty. A removed
-// service's comes from its removal in the ring or, once that is evicted, from
-// an annotation that named it.
+// service's comes from its removal, while the ring holds it.
 func (c *Cache) serviceStack(id string) string {
 	if id == "" {
 		return ""
@@ -482,26 +504,14 @@ func (c *Cache) serviceStack(id string) string {
 		return svc.Spec.Labels[StackLabel]
 	}
 
-	for _, e := range c.history.List(HistoryQuery{
+	removal := c.history.List(HistoryQuery{
 		ResourceID: id, Type: EventService, Kinds: []string{KindChange}, Limit: 1,
-	}) {
-		if e.Stack != "" {
-			return e.Stack
-		}
+	})
+	if len(removal) == 0 {
+		return ""
 	}
 
-	c.annotations.mu.RLock()
-	defer c.annotations.mu.RUnlock()
-
-	for _, a := range c.annotations.ordered {
-		for _, r := range a.Resources {
-			if r.Type == EventService && r.ID == id && r.Stack != "" {
-				return r.Stack
-			}
-		}
-	}
-
-	return ""
+	return removal[0].Stack
 }
 
 // About reports whether a belongs on the timeline of the resource of typ with

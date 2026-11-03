@@ -148,11 +148,9 @@ func (h *Handlers) queryHistoryFeed(
 	query.BeforeID = beforeID
 	query.Limit = limit
 	query.Visible = h.readableHistory(r)
-	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
 	query.ReadableAnnotation = h.annotationCaller(r).MayRead
-	entries := cluster.NameHistoryTasks(h.cache, h.cache.Timeline(query), canRead)
 
-	return entries, beforeID, limit, true
+	return h.timeline(r, query), beforeID, limit, true
 }
 
 // handleFeedSearch validates the search query, queries matching history entries,
@@ -249,13 +247,7 @@ func (h *Handlers) feedAnnotationsHandler(render feedRenderer) http.HandlerFunc 
 			return
 		}
 
-		if !h.annotations.Enabled() {
-			problem.Write(w, r, "ANN003", cache.ErrAnnotationsOff.Error())
-			return
-		}
-
-		if r.URL.Query().Has("kind") {
-			problem.Write(w, r, "API016", "annotations take no kind parameter")
+		if !h.requireAnnotations(w, r) || refuseParams(w, r, "kind", "tasks") {
 			return
 		}
 
@@ -623,7 +615,7 @@ var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset
 var historyFeedParams = []string{"kind", "tag", "matchAny", "author", "since", "until"}
 
 // annotationFeedParams names what /annotations' feeds read, which take no kind.
-var annotationFeedParams = []string{"tag", "matchAny", "author", "since", "until"}
+var annotationFeedParams = withoutParams(historyFeedParams, "kind")
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
@@ -631,9 +623,13 @@ var historyCSVParams = slices.Concat(
 )
 
 // annotationCSVParams names what HandleAnnotations reads.
-var annotationCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "search", "before", "limit"}, annotationFeedParams,
-)
+var annotationCSVParams = withoutParams(historyCSVParams, "kind", "tasks")
+
+func withoutParams(params []string, names ...string) []string {
+	return slices.DeleteFunc(slices.Clone(params), func(p string) bool {
+		return slices.Contains(names, p)
+	})
+}
 
 // echoingFeedRequest opts r out of compression when the feed's links will echo
 // a parameter beyond the pagination pair back: reflected input beside

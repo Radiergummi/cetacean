@@ -215,6 +215,12 @@ func TestAnnotationTagsCountWhatTheCallerMayRead(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
+	h.HandleAnnotationTags(w, newAnnotationRequest("GET", "/annotations/tags?limit=1", "carol", ""))
+	if !strings.Contains(w.Header().Get("Link"), `rel="next"`) {
+		t.Errorf("limit 1: Link = %q, want a next page", w.Header().Get("Link"))
+	}
+
+	w = httptest.NewRecorder()
 	h.HandleAnnotationTags(w, newAnnotationRequest("GET", "/annotations/tags?limit=0", "carol", ""))
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("limit 0 = %d, want 400", w.Code)

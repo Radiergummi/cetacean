@@ -86,8 +86,16 @@ func NewAnnotations(c *cache.Cache) *Annotations {
 // Enabled reports whether writes have a store to go to.
 func (s *Annotations) Enabled() bool { return s != nil && s.cache.AnnotationsOn() }
 
-// Get returns an annotation the caller may read; one they may not is not found.
+// Get returns an annotation the caller may read, its removed resources marked;
+// one they may not read is not found.
 func (s *Annotations) Get(c AnnotationCaller, id uint64) (cache.Annotation, error) {
+	a, err := s.get(c, id)
+
+	return s.cache.WithRemovals(a), err
+}
+
+// get is Get unmarked, as a write must start from: the marks are not stored.
+func (s *Annotations) get(c AnnotationCaller, id uint64) (cache.Annotation, error) {
 	a, ok := s.cache.Annotation(id)
 	if !ok || !c.MayRead(a) {
 		return cache.Annotation{}, cache.ErrAnnotationNotFound
@@ -145,7 +153,9 @@ func (s *Annotations) Create(
 		a.Actor = &actor
 	}
 
-	return s.cache.CreateAnnotation(ctx, a)
+	created, err := s.cache.CreateAnnotation(ctx, a)
+
+	return s.cache.WithRemovals(created), err
 }
 
 // Update applies patch to an annotation the caller may edit. matches, when
@@ -190,7 +200,7 @@ func (s *Annotations) Update(
 			continue
 		}
 
-		return updated, err
+		return s.cache.WithRemovals(updated), err
 	}
 }
 
@@ -236,7 +246,7 @@ func (s *Annotations) editable(
 		return cache.Annotation{}, cache.ErrAnnotationsOff
 	}
 
-	current, err := s.Get(c, id)
+	current, err := s.get(c, id)
 	if err != nil {
 		return cache.Annotation{}, err
 	}
@@ -245,7 +255,8 @@ func (s *Annotations) editable(
 		return cache.Annotation{}, ErrAnnotationDenied
 	}
 
-	if matches != nil && !matches(current) {
+	// The caller's validator is the one a read answered, marks and all.
+	if matches != nil && !matches(s.cache.WithRemovals(current)) {
 		return cache.Annotation{}, ErrAnnotationPrecondition
 	}
 

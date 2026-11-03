@@ -1188,7 +1188,7 @@ func (rt routes) annotations() {
 	}, spa))
 	mux.HandleFunc("GET /annotations/tags", contentNegotiated(h.HandleAnnotationTags, feedHandlers{
 		csv:       true,
-		csvParams: []string{"q", "limit"},
+		csvParams: []string{"q", "limit", "offset"},
 	}, spa))
 	mux.Handle("POST /annotations",
 		annotationWrite(h.mayAnnotate).AnswersWithABody().ThenFunc(h.HandleCreateAnnotation))

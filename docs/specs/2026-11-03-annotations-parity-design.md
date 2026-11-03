@@ -40,7 +40,7 @@ The stack review also left a list of small issues (#592). This design takes ever
 
 The tags the caller can see, with how many notes carry each, most-used first.
 
-- `?q=` narrows to tags starting with it; `?limit=` caps the list (default 100, at most 1,000).
+- `?q=` narrows to tags starting with it; it pages as the other lists do (`limit`, `offset`, `Range`).
 - Only notes the caller may read are counted, so a count never reveals a hidden note.
 - A `CollectionResponse` of `{"@type": "AnnotationTag", "tag", "count"}`, each `@id`
   `/annotations?tag={tag}`. JSON, CSV and HTML; no feeds, since a tag has no time.
@@ -63,9 +63,9 @@ It currently reuses `/history`'s handler and quirks (#592).
 - **A stack's timeline includes notes on its services.** The rule becomes symmetric: a service
   matches notes on its stack, and a stack matches notes on its services. Each note stores its
   service's stack already.
-- **A removed service keeps its stack's notes.** The stack is read from the service's removal
-  entry in the ring, which records it, and once that is evicted from the `AnnotationResource.Stack`
-  of a note that named the service. The live service is gone.
+- **A removed service keeps its stack's notes** while the ring holds its removal, which records
+  the stack. The live service is gone, and a note naming the service is no answer: whether one
+  exists is chance.
 - **A removed resource is marked.** A note's resource carries `"removed": true` when the cache
   no longer holds it. The dashboard renders its name without a link.
   - That changes the representation without a write, so the detail's `ETag` adds a bitmask of

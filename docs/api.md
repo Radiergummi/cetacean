@@ -554,8 +554,8 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
   [history's filters](#annotations-on-the-history), refuses `kind` and `tasks`, and has Atom, JSON Feed, and CSV
   forms. With `storage.timeline` off it answers `409` (`ANN003`), where `/history` answers an empty list.
 - `GET /annotations/tags` lists the tags in use with how many annotations carry each, most used first. `q` keeps the
-  tags starting with it, and `limit` caps the list, 100 by default. Only annotations the caller may read are counted.
-  Each tag's `@id` is `/annotations?tag={tag}`.
+  tags starting with it, and it pages like the other lists. Only annotations the caller may read are counted. Each
+  tag's `@id` is `/annotations?tag={tag}`.
 
 A resource the cluster no longer holds is marked `"removed": true` in an annotation's `resources`.
 
@@ -595,7 +595,8 @@ The filters apply to annotations as follows:
 - Gaps stay with every filter above except `kind`.
 - `since` and `until` keep a range annotation that overlaps the window.
 - `resourceId` keeps the annotations that name the resource, those on a service's stack, those on a stack's
-  services, and cluster-wide ones. A removed service keeps the annotations on its stack.
+  services, and cluster-wide ones. A removed service keeps the annotations on its stack while the history holds its
+  removal.
   `type` without `resourceId` keeps those naming a resource of that type, and cluster-wide ones.
 
 The CSV adds `text`, `tags`, and `resources` columns, the tags separated by commas. An annotation's row has its ID in

@@ -2,11 +2,11 @@ package cluster
 
 import "github.com/radiergummi/cetacean/internal/cache"
 
-// NameHistoryTasks replaces the name on task history entries with the one Swarm
-// shows. cache.ExtractName must keep recording a task's ID as its name, since
-// every read-side permission check is keyed on it — so this runs after
-// filtering, for presentation only. Naming is best-effort and falls back.
-func NameHistoryTasks(
+// PresentHistory names task entries as Swarm shows them and marks the
+// resources an annotation names that are gone. cache.ExtractName must keep a
+// task's ID as its name, since every read check is keyed on it, so this runs
+// after filtering, for presentation only. Naming is best-effort.
+func PresentHistory(
 	c *cache.Cache,
 	entries []cache.HistoryEntry,
 	canRead func(resource string) bool,
@@ -19,6 +19,11 @@ func NameHistoryTasks(
 	names := make(map[string]string)
 
 	for i, e := range named {
+		if e.Annotation != nil {
+			a := c.WithRemovals(*e.Annotation)
+			named[i].Resources, named[i].Annotation = a.Resources, &a
+		}
+
 		if e.Type != cache.EventTask {
 			continue
 		}

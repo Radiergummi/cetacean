@@ -64,22 +64,16 @@ func (h *Handlers) HandleAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mayAnnotate := h.mayAnnotate(r)
+
 	offer := readOnly
-	if h.mayAnnotate(r) {
+	if mayAnnotate {
 		offer = offeredWrites{methods: []string{"GET", "HEAD", "POST"}}
 	}
 	writeAllow(w, offer)
 
-	if !h.annotations.Enabled() {
-		problem.Write(w, r, "ANN003", cache.ErrAnnotationsOff.Error())
+	if !h.requireAnnotations(w, r) || refuseParams(w, r, "kind", "tasks") {
 		return
-	}
-
-	for _, name := range []string{"kind", "tasks"} {
-		if r.URL.Query().Has(name) {
-			problem.Write(w, r, "API016", "annotations take no "+name+" parameter")
-			return
-		}
 	}
 
 	query, ok := h.timelineQuery(w, r)
@@ -89,7 +83,7 @@ func (h *Handlers) HandleAnnotations(w http.ResponseWriter, r *http.Request) {
 
 	query.Kinds = []string{cache.KindAnnotation}
 	entries := h.timeline(r, query)
-	h.linkAnnotationsWhen(w, r, h.mayAnnotate(r))
+	h.linkAnnotationsWhen(w, r, mayAnnotate)
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
 		writeCSV(w, r, "annotations", csvTableForHistory(entries))
@@ -196,24 +190,11 @@ func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 	return nil
 }
 
-// timeline lists query, naming tasks the caller may read and marking the
-// resources removed since an annotation named them.
+// timeline lists query as the caller sees it, through cluster.PresentHistory.
 func (h *Handlers) timeline(r *http.Request, query cache.HistoryQuery) []cache.HistoryEntry {
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
 
-	entries := cluster.NameHistoryTasks(h.cache, h.cache.Timeline(query), canRead)
-	if entries == nil {
-		return []cache.HistoryEntry{}
-	}
-
-	for i, e := range entries {
-		if e.Annotation != nil {
-			a := h.cache.WithRemovals(*e.Annotation)
-			entries[i].Resources, entries[i].Annotation = a.Resources, &a
-		}
-	}
-
-	return entries
+	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), canRead)
 }
 
 // linkNextTimelinePage links the page below the last entry when this one is full.
