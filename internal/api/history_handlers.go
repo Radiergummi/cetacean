@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
@@ -15,45 +18,124 @@ import (
 // --- History ---
 
 func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
-	h.serveHistory(w, r, r.URL.Query().Get("kind"), "history")
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
+	query, ok := h.timelineQuery(w, r)
+	if !ok {
+		return
+	}
+
+	includeTasks := true
+	if value := r.URL.Query().Get("tasks"); value != "" {
+		var err error
+		if includeTasks, err = strconv.ParseBool(value); err != nil {
+			problem.Write(w, r, "API016", "tasks must be true or false")
+			return
+		}
+	}
+
+	// The type names what resourceId is, and a service's timeline holds its
+	// tasks' entries too, unless the caller turns that off.
+	if includeTasks && query.Type == cache.EventService && query.ResourceID != "" {
+		query.Type = ""
+		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
+	}
+
+	entries := h.timeline(r, query)
+	h.linkAnnotationsWhen(w, r, h.mayAnnotate(r))
+
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		writeCSV(w, r, "history", csvTableForHistory(entries))
+		return
+	}
+
+	linkNextTimelinePage(w, r, entries, query.Limit)
+	writeCachedJSON(w, r, NewCollectionResponse(
+		r.Context(), wrapHistory(r.Context(), entries), len(entries), len(entries), 0,
+	))
 }
 
-// HandleAnnotations lists the annotations: the history narrowed to them.
+// HandleAnnotations lists the annotations, each in the shape its own
+// /annotations/{id} has.
 func (h *Handlers) HandleAnnotations(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
 	offer := readOnly
 	if h.mayAnnotate(r) {
 		offer = offeredWrites{methods: []string{"GET", "HEAD", "POST"}}
 	}
 	writeAllow(w, offer)
 
-	h.serveHistory(w, r, cache.KindAnnotation, "annotations")
-}
-
-// serveHistory lists the timeline of kind; name names its CSV download.
-func (h *Handlers) serveHistory(w http.ResponseWriter, r *http.Request, kind, name string) {
-	if !h.requireAnyGrant(w, r) {
+	if !h.annotations.Enabled() {
+		problem.Write(w, r, "ANN003", cache.ErrAnnotationsOff.Error())
 		return
 	}
 
+	for _, name := range []string{"kind", "tasks"} {
+		if r.URL.Query().Has(name) {
+			problem.Write(w, r, "API016", "annotations take no "+name+" parameter")
+			return
+		}
+	}
+
+	query, ok := h.timelineQuery(w, r)
+	if !ok {
+		return
+	}
+
+	query.Kinds = []string{cache.KindAnnotation}
+	entries := h.timeline(r, query)
+	h.linkAnnotationsWhen(w, r, h.mayAnnotate(r))
+
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		writeCSV(w, r, "annotations", csvTableForHistory(entries))
+		return
+	}
+
+	annotations := make([]cache.Annotation, len(entries))
+	for i, e := range entries {
+		annotations[i] = listedAnnotation(*e.Annotation)
+	}
+
+	linkNextTimelinePage(w, r, entries, query.Limit)
+	writeCachedJSON(w, r, NewCollectionResponse(
+		r.Context(),
+		wrapTypedItems(r.Context(), annotations,
+			func(cache.Annotation) string { return "Annotation" },
+			func(a cache.Annotation) string { return annotationPath(a.ID) },
+		),
+		len(entries), len(entries), 0,
+	))
+}
+
+// timelineQuery reads what /history and /annotations share: the cursor, the
+// window, the resource and the filters, with the caller's read checks.
+func (h *Handlers) timelineQuery(
+	w http.ResponseWriter,
+	r *http.Request,
+) (cache.HistoryQuery, bool) {
 	q := r.URL.Query()
-	wantCSV := ContentTypeFromContext(r.Context()) == ContentTypeCSV
 
 	// Paged by cursor, as the feeds are: the ring moves under an offset.
 	beforeID, limit, err := parseFeedPagination(r)
 	if err != nil {
 		problem.Write(w, r, "API016", err.Error())
-		return
+		return cache.HistoryQuery{}, false
 	}
 
 	// A download nobody paginated is everything the ring and the annotations hold.
-	if wantCSV && q.Get("limit") == "" {
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV && q.Get("limit") == "" {
 		limit = h.cache.History().Size() + h.cache.AnnotationCount()
 	}
 
 	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
 	if err != nil {
 		problem.Write(w, r, "API016", err.Error())
-		return
+		return cache.HistoryQuery{}, false
 	}
 
 	// `resourceId` is a query parameter, so the canonical redirect never
@@ -66,7 +148,7 @@ func (h *Handlers) serveHistory(w http.ResponseWriter, r *http.Request, kind, na
 		h.cache, resourceType, q.Get("resourceId"), canRead,
 	)
 	if h.reportAmbiguousName(w, r, resourceType, err) {
-		return
+		return cache.HistoryQuery{}, false
 	}
 
 	query := cache.HistoryQuery{
@@ -74,63 +156,81 @@ func (h *Handlers) serveHistory(w http.ResponseWriter, r *http.Request, kind, na
 		ResourceID:   resourceID,
 		BeforeID:     beforeID,
 		NameContains: q.Get("search"),
-		Kind:         kind,
 		Limit:        limit,
 		After:        window.Since,
 		Before:       window.Until,
 		Visible:      h.readableHistory(r),
-		Tag:          q.Get("tag"),
 
 		ReadableAnnotation: h.annotationCaller(r).MayRead,
 	}
 
-	includeTasks := true
-	if value := q.Get("tasks"); value != "" {
-		if includeTasks, err = strconv.ParseBool(value); err != nil {
-			problem.Write(w, r, "API016", "tasks must be true or false")
-			return
+	if err := timelineFilters(q, &query); err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return cache.HistoryQuery{}, false
+	}
+
+	return query, true
+}
+
+// timelineFilters reads the filters the timeline's JSON, CSV and feeds share:
+// `kind` and `tag` repeat, `matchAny` widens the tags to any of them, and
+// `author` names an actor's subject. An empty value is no filter.
+func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
+	present := func(name string) []string {
+		return slices.DeleteFunc(slices.Clone(q[name]), func(v string) bool { return v == "" })
+	}
+
+	query.Kinds = present("kind")
+	query.Tags = present("tag")
+	query.Author = q.Get("author")
+
+	if value := q.Get("matchAny"); value != "" {
+		matchAny, err := strconv.ParseBool(value)
+		if err != nil {
+			return errors.New("matchAny must be true or false")
+		}
+
+		query.MatchAny = matchAny
+	}
+
+	return nil
+}
+
+// timeline lists query, naming tasks the caller may read and marking the
+// resources removed since an annotation named them.
+func (h *Handlers) timeline(r *http.Request, query cache.HistoryQuery) []cache.HistoryEntry {
+	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+
+	entries := cluster.NameHistoryTasks(h.cache, h.cache.Timeline(query), canRead)
+	if entries == nil {
+		return []cache.HistoryEntry{}
+	}
+
+	for i, e := range entries {
+		if e.Annotation != nil {
+			a := h.cache.WithRemovals(*e.Annotation)
+			entries[i].Resources, entries[i].Annotation = a.Resources, &a
 		}
 	}
 
-	// The type names what resourceId is, and a service's timeline holds its
-	// tasks' entries too, unless the caller turns that off.
-	if includeTasks && query.Type == cache.EventService && resourceID != "" {
-		query.Type = ""
-		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
-	}
+	return entries
+}
 
-	entries := h.cache.Timeline(query)
-	if entries == nil {
-		entries = []cache.HistoryEntry{}
-	}
-
-	entries = cluster.NameHistoryTasks(h.cache, entries, canRead)
-
-	if wantCSV {
-		writeCSV(w, r, name, csvTableForHistory(entries))
+// linkNextTimelinePage links the page below the last entry when this one is full.
+func linkNextTimelinePage(
+	w http.ResponseWriter,
+	r *http.Request,
+	entries []cache.HistoryEntry,
+	limit int,
+) {
+	if len(entries) < limit || len(entries) == 0 {
 		return
 	}
 
-	if len(entries) == limit {
-		next := r.URL.Query()
-		next.Set("before", strconv.FormatUint(entries[len(entries)-1].ID, 10))
-		next.Set("limit", strconv.Itoa(limit))
-		w.Header().Add("Link", fmt.Sprintf(
-			`<%s?%s>; rel="next"`, selfPath(r), next.Encode(),
-		))
-	}
-
-	writeCachedJSON(
-		w,
-		r,
-		NewCollectionResponse(
-			r.Context(),
-			wrapHistory(r.Context(), entries),
-			len(entries),
-			len(entries),
-			0,
-		),
-	)
+	next := r.URL.Query()
+	next.Set("before", strconv.FormatUint(entries[len(entries)-1].ID, 10))
+	next.Set("limit", strconv.Itoa(limit))
+	w.Header().Add("Link", fmt.Sprintf(`<%s?%s>; rel="next"`, selfPath(r), next.Encode()))
 }
 
 // wrapHistory types each item by its kind: a gap is not a change.

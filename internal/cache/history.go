@@ -68,10 +68,10 @@ type HistoryQuery struct {
 	// what is returned, under the read lock every Append contends with.
 	Types []EventType
 
-	// Kind narrows to one kind; empty means every kind. It is the only filter
-	// besides the window and Visible that a gap does not pass: a gap names no
-	// resource, and nothing was recorded about any resource while it lasted.
-	Kind string
+	// Kinds narrows to entries of any of these kinds; empty means every kind.
+	// It is the only filter besides the window and Visible that a gap does not
+	// pass: a gap names no resource, and nothing was recorded while it lasted.
+	Kinds []string
 
 	// Before bounds the result at the newer end: only entries starting at or
 	// before it. Unlike After it cannot end the walk — entries are visited
@@ -90,8 +90,14 @@ type HistoryQuery struct {
 	// lock and must not call back into History.
 	Visible func(HistoryEntry) bool
 
-	// Tag narrows to annotations carrying it; a gap passes, as it does search.
-	Tag string
+	// Tags narrows to annotations carrying every one of them, or any with
+	// MatchAny. A gap passes, as it does search; a change carries no tags.
+	Tags     []string
+	MatchAny bool
+
+	// Author narrows to what the actor with this subject did: the changes made
+	// through Cetacean and the annotations written. A gap passes.
+	Author string
 
 	// ReadableAnnotation, when set, keeps only the annotations it admits. It
 	// runs outside every cache lock.
@@ -404,7 +410,7 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 // two list paths share it so a filter added here is honoured on both, which is
 // the same reason listByResource takes the whole query.
 func (q HistoryQuery) matches(e HistoryEntry) bool {
-	if e.Kind == KindAnnotation || q.Kind != "" && e.Kind != q.Kind {
+	if e.Kind == KindAnnotation || !q.wantsKind(e.Kind) {
 		return false
 	}
 
@@ -412,7 +418,7 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 		return false
 	}
 
-	if e.Kind == KindChange && q.Tag != "" {
+	if e.Kind == KindChange && (len(q.Tags) > 0 || !q.matchesAuthor(e.Actor)) {
 		return false
 	}
 
@@ -421,6 +427,30 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 	}
 
 	return q.Visible == nil || q.Visible(e)
+}
+
+// wantsKind reports whether q admits entries of kind.
+func (q HistoryQuery) wantsKind(kind string) bool {
+	return len(q.Kinds) == 0 || slices.Contains(q.Kinds, kind)
+}
+
+// matchesTags reports whether tags satisfy q's tag filter.
+func (q HistoryQuery) matchesTags(tags []string) bool {
+	if len(q.Tags) == 0 {
+		return true
+	}
+
+	carried := func(tag string) bool { return slices.Contains(tags, tag) }
+	if q.MatchAny {
+		return slices.ContainsFunc(q.Tags, carried)
+	}
+
+	return !slices.ContainsFunc(q.Tags, func(tag string) bool { return !carried(tag) })
+}
+
+// matchesAuthor reports whether actor satisfies q's author filter.
+func (q HistoryQuery) matchesAuthor(actor *Actor) bool {
+	return q.Author == "" || actor != nil && actor.Subject == q.Author
 }
 
 // matchesResource applies the filters that select by resource.
@@ -454,7 +484,7 @@ func (h *History) listByResource(
 
 	// Every gap belongs on every resource's timeline, so its index is merged in.
 	gaps := &indexCursor{whole: true}
-	if q.Kind == "" || q.Kind == KindGap {
+	if q.wantsKind(KindGap) {
 		gaps = h.indexCursor("", func(e HistoryEntry) bool { return e.Kind == KindGap })
 	}
 

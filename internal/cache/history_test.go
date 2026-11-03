@@ -975,8 +975,8 @@ func TestGapPassesEveryResourceFilter(t *testing.T) {
 		{ResourceID: "other"},
 		{NameContains: "nothing"},
 		{Types: []EventType{EventTask}},
-		{Kind: KindGap},
-		{Kind: KindGap, ResourceID: "svc1"},
+		{Kinds: []string{KindGap}},
+		{Kinds: []string{KindGap}, ResourceID: "svc1"},
 	} {
 		if got := historyIDs(h.List(q)); !slices.Equal(got, []uint64{2}) {
 			t.Errorf("List(%+v) = %v, want only the gap", q, got)
@@ -984,8 +984,8 @@ func TestGapPassesEveryResourceFilter(t *testing.T) {
 	}
 
 	for _, q := range []HistoryQuery{
-		{Kind: KindChange},
-		{Kind: KindChange, ResourceID: "svc1"},
+		{Kinds: []string{KindChange}},
+		{Kinds: []string{KindChange}, ResourceID: "svc1"},
 		{Visible: func(e HistoryEntry) bool { return e.Kind != KindGap }},
 	} {
 		if got := historyIDs(h.List(q)); !slices.Equal(got, []uint64{3, 1}) {
@@ -1024,14 +1024,14 @@ func TestListByResourceMergesGapsLikeAScan(t *testing.T) {
 		return want
 	}
 
-	for _, kind := range []string{"", KindChange, KindGap} {
+	for _, kinds := range [][]string{nil, {KindChange}, {KindGap}, {KindChange, KindGap}} {
 		for _, limit := range []int{1, 10, 50, 200} {
-			q := HistoryQuery{ResourceID: "svc1", Kind: kind, Limit: limit}
+			q := HistoryQuery{ResourceID: "svc1", Kinds: kinds, Limit: limit}
 			for page := range 30 {
 				got := historyIDs(h.List(q))
 				if want := scan(q); !slices.Equal(got, want) {
-					t.Fatalf("kind %q, limit %d, page %d: got %v, want %v",
-						kind, limit, page, got, want)
+					t.Fatalf("kinds %q, limit %d, page %d: got %v, want %v",
+						kinds, limit, page, got, want)
 				}
 				if len(got) < limit {
 					break

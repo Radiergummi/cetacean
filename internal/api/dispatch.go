@@ -177,16 +177,17 @@ func (h *Handlers) streamResource(
 ) {
 	// No replay for per-resource streams: cross-resource matchers can't be
 	// reconstructed from history, so reconnects fall back to a sync event.
-	resMatch := h.detailStreamMatch(id, sse.ResourceMatcher(typ, id))
+	resMatch := h.detailStreamMatch(typ, id, sse.ResourceMatcher(typ, id))
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, resMatch), "")
 }
 
 // detailStreamMatch adds to a detail stream the annotations its resource's
-// history lists: those naming it, on a service's stack, and cluster-wide ones.
+// history lists: those naming it, on a service's stack or a stack's services,
+// and cluster-wide ones.
 func (h *Handlers) detailStreamMatch(
-	id string, match func(cache.Event) bool,
+	typ cache.EventType, id string, match func(cache.Event) bool,
 ) func(cache.Event) bool {
-	return sse.AnnotationsOn(h.cache, id, match)
+	return sse.AnnotationsOn(h.cache, typ, id, match)
 }
 
 // streamVersioned is streamResource for a config or secret, whose stream also
@@ -194,7 +195,7 @@ func (h *Handlers) detailStreamMatch(
 func (h *Handlers) streamVersioned(
 	w http.ResponseWriter, r *http.Request, typ cache.EventType, id string,
 ) {
-	match := h.detailStreamMatch(id, sse.VersionMatcher(h.versions, typ, id))
+	match := h.detailStreamMatch(typ, id, sse.VersionMatcher(h.versions, typ, id))
 	h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, match), "")
 }
 

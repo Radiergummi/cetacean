@@ -165,3 +165,36 @@ func TestAnnotationsOverRESTFollowTheGrants(t *testing.T) {
 		t.Errorf("ops delete: %d, want 204", resp.StatusCode)
 	}
 }
+
+// The tag list counts what a persona may read, through the real router.
+func TestAnnotationTagsCountTheNotesAPersonaMayRead(t *testing.T) {
+	w := NewWorld(t)
+	onService := `{"text":"deploy","tags":["deploy"],"resources":[{"type":"service","id":"` +
+		SeededServiceID + `"}]}`
+	if resp := annotate(
+		t,
+		w,
+		"ops",
+		"POST",
+		"/annotations",
+		"application/json",
+		"",
+		onService,
+	); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("ops create: %d %s", resp.StatusCode, resp.Body)
+	}
+
+	listed := annotate(t, w, "viewers", "GET", "/annotations/tags", "", "", "")
+	var tags struct {
+		Items []struct {
+			Tag   string `json:"tag"`
+			Count int    `json:"count"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listed.Body, &tags); err != nil {
+		t.Fatalf("%d %s: %v", listed.StatusCode, listed.Body, err)
+	}
+	if len(tags.Items) != 1 || tags.Items[0].Tag != "deploy" || tags.Items[0].Count != 1 {
+		t.Errorf("viewers tags: %d %s, want deploy once", listed.StatusCode, listed.Body)
+	}
+}

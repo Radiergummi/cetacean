@@ -159,7 +159,7 @@ func TestEveryDetailStreamHearsClusterWideAnnotations(t *testing.T) {
 	for _, typ := range []cache.EventType{
 		cache.EventTask, cache.EventConfig, cache.EventSecret, cache.EventNetwork, cache.EventVolume,
 	} {
-		match := h.detailStreamMatch("x", sse.ResourceMatcher(typ, "x"))
+		match := h.detailStreamMatch(typ, "x", sse.ResourceMatcher(typ, "x"))
 		if !match(clusterWide) {
 			t.Errorf("a %s's stream misses a cluster-wide annotation its history lists", typ)
 		}

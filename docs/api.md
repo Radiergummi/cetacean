@@ -550,10 +550,17 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
 - `PATCH /annotations/{id}` takes an `application/merge-patch+json` body. `null` clears `until`, `tags` or
   `resources`. The `ID` stays the same, and the author is kept; `updated` and `editor` record the edit.
 - `DELETE /annotations/{id}` answers `204`.
-- `GET /annotations` lists them, newest first, as `/history?kind=annotation` does.
+- `GET /annotations` lists them, newest first, each in the shape `GET /annotations/{id}` gives it. It takes the
+  [history's filters](#annotations-on-the-history), refuses `kind` and `tasks`, and has Atom, JSON Feed, and CSV
+  forms. With `storage.timeline` off it answers `409` (`ANN003`), where `/history` answers an empty list.
+- `GET /annotations/tags` lists the tags in use with how many annotations carry each, most used first. `q` keeps the
+  tags starting with it, and `limit` caps the list, 100 by default. Only annotations the caller may read are counted.
+  Each tag's `@id` is `/annotations?tag={tag}`.
 
-The `ETag` is the annotation's version, which every edit advances. `PATCH` and `DELETE` honor `If-Match`, and refuse
-a stale one with `412`.
+A resource the cluster no longer holds is marked `"removed": true` in an annotation's `resources`.
+
+The `ETag` is the annotation's version, which every edit advances; a resource's removal changes it too. `PATCH` and
+`DELETE` honor `If-Match` against the `ETag` as it stands, and refuse a stale one with `412`.
 
 Who may do what follows the resources an annotation names:
 
@@ -565,8 +572,9 @@ Who may do what follows the resources an annotation names:
 
 An annotation doesn't change anything in Docker, so it needs no [operations level][operations-level]: annotations work
 on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may
-annotate that resource, and `GET /cluster` links it when the caller may create a cluster-wide one. `GET /annotations`
-lists `POST` in `Allow` when the caller may create any annotation. The cluster holds at most 10,000 annotations; the
+annotate that resource, and `GET /cluster` links it when the caller may create a cluster-wide one. `GET /history` and
+`GET /annotations` link it when the caller may create any annotation, and `GET /annotations` lists `POST` in `Allow`
+then. The cluster holds at most 10,000 annotations; the
 next one is refused with `409` (`ANN002`) rather than removing an older one.
 
 ### Annotations on the history
@@ -578,12 +586,20 @@ fields, so an edit changes what it says without moving it. Its `@id` is `/annota
 
 The filters apply to annotations as follows:
 
-- `search` matches the text, and `tag` keeps the annotations carrying a tag. Gaps stay with both; changes don't with `tag`.
+- `search` matches the text.
+- `tag` keeps the annotations carrying a tag. Repeat it, `tag=deploy&tag=web`, to keep those carrying every one, and
+  add `matchAny=true` to keep those carrying any. Changes are left out.
+- `author` keeps what the actor with that subject did: the annotations they wrote and the changes they made through
+  Cetacean.
+- `kind` repeats too: `kind=change&kind=annotation` lists changes and annotations without gaps.
+- Gaps stay with every filter above except `kind`.
 - `since` and `until` keep a range annotation that overlaps the window.
-- `resourceId` keeps the annotations that name the resource, those on a service's stack, and cluster-wide ones.
+- `resourceId` keeps the annotations that name the resource, those on a service's stack, those on a stack's
+  services, and cluster-wide ones. A removed service keeps the annotations on its stack.
   `type` without `resourceId` keeps those naming a resource of that type, and cluster-wide ones.
 
-The CSV adds `text` and `tags` columns, the tags separated by commas. In Atom and JSON Feed, an annotation is one
+The CSV adds `text`, `tags`, and `resources` columns, the tags separated by commas. An annotation's row has its ID in
+`id`, and `resources` lists `type:name` pairs, or `cluster` for a cluster-wide one. In Atom and JSON Feed, an annotation is one
 entry whose ID never changes and whose `updated` (`date_modified`) is its last edit, so a feed reader shows an edit as
 an update to the entry rather than as a new one.
 
@@ -596,6 +612,25 @@ id: 4182
 event: annotation
 data: {"@id":"/annotations/4182","@type":"Annotation","type":"annotation","action":"create","id":"4182","resource":{"id":4182,"timestamp":"2026-11-01T14:00:00Z","text":"Load test against the checkout flow","tags":["load-test"],"resources":[...]}}
 ```
+
+### Annotating deploys from CI
+
+A pipeline can mark each deploy, so the charts show when it happened. Mint an [API access token][api-tokens] for a
+user with write on the service, store it as a secret in the pipeline, and post after the deploy:
+
+```bash
+curl --fail -X POST https://cetacean.example.com/annotations \
+     -H "Authorization: Bearer $CETACEAN_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "text": "Deployed '"$GIT_SHA"'",
+       "tags": ["deploy"],
+       "resources": [{ "type": "service", "id": "shop_web" }]
+     }'
+```
+
+To mark the whole rollout as a range, post when it starts and `PATCH` its `until` when it ends, using the `Location`
+the first request answered. The note is attributed to the token's user.
 
 ## Response format
 

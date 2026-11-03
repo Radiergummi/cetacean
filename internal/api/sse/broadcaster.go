@@ -777,11 +777,13 @@ func StackMatcher(c *cache.Cache, name string) func(cache.Event) bool {
 }
 
 // AnnotationsOn extends match with the annotations on the timeline of the
-// resource with id, which /history lists for it.
-func AnnotationsOn(c *cache.Cache, id string, match func(cache.Event) bool) func(cache.Event) bool {
+// resource of typ with id, which /history lists for it.
+func AnnotationsOn(
+	c *cache.Cache, typ cache.EventType, id string, match func(cache.Event) bool,
+) func(cache.Event) bool {
 	return func(e cache.Event) bool {
 		if a, ok := e.Resource.(cache.Annotation); ok && e.Type == cache.EventAnnotation {
-			return c.AnnotationOn(a, id)
+			return c.AnnotationOn(a, typ, id)
 		}
 
 		return match(e)

@@ -115,7 +115,7 @@ func TestTimeline_AnEditKeepsThePosition(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := c.Timeline(HistoryQuery{Kind: KindAnnotation})
+	got := c.Timeline(HistoryQuery{Kinds: []string{KindAnnotation}})
 	if len(got) != 1 || got[0].ID != note || got[0].Text != "edited" || got[0].Updated.IsZero() {
 		t.Fatalf("annotations = %+v, want the edited one at its creation ID", got)
 	}
@@ -153,12 +153,12 @@ func TestTimeline_FiltersAnnotations(t *testing.T) {
 			[]uint64{change, backdatedRange, clusterWide, onStack, onService, created},
 		},
 		{"a type", HistoryQuery{Type: EventNode}, []uint64{backdatedRange, clusterWide, onNode}},
-		{"a tag", HistoryQuery{Tag: "load-test"}, []uint64{onService}},
+		{"a tag", HistoryQuery{Tags: []string{"load-test"}}, []uint64{onService}},
 		{"search on the text", HistoryQuery{NameContains: "load"}, []uint64{onService}},
 		{
 			"a window overlapping the range",
 			HistoryQuery{
-				Kind:   KindAnnotation,
+				Kinds:  []string{KindAnnotation},
 				After:  timelineBase.Add(-2 * time.Hour),
 				Before: timelineBase.Add(-90 * time.Minute),
 			},
@@ -166,14 +166,14 @@ func TestTimeline_FiltersAnnotations(t *testing.T) {
 		},
 		{
 			"a window after the range",
-			HistoryQuery{Kind: KindAnnotation, After: timelineBase.Add(-time.Hour)},
+			HistoryQuery{Kinds: []string{KindAnnotation}, After: timelineBase.Add(-time.Hour)},
 			[]uint64{clusterWide, onNode, onStack, onService},
 		},
-		{"changes alone", HistoryQuery{Kind: KindChange}, []uint64{change, created}},
+		{"changes alone", HistoryQuery{Kinds: []string{KindChange}}, []uint64{change, created}},
 		{
 			"what the reader may read",
 			HistoryQuery{
-				Kind:               KindAnnotation,
+				Kinds:              []string{KindAnnotation},
 				ReadableAnnotation: func(a Annotation) bool { return len(a.Resources) > 0 },
 			},
 			[]uint64{onNode, onStack, onService},
@@ -186,6 +186,146 @@ func TestTimeline_FiltersAnnotations(t *testing.T) {
 				t.Errorf("Timeline = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTimeline_FiltersByTagsAuthorAndKinds(t *testing.T) {
+	c := timelineCache(t, 100)
+	created := c.history.Count()
+	alice := &Actor{Subject: "alice", Provider: "oidc"}
+	both := c.note(t, Annotation{Tags: []string{"deploy", "web"}, Actor: alice})
+	deploy := c.note(t, Annotation{Tags: []string{"deploy"}})
+	web := c.note(t, Annotation{Tags: []string{"web"}})
+	byAlice := c.history.Append(HistoryEntry{
+		Type: EventService, ResourceID: "svc1", Timestamp: timelineBase, Actor: alice,
+	})
+	elsewhere := c.change(t, 0)
+	gap := c.history.Append(HistoryEntry{
+		Kind: KindGap, Timestamp: timelineBase, Until: timelineBase.Add(time.Minute),
+	})
+
+	for _, tt := range []struct {
+		name string
+		q    HistoryQuery
+		want []uint64
+	}{
+		{"every tag", HistoryQuery{Tags: []string{"deploy", "web"}}, []uint64{gap, both}},
+		{
+			"any tag",
+			HistoryQuery{Tags: []string{"deploy", "web"}, MatchAny: true},
+			[]uint64{gap, web, deploy, both},
+		},
+		{"an author", HistoryQuery{Author: "alice"}, []uint64{gap, byAlice, both}},
+		{
+			"changes and notes",
+			HistoryQuery{Kinds: []string{KindChange, KindAnnotation}, BeforeID: gap},
+			[]uint64{elsewhere, byAlice, web, deploy, both, created},
+		},
+		{"gaps and notes", HistoryQuery{Kinds: []string{KindGap, KindAnnotation}}, []uint64{gap, web, deploy, both}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := timelineIDs(c.Timeline(tt.q)); !slices.Equal(got, tt.want) {
+				t.Errorf("Timeline = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTimeline_AStackListsNotesOnItsServices(t *testing.T) {
+	c := timelineCache(t, 100)
+	onService := c.note(t, Annotation{
+		Resources: []AnnotationResource{{Type: EventService, ID: "svc1", Stack: "shop"}},
+	})
+	c.note(t, Annotation{
+		Resources: []AnnotationResource{{Type: EventService, ID: "svc2", Stack: "blog"}},
+	})
+
+	got := c.Timeline(HistoryQuery{
+		Type: EventStack, ResourceID: "shop", Kinds: []string{KindAnnotation},
+	})
+	if ids := timelineIDs(got); !slices.Equal(ids, []uint64{onService}) {
+		t.Fatalf("stack timeline = %v, want [%d]", ids, onService)
+	}
+}
+
+func TestTimeline_ARemovedServiceKeepsItsStacksNotes(t *testing.T) {
+	c := timelineCache(t, 100)
+	onStack := c.note(
+		t,
+		Annotation{Resources: []AnnotationResource{{Type: EventStack, ID: "shop"}}},
+	)
+	c.DeleteService("svc1")
+
+	got := c.Timeline(HistoryQuery{
+		Type: EventService, ResourceID: "svc1", Kinds: []string{KindAnnotation},
+	})
+	if ids := timelineIDs(got); !slices.Equal(ids, []uint64{onStack}) {
+		t.Fatalf("removed service's timeline = %v, want its stack's note %d", ids, onStack)
+	}
+}
+
+func TestTimeline_PagesPastNotesTheReaderCannotRead(t *testing.T) {
+	c := timelineCache(t, 100)
+	var readable []uint64
+	for i := range 30 {
+		id := c.note(t, Annotation{Text: string(rune('a' + i%2))})
+		if i%2 == 0 {
+			readable = append(readable, id)
+		}
+	}
+	slices.Reverse(readable)
+
+	q := HistoryQuery{
+		Kinds:              []string{KindAnnotation},
+		Limit:              4,
+		ReadableAnnotation: func(a Annotation) bool { return a.Text == "a" },
+	}
+
+	var got []uint64
+	for range 10 {
+		page := timelineIDs(c.Timeline(q))
+		if len(page) == 0 {
+			break
+		}
+		got = append(got, page...)
+		q.BeforeID = page[len(page)-1]
+	}
+
+	if !slices.Equal(got, readable) {
+		t.Fatalf("pages = %v, want %v", got, readable)
+	}
+}
+
+func TestAnnotationIndex_StaysOrderedThroughEditsAndRemovals(t *testing.T) {
+	c := New(nil)
+	store := &fakeAnnotationStore{}
+	c.history.Restore(nil, 9)
+	c.RestoreAnnotations(store, []Annotation{{ID: 9, Text: "nine"}, {ID: 3, Text: "three"}})
+
+	ten := c.note(t, Annotation{})
+	if err := c.DeleteAnnotation(
+		context.Background(),
+		3,
+		func(Annotation) error { return nil },
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UpdateAnnotation(context.Background(), 9, func(a *Annotation) error {
+		a.Text = "edited"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if a, ok := c.Annotation(9); !ok || a.Text != "edited" {
+		t.Fatalf("Annotation(9) = %+v, %v; want the edit", a, ok)
+	}
+	if _, ok := c.Annotation(3); ok {
+		t.Fatal("Annotation(3) is still found after its removal")
+	}
+	got := timelineIDs(c.Timeline(HistoryQuery{Kinds: []string{KindAnnotation}}))
+	if ten <= 9 || !slices.Equal(got, []uint64{ten, 9}) {
+		t.Fatalf("annotations = %v, want [%d 9]", got, ten)
 	}
 }
 
@@ -242,17 +382,38 @@ func TestAnnotationOn_TheTimelineAListFindsItOn(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		resources []AnnotationResource
+		typ       EventType
 		id        string
 		want      bool
 	}{
-		{"cluster-wide", nil, "node9", true},
-		{"named", []AnnotationResource{{Type: EventNode, ID: "node1"}}, "node1", true},
-		{"another", []AnnotationResource{{Type: EventNode, ID: "node1"}}, "node2", false},
-		{"its service's stack", []AnnotationResource{{Type: EventStack, ID: "shop"}}, "svc1", true},
-		{"the stack itself", []AnnotationResource{{Type: EventStack, ID: "shop"}}, "shop", true},
+		{"cluster-wide", nil, EventNode, "node9", true},
+		{"named", []AnnotationResource{{Type: EventNode, ID: "node1"}}, EventNode, "node1", true},
+		{"another", []AnnotationResource{{Type: EventNode, ID: "node1"}}, EventNode, "node2", false},
+		{
+			"its service's stack",
+			[]AnnotationResource{{Type: EventStack, ID: "shop"}}, EventService, "svc1", true,
+		},
+		{
+			"the stack itself",
+			[]AnnotationResource{{Type: EventStack, ID: "shop"}}, EventStack, "shop", true,
+		},
+		{
+			"a service of the stack",
+			[]AnnotationResource{{Type: EventService, ID: "svc1", Stack: "shop"}},
+			EventStack, "shop", true,
+		},
+		{
+			"a service of another stack",
+			[]AnnotationResource{{Type: EventService, ID: "svc2", Stack: "blog"}},
+			EventStack, "shop", false,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := c.AnnotationOn(Annotation{Resources: tt.resources}, tt.id); got != tt.want {
+			if got := c.AnnotationOn(
+				Annotation{Resources: tt.resources},
+				tt.typ,
+				tt.id,
+			); got != tt.want {
 				t.Errorf("AnnotationOn(%s) = %v, want %v", tt.id, got, tt.want)
 			}
 		})

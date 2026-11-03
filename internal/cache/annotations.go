@@ -47,6 +47,9 @@ type AnnotationResource struct {
 	Name    string    `json:"name"`
 	Service string    `json:"-"`
 	Stack   string    `json:"-"`
+
+	// Removed is set for a response by WithRemovals; it is never stored.
+	Removed bool `json:"removed,omitempty"`
 }
 
 // AnnotationStore persists annotations; a write is committed before it returns.
@@ -55,10 +58,20 @@ type AnnotationStore interface {
 	DeleteAnnotation(ctx context.Context, id uint64) error
 }
 
+// annotationIndex holds the annotations ordered by ID. IDs only grow, so a
+// create appends and a list binary-searches to its cursor.
 type annotationIndex struct {
-	mu    sync.RWMutex
-	store AnnotationStore
-	byID  map[uint64]Annotation
+	mu      sync.RWMutex
+	store   AnnotationStore
+	ordered []Annotation
+}
+
+// find is where the annotation with id is, or would be inserted. The caller
+// holds mu.
+func (x *annotationIndex) find(id uint64) (int, bool) {
+	return slices.BinarySearchFunc(x.ordered, id, func(a Annotation, id uint64) int {
+		return cmp.Compare(a.ID, id)
+	})
 }
 
 // RestoreAnnotations loads the stored annotations and makes store the one
@@ -68,9 +81,11 @@ func (c *Cache) RestoreAnnotations(store AnnotationStore, annotations []Annotati
 	defer c.annotations.mu.Unlock()
 
 	c.annotations.store = store
-	for _, a := range annotations {
-		c.annotations.byID[a.ID] = a
-	}
+	c.annotations.ordered = append(c.annotations.ordered, annotations...)
+	slices.SortFunc(
+		c.annotations.ordered,
+		func(a, b Annotation) int { return cmp.Compare(a.ID, b.ID) },
+	)
 }
 
 // Annotation returns one annotation. Its slices are shared and must not be
@@ -79,9 +94,12 @@ func (c *Cache) Annotation(id uint64) (Annotation, bool) {
 	c.annotations.mu.RLock()
 	defer c.annotations.mu.RUnlock()
 
-	a, ok := c.annotations.byID[id]
+	i, ok := c.annotations.find(id)
+	if !ok {
+		return Annotation{}, false
+	}
 
-	return a, ok
+	return c.annotations.ordered[i], true
 }
 
 // CreateAnnotation records a new annotation, assigning its ID, version and
@@ -163,7 +181,7 @@ func (c *Cache) AnnotationCount() int {
 	c.annotations.mu.RLock()
 	defer c.annotations.mu.RUnlock()
 
-	return len(c.annotations.byID)
+	return len(c.annotations.ordered)
 }
 
 // commitAnnotation commits a write, then indexes it and appends its item, all
@@ -194,10 +212,16 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 	}
 
 	c.annotations.mu.Lock()
-	if action == "remove" {
-		delete(c.annotations.byID, a.ID)
-	} else {
-		c.annotations.byID[a.ID] = a
+	i, found := c.annotations.find(a.ID)
+	switch {
+	case action == "remove":
+		if found {
+			c.annotations.ordered = slices.Delete(c.annotations.ordered, i, i+1)
+		}
+	case found:
+		c.annotations.ordered[i] = a
+	default:
+		c.annotations.ordered = slices.Insert(c.annotations.ordered, i, a)
 	}
 	c.annotations.mu.Unlock()
 
@@ -220,6 +244,80 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 	return nil
 }
 
+// AnnotationTag is a tag and how many annotations carry it.
+type AnnotationTag struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
+}
+
+// AnnotationTags counts the tags starting with prefix on the annotations
+// readable admits, most used first, then by name. readable runs outside the
+// lock, which is held only to copy the annotations carrying such a tag.
+func (c *Cache) AnnotationTags(prefix string, readable func(Annotation) bool) []AnnotationTag {
+	tagged := func(tag string) bool { return strings.HasPrefix(tag, prefix) }
+
+	c.annotations.mu.RLock()
+	var candidates []Annotation
+	for _, a := range c.annotations.ordered {
+		if slices.ContainsFunc(a.Tags, tagged) {
+			candidates = append(candidates, a)
+		}
+	}
+	c.annotations.mu.RUnlock()
+
+	counts := map[string]int{}
+	for _, a := range candidates {
+		if readable != nil && !readable(a) {
+			continue
+		}
+
+		for _, tag := range a.Tags {
+			if tagged(tag) {
+				counts[tag]++
+			}
+		}
+	}
+
+	tags := make([]AnnotationTag, 0, len(counts))
+	for tag, count := range counts {
+		tags = append(tags, AnnotationTag{Tag: tag, Count: count})
+	}
+
+	slices.SortFunc(tags, func(a, b AnnotationTag) int {
+		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.Tag, b.Tag))
+	})
+
+	return tags
+}
+
+// WithRemovals returns a copy of a marking each resource the cache no longer
+// holds as removed.
+func (c *Cache) WithRemovals(a Annotation) Annotation {
+	resources := slices.Clone(a.Resources)
+	for i, r := range resources {
+		resources[i].Removed = !c.holds(r)
+	}
+	a.Resources = resources
+
+	return a
+}
+
+func (c *Cache) holds(r AnnotationResource) bool {
+	var ok bool
+	switch r.Type {
+	case EventService:
+		_, ok = c.GetService(r.ID)
+	case EventNode:
+		_, ok = c.GetNode(r.ID)
+	case EventStack:
+		_, ok = c.GetStack(r.ID)
+	default:
+		ok = true
+	}
+
+	return ok
+}
+
 // AnnotationsOn reports whether annotation writes have a store to go to.
 func (c *Cache) AnnotationsOn() bool {
 	c.annotations.mu.RLock()
@@ -237,11 +335,11 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 	}
 
 	var ring []HistoryEntry
-	if q.Kind != KindAnnotation {
+	if len(q.Kinds) != 1 || q.Kinds[0] != KindAnnotation {
 		ring = c.history.List(q)
 	}
 
-	if q.Kind != "" && q.Kind != KindAnnotation {
+	if !q.wantsKind(KindAnnotation) {
 		return ring
 	}
 
@@ -259,43 +357,68 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 	return merged
 }
 
-// annotationEntries returns the newest q.Limit annotations q admits.
+// annotationEntries returns the newest q.Limit annotations q admits below
+// q.BeforeID. ReadableAnnotation runs outside the lock, so the walk takes its
+// matches in batches, each resuming below the last annotation it visited.
 func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
 	stack := c.serviceStack(q.ResourceID)
+	entries := []HistoryEntry{}
 
-	c.annotations.mu.RLock()
-	found := make([]Annotation, 0, len(c.annotations.byID))
-	for _, a := range c.annotations.byID {
-		if q.matchesAnnotation(a, stack) {
-			found = append(found, a)
+	for cursor := q.BeforeID; len(entries) < q.Limit; {
+		batch, next := c.annotationBatch(q, stack, cursor, q.Limit-len(entries))
+
+		for _, a := range batch {
+			if q.ReadableAnnotation == nil || q.ReadableAnnotation(a) {
+				entries = append(entries, a.entry())
+			}
 		}
-	}
-	c.annotations.mu.RUnlock()
 
-	slices.SortFunc(found, func(a, b Annotation) int { return cmp.Compare(b.ID, a.ID) })
-
-	entries := make([]HistoryEntry, 0, min(q.Limit, len(found)))
-	for _, a := range found {
-		if len(entries) == q.Limit {
+		if next == 0 {
 			break
 		}
 
-		if q.ReadableAnnotation == nil || q.ReadableAnnotation(a) {
-			entries = append(entries, a.entry())
-		}
+		cursor = next
 	}
 
 	return entries
 }
 
-// matchesAnnotation applies q to a. A resource filter admits an annotation
-// naming the resource, one on a service's stack, and a cluster-wide one;
-// without a resource ID, the type is matched against the resources named.
-func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
-	if q.BeforeID != 0 && a.ID >= q.BeforeID {
-		return false
+// annotationBatch collects up to n annotations q admits with an ID below
+// cursor, or any ID for a zero cursor, newest first. next is the cursor to
+// resume from, zero once nothing older is left.
+func (c *Cache) annotationBatch(
+	q HistoryQuery,
+	stack string,
+	cursor uint64,
+	n int,
+) (batch []Annotation, next uint64) {
+	c.annotations.mu.RLock()
+	defer c.annotations.mu.RUnlock()
+
+	end := len(c.annotations.ordered)
+	if cursor != 0 {
+		end, _ = c.annotations.find(cursor)
 	}
 
+	for i := end - 1; i >= 0; i-- {
+		a := c.annotations.ordered[i]
+		if !q.matchesAnnotation(a, stack) {
+			continue
+		}
+
+		if batch = append(batch, a); len(batch) == n {
+			return batch, a.ID
+		}
+	}
+
+	return batch, 0
+}
+
+// matchesAnnotation applies q to a. A resource filter admits an annotation
+// naming the resource, one on a service's stack or a stack's service, and a
+// cluster-wide one; without a resource ID, the type is matched against the
+// resources named.
+func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 	end := a.Timestamp
 	if !a.Until.IsZero() {
 		end = a.Until
@@ -306,7 +429,7 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
-	if q.Tag != "" && !slices.Contains(a.Tags, q.Tag) {
+	if !q.matchesTags(a.Tags) || !q.matchesAuthor(a.Actor) {
 		return false
 	}
 
@@ -317,7 +440,7 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 	}
 
 	if q.ResourceID != "" {
-		return a.About(q.ResourceID, stack)
+		return a.About(q.subjectType(), q.ResourceID, stack)
 	}
 
 	return len(a.Resources) == 0 ||
@@ -327,28 +450,69 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		})
 }
 
-// AnnotationOn reports whether a belongs on the timeline of the resource with
-// id, as a list filtered by that resource finds it.
-func (c *Cache) AnnotationOn(a Annotation, id string) bool {
-	return a.About(id, c.serviceStack(id))
+// subjectType is the type of the resource q's ResourceID names, when q says
+// which; only a stack's is told apart, and a stack's timeline asks for one.
+func (q HistoryQuery) subjectType() EventType {
+	if q.Type != "" {
+		return q.Type
+	}
+
+	if len(q.Types) == 1 {
+		return q.Types[0]
+	}
+
+	return ""
 }
 
-// serviceStack is the stack of the service with id, or empty.
+// AnnotationOn reports whether a belongs on the timeline of the resource of
+// typ with id, as a list filtered by that resource finds it.
+func (c *Cache) AnnotationOn(a Annotation, typ EventType, id string) bool {
+	return a.About(typ, id, c.serviceStack(id))
+}
+
+// serviceStack is the stack of the service with id, or empty. A removed
+// service's comes from its removal in the ring or, once that is evicted, from
+// an annotation that named it.
 func (c *Cache) serviceStack(id string) string {
-	svc, ok := c.GetService(id)
-	if !ok {
+	if id == "" {
 		return ""
 	}
 
-	return svc.Spec.Labels[StackLabel]
+	if svc, ok := c.GetService(id); ok {
+		return svc.Spec.Labels[StackLabel]
+	}
+
+	for _, e := range c.history.List(HistoryQuery{
+		ResourceID: id, Type: EventService, Kinds: []string{KindChange}, Limit: 1,
+	}) {
+		if e.Stack != "" {
+			return e.Stack
+		}
+	}
+
+	c.annotations.mu.RLock()
+	defer c.annotations.mu.RUnlock()
+
+	for _, a := range c.annotations.ordered {
+		for _, r := range a.Resources {
+			if r.Type == EventService && r.ID == id && r.Stack != "" {
+				return r.Stack
+			}
+		}
+	}
+
+	return ""
 }
 
-// About reports whether a belongs on the timeline of the resource with id:
-// it names it, it is cluster-wide, or it names stack, the resource's stack.
-func (a Annotation) About(id, stack string) bool {
+// About reports whether a belongs on the timeline of the resource of typ with
+// id: it is cluster-wide, it names the resource, it names stack (a service's
+// stack), or, on a stack's timeline, it names one of the stack's services.
+func (a Annotation) About(typ EventType, id, stack string) bool {
 	return len(a.Resources) == 0 ||
 		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
-			return r.ID == id || stack != "" && r.Type == EventStack && r.ID == stack
+			return r.ID == id ||
+				stack != "" && r.Type == EventStack && r.ID == stack ||
+				typ == EventStack && r.Type == EventService && r.Stack == id
 		})
 }
 

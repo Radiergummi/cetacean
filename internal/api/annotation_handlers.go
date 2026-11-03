@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -62,8 +63,7 @@ func (h *Handlers) mayAnnotate(r *http.Request) bool {
 	id := auth.IdentityFromContext(r.Context())
 	access := h.acl.TypeGrants(id)
 
-	return h.acl.CanWriteEverything(id) ||
-		access.Can("write", "service") ||
+	return access.Can("write", "service") ||
 		access.Can("write", "stack") ||
 		access.Can("write", "node")
 }
@@ -107,14 +107,15 @@ func (h *Handlers) linkAnnotationsWhen(w http.ResponseWriter, r *http.Request, a
 }
 
 func (h *Handlers) HandleGetAnnotation(w http.ResponseWriter, r *http.Request) {
-	a, ok := h.annotationOr404(w, r)
+	stored, ok := h.annotationOr404(w, r)
 	if !ok {
 		return
 	}
+	a := h.cache.WithRemovals(stored)
 
 	offer := readOnly
 	if h.annotations.Enabled() &&
-		h.annotations.MayEdit(attributedRead(r), h.annotationCaller(r), a) {
+		h.annotations.MayEdit(attributedRead(r), h.annotationCaller(r), stored) {
 		offer = offeredWrites{
 			methods:     []string{"GET", "HEAD", "PATCH", "DELETE"},
 			acceptPatch: AcceptMergePatch,
@@ -132,6 +133,60 @@ func (h *Handlers) HandleGetAnnotation(w http.ResponseWriter, r *http.Request) {
 	writeRenderedJSON(w, r, http.StatusOK,
 		renderedDoc{body: body, etag: annotationETag(a)}, annotationModified(a))
 }
+
+// HandleAnnotationTags lists the tags on the annotations the caller may read,
+// with how many carry each, so a count never reveals a hidden note.
+func (h *Handlers) HandleAnnotationTags(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAnyGrant(w, r) {
+		return
+	}
+
+	if !h.annotations.Enabled() {
+		problem.Write(w, r, "ANN003", cache.ErrAnnotationsOff.Error())
+		return
+	}
+
+	limit := defaultTagLimit
+	if value := r.URL.Query().Get("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > maxTagLimit {
+			problem.Write(w, r, "API016", "limit must be between 1 and "+strconv.Itoa(maxTagLimit))
+			return
+		}
+
+		limit = parsed
+	}
+
+	tags := h.cache.AnnotationTags(r.URL.Query().Get("q"), h.annotationCaller(r).MayRead)
+	total := len(tags)
+	tags = tags[:min(limit, total)]
+
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
+		table := csvTable{header: []string{"tag", "count"}, records: make([][]string, len(tags))}
+		for i, t := range tags {
+			table.records[i] = []string{t.Tag, strconv.Itoa(t.Count)}
+		}
+
+		writeCSV(w, r, "annotation-tags", table)
+		return
+	}
+
+	writeCachedJSON(w, r, NewCollectionResponse(
+		r.Context(),
+		wrapTypedItems(
+			r.Context(),
+			tags,
+			func(cache.AnnotationTag) string { return "AnnotationTag" },
+			func(t cache.AnnotationTag) string { return "/annotations?tag=" + url.QueryEscape(t.Tag) },
+		),
+		total, limit, 0,
+	))
+}
+
+const (
+	defaultTagLimit = 100
+	maxTagLimit     = 1000
+)
 
 func (h *Handlers) HandleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	limitWriteBody(w, r)
@@ -159,6 +214,7 @@ func (h *Handlers) HandleCreateAnnotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	a = h.cache.WithRemovals(a)
 	w.Header().Set("Location", absPath(r.Context(), annotationPath(a.ID)))
 	w.Header().Set("ETag", annotationETag(a))
 	writeJSONStatus(w, http.StatusCreated, annotationBody(r, a))
@@ -182,13 +238,14 @@ func (h *Handlers) HandlePatchAnnotation(w http.ResponseWriter, r *http.Request)
 	}
 
 	a, err := h.annotations.Update(
-		r.Context(), h.annotationCaller(r), id, patch, annotationPreconditions(r),
+		r.Context(), h.annotationCaller(r), id, patch, h.annotationPreconditions(r),
 	)
 	if err != nil {
 		writeAnnotationError(w, r, err)
 		return
 	}
 
+	a = h.cache.WithRemovals(a)
 	w.Header().Set("ETag", annotationETag(a))
 	writeMutationResponse(w, r, annotationBody(r, a))
 }
@@ -199,7 +256,9 @@ func (h *Handlers) HandleDeleteAnnotation(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err := h.annotations.Delete(r.Context(), h.annotationCaller(r), id, annotationPreconditions(r))
+	err := h.annotations.Delete(
+		r.Context(), h.annotationCaller(r), id, h.annotationPreconditions(r),
+	)
 	if err != nil {
 		writeAnnotationError(w, r, err)
 		return
@@ -239,7 +298,7 @@ func annotationID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 // annotationPreconditions evaluates RFC 9110 §13.2.2 against the annotation
 // the write finds, inside the use case, so no other write lands between the
 // check and the commit. Nil when the request names none.
-func annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
+func (h *Handlers) annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
 	ifNoneMatch := r.Header.Get("If-None-Match")
 	if r.Header.Get("If-Match") == "" && ifNoneMatch == "" &&
 		r.Header.Get("If-Unmodified-Since") == "" {
@@ -247,7 +306,7 @@ func annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
 	}
 
 	return func(a cache.Annotation) bool {
-		etag := annotationETag(a)
+		etag := annotationETag(h.cache.WithRemovals(a))
 		if preconditionFailed(r, etag, annotationModified(a)) != "" {
 			return false
 		}
@@ -342,6 +401,14 @@ func writeAnnotationError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func annotationBody(r *http.Request, a cache.Annotation) DetailResponse {
+	return NewDetailResponse(
+		r.Context(), annotationPath(a.ID), "Annotation", AnnotationResponse{listedAnnotation(a)},
+	)
+}
+
+// listedAnnotation is a as every response shows it: tags and resources are
+// always arrays.
+func listedAnnotation(a cache.Annotation) cache.Annotation {
 	if a.Tags == nil {
 		a.Tags = []string{}
 	}
@@ -349,14 +416,27 @@ func annotationBody(r *http.Request, a cache.Annotation) DetailResponse {
 		a.Resources = []cache.AnnotationResource{}
 	}
 
-	return NewDetailResponse(r.Context(), annotationPath(a.ID), "Annotation", AnnotationResponse{a})
+	return a
 }
 
 func annotationPath(id uint64) string { return "/annotations/" + strconv.FormatUint(id, 10) }
 
-// annotationETag is the annotation's version, which every write advances.
+// annotationETag is the annotation's version, which every write advances, and
+// which of its resources are removed, which changes it without a write.
 func annotationETag(a cache.Annotation) string {
-	return `"` + strconv.FormatUint(a.Version, 10) + `"`
+	var removed uint32
+	for i, r := range a.Resources {
+		if r.Removed {
+			removed |= 1 << i
+		}
+	}
+
+	version := strconv.FormatUint(a.Version, 10)
+	if removed != 0 {
+		version += "-" + strconv.FormatUint(uint64(removed), 16)
+	}
+
+	return `"` + version + `"`
 }
 
 func annotationModified(a cache.Annotation) time.Time {

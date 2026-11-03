@@ -987,7 +987,9 @@ func (rt routes) stacks() {
 		"GET /stacks/{name}",
 		contentNegotiatedWithSSE(h.HandleGetStack, func(w http.ResponseWriter, r *http.Request) {
 			name := r.PathValue("name")
-			stackMatch := sse.AnnotationsOn(h.cache, name, sse.StackMatcher(h.cache, name))
+			stackMatch := sse.AnnotationsOn(
+				h.cache, cache.EventStack, name, sse.StackMatcher(h.cache, name),
+			)
 			h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, stackMatch), "")
 		}, stackFeeds, spa),
 	)
@@ -1115,7 +1117,9 @@ func (rt routes) networks() {
 			func(w http.ResponseWriter, r *http.Request) {
 				// Per-resource streams have no replay; see streamResource.
 				id := r.PathValue("id")
-				networkMatch := h.detailStreamMatch(id, sse.NetworkMatcher(h.cache, id))
+				networkMatch := h.detailStreamMatch(
+					cache.EventNetwork, id, sse.NetworkMatcher(h.cache, id),
+				)
 				h.broadcaster.ServeSSE(w, r, h.aclMatchWrap(r, networkMatch), "")
 			},
 			h.detailFeeds(cache.EventNetwork, "id", func(id string) string {
@@ -1176,8 +1180,15 @@ func (rt routes) annotations() {
 	h, mux, spa := rt.h, rt.mux, rt.cfg.SPA
 
 	mux.HandleFunc("GET /annotations", contentNegotiated(h.HandleAnnotations, feedHandlers{
+		atom:        h.feedAnnotationsHandler(renderAtom),
+		jsonFeed:    h.feedAnnotationsHandler(renderJSONFeed),
+		csv:         true,
+		csvParams:   annotationCSVParams,
+		queryParams: annotationFeedParams,
+	}, spa))
+	mux.HandleFunc("GET /annotations/tags", contentNegotiated(h.HandleAnnotationTags, feedHandlers{
 		csv:       true,
-		csvParams: historyCSVParams,
+		csvParams: []string{"q", "limit"},
 	}, spa))
 	mux.Handle("POST /annotations",
 		annotationWrite(h.mayAnnotate).AnswersWithABody().ThenFunc(h.HandleCreateAnnotation))

@@ -89,7 +89,7 @@ func TestAnnotationItems_AreNeverListed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, q := range []HistoryQuery{{}, {Kind: KindAnnotation}, {ResourceID: "1"}} {
+	for _, q := range []HistoryQuery{{}, {Kinds: []string{KindAnnotation}}, {ResourceID: "1"}} {
 		if got := c.history.List(q); len(got) != 0 {
 			t.Errorf("List(%+v) = %+v, want nothing", q, got)
 		}
