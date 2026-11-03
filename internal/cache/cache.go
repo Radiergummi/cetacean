@@ -419,7 +419,7 @@ func (c *Cache) notify(e Event) {
 			Stack:      e.Stack,
 		}
 		if task, ok := e.Resource.(swarm.Task); ok {
-			entry.ServiceID = task.ServiceID
+			entry.ServiceID, entry.Slot, entry.NodeID = task.ServiceID, task.Slot, task.NodeID
 		}
 		if actor, ok := c.attributions.match(e); ok {
 			entry.Actor = &actor

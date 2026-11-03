@@ -1,0 +1,2 @@
+ALTER TABLE timeline ADD COLUMN slot INTEGER;
+ALTER TABLE timeline ADD COLUMN node_id TEXT;

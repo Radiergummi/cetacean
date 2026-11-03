@@ -526,12 +526,12 @@ func TestTimeline_SearchFindsWhatARowShows(t *testing.T) {
 	} {
 		got := timelineIDs(c.Timeline(HistoryQuery{
 			Search: search, Kinds: []string{KindChange, KindAnnotation},
-			TaskName: func(id string) string {
-				if id == "x7k2task" {
+			TaskName: func(e HistoryEntry) string {
+				if e.ResourceID == "x7k2task" {
 					return "shop_web.1"
 				}
 
-				return id
+				return e.ResourceID
 			},
 		}))
 		if !slices.Equal(got, want) {
@@ -556,9 +556,12 @@ func TestHistoryQuery_ResolvesNoNameItHides(t *testing.T) {
 	var resolved []string
 
 	q := HistoryQuery{
-		Search:   "web",
-		Visible:  func(e HistoryEntry) bool { return e.ResourceID != "hidden" },
-		TaskName: func(id string) string { resolved = append(resolved, id); return id },
+		Search:  "web",
+		Visible: func(e HistoryEntry) bool { return e.ResourceID != "hidden" },
+		TaskName: func(e HistoryEntry) string {
+			resolved = append(resolved, e.ResourceID)
+			return e.ResourceID
+		},
 	}
 
 	q.matches(HistoryEntry{Kind: KindChange, Type: EventTask, ResourceID: "hidden"})

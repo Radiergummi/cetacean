@@ -59,6 +59,8 @@ func Run(t *testing.T, newStore Factory) {
 				Action:     "update",
 				ResourceID: "task1",
 				ServiceID:  "svc1",
+				Slot:       2,
+				NodeID:     "node1",
 			},
 			{
 				ID:        9,

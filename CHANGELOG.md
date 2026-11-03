@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `/history` items carry a `kind`, and gaps appear beside changes; request `?kind=change` to keep the list of changes alone
 
 ### Fixed
+- History, its feeds, Recent Activity and `get_events` keep naming a task `service.slot` after Swarm prunes it, rather than falling back to its ID
 - The licenses page and `/-/sbom.cdx.json` no longer list build tools, such as TypeScript and its platform binaries, that the frontend doesn't bundle
 - A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50; on `/history.csv` it returns 200 rows instead of the whole history, which leaving `limit` out still does
 - A log stream resumed after a dropped connection no longer loses the lines a node with a slower clock wrote meanwhile; resuming may now repeat lines, which the dashboard hides

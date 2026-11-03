@@ -42,6 +42,35 @@ func TestPresentHistoryNamesOnlyReadableServices(t *testing.T) {
 	}
 }
 
+func TestPresentHistoryNamesAPrunedTaskByTheReplicaItRecorded(t *testing.T) {
+	c := hiddenServiceCache()
+	c.DeleteTask("task-hidden")
+
+	entries := c.History().List(cache.HistoryQuery{Limit: 10})
+	if len(entries) < 2 {
+		t.Fatalf("history = %+v, want the task's create and remove", entries)
+	}
+
+	for _, e := range cluster.PresentHistory(c, entries, cluster.ReadableTaskNames(c, nil)) {
+		if e.Type == cache.EventTask && e.Name != "payroll-db.1" {
+			t.Errorf("%s of the pruned task named %q, want payroll-db.1", e.Action, e.Name)
+		}
+	}
+
+	for _, e := range cluster.PresentHistory(c, entries, cluster.ReadableTaskNames(c, tasksOnlyReader)) {
+		if e.Type == cache.EventTask && e.Name != "task-hidden" {
+			t.Errorf("without the service grant, %s named %q, want the task ID", e.Action, e.Name)
+		}
+	}
+
+	unrecorded := []cache.HistoryEntry{
+		{Type: cache.EventTask, ResourceID: "task-hidden", ServiceID: "svc-hidden"},
+	}
+	if got := cluster.PresentHistory(c, unrecorded, cluster.ReadableTaskNames(c, nil))[0].Name; got != "task-hidden" {
+		t.Errorf("an entry recorded before replicas were kept = %q, want the task ID", got)
+	}
+}
+
 func TestSearchDoesNotRevealAHiddenServiceThroughItsTasks(t *testing.T) {
 	c := hiddenServiceCache()
 
