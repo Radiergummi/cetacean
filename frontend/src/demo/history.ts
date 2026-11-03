@@ -265,9 +265,13 @@ export function filterHistory(
       return false;
     }
 
+    // A stack's history holds its services' changes too.
+    const member =
+      type === "stack" && entry.type === "service" && stackOf(entry.resourceId) === resourceId;
+
     return (
-      (!type || entry.type === type) &&
-      (!resourceId || entry.resourceId === resourceId) &&
+      (!type || entry.type === type || member) &&
+      (!resourceId || entry.resourceId === resourceId || member) &&
       start > sinceTime &&
       start <= untilTime
     );

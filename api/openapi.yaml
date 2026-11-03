@@ -5786,7 +5786,8 @@ paths:
             other type claims it. An identifier matching nothing is used as it
             stands, so entries for a resource the cluster has since dropped stay
             reachable by the ID they were recorded under. A service's timeline
-            includes its tasks' entries, with `type=service` as well.
+            includes its tasks' entries, with `type=service` as well, and a
+            stack's includes its services' changes.
           schema:
             type: string
           example: r8m2x5nk3p7q
