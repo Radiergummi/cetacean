@@ -418,8 +418,8 @@ func (c *Cache) notify(e Event) {
 			Service:    e.Service,
 			Stack:      e.Stack,
 		}
-		if task, ok := e.Resource.(swarm.Task); ok {
-			entry.ServiceID, entry.Slot, entry.NodeID = task.ServiceID, task.Slot, task.NodeID
+		if e.Type == EventTask {
+			c.recordReplica(&entry, e)
 		}
 		if actor, ok := c.attributions.match(e); ok {
 			entry.Actor = &actor
@@ -450,6 +450,31 @@ func (c *Cache) dispatch(e Event) {
 
 	for _, fn := range fns {
 		fn(e)
+	}
+}
+
+// recordReplica gives a task entry its replica and its service's name. A
+// task removed after the cache forgot it carries none, so it keeps what its
+// last entry recorded.
+func (c *Cache) recordReplica(entry *HistoryEntry, e Event) {
+	task, ok := e.Resource.(swarm.Task)
+	if !ok {
+		last := c.history.List(HistoryQuery{
+			ResourceID: e.ID, Types: []EventType{EventTask}, Kinds: []string{KindChange}, Limit: 1,
+		})
+		if len(last) > 0 {
+			entry.ServiceID, entry.Slot = last[0].ServiceID, last[0].Slot
+			entry.NodeID, entry.ServiceName = last[0].NodeID, last[0].ServiceName
+		}
+
+		return
+	}
+
+	entry.ServiceID, entry.Slot, entry.NodeID = task.ServiceID, task.Slot, task.NodeID
+	entry.ServiceName = e.Service
+
+	if svc, ok := c.GetService(task.ServiceID); ok {
+		entry.ServiceName = svc.Spec.Name
 	}
 }
 

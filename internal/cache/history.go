@@ -46,10 +46,12 @@ type HistoryEntry struct {
 	// returns it too, since a crash loop changes nothing on the service itself.
 	ServiceID string `json:"-"`
 
-	// Slot and NodeID are a task entry's replica, which name it once Swarm has
-	// pruned the task; both are zero on an entry recorded before they were kept.
-	Slot   int    `json:"-"`
-	NodeID string `json:"-"`
+	// Slot, NodeID and ServiceName are a task entry's replica and its service's
+	// name, which name it once Swarm has pruned the task or its service; all are
+	// zero on an entry recorded before they were kept.
+	Slot        int    `json:"-"`
+	NodeID      string `json:"-"`
+	ServiceName string `json:"-"`
 
 	// The annotation's own fields, set on the entry a list makes of one.
 	Text      string               `json:"text,omitempty"`

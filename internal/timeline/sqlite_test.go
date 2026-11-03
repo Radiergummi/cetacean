@@ -143,11 +143,19 @@ func TestSQLite_RestoresATaskRecordedBeforeItsReplicaWas(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Back to the schema before migration 3, as an older release left it.
 	raw := timeline.OpenRaw(t, path)
-	if _, err := raw.ExecContext(ctx, `INSERT INTO timeline
-		(id, kind, at, type, action, resource_id, name, service_id)
-		VALUES (1, 'change', 0, 'task', 'update', 'task1', 'task1', 'svc1')`); err != nil {
-		t.Fatal(err)
+	for _, stmt := range []string{
+		`ALTER TABLE timeline DROP COLUMN slot`,
+		`ALTER TABLE timeline DROP COLUMN node_id`,
+		`ALTER TABLE timeline DROP COLUMN service_name`,
+		`DELETE FROM schema_migrations WHERE version = 3`,
+		`INSERT INTO timeline (id, kind, at, type, action, resource_id, name, service_id)
+			VALUES (1, 'change', 0, 'task', 'update', 'task1', 'task1', 'svc1')`,
+	} {
+		if _, err := raw.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
 	}
 
 	if err := raw.Close(); err != nil {
