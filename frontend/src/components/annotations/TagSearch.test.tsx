@@ -74,6 +74,14 @@ describe("TagSearch", () => {
     await waitFor(() => expect(params().get("q")).toBe("web"));
   });
 
+  it("leaves a lone # out of the search", async () => {
+    const { user, input, params } = show();
+
+    await user.type(input, "web # ");
+
+    await waitFor(() => expect(params().get("q")).toBe("web"));
+  });
+
   it("takes a chip back on Backspace in an empty box, and refuses an invalid tag", async () => {
     const { user, input, params } = show("/history?tag=deploy&tag=db");
 

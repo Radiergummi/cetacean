@@ -13,10 +13,13 @@ import { useId, useState, type KeyboardEvent } from "react";
 const tagToken = /(?:^|\s)#(\S*)$/;
 
 /**
- * The input without the tag being typed, which is the free-text search.
+ * The input without the tag being typed or a lone `#`: the free-text search.
  */
 function freeText(input: string): string {
-  return input.replace(tagToken, "").trim();
+  return input
+    .replace(tagToken, "")
+    .replace(/(^|\s)#(?=\s|$)/g, "$1")
+    .trim();
 }
 
 /**
@@ -53,6 +56,7 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
       ? []
       : suggestions.filter((tag) => tag.includes(token.toLowerCase()));
   const open = options.length > 0;
+  const active = Math.min(highlight, options.length - 1);
   const optionId = (index: number) => `${listboxId}-${index}`;
 
   const change = (value: string) => {
@@ -94,10 +98,10 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
 
     if (open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
-      setHighlight((current) =>
+      setHighlight(
         event.key === "ArrowDown"
-          ? Math.min(current + 1, options.length - 1)
-          : Math.max(current - 1, 0),
+          ? Math.min(active + 1, options.length - 1)
+          : Math.max(active - 1, 0),
       );
 
       return;
@@ -111,7 +115,7 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
     }
 
     // Tab and Enter complete to the highlighted tag; Space keeps what is typed.
-    const chosen = event.key === " " ? token : (options[highlight] ?? token);
+    const chosen = event.key === " " ? token : (options[active] ?? token);
 
     if ((event.key === "Tab" || event.key === "Enter" || event.key === " ") && chosen !== "") {
       event.preventDefault();
@@ -160,7 +164,7 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
             aria-expanded={open}
             aria-controls={listboxId}
             aria-autocomplete="list"
-            aria-activedescendant={open ? optionId(highlight) : undefined}
+            aria-activedescendant={open ? optionId(active) : undefined}
             aria-invalid={invalid || undefined}
             autoComplete="off"
             spellCheck={false}
@@ -206,8 +210,8 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
               key={tag}
               id={optionId(index)}
               role="option"
-              aria-selected={index === highlight}
-              data-active={index === highlight || undefined}
+              aria-selected={index === active}
+              data-active={index === active || undefined}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setHighlight(index)}
               onClick={() => commit(tag)}

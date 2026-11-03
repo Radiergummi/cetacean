@@ -473,13 +473,7 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
-	fields := append(actorFields(a.Actor), a.Text)
-	fields = append(fields, a.Tags...)
-	for _, r := range a.Resources {
-		fields = append(fields, r.Name, stackDisplay(r.Name))
-	}
-
-	if !q.mentions(fields...) {
+	if q.Search != "" && !q.mentions(annotationFields(a)...) {
 		return false
 	}
 
@@ -492,6 +486,18 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 			return (q.Type == "" || r.Type == q.Type) &&
 				(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
 		})
+}
+
+// annotationFields are what a reader may search an annotation by.
+func annotationFields(a Annotation) []string {
+	fields := append(actorFields(a.Actor), a.Text)
+	fields = append(fields, a.Tags...)
+
+	for _, r := range a.Resources {
+		fields = append(fields, r.Name, stackDisplay(r.Name))
+	}
+
+	return fields
 }
 
 // subjectType is the type of the resource q's ResourceID names, when q says

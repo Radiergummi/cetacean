@@ -502,17 +502,14 @@ func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 		return false
 	}
 
-	return q.mentions(append(
+	return q.Search == "" || q.mentions(append(
 		actorFields(e.Actor), e.Name, stackDisplay(e.Name), e.ResourceID, string(e.Type), e.Action,
 	)...)
 }
 
-// mentions reports whether any of fields holds q.Search, ignoring case.
+// mentions reports whether any of fields holds q.Search, ignoring case. A
+// caller tests for an empty Search first, to spare building the fields.
 func (q HistoryQuery) mentions(fields ...string) bool {
-	if q.Search == "" {
-		return true
-	}
-
 	needle := strings.ToLower(q.Search)
 
 	return slices.ContainsFunc(fields, func(field string) bool {
