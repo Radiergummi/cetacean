@@ -271,7 +271,7 @@
   "go:github.com/go-logr/stdr@v1.2.2": {
    "license": "c71d239df91726fc519c6eb72d318ec6"
   },
-  "go:github.com/goccy/go-json@v0.11.2": {
+  "go:github.com/goccy/go-json@v0.12.0": {
    "license": "a707cd425201945d57500566c47c74dc"
   },
   "go:github.com/godbus/dbus/v5@v5.2.2": {
@@ -304,7 +304,7 @@
   "go:github.com/klauspost/compress@v1.20.3": {
    "license": "0d9e582ee4bff57bf1189c9e514e6da7"
   },
-  "go:github.com/mark3labs/mcp-go@v1.3.0": {
+  "go:github.com/mark3labs/mcp-go@v1.4.0": {
    "license": "5e13dbbc1d120fc2a03cecde7c91424a"
   },
   "go:github.com/mdlayher/netlink@v1.11.2": {
@@ -322,10 +322,10 @@
   "go:github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822": {
    "license": "aa1376b9bc5dea6f30cdefde40c176a2"
   },
-  "go:github.com/ncruces/go-sqlite3-wasm/v6@v6.3.35304": {
+  "go:github.com/ncruces/go-sqlite3-wasm/v6@v6.4.35401": {
    "license": "13219037ddf63dbbcf174bf59525d602"
   },
-  "go:github.com/ncruces/go-sqlite3@v0.35.6": {
+  "go:github.com/ncruces/go-sqlite3@v0.36.0": {
    "license": "8929c89a593807bf0c042272adc73013"
   },
   "go:github.com/ncruces/julianday@v1.0.0": {
@@ -428,7 +428,7 @@
   "go:golang.org/x/exp@v0.0.0-20260908205506-85c1c2202aba": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
-  "go:golang.org/x/net@v0.61.0": {
+  "go:golang.org/x/net@v0.62.0": {
    "license": "911f8f5782931320f5b8d1160a76365b"
   },
   "go:golang.org/x/oauth2@v0.37.0": {
@@ -469,7 +469,7 @@
   "go:gvisor.dev/gvisor@v0.0.0-20260915211658-a6f909f08a72": {
    "license": "0fbab5c58efbdf6d31e8085214f2dd82"
   },
-  "go:tailscale.com@v1.104.2": {
+  "go:tailscale.com@v1.104.4": {
    "license": "a7ca6186a7963a0a60740f6047760eec"
   },
   "npm:@ai-sdk/gateway@3.0.139": {
