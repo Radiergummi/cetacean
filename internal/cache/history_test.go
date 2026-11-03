@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/swarm"
 )
 
 func TestHistory_Append(t *testing.T) {
@@ -938,6 +940,22 @@ func TestRecordRecoveredGapPutsItsChangesJustBelowIt(t *testing.T) {
 
 	if len(events) != 1 || events[0].Type != EventGap {
 		t.Errorf("listeners got %+v, want the gap alone", events)
+	}
+}
+
+func TestALateTaskRemoveKeepsTheReplicaItsTaskRecorded(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	c.SetService(svc)
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Slot: 3, NodeID: "node1"})
+	c.DeleteTask("t1")
+	c.DeleteTask("t1")
+
+	late := c.History().List(HistoryQuery{Limit: 1})[0]
+	if late.Action != "remove" || late.ServiceID != "svc1" || late.Slot != 3 ||
+		late.NodeID != "node1" || late.ServiceName != "web" {
+		t.Errorf("late remove = %+v, want the replica t1's entries recorded", late)
 	}
 }
 

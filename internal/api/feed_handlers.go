@@ -267,17 +267,8 @@ func (h *Handlers) feedTimeline(
 	params []string,
 	kinds []string,
 ) {
-	q := r.URL.Query()
-
-	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
-	if err != nil {
-		problem.Write(w, r, "API016", err.Error())
-		return
-	}
-
-	query := cache.HistoryQuery{After: window.Since, Before: window.Until}
-	if err := timelineFilters(q, &query); err != nil {
-		problem.Write(w, r, "API016", err.Error())
+	query, ok := h.timelineScope(w, r)
+	if !ok {
 		return
 	}
 
@@ -623,15 +614,15 @@ var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset
 
 // historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyFeedParams = []string{"search", "kind", "tag", "matchAny", "author", "since", "until"}
+var historyFeedParams = []string{
+	"type", "resourceId", "tasks", "search", "kind", "tag", "matchAny", "author", "since", "until",
+}
 
 // annotationFeedParams names what /annotations' feeds read, which take no kind.
-var annotationFeedParams = withoutParams(historyFeedParams, "kind")
+var annotationFeedParams = withoutParams(historyFeedParams, "kind", "tasks")
 
 // historyCSVParams names what HandleHistory reads.
-var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "tasks", "before", "limit"}, historyFeedParams,
-)
+var historyCSVParams = slices.Concat([]string{"before", "limit"}, historyFeedParams)
 
 // annotationCSVParams names what HandleAnnotations reads.
 var annotationCSVParams = withoutParams(historyCSVParams, "kind", "tasks")

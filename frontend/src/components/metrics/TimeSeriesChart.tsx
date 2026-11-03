@@ -17,7 +17,6 @@ import {
   layoutMarkers,
   type MarkerLayout,
   markersAt,
-  markerX,
   annotationsAt,
   timeAtIndex,
   tooltipMarkers,
@@ -109,10 +108,16 @@ export default function TimeSeriesChart({
   const isMobile = useMatchesBreakpoint("md", "below");
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
-  // `offset` is the click's distance from its marker, kept as the marker moves.
-  const [pin, setPin] = useState<(NotePin & { offset: number }) | null>(null);
+  const [pin, setPin] = useState<NotePin | null>(null);
   const unpin = useCallback(() => setPin(null), []);
-  const pinRef = useRef(pin);
+  const markerListenersRef = useRef(new Set<() => void>());
+  const subscribeMarkers = useCallback((listener: () => void) => {
+    markerListenersRef.current.add(listener);
+
+    return () => {
+      markerListenersRef.current.delete(listener);
+    };
+  }, []);
   const plotRef = useRef<HTMLDivElement>(null);
   const chartId = useId();
   const sync = useChartSync();
@@ -168,19 +173,21 @@ export default function TimeSeriesChart({
 
     return timeAtIndex(timestamps, index);
   }, []);
+  // Where a time sits on the canvas now; null once it is off the samples.
+  const pixelFor = useCallback((time: number) => {
+    const xScale = chartRef.current?.scales["x"];
+    const index = fractionalIndex(dataRef.current?.timestamps ?? [], time);
+
+    return xScale && index !== null ? xScale.getPixelForValue(index) : null;
+  }, []);
   // The form holds minutes, so a mark is drawn at the minute it will save.
   const snapToMinute = useCallback(
     (x: number) => {
       const time = timeFor(x);
-      const xScale = chartRef.current?.scales["x"];
-      const index =
-        time === null
-          ? null
-          : fractionalIndex(dataRef.current?.timestamps ?? [], Math.floor(time / 60) * 60);
 
-      return xScale && index !== null ? xScale.getPixelForValue(index) : x;
+      return (time === null ? null : pixelFor(Math.floor(time / 60) * 60)) ?? x;
     },
-    [timeFor],
+    [pixelFor, timeFor],
   );
   const timelineRef = useRef(panel?.timeline);
   timelineRef.current = panel?.timeline;
@@ -272,10 +279,6 @@ export default function TimeSeriesChart({
     chartRef.current?.draw();
   }, [panel?.timeline]);
 
-  useEffect(() => {
-    pinRef.current = pin;
-  }, [pin]);
-
   const markerPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "timelineMarkers",
@@ -308,12 +311,9 @@ export default function TimeSeriesChart({
           markerLayoutRef.current = layout;
           markerInputsRef.current = inputs;
 
-          // A pinned popover follows its marker as new samples move the axis.
-          const pinned = pinRef.current;
-          const at = pinned ? markerX(layout, pinned.ids) : undefined;
-
-          if (pinned && at !== undefined && at + pinned.offset !== pinned.x) {
-            setPin({ ...pinned, x: at + pinned.offset });
+          // A pinned popover follows its time as samples move the axis.
+          for (const listener of markerListenersRef.current) {
+            listener();
           }
         }
 
@@ -391,7 +391,7 @@ export default function TimeSeriesChart({
           // A flag's or a range's annotations open pinned; the rest of the plot isolates a series.
           if (onFlag && y != null) {
             const notes = annotationsAt(markerLayoutRef.current, x, y, chart.chartArea.top);
-            const ids = notes.map(({ entry }) => entry.id);
+            const time = timeFor(x);
 
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
@@ -399,12 +399,10 @@ export default function TimeSeriesChart({
             }
 
             tooltipRef.current(null);
-            setPin({
-              x,
-              y: chart.chartArea.top,
-              ids,
-              offset: x - (markerX(markerLayoutRef.current, ids) ?? x),
-            });
+
+            if (time !== null) {
+              setPin({ time, y: chart.chartArea.top, ids: notes.map(({ entry }) => entry.id) });
+            }
 
             return;
           }
@@ -552,7 +550,17 @@ export default function TimeSeriesChart({
         ctx.restore();
       },
     }),
-    [chartId, sync, dataRef, tooltipRef, onSeriesDoubleClickRef, isolationRef, stackedRef, unitRef],
+    [
+      chartId,
+      sync,
+      dataRef,
+      tooltipRef,
+      onSeriesDoubleClickRef,
+      isolationRef,
+      stackedRef,
+      unitRef,
+      timeFor,
+    ],
   );
 
   const options = useMemo<ChartOptions<"line">>(
@@ -737,6 +745,8 @@ export default function TimeSeriesChart({
           pin={pin}
           container={plotRef}
           timeline={panel?.timeline ?? []}
+          locate={pixelFor}
+          subscribe={subscribeMarkers}
           onClose={unpin}
         />
       </div>

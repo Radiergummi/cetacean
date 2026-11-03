@@ -159,7 +159,7 @@ func (s *SQLite) Restore(
 ) (entries []cache.HistoryEntry, last uint64, err error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, at, until,
 			type, action, resource_id, name, summary,
-			service, stack, service_id, slot, node_id, recovered, recovered_from,
+			service, stack, service_id, slot, node_id, service_name, recovered, recovered_from,
 			actor_subject, actor_name, actor_provider, actor_client, actor_transport
 		FROM timeline WHERE `+ringKinds+` ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
@@ -173,7 +173,7 @@ func (s *SQLite) Restore(
 			at                                              int64
 			until                                           sql.NullInt64
 			typ, action, resourceID, name, summary          sql.NullString
-			service, stack, serviceID, nodeID               sql.NullString
+			service, stack, serviceID, nodeID, serviceName  sql.NullString
 			slot, recoveredFrom                             sql.NullInt64
 			recovered                                       sql.NullBool
 			subject, actorName, provider, client, transport sql.NullString
@@ -182,7 +182,7 @@ func (s *SQLite) Restore(
 		if err := rows.Scan(
 			&e.ID, &e.Kind, &at, &until,
 			&typ, &action, &resourceID, &name, &summary,
-			&service, &stack, &serviceID, &slot, &nodeID, &recovered, &recoveredFrom,
+			&service, &stack, &serviceID, &slot, &nodeID, &serviceName, &recovered, &recoveredFrom,
 			&subject, &actorName, &provider, &client, &transport,
 		); err != nil {
 			return nil, 0, err
@@ -203,6 +203,7 @@ func (s *SQLite) Restore(
 		e.ServiceID = serviceID.String
 		e.Slot = int(slot.Int64)
 		e.NodeID = nodeID.String
+		e.ServiceName = serviceName.String
 		e.Recovered = recovered.Bool
 
 		if recoveredFrom.Valid {
@@ -324,9 +325,9 @@ func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO timeline (
 			id, kind, at, until, type, action, resource_id, name, summary,
-			service, stack, service_id, slot, node_id, recovered, recovered_from,
+			service, stack, service_id, slot, node_id, service_name, recovered, recovered_from,
 			actor_subject, actor_name, actor_provider, actor_client, actor_transport
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO NOTHING`)
 	if err != nil {
 		return err
@@ -356,7 +357,8 @@ func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error
 			ctx,
 			e.ID, e.Kind, e.Timestamp.UnixNano(), until,
 			string(e.Type), e.Action, e.ResourceID, e.Name, e.Summary,
-			e.Service, e.Stack, e.ServiceID, e.Slot, e.NodeID, e.Recovered, recoveredFrom,
+			e.Service, e.Stack, e.ServiceID, e.Slot, e.NodeID, e.ServiceName,
+			e.Recovered, recoveredFrom,
 			subject, name, provider, client, transport,
 		); err != nil {
 			return err
