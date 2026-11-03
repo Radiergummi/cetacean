@@ -2414,11 +2414,11 @@
       }
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/gateway@3.0.139",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/gateway@4.0.115",
       "type": "library",
       "group": "@ai-sdk",
       "name": "gateway",
-      "version": "3.0.139",
+      "version": "4.0.115",
       "licenses": [
         {
           "license": {
@@ -2426,7 +2426,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/gateway@3.0.139",
+      "purl": "pkg:npm/%40ai-sdk/gateway@4.0.115",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
@@ -2441,11 +2441,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/gateway/-/gateway-3.0.139.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/gateway/-/gateway-4.0.115.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "445a71ca1e63f60ed931f2b1862c02705edb194f3bda8dc9be8888a996c738ce2a911e110b378a245fa4fb31e899c25819e51a6c46de3174ca3404b3cf84e8c7"
+              "content": "5e7fa00d63384e2d85cd89b186566d8c4b86046665398690329c1c55148de1cf6a08c52ccc3e45e5301b93180b57fb4729e31f117f9612e4c297a2a48f6afbdc"
             }
           ],
           "type": "distribution"
@@ -2453,11 +2453,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/provider-utils@4.0.33",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/provider-utils@5.0.61",
       "type": "library",
       "group": "@ai-sdk",
       "name": "provider-utils",
-      "version": "4.0.33",
+      "version": "5.0.61",
       "licenses": [
         {
           "license": {
@@ -2465,7 +2465,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.33",
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@5.0.61",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
@@ -2480,11 +2480,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-4.0.33.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-5.0.61.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "9c9d1b01f7a0300209b6bccc26d6f37abd5c4b79dbedcec3b325354b89eb3e6ed9534327e9204166fe481996464dba564c9c2a29348f7992535da95b031b7504"
+              "content": "63e677e77f545f0d1cb450cd7a94ed1b6dd5a81407af603ac88daa531bd0720ef90c96202680f617d536569e4e8108d7ee5c6da3504b805b4ab8e873aebe76bd"
             }
           ],
           "type": "distribution"
@@ -2492,11 +2492,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/provider@3.0.12",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/provider@4.0.28",
       "type": "library",
       "group": "@ai-sdk",
       "name": "provider",
-      "version": "3.0.12",
+      "version": "4.0.28",
       "licenses": [
         {
           "license": {
@@ -2504,7 +2504,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider@3.0.12",
+      "purl": "pkg:npm/%40ai-sdk/provider@4.0.28",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
@@ -2519,11 +2519,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/provider/-/provider-3.0.12.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/provider/-/provider-4.0.28.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b23f4359327665ed1647daac88e3eaa2accdc773b12fa88cc472266e1be87bda8eb297a46f3c4d0cc889e132067d81d887dc383a6063cf7a6bbea8734e2f7af9"
+              "content": "e9385c9a42505d232506b7fa9a2ac88d4512d38439fe40296d84cecdde6565f6172dad573e99c32f13ff1bdebf0ca734d1f0c850e5bd4b696cd264b36f4fa5f7"
             }
           ],
           "type": "distribution"
@@ -2531,11 +2531,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@ai-sdk/vue@3.0.214",
+      "bom-ref": "frontend@0.0.0|@ai-sdk/vue@4.0.142",
       "type": "library",
       "group": "@ai-sdk",
       "name": "vue",
-      "version": "3.0.214",
+      "version": "4.0.142",
       "licenses": [
         {
           "license": {
@@ -2543,7 +2543,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/vue@3.0.214",
+      "purl": "pkg:npm/%40ai-sdk/vue@4.0.142",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
@@ -2558,11 +2558,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@ai-sdk/vue/-/vue-3.0.214.tgz",
+          "url": "https://registry.npmjs.org/@ai-sdk/vue/-/vue-4.0.142.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "6000e27b37e141f8ea589b6d5e4c1e48b64d582507d15391bf75640aec1b003f9588e4d888efc89b735faf8f40814c2af8b6986460c5097b6b8390cda1b811de"
+              "content": "6307a7138e4021db69879625f74811a6cd7e8b70d5b11f02de31cfdc73c4b012f5f1ceb6a73078b345de58dd8c27ac521a57124201fb13c7d8d61f2a331df943"
             }
           ],
           "type": "distribution"
@@ -2570,12 +2570,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@babel/helper-string-parser@7.29.7",
+      "bom-ref": "frontend@0.0.0|@babel/helper-string-parser@7.29.11",
       "type": "library",
       "author": "The Babel Team",
       "group": "@babel",
       "name": "helper-string-parser",
-      "version": "7.29.7",
+      "version": "7.29.11",
       "description": "A utility package to parse strings",
       "licenses": [
         {
@@ -2584,7 +2584,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40babel/helper-string-parser@7.29.7",
+      "purl": "pkg:npm/%40babel/helper-string-parser@7.29.11",
       "externalReferences": [
         {
           "url": "https://babel.dev/docs/en/next/babel-helper-string-parser",
@@ -2595,11 +2595,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.29.7.tgz",
+          "url": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.29.11.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3dbe628cfad9f3d1831fcdb6dcbe143fc8ba400a56c6cd3845b3d02537960d5d3f91e476137e8c78a9f2afa2d899452fa91448f88bfced2b85d56e84ac837363"
+              "content": "b2765b3bb3040cea1ffa1bcd6bdec48c463ba83ee1da4c2f42be40242dd9850b9d296e5d9de8fa93790ff4d415f3c849c1a4bcbc3a912c5a3dae2bcb12195eda"
             }
           ],
           "type": "distribution"
@@ -2640,12 +2640,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@babel/parser@7.29.8",
+      "bom-ref": "frontend@0.0.0|@babel/parser@7.29.12",
       "type": "library",
       "author": "The Babel Team",
       "group": "@babel",
       "name": "parser",
-      "version": "7.29.8",
+      "version": "7.29.12",
       "description": "A JavaScript parser",
       "licenses": [
         {
@@ -2654,7 +2654,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40babel/parser@7.29.8",
+      "purl": "pkg:npm/%40babel/parser@7.29.12",
       "externalReferences": [
         {
           "url": "https://babel.dev/docs/en/next/babel-parser",
@@ -2669,11 +2669,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.8.tgz",
+          "url": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.12.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "13c953018341d4a5be147f95189b993358a8031d84ea8565bd0151adfe4ff19666b222576000fdbd3155ef2c84511373821d5d16a319b8eead53070045ba8508"
+              "content": "589ec9069fd0e3ecff226c9db48ee34ba355728e7efbadf613105e9925fe62c6fe1b5942c10e41568dd263e8c618e7195c8e1971c6d94944892cd056e9e12926"
             }
           ],
           "type": "distribution"
@@ -2718,12 +2718,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@babel/types@7.29.8",
+      "bom-ref": "frontend@0.0.0|@babel/types@7.29.11",
       "type": "library",
       "author": "The Babel Team",
       "group": "@babel",
       "name": "types",
-      "version": "7.29.8",
+      "version": "7.29.11",
       "description": "Babel Types is a Lodash-esque utility library for AST nodes",
       "licenses": [
         {
@@ -2732,7 +2732,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40babel/types@7.29.8",
+      "purl": "pkg:npm/%40babel/types@7.29.11",
       "externalReferences": [
         {
           "url": "https://babel.dev/docs/en/next/babel-types",
@@ -2747,11 +2747,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@babel/types/-/types-7.29.8.tgz",
+          "url": "https://registry.npmjs.org/@babel/types/-/types-7.29.11.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "563d6317770f7f183b3807e823b42754a2e820b966d8917da67547ad7f2ac7b0073226164fe343000ee30a194d8114b85932dcfdf0f59572e63e2c65ba3fb71a"
+              "content": "582b1e996e340a973a828b82d52ad8e8f05a67ea0b46511563d5c1bd9048ee297f1f252b6f69c9e74e70135307105c8364d9eb58312ecb88cbe745951df4d349"
             }
           ],
           "type": "distribution"
@@ -3130,6 +3130,39 @@
       ]
     },
     {
+      "bom-ref": "frontend@0.0.0|@codemirror/language@6.13.1",
+      "type": "library",
+      "author": "Marijn Haverbeke",
+      "group": "@codemirror",
+      "name": "language",
+      "version": "6.13.1",
+      "description": "Language support infrastructure for the CodeMirror code editor",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40codemirror/language@6.13.1",
+      "externalReferences": [
+        {
+          "url": "git+https://code.haverbeke.berlin/codemirror/language.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@codemirror/language/-/language-6.13.1.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "cdfbd4dabdd3cb29502cc8ffb5efb90a7434ad2a998bc075a130816d091a81c2d6e1773a8a669beaa37ea44261b2e34e2da26a891c815e9f548560350e156f0f"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
       "bom-ref": "frontend@0.0.0|@codemirror/lint@6.9.7",
       "type": "library",
       "author": "Marijn Haverbeke",
@@ -3196,6 +3229,72 @@
       ]
     },
     {
+      "bom-ref": "frontend@0.0.0|@codemirror/state@6.7.6",
+      "type": "library",
+      "author": "Marijn Haverbeke",
+      "group": "@codemirror",
+      "name": "state",
+      "version": "6.7.6",
+      "description": "Editor state data structures for the CodeMirror code editor",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40codemirror/state@6.7.6",
+      "externalReferences": [
+        {
+          "url": "git+https://code.haverbeke.berlin/codemirror/state.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@codemirror/state/-/state-6.7.6.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "900cfe027711b4ab8892779dc53d5bab85f05efe14a3085b9075359b23ebb556ff8d9b48996b95e415f3bf9bcaea2de46000ac76266240a15043932aede956f3"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@codemirror/streamparser@6.0.0",
+      "type": "library",
+      "author": "Marijn Haverbeke",
+      "group": "@codemirror",
+      "name": "streamparser",
+      "version": "6.0.0",
+      "description": "Types for CodeMirror-5-style stream parsers",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40codemirror/streamparser@6.0.0",
+      "externalReferences": [
+        {
+          "url": "git+https://code.haverbeke.berlin/codemirror/streamparser.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@codemirror/streamparser/-/streamparser-6.0.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "25314f17ac6b7e3b749a77c63e0cdc2e2330626bc8c8d6a88b3a7c058ceff0513c2ab4fa181183675f74aedb7e3bb5a47b7806fcc147ca263d60635e8a6a1fe3"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
       "bom-ref": "frontend@0.0.0|@codemirror/view@6.43.12",
       "type": "library",
       "author": "Marijn Haverbeke",
@@ -3222,6 +3321,39 @@
             {
               "alg": "SHA-512",
               "content": "36fd2fc50d7d340aaf07f736a45ce3233165cf3265ee399db4d9303b019b9f42acf66140ce26efba6cfb7107a6e5c46c140d9c130d9f83eb876466dc1eea4b41"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@codemirror/view@6.43.15",
+      "type": "library",
+      "author": "Marijn Haverbeke",
+      "group": "@codemirror",
+      "name": "view",
+      "version": "6.43.15",
+      "description": "DOM view component for the CodeMirror code editor",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40codemirror/view@6.43.15",
+      "externalReferences": [
+        {
+          "url": "git+https://code.haverbeke.berlin/codemirror/view.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@codemirror/view/-/view-6.43.15.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1c7b1fa6a15e1f25cbb3df37a5245edfc5da8ecd2f156650d81b97d26eca8bcc378d9e620fc72e477941cf6ff9fd7e770e17f7d920472a1eabb524c1ead29e1b"
             }
           ],
           "type": "distribution"
@@ -3352,47 +3484,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@floating-ui/utils@0.2.10",
-      "type": "library",
-      "author": "atomiks",
-      "group": "@floating-ui",
-      "name": "utils",
-      "version": "0.2.10",
-      "description": "Utilities for Floating UI",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40floating-ui/utils@0.2.10",
-      "externalReferences": [
-        {
-          "url": "https://floating-ui.com",
-          "type": "website"
-        },
-        {
-          "url": "https://github.com/floating-ui/floating-ui.git",
-          "type": "vcs"
-        },
-        {
-          "url": "https://github.com/floating-ui/floating-ui",
-          "type": "issue-tracker"
-        },
-        {
-          "url": "https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.10.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "6864f16e96e0f3f6f925f5351d74ab6c7df05d9b8b3c970d11c65014cc4bb37a12ce0b55bba9c53e46db18652f05c523295d98c81f56c7169ba3e1c41fdb5c45"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|@floating-ui/utils@0.2.12",
       "type": "library",
       "author": "atomiks",
@@ -3475,12 +3566,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@floating-ui/vue@1.1.9",
+      "bom-ref": "frontend@0.0.0|@floating-ui/vue@2.0.1",
       "type": "library",
       "author": "lozinsky",
       "group": "@floating-ui",
       "name": "vue",
-      "version": "1.1.9",
+      "version": "2.0.1",
       "description": "Floating UI for Vue",
       "licenses": [
         {
@@ -3489,7 +3580,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40floating-ui/vue@1.1.9",
+      "purl": "pkg:npm/%40floating-ui/vue@2.0.1",
       "externalReferences": [
         {
           "url": "https://floating-ui.com/docs/vue",
@@ -3504,11 +3595,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@floating-ui/vue/-/vue-1.1.9.tgz",
+          "url": "https://registry.npmjs.org/@floating-ui/vue/-/vue-2.0.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "05f36a356e8a03cdcd7b1b2981bf4366ecf9efc47b1d3f0c670d427caf48e8087841178d58426c5d61cdf927663952cd1a64cf0e2f9f0d3e77e437f93f330b6d"
+              "content": "d38dddc84283f530d27f3d3cd181f6be86ee6e083e348a3ff45c3844097bb043290fc026d4336bad24e5fc6a4c063c861e80ff15b258d902dac18f87490b0420"
             }
           ],
           "type": "distribution"
@@ -3681,6 +3772,113 @@
       ]
     },
     {
+      "bom-ref": "frontend@0.0.0|@jridgewell/gen-mapping@0.3.13",
+      "type": "library",
+      "author": "Justin Ridgewell",
+      "group": "@jridgewell",
+      "name": "gen-mapping",
+      "version": "0.3.13",
+      "description": "Generate source maps",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40jridgewell/gen-mapping@0.3.13",
+      "externalReferences": [
+        {
+          "url": "https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/jridgewell/sourcemaps.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "da492dffb9e227a32010fc45d1b61d43a7ad65a03e7d0bc370b29c921cb5c8840ecdaa0a8c10634a3eb7fda2d58d8137aa146de5dbccfae5327c283a50a0816c"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@jridgewell/remapping@2.3.5",
+      "type": "library",
+      "author": "Justin Ridgewell",
+      "group": "@jridgewell",
+      "name": "remapping",
+      "version": "2.3.5",
+      "description": "Remap sequential sourcemaps through transformations to point at the original source code",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40jridgewell/remapping@2.3.5",
+      "externalReferences": [
+        {
+          "url": "https://github.com/jridgewell/sourcemaps/tree/main/packages/remapping",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/jridgewell/sourcemaps.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@jridgewell/remapping/-/remapping-2.3.5.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "2c8f6effe95a606e03b354c3292256d983eb22571560ec22d9f502eb1078de5b9e0a383157895f7ce0990ad605887e9334e5feb50297c7ded3e082876e1c8711"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@jridgewell/resolve-uri@3.1.2",
+      "type": "library",
+      "author": "Justin Ridgewell",
+      "group": "@jridgewell",
+      "name": "resolve-uri",
+      "version": "3.1.2",
+      "description": "Resolve a URI relative to an optional base URI",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40jridgewell/resolve-uri@3.1.2",
+      "externalReferences": [
+        {
+          "url": "https://github.com/jridgewell/resolve-uri",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6d12128022233f6d3fb5b5923d63048b9e1054f45913192e0fd9492fe508c542adc15240f305b54eb6f58ccb354455e8d42053359ff98690bd42f98a59da292b"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
       "bom-ref": "frontend@0.0.0|@jridgewell/sourcemap-codec@1.6.0",
       "type": "library",
       "author": "Justin Ridgewell",
@@ -3711,6 +3909,43 @@
             {
               "alg": "SHA-512",
               "content": "4fb8dffb9ce0b191f0349e25bd0eff69ecdbca4d27357fb32555a998703b558b04c7b6bbaabe5183921bb4916a920cdee58dacaeeab545463c43cdfb39dee217"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@jridgewell/trace-mapping@0.3.31",
+      "type": "library",
+      "author": "Justin Ridgewell",
+      "group": "@jridgewell",
+      "name": "trace-mapping",
+      "version": "0.3.31",
+      "description": "Trace the original position through a source map",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40jridgewell/trace-mapping@0.3.31",
+      "externalReferences": [
+        {
+          "url": "https://github.com/jridgewell/sourcemaps/tree/main/packages/trace-mapping",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/jridgewell/sourcemaps.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "cf3351f9275048327373c8e869e3fc410a0242bf0db98c76748232b65d507811191c9f6e5ba85e6ecad881bcfc849c1441aa374d608cb667d5f0dbb5b7038b03"
             }
           ],
           "type": "distribution"
@@ -3851,6 +4086,39 @@
             {
               "alg": "SHA-512",
               "content": "a97747ed4a93bc67dd54120dae02a10ec553253c5a72d34dc4b93bf94330661535de530768e06525ef55aa9f74ef26b9e98dfe79ddad96acf2b3b8c3913996d2"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@lezer/highlight@1.2.5",
+      "type": "library",
+      "author": "Marijn Haverbeke",
+      "group": "@lezer",
+      "name": "highlight",
+      "version": "1.2.5",
+      "description": "Highlighting system for Lezer parse trees",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40lezer/highlight@1.2.5",
+      "externalReferences": [
+        {
+          "url": "git+https://code.haverbeke.berlin/lezer/highlight.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@lezer/highlight/-/highlight-1.2.5.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "3b518c54a82d7f962ca45691ce99aa91580cb489361c6f6e3006c7eb074021d361dd35730ac721ffe7118beea5dbffd418329ee8d07d056ddcbee4797b3310d3"
             }
           ],
           "type": "distribution"
@@ -4097,12 +4365,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@modelcontextprotocol/client@2.3.1",
+      "bom-ref": "frontend@0.0.0|@modelcontextprotocol/client@2.4.0",
       "type": "library",
       "author": "Anthropic, PBC",
       "group": "@modelcontextprotocol",
       "name": "client",
-      "version": "2.3.1",
+      "version": "2.4.0",
       "description": "Model Context Protocol implementation for TypeScript - Client package",
       "licenses": [
         {
@@ -4111,7 +4379,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/client@2.3.1",
+      "purl": "pkg:npm/%40modelcontextprotocol/client@2.4.0",
       "externalReferences": [
         {
           "url": "https://modelcontextprotocol.io",
@@ -4126,11 +4394,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.3.1.tgz",
+          "url": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.4.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "9881995e91ec8e767a943fa00ff58232947993cc95410f273451f53744ab7fb02f9f04d43180faa6f4d8f27836f877b915f57b60c64b9ab8cbedc2dafdc73775"
+              "content": "2e0ac3d8ea611ee1b5daf7ca14acfa48e9eaedb287426846248018743f8c6419f69e91c4cabcbab83f33be4b6876d97909033ce4c3b46a75320fd2709949b1c3"
             }
           ],
           "type": "distribution"
@@ -4138,12 +4406,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@modelcontextprotocol/core@2.3.1",
+      "bom-ref": "frontend@0.0.0|@modelcontextprotocol/core@2.4.0",
       "type": "library",
       "author": "Anthropic, PBC",
       "group": "@modelcontextprotocol",
       "name": "core",
-      "version": "2.3.1",
+      "version": "2.4.0",
       "description": "Model Context Protocol for TypeScript — public Zod schemas (spec + OAuth/OpenID)",
       "licenses": [
         {
@@ -4152,7 +4420,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/core@2.3.1",
+      "purl": "pkg:npm/%40modelcontextprotocol/core@2.4.0",
       "externalReferences": [
         {
           "url": "https://modelcontextprotocol.io",
@@ -4167,11 +4435,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@modelcontextprotocol/core/-/core-2.3.1.tgz",
+          "url": "https://registry.npmjs.org/@modelcontextprotocol/core/-/core-2.4.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "95a5662213c6a568bbac6f6afb452281b9513741f0b3f62395beaa2c5b55aabc9754b91ce21fb237ccfbdf53ce0f62e700642515eeffb578549bb062d1807dd6"
+              "content": "cfc4012aa75f5cb3f390b42e1b8c69f21ad510c9b53d9d4883130ddac31b26216200a3965e7033a205e7d96e1aa880653f579ae94e728aa56abaf50d3350a3e9"
             }
           ],
           "type": "distribution"
@@ -4179,12 +4447,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@modelcontextprotocol/ext-apps@2.0.3",
+      "bom-ref": "frontend@0.0.0|@modelcontextprotocol/ext-apps@2.0.4",
       "type": "library",
       "author": "Olivier Chafik",
       "group": "@modelcontextprotocol",
       "name": "ext-apps",
-      "version": "2.0.3",
+      "version": "2.0.4",
       "description": "MCP Apps SDK — Enable MCP servers to display interactive user interfaces in conversational clients.",
       "licenses": [
         {
@@ -4193,7 +4461,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/ext-apps@2.0.3",
+      "purl": "pkg:npm/%40modelcontextprotocol/ext-apps@2.0.4",
       "externalReferences": [
         {
           "url": "https://github.com/modelcontextprotocol/ext-apps",
@@ -4204,48 +4472,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@modelcontextprotocol/ext-apps/-/ext-apps-2.0.3.tgz",
+          "url": "https://registry.npmjs.org/@modelcontextprotocol/ext-apps/-/ext-apps-2.0.4.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4e7fb8f9cca13b87f8710483c4dc8b8887c413eaa54d3b886d604907c2538a71173a10d88024f8c034d0a65c43f4c058647e69098182e7d19ac62c084f86eef3"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
-      "bom-ref": "frontend@0.0.0|@opentelemetry/api@1.9.0",
-      "type": "library",
-      "author": "OpenTelemetry Authors",
-      "group": "@opentelemetry",
-      "name": "api",
-      "version": "1.9.0",
-      "description": "Public API for OpenTelemetry",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40opentelemetry/api@1.9.0",
-      "externalReferences": [
-        {
-          "url": "https://github.com/open-telemetry/opentelemetry-js/tree/main/api",
-          "type": "website"
-        },
-        {
-          "url": "open-telemetry/opentelemetry-js",
-          "type": "vcs"
-        },
-        {
-          "url": "https://registry.npmjs.org/@opentelemetry/api/-/api-1.9.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "de0880390bd9887e45f5b325322bfcf8648f31eaa0d1d6da7a8e7cff44a503db314aa6619d4b71cd7f7fd85cf2852f6c5907f94b418913400a06b16a8e979872"
+              "content": "07e3dc6ee1a269fd1ee48deecb888ee6d4b701ba3ee70f09bd91731cccd076af725703fcdfacc9930dbe28218e434af84ccd5fb908b825d9dbb968e44b8681be"
             }
           ],
           "type": "distribution"
@@ -4319,12 +4550,52 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/agent-chat@0.12.45",
+      "bom-ref": "frontend@0.0.0|@rolldown/pluginutils@1.0.1",
+      "type": "library",
+      "group": "@rolldown",
+      "name": "pluginutils",
+      "version": "1.0.1",
+      "description": "Plugin utilities for Rolldown",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40rolldown/pluginutils@1.0.1",
+      "externalReferences": [
+        {
+          "url": "https://github.com/rolldown/plugins/tree/main/packages/pluginutils#readme",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/rolldown/plugins.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/rolldown/plugins/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "da3f5b1ade4987c863faf3ed8333ed97bda3d324711c0cae9a8a3a4cd7c08ec2c1d3852da52bcf6cf703701331cfb9fef42601d1cd46c501716118368e29aa1b"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@scalar/agent-chat@0.12.49",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "agent-chat",
-      "version": "0.12.45",
+      "version": "0.12.49",
       "description": "Agent chat components",
       "licenses": [
         {
@@ -4333,7 +4604,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/agent-chat@0.12.45",
+      "purl": "pkg:npm/%40scalar/agent-chat@0.12.49",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4348,11 +4619,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/agent-chat/-/agent-chat-0.12.45.tgz",
+          "url": "https://registry.npmjs.org/@scalar/agent-chat/-/agent-chat-0.12.49.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "71c8f32fc682404239aeebf5b8e6f00a6c017abb84e8a65704874673c76170dbbae93a0bc19a0b1bd8862f893f457fd2099983f53ec23a40a5882668e553b457"
+              "content": "a25e156d048201f44fb078adb9e2bc1baa63d184614d7a8ba956390039fd593296ec5d145608dfabc1d4f2083443a478ddf05d9a4ef87957c8ec3a2301d05bc6"
             }
           ],
           "type": "distribution"
@@ -4360,12 +4631,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/api-client@3.23.2",
+      "bom-ref": "frontend@0.0.0|@scalar/api-client@3.23.6",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "api-client",
-      "version": "3.23.2",
+      "version": "3.23.6",
       "description": "the open source API testing client",
       "licenses": [
         {
@@ -4374,7 +4645,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/api-client@3.23.2",
+      "purl": "pkg:npm/%40scalar/api-client@3.23.6",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4389,11 +4660,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/api-client/-/api-client-3.23.2.tgz",
+          "url": "https://registry.npmjs.org/@scalar/api-client/-/api-client-3.23.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "81cb23df01d4009ffd979e53827658927216885dae3f6c68d4ee62b0db1f02a7800bb5a084c941d9a6677d5e97ddea43406423bdf9b2f8a85262ba51155de02a"
+              "content": "56630007d92e6360fbbf81352109dba3622c1f34a6a1fd2f6b07e5a1196b89bc65bca711af9cc29ad6913317ef49cba18a2bad044edf67d9d99fef3ca305a9ad"
             }
           ],
           "type": "distribution"
@@ -4401,12 +4672,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/api-reference@1.75.1",
+      "bom-ref": "frontend@0.0.0|@scalar/api-reference@1.76.4",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "api-reference",
-      "version": "1.75.1",
+      "version": "1.76.4",
       "description": "Generate beautiful API references from OpenAPI documents",
       "licenses": [
         {
@@ -4415,7 +4686,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/api-reference@1.75.1",
+      "purl": "pkg:npm/%40scalar/api-reference@1.76.4",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4430,11 +4701,52 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/api-reference/-/api-reference-1.75.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/api-reference/-/api-reference-1.76.4.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f645a5b247c3cf3081eda5d320cf411d6627125cbad88f4867eb45ce573e928ab74f0fc7a12315d985981f090bf388b919093496b3e897347eb408a48a265578"
+              "content": "6c7495bf8f78cae353701ce67d947779885c90e4e2bb72fa2099af33691d2b3055996aa6f898441db61cef276cbfb1414acdef4d6f6c0b3d342dad9d1605b156"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@scalar/asyncapi-to-markdown@0.2.5",
+      "type": "library",
+      "author": "Scalar",
+      "group": "@scalar",
+      "name": "asyncapi-to-markdown",
+      "version": "0.2.5",
+      "description": "Create plain Markdown from AsyncAPI documents (for LLMs)",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40scalar/asyncapi-to-markdown@0.2.5",
+      "externalReferences": [
+        {
+          "url": "https://github.com/scalar/scalar",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/scalar/scalar.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/scalar/scalar/issues/new/choose",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@scalar/asyncapi-to-markdown/-/asyncapi-to-markdown-0.2.5.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "d2dfebe19b55b2e5108508ec4706991f573106dc2c3e74c38d08c3010e82780d669de04cc071b40297b16dc5781f0e02fb9d2ba26857145f3d8d161474ebe9e2"
             }
           ],
           "type": "distribution"
@@ -4483,12 +4795,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/blocks@0.5.4",
+      "bom-ref": "frontend@0.0.0|@scalar/blocks@0.6.3",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "blocks",
-      "version": "0.5.4",
+      "version": "0.6.3",
       "description": "Render blocks for your OpenAPI documentation",
       "licenses": [
         {
@@ -4497,7 +4809,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/blocks@0.5.4",
+      "purl": "pkg:npm/%40scalar/blocks@0.6.3",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4512,11 +4824,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/blocks/-/blocks-0.5.4.tgz",
+          "url": "https://registry.npmjs.org/@scalar/blocks/-/blocks-0.6.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ed3ce8f3ef6d7b946fcaff753c304fafef87122c5d037cb0ee5d84fc9606bd7bbc6b83452d42e426ba0a4b67103de039c6cfa9f4dfb8ffc18c84631e0abd9296"
+              "content": "a67a4e2ba960371d5614303d11dd58f926be62a0d93afdd2599a98f5ef79171c8000172fd6633d2a1fdc2b948b4f8db6fdd2ccbf297b429dda6be1531a599e7e"
             }
           ],
           "type": "distribution"
@@ -4524,12 +4836,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/code-highlight@0.4.10",
+      "bom-ref": "frontend@0.0.0|@scalar/code-highlight@0.4.11",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "code-highlight",
-      "version": "0.4.10",
+      "version": "0.4.11",
       "description": "Central methods and themes for code highlighting in Scalar projects",
       "licenses": [
         {
@@ -4538,7 +4850,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/code-highlight@0.4.10",
+      "purl": "pkg:npm/%40scalar/code-highlight@0.4.11",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4553,11 +4865,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/code-highlight/-/code-highlight-0.4.10.tgz",
+          "url": "https://registry.npmjs.org/@scalar/code-highlight/-/code-highlight-0.4.11.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "acd47de68af2b7ae6b2bab160c29983873c7bf14f2b1b5c3b60a9f82908f96c000e7376c11669d5a3bd2eb4f1e8eda2ad0a2f2cee865b4ee8c32e323190b6344"
+              "content": "c2a94080c5b7e4211762605303635a92f33b6b4cbaf611c874c76e31912c03c16d91ce26722dcf4e15205c2ed8acbda714be7b3c65bdecbc61d81a0d81dbf7e5"
             }
           ],
           "type": "distribution"
@@ -4565,12 +4877,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/components@0.32.1",
+      "bom-ref": "frontend@0.0.0|@scalar/components@0.33.1",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "components",
-      "version": "0.32.1",
+      "version": "0.33.1",
       "description": "Scalars component library",
       "licenses": [
         {
@@ -4579,7 +4891,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/components@0.32.1",
+      "purl": "pkg:npm/%40scalar/components@0.33.1",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4594,11 +4906,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/components/-/components-0.32.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/components/-/components-0.33.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4accd49006e89303d54d146ac0262c9e4a382b5bd746d7fe2e923680a829854595f7a3b1108df487aa084307b85b7f97bbbb3e5dc89d761c06ff47f34c4f955f"
+              "content": "b4d86d271d6c7d7e38a8f3270b5860b9d6c8b94b870e1bd15b90e007db39896b4820954a0344ec763a4beb98adcfd0b3d2b783c7b786740ee5132afe327803bf"
             }
           ],
           "type": "distribution"
@@ -4647,12 +4959,53 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/icons@0.7.7",
+      "bom-ref": "frontend@0.0.0|@scalar/highlight@0.6.0",
+      "type": "library",
+      "author": "Scalar",
+      "group": "@scalar",
+      "name": "highlight",
+      "version": "0.6.0",
+      "description": "Scalar's code highlighter",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40scalar/highlight@0.6.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/scalar/scalar",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/scalar/scalar.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/scalar/scalar/issues/new/choose",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@scalar/highlight/-/highlight-0.6.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "55be7b6c6027e5e9ad1c141ae903e34aad99d97a366777064ba76257f0666169f49330caa852b50784857c534936124bb26efdf24748d62273ebdee55e732144"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@scalar/icons@0.7.8",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "icons",
-      "version": "0.7.7",
+      "version": "0.7.8",
       "description": "Scalar Icons",
       "licenses": [
         {
@@ -4661,7 +5014,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/icons@0.7.7",
+      "purl": "pkg:npm/%40scalar/icons@0.7.8",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4676,11 +5029,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/icons/-/icons-0.7.7.tgz",
+          "url": "https://registry.npmjs.org/@scalar/icons/-/icons-0.7.8.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "54a6ba7e05c82db3b13a1bf260bfad6a55c9115763ebc3217622ee17c7c0bf8def24c407eefa3a51c73230c8a0d23752681819c72dc0b3f6922ab60e6e4e168c"
+              "content": "fc979efba964dc8dc60a42f8156ec83e30b5f96bc0900b19e321a4ab4b571db67327505633346e77f059b8ad5e08743eba7e420d3cb6e94cc970ce6d08c9fadf"
             }
           ],
           "type": "distribution"
@@ -4688,12 +5041,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/json-magic@0.16.1",
+      "bom-ref": "frontend@0.0.0|@scalar/json-magic@0.17.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "json-magic",
-      "version": "0.16.1",
+      "version": "0.17.0",
       "description": "A collection of utilities for working with JSON objects, including diffing, conflict resolution, bundling and more.",
       "licenses": [
         {
@@ -4702,7 +5055,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/json-magic@0.16.1",
+      "purl": "pkg:npm/%40scalar/json-magic@0.17.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4717,11 +5070,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/json-magic/-/json-magic-0.16.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/json-magic/-/json-magic-0.17.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c9640952b92e7d4b12862cc5fab18a3b806867f8a33299eb830463b42036718aa3c6440e61a40277e59517e6f78a199713b6a6afbebca4b22d142c79515fce6d"
+              "content": "6262403bd368182714fefc7b3f80f2f431aff959eda7e9f2dc587df6c94738e87f219c6f6dd2b9856799773437c7e7b369bf5724db1c1685fc1ff3fa5be1fc94"
             }
           ],
           "type": "distribution"
@@ -4729,12 +5082,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/localization@0.2.8",
+      "bom-ref": "frontend@0.0.0|@scalar/localization@0.2.9",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "localization",
-      "version": "0.2.8",
+      "version": "0.2.9",
       "description": "Framework-agnostic localization engine for Scalar packages",
       "licenses": [
         {
@@ -4743,7 +5096,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/localization@0.2.8",
+      "purl": "pkg:npm/%40scalar/localization@0.2.9",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4758,11 +5111,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/localization/-/localization-0.2.8.tgz",
+          "url": "https://registry.npmjs.org/@scalar/localization/-/localization-0.2.9.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d4cf9c1578221a195f8af6790ce1ffb082b5cfc16c58d22c179aec56bdd89152f4a7d7d47e0fc597f149074214c978448e166d4f042813be0b2df15002d3c465"
+              "content": "692769a165921f4109ef92c9e7330d9a1f0718c9672840dda7294745baf555333273136e659d1309448836ed048ce48507e9fcf37fa9931e5c5e594800753531"
             }
           ],
           "type": "distribution"
@@ -4770,12 +5123,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/oas-utils@0.20.14",
+      "bom-ref": "frontend@0.0.0|@scalar/oas-utils@0.20.18",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "oas-utils",
-      "version": "0.20.14",
+      "version": "0.20.18",
       "description": "Open API spec and Yaml handling utilities",
       "licenses": [
         {
@@ -4784,7 +5137,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/oas-utils@0.20.14",
+      "purl": "pkg:npm/%40scalar/oas-utils@0.20.18",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4799,11 +5152,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/oas-utils/-/oas-utils-0.20.14.tgz",
+          "url": "https://registry.npmjs.org/@scalar/oas-utils/-/oas-utils-0.20.18.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b95c71510d764ed351dfb1fafbad8154c34bc2464995a425eb6bab0a5d61466de30d611022a29535a890758673168e1dd414c61034d1eb5a427118f089dc5c2d"
+              "content": "3b89ce9244eb6e7592c937f64f65910caa0e41b349e791fdae3634574eac4bf3ff5cd768e50a09fc6adaa9c816862543d630d6677327ce351c022eaff29c5469"
             }
           ],
           "type": "distribution"
@@ -4811,12 +5164,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/openapi-to-markdown@1.6.1",
+      "bom-ref": "frontend@0.0.0|@scalar/openapi-to-markdown@1.7.3",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "openapi-to-markdown",
-      "version": "1.6.1",
+      "version": "1.7.3",
       "description": "Create plain Markdown from OpenAPI documents (for LLMs)",
       "licenses": [
         {
@@ -4825,7 +5178,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/openapi-to-markdown@1.6.1",
+      "purl": "pkg:npm/%40scalar/openapi-to-markdown@1.7.3",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4840,11 +5193,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/openapi-to-markdown/-/openapi-to-markdown-1.6.1.tgz",
+          "url": "https://registry.npmjs.org/@scalar/openapi-to-markdown/-/openapi-to-markdown-1.7.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "7715f4f5f9260f149337ecbea61de4b85892da2eb52b6e43559f08b1dc35644b28d6d90e0aa3da30e1635c5b6ff12d2e94d57354261b7bd65ccf507f9d903f2d"
+              "content": "f6f505568e60d98483ed8f19421bf19d59d05ff28602237097edfbc50bd978470faf480dad6c9ab902fd5cad86e9494787af7fae15770266234cbaa1570f02bc"
             }
           ],
           "type": "distribution"
@@ -4893,12 +5246,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/openapi-upgrader@0.4.5",
+      "bom-ref": "frontend@0.0.0|@scalar/openapi-upgrader@0.4.6",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "openapi-upgrader",
-      "version": "0.4.5",
+      "version": "0.4.6",
       "description": "Upgrade OpenAPI documents to the latest and greatest version",
       "licenses": [
         {
@@ -4907,7 +5260,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.4.5",
+      "purl": "pkg:npm/%40scalar/openapi-upgrader@0.4.6",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4922,11 +5275,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/openapi-upgrader/-/openapi-upgrader-0.4.5.tgz",
+          "url": "https://registry.npmjs.org/@scalar/openapi-upgrader/-/openapi-upgrader-0.4.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3ddb13c9e3bc09ea553fb23c26fc28a23b73c99f91d4cad582ed42f27a6f56fcb92518b1a79137e19e09d6c2a88c9b3e6117b8dbf30ad971d754cfd7d6a8063c"
+              "content": "c244dba301990250c0e408420270557edeb2def7a8135ecffa8907ff3af033f0595814b33e0846a5ae013d30a0dfe23346644fffc65e6983bb2dfc420c012670"
             }
           ],
           "type": "distribution"
@@ -4934,12 +5287,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/schemas@0.14.0",
+      "bom-ref": "frontend@0.0.0|@scalar/schemas@0.16.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "schemas",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "description": "Schemas for Scalar packages",
       "licenses": [
         {
@@ -4948,7 +5301,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/schemas@0.14.0",
+      "purl": "pkg:npm/%40scalar/schemas@0.16.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -4963,11 +5316,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/schemas/-/schemas-0.14.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/schemas/-/schemas-0.16.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b5835f7883a4fc6e68fc3896d98736b4594dbc4e362ecd5a1d4390492785ba08c182fe77a77bb7b65bbb800e4de2e31a4bc9900ae99446eb1cfdc6f8466897da"
+              "content": "487851207ffdc7cea646625cc8c82730c5b10cdcd1b6ec9bf776a7cf9cdf595d97b95ee067506be84e4b976620a1cdc7a0a8ce42449d495b35d68290c63bca33"
             }
           ],
           "type": "distribution"
@@ -4975,12 +5328,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/sidebar@0.12.2",
+      "bom-ref": "frontend@0.0.0|@scalar/sidebar@0.12.6",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "sidebar",
-      "version": "0.12.2",
+      "version": "0.12.6",
       "description": "Scalar sidebar component and sidebar state management",
       "licenses": [
         {
@@ -4989,7 +5342,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/sidebar@0.12.2",
+      "purl": "pkg:npm/%40scalar/sidebar@0.12.6",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5004,11 +5357,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/sidebar/-/sidebar-0.12.2.tgz",
+          "url": "https://registry.npmjs.org/@scalar/sidebar/-/sidebar-0.12.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d689fe722d6921f7029983e5a7042f8fa9e33d7b2215124eeb03a45d4d40c4e5b16e81206a9d05e848fc63e8374c75e468ee5b7f0e563b78876e3aea6d67e9f4"
+              "content": "d3994742e26fd7c3f872d0d6df1776a7512aae02a176e7e2e850425fd2be4e50dec4e6396d8bfe42f66f3a01271ac7941155a28ba8c6c62c42eac424c45c25ec"
             }
           ],
           "type": "distribution"
@@ -5016,12 +5369,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/snippetz@0.10.10",
+      "bom-ref": "frontend@0.0.0|@scalar/snippetz@0.10.14",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "snippetz",
-      "version": "0.10.10",
+      "version": "0.10.14",
       "licenses": [
         {
           "license": {
@@ -5029,7 +5382,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/snippetz@0.10.10",
+      "purl": "pkg:npm/%40scalar/snippetz@0.10.14",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5044,11 +5397,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/snippetz/-/snippetz-0.10.10.tgz",
+          "url": "https://registry.npmjs.org/@scalar/snippetz/-/snippetz-0.10.14.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "64c1f4d6361c1b44cf22fae2b56402b6b5bba6f08db2d95d3b6c6b239687724099eb7a303d267a085fb6ee19e831e4e194017bf0c18834de3826aa9ebf425b19"
+              "content": "ff53bbe433712bc7c1eabf1076f947b1e93a6ccca786709ef3c218df7ab11d76c77e8de042bb83f87ced26fa8e57c2106060278dfdf7ae79f3e1a7929df50006"
             }
           ],
           "type": "distribution"
@@ -5056,12 +5409,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/themes@0.19.2",
+      "bom-ref": "frontend@0.0.0|@scalar/themes@0.20.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "themes",
-      "version": "0.19.2",
+      "version": "0.20.0",
       "description": "the default CSS variables for all Scalar packages",
       "licenses": [
         {
@@ -5070,7 +5423,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/themes@0.19.2",
+      "purl": "pkg:npm/%40scalar/themes@0.20.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5085,11 +5438,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/themes/-/themes-0.19.2.tgz",
+          "url": "https://registry.npmjs.org/@scalar/themes/-/themes-0.20.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b6bdf7704e3f63ef2bc03b3d9397dc14ac21af570cb4aeab7eb172e50a64682d6c3788e31c4a2958ffa3fc4851d00d7d4bfbc55d1b7a2bae426cc9526858cd6a"
+              "content": "958c998dc3fa6d3860b5cdd3b4d79389c78e7438653cd7e874c8b9945080c4c350c4e71c7895e2f9fd5678bb9e3d6703d79b86fc0a6030bbbf17b8538fef2415"
             }
           ],
           "type": "distribution"
@@ -5130,12 +5483,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/types@0.24.0",
+      "bom-ref": "frontend@0.0.0|@scalar/types@0.26.0",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "types",
-      "version": "0.24.0",
+      "version": "0.26.0",
       "description": "Types to work with Scalar packages",
       "licenses": [
         {
@@ -5144,7 +5497,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/types@0.24.0",
+      "purl": "pkg:npm/%40scalar/types@0.26.0",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5159,11 +5512,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/types/-/types-0.24.0.tgz",
+          "url": "https://registry.npmjs.org/@scalar/types/-/types-0.26.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c783bc75d0af87ee7dcf087d5dcf9b1b64000b160045c3c37c9058894cc3fe1cd2c5beafa5c9acf962a0324b017d858266778ee9ee4ab7a859141a04f43f580a"
+              "content": "4fbf038f543e5b413546c3323e8c9d7d1f8bfa9f48508927b4109162559a4626ccf7c8c0c4005160642853fa831d7d0f47520015d13e77b66ab25ca965b27372"
             }
           ],
           "type": "distribution"
@@ -5171,12 +5524,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/use-codemirror@0.14.15",
+      "bom-ref": "frontend@0.0.0|@scalar/use-codemirror@0.14.16",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "use-codemirror",
-      "version": "0.14.15",
+      "version": "0.14.16",
       "description": "CodeMirror for Vue",
       "licenses": [
         {
@@ -5185,7 +5538,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/use-codemirror@0.14.15",
+      "purl": "pkg:npm/%40scalar/use-codemirror@0.14.16",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5200,11 +5553,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/use-codemirror/-/use-codemirror-0.14.15.tgz",
+          "url": "https://registry.npmjs.org/@scalar/use-codemirror/-/use-codemirror-0.14.16.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "52f8f1d2abceb163ecf88df614bfb7bffffe54ac2da7c44e5e06c800c6ae372a6ec39d95785ed1e1133b6283765e0d4400488cb4cf198565730a861316be8029"
+              "content": "decf08cc510c45e076f243f429eab5c8dbbce05dad513a47a17c1f498e0d6f7c6988168c25f6e3d69e70d9f16f5d08020ad75fde70543db44b4f180079b59768"
             }
           ],
           "type": "distribution"
@@ -5212,12 +5565,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/use-hooks@0.4.21",
+      "bom-ref": "frontend@0.0.0|@scalar/use-hooks@0.4.22",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "use-hooks",
-      "version": "0.4.21",
+      "version": "0.4.22",
       "description": "Utility hooks for Scalar",
       "licenses": [
         {
@@ -5226,7 +5579,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/use-hooks@0.4.21",
+      "purl": "pkg:npm/%40scalar/use-hooks@0.4.22",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5241,11 +5594,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/use-hooks/-/use-hooks-0.4.21.tgz",
+          "url": "https://registry.npmjs.org/@scalar/use-hooks/-/use-hooks-0.4.22.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "5bd6599c75f4c07f6628c0843733c72ca2c77c1a38b3b9034fecd9b657f16043cf3ebd3bf0009c8772067f511981da337b57864dc768a9f7532d2208a177cbed"
+              "content": "f9743c5b05060b30532c6c9c80db9eff4b0839203c9ff45296edd70b5c145fa501ebd8f7903e2a788f48eb48b5b855bb38bd42b5a2eaeba0487bce2e3272409e"
             }
           ],
           "type": "distribution"
@@ -5253,12 +5606,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/use-toasts@0.10.5",
+      "bom-ref": "frontend@0.0.0|@scalar/use-toasts@0.10.6",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "use-toasts",
-      "version": "0.10.5",
+      "version": "0.10.6",
       "description": "display toasts in Vue",
       "licenses": [
         {
@@ -5267,7 +5620,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/use-toasts@0.10.5",
+      "purl": "pkg:npm/%40scalar/use-toasts@0.10.6",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5282,11 +5635,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/use-toasts/-/use-toasts-0.10.5.tgz",
+          "url": "https://registry.npmjs.org/@scalar/use-toasts/-/use-toasts-0.10.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "e5af2a4d577d797bcc0de0f489fa87be7ce0d22dafd79725872153a170c7626227403e75a01470072085a853be9bdca6c522ce1d9eff16211c53a17dd3f41396"
+              "content": "aecd0391b5a92a1cbc58f8d4e8b0ce6a7e5123e8946a3ee3fd1764ba2dbe1570742c1efcf4e7d6b23dd5783fef94f2eb93b2f90eeebb00e2cb295ab0229da724"
             }
           ],
           "type": "distribution"
@@ -5335,12 +5688,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@scalar/workspace-store@0.68.5",
+      "bom-ref": "frontend@0.0.0|@scalar/workspace-store@0.69.3",
       "type": "library",
       "author": "Scalar",
       "group": "@scalar",
       "name": "workspace-store",
-      "version": "0.68.5",
+      "version": "0.69.3",
       "description": "Store interface for openapi documents",
       "licenses": [
         {
@@ -5349,7 +5702,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40scalar/workspace-store@0.68.5",
+      "purl": "pkg:npm/%40scalar/workspace-store@0.69.3",
       "externalReferences": [
         {
           "url": "https://github.com/scalar/scalar",
@@ -5364,11 +5717,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@scalar/workspace-store/-/workspace-store-0.68.5.tgz",
+          "url": "https://registry.npmjs.org/@scalar/workspace-store/-/workspace-store-0.69.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "dfeced628718d3b846fd6c1a1e9f16823d719bee696aac5aa27a755d9137730cb341e088e36d1a380928aab5815f23c2447d190030f4863042f6e9832031369d"
+              "content": "0cd767374a316c566455bfeb082dc6eb9a50917fe0b62bb095ba1409ee557ef7dc4ed3fb79b9f68d2e0c93379f2ba646bbb7c78bed59c35b2b39222200e1eb6d"
             }
           ],
           "type": "distribution"
@@ -5454,12 +5807,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.104.5",
+      "bom-ref": "frontend@0.0.0|@tanstack/query-core@5.105.0",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "query-core",
-      "version": "5.104.5",
+      "version": "5.105.0",
       "description": "The framework agnostic core that powers TanStack Query",
       "licenses": [
         {
@@ -5468,7 +5821,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/query-core@5.104.5",
+      "purl": "pkg:npm/%40tanstack/query-core@5.105.0",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5479,11 +5832,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.104.5.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.105.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "43de2023c3a977e09b75534e763f190b257c5aa2d88adac3ab5b7de9773c5994fa958d2be6246724b5d80f131ec7b1047f6bfe997be7e05723681292c57650f4"
+              "content": "ee9e7abd1993ff3e1427ab1cb4621d979591510c94bf9dc852953010a8b683def331b3bbce1f19b022df7c602f08f051e310fbd9edd55ec0f22f05c786835331"
             }
           ],
           "type": "distribution"
@@ -5491,12 +5844,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.104.5",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-query@5.105.0",
       "type": "library",
       "author": "tannerlinsley",
       "group": "@tanstack",
       "name": "react-query",
-      "version": "5.104.5",
+      "version": "5.105.0",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "licenses": [
         {
@@ -5505,7 +5858,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.104.5",
+      "purl": "pkg:npm/%40tanstack/react-query@5.105.0",
       "externalReferences": [
         {
           "url": "https://tanstack.com/query",
@@ -5516,11 +5869,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.104.5.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.105.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "44e46015ed39d94fbddf079a36eaa0eea1eaeef3553735cdfd5ad7a83e1b6c0b9009652a3a5da5579522f5f956939095bccc8bfc1876ed05a1cf01f469a3b1f6"
+              "content": "cbe84cb83111be083a6b2d5d6b45756ba642d1938db7b7442f148592a459bb09bba754d366cd0ca17acf94145f948a51a188efcd0558c727272c89a914b856af"
             }
           ],
           "type": "distribution"
@@ -5528,12 +5881,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/react-virtual@3.14.22",
+      "bom-ref": "frontend@0.0.0|@tanstack/react-virtual@3.14.24",
       "type": "library",
       "author": "Tanner Linsley",
       "group": "@tanstack",
       "name": "react-virtual",
-      "version": "3.14.22",
+      "version": "3.14.24",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "licenses": [
         {
@@ -5542,7 +5895,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.22",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.24",
       "externalReferences": [
         {
           "url": "https://tanstack.com/virtual",
@@ -5553,11 +5906,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.14.22.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.14.24.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ccd881f48177a6bc924df014ae3f6d3c78c3fe5a2705891fc6b3cfe2fe084d4c7eab01da8c9479718ff18ab8efc1cf8a5a4babd74197dd3a6c6ca87b2640fc2f"
+              "content": "26836c0725d1ebc7cd941d8d66e4f76d293cb98071b8e5a5e98349edd8d3af0ec8330056b9a3ad7dfc63fd372e31af345a62fa6f26fef348b534433ff109a873"
             }
           ],
           "type": "distribution"
@@ -5602,12 +5955,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@tanstack/virtual-core@3.19.7",
+      "bom-ref": "frontend@0.0.0|@tanstack/virtual-core@3.19.9",
       "type": "library",
       "author": "Tanner Linsley",
       "group": "@tanstack",
       "name": "virtual-core",
-      "version": "3.19.7",
+      "version": "3.19.9",
       "description": "Headless UI for virtualizing scrollable elements in TS/JS + Frameworks",
       "licenses": [
         {
@@ -5616,7 +5969,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40tanstack/virtual-core@3.19.7",
+      "purl": "pkg:npm/%40tanstack/virtual-core@3.19.9",
       "externalReferences": [
         {
           "url": "https://tanstack.com/virtual",
@@ -5627,11 +5980,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.19.7.tgz",
+          "url": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.19.9.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "831cb94af1f4985449d18ba3b6b7e507fd4702ef569f5286bcbd1b8d97d091855532c229422c1c7f5991d3afd588de0d8e59546f81cd0a3a84f451b0813bcc09"
+              "content": "4b289a7f7c3af5d17262fe28da6a89d7fd95b4125336ae47bb97155df9f33ae24a1695288ee910475dd95bee4dbdd30933b1851de34f9af78c361a08b9b885c8"
             }
           ],
           "type": "distribution"
@@ -6108,11 +6461,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@types/node@24.13.4",
+      "bom-ref": "frontend@0.0.0|@types/node@24.19.2",
       "type": "library",
       "group": "@types",
       "name": "node",
-      "version": "24.13.4",
+      "version": "24.19.2",
       "description": "TypeScript definitions for node",
       "licenses": [
         {
@@ -6121,7 +6474,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40types/node@24.13.4",
+      "purl": "pkg:npm/%40types/node@24.19.2",
       "externalReferences": [
         {
           "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node",
@@ -6132,11 +6485,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/@types/node/-/node-24.13.4.tgz",
+          "url": "https://registry.npmjs.org/@types/node/-/node-24.19.2.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "609ec4a82b2d553cc8af47ccafbaae97ff7bede9fea501eb7e6b8a228e99afd8bbe417b6d5daf7328bdc7ef1adcaf8b61c052b45ead6a6ce6c30ef48ed66b10f"
+              "content": "f77778f700962640b237ceccc4ba4d37a2973c2c05c3b6d5520efd986515d4e4b8d09196c150abf27eb50d7092ab3ec257afd57cf91bef179ceee3f633e40759"
             }
           ],
           "type": "distribution"
@@ -6293,13 +6646,13 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@unhead/vue@2.1.17",
+      "bom-ref": "frontend@0.0.0|@unhead/bundler@3.4.3",
       "type": "library",
       "author": "Harlan Wilton",
       "group": "@unhead",
-      "name": "vue",
-      "version": "2.1.17",
-      "description": "Full-stack <head> manager built for Vue.",
+      "name": "bundler",
+      "version": "3.4.3",
+      "description": "Unhead build-time optimizations for Vite and Webpack.",
       "licenses": [
         {
           "license": {
@@ -6307,7 +6660,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40unhead/vue@2.1.17",
+      "purl": "pkg:npm/%40unhead/bundler@3.4.3",
       "externalReferences": [
         {
           "url": "https://unhead.unjs.io",
@@ -6322,11 +6675,52 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@unhead/vue/-/vue-2.1.17.tgz",
+          "url": "https://registry.npmjs.org/@unhead/bundler/-/bundler-3.4.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "a670bcc7d1cb577a905ddbd67f2954114db9ba17c2032de5cbd9e6a50cfce23f69cbcd7c0d17d4f233ac439c23756b71c94d6f5ff7d6dae75f9b88edc542bc06"
+              "content": "9e8513cdacd10787cc80efe796ea22aeb6495e780d6cd6f7b10cc8b2503cd39b4a9306a446fd9f89be177b811d893b8d07b5795e6a5416f7d090a45d050f6a00"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@unhead/vue@3.4.3",
+      "type": "library",
+      "author": "Harlan Wilton",
+      "group": "@unhead",
+      "name": "vue",
+      "version": "3.4.3",
+      "description": "Full-stack <head> manager built for Vue.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40unhead/vue@3.4.3",
+      "externalReferences": [
+        {
+          "url": "https://unhead.unjs.io",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/unjs/unhead.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/unjs/unhead/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/@unhead/vue/-/vue-3.4.3.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "5ab9a4eb6a02fd5d4470148a443bb2efb915681b415d7b23e9bfaf1045af99fa3d0107e92e57366fabefbd28fd5a75ebf1563592c2878f8f448e8f09ff02d238"
             }
           ],
           "type": "distribution"
@@ -6374,12 +6768,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/compiler-core@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/compiler-core@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "compiler-core",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/compiler-core",
       "licenses": [
         {
@@ -6388,7 +6782,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/compiler-core@3.5.42",
+      "purl": "pkg:npm/%40vue/compiler-core@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/compiler-core#readme",
@@ -6403,11 +6797,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/compiler-core/-/compiler-core-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/compiler-core/-/compiler-core-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d987b58a532d297c65f2a654ad0e63d027607a7169fc71509ad6baadf4727c4b131baf4be9693eb56b8da07607331f44f2d1764a5bdd83516ec03bc05ddcb52d"
+              "content": "937e270b2b5b2bc3d0d6047698644e60ec3a3e7bff9ae9aa21dad9df1dad6f25d90d69bb5622862d37dd07e0d1ad6a8442c2e0189be7d1637d8c189fe730932d"
             }
           ],
           "type": "distribution"
@@ -6415,12 +6809,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/compiler-dom@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/compiler-dom@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "compiler-dom",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/compiler-dom",
       "licenses": [
         {
@@ -6429,7 +6823,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/compiler-dom@3.5.42",
+      "purl": "pkg:npm/%40vue/compiler-dom@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/compiler-dom#readme",
@@ -6444,11 +6838,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/compiler-dom/-/compiler-dom-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/compiler-dom/-/compiler-dom-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "a9b850644166c9cafe9e2feacae71c4b8b2e70d37b5406c37db92f37158e5f655f8059bdd0c36cdff52144d2a83cc108567d05f207656232cfbeac47c0779038"
+              "content": "5b902804559dc3595000a887a3091f80528569bf36a12453eac1ac3dfc3fab51918eccbf64914b1c6849c8144814df403cb4d476e0c7f54d890223ce2322ae62"
             }
           ],
           "type": "distribution"
@@ -6456,12 +6850,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/compiler-sfc@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/compiler-sfc@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "compiler-sfc",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/compiler-sfc",
       "licenses": [
         {
@@ -6470,7 +6864,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/compiler-sfc@3.5.42",
+      "purl": "pkg:npm/%40vue/compiler-sfc@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/compiler-sfc#readme",
@@ -6485,11 +6879,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/compiler-sfc/-/compiler-sfc-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/compiler-sfc/-/compiler-sfc-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "7e4080141e2891c00034631385ba169d2729fe0cd68d4d194a45678d3222a6598c0eadaeab4b480778fec55bb8ae1bf9aef3a0072482cacb9d99b31deb1451ab"
+              "content": "7731e64388d74e976be458c84147b29156a437fbb3a856d4a3dfc2e62901160ddadcf78ceae47179ccf1d596d704c2f4ff326cb44877ca0622a7347967b6f63f"
             }
           ],
           "type": "distribution"
@@ -6497,12 +6891,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/compiler-ssr@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/compiler-ssr@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "compiler-ssr",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/compiler-ssr",
       "licenses": [
         {
@@ -6511,7 +6905,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/compiler-ssr@3.5.42",
+      "purl": "pkg:npm/%40vue/compiler-ssr@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/compiler-ssr#readme",
@@ -6526,11 +6920,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/compiler-ssr/-/compiler-ssr-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/compiler-ssr/-/compiler-ssr-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c662e4df02e46e2ccf0222f2a268e0145a2c7f6cacf5be4685bfa887f936b67be2a4dcfc385ad03a24dc582cf22bb329069f4a9321ad7ef81f2d48af6e6b8660"
+              "content": "c6be606f52551e57d72704a5473d4578feaec686b37731ee31354b13bba9fb856bab1936d7d0afc4b3f10fd35706de3bcaf656efea780d77f2a783b57e407220"
             }
           ],
           "type": "distribution"
@@ -6538,12 +6932,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/reactivity@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/reactivity@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "reactivity",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/reactivity",
       "licenses": [
         {
@@ -6552,7 +6946,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/reactivity@3.5.42",
+      "purl": "pkg:npm/%40vue/reactivity@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/reactivity#readme",
@@ -6567,11 +6961,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/reactivity/-/reactivity-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/reactivity/-/reactivity-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4f334d7caa5bee10f16d096dc00badf150d003960ff81b919719ed1d4b918f22b094cbe600f6ecdee9e10af89e8a389f63abc57d5070b12ef01bf0bbbaaf9b11"
+              "content": "bbe40974a78104400390f75ebec2fee84d764256157c10fc65cc39aa30d02ad6a623a975e0acaa6b324ca1b84229e96158de73a722948840e84f21c4f7772a5b"
             }
           ],
           "type": "distribution"
@@ -6579,12 +6973,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/runtime-core@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/runtime-core@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "runtime-core",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/runtime-core",
       "licenses": [
         {
@@ -6593,7 +6987,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/runtime-core@3.5.42",
+      "purl": "pkg:npm/%40vue/runtime-core@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/runtime-core#readme",
@@ -6608,11 +7002,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/runtime-core/-/runtime-core-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/runtime-core/-/runtime-core-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f6e002b6e1eceef246926e41a77c6ee314432c54c8632e43831a53a158ea1880210042b041fb1a2ef28836133a9c5569e9b64f44519d0ea775839d8ca8ab28b4"
+              "content": "b846bf9ddc2386bae19ce7dbda9fac672eb37a86a624e212a9a2d224693ff11ea70014f5665769cdc2683f32a3fb31d5a265413dc9906320b6af82edbc357a09"
             }
           ],
           "type": "distribution"
@@ -6620,12 +7014,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/runtime-dom@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/runtime-dom@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "runtime-dom",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/runtime-dom",
       "licenses": [
         {
@@ -6634,7 +7028,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/runtime-dom@3.5.42",
+      "purl": "pkg:npm/%40vue/runtime-dom@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/runtime-dom#readme",
@@ -6649,11 +7043,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/runtime-dom/-/runtime-dom-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/runtime-dom/-/runtime-dom-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "aec0a686258b691c4696d2f0865096c989059fb5806ca461d2ad7b799d40e83aba7aa73600243ad4822bcb1cf42ebb2f0b31d28a52c0f491e8bd5c0cf02344da"
+              "content": "ddf738011717561541689dee8d688d6490110faa64c917301be65884cce32ad294a7b3006341cbc2beebdd299ea772e2e996964fa7b0766c7c5ea75a0f9a0d66"
             }
           ],
           "type": "distribution"
@@ -6661,12 +7055,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/server-renderer@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/server-renderer@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "server-renderer",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "@vue/server-renderer",
       "licenses": [
         {
@@ -6675,7 +7069,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/server-renderer@3.5.42",
+      "purl": "pkg:npm/%40vue/server-renderer@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/server-renderer#readme",
@@ -6690,11 +7084,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/server-renderer/-/server-renderer-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/server-renderer/-/server-renderer-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "dbefb9754c984b882fa3bc505d2102503841ed34b468e97949e55f0b9a92ab52607e18ef7a0c35cea8704c84778a667e4183c9430f607dc16f5c6023199eda8d"
+              "content": "4784b55281f887916badabaff19e571394f157da018944a05880b84f254ad452be4687119ce2f0140e57726a36d35d51960269f806d90a7c3a69fae196046e51"
             }
           ],
           "type": "distribution"
@@ -6702,12 +7096,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vue/shared@3.5.42",
+      "bom-ref": "frontend@0.0.0|@vue/shared@3.5.44",
       "type": "library",
       "author": "Evan You",
       "group": "@vue",
       "name": "shared",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "internal utils shared across @vue packages",
       "licenses": [
         {
@@ -6716,7 +7110,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vue/shared@3.5.42",
+      "purl": "pkg:npm/%40vue/shared@3.5.44",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/core/tree/main/packages/shared#readme",
@@ -6731,11 +7125,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vue/shared/-/shared-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/@vue/shared/-/shared-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "dab3f17b1d6341fe23be5f4c38797a61a5c23dcacdab3fc5b2d30e121dd0598fbf38c13d9d04ef97d598782c215bb0058da4744a79e0646969ff0911eab908ea"
+              "content": "1fcd972c7d038e648e75b1303b5e71dd04e8d5fe4f584b6fdb7ede2e960a7349aa2eef81f219ead7a9455a6b8198dbab91e886df0afea0cd4584e965fd854546"
             }
           ],
           "type": "distribution"
@@ -6784,12 +7178,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vueuse/core@13.9.0",
+      "bom-ref": "frontend@0.0.0|@vueuse/core@15.0.0",
       "type": "library",
       "author": "Anthony Fu",
       "group": "@vueuse",
       "name": "core",
-      "version": "13.9.0",
+      "version": "15.0.0",
       "description": "Collection of essential Vue Composition Utilities",
       "licenses": [
         {
@@ -6798,7 +7192,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vueuse/core@13.9.0",
+      "purl": "pkg:npm/%40vueuse/core@15.0.0",
       "externalReferences": [
         {
           "url": "https://github.com/vueuse/vueuse#readme",
@@ -6813,11 +7207,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vueuse/core/-/core-13.9.0.tgz",
+          "url": "https://registry.npmjs.org/@vueuse/core/-/core-15.0.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "b6cdeb7a0050c9445f084d81732b4bab39bcf8c98b968e4b9ff28ba310d572c67683323054d9d0a5038bfd4295f1a954aa34993a5a4565c44db0b46a8fe3b3c8"
+              "content": "66febb8799ab93b6070c9b1139bc7e0d7682073e91281529c6a2deb09fb7c5934f1bacae42cee36bb920def785aeba2e60b580ab2750ec2c0611b2d5c41e3736"
             }
           ],
           "type": "distribution"
@@ -6825,12 +7219,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vueuse/integrations@13.9.0",
+      "bom-ref": "frontend@0.0.0|@vueuse/integrations@15.0.0",
       "type": "library",
       "author": "Anthony Fu",
       "group": "@vueuse",
       "name": "integrations",
-      "version": "13.9.0",
+      "version": "15.0.0",
       "description": "Integration wrappers for utility libraries",
       "licenses": [
         {
@@ -6839,7 +7233,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vueuse/integrations@13.9.0",
+      "purl": "pkg:npm/%40vueuse/integrations@15.0.0",
       "externalReferences": [
         {
           "url": "https://github.com/vueuse/vueuse/tree/main/packages/integrations#readme",
@@ -6854,11 +7248,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vueuse/integrations/-/integrations-13.9.0.tgz",
+          "url": "https://registry.npmjs.org/@vueuse/integrations/-/integrations-15.0.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "483a1b2816cf20e7b47152fb4313331a4b94187bd64dd8a18bdcceaeb59a59480529ed7973011cc1f5a682b70dce34fa9079cd996b936a33c7a08cd48d835861"
+              "content": "b960b5eb4f291287093de464d48aab100dee60784019324d89b70c01dc6074ad92cb61f2a5ce9bf9574d3bd29e902c723dce155caf12283a7cbec5de7d1fd916"
             }
           ],
           "type": "distribution"
@@ -6907,12 +7301,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vueuse/metadata@13.9.0",
+      "bom-ref": "frontend@0.0.0|@vueuse/metadata@15.0.0",
       "type": "library",
       "author": "Anthony Fu",
       "group": "@vueuse",
       "name": "metadata",
-      "version": "13.9.0",
+      "version": "15.0.0",
       "description": "Metadata for VueUse functions",
       "licenses": [
         {
@@ -6921,7 +7315,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vueuse/metadata@13.9.0",
+      "purl": "pkg:npm/%40vueuse/metadata@15.0.0",
       "externalReferences": [
         {
           "url": "https://github.com/vueuse/vueuse/tree/main/packages/metadata#readme",
@@ -6936,11 +7330,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vueuse/metadata/-/metadata-13.9.0.tgz",
+          "url": "https://registry.npmjs.org/@vueuse/metadata/-/metadata-15.0.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d40151bee886a617c5ef25a2c596b42b08d81fcba5ca30c20b468582b191cfcf8fe24bc31527572d57d3939c4037dc04b83d49eb3e3f9b232861b9c7a17d3bce"
+              "content": "b1f584e4b00300a2742a78ed1a588c75237c223fcbeee3faad72199603e5a00238cefbde7dbc3a1f92edeca240e91a90398815a961791ae8f9d071cc233ca006"
             }
           ],
           "type": "distribution"
@@ -6988,12 +7382,12 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|@vueuse/shared@13.9.0",
+      "bom-ref": "frontend@0.0.0|@vueuse/shared@15.0.0",
       "type": "library",
       "author": "Anthony Fu",
       "group": "@vueuse",
       "name": "shared",
-      "version": "13.9.0",
+      "version": "15.0.0",
       "licenses": [
         {
           "license": {
@@ -7001,7 +7395,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40vueuse/shared@13.9.0",
+      "purl": "pkg:npm/%40vueuse/shared@15.0.0",
       "externalReferences": [
         {
           "url": "https://github.com/vueuse/vueuse/tree/main/packages/shared#readme",
@@ -7016,11 +7410,43 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/@vueuse/shared/-/shared-13.9.0.tgz",
+          "url": "https://registry.npmjs.org/@vueuse/shared/-/shared-15.0.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "7bcf6eb932cc874539719f620e9108dac7a7a8f19f6cf4531ccff401a4247319e9aa3919a8360ff2ba5f9bb79d3b3f2cfa9382391384cb53c8bde496f3e7cbe6"
+              "content": "bdb357846adb579df13ce312c8eccc1d046f84c8197fba0d0f0d910a151eb55c704c81242274358e867d25b4f41b7cf69f6009363be609678cf72498ae7be880"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|@workflow/serde@4.1.0",
+      "type": "library",
+      "group": "@workflow",
+      "name": "serde",
+      "version": "4.1.0",
+      "description": "Serialization symbols for custom class serialization in Workflow SDK",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40workflow/serde@4.1.0",
+      "externalReferences": [
+        {
+          "url": "https://github.com/vercel/workflow.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/@workflow/serde/-/serde-4.1.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a5abf81760688ab102591ecd7f54cab7ed9e1137018fb8e3e1c05e7d0f155d0080e8d3e468a78b7e3ff33208bedf3615e592014f81ae522a61b23d3f6fd84f41"
             }
           ],
           "type": "distribution"
@@ -7100,10 +7526,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|ai@6.0.214",
+      "bom-ref": "frontend@0.0.0|ai@7.0.142",
       "type": "library",
       "name": "ai",
-      "version": "6.0.214",
+      "version": "7.0.142",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "licenses": [
         {
@@ -7112,7 +7538,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/ai@6.0.214",
+      "purl": "pkg:npm/ai@7.0.142",
       "externalReferences": [
         {
           "url": "https://ai-sdk.dev/docs",
@@ -7127,11 +7553,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/ai/-/ai-6.0.214.tgz",
+          "url": "https://registry.npmjs.org/ai/-/ai-7.0.142.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f4c95e3c45d3e695ed42fe1f5ea9a2474446dc3654e036effa453d92d1090b608e8b6447d96bc8d868b21bd32e0aa80f208e9fd70fb9901e5f348880aea3f369"
+              "content": "4e27e78baffa9cd842bb81a7144798611ec21a62776219b8e121b162b3aea6a3f669a6709861a2881e59c788626ae251d005a299c5d42de8c34fe42c8fe48739"
             }
           ],
           "type": "distribution"
@@ -7247,10 +7673,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|chalk@5.6.2",
+      "bom-ref": "frontend@0.0.0|chalk@6.0.1",
       "type": "library",
       "name": "chalk",
-      "version": "5.6.2",
+      "version": "6.0.1",
       "description": "Terminal string styling done right",
       "licenses": [
         {
@@ -7259,18 +7685,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/chalk@5.6.2",
+      "purl": "pkg:npm/chalk@6.0.1",
       "externalReferences": [
         {
           "url": "chalk/chalk",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/chalk/-/chalk-5.6.2.tgz",
+          "url": "https://registry.npmjs.org/chalk/-/chalk-6.0.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ecdcc12f4acde9f3145be7fb03a228e21e34a90946fb11a6b4cc5f6e71ff2bb4c0b6df094165502beea0d145ca31e549a3257912490db04ad0f29543ddb2c76c"
+              "content": "fc27ba28d9b7bc86d674c94d9dae9154867f2024319c9c4289c7ade4b04a2bd65f7c192acc3c34c61f4488a4a58dd46d8884354b5cf862072c714506ccd096ac"
             }
           ],
           "type": "distribution"
@@ -8303,29 +8729,29 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|elkjs@0.12.0",
+      "bom-ref": "frontend@0.0.0|elkjs@0.12.1",
       "type": "library",
       "author": "Ulf Rüegg",
       "name": "elkjs",
-      "version": "0.12.0",
+      "version": "0.12.1",
       "description": "Automatic graph layout based on Sugiyama's algorithm. Specialized for data flow diagrams and ports.",
       "licenses": [
         {
           "expression": "EPL-2.0 OR GPL-3.0-or-later"
         }
       ],
-      "purl": "pkg:npm/elkjs@0.12.0",
+      "purl": "pkg:npm/elkjs@0.12.1",
       "externalReferences": [
         {
           "url": "https://github.com/kieler/elkjs.git",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/elkjs/-/elkjs-0.12.0.tgz",
+          "url": "https://registry.npmjs.org/elkjs/-/elkjs-0.12.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "61970aca7c55c58a0a20e129cb010fc0215d83e0536f141135fde96f07430af73c3b79100fc6e62304b1294d5e39355ce17a3e546f537bee7be6695fbceae111"
+              "content": "2213182871384b6bedc7442b8413f79583882837888895c1addabd306624b81f191ea86b0671cd7d25277635c57b0ad7d423caf1c870abed8d0342b4865898bb"
             }
           ],
           "type": "distribution"
@@ -8653,11 +9079,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|focus-trap@7.8.0",
+      "bom-ref": "frontend@0.0.0|focus-trap@8.2.4",
       "type": "library",
       "author": "David Clark",
       "name": "focus-trap",
-      "version": "7.8.0",
+      "version": "8.2.4",
       "description": "Trap focus within a DOM node.",
       "licenses": [
         {
@@ -8666,7 +9092,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/focus-trap@7.8.0",
+      "purl": "pkg:npm/focus-trap@8.2.4",
       "externalReferences": [
         {
           "url": "https://github.com/focus-trap/focus-trap#readme",
@@ -8681,11 +9107,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/focus-trap/-/focus-trap-7.8.0.tgz",
+          "url": "https://registry.npmjs.org/focus-trap/-/focus-trap-8.2.4.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ff235d94892959b334a6dc67a3738d4ee7feda0df5f248767b3dca49e64de5d67c602e8002681e5b3f866ac61888124f15a61c4803debb819f8546828732095c"
+              "content": "a32e9d8fb59962031b6e9a0e036f4ae56fbee3bdc5d73133748d682603dbeb1ef2593dfa61a59e7547ba8ba60f584b79aae4a1d2944ca215721cb597531b5dc6"
             }
           ],
           "type": "distribution"
@@ -9780,11 +10206,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|js-base64@3.9.3",
+      "bom-ref": "frontend@0.0.0|js-base64@3.9.5",
       "type": "library",
       "author": "Dan Kogai",
       "name": "js-base64",
-      "version": "3.9.3",
+      "version": "3.9.5",
       "description": "Yet another Base64 transcoder in pure-JS",
       "licenses": [
         {
@@ -9793,18 +10219,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/js-base64@3.9.3",
+      "purl": "pkg:npm/js-base64@3.9.5",
       "externalReferences": [
         {
           "url": "git+https://github.com/dankogai/js-base64.git",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/js-base64/-/js-base64-3.9.3.tgz",
+          "url": "https://registry.npmjs.org/js-base64/-/js-base64-3.9.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "bb0610a7e549dfc155bed8a6eaa35b8ade9ef6e4fa770590e18d7e1fd4f1856e617078e91f0a31951d27329a9498814e9aee15a8cc7074903cf20215b99250fe"
+              "content": "bb40850d471af016c146432417f7c372ea0b0b1f674cd6d7755b5b8d59c1ab2480f44db6d6ed2e60a6c00a260638493585e63af6a33871a797dcec234b2c5ebf"
             }
           ],
           "type": "distribution"
@@ -9950,11 +10376,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|lucide-react@1.61.0",
+      "bom-ref": "frontend@0.0.0|lucide-react@1.66.0",
       "type": "library",
       "author": "Eric Fennis",
       "name": "lucide-react",
-      "version": "1.61.0",
+      "version": "1.66.0",
       "description": "A Lucide icon library package for React applications.",
       "licenses": [
         {
@@ -9963,7 +10389,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.61.0",
+      "purl": "pkg:npm/lucide-react@1.66.0",
       "externalReferences": [
         {
           "url": "https://lucide.dev",
@@ -9978,11 +10404,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.61.0.tgz",
+          "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.66.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "bf64903cf3cd8e7afe06584bf52a6ece6a39c91fa12e47ed7ee1381378dac5d34f8121f484928f70b2413fbc80b5af3b8d034fb121114b9f4f263089fc2a2b04"
+              "content": "f338db8bf52cf844d7a9f07099717f147ad6188a8e744eb34f5c9475124b415a29b68992901d3374559520cebaeedf4af1d8d60da5dd90192a8b6a954ee0cd8b"
             }
           ],
           "type": "distribution"
@@ -10047,6 +10473,38 @@
             {
               "alg": "SHA-512",
               "content": "bddd85e1853211728670b1e8abe4c4c828f1b9e49e1e7171cb28cda7cd328345d5e2f5219c37abfe5bef96a33f6ab0796d740de4adbfde88a7c82472c7c4f609"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|magic-string@1.4.3",
+      "type": "library",
+      "author": "Rich Harris",
+      "name": "magic-string",
+      "version": "1.4.3",
+      "description": "Modify strings, generate sourcemaps",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/magic-string@1.4.3",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/Rich-Harris/magic-string.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://registry.npmjs.org/magic-string/-/magic-string-1.4.3.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "cf5d8ec6668f184d05e3196919d8ee0147248a92e94254c0b809b21a13680fb383a58533bc37efb7151b8ccfe3c339f23f5efca23bbf2837728b6db4c0d27445"
             }
           ],
           "type": "distribution"
@@ -10522,11 +10980,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|microdiff@1.6.0",
+      "bom-ref": "frontend@0.0.0|microdiff@1.5.0",
       "type": "library",
       "author": "AsyncBanana",
       "name": "microdiff",
-      "version": "1.6.0",
+      "version": "1.5.0",
       "description": "Small, fast, zero dependency deep object and array comparison",
       "licenses": [
         {
@@ -10535,7 +10993,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/microdiff@1.6.0",
+      "purl": "pkg:npm/microdiff@1.5.0",
       "externalReferences": [
         {
           "url": "https://github.com/AsyncBanana/microdiff#readme",
@@ -10550,11 +11008,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/microdiff/-/microdiff-1.6.0.tgz",
+          "url": "https://registry.npmjs.org/microdiff/-/microdiff-1.5.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c3b256b7c067a3a23c874ac4aa5c6be25346e146d3d4556d5a8e36c16a2c222689fab3f7a5787bb210980e7caa06b631dfa2c9d4267ae29f00eb6695a74b09a5"
+              "content": "0ebabefd31ccbc3773458acad28c4998e2a20b6e1ac9457c6a1aedf25de844ae753d6b7a81db6b206ae5207de94ff945875cfddc56c072276db077166e7473f1"
             }
           ],
           "type": "distribution"
@@ -11695,12 +12153,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|parse-ms@4.0.0",
+      "bom-ref": "frontend@0.0.0|oxc-walker@1.1.1",
       "type": "library",
-      "author": "Sindre Sorhus",
-      "name": "parse-ms",
-      "version": "4.0.0",
-      "description": "Parse milliseconds into an object",
+      "name": "oxc-walker",
+      "version": "1.1.1",
       "licenses": [
         {
           "license": {
@@ -11708,18 +12164,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/parse-ms@4.0.0",
+      "purl": "pkg:npm/oxc-walker@1.1.1",
       "externalReferences": [
         {
-          "url": "sindresorhus/parse-ms",
+          "url": "oxc-project/oxc-walker",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/parse-ms/-/parse-ms-4.0.0.tgz",
+          "url": "https://registry.npmjs.org/oxc-walker/-/oxc-walker-1.1.1.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "4d77ebca2adb9aadf8cbc401c20a8254b8bef28037a16c767809d29fad884f2121118696465559d83bcc33d7996ccb3f45fc4fbbf3cafda04bc868f822ba8c1f"
+              "content": "1f077b76adbcceefc4afdf7e6e95a9d7a086c05ae1c9a9498745b724e07b5e93ef816a3732a322da4b1618abb3cc0f73b79d26276a4853047996901d67d00235"
             }
           ],
           "type": "distribution"
@@ -11858,6 +12314,46 @@
       ]
     },
     {
+      "bom-ref": "frontend@0.0.0|picomatch@4.0.7",
+      "type": "library",
+      "author": "Jon Schlinkert",
+      "name": "picomatch",
+      "version": "4.0.7",
+      "description": "Blazing fast and accurate glob matcher written in JavaScript, with no dependencies and full support for standard and extended Bash glob features, including braces, extglobs, POSIX brackets, and regular expressions.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/picomatch@4.0.7",
+      "externalReferences": [
+        {
+          "url": "https://github.com/micromatch/picomatch",
+          "type": "website"
+        },
+        {
+          "url": "micromatch/picomatch",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/micromatch/picomatch/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a9c26ef3c436216a89b030f9dbd24a31dc069bf76f2275b81ef427470887f49b62849bf318eb1c0ed1c4df1d6904a794393cac43c91598b9c9da426eef285c18"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
       "bom-ref": "frontend@0.0.0|pkce-challenge@5.0.1",
       "type": "library",
       "author": "crouchcd",
@@ -11938,11 +12434,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|pretty-ms@9.3.1",
+      "bom-ref": "frontend@0.0.0|pretty-ms@10.0.0",
       "type": "library",
       "author": "Sindre Sorhus",
       "name": "pretty-ms",
-      "version": "9.3.1",
+      "version": "10.0.0",
       "description": "Convert milliseconds to a human readable string: `1337000000` → `15d 11h 23m 20s`",
       "licenses": [
         {
@@ -11951,18 +12447,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/pretty-ms@9.3.1",
+      "purl": "pkg:npm/pretty-ms@10.0.0",
       "externalReferences": [
         {
           "url": "sindresorhus/pretty-ms",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/pretty-ms/-/pretty-ms-9.3.1.tgz",
+          "url": "https://registry.npmjs.org/pretty-ms/-/pretty-ms-10.0.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "1f3332dc67aadb79d500b0ff3362e5894f85f8cfa054db2f910596a9e059f070e20a0ce8e983c9fce9ab9adab6e0416b22c9346b712440611dedb0cea3e22118"
+              "content": "e815aec58d9d08d813e395671b365c7cdcbb59e2ea5e266a861cb86874e14c4e8a239e91d99070f4743bb293c52987210e2cef25b3f14c4927229996e054a640"
             }
           ],
           "type": "distribution"
@@ -12125,11 +12621,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|react-router-dom@7.18.4",
+      "bom-ref": "frontend@0.0.0|react-router-dom@7.18.5",
       "type": "library",
       "author": "Remix Software",
       "name": "react-router-dom",
-      "version": "7.18.4",
+      "version": "7.18.5",
       "description": "Declarative routing for React web applications",
       "licenses": [
         {
@@ -12138,18 +12634,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/react-router-dom@7.18.4",
+      "purl": "pkg:npm/react-router-dom@7.18.5",
       "externalReferences": [
         {
           "url": "https://github.com/remix-run/react-router",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.4.tgz",
+          "url": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "cab7e62472290c6eed682a6a2a34f51b907aab73b62be44df3f7e035fd254e30b088f6d0d1e8babd75fd663411fbb95df13afb679c66c8c9d9f1826ba6159053"
+              "content": "f4771f0cc53a249fdfa7a8096581b0344e919275464b89018c7d4790dc3de7d982262ef44d5c1d8a9416bf6144a25f6e1a98be4994c5b55a493ed1107dac9e3b"
             }
           ],
           "type": "distribution"
@@ -12157,11 +12653,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|react-router@7.18.4",
+      "bom-ref": "frontend@0.0.0|react-router@7.18.5",
       "type": "library",
       "author": "Remix Software",
       "name": "react-router",
-      "version": "7.18.4",
+      "version": "7.18.5",
       "description": "Declarative routing for React",
       "licenses": [
         {
@@ -12170,18 +12666,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/react-router@7.18.4",
+      "purl": "pkg:npm/react-router@7.18.5",
       "externalReferences": [
         {
           "url": "https://github.com/remix-run/react-router",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/react-router/-/react-router-7.18.4.tgz",
+          "url": "https://registry.npmjs.org/react-router/-/react-router-7.18.5.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "3d43d070c84c19102c94b72fb653f3fe49b304458f84b7602c5acbee92cd7a904be9d5f49568f8583d9c518560602b93de3c6f82160583cd5c0d38f8e0385eb5"
+              "content": "75382f7170ceacb3eb94b1eb71902a5af7a22b584c4aa37eac6009cde80ff07b663647d1c4ea2c846581357dd92747198ce1e445d95426d68885930b2f21b23f"
             }
           ],
           "type": "distribution"
@@ -12786,11 +13282,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|set-cookie-parser@3.1.0",
+      "bom-ref": "frontend@0.0.0|set-cookie-parser@3.1.3",
       "type": "library",
       "author": "Nathan Friedly",
       "name": "set-cookie-parser",
-      "version": "3.1.0",
+      "version": "3.1.3",
       "description": "Parses set-cookie headers into objects",
       "licenses": [
         {
@@ -12799,7 +13295,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/set-cookie-parser@3.1.0",
+      "purl": "pkg:npm/set-cookie-parser@3.1.3",
       "externalReferences": [
         {
           "url": "https://github.com/nfriedly/set-cookie-parser",
@@ -12810,11 +13306,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/set-cookie-parser/-/set-cookie-parser-3.1.0.tgz",
+          "url": "https://registry.npmjs.org/set-cookie-parser/-/set-cookie-parser-3.1.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "9239c2d435c11dcc5a39a39704705e46d96db031b69d48949e2fa33fdd8cf6061d5b5dabb26c7dd94b1fa47ee8e6d0d1b3b2356593d2409406bf751a45f0a2bb"
+              "content": "c657ad49d008e5e7f25498ec6ad05bcc391797733f66669ddf17e741eed95ee041d323705bb0b6585b0d1a375135f66e9e634742e5fbf71b3f0023132c275c7b"
             }
           ],
           "type": "distribution"
@@ -13248,46 +13744,6 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|tailwind-merge@3.5.0",
-      "type": "library",
-      "author": "Dany Castillo",
-      "name": "tailwind-merge",
-      "version": "3.5.0",
-      "description": "Merge Tailwind CSS classes without style conflicts",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:npm/tailwind-merge@3.5.0",
-      "externalReferences": [
-        {
-          "url": "https://github.com/dcastil/tailwind-merge",
-          "type": "website"
-        },
-        {
-          "url": "https://github.com/dcastil/tailwind-merge.git",
-          "type": "vcs"
-        },
-        {
-          "url": "https://github.com/dcastil/tailwind-merge/issues",
-          "type": "issue-tracker"
-        },
-        {
-          "url": "https://registry.npmjs.org/tailwind-merge/-/tailwind-merge-3.5.0.tgz",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "23c2bdc1ec2754390bd4d4c6a2a5a654422551c07d805ae200491791f0a35f989bf1ecc6c6d477c43ee2648c6b7c0ae312c1fb1750870f844552dc5e7dda95fc"
-            }
-          ],
-          "type": "distribution"
-        }
-      ]
-    },
-    {
       "bom-ref": "frontend@0.0.0|tailwind-merge@3.7.0",
       "type": "library",
       "author": "Dany Castillo",
@@ -13595,29 +14051,29 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|type-fest@5.9.0",
+      "bom-ref": "frontend@0.0.0|type-fest@5.10.0",
       "type": "library",
       "author": "Sindre Sorhus",
       "name": "type-fest",
-      "version": "5.9.0",
+      "version": "5.10.0",
       "description": "A collection of essential TypeScript types",
       "licenses": [
         {
           "expression": "(MIT OR CC0-1.0)"
         }
       ],
-      "purl": "pkg:npm/type-fest@5.9.0",
+      "purl": "pkg:npm/type-fest@5.10.0",
       "externalReferences": [
         {
           "url": "sindresorhus/type-fest",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/type-fest/-/type-fest-5.9.0.tgz",
+          "url": "https://registry.npmjs.org/type-fest/-/type-fest-5.10.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "c80366dc9af71a2275aa0265c46015c533887043a4d6b8501da9a55ed9eb08aec41cfe0778cf4e1b1b4c83f5bb1c576b573c3f65624a195209bac547f39b0bb7"
+              "content": "36849da6afd6122020e6c8e6064995fe17f1bfa1c91f836a3cdaea8ed48ee42c119a9b037da7f86de8315b7e0a749ca41ff975c87b700564240917685cef263c"
             }
           ],
           "type": "distribution"
@@ -13625,10 +14081,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|undici-types@7.18.2",
+      "bom-ref": "frontend@0.0.0|undici-types@7.24.6",
       "type": "library",
       "name": "undici-types",
-      "version": "7.18.2",
+      "version": "7.24.6",
       "description": "A stand-alone types package for Undici",
       "licenses": [
         {
@@ -13637,7 +14093,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/undici-types@7.18.2",
+      "purl": "pkg:npm/undici-types@7.24.6",
       "externalReferences": [
         {
           "url": "https://undici.nodejs.org",
@@ -13652,11 +14108,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/undici-types/-/undici-types-7.18.2.tgz",
+          "url": "https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "02cb82cdf7c61c9c9b49a46b9abe5e1ebf359b0254de48f0e8cfaea6b5af09788d78df52386c10dc99fc8dbf26dd9ea2cd58249e7d51d054c21003f642b2d8ff"
+              "content": "591356fac2608f9381378ff42691c5aadab38696e75741ae07e3a8cc0f6008bedaf7ddd2994fb5241642ccb37162c6cc7c87832fe953b29843e6337937e9f4ce"
             }
           ],
           "type": "distribution"
@@ -13703,11 +14159,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|unhead@2.1.17",
+      "bom-ref": "frontend@0.0.0|unhead@3.4.3",
       "type": "library",
       "author": "Harlan Wilton",
       "name": "unhead",
-      "version": "2.1.17",
+      "version": "3.4.3",
       "description": "Full-stack <head> manager built for any framework.",
       "licenses": [
         {
@@ -13716,7 +14172,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/unhead@2.1.17",
+      "purl": "pkg:npm/unhead@3.4.3",
       "externalReferences": [
         {
           "url": "https://unhead.unjs.io",
@@ -13731,11 +14187,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/unhead/-/unhead-2.1.17.tgz",
+          "url": "https://registry.npmjs.org/unhead/-/unhead-3.4.3.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "1cb30a5ceb3346100f06bafa565a82795789ab691b0b8917c3318b119befa233cb58d613270db6c46ec17f086cbecdf5f8805eb775a5f000e0f5dc18772a617d"
+              "content": "d05648fea082c887b2d7808a946305a6242e99649ab65b61272ed7beba3b1f79e68bf576a3091c0971b4de4d065c3736fd35752ba6efadb0308734d17b936177"
             }
           ],
           "type": "distribution"
@@ -13963,11 +14419,47 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|unist-util-visit@5.1.0",
+      "bom-ref": "frontend@0.0.0|unist-util-visit-parents@6.1.0",
+      "type": "library",
+      "author": "Titus Wormer",
+      "name": "unist-util-visit-parents",
+      "version": "6.1.0",
+      "description": "unist utility to recursively walk over nodes, with ancestral information",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/unist-util-visit-parents@6.1.0",
+      "externalReferences": [
+        {
+          "url": "syntax-tree/unist-util-visit-parents",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/syntax-tree/unist-util-visit-parents/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/unist-util-visit-parents/-/unist-util-visit-parents-6.1.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "bca5f1cfa3b7f2c2838f59adc7f936716be490506e606c7ab86ae5cc191579609117f17cb1d2348f759b933ff9ad535146e55cf14ae045d6c2c4d86661780fdf"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|unist-util-visit@5.2.0",
       "type": "library",
       "author": "Titus Wormer",
       "name": "unist-util-visit",
-      "version": "5.1.0",
+      "version": "5.2.0",
       "description": "unist utility to visit nodes",
       "licenses": [
         {
@@ -13976,7 +14468,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/unist-util-visit@5.1.0",
+      "purl": "pkg:npm/unist-util-visit@5.2.0",
       "externalReferences": [
         {
           "url": "syntax-tree/unist-util-visit",
@@ -13987,11 +14479,50 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/unist-util-visit/-/unist-util-visit-5.1.0.tgz",
+          "url": "https://registry.npmjs.org/unist-util-visit/-/unist-util-visit-5.2.0.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "9bebc87727823a976bfd07900aed84cf15ffa21812f0a6e73c38059e2e1d42c7d20ada73f14a83c98e468d1aeef0f0cab989fb16ad7d8f5090fa7252b0628ece"
+              "content": "7e9b18b3f555a19c5f198f7f8f7150a5998df3074b25a5753eddfc01a24d66ef6e2881dc154de16a509d06f784ab51c628ed4e11f258eb9c35cefa055756f7a9"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|unplugin@3.7.0",
+      "type": "library",
+      "name": "unplugin",
+      "version": "3.7.0",
+      "description": "Unified plugin system for build tools",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/unplugin@3.7.0",
+      "externalReferences": [
+        {
+          "url": "https://unplugin.unjs.io",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/unjs/unplugin.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/unjs/unplugin/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/unplugin/-/unplugin-3.7.0.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1ab336baadc3428de1bcb536163798868a09f0163d37a8f515bce0c7b3ed6b755525ebec0f754fe1d3e366464e4b498bbcdf30f73cebf4e94ffb7d5b48ccae2f"
             }
           ],
           "type": "distribution"
@@ -14138,10 +14669,10 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|vue-component-type-helpers@3.3.11",
+      "bom-ref": "frontend@0.0.0|vue-component-type-helpers@3.3.14",
       "type": "library",
       "name": "vue-component-type-helpers",
-      "version": "3.3.11",
+      "version": "3.3.14",
       "licenses": [
         {
           "license": {
@@ -14149,18 +14680,18 @@
           }
         }
       ],
-      "purl": "pkg:npm/vue-component-type-helpers@3.3.11",
+      "purl": "pkg:npm/vue-component-type-helpers@3.3.14",
       "externalReferences": [
         {
           "url": "https://github.com/vuejs/language-tools.git",
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/vue-component-type-helpers/-/vue-component-type-helpers-3.3.11.tgz",
+          "url": "https://registry.npmjs.org/vue-component-type-helpers/-/vue-component-type-helpers-3.3.14.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "2f0731cde9623bd7e441ca491b43e85fc5f99260212a61fdc24a432f135a6f0ce443d65e89bd98547c05578a5c5a630b7d755f8ebfdd495f83689ddc20f81234"
+              "content": "3eadfe3a76c288f08793447b29266bc7e8ff5d76949f69124357a9c6aeb4c3c08f6c1c8b8c2d44260579d67e1663ce75b135d4573b0d32e8adcb0764755c8a8c"
             }
           ],
           "type": "distribution"
@@ -14199,11 +14730,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|vue-sonner@1.3.2",
+      "bom-ref": "frontend@0.0.0|vue-sonner@2.0.9",
       "type": "library",
       "author": "xiaoluoboding",
       "name": "vue-sonner",
-      "version": "1.3.2",
+      "version": "2.0.9",
       "licenses": [
         {
           "license": {
@@ -14211,7 +14742,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/vue-sonner@1.3.2",
+      "purl": "pkg:npm/vue-sonner@2.0.9",
       "externalReferences": [
         {
           "url": "https://github.com/xiaoluoboding/vue-sonner",
@@ -14222,11 +14753,11 @@
           "type": "vcs"
         },
         {
-          "url": "https://registry.npmjs.org/vue-sonner/-/vue-sonner-1.3.2.tgz",
+          "url": "https://registry.npmjs.org/vue-sonner/-/vue-sonner-2.0.9.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "51b678f04f552326b74e88911c06546e874abad7bfcff335893f3fddf53ccc46f0051135d402ae1e292cb2fd7c2cc9368134ebe9e3104f8a9fe89a0b1d6ba3fc"
+              "content": "8ba06890d94d0cbf777e9ccdc4dfcb6529fa0fa33394efa2dea5edea25599dedf1d64ed1e3a7791e5141e0ff2d63276182a3ab45b21912c9d1777906eea197cb"
             }
           ],
           "type": "distribution"
@@ -14234,11 +14765,11 @@
       ]
     },
     {
-      "bom-ref": "frontend@0.0.0|vue@3.5.42",
+      "bom-ref": "frontend@0.0.0|vue@3.5.44",
       "type": "library",
       "author": "Evan You",
       "name": "vue",
-      "version": "3.5.42",
+      "version": "3.5.44",
       "description": "The progressive JavaScript framework for building modern web UI.",
       "licenses": [
         {
@@ -14247,7 +14778,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/vue@3.5.42",
+      "purl": "pkg:npm/vue@3.5.44",
       "externalReferences": [
         {
           "url": "https://vuejs.org/",
@@ -14262,11 +14793,11 @@
           "type": "issue-tracker"
         },
         {
-          "url": "https://registry.npmjs.org/vue/-/vue-3.5.42.tgz",
+          "url": "https://registry.npmjs.org/vue/-/vue-3.5.44.tgz",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "e11c874136d0bce3ecdcc7ef50ed52834611aca36703498056dbe9775d938357ca0cdece1c1525d48a929fccc62632bd9c8dcd90da7c7204e956b4990b94d370"
+              "content": "76fbe668e086ee500c9094cfa8fc1678632c3d2e8322c16c7d90d4801a7d57a9877fd6f7fbfc32570611e04b3e595eae242d05291c69f3539b72ad19c1470615"
             }
           ],
           "type": "distribution"
@@ -14343,6 +14874,46 @@
             {
               "alg": "SHA-512",
               "content": "6caaf50e488d6b692b4bbab136d76bb47026cee6061502e2435dd3b28aec753e942d390f2cabaee7e1ac1690e583a2458d44f05f60f284c3c6d9b7bcb8faeab1"
+            }
+          ],
+          "type": "distribution"
+        }
+      ]
+    },
+    {
+      "bom-ref": "frontend@0.0.0|webpack-virtual-modules@0.6.2",
+      "type": "library",
+      "author": "SysGears INC",
+      "name": "webpack-virtual-modules",
+      "version": "0.6.2",
+      "description": "Webpack Virtual Modules",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/webpack-virtual-modules@0.6.2",
+      "externalReferences": [
+        {
+          "url": "https://github.com/sysgears/webpack-virtual-modules#readme",
+          "type": "website"
+        },
+        {
+          "url": "git+https://github.com/sysgears/webpack-virtual-modules.git",
+          "type": "vcs"
+        },
+        {
+          "url": "https://github.com/sysgears/webpack-virtual-modules/issues",
+          "type": "issue-tracker"
+        },
+        {
+          "url": "https://registry.npmjs.org/webpack-virtual-modules/-/webpack-virtual-modules-0.6.2.tgz",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ebafd5da2e6141a9c2e75bc140a3c7e1a23c34c01c056e7d15506cfab0bb7861eea4cc9f9f7e2aeeb64813e113949f974debea7d485554181250d496d9f94451"
             }
           ],
           "type": "distribution"
