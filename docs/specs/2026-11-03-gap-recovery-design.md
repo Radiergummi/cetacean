@@ -18,33 +18,36 @@ the most recent stretch of the gap. It can never close a gap: tasks are missing 
 
 ## Proposal
 
-**Read once, at ready, before the gap is recorded.** When the writer is about to record a gap from
-`from` to now, it first asks the daemon for `/events?since=from&until=now`, filtered to the six
-types above, and separately for the oldest buffered event of any type. The read is bounded by the
-256-entry buffer and a short timeout; a failure records the gap as today.
+**Read once, before the stream records anything.** The watcher calls a hook once a sync has first
+succeeded and before the event stream beside it records a change, giving the time that stream
+replays from. The timeline writer records the gap there: it reads the previous process's last
+heartbeat, then reads the daemon's whole buffer (`/events` from the epoch to the stream's start,
+every type) with a short timeout. Coverage opens only after the hook. A stream already running
+when a sync first succeeds, or a store that fails at that moment, records the gap later, with no
+recovery: anything past-dated would then sort above changes already watched.
+
+**The bounds.** Recovery takes the events after `from` plus the watcher's replay margin, which the
+previous process may already have recorded by the daemon's clock, and before the stream's start,
+which the stream replays itself. Both bounds compare the daemon's own timestamps, so neither side
+of the stream's start is read twice. The recovered changes and the gap are appended before the
+stream records anything, so IDs and times still rise together and a time-bounded walk can stop at
+the first entry that ended before its window.
 
 **Each event becomes a change entry,** stamped with the event's time and carrying its type, action
 (`create`, `update`, `remove`), resource ID and the name from its attributes. Nothing is re-read:
 the resource's state at that moment is gone, and the first sync already holds its current one. It
-has no actor, since attribution lived in the process that stopped. It is marked `recovered: true`
-on every representation — JSON, CSV, the feeds, `get_events` — and the dashboard says "recovered
-from Docker's event log" on its row.
+has no actor, since attribution lived in the process that stopped. A service's entry takes its
+stack from the snapshot loaded before the first sync, which still holds a service removed in the
+gap. It is marked `recovered: true` on every representation — JSON, CSV, the feeds, `get_events`
+— and the dashboard says "recovered from Docker's event log" on its row. A recovered change never
+runs alone with a watched one, and SSE replay skips it: it was never live.
 
 **The gap stays, and says how far recovery reached.** It gains `recoveredFrom`: the time from which
-those six types are complete, which is the oldest buffered event when that falls after `from`, and
-`from` itself when the buffer reaches across the whole gap. The divider reads "Cetacean wasn't
-watching from 10:00 to 11:00; changes to services, nodes, configs, secrets, networks and volumes
-since 10:40 were recovered. Task changes are unknown." `get_events`' description says the same.
-
-**Order.** The recovered entries are appended just before the gap, so they take the IDs between the
-last entry before it and the gap itself. A newest-first list then shows the divider, the recovered
-changes below it, then what came before — the divider heads its recovered changes. A time-ordered
-view (the charts' markers, `get_events`) places them inside the gap by their timestamps. They are
-appended to the history under `notifyMu` without being dispatched as live events: they describe the
-past, and the gap's own event already tells every client to refetch its timeline.
-
-**Replays are not duplicated.** Events the live stream replays through `eventsSince`'s margin
-arrive after ready and are recorded as today; recovery stops at the moment the gap is recorded.
+those six types are complete, which is the oldest buffered event when that falls after the start
+above, and that start itself when the buffer reaches across it. The oldest event is the bound even
+when the buffer is not full: a daemon restarted during the gap kept nothing from before it, and
+nothing tells the two cases apart. The divider reads "Not watching for 1h, partly covered by
+Docker's log", with the time in its title; the feed entry's title says the same.
 
 ## Not in this design
 

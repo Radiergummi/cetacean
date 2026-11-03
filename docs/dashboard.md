@@ -305,7 +305,7 @@ A change made through Cetacean names who made it and whether they used the dashb
 with no name came from somewhere else, such as the Docker CLI. The history survives a restart while
 `storage.timeline` is on; the time Cetacean wasn't watching shows as a gap, a divider between the rows. Changes
 Docker still remembered from the gap appear below it, marked **recovered**, and the divider says it was partly
-recovered. Task changes during a gap are never recovered.
+covered by Docker's log. Task changes during a gap are never recovered.
 
 ## Atom feeds
 

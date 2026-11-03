@@ -10,8 +10,8 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-// recoverTimeout bounds the read of the daemon's buffer, which runs once, as
-// the timeline records the gap it ends.
+// recoverTimeout bounds the read of the daemon's buffer, which holds back the
+// event stream once, as the gap it ends is recorded.
 const recoverTimeout = 5 * time.Second
 
 // recoverable are the event types the history records that the daemon keeps;
@@ -25,53 +25,73 @@ var recoverable = map[events.Type]cache.EventType{
 	events.VolumeEventType:  cache.EventVolume,
 }
 
+// historyAction is the action history records for a resource event: Docker
+// says destroy for a network or a volume where it says remove for the rest.
+func historyAction(action events.Action) string {
+	if action == "destroy" {
+		return "remove"
+	}
+
+	return string(action)
+}
+
 // EventBuffer reads what a daemon still holds of its recent events.
 type EventBuffer interface {
 	BufferedEvents(ctx context.Context, until time.Time) ([]events.Message, error)
 }
 
-// RecoverGap reads what the daemon still holds of the gap from from until
-// now; a failed read recovers nothing, and the gap is recorded as it was.
-func RecoverGap(ctx context.Context, buffer EventBuffer, from time.Time) cache.Recovery {
+// RecoverGap reads what the daemon still holds of the gap from from until the
+// live stream's start, which replays everything after it; serviceStacks names
+// the stacks of the services from before the first sync forgot the removed
+// ones. A failed read recovers nothing, and the gap is recorded as it was.
+func RecoverGap(
+	ctx context.Context,
+	buffer EventBuffer,
+	from, until time.Time,
+	serviceStacks map[string]string,
+) cache.Recovery {
 	ctx, cancel := context.WithTimeout(ctx, recoverTimeout)
 	defer cancel()
 
-	buffered, err := buffer.BufferedEvents(ctx, time.Now())
+	buffered, err := buffer.BufferedEvents(ctx, until)
 	if err != nil {
 		slog.WarnContext(ctx, "could not read the changes made during the gap", "error", err)
 		return cache.Recovery{}
 	}
 
-	return recoverFrom(buffered, from)
+	return recoverFrom(buffered, from, until, serviceStacks)
 }
 
-// recoverFrom turns the buffered events after from into recovered changes,
-// complete from from when the buffer reaches back past it and from its oldest
-// event otherwise: the buffer holds everything since that event, but not before.
-func recoverFrom(buffered []events.Message, from time.Time) cache.Recovery {
-	if len(buffered) == 0 {
+// recoverFrom turns the buffered events inside the gap into recovered
+// changes. It starts a replay margin after from, which the previous process
+// may have recorded by the daemon's clock, and is complete from there when
+// the buffer reaches back past it, from its oldest event otherwise.
+func recoverFrom(
+	buffered []events.Message,
+	from, until time.Time,
+	serviceStacks map[string]string,
+) cache.Recovery {
+	start := from.Add(eventReplayMargin)
+	if len(buffered) == 0 || !until.After(start) {
 		return cache.Recovery{}
 	}
 
-	recovery := cache.Recovery{From: from}
-	if oldest := eventTime(buffered[0]); oldest.After(from) {
+	recovery := cache.Recovery{From: start}
+	if oldest := eventTime(buffered[0]); oldest.After(start) {
 		recovery.From = oldest
+	}
+
+	if !recovery.From.Before(until) {
+		return cache.Recovery{}
 	}
 
 	for _, msg := range buffered {
 		typ, ok := recoverable[msg.Type]
 		at := eventTime(msg)
+		action := historyAction(msg.Action)
 
-		if !ok || !at.After(from) {
-			continue
-		}
-
-		action := string(msg.Action)
-		if action == "destroy" {
-			action = "remove"
-		}
-
-		if action != "create" && action != "update" && action != "remove" {
+		if !ok || !at.After(start) || !at.Before(until) ||
+			action != "create" && action != "update" && action != "remove" {
 			continue
 		}
 
@@ -80,7 +100,7 @@ func recoverFrom(buffered []events.Message, from time.Time) cache.Recovery {
 			name = msg.Actor.ID
 		}
 
-		recovery.Entries = append(recovery.Entries, cache.HistoryEntry{
+		entry := cache.HistoryEntry{
 			Kind:       cache.KindChange,
 			Timestamp:  at,
 			Type:       typ,
@@ -88,7 +108,12 @@ func recoverFrom(buffered []events.Message, from time.Time) cache.Recovery {
 			ResourceID: msg.Actor.ID,
 			Name:       name,
 			Recovered:  true,
-		})
+		}
+		if typ == cache.EventService {
+			entry.Stack = serviceStacks[msg.Actor.ID]
+		}
+
+		recovery.Entries = append(recovery.Entries, entry)
 	}
 
 	return recovery

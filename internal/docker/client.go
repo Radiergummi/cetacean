@@ -192,7 +192,7 @@ func (c *Client) Events(
 ) (<-chan events.Message, <-chan error) {
 	var sinceArg string
 	if !since.IsZero() {
-		sinceArg = fmt.Sprintf("%d.%09d", since.Unix(), since.Nanosecond())
+		sinceArg = dockerTime(since)
 	}
 
 	return c.docker.Events(ctx, events.ListOptions{
@@ -210,6 +210,11 @@ func (c *Client) Events(
 	})
 }
 
+// dockerTime is t as the events API's since and until take it.
+func dockerTime(t time.Time) string {
+	return fmt.Sprintf("%d.%09d", t.Unix(), t.Nanosecond())
+}
+
 // BufferedEvents returns every event the daemon still holds from before until,
 // of every type, oldest first: its buffer of the last 256.
 func (c *Client) BufferedEvents(ctx context.Context, until time.Time) ([]events.Message, error) {
@@ -218,7 +223,7 @@ func (c *Client) BufferedEvents(ctx context.Context, until time.Time) ([]events.
 
 	msgCh, errCh := c.docker.Events(ctx, events.ListOptions{
 		Since: "1",
-		Until: fmt.Sprintf("%d.%09d", until.Unix(), until.Nanosecond()),
+		Until: dockerTime(until),
 	})
 
 	var buffered []events.Message

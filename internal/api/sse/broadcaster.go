@@ -474,8 +474,9 @@ func (b *Broadcaster) replayEvents(
 	// Filter entries by type and ACL, then convert to cache.Event (no Resource payload).
 	var replay []frameEvent
 	for _, e := range entries {
-		// An annotation item replays its annotation; without one it has nothing to send.
-		if e.Kind == cache.KindAnnotation && e.Annotation == nil {
+		// An annotation item replays its annotation; without one it has nothing to
+		// send. A recovered change was never live, and its gap's event refetches it.
+		if e.Kind == cache.KindAnnotation && e.Annotation == nil || e.Recovered {
 			continue
 		}
 

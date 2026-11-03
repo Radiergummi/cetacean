@@ -376,19 +376,22 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 // resource, and it was last updated when it was recorded, at its end.
 func gapFeedEntry(e cache.HistoryEntry) feedEntry {
 	from, until := e.Timestamp.UTC().Format(time.RFC3339), e.Until.UTC().Format(time.RFC3339)
+	title := fmt.Sprintf("Nothing recorded from %s to %s", from, until)
+	content := "<p>Cetacean was not watching the cluster from " + from + " to " + until
 
-	content := "<p>Cetacean was not watching the cluster from " + from + " to " + until +
-		", so changes made then are missing from this record.</p>"
-	if !e.RecoveredFrom.IsZero() {
-		content = "<p>Cetacean was not watching the cluster from " + from + " to " + until +
-			". Changes to every resource but tasks since " +
-			e.RecoveredFrom.UTC().Format(time.RFC3339) +
-			" were recovered from Docker's event log; task changes are missing.</p>"
+	if e.RecoveredFrom.IsZero() {
+		content += ", so changes made then are missing from this record.</p>"
+	} else {
+		recovered := e.RecoveredFrom.UTC().Format(time.RFC3339)
+		title = fmt.Sprintf("Not watching from %s to %s; Docker's log covers it from %s",
+			from, until, recovered)
+		content += ". Docker's event log covers it from " + recovered +
+			": changes to every resource but tasks since then are recorded; task changes are missing.</p>"
 	}
 
 	return feedEntry{
 		ID:          fmt.Sprintf("urn:cetacean:history:%d", e.ID),
-		Title:       fmt.Sprintf("Nothing recorded from %s to %s", from, until),
+		Title:       title,
 		ContentHTML: content,
 		Updated:     e.Until,
 		Tags:        []string{cache.KindGap},

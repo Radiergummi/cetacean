@@ -16,9 +16,10 @@ type Writer struct {
 	history *cache.History
 	keep    int
 
-	// recordGap records the window between the previous process's last
-	// heartbeat and this one's coverage; it reaches the store through the ring.
-	recordGap func(from time.Time)
+	// recordGap records the window from the previous process's last heartbeat,
+	// recovering what it can up to streamSince, or nothing when that is zero; it
+	// reaches the store through the ring.
+	recordGap func(ctx context.Context, from, streamSince time.Time)
 
 	// lastWritten is the newest ID committed; a failed commit leaves it, so
 	// the next tick retries from the same place.
@@ -39,7 +40,7 @@ func NewWriter(
 	store Store,
 	history *cache.History,
 	keep int,
-	recordGap func(from time.Time),
+	recordGap func(ctx context.Context, from, streamSince time.Time),
 ) *Writer {
 	return &Writer{
 		store:       store,
@@ -81,21 +82,33 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 	}
 }
 
-// openCoverage records the gap since the previous stretch of watching, then
-// opens this one. The gap is recorded as soon as it is known, so a coverage
-// row that takes long to write does not stretch it over watched time.
+// RecordGap records the gap since the previous stretch of watching, before
+// the stream starting at streamSince records anything, so what it recovers sits
+// below every change watched. Run's ready must close after it; when the store
+// fails here, openCoverage records the gap then, recovering nothing.
+func (w *Writer) RecordGap(ctx context.Context, streamSince time.Time) {
+	previous, ok, err := w.store.LastSeen(ctx)
+	if err != nil {
+		w.coverageFailed(ctx, err)
+		return
+	}
+
+	w.gapChecked = true
+
+	if ok && previous.Before(time.Now()) {
+		w.recordGap(ctx, previous, streamSince)
+	}
+}
+
+// openCoverage records the gap since the previous stretch of watching, if
+// RecordGap could not, then opens this one. The gap is recorded as soon as it
+// is known, so a coverage row slow to write does not stretch it over watched time.
 func (w *Writer) openCoverage(ctx context.Context) {
 	if !w.gapChecked {
-		previous, ok, err := w.store.LastSeen(ctx)
-		if err != nil {
-			w.coverageFailed(ctx, err)
+		w.RecordGap(ctx, time.Time{})
+
+		if !w.gapChecked {
 			return
-		}
-
-		w.gapChecked = true
-
-		if ok && previous.Before(time.Now()) {
-			w.recordGap(previous)
 		}
 	}
 

@@ -80,14 +80,13 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
 
     range = gap.detail;
     text = total > 0 ? gap.title : "Not watching";
-
-    if (oldest.recoveredFrom) {
-      range += `. Changes to everything but tasks since ${formatDateTime(oldest.recoveredFrom)} were recovered from Docker's event log`;
-    }
   }
 
-  if (gaps.some(({ recoveredFrom }) => recoveredFrom)) {
-    text += ", partly recovered";
+  const covered = gaps.flatMap(({ recoveredFrom }) => (recoveredFrom ? [recoveredFrom] : []));
+
+  if (covered.length > 0) {
+    text += ", partly covered by Docker's log";
+    range += `. Docker's event log covers ${covered.length === 1 ? "it" : `${covered.length} of them`} from ${covered.map((from) => formatDateTime(from)).join(", ")}: changes to everything but tasks since then are listed below`;
   }
 
   return (

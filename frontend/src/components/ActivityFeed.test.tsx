@@ -208,18 +208,43 @@ describe("ActivityFeed", () => {
       </MemoryRouter>,
     );
 
-    const divider = screen.getByText(/^Not watching for 3h, partly recovered/);
+    const divider = screen.getByText(/^Not watching for 3h, partly covered by Docker's log/);
 
     expect(divider).toHaveAttribute(
       "title",
       expect.stringContaining(
-        `everything but tasks since ${formatDateTime("2026-10-30T15:00:00Z")} were recovered`,
+        `Docker's event log covers it from ${formatDateTime("2026-10-30T15:00:00Z")}`,
       ),
     );
     expect(screen.getByText("recovered")).toHaveAttribute(
       "title",
       expect.stringMatching(/^Recovered from Docker's event log/),
     );
+  });
+
+  it("keeps a recovered change out of a watched change's run", () => {
+    const change = (id: number, recovered: boolean): HistoryEntry => ({
+      id,
+      kind: "change",
+      timestamp: `2026-10-30T1${id}:00:00Z`,
+      type: "service",
+      action: "update",
+      resourceId: "svc1",
+      name: "web-app",
+      recovered,
+    });
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed
+          entries={[change(2, true), change(1, false)]}
+          collapse
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("2 changes")).not.toBeInTheDocument();
+    expect(screen.getAllByText("recovered")).toHaveLength(1);
   });
 
   it("skips kinds it does not know", () => {

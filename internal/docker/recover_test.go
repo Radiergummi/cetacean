@@ -12,10 +12,13 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
-var gapStart = time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+var (
+	gapStart  = time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	streamEnd = gapStart.Add(time.Hour)
+)
 
 func bufferedAt(
-	minutes int,
+	at time.Duration,
 	typ events.Type,
 	action events.Action,
 	id, name string,
@@ -24,30 +27,32 @@ func bufferedAt(
 		Type:     typ,
 		Action:   action,
 		Actor:    events.Actor{ID: id, Attributes: map[string]string{"name": name}},
-		TimeNano: gapStart.Add(time.Duration(minutes) * time.Minute).UnixNano(),
+		TimeNano: gapStart.Add(at).UnixNano(),
 	}
 }
 
 func TestRecoverFrom_TurnsTheGapsEventsIntoRecoveredChanges(t *testing.T) {
 	buffered := []events.Message{
-		bufferedAt(-5, events.ServiceEventType, "update", "svc0", "before"),
-		bufferedAt(10, events.ContainerEventType, "die", "c1", "web.1.x"),
-		bufferedAt(20, events.ServiceEventType, "update", "svc1", "shop_web"),
-		bufferedAt(30, events.NetworkEventType, "connect", "net1", "shop_default"),
-		bufferedAt(40, events.VolumeEventType, "destroy", "data", ""),
+		bufferedAt(-5*time.Minute, events.ServiceEventType, "update", "svc0", "before"),
+		bufferedAt(2*time.Second, events.ServiceEventType, "update", "svc0", "seen-before-the-gap"),
+		bufferedAt(10*time.Minute, events.ContainerEventType, "die", "c1", "web.1.x"),
+		bufferedAt(20*time.Minute, events.ServiceEventType, "remove", "svc1", "shop_web"),
+		bufferedAt(30*time.Minute, events.NetworkEventType, "connect", "net1", "shop_default"),
+		bufferedAt(40*time.Minute, events.VolumeEventType, "destroy", "data", ""),
+		bufferedAt(time.Hour, events.ServiceEventType, "update", "svc2", "replayed-by-the-stream"),
 	}
 
-	got := recoverFrom(buffered, gapStart)
+	got := recoverFrom(buffered, gapStart, streamEnd, map[string]string{"svc1": "shop"})
 
-	if !got.From.Equal(gapStart) {
-		t.Errorf("From = %v, want the gap's start, which the buffer reaches past", got.From)
+	if want := gapStart.Add(eventReplayMargin); !got.From.Equal(want) {
+		t.Errorf("From = %v, want the gap's start past the replay margin, %v", got.From, want)
 	}
 
 	want := []cache.HistoryEntry{
 		{
 			Kind: cache.KindChange, Timestamp: gapStart.Add(20 * time.Minute),
-			Type: cache.EventService, Action: "update", ResourceID: "svc1", Name: "shop_web",
-			Recovered: true,
+			Type: cache.EventService, Action: "remove", ResourceID: "svc1", Name: "shop_web",
+			Stack: "shop", Recovered: true,
 		},
 		{
 			Kind: cache.KindChange, Timestamp: gapStart.Add(40 * time.Minute),
@@ -73,9 +78,9 @@ func TestRecoverFrom_TurnsTheGapsEventsIntoRecoveredChanges(t *testing.T) {
 
 func TestRecoverFrom_IsCompleteOnlyFromTheOldestEventItHolds(t *testing.T) {
 	got := recoverFrom([]events.Message{
-		bufferedAt(25, events.ContainerEventType, "start", "c1", "x"),
-		bufferedAt(30, events.NodeEventType, "update", "node1", "worker-1"),
-	}, gapStart)
+		bufferedAt(25*time.Minute, events.ContainerEventType, "start", "c1", "x"),
+		bufferedAt(30*time.Minute, events.NodeEventType, "update", "node1", "worker-1"),
+	}, gapStart, streamEnd, nil)
 
 	if want := gapStart.Add(25 * time.Minute); !got.From.Equal(want) {
 		t.Errorf("From = %v, want the oldest buffered event, %v", got.From, want)
@@ -84,9 +89,21 @@ func TestRecoverFrom_IsCompleteOnlyFromTheOldestEventItHolds(t *testing.T) {
 	if len(got.Entries) != 1 || got.Entries[0].Name != "worker-1" {
 		t.Errorf("entries = %+v, want the node's update", got.Entries)
 	}
+}
 
-	if empty := recoverFrom(nil, gapStart); !empty.From.IsZero() || empty.Entries != nil {
-		t.Errorf("an empty buffer recovered %+v, want nothing", empty)
+func TestRecoverFrom_RecoversNothingItCannotVouchFor(t *testing.T) {
+	for name, got := range map[string]cache.Recovery{
+		"an empty buffer": recoverFrom(nil, gapStart, streamEnd, nil),
+		"a buffer starting after the stream": recoverFrom([]events.Message{
+			bufferedAt(2*time.Hour, events.ServiceEventType, "update", "svc1", "web"),
+		}, gapStart, streamEnd, nil),
+		"a gap shorter than the margin": recoverFrom([]events.Message{
+			bufferedAt(-time.Minute, events.ServiceEventType, "update", "svc1", "web"),
+		}, gapStart, gapStart.Add(time.Second), nil),
+	} {
+		if !got.From.IsZero() || got.Entries != nil {
+			t.Errorf("%s recovered %+v, want nothing", name, got)
+		}
 	}
 }
 
@@ -97,8 +114,8 @@ func (failingBuffer) BufferedEvents(context.Context, time.Time) ([]events.Messag
 }
 
 func TestRecoverGap_RecoversNothingWhenTheReadFails(t *testing.T) {
-	if got := RecoverGap(context.Background(), failingBuffer{}, gapStart); !got.From.IsZero() ||
-		got.Entries != nil {
+	got := RecoverGap(context.Background(), failingBuffer{}, gapStart, streamEnd, nil)
+	if !got.From.IsZero() || got.Entries != nil {
 		t.Errorf("a failed read recovered %+v, want nothing", got)
 	}
 }

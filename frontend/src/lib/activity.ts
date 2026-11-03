@@ -24,13 +24,14 @@ export type ActivityRow =
 
 /**
  * What decides whether two changes share a row: the same type, name and actor,
- * whatever the action. A replica restarting in place keeps its name, so its
- * churn folds.
+ * whatever the action, and both watched or both recovered. A replica restarting
+ * in place keeps its name, so its churn folds.
  */
-export function runSignature({ actor, name, type }: HistoryEntry): string {
+export function runSignature({ actor, name, recovered, type }: HistoryEntry): string {
   return JSON.stringify([
     type,
     name,
+    recovered === true,
     actor?.subject,
     actor?.name,
     actor?.provider,

@@ -314,7 +314,7 @@ func TestARecoveredGapSaysSoInJSONAndItsFeed(t *testing.T) {
 
 	if body := rec.Body.String(); !strings.Contains(
 		body,
-		"since 2026-10-30T14:00:00Z were recovered",
+		"covers it from 2026-10-30T14:00:00Z",
 	) ||
 		!strings.Contains(body, "Recovered from Docker") {
 		t.Errorf("feed = %s, want the gap's and the change's recovery told", body)
