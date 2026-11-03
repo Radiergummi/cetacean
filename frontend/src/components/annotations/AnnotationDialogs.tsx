@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useLatestRef } from "@/hooks/useLatestRef";
 import { getErrorMessage } from "@/lib/utils";
 import { useState } from "react";
 
@@ -72,6 +73,7 @@ export function DeleteAnnotationDialog({
   onDeleted?: (() => void) | undefined;
 }) {
   const [target, setTarget] = useState(deleting);
+  const openRef = useLatestRef(deleting !== null);
   const [opened, setOpened] = useState(deleting);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -118,8 +120,11 @@ export function DeleteAnnotationDialog({
             }
           }
 
-          setTarget({ note: data, etag });
-          setError("This annotation changed since you opened it. Delete it anyway?");
+          // Cancelled meanwhile, the confirmation stays closed.
+          if (openRef.current) {
+            setTarget({ note: data, etag });
+            setError("This annotation changed since you opened it. Delete it anyway?");
+          }
         } catch (reason) {
           setError(getErrorMessage(reason, "The annotation could not be read."));
         }

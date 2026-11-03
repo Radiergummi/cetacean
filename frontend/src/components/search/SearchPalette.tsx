@@ -397,8 +397,8 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       const resource = args[0] as SearchResult;
       const path = action.capabilityPath
         ? action.capabilityPath(...args)
-        : first?.type === "resource"
-          ? resourcePath(first.resourceType!, resource.id, resource.name)
+        : first?.type === "resource" && first.resourceType
+          ? resourcePath(first.resourceType, resource.id, resource.name)
           : null;
 
       if (action.requiredMethod || action.requiredEdit) {
@@ -455,19 +455,22 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   const activateAction = useCallback(
     (action: PaletteAction) => {
-      setActiveAction(action);
-      setActionStep(0);
-      setActionArgs([]);
       setActionError(null);
       setQuery("");
       setResponse(null);
       setHighlightIndex(0);
-      openStep(action.steps[0]);
 
-      // Nothing to ask: it still checks permission and confirms before running.
+      // Nothing to ask: it still checks permission and confirms, from search.
       if (action.steps.length === 0) {
         void executeAction(action, []);
+
+        return;
       }
+
+      setActiveAction(action);
+      setActionStep(0);
+      setActionArgs([]);
+      openStep(action.steps[0]);
     },
     [executeAction, openStep],
   );
@@ -478,7 +481,8 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         return;
       }
 
-      const newArgs = [...actionArgs, value];
+      // A pick after a refusal or a cancelled confirmation replaces this step's earlier one.
+      const newArgs = [...actionArgs.slice(0, actionStep), value];
 
       setActionArgs(newArgs);
 
