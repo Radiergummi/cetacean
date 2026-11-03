@@ -95,7 +95,7 @@ export default function ChartTooltipOverlay({ tooltip, visible }: Props) {
               {tooltip.markers.moreAnnotations > 0 && (
                 <div className="text-muted-foreground">
                   {tooltip.markers.moreAnnotations} more{" "}
-                  {tooltip.markers.moreAnnotations === 1 ? "note" : "notes"}
+                  {tooltip.markers.moreAnnotations === 1 ? "annotation" : "annotations"}
                 </div>
               )}
 

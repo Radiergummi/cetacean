@@ -1,23 +1,6 @@
-import { changedOnlyByRemovals } from "./annotationFields";
-import AnnotationForm, { type EditedNote } from "./AnnotationForm";
-import { api, ApiError } from "@/api/client";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { DeleteAnnotationDialog, EditAnnotationDialog } from "./AnnotationDialogs";
+import type { EditedNote } from "./AnnotationForm";
+import { api } from "@/api/client";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { getErrorMessage } from "@/lib/utils";
 import { Menu } from "@base-ui/react/menu";
@@ -45,8 +28,6 @@ export default function AnnotationMenu({
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [editing, setEditing] = useState<EditedNote | null>(null);
   const [deleting, setDeleting] = useState<EditedNote | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [removing, setRemoving] = useState(false);
   const latest = useRef(0);
   const active = menuOpen || editing !== null || deleting !== null;
 
@@ -75,54 +56,9 @@ export default function AnnotationMenu({
       if (request === latest.current) {
         setLoaded({
           status: "failed",
-          message: getErrorMessage(failure, "The note could not be read."),
+          message: getErrorMessage(failure, "The annotation could not be read."),
         });
       }
-    }
-  };
-
-  const remove = async (target: EditedNote) => {
-    setRemoving(true);
-    setDeleteError(null);
-
-    try {
-      await api.deleteAnnotation(target.note.id, target.etag);
-      setDeleting(null);
-    } catch (failure) {
-      if (failure instanceof ApiError && failure.status === 404) {
-        // Someone else deleted it: what was asked for is done.
-        setDeleting(null);
-      } else if (failure instanceof ApiError && failure.status === 412) {
-        try {
-          const { data, etag } = await api.annotation(target.note.id);
-
-          // A removal elsewhere changed the validator, not the note: delete again.
-          if (changedOnlyByRemovals(target.note, data)) {
-            try {
-              await api.deleteAnnotation(data.id, etag);
-              setDeleting(null);
-
-              return;
-            } catch (retry) {
-              if (!(retry instanceof ApiError && retry.status === 412)) {
-                setDeleteError(getErrorMessage(retry, "The note could not be deleted."));
-
-                return;
-              }
-            }
-          }
-
-          // Cancelled meanwhile, the confirmation stays closed.
-          setDeleting((current) => current && { note: data, etag });
-          setDeleteError("This note changed since you opened it. Delete it anyway?");
-        } catch (reason) {
-          setDeleteError(getErrorMessage(reason, "The note could not be read."));
-        }
-      } else {
-        setDeleteError(getErrorMessage(failure, "The note could not be deleted."));
-      }
-    } finally {
-      setRemoving(false);
     }
   };
 
@@ -139,7 +75,7 @@ export default function AnnotationMenu({
         }}
       >
         <Menu.Trigger
-          aria-label="Note actions"
+          aria-label="Annotation actions"
           className="-my-0.5 inline-flex shrink-0 cursor-pointer items-center rounded-sm p-0.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <Ellipsis className="size-4" />
@@ -155,17 +91,14 @@ export default function AnnotationMenu({
               {loaded.methods.has("DELETE") && (
                 <MenuItem
                   className="text-status-danger"
-                  onClick={() => {
-                    setDeleteError(null);
-                    setDeleting(loaded.edited);
-                  }}
+                  onClick={() => setDeleting(loaded.edited)}
                 >
                   Delete
                 </MenuItem>
               )}
 
               {!loaded.methods.has("PATCH") && !loaded.methods.has("DELETE") && (
-                <MenuItem disabled>You can't change this note</MenuItem>
+                <MenuItem disabled>You can't change this annotation</MenuItem>
               )}
             </>
           ) : (
@@ -176,70 +109,15 @@ export default function AnnotationMenu({
         </MenuContent>
       </Menu.Root>
 
-      <Dialog
-        open={editing !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditing(null);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit annotation</DialogTitle>
-            <DialogDescription>What it is about stays as it is.</DialogDescription>
-          </DialogHeader>
+      <EditAnnotationDialog
+        editing={editing}
+        onClose={() => setEditing(null)}
+      />
 
-          {editing && (
-            <AnnotationForm
-              editing={editing}
-              onDone={() => setEditing(null)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={deleting !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleting(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete annotation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The note is removed for everyone. This can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {deleteError && (
-            <p
-              role="alert"
-              className="text-sm text-status-danger"
-            >
-              {deleteError}
-            </p>
-          )}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button
-              variant="destructive"
-              disabled={removing}
-              onClick={() => {
-                if (deleting) {
-                  void remove(deleting);
-                }
-              }}
-            >
-              {removing ? "Deleting…" : "Delete"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteAnnotationDialog
+        deleting={deleting}
+        onClose={() => setDeleting(null)}
+      />
     </>
   );
 }

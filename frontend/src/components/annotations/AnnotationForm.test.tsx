@@ -64,7 +64,7 @@ describe("AnnotationForm", () => {
     const user = userEvent.setup();
     const onDone = show();
 
-    await user.type(screen.getByLabelText("Note"), "Deployed the fix");
+    await user.type(screen.getByLabelText("Text"), "Deployed the fix");
     await user.type(screen.getByLabelText("Tags"), "deploy{Enter}rollback,");
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
@@ -94,7 +94,7 @@ describe("AnnotationForm", () => {
 
     expect(screen.getByRole("button", { name: "Add annotation" })).toBeDisabled();
 
-    await user.type(screen.getByLabelText("Note"), "x");
+    await user.type(screen.getByLabelText("Text"), "x");
     fireEvent.change(screen.getByLabelText("Until"), { target: { value: "2000-01-01T00:00" } });
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
@@ -111,11 +111,11 @@ describe("AnnotationForm", () => {
 
     const onDone = show();
 
-    await user.type(screen.getByLabelText("Note"), "Deployed the fix");
+    await user.type(screen.getByLabelText("Text"), "Deployed the fix");
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("You may not annotate service web");
-    expect(screen.getByLabelText("Note")).toHaveValue("Deployed the fix");
+    expect(screen.getByLabelText("Text")).toHaveValue("Deployed the fix");
     expect(onDone).not.toHaveBeenCalled();
   });
 
@@ -125,7 +125,7 @@ describe("AnnotationForm", () => {
     createAnnotation.mockReturnValue(new Promise(() => {}));
     show();
 
-    await user.type(screen.getByLabelText("Note"), "x");
+    await user.type(screen.getByLabelText("Text"), "x");
 
     const form = screen.getByRole("button", { name: "Add annotation" }).closest("form")!;
 
@@ -143,7 +143,7 @@ describe("AnnotationForm", () => {
     expect(screen.getByRole("radio", { name: "web" })).toBeChecked();
 
     await user.click(screen.getByRole("radio", { name: "Cluster-wide" }));
-    await user.type(screen.getByLabelText("Note"), "x");
+    await user.type(screen.getByLabelText("Text"), "x");
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
     await waitFor(() => expect(createAnnotation).toHaveBeenCalled());
@@ -182,7 +182,7 @@ describe("AnnotationForm", () => {
 
     show();
     await user.type(screen.getByLabelText("Tags"), "deploy");
-    await user.click(screen.getByLabelText("Note"));
+    await user.click(screen.getByLabelText("Text"));
 
     expect(screen.getByText("#deploy")).toBeInTheDocument();
     expect(screen.getByLabelText("Tags")).toHaveValue("");
@@ -234,7 +234,7 @@ describe("AnnotationForm, editing", () => {
   it("is filled from the note and shows its scope without offering to change it", () => {
     edit();
 
-    expect(screen.getByLabelText("Note")).toHaveValue("Load test");
+    expect(screen.getByLabelText("Text")).toHaveValue("Load test");
     expect(screen.getByText("#load")).toBeInTheDocument();
     expect(screen.getByLabelText("Until")).not.toHaveValue("");
     expect(screen.getByText("About").nextElementSibling).toHaveTextContent("webshop/api");
@@ -245,8 +245,8 @@ describe("AnnotationForm, editing", () => {
     const user = userEvent.setup();
     const onDone = edit();
 
-    await user.clear(screen.getByLabelText("Note"));
-    await user.type(screen.getByLabelText("Note"), "Soak test");
+    await user.clear(screen.getByLabelText("Text"));
+    await user.type(screen.getByLabelText("Text"), "Soak test");
     fireEvent.change(screen.getByLabelText("Until"), { target: { value: "" } });
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -277,15 +277,15 @@ describe("AnnotationForm, editing", () => {
 
     const onDone = edit();
 
-    await user.clear(screen.getByLabelText("Note"));
-    await user.type(screen.getByLabelText("Note"), "Soak test");
+    await user.clear(screen.getByLabelText("Text"));
+    await user.type(screen.getByLabelText("Text"), "Soak test");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This note changed since you opened it",
+      "This annotation changed since you opened it",
     );
     expect(readAnnotation).toHaveBeenCalledWith(7);
-    expect(screen.getByLabelText("Note")).toHaveValue("Soak test");
+    expect(screen.getByLabelText("Text")).toHaveValue("Soak test");
     expect(screen.getByText("#soak")).toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
 
@@ -308,7 +308,7 @@ describe("AnnotationForm, editing", () => {
 
     const onDone = edit();
 
-    await user.type(screen.getByLabelText("Note"), "!");
+    await user.type(screen.getByLabelText("Text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
@@ -330,7 +330,7 @@ describe("AnnotationForm, editing", () => {
       { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Note"), "!");
+    await user.type(screen.getByLabelText("Text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>

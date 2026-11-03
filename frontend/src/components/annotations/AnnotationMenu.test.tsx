@@ -62,7 +62,7 @@ describe("AnnotationMenu", () => {
 
     expect(readAnnotation).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
 
     expect(await screen.findByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
 
     expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
@@ -95,10 +95,10 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
 
     expect(
-      await screen.findByRole("menuitem", { name: "You can't change this note" }),
+      await screen.findByRole("menuitem", { name: "You can't change this annotation" }),
     ).toHaveAttribute("aria-disabled", "true");
     expect(screen.queryByRole("menuitem", { name: "Edit" })).not.toBeInTheDocument();
   });
@@ -114,11 +114,11 @@ describe("AnnotationMenu", () => {
       />,
       { wrapper: createWrapper(createTestQueryClient(), { withRouter: false }) },
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("Note")).toHaveValue("Load test");
+    expect(screen.getByLabelText("Text")).toHaveValue("Load test");
   });
 
   it("deletes the version it read, after asking", async () => {
@@ -131,7 +131,7 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
 
     expect(deleteAnnotation).not.toHaveBeenCalled();
@@ -155,12 +155,12 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     await user.click(await screen.findByRole("button", { name: "Delete" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This note changed since you opened it",
+      "This annotation changed since you opened it",
     );
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
@@ -178,7 +178,7 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     readAnnotation.mockResolvedValue({
       data: note,
@@ -207,7 +207,7 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     await user.click(await screen.findByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
@@ -231,7 +231,7 @@ describe("AnnotationMenu", () => {
         onActiveChange={() => {}}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(screen.getByRole("button", { name: "Annotation actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     await user.click(await screen.findByRole("button", { name: "Delete" }));
 

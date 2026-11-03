@@ -215,6 +215,7 @@ export default function MetricsPanel({
     <CollapsibleSection
       title={typeof header === "string" ? header : "Metrics"}
       controls={controls}
+      id={timeline ? "metrics" : undefined}
     >
       <MetricsPanelContext.Provider value={panelCtx}>
         <ChartSyncProvider>

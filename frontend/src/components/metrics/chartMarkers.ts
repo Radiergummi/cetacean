@@ -285,24 +285,30 @@ export function markersAt(layout: MarkerLayout | null, x: number): MarkerHit {
 const flagSlop = 3;
 
 /**
- * The notes whose flag the point at `x`, `y` is on, newest first: point notes
- * and the starts of ranges, whose pennant sits at the plot's `top`. Only the
- * pennant is a target, so a click anywhere else on the plot is the chart's.
+ * The annotations a click at `x`, `y` opens, newest first: the point notes
+ * whose pennant at the plot's `top` it is on, and every range whose band
+ * holds it. Anywhere else on the plot the click is the chart's.
  */
-export function notesAtFlag(
+export function annotationsAt(
   layout: MarkerLayout | null,
   x: number,
   y: number,
   top: number,
 ): TimelineItem[] {
-  if (!layout || y < top - flagSlop || y > top + flagSize + flagSlop) {
+  if (!layout) {
     return [];
   }
 
-  const onPennant = (at: number) => x >= at - flagSlop && x <= at + flagSize + flagSlop;
+  const onPennant = (at: number) =>
+    y >= top - flagSlop &&
+    y <= top + flagSize + flagSlop &&
+    x >= at - flagSlop &&
+    x <= at + flagSize + flagSlop;
   const hit = [
     ...layout.flags.filter(({ x: at }) => onPennant(at)).flatMap(({ items }) => items),
-    ...layout.regions.filter(({ left, opens }) => opens && onPennant(left)).map(({ item }) => item),
+    ...layout.regions
+      .filter(({ left, right, opens }) => (x >= left && x <= right) || (opens && onPennant(left)))
+      .map(({ item }) => item),
   ];
   const start = (item: TimelineItem) => (item.shape === "point" ? item.at : item.from);
 

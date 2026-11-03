@@ -24,8 +24,8 @@ export default function NotesControl({
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger
-        title="Notes"
-        aria-label={narrowed ? "Notes, filtered" : "Notes"}
+        title="Annotations"
+        aria-label={narrowed ? "Annotations, filtered" : "Annotations"}
         data-narrowed={narrowed || undefined}
         className="relative flex size-8 cursor-pointer items-center justify-center rounded-md border border-border bg-background outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
       >
@@ -41,7 +41,7 @@ export default function NotesControl({
           onCheckedChange={setShown}
           closeOnClick={false}
         >
-          Show notes
+          Show annotations
           <Menu.CheckboxItemIndicator>
             <Check className="size-3.5" />
           </Menu.CheckboxItemIndicator>
@@ -50,7 +50,7 @@ export default function NotesControl({
         {offered.length > 0 && (
           <Menu.Group>
             <Menu.GroupLabel className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
-              Only notes tagged
+              Only annotations tagged
             </Menu.GroupLabel>
 
             {offered.map((tag) => (

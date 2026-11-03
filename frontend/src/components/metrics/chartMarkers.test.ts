@@ -6,7 +6,7 @@ import {
   timeAtIndex,
   type MarkerHit,
   markersAt,
-  notesAtFlag,
+  annotationsAt,
   tooltipMarkers,
 } from "./chartMarkers";
 import type { HistoryEntry } from "@/api/types";
@@ -164,23 +164,24 @@ describe("layoutMarkers on annotation scopes", () => {
   });
 });
 
-describe("notesAtFlag", () => {
+describe("annotationsAt", () => {
   const top = 10;
   const ids = (items: TimelineItem[]) => items.map(({ entry: { id } }) => id);
 
-  it("lists every note a flag groups, newest first, only on its pennant", () => {
+  it("lists every annotation a flag groups, newest first, only on its pennant", () => {
     const layout = layoutMarkers([flag(1, 200), flag(2, 202)], timestamps, pixelFor);
 
-    expect(ids(notesAtFlag(layout, 104, top + 3, top))).toEqual([2, 1]);
-    expect(notesAtFlag(layout, 104, top + 60, top)).toEqual([]);
-    expect(notesAtFlag(layout, 130, top + 3, top)).toEqual([]);
+    expect(ids(annotationsAt(layout, 104, top + 3, top))).toEqual([2, 1]);
+    expect(annotationsAt(layout, 104, top + 60, top)).toEqual([]);
+    expect(annotationsAt(layout, 130, top + 3, top)).toEqual([]);
   });
 
-  it("takes a range's start, not a range clipped to the samples", () => {
+  it("takes every range whose band holds the point, at any height, newest first", () => {
     const layout = layoutMarkers([region(1, 250, 350), region(2, 0, 300)], timestamps, pixelFor);
 
-    expect(ids(notesAtFlag(layout, 152, top, top))).toEqual([1]);
-    expect(notesAtFlag(layout, 2, top, top)).toEqual([]);
+    expect(ids(annotationsAt(layout, 152, top + 80, top))).toEqual([1, 2]);
+    expect(ids(annotationsAt(layout, 2, top + 80, top))).toEqual([2]);
+    expect(annotationsAt(layout, 260, top + 80, top)).toEqual([]);
   });
 });
 

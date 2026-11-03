@@ -13,9 +13,8 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { Download, StickyNote } from "lucide-react";
+import { Download } from "lucide-react";
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 
 /** The most entries `GET /history` returns in one page. */
 const historyLimit = 200;
@@ -41,7 +40,7 @@ function isTypeFilter(value: string | null): value is TypeFilter {
 const kindSegments = [
   { value: "all", label: "All" },
   { value: "change", label: "Changes" },
-  { value: "annotation", label: "Notes" },
+  { value: "annotation", label: "Annotations" },
 ] as const;
 
 type KindFilter = (typeof kindSegments)[number]["value"];
@@ -92,13 +91,6 @@ export default function History() {
         actions={
           <div className="flex items-center gap-2">
             {create && <AddAnnotationButton />}
-            <Link
-              to="/annotations"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <StickyNote className="size-3.5" />
-              Annotations
-            </Link>
             <a
               href={csvHref}
               download
@@ -119,11 +111,7 @@ export default function History() {
         />
 
         <SegmentedControl
-          segments={kindSegments.map((segment) => ({
-            ...segment,
-            // A change carries no tags, so a tag filter leaves none.
-            disabled: segment.value === "change" && tags.length > 0,
-          }))}
+          segments={[...kindSegments]}
           value={kind}
           onChange={setKind}
         />
@@ -150,11 +138,13 @@ export default function History() {
             hideType={resourceType !== undefined}
             collapse={false}
             emptyText={
-              hasNextPage
-                ? "No changes among the newest events"
-                : filtered
-                  ? "Nothing matches these filters"
-                  : undefined
+              kind === "change" && tags.length > 0
+                ? "Changes carry no tags; remove the tag filter to see them"
+                : hasNextPage
+                  ? "No changes among the newest events"
+                  : filtered
+                    ? "Nothing matches these filters"
+                    : undefined
             }
           />
         </div>

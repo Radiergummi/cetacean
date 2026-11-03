@@ -17,7 +17,7 @@ import {
   layoutMarkers,
   type MarkerLayout,
   markersAt,
-  notesAtFlag,
+  annotationsAt,
   timeAtIndex,
   tooltipMarkers,
 } from "./chartMarkers";
@@ -318,12 +318,12 @@ export default function TimeSeriesChart({
     () => ({
       id: "crosshair",
       afterEvent(chart, { event: { native, type, x, y } }) {
-        // A flag under the pointer is found anew; anywhere else the cursor is the default.
+        // What a click here would open is found anew; anywhere else the cursor is the default.
         const onFlag =
           x != null &&
           y != null &&
           chart.chartArea != null &&
-          notesAtFlag(markerLayoutRef.current, x, y, chart.chartArea.top).length > 0;
+          annotationsAt(markerLayoutRef.current, x, y, chart.chartArea.top).length > 0;
 
         chart.canvas.style.cursor = onFlag && type !== "mouseout" ? "pointer" : "";
 
@@ -373,9 +373,9 @@ export default function TimeSeriesChart({
             return;
           }
 
-          // A flag's notes open pinned; isolating a series is for the rest of the plot.
+          // A flag's or a range's annotations open pinned; the rest of the plot isolates a series.
           if (onFlag && y != null) {
-            const notes = notesAtFlag(markerLayoutRef.current, x, y, chart.chartArea.top);
+            const notes = annotationsAt(markerLayoutRef.current, x, y, chart.chartArea.top);
 
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);

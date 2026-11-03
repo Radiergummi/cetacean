@@ -104,20 +104,20 @@ describe("MetricsPanel", () => {
       );
     const notes = () => screen.getByTestId("chart-CPU").getAttribute("data-notes");
 
-    const { unmount } = at("/?noteTag=db");
+    const { unmount } = at("/?annotationTag=db");
 
     expect(notes()).toBe("note 2");
-    expect(screen.getByRole("button", { name: "Notes, filtered" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Annotations, filtered" })).toBeInTheDocument();
     unmount();
 
     at("/");
     expect(notes()).toBe("note 1,note 2");
 
-    await user.click(screen.getByRole("button", { name: "Notes" }));
+    await user.click(screen.getByRole("button", { name: "Annotations" }));
     await user.click(await screen.findByRole("menuitemcheckbox", { name: "#deploy" }));
     expect(notes()).toBe("note 1");
 
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "Show notes" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Show annotations" }));
     expect(notes()).toBe("");
     expect(screen.getByRole("menuitemcheckbox", { name: "#deploy" })).toHaveAttribute(
       "aria-disabled",
@@ -128,7 +128,7 @@ describe("MetricsPanel", () => {
   it("offers the notes menu only where the charts draw a timeline", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
 
-    expect(screen.queryByRole("button", { name: "Notes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Annotations" })).not.toBeInTheDocument();
   });
 
   it("renders refresh button", () => {

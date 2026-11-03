@@ -53,7 +53,7 @@ export default function NotePopover({
       }}
     >
       <PopoverContent
-        aria-label={notes.length > 1 ? `${notes.length} notes` : "Note"}
+        aria-label={notes.length > 1 ? `${notes.length} annotations` : "Annotation"}
         side="bottom"
         align="start"
         sideOffset={10}

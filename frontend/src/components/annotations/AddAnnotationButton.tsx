@@ -54,7 +54,7 @@ export default function AddAnnotationButton({
         <DialogHeader>
           <DialogTitle>Add annotation</DialogTitle>
           <DialogDescription>
-            A note about a moment or a range, for everyone to see.
+            An annotation on a moment or a range, for everyone to see.
           </DialogDescription>
         </DialogHeader>
 

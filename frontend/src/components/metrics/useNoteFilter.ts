@@ -16,7 +16,7 @@ export function filterNotes(items: TimelineItem[], shown: boolean, tags: string[
 
 /**
  * Whether the page's charts show notes and which tags narrow them, in the URL
- * as `notes=off` and `noteTag`: view state that belongs in a link.
+ * as `annotations=off` and `annotationTag`: view state that belongs in a link.
  */
 export function useNoteFilter() {
   const [params, setParams] = useSearchParams();
@@ -37,30 +37,31 @@ export function useNoteFilter() {
   );
 
   const setShown = useCallback(
-    (shown: boolean) => update((next) => (shown ? next.delete("notes") : next.set("notes", "off"))),
+    (shown: boolean) =>
+      update((next) => (shown ? next.delete("annotations") : next.set("annotations", "off"))),
     [update],
   );
 
   const toggleTag = useCallback(
     (tag: string) =>
       update((next) => {
-        const tags = next.getAll("noteTag");
+        const tags = next.getAll("annotationTag");
 
-        next.delete("noteTag");
+        next.delete("annotationTag");
 
         for (const kept of tags.includes(tag)
           ? tags.filter((other) => other !== tag)
           : [...tags, tag]) {
-          next.append("noteTag", kept);
+          next.append("annotationTag", kept);
         }
       }),
     [update],
   );
 
-  const tags = useMemo(() => params.getAll("noteTag"), [params]);
+  const tags = useMemo(() => params.getAll("annotationTag"), [params]);
 
   return {
-    shown: params.get("notes") !== "off",
+    shown: params.get("annotations") !== "off",
     tags,
     setShown,
     toggleTag,

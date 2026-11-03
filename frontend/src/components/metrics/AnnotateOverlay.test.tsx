@@ -39,7 +39,7 @@ describe("AnnotateOverlay", () => {
 
     click(overlay, 100);
 
-    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Text")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "web" })).toBeChecked();
   });
 
@@ -52,7 +52,7 @@ describe("AnnotateOverlay", () => {
       fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
     });
 
-    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Text")).toBeInTheDocument();
     expect(screen.getByLabelText("Until")).not.toHaveValue("");
   });
 
@@ -61,7 +61,7 @@ describe("AnnotateOverlay", () => {
 
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
     fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
-    await screen.findByLabelText("Note");
+    await screen.findByLabelText("Text");
 
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px", width: "200px" });
   });
@@ -85,7 +85,7 @@ describe("AnnotateOverlay", () => {
 
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
     fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
-    await screen.findByLabelText("Note");
+    await screen.findByLabelText("Text");
 
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "93px", width: "200px" });
   });
@@ -128,7 +128,7 @@ describe("AnnotateOverlay", () => {
 
     fireEvent.pointerDown(overlay, { clientX: 40, pointerType: "mouse" });
     fireEvent.pointerUp(overlay, { clientX: 60, pointerType: "mouse" });
-    await screen.findByLabelText("Note");
+    await screen.findByLabelText("Text");
 
     expect(screen.getByTestId("annotate-mark")).toHaveAttribute("data-point");
   });
@@ -149,7 +149,7 @@ describe("AnnotateOverlay", () => {
     );
     fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse", button: 0 });
 
-    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Text")).toBeInTheDocument();
   });
 
   it("leaves a secondary button to the context menu", () => {
@@ -158,7 +158,7 @@ describe("AnnotateOverlay", () => {
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 2 });
     fireEvent.pointerUp(overlay, { clientX: 100, pointerType: "mouse", button: 2 });
 
-    expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Text")).not.toBeInTheDocument();
   });
 
   it("makes a point of a drag shorter than the form's minute", async () => {
@@ -174,10 +174,10 @@ describe("AnnotateOverlay", () => {
     const { overlay } = show();
 
     click(overlay, 100);
-    await screen.findByLabelText("Note");
+    await screen.findByLabelText("Text");
     click(overlay, 300);
 
-    expect(await screen.findAllByLabelText("Note")).toHaveLength(1);
+    expect(await screen.findAllByLabelText("Text")).toHaveLength(1);
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "300px" });
   });
 
@@ -185,10 +185,10 @@ describe("AnnotateOverlay", () => {
     const { overlay, unmount } = show();
 
     click(overlay, 100);
-    await screen.findByLabelText("Note");
+    await screen.findByLabelText("Text");
     unmount();
 
-    expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Text")).not.toBeInTheDocument();
   });
 
   it("leaves the mark where it is while the form is used", async () => {
@@ -196,7 +196,7 @@ describe("AnnotateOverlay", () => {
 
     click(overlay, 100);
 
-    const note = await screen.findByLabelText("Note");
+    const note = await screen.findByLabelText("Text");
 
     fireEvent.pointerDown(note, { clientX: 400, pointerType: "mouse" });
     fireEvent.pointerUp(note, { clientX: 400, pointerType: "mouse" });
@@ -209,6 +209,6 @@ describe("AnnotateOverlay", () => {
 
     click(overlay, 100);
 
-    expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Text")).not.toBeInTheDocument();
   });
 });

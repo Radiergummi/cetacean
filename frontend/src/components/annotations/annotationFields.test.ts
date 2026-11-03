@@ -187,7 +187,7 @@ describe("chartPath", () => {
         },
         now,
       ),
-    ).toBe(`/nodes/n1?from=${at - 1800}&to=${at + 1800}`);
+    ).toBe(`/nodes/n1?from=${at - 1800}&to=${at + 1800}#metrics`);
   });
 
   it("widens around a long range and stops at now", () => {
@@ -198,7 +198,7 @@ describe("chartPath", () => {
         { timestamp, until, resources: [{ type: "service", id: "s1", name: "web" }] },
         at + 9 * 3600,
       ),
-    ).toBe(`/services/s1?from=${at - 2 * 3600}&to=${at + 9 * 3600}`);
+    ).toBe(`/services/s1?from=${at - 2 * 3600}&to=${at + 9 * 3600}#metrics`);
   });
 
   it("has nowhere to go for a cluster-wide note or one yet to come", () => {

@@ -38,15 +38,18 @@ function TimelineRow({
   return (
     <div
       data-top={top || undefined}
-      className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3 data-top:items-start"
+      className="relative grid min-h-8 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3 py-1.5 ps-3 data-top:items-start"
     >
       {marker}
 
-      <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">
+      <span
+        data-top={top || undefined}
+        className="text-xs leading-none whitespace-nowrap text-muted-foreground data-top:mt-[11px]"
+      >
         <TimeAgo date={date} />
       </span>
 
-      {children}
+      <div className="flex min-w-0 items-center gap-3">{children}</div>
     </div>
   );
 }
@@ -227,7 +230,7 @@ function AnnotationCard({
       marker={
         <div
           data-cluster-wide={clusterWide || undefined}
-          className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
+          className="absolute top-[18px] -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
         />
       }
     >
@@ -343,7 +346,7 @@ export default function ActivityFeed({
             className="mt-2 bg-background text-muted-foreground shadow-sm"
           >
             <Pause />
-            Updates paused while a note is open
+            Updates paused
           </Badge>
         )}
       </div>

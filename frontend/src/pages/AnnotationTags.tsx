@@ -73,7 +73,7 @@ export default function AnnotationTags() {
               >
                 <span className="font-medium">#{tag}</span>
                 <span className="text-muted-foreground tabular-nums">
-                  {count === 1 ? "1 note" : `${count} notes`}
+                  {count === 1 ? "1 annotation" : `${count} annotations`}
                 </span>
               </Link>
             </li>
