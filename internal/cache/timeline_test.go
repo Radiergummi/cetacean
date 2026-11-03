@@ -438,7 +438,10 @@ func TestAnnotationEvents_MarkRemovedResources(t *testing.T) {
 
 	sent, ok := events[len(events)-1].Resource.(Annotation)
 	if !ok || !sent.Resources[0].Removed {
-		t.Fatalf("event resource = %+v, want the service marked removed", events[len(events)-1].Resource)
+		t.Fatalf(
+			"event resource = %+v, want the service marked removed",
+			events[len(events)-1].Resource,
+		)
 	}
 	if stored, _ := c.Annotation(id); stored.Resources[0].Removed {
 		t.Fatal("the index stores the mark")
