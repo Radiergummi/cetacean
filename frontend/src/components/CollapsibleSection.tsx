@@ -96,7 +96,9 @@ export default function CollapsibleSection({
   controls?: React.ReactNode | undefined;
   defaultOpen?: boolean | undefined;
 
-  /** Makes the section a link target: a URL whose hash names it opens it and scrolls to it. */
+  /**
+   * Makes the section a link target: a URL whose hash names it opens it and scrolls to it.
+   */
   id?: string | undefined;
 }) {
   const { open, toggle, reveal } = useSectionCollapse(title, defaultOpen);
