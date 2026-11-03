@@ -399,6 +399,18 @@ was before gaps were recorded. Later versions add kinds, so **ignore a kind you 
 a change. CSV carries a gap as a row, and Atom and JSON Feed as an entry of its own. Every feed
 built from the history carries gaps, the search feed and a type's or a resource's feed included.
 
+### Changes recovered from a gap
+
+When it records a gap, Cetacean first reads back what the Docker daemon still holds of it: the engine keeps its
+last 256 events in memory, of every kind. Each service, node, config, secret, network, or volume event from the gap
+becomes a change with `"recovered": true`, at the time it happened, without an `actor` or a `summary`. Recovered
+changes sit just below their gap in the list. The gap gains `recoveredFrom`: from then on, changes to every resource
+but tasks are complete. Swarm records no events for tasks, so their changes during a gap stay unknown.
+
+The buffer is shared with container events and is lost when the daemon restarts, so on a busy manager it may reach
+back minutes rather than hours, and a gap without `recoveredFrom` recovered nothing. CSV carries both fields as the
+`recovered` and `recoveredFrom` columns.
+
 ### History pagination
 
 `/history` pages by cursor rather than offset, because new entries arrive at the front while you read. A full page

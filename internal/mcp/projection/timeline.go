@@ -22,6 +22,13 @@ type TimelineEntry struct {
 	// Until ends a gap, which starts at At, in At's format; empty otherwise.
 	Until string `json:"until,omitempty"`
 
+	// RecoveredFrom, on a gap, is when its recovered changes are complete for
+	// every type but tasks, in At's format; empty when none were recovered.
+	RecoveredFrom string `json:"recoveredFrom,omitempty"`
+
+	// Recovered marks a change read back from Docker after a gap, not watched.
+	Recovered bool `json:"recovered,omitempty"`
+
 	// Kind is "change", "gap", "annotation" or "log". A gap is a window
 	// nobody watched, so changes made in it are missing; it names no resource.
 	Kind string `json:"kind"`

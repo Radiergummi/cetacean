@@ -107,7 +107,7 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 		header: []string{
 			"timestamp", "type", "action", "name", "id", "summary",
 			"actor", "provider", "client", "transport", "kind", "until",
-			"text", "tags", "resources",
+			"text", "tags", "resources", "recovered", "recoveredFrom",
 		},
 		records: make([][]string, 0, len(entries)),
 	}
@@ -118,9 +118,17 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			actor = *entry.Actor
 		}
 
-		var until string
+		var until, recoveredFrom, recovered string
 		if !entry.Until.IsZero() {
 			until = entry.Until.UTC().Format(time.RFC3339)
+		}
+
+		if !entry.RecoveredFrom.IsZero() {
+			recoveredFrom = entry.RecoveredFrom.UTC().Format(time.RFC3339)
+		}
+
+		if entry.Recovered {
+			recovered = "true"
 		}
 
 		// An annotation's row names the note and what it is about; a change's
@@ -147,6 +155,8 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			entry.Text,
 			strings.Join(entry.Tags, ","),
 			resources,
+			recovered,
+			recoveredFrom,
 		})
 	}
 

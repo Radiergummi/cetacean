@@ -63,10 +63,21 @@ func Run(t *testing.T, newStore Factory) {
 				NodeID:     "node1",
 			},
 			{
-				ID:        9,
-				Kind:      cache.KindGap,
-				Timestamp: at.Add(2 * time.Second),
-				Until:     at.Add(time.Hour),
+				ID:         9,
+				Kind:       cache.KindChange,
+				Timestamp:  at.Add(30 * time.Minute),
+				Type:       cache.EventConfig,
+				Action:     "create",
+				ResourceID: "cfg1",
+				Name:       "app_settings",
+				Recovered:  true,
+			},
+			{
+				ID:            10,
+				Kind:          cache.KindGap,
+				Timestamp:     at.Add(2 * time.Second),
+				Until:         at.Add(time.Hour),
+				RecoveredFrom: at.Add(20 * time.Minute),
 			},
 		}
 
@@ -96,7 +107,17 @@ func Run(t *testing.T, newStore Factory) {
 				t.Errorf("entry %d: Until = %v, want %v", i, got[i].Until, want[i].Until)
 			}
 
+			if !got[i].RecoveredFrom.Equal(want[i].RecoveredFrom) {
+				t.Errorf(
+					"entry %d: RecoveredFrom = %v, want %v",
+					i,
+					got[i].RecoveredFrom,
+					want[i].RecoveredFrom,
+				)
+			}
+
 			got[i].Timestamp, got[i].Until = want[i].Timestamp, want[i].Until
+			got[i].RecoveredFrom = want[i].RecoveredFrom
 			if !reflect.DeepEqual(got[i], want[i]) {
 				t.Errorf("entry %d:\n got %+v\nwant %+v", i, got[i], want[i])
 			}

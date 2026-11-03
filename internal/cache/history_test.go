@@ -914,6 +914,33 @@ func TestRecordGapGoesThroughNotify(t *testing.T) {
 	}
 }
 
+func TestRecordRecoveredGapPutsItsChangesJustBelowIt(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	from := time.Date(2026, 10, 30, 13, 0, 0, 0, time.UTC)
+	recovered := HistoryEntry{
+		Kind: KindChange, Timestamp: from.Add(time.Minute), Type: EventService,
+		Action: "update", ResourceID: "svc1", Name: "web", Recovered: true,
+	}
+	c.RecordRecoveredGap(from, Recovery{Entries: []HistoryEntry{recovered}, From: from})
+
+	entries := c.History().List(HistoryQuery{})
+	if len(entries) != 2 {
+		t.Fatalf("history holds %+v, want the gap and its recovered change", entries)
+	}
+
+	gap, change := entries[0], entries[1]
+	if gap.Kind != KindGap || !gap.RecoveredFrom.Equal(from) || change.ID != gap.ID-1 ||
+		!change.Recovered || change.ResourceID != "svc1" {
+		t.Errorf("entries = %+v, want the gap recovered from 13:00 over its change", entries)
+	}
+
+	if len(events) != 1 || events[0].Type != EventGap {
+		t.Errorf("listeners got %+v, want the gap alone", events)
+	}
+}
+
 func TestAppendDefaultsToAChange(t *testing.T) {
 	h := NewHistory(10)
 	h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"})

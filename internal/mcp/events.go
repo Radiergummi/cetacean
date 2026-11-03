@@ -128,9 +128,13 @@ func (s *Server) toolGetEvents(
 	timeline := make([]projection.TimelineEntry, 0, len(matched))
 
 	for _, e := range matched {
-		var until string
+		var until, recoveredFrom string
 		if !e.Until.IsZero() {
 			until = projection.TimelineTime(e.Until)
+		}
+
+		if !e.RecoveredFrom.IsZero() {
+			recoveredFrom = projection.TimelineTime(e.RecoveredFrom)
 		}
 
 		var id, version uint64
@@ -139,19 +143,21 @@ func (s *Server) toolGetEvents(
 		}
 
 		timeline = append(timeline, projection.TimelineEntry{
-			At:         projection.TimelineTime(e.Timestamp),
-			Until:      until,
-			Kind:       e.Kind,
-			Type:       string(e.Type),
-			Name:       e.Name,
-			ResourceID: e.ResourceID,
-			Message:    e.Action,
-			Actor:      e.Actor,
-			Text:       e.Text,
-			Tags:       e.Tags,
-			Resources:  e.Resources,
-			ID:         id,
-			Version:    version,
+			At:            projection.TimelineTime(e.Timestamp),
+			Until:         until,
+			RecoveredFrom: recoveredFrom,
+			Recovered:     e.Recovered,
+			Kind:          e.Kind,
+			Type:          string(e.Type),
+			Name:          e.Name,
+			ResourceID:    e.ResourceID,
+			Message:       e.Action,
+			Actor:         e.Actor,
+			Text:          e.Text,
+			Tags:          e.Tags,
+			Resources:     e.Resources,
+			ID:            id,
+			Version:       version,
 		})
 	}
 

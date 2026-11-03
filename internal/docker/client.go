@@ -210,6 +210,33 @@ func (c *Client) Events(
 	})
 }
 
+// BufferedEvents returns every event the daemon still holds from before until,
+// of every type, oldest first: its buffer of the last 256.
+func (c *Client) BufferedEvents(ctx context.Context, until time.Time) ([]events.Message, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	msgCh, errCh := c.docker.Events(ctx, events.ListOptions{
+		Since: "1",
+		Until: fmt.Sprintf("%d.%09d", until.Unix(), until.Nanosecond()),
+	})
+
+	var buffered []events.Message
+
+	for {
+		select {
+		case msg := <-msgCh:
+			buffered = append(buffered, msg)
+		case err := <-errCh:
+			if errors.Is(err, io.EOF) {
+				return buffered, nil
+			}
+
+			return nil, err
+		}
+	}
+}
+
 func (c *Client) InspectVolume(ctx context.Context, name string) (volume.Volume, error) {
 	return c.docker.VolumeInspect(ctx, name)
 }

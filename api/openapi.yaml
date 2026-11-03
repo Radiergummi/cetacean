@@ -10265,6 +10265,19 @@ components:
           type: string
           format: date-time
           description: When a gap or a range annotation ended. Absent on a change.
+        recoveredFrom:
+          type: string
+          format: date-time
+          description: >-
+            On a gap, when the changes recovered from Docker's event buffer
+            become complete for every resource type but tasks, which Docker
+            keeps no events for. Absent when nothing was recovered.
+        recovered:
+          type: boolean
+          description: >-
+            True on a change read back from Docker's event buffer after a gap
+            rather than watched. It sits just below its gap, at the time the
+            event happened, with no actor or summary.
         type:
           type: string
           description: Resource type (node, service, task, etc.); empty on a gap

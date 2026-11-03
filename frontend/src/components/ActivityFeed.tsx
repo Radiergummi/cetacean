@@ -80,6 +80,14 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
 
     range = gap.detail;
     text = total > 0 ? gap.title : "Not watching";
+
+    if (oldest.recoveredFrom) {
+      range += `. Changes to everything but tasks since ${formatDateTime(oldest.recoveredFrom)} were recovered from Docker's event log`;
+    }
+  }
+
+  if (gaps.some(({ recoveredFrom }) => recoveredFrom)) {
+    text += ", partly recovered";
   }
 
   return (
@@ -118,7 +126,7 @@ function ChangeRun({
 }) {
   const [open, setOpen] = useState(false);
   const runId = useId();
-  const [{ action, actor, name, resourceId, timestamp, type }] = entries;
+  const [{ action, actor, name, recovered, resourceId, timestamp, type }] = entries;
   const path = resourcePath(type, resourceId, name);
 
   return (
@@ -173,6 +181,14 @@ function ChangeRun({
               title={`${actor.subject} (${actor.provider}${actor.client ? `, client ${actor.client}` : ""})`}
             >
               {attribution(actor)}
+            </span>
+          )}
+          {recovered && (
+            <span
+              className="rounded border border-dashed px-1.5 py-0.5 text-xs text-muted-foreground"
+              title="Recovered from Docker's event log after Cetacean restarted"
+            >
+              recovered
             </span>
           )}
         </div>

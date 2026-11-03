@@ -29,6 +29,14 @@ type HistoryEntry struct {
 	// Until ends a gap, which runs from Timestamp; zero for a change.
 	Until time.Time `json:"until,omitzero"`
 
+	// RecoveredFrom is when a gap's recovered changes become complete for every
+	// type but tasks, which Docker records no events for; zero when none were.
+	RecoveredFrom time.Time `json:"recoveredFrom,omitzero"`
+
+	// Recovered marks a change read back from Docker's event buffer after a
+	// gap rather than watched: it has no actor and no summary.
+	Recovered bool `json:"recovered,omitempty"`
+
 	Type       EventType `json:"type"`
 	Action     string    `json:"action"`
 	ResourceID string    `json:"resourceId"`

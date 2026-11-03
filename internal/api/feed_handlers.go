@@ -386,13 +386,21 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 func gapFeedEntry(e cache.HistoryEntry) feedEntry {
 	from, until := e.Timestamp.UTC().Format(time.RFC3339), e.Until.UTC().Format(time.RFC3339)
 
+	content := "<p>Cetacean was not watching the cluster from " + from + " to " + until +
+		", so changes made then are missing from this record.</p>"
+	if !e.RecoveredFrom.IsZero() {
+		content = "<p>Cetacean was not watching the cluster from " + from + " to " + until +
+			". Changes to every resource but tasks since " +
+			e.RecoveredFrom.UTC().Format(time.RFC3339) +
+			" were recovered from Docker's event log; task changes are missing.</p>"
+	}
+
 	return feedEntry{
-		ID:    fmt.Sprintf("urn:cetacean:history:%d", e.ID),
-		Title: fmt.Sprintf("Nothing recorded from %s to %s", from, until),
-		ContentHTML: "<p>Cetacean was not watching the cluster from " + from + " to " + until +
-			", so changes made then are missing from this record.</p>",
-		Updated: e.Until,
-		Tags:    []string{cache.KindGap},
+		ID:          fmt.Sprintf("urn:cetacean:history:%d", e.ID),
+		Title:       fmt.Sprintf("Nothing recorded from %s to %s", from, until),
+		ContentHTML: content,
+		Updated:     e.Until,
+		Tags:        []string{cache.KindGap},
 	}
 }
 
@@ -493,6 +501,9 @@ func historyEntryHTML(e cache.HistoryEntry, href string) string {
 		b.WriteString(html.EscapeString(transportLabel[e.Actor.Transport]))
 	}
 	b.WriteString("</p>")
+	if e.Recovered {
+		b.WriteString("<p>Recovered from Docker's event log after Cetacean restarted.</p>")
+	}
 
 	if href != "" {
 		b.WriteString(`<p><a href="`)

@@ -303,7 +303,9 @@ into a single row with a count, but the history page lists every entry.
 
 A change made through Cetacean names who made it and whether they used the dashboard, the API, or MCP. A change
 with no name came from somewhere else, such as the Docker CLI. The history survives a restart while
-`storage.timeline` is on; the time Cetacean wasn't watching shows as a gap, a divider between the rows.
+`storage.timeline` is on; the time Cetacean wasn't watching shows as a gap, a divider between the rows. Changes
+Docker still remembered from the gap appear below it, marked **recovered**, and the divider says it was partly
+recovered. Task changes during a gap are never recovered.
 
 ## Atom feeds
 

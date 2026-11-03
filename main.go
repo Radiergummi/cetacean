@@ -345,7 +345,10 @@ func run(s settings) error {
 			timelineStore,
 			stateCache.History(),
 			cfg.HistoryEntries,
-			stateCache.RecordGap,
+			func(from time.Time) {
+				recovered := docker.RecoverGap(context.Background(), dockerClient, from)
+				stateCache.RecordRecoveredGap(from, recovered)
+			},
 		)
 	}
 
