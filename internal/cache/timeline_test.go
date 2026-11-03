@@ -482,3 +482,42 @@ func TestTimeline_AStackListsItsServicesChanges(t *testing.T) {
 		)
 	}
 }
+
+func TestTimeline_SearchFindsWhatARowShows(t *testing.T) {
+	c := timelineCache(t, 100)
+	record := func(e HistoryEntry) uint64 {
+		e.Timestamp = timelineBase
+		return c.history.Append(e)
+	}
+	task := record(HistoryEntry{
+		Type: EventTask, Action: "update", ResourceID: "x7k2task", Name: "web.1",
+	})
+	stacked := record(HistoryEntry{
+		Type: EventService, Action: "update", ResourceID: "svc9", Name: "shop_checkout",
+	})
+	byAlice := record(HistoryEntry{
+		Type: EventVolume, Action: "remove", ResourceID: "data", Name: "data",
+		Actor: &Actor{Subject: "u-17", Name: "Alice"},
+	})
+	tagged := c.note(t, Annotation{
+		Text: "Load test", Tags: []string{"perf"},
+		Resources: []AnnotationResource{{Type: EventService, ID: "svc9", Name: "shop_checkout"}},
+	})
+
+	for search, want := range map[string][]uint64{
+		"X7K2":          {task},
+		"shop/checkout": {tagged, stacked},
+		"alice":         {byAlice},
+		"u-17":          {byAlice},
+		"volume":        {byAlice},
+		"perf":          {tagged},
+		"load":          {tagged},
+	} {
+		got := timelineIDs(c.Timeline(HistoryQuery{
+			Search: search, Kinds: []string{KindChange, KindAnnotation},
+		}))
+		if !slices.Equal(got, want) {
+			t.Errorf("search %q = %v, want %v", search, got, want)
+		}
+	}
+}

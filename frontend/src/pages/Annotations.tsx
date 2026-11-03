@@ -3,16 +3,15 @@ import type { AnnotationFilters } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import AddAnnotationButton from "../components/annotations/AddAnnotationButton";
 import { annotationEntry } from "../components/annotations/annotationFields";
-import TagFilter from "../components/annotations/TagFilter";
+import TagSearch from "../components/annotations/TagSearch";
 import { useTagFilterParams } from "../components/annotations/useTagFilterParams";
 import FetchError from "../components/FetchError";
-import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import { Button, buttonVariants } from "../components/ui/button";
 import { useAuth } from "../hooks/useAuth";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
-import { useSearchParam } from "../hooks/useSearchParam";
+import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Download, Tags } from "lucide-react";
@@ -33,7 +32,7 @@ const authorSegments = [
  */
 export default function Annotations() {
   const [params, setParams] = useSearchParams();
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
+  const [debouncedSearch] = useUrlParam("q", "");
   const { identity } = useAuth();
 
   const { tags, matchAny } = useTagFilterParams();
@@ -117,15 +116,9 @@ export default function Annotations() {
             }
           />
         )}
-
-        <TagFilter />
       </div>
 
-      <ListToolbar
-        search={search}
-        onSearchChange={setSearch}
-        placeholder="Search the annotations…"
-      />
+      <TagSearch placeholder="Search annotations, or type # for a tag…" />
 
       {error ? (
         <FetchError

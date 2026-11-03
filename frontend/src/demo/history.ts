@@ -214,6 +214,9 @@ export function filterHistory(
   const matchAny = params.get("matchAny") === "true";
   const authors = params.getAll("author").filter(Boolean);
   const search = params.get("search")?.toLowerCase();
+  const mentions = (...fields: (string | undefined)[]) =>
+    !search || fields.some((field) => field?.toLowerCase().includes(search));
+  const actorFields = ({ actor }: HistoryEntry) => [actor?.name, actor?.subject];
   const stack = resourceId ? stackOf(resourceId) : undefined;
   const kinds = params.getAll("kind").filter(Boolean);
   const carries = (entry: HistoryEntry) => {
@@ -249,7 +252,12 @@ export function filterHistory(
         overlaps &&
         carries(entry) &&
         byAuthor(entry) &&
-        (!search || (entry.text ?? "").toLowerCase().includes(search)) &&
+        mentions(
+          entry.text,
+          ...(entry.tags ?? []),
+          ...(entry.resources ?? []).flatMap(({ name }) => [name, name.replace("_", "/")]),
+          ...actorFields(entry),
+        ) &&
         (named.length === 0 ||
           named.some(({ type: namedType, id }) =>
             resourceId
@@ -272,6 +280,14 @@ export function filterHistory(
     return (
       (!type || entry.type === type || member) &&
       (!resourceId || entry.resourceId === resourceId || member) &&
+      mentions(
+        entry.name,
+        entry.name.replace("_", "/"),
+        entry.resourceId,
+        entry.type,
+        entry.action,
+        ...actorFields(entry),
+      ) &&
       start > sinceTime &&
       start <= untilTime
     );

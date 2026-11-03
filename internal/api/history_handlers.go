@@ -147,14 +147,14 @@ func (h *Handlers) timelineQuery(
 	}
 
 	query := cache.HistoryQuery{
-		Type:         cache.EventType(resourceType),
-		ResourceID:   resourceID,
-		BeforeID:     beforeID,
-		NameContains: q.Get("search"),
-		Limit:        limit,
-		After:        window.Since,
-		Before:       window.Until,
-		Visible:      h.readableHistory(r),
+		Type:       cache.EventType(resourceType),
+		ResourceID: resourceID,
+		BeforeID:   beforeID,
+		Search:     q.Get("search"),
+		Limit:      limit,
+		After:      window.Since,
+		Before:     window.Until,
+		Visible:    h.readableHistory(r),
 
 		ReadableAnnotation: h.annotationCaller(r).MayRead,
 	}

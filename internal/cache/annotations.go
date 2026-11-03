@@ -473,6 +473,16 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
+	fields := append(actorFields(a.Actor), a.Text)
+	fields = append(fields, a.Tags...)
+	for _, r := range a.Resources {
+		fields = append(fields, r.Name, stackDisplay(r.Name))
+	}
+
+	if !q.mentions(fields...) {
+		return false
+	}
+
 	if q.ResourceID != "" {
 		return a.About(q.subjectType(), q.ResourceID, stack)
 	}

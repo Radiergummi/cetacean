@@ -1,15 +1,13 @@
 import { api } from "../api/client";
 import ActivityFeed from "../components/ActivityFeed";
 import AddAnnotationButton from "../components/annotations/AddAnnotationButton";
-import TagFilter from "../components/annotations/TagFilter";
+import TagSearch from "../components/annotations/TagSearch";
 import { useTagFilterParams } from "../components/annotations/useTagFilterParams";
 import FetchError from "../components/FetchError";
-import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import { Button, buttonVariants } from "../components/ui/button";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
-import { useSearchParam } from "../hooks/useSearchParam";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
@@ -50,7 +48,7 @@ function isKindFilter(value: string | null): value is KindFilter {
 }
 
 export default function History() {
-  const [search, debouncedSearch, setSearch] = useSearchParam("q");
+  const [debouncedSearch] = useUrlParam("q", "");
   const [requestedType, setType] = useUrlParam("type", "all");
   const [requestedKind, setKind] = useUrlParam("kind", "all");
   const type: TypeFilter = isTypeFilter(requestedType) ? requestedType : "all";
@@ -115,15 +113,9 @@ export default function History() {
           value={kind}
           onChange={setKind}
         />
-
-        <TagFilter />
       </div>
 
-      <ListToolbar
-        search={search}
-        onSearchChange={setSearch}
-        placeholder="Filter by name…"
-      />
+      <TagSearch placeholder="Search everything shown, or type # for a tag…" />
 
       {error ? (
         <FetchError

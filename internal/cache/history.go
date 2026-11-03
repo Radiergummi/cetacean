@@ -63,7 +63,12 @@ type HistoryQuery struct {
 	ResourceID   string
 	BeforeID     uint64 // keeps the entries below it; zero means unbounded
 	NameContains string // case-insensitive substring match on Name
-	Limit        int
+
+	// Search narrows to the entries that mention it, ignoring case, anywhere a
+	// timeline row shows: a change's name, ID, type, action and actor, or an
+	// annotation's text, tags, resources and author. A gap passes.
+	Search string
+	Limit  int
 
 	// Types narrows to entries of any of these types, where Type narrows to
 	// exactly one; empty means every type, and both set means the intersection.
@@ -491,9 +496,43 @@ func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 		return false
 	}
 
-	return q.NameContains == "" || strings.Contains(
+	if q.NameContains != "" && !strings.Contains(
 		strings.ToLower(e.Name), strings.ToLower(q.NameContains),
-	)
+	) {
+		return false
+	}
+
+	return q.mentions(append(
+		actorFields(e.Actor), e.Name, stackDisplay(e.Name), e.ResourceID, string(e.Type), e.Action,
+	)...)
+}
+
+// mentions reports whether any of fields holds q.Search, ignoring case.
+func (q HistoryQuery) mentions(fields ...string) bool {
+	if q.Search == "" {
+		return true
+	}
+
+	needle := strings.ToLower(q.Search)
+
+	return slices.ContainsFunc(fields, func(field string) bool {
+		return strings.Contains(strings.ToLower(field), needle)
+	})
+}
+
+// actorFields are what a reader may search an actor by.
+func actorFields(actor *Actor) []string {
+	if actor == nil {
+		return nil
+	}
+
+	return []string{actor.Name, actor.Subject}
+}
+
+// stackDisplay is a stack's resource name as the dashboard shows it, its
+// stack and name split by a slash, so what a reader sees is what they find.
+func stackDisplay(name string) string {
+	return strings.Replace(name, "_", "/", 1)
 }
 
 // listByResource answers a query already known to name a resource, taking the
