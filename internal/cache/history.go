@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// Kinds lists every kind of timeline item, in the order the docs name them.
+var Kinds = []string{KindChange, KindGap, KindAnnotation}
+
 // The kinds of timeline item. A reader skips a kind it does not know.
 const (
 	KindChange = "change"
@@ -95,9 +98,9 @@ type HistoryQuery struct {
 	Tags     []string
 	MatchAny bool
 
-	// Author narrows to what the actor with this subject did: the changes made
-	// through Cetacean and the annotations written. A gap passes.
-	Author string
+	// Authors narrows to what an actor with one of these subjects did: the
+	// changes made through Cetacean and the annotations written. A gap passes.
+	Authors []string
 
 	// ReadableAnnotation, when set, keeps only the annotations it admits. It
 	// runs outside every cache lock.
@@ -450,7 +453,7 @@ func (q HistoryQuery) matchesTags(tags []string) bool {
 
 // matchesAuthor reports whether actor satisfies q's author filter.
 func (q HistoryQuery) matchesAuthor(actor *Actor) bool {
-	return q.Author == "" || actor != nil && actor.Subject == q.Author
+	return len(q.Authors) == 0 || actor != nil && slices.Contains(q.Authors, actor.Subject)
 }
 
 // matchesResource applies the filters that select by resource.

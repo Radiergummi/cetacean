@@ -52,6 +52,7 @@ func TestListAnnotationsFiltersByTagsAndAuthor(t *testing.T) {
 		{"tag=deploy&tag=web&matchAny=true", []string{byAlice, deploy, both}},
 		{"author=alice", []string{byAlice}},
 		{"author=carol&tag=deploy", []string{deploy, both}},
+		{"author=bob&author=alice", []string{byAlice}},
 		{"tag=", []string{byAlice, deploy, both}},
 	} {
 		w := httptest.NewRecorder()
@@ -101,6 +102,19 @@ func TestHistoryAnswersAnEmptyListWhenAnnotationsAreOff(t *testing.T) {
 
 	if got := listedIDs(t, w); len(got) != 0 {
 		t.Fatalf("history lists %v, want nothing", got)
+	}
+}
+
+func TestHistoryRefusesAKindItDoesNotKnow(t *testing.T) {
+	h := annotationHandlers(t, true)
+
+	w := httptest.NewRecorder()
+	h.HandleHistory(w, newAnnotationRequest(
+		"GET", "/history?kind=change&kind=annotations", "carol", "",
+	))
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `\"annotations\"`) {
+		t.Fatalf("status %d %s, want 400 naming the unknown kind", w.Code, w.Body)
 	}
 }
 
@@ -305,10 +319,12 @@ func TestAnnotationFeedsListAnnotationsAlone(t *testing.T) {
 		t.Fatalf("feed = %+v, want the one annotation", feed)
 	}
 
-	w = httptest.NewRecorder()
-	h.feedAnnotationsHandler(renderAtom)(w,
-		newAnnotationRequest("GET", "/annotations.atom?kind=change", "carol", ""))
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("kind on the feed = %d, want 400", w.Code)
+	for _, query := range []string{"kind=change", "tasks=false"} {
+		w = httptest.NewRecorder()
+		h.feedAnnotationsHandler(renderAtom)(w,
+			newAnnotationRequest("GET", "/annotations.atom?"+query, "carol", ""))
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s on the feed = %d, want 400", query, w.Code)
+		}
 	}
 }

@@ -225,19 +225,21 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 	}
 	c.annotations.mu.Unlock()
 
+	// The event shows the note as a read would, removal marks and all.
+	marked := c.WithRemovals(a)
 	id := strconv.FormatUint(a.ID, 10)
 	historyID := c.history.Append(HistoryEntry{
 		Kind:       KindAnnotation,
 		Action:     action,
 		ResourceID: id,
-		Annotation: &a,
+		Annotation: &marked,
 	})
 
 	c.dispatch(Event{
 		Type:      EventAnnotation,
 		Action:    action,
 		ID:        id,
-		Resource:  a,
+		Resource:  marked,
 		HistoryID: historyID,
 	})
 

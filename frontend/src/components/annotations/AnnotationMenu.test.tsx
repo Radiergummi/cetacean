@@ -162,6 +162,32 @@ describe("AnnotationMenu", () => {
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
+  it("deletes again when only a removal elsewhere changed the note's validator", async () => {
+    const user = userEvent.setup();
+
+    allowing("DELETE");
+    deleteAnnotation.mockRejectedValueOnce(
+      new ApiError("/api/errors/API013", "Precondition Failed", 412, "stale"),
+    );
+    render(
+      <AnnotationMenu
+        id={7}
+        onActiveChange={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Note actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    readAnnotation.mockResolvedValue({
+      data: note,
+      allowedMethods: new Set(["GET", "HEAD", "DELETE"]),
+      etag: '"3-1"',
+    });
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleteAnnotation).toHaveBeenLastCalledWith(7, '"3-1"'));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
   it("stays closed when cancelled before a stale delete answers", async () => {
     const user = userEvent.setup();
     let refuse: (failure: unknown) => void = () => {};

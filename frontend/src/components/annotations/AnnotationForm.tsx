@@ -2,6 +2,7 @@ import {
   annotationBody,
   annotationInputs,
   annotationPatch,
+  changedOnlyByRemovals,
   parseTag,
   toLocalInput,
 } from "./annotationFields";
@@ -157,9 +158,26 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
    * Takes up the note's current version after a stale write: a field the user
    * changed keeps their input, any other shows the newer value.
    */
-  const reload = async (id: number, changed: Record<string, unknown>) => {
+  const reload = async (opened: EditedNote, changed: Record<string, unknown>) => {
     try {
-      const { data, etag } = await api.annotation(id);
+      const { data, etag } = await api.annotation(opened.note.id);
+
+      // A removal elsewhere changed the validator, not the note: save again.
+      if (changedOnlyByRemovals(opened.note, data)) {
+        try {
+          await api.updateAnnotation(data.id, changed, etag);
+          onDone();
+
+          return;
+        } catch (retry) {
+          if (!(retry instanceof ApiError && retry.status === 412)) {
+            setError({ message: getErrorMessage(retry, "The note could not be saved.") });
+
+            return;
+          }
+        }
+      }
+
       const now = annotationInputs(data);
 
       if (!("text" in changed)) {
@@ -228,7 +246,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       onDone();
     } catch (failure) {
       if (edited && patch && failure instanceof ApiError && failure.status === 412) {
-        await reload(edited.note.id, patch);
+        await reload(edited, patch);
       } else {
         setError({ message: getErrorMessage(failure, "The note could not be saved.") });
       }

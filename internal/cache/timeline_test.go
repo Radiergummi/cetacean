@@ -215,7 +215,8 @@ func TestTimeline_FiltersByTagsAuthorAndKinds(t *testing.T) {
 			HistoryQuery{Tags: []string{"deploy", "web"}, MatchAny: true},
 			[]uint64{gap, web, deploy, both},
 		},
-		{"an author", HistoryQuery{Author: "alice"}, []uint64{gap, byAlice, both}},
+		{"an author", HistoryQuery{Authors: []string{"alice"}}, []uint64{gap, byAlice, both}},
+		{"any of authors", HistoryQuery{Authors: []string{"bob", "alice"}}, []uint64{gap, byAlice, both}},
 		{
 			"changes and notes",
 			HistoryQuery{Kinds: []string{KindChange, KindAnnotation}, BeforeID: gap},
@@ -417,5 +418,29 @@ func TestAnnotationOn_TheTimelineAListFindsItOn(t *testing.T) {
 				t.Errorf("AnnotationOn(%s) = %v, want %v", tt.id, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAnnotationEvents_MarkRemovedResources(t *testing.T) {
+	c := timelineCache(t, 100)
+	id := c.note(t, Annotation{Resources: []AnnotationResource{{Type: EventService, ID: "svc1"}}})
+	c.DeleteService("svc1")
+
+	var events []Event
+	c.AddOnChangeListener(func(e Event) { events = append(events, e) })
+
+	if _, err := c.UpdateAnnotation(context.Background(), id, func(a *Annotation) error {
+		a.Text = "edited"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sent, ok := events[len(events)-1].Resource.(Annotation)
+	if !ok || !sent.Resources[0].Removed {
+		t.Fatalf("event resource = %+v, want the service marked removed", events[len(events)-1].Resource)
+	}
+	if stored, _ := c.Annotation(id); stored.Resources[0].Removed {
+		t.Fatal("the index stores the mark")
 	}
 }

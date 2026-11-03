@@ -590,8 +590,9 @@ The filters apply to annotations as follows:
 - `tag` keeps the annotations carrying a tag. Repeat it, `tag=deploy&tag=web`, to keep those carrying every one, and
   add `matchAny=true` to keep those carrying any. Changes are left out.
 - `author` keeps what the actor with that subject did: the annotations they wrote and the changes they made through
-  Cetacean.
-- `kind` repeats too: `kind=change&kind=annotation` lists changes and annotations without gaps.
+  Cetacean. Repeat it to keep what any of several did.
+- `kind` repeats too: `kind=change&kind=annotation` lists changes and annotations without gaps. A kind other than
+  `change`, `gap`, or `annotation` answers `400` (`API016`).
 - Gaps stay with every filter above except `kind`.
 - `since` and `until` keep a range annotation that overlaps the window.
 - `resourceId` keeps the annotations that name the resource, those on a service's stack, those on a stack's

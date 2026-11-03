@@ -270,6 +270,27 @@ describe("AnnotationForm, editing", () => {
     expect(updateAnnotation).toHaveBeenLastCalledWith(7, { text: "Soak test" }, '"4"');
   });
 
+  it("saves again when only a removal elsewhere changed the note's validator", async () => {
+    const user = userEvent.setup();
+
+    updateAnnotation.mockRejectedValueOnce(
+      new ApiError("/api/errors/API013", "Precondition Failed", 412, "stale"),
+    );
+    readAnnotation.mockResolvedValue({
+      data: { ...note, resources: note.resources.map((r) => ({ ...r, removed: true })) },
+      etag: '"3-1"',
+    });
+
+    const onDone = edit();
+
+    await user.type(screen.getByLabelText("Note"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(updateAnnotation).toHaveBeenLastCalledWith(7, { text: "Load test!" }, '"3-1"');
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("saves a note whose range is inside one minute without touching its times", async () => {
     const user = userEvent.setup();
 

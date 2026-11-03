@@ -5804,13 +5804,15 @@ paths:
           in: query
           description: |
             Return only items of these kinds; repeat it for several. `change` keeps
-            the list as it was before gaps were recorded. Omit for every kind.
+            the list as it was before gaps were recorded. Omit for every kind. A kind
+            not listed here answers `400` (`API016`).
           style: form
           explode: true
           schema:
             type: array
             items:
               type: string
+              enum: [change, gap, annotation]
           example: [change, annotation]
         - $ref: "#/components/parameters/annotationTag"
         - $ref: "#/components/parameters/annotationMatchAny"
@@ -7940,12 +7942,16 @@ components:
       name: author
       in: query
       description: |
-        Return only what the actor with this subject did: the annotations they
-        wrote (not ones they only edited) and the changes they made through
-        Cetacean. Gaps stay.
+        Return only what an actor with one of these subjects did: the annotations
+        they wrote (not ones they only edited) and the changes they made through
+        Cetacean. Repeat it for several. Gaps stay.
+      style: form
+      explode: true
       schema:
-        type: string
-      example: 3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90
+        type: array
+        items:
+          type: string
+      example: [3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90]
 
     search:
       name: search

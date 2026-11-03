@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -167,8 +168,8 @@ func (h *Handlers) timelineQuery(
 }
 
 // timelineFilters reads the filters the timeline's JSON, CSV and feeds share:
-// `kind` and `tag` repeat, `matchAny` widens the tags to any of them, and
-// `author` names an actor's subject. An empty value is no filter.
+// `kind`, `tag` and `author` repeat, and `matchAny` widens the tags to any of
+// them. An empty value is no filter.
 func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 	present := func(name string) []string {
 		return slices.DeleteFunc(slices.Clone(q[name]), func(v string) bool { return v == "" })
@@ -176,7 +177,13 @@ func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 
 	query.Kinds = present("kind")
 	query.Tags = present("tag")
-	query.Author = q.Get("author")
+	query.Authors = present("author")
+
+	for _, kind := range query.Kinds {
+		if !slices.Contains(cache.Kinds, kind) {
+			return fmt.Errorf("kind %q is not one of %s", kind, strings.Join(cache.Kinds, ", "))
+		}
+	}
 
 	if value := q.Get("matchAny"); value != "" {
 		matchAny, err := strconv.ParseBool(value)
