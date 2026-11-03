@@ -109,6 +109,17 @@ describe("filterHistory on annotations", () => {
     expect(texts({ type: "stack", resourceId: "monitoring" })).not.toContain("Checkout hotfix");
   });
 
+  it("keeps the changes to a stack's services for the stack", () => {
+    const changes = filterHistory(
+      demoHistory(dataset, now),
+      new URLSearchParams({ type: "stack", resourceId: "webshop", kind: "change" }),
+      stackOf,
+    );
+
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every(({ resourceId }) => stackOf(resourceId) === "webshop")).toBe(true);
+  });
+
   it("keeps the notes carrying a tag, the gaps, and no change", () => {
     const kept = filterHistory(
       demoHistory(dataset, now),

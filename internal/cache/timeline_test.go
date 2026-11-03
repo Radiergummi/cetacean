@@ -447,3 +447,38 @@ func TestAnnotationEvents_MarkRemovedResources(t *testing.T) {
 		t.Fatal("the index stores the mark")
 	}
 }
+
+func TestTimeline_AStackListsItsServicesChanges(t *testing.T) {
+	c := timelineCache(t, 100)
+	created := c.history.Count()
+	other := swarm.Service{ID: "svc2"}
+	other.Spec.Labels = map[string]string{StackLabel: "blog"}
+	c.SetService(other)
+	gone := swarm.Service{ID: "svc3"}
+	gone.Spec.Labels = map[string]string{StackLabel: "shop"}
+	c.SetService(gone)
+	goneCreated := c.history.Count()
+
+	record := func(e HistoryEntry) uint64 {
+		e.Timestamp = timelineBase
+		return c.history.Append(e)
+	}
+	own := record(HistoryEntry{Type: EventStack, ResourceID: "shop", Name: "shop"})
+	member := c.change(t, 0)
+	record(HistoryEntry{Type: EventService, ResourceID: "svc2", Name: "blog_web"})
+	record(HistoryEntry{Type: EventTask, ResourceID: "task1", ServiceID: "svc1"})
+	c.DeleteService("svc3")
+	removal := c.history.Count()
+
+	got := c.Timeline(HistoryQuery{
+		Type: EventStack, ResourceID: "shop", Kinds: []string{KindChange},
+	})
+	want := []uint64{removal, member, own, goneCreated, created}
+	if ids := timelineIDs(got); !slices.Equal(ids, want) {
+		t.Fatalf(
+			"stack timeline = %v, want %v: its own and its services', a removed one's too",
+			ids,
+			want,
+		)
+	}
+}

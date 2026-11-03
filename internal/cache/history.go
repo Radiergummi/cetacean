@@ -105,6 +105,10 @@ type HistoryQuery struct {
 	// ReadableAnnotation, when set, keeps only the annotations it admits. It
 	// runs outside every cache lock.
 	ReadableAnnotation func(Annotation) bool
+
+	// Members, on a stack's query, are its services' IDs, whose changes its
+	// timeline holds as a service's holds its tasks'. Cache.Timeline sets it.
+	Members []string
 }
 
 type History struct {
@@ -343,6 +347,21 @@ func (e HistoryEntry) about(id string) bool {
 	return e.ResourceID == id || e.ServiceID == id
 }
 
+// removedFromStack lists the services whose removal the ring recorded in stack.
+func (h *History) removedFromStack(stack string) []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var ids []string
+	for _, e := range h.entries {
+		if e.Type == EventService && e.Action == "remove" && e.Stack == stack {
+			ids = append(ids, e.ResourceID)
+		}
+	}
+
+	return ids
+}
+
 // end is when an entry stops: a gap's Until, otherwise its Timestamp.
 func (e HistoryEntry) end() time.Time {
 	if e.Until.IsZero() {
@@ -361,11 +380,11 @@ func (h *History) List(q HistoryQuery) []HistoryEntry {
 		limit = 50
 	}
 
-	// Fast path: a resource-ID filter reads the per-resource index rather than
-	// scanning the ring, but only when the index can prove it answered the
-	// whole question — it holds the newest indexRingSize entries, and runs out
-	// both on a larger limit and on a cursor paging off its end.
-	if q.ResourceID != "" {
+	// Fast path: a resource-ID filter reads the per-resource index, but only
+	// when it can prove it answered the whole question — it holds the newest
+	// indexRingSize entries of one resource, so a stack's members are not in it,
+	// and runs out on a larger limit and on a cursor paging off its end.
+	if q.ResourceID != "" && len(q.Members) == 0 {
 		if found, complete := h.listByResource(q, limit); complete {
 			return found
 		}
@@ -458,11 +477,13 @@ func (q HistoryQuery) matchesAuthor(actor *Actor) bool {
 
 // matchesResource applies the filters that select by resource.
 func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
-	if q.ResourceID != "" && !e.about(q.ResourceID) {
+	member := e.Type == EventService && slices.Contains(q.Members, e.ResourceID)
+
+	if q.ResourceID != "" && !e.about(q.ResourceID) && !member {
 		return false
 	}
 
-	if q.Type != "" && e.Type != q.Type {
+	if q.Type != "" && e.Type != q.Type && !member {
 		return false
 	}
 

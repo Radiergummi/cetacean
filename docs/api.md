@@ -408,6 +408,9 @@ whole log, not only the page you have, and stays on the `next` link along with `
 With `type=service`, a service's history includes its tasks' entries. Add `tasks=false` for the service's own
 entries alone, so a crash loop's task churn doesn't fill the pages before you reach the change that started it.
 
+With `type=stack`, a stack's history includes the changes to its services, and to those removed from it while the
+history still holds their removal.
+
 ```http tab
 GET /history?search=web&limit=50 HTTP/1.1
 
