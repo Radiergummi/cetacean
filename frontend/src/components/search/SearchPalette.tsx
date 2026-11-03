@@ -3,7 +3,7 @@ import type { SearchResourceType, SearchResponse, SearchResult } from "../../api
 import { type SSEEvent, useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { getErrorInfo } from "../../lib/errors";
-import { isResourceEvent } from "../../lib/resourceEvents";
+import { movesResources } from "../../lib/resourceEvents";
 import {
   flattenSearchResults,
   resourcePath,
@@ -309,7 +309,7 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     useCallback(
       (event: SSEEvent) => {
         // Search finds resources, so only a resource's event changes its results.
-        if (event.type !== "sync" && !isResourceEvent(event)) {
+        if (!movesResources(event)) {
           return;
         }
 

@@ -1,21 +1,21 @@
 import { useLatestRef } from "./useLatestRef";
 import type { SSEEvent, SSEListener } from "./useResourceStream";
 import { useResourceStream } from "./useResourceStream";
-import { isResourceEvent } from "@/lib/resourceEvents";
+import { movesResources } from "@/lib/resourceEvents";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
 /** The longest a burst of events defers its refetch, timed from its first event. */
 const maximumWait = 5000;
 
-const noKeys: readonly (readonly unknown[])[] = [];
+type QueryKeys = readonly (readonly unknown[])[];
 
 interface Options {
-  /**
-   * Invalidated on every event, a gap's and an annotation's too: the queries
-   * that list a timeline. The plain keys skip events that move no resource.
-   */
-  timelineKeys?: readonly (readonly unknown[])[] | undefined;
+  /** Invalidated on an event that may have moved a resource, and a sync. */
+  resourceKeys?: QueryKeys | undefined;
+
+  /** Invalidated on every event, a gap's and an annotation's too: what lists a timeline. */
+  timelineKeys?: QueryKeys | undefined;
   delay?: number | undefined;
   onEvent?: SSEListener | undefined;
 
@@ -24,20 +24,19 @@ interface Options {
 }
 
 /**
- * Subscribes to an SSE path and invalidates the given query keys once a burst
- * of events goes quiet for `delay`, or `maximumWait` after its first event, so
- * a stream that never goes quiet (a crash loop, a rollout) still refetches.
+ * Subscribes to an SSE path and invalidates query keys once a burst of events
+ * goes quiet for `delay`, or `maximumWait` after its first event, so a stream
+ * that never goes quiet (a crash loop, a rollout) still refetches.
  */
 export function useDebouncedInvalidation(
   ssePath: string | undefined,
-  queryKeys: readonly (readonly unknown[])[],
-  { timelineKeys = noKeys, delay = 500, onEvent, relevant }: Options = {},
+  { resourceKeys = [], timelineKeys = [], delay = 500, onEvent, relevant }: Options,
 ) {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const burstStartRef = useRef<number | null>(null);
   const movedResourceRef = useRef(false);
-  const queryKeysRef = useLatestRef(queryKeys);
+  const resourceKeysRef = useLatestRef(resourceKeys);
   const timelineKeysRef = useLatestRef(timelineKeys);
   const onEventRef = useLatestRef(onEvent);
   const relevantRef = useLatestRef(relevant);
@@ -54,7 +53,7 @@ export function useDebouncedInvalidation(
           return;
         }
 
-        const movesResource = event.type === "sync" || isResourceEvent(event);
+        const movesResource = movesResources(event);
 
         if (!movesResource && timelineKeysRef.current.length === 0) {
           return;
@@ -74,7 +73,7 @@ export function useDebouncedInvalidation(
 
         debounceRef.current = setTimeout(() => {
           const keys = movedResourceRef.current
-            ? [...queryKeysRef.current, ...timelineKeysRef.current]
+            ? [...resourceKeysRef.current, ...timelineKeysRef.current]
             : timelineKeysRef.current;
 
           debounceRef.current = null;
@@ -86,7 +85,7 @@ export function useDebouncedInvalidation(
           }
         }, wait);
       },
-      [queryClient, delay, queryKeysRef, timelineKeysRef, onEventRef, relevantRef],
+      [queryClient, delay, resourceKeysRef, timelineKeysRef, onEventRef, relevantRef],
     ),
   );
 

@@ -98,8 +98,6 @@ export function useDetailResource<T>(
     enabled: !!key && fetchHistory,
   });
 
-  const invalidationKeys: (readonly unknown[])[] = [detailKey, ...(extraQueryKeys ?? [])];
-
   const setData = useCallback(
     (update: (previous: T) => T) =>
       queryClient.setQueryData<FetchResult<T>>(detailKey, (previous) =>
@@ -120,7 +118,8 @@ export function useDetailResource<T>(
     [onEvent, queryClient, detailKey, setData],
   );
 
-  useDebouncedInvalidation(ssePath, invalidationKeys, {
+  useDebouncedInvalidation(ssePath, {
+    resourceKeys: [detailKey, ...(extraQueryKeys ?? [])],
     timelineKeys: fetchHistory ? [historyKey] : [],
     onEvent: onEvent ? handleEvent : undefined,
   });

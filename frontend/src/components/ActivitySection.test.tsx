@@ -3,8 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => ({ clusterWide: false }),
+vi.mock("@/hooks/useClusterAnnotatable", () => ({
+  useClusterAnnotatable: () => false,
 }));
 
 describe("ActivitySection", () => {

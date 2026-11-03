@@ -58,7 +58,7 @@ export default function History() {
       placeholderData: keepPreviousData,
     });
 
-  useDebouncedInvalidation("/events", [], { timelineKeys: [["history"]], delay: 2_000 });
+  useDebouncedInvalidation("/events", { timelineKeys: [["history"]], delay: 2_000 });
 
   const entries = useMemo(() => data?.pages.flatMap(({ items }) => items) ?? [], [data]);
   const create = data?.pages[0]?.annotatable ?? false;

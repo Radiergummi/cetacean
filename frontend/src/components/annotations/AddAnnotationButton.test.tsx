@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const capabilities = vi.hoisted(() => ({ clusterWide: false }));
 
-vi.mock("@/hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => capabilities,
+vi.mock("@/hooks/useClusterAnnotatable", () => ({
+  useClusterAnnotatable: () => capabilities.clusterWide,
 }));
 
 const service = { type: "service", id: "svc1", name: "web" } as const;

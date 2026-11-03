@@ -6,12 +6,13 @@ import { useQuery } from "@tanstack/react-query";
  * `/cluster` sends; false until it has answered, so nothing is offered on a
  * guess. Whether they may create any is the link on the list a page reads.
  */
-export function useAnnotationCapabilities(): { clusterWide: boolean } {
-  const { data: clusterWide = false } = useQuery({
+export function useClusterAnnotatable(): boolean {
+  const { data = false } = useQuery({
     queryKey: ["cluster"],
     queryFn: () => api.cluster(),
     select: ({ annotatable }) => annotatable ?? false,
+    staleTime: 60_000,
   });
 
-  return { clusterWide };
+  return data;
 }

@@ -2,7 +2,7 @@
  * The event types that name a swarm resource. A gap, an annotation, and any
  * kind a later server adds name none, so they move no resource's data.
  */
-const resourceEventTypes: ReadonlySet<string> = new Set([
+export const resourceEventTypes = [
   "node",
   "service",
   "task",
@@ -11,11 +11,14 @@ const resourceEventTypes: ReadonlySet<string> = new Set([
   "network",
   "volume",
   "stack",
-]);
+] as const;
+
+const resourceTypes: ReadonlySet<string> = new Set(resourceEventTypes);
 
 /**
- * Whether an event changed a resource, rather than only a timeline.
+ * Whether an event may have moved resources: one of theirs, or a sync, after
+ * which any of them may have changed.
  */
-export function isResourceEvent({ type }: { type: string }): boolean {
-  return resourceEventTypes.has(type);
+export function movesResources({ type }: { type: string }): boolean {
+  return type === "sync" || resourceTypes.has(type);
 }

@@ -33,7 +33,7 @@ export default function AnnotationTags() {
       placeholderData: keepPreviousData,
     });
 
-  useDebouncedInvalidation("/events", [], {
+  useDebouncedInvalidation("/events", {
     timelineKeys: [["annotations", "tags"]],
     delay: 2_000,
   });

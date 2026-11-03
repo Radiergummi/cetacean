@@ -28,9 +28,12 @@ describe("useDebouncedInvalidation", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    renderHook(() => useDebouncedInvalidation("/services/s1", [["service", "s1"]]), {
-      wrapper: createWrapper(client),
-    });
+    renderHook(
+      () => useDebouncedInvalidation("/services/s1", { resourceKeys: [["service", "s1"]] }),
+      {
+        wrapper: createWrapper(client),
+      },
+    );
 
     for (let elapsed = 0; elapsed < 12_000; elapsed += 200) {
       listener?.(event);
@@ -46,7 +49,8 @@ describe("useDebouncedInvalidation", () => {
 
     renderHook(
       () =>
-        useDebouncedInvalidation("/tasks", [["job-outcomes"]], {
+        useDebouncedInvalidation("/tasks", {
+          resourceKeys: [["job-outcomes"]],
           relevant: ({ id }) => id === "wanted",
         }),
       { wrapper: createWrapper(client) },
@@ -67,9 +71,12 @@ describe("useDebouncedInvalidation", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    renderHook(() => useDebouncedInvalidation("/services/s1", [["service", "s1"]]), {
-      wrapper: createWrapper(client),
-    });
+    renderHook(
+      () => useDebouncedInvalidation("/services/s1", { resourceKeys: [["service", "s1"]] }),
+      {
+        wrapper: createWrapper(client),
+      },
+    );
 
     listener?.(event);
     vi.advanceTimersByTime(300);
@@ -89,7 +96,8 @@ describe("useDebouncedInvalidation", () => {
 
     renderHook(
       () =>
-        useDebouncedInvalidation("/services/s1", [["service", "s1"]], {
+        useDebouncedInvalidation("/services/s1", {
+          resourceKeys: [["service", "s1"]],
           timelineKeys: [["history", "s1"]],
         }),
       { wrapper: createWrapper(client) },
@@ -115,7 +123,7 @@ describe("useDebouncedInvalidation", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
-    renderHook(() => useDebouncedInvalidation("/events", [["cluster"]]), {
+    renderHook(() => useDebouncedInvalidation("/events", { resourceKeys: [["cluster"]] }), {
       wrapper: createWrapper(client),
     });
 

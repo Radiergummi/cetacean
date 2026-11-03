@@ -21,8 +21,7 @@ vi.mock("@/api/client", () => ({
 vi.mock("@/hooks/useDebouncedInvalidation", () => ({
   useDebouncedInvalidation: (
     path: string | undefined,
-    _keys: unknown,
-    { relevant }: { relevant?: (event: { type: string }) => boolean } = {},
+    { relevant }: { relevant?: (event: { type: string }) => boolean },
   ) => invalidation(path, relevant),
 }));
 

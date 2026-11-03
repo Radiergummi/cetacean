@@ -9,7 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useAnnotationCapabilities } from "@/hooks/useAnnotationCapabilities";
+import { useClusterAnnotatable } from "@/hooks/useClusterAnnotatable";
 import { MessageSquarePlus } from "lucide-react";
 import { useState } from "react";
 
@@ -24,7 +24,7 @@ export default function AddAnnotationButton({
 }) {
   const [open, setOpen] = useState(false);
   const [openedAt, setOpenedAt] = useState(0);
-  const { clusterWide } = useAnnotationCapabilities();
+  const clusterWide = useClusterAnnotatable();
   const cluster: AnnotationScope[] = clusterWide ? ["cluster"] : [];
 
   return (

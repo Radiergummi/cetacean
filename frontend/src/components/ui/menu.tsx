@@ -9,17 +9,12 @@ const itemClass =
 /**
  * A menu's popup, portalled and placed below its trigger's end.
  */
-function MenuContent({
-  className,
-  align = "end",
-  sideOffset = 4,
-  ...props
-}: MenuPrimitive.Popup.Props & Pick<MenuPrimitive.Positioner.Props, "align" | "sideOffset">) {
+function MenuContent({ className, ...props }: MenuPrimitive.Popup.Props) {
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner
-        align={align}
-        sideOffset={sideOffset}
+        align="end"
+        sideOffset={4}
         className="z-50"
       >
         <MenuPrimitive.Popup

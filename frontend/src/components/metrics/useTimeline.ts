@@ -69,7 +69,7 @@ export function useTimeline(
         : undefined,
   });
 
-  useDebouncedInvalidation(type && resourceId ? `/${type}s/${resourceId}` : undefined, [], {
+  useDebouncedInvalidation(type && resourceId ? `/${type}s/${resourceId}` : undefined, {
     timelineKeys: [queryKey],
     relevant: (event) => event.type === type || event.type === "annotation",
   });

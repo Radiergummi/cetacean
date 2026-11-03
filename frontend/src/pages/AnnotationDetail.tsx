@@ -26,7 +26,7 @@ export default function AnnotationDetail() {
       !(failure instanceof ApiError && failure.status === 404) && count < 2,
   });
 
-  useDebouncedInvalidation("/events", [], {
+  useDebouncedInvalidation("/events", {
     timelineKeys: [["annotations", "detail", noteId]],
     delay: 1_000,
   });

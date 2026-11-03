@@ -50,7 +50,8 @@ export default function ClusterOverview() {
     };
   }, [snapshot]);
 
-  useDebouncedInvalidation("/events", [["cluster"]], {
+  useDebouncedInvalidation("/events", {
+    resourceKeys: [["cluster"]],
     timelineKeys: [["history"]],
     delay: 2_000,
   });

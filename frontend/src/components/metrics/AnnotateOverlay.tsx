@@ -2,7 +2,7 @@ import { type Gesture, type GestureEvent, type Mark, step } from "./annotateGest
 import type { AnnotationScope } from "@/api/types";
 import AnnotationForm from "@/components/annotations/AnnotationForm";
 import { Popover, PopoverContent } from "@/components/ui/popover";
-import { useAnnotationCapabilities } from "@/hooks/useAnnotationCapabilities";
+import { useClusterAnnotatable } from "@/hooks/useClusterAnnotatable";
 import { type PointerEvent, useEffect, useReducer, useRef } from "react";
 
 interface OverlayState {
@@ -56,7 +56,7 @@ export default function AnnotateOverlay({
   const [{ gesture, mark, marks }, dispatch] = useReducer(overlayReducer, initialState);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const { clusterWide } = useAnnotationCapabilities();
+  const clusterWide = useClusterAnnotatable();
   const markOpen = mark !== null;
 
   useEffect(() => {

@@ -55,7 +55,7 @@ export default function Annotations() {
       placeholderData: keepPreviousData,
     });
 
-  useDebouncedInvalidation("/events", [], { timelineKeys: [["annotations"]], delay: 2_000 });
+  useDebouncedInvalidation("/events", { timelineKeys: [["annotations"]], delay: 2_000 });
 
   const entries = useMemo(
     () => data?.pages.flatMap(({ items }) => items.map(annotationEntry)) ?? [],

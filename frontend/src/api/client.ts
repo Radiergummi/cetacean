@@ -499,9 +499,6 @@ export interface Capabilities {
 
   /** The sub-resources the caller may write, from `rel="edit"` links. */
   editable: Set<string>;
-
-  /** Whether the caller may annotate the resource. */
-  annotatable?: boolean | undefined;
 }
 
 export async function headCapabilities(path: string): Promise<Capabilities> {
@@ -514,7 +511,6 @@ export async function headCapabilities(path: string): Promise<Capabilities> {
   return {
     methods: parseAllowHeader(response),
     editable: editableOf(response),
-    annotatable: annotatableOf(response),
   };
 }
 
