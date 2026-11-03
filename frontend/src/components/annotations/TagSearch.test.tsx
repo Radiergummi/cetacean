@@ -1,7 +1,7 @@
 import TagSearch from "./TagSearch";
 import { createTestQueryClient } from "@/test/mocks";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -146,6 +146,42 @@ describe("TagSearch", () => {
     await user.click(input);
 
     expect(screen.getByRole("option", { name: "#deploy" })).toBeInTheDocument();
+  });
+
+  it("lets Tab leave on a word that is no tag, and Shift+Tab always", async () => {
+    const { user, input, params } = show();
+
+    await user.type(input, "#bad!");
+    await user.tab();
+
+    expect(input).not.toHaveFocus();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    await user.clear(input);
+    await user.type(input, "#dep");
+    await screen.findByRole("option", { name: "#deploy" });
+    await user.tab({ shift: true });
+
+    expect(input).not.toHaveFocus();
+    expect(params().getAll("tag")).toEqual([]);
+  });
+
+  it("leaves a key confirming an IME composition to the input method", async () => {
+    const { user, input, params } = show();
+
+    await user.type(input, "#dep");
+    await screen.findByRole("option", { name: "#deploy" });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(params().getAll("tag")).toEqual([]);
+  });
+
+  it("makes a chip of a # word arriving in q from a link", async () => {
+    const { input, params } = show("/history?q=%23db%20web");
+
+    await waitFor(() => expect(params().getAll("tag")).toEqual(["db"]));
+    expect(params().get("q")).toBe("web");
+    expect(input).toHaveValue("web");
   });
 
   it("offers every tag or any tag once two are set", () => {

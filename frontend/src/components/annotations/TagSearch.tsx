@@ -1,10 +1,12 @@
 import { parseTag } from "./annotationFields";
 import { useTagFilterParams } from "./useTagFilterParams";
 import { useTagSuggestions } from "./useTagSuggestions";
+import { setTagParams } from "@/api/client";
 import SegmentedControl from "@/components/SegmentedControl";
 import { useDebouncedUrlParam } from "@/hooks/useSearchParam";
 import { Search, X } from "lucide-react";
-import { useId, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useState, type KeyboardEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 
 /**
  * The tag being typed: a word starting with `#` at the end of the input.
@@ -66,7 +68,8 @@ function firstHighlight(input: string): number {
  */
 export default function TagSearch({ placeholder }: { placeholder: string }) {
   const { tags, matchAny, setTagFilter } = useTagFilterParams();
-  const [urlText, setSearch] = useDebouncedUrlParam("q");
+  const [urlText, setSearch, external] = useDebouncedUrlParam("q");
+  const [, setParams] = useSearchParams();
   const [input, setInput] = useState(urlText);
   const [seenText, setSeenText] = useState(urlText);
   const [highlight, setHighlight] = useState(0);
@@ -75,14 +78,46 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
   const listboxId = useId();
   const hintId = useId();
 
-  // A search changed elsewhere, as by Back, replaces what is typed.
+  // A search changed elsewhere, as by Back, replaces what is typed; this box's
+  // own write landing behind newer typing does not.
   if (urlText !== seenText) {
     setSeenText(urlText);
 
-    if (freeText(input) !== urlText) {
+    if (external) {
       setInput(urlText);
     }
   }
+
+  // A `#` word arriving in `q`, as from a link, becomes a chip.
+  useEffect(() => {
+    const { rest, taken } = takeFinishedTags(`${urlText} `);
+
+    if (taken.length === 0) {
+      return;
+    }
+
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        const text = rest.replace(/\s+/g, " ").trim();
+
+        setTagParams(
+          next,
+          [...new Set([...next.getAll("tag"), ...taken])],
+          next.get("matchAny") === "true",
+        );
+
+        if (text === "") {
+          next.delete("q");
+        } else {
+          next.set("q", text);
+        }
+
+        return next;
+      },
+      { replace: true },
+    );
+  }, [urlText, setParams]);
 
   const token = tagToken.exec(input)?.[1];
   const { suggestions } = useTagSuggestions(token ?? "", tags);
@@ -136,6 +171,11 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // A key that confirms an IME composition is the input method's.
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
     if (event.key === "Backspace" && input === "" && tags.length > 0) {
       setTagFilter(tags.slice(0, -1), matchAny);
 
@@ -176,6 +216,11 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
 
     // Tab and Enter complete to the highlighted tag; Space keeps what is typed.
     const chosen = event.key === " " ? token : (options[active] ?? token);
+
+    // Tab leaves the box unless it has a tag to take, so focus is never trapped.
+    if (event.key === "Tab" && (event.shiftKey || parseTag(chosen) === null)) {
+      return;
+    }
 
     if ((event.key === "Tab" || event.key === "Enter" || event.key === " ") && chosen !== "") {
       event.preventDefault();
@@ -229,7 +274,7 @@ export default function TagSearch({ placeholder }: { placeholder: string }) {
             autoComplete="off"
             spellCheck={false}
             value={input}
-            onChange={(event) => change(event.target.value)}
+            onChange={({ target: { value } }) => change(value)}
             onKeyDown={onKeyDown}
             onFocus={() => setDismissed(false)}
             onBlur={() => setDismissed(true)}

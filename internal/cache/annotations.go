@@ -387,7 +387,7 @@ func (c *Cache) stackMembers(stack string) []string {
 // q.BeforeID. ReadableAnnotation runs outside the lock, so the walk takes its
 // matches in batches, each resuming below the last annotation it visited.
 func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
-	q = q.folded()
+	q = q.prepared()
 
 	var stack string
 	if t := q.subjectType(); t == "" || t == EventService {
@@ -469,32 +469,41 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
-	if q.TitleContains != "" || q.Search != "" {
-		q = q.folded()
-
-		if !strings.Contains(strings.ToLower(a.Text), q.TitleContains) ||
-			q.Search != "" && !q.mentionsAnnotation(a) {
+	if q.ResourceID != "" {
+		if !a.About(q.subjectType(), q.ResourceID, stack) {
 			return false
 		}
-	}
-
-	if q.ResourceID != "" {
-		return a.About(q.subjectType(), q.ResourceID, stack)
-	}
-
-	return len(a.Resources) == 0 ||
-		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+	} else if len(a.Resources) > 0 &&
+		!slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
 			return (q.Type == "" || r.Type == q.Type) &&
 				(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
-		})
+		}) {
+		return false
+	}
+
+	return q.annotationMatchesText(a)
 }
 
-// mentionsAnnotation reports whether q.Search is in anything a reader sees of a.
-func (q HistoryQuery) mentionsAnnotation(a Annotation) bool {
-	return q.mentions(a.Text) || slices.ContainsFunc(a.Tags, q.mentions) ||
-		q.mentionsActor(a.Actor) ||
-		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
-			return q.mentionsName(r.Name)
+// annotationMatchesText applies TitleContains to a's text, and Search to
+// anything a reader sees of it, each word anywhere.
+func (q HistoryQuery) annotationMatchesText(a Annotation) bool {
+	if q.TitleContains == "" && q.Search == "" {
+		return true
+	}
+
+	if !q.ready {
+		q = q.prepared()
+	}
+
+	return ContainsLower(a.Text, q.TitleContains) &&
+		!slices.ContainsFunc(q.words, func(word string) bool {
+			has := func(field string) bool { return ContainsLower(field, word) }
+
+			return !has(a.Text) && !slices.ContainsFunc(a.Tags, has) && !actorHas(a.Actor, word) &&
+				!slices.ContainsFunc(
+					a.Resources,
+					func(r AnnotationResource) bool { return nameHas(r.Name, word) },
+				)
 		})
 }
 

@@ -32,7 +32,7 @@ const authorSegments = [
  */
 export default function Annotations() {
   const [params, setParams] = useSearchParams();
-  const [debouncedSearch] = useUrlParam("q", "");
+  const [search] = useUrlParam("q", "");
   const { identity } = useAuth();
 
   const { tags, matchAny } = useTagFilterParams();
@@ -43,7 +43,7 @@ export default function Annotations() {
     tags,
     matchAny,
     authors,
-    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(search ? { search } : {}),
   };
 
   const { data, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =
@@ -70,7 +70,7 @@ export default function Annotations() {
     setParams(next, { replace: true });
   };
 
-  const filtered = tags.length > 0 || authors.length > 0 || debouncedSearch !== "";
+  const filtered = tags.length > 0 || authors.length > 0 || search !== "";
   const csvHref = apiPath(api.annotationsPath(filters).replace("/annotations", "/annotations.csv"));
 
   return (

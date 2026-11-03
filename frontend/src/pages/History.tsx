@@ -48,7 +48,7 @@ function isKindFilter(value: string | null): value is KindFilter {
 }
 
 export default function History() {
-  const [debouncedSearch] = useUrlParam("q", "");
+  const [search] = useUrlParam("q", "");
   const [requestedType, setType] = useUrlParam("type", "all");
   const [requestedKind, setKind] = useUrlParam("kind", "all");
   const type: TypeFilter = isTypeFilter(requestedType) ? requestedType : "all";
@@ -59,11 +59,11 @@ export default function History() {
   const filters = {
     ...(resourceType ? { type: resourceType } : {}),
     ...(kind === "all" ? {} : { kind }),
-    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(search ? { search } : {}),
     tags,
     matchAny,
   };
-  const filtered = type !== "all" || kind !== "all" || debouncedSearch !== "" || tags.length > 0;
+  const filtered = type !== "all" || kind !== "all" || search !== "" || tags.length > 0;
 
   // Filtered on the server, so a match on a page not yet loaded still shows.
   const { data, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =

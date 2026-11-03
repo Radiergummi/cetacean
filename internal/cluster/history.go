@@ -5,16 +5,14 @@ import "github.com/radiergummi/cetacean/internal/cache"
 // PresentHistory names task entries as Swarm shows them and marks the
 // resources an annotation names that are gone. cache.ExtractName must keep a
 // task's ID as its name, since every read check is keyed on it, so this runs
-// after filtering, for presentation only. Naming is best-effort.
+// after filtering, for presentation only, through the caller's ReadableTaskNames.
 func PresentHistory(
 	c *cache.Cache,
 	entries []cache.HistoryEntry,
-	canRead func(resource string) bool,
+	taskName func(taskID string) string,
 ) []cache.HistoryEntry {
 	named := make([]cache.HistoryEntry, len(entries))
 	copy(named, entries)
-
-	taskName := ReadableTaskNames(c, canRead)
 
 	for i, e := range named {
 		if e.Annotation != nil {

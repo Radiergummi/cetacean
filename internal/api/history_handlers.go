@@ -202,7 +202,7 @@ func (h *Handlers) timeline(r *http.Request, query cache.HistoryQuery) []cache.H
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
 	query.TaskName = cluster.ReadableTaskNames(h.cache, canRead)
 
-	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), canRead)
+	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), query.TaskName)
 }
 
 // linkNextTimelinePage links the page below the last entry when this one is full.

@@ -403,9 +403,10 @@ built from the history carries gaps, the search feed and a type's or a resource'
 
 `/history` pages by cursor rather than offset, because new entries arrive at the front while you read. A full page
 carries a `Link` with `rel="next"`, whose `before` names the oldest entry on it. `search` matches across the whole
-log, not only the page you have, and stays on the `next` link along with `type` and `resourceId`. It matches what an
-entry shows: a change's resource name (also written `stack/name`, and a task's as `service.slot`), the start of its
-ID, its type and action, and who made it.
+log, not only the page you have, and stays on the `next` link along with `type` and `resourceId`. Each of its words
+must appear somewhere an entry shows it: a change's resource name (also written `stack/name`, and a task's as
+`service.slot`), the start of its ID, its type and action, and who made it; an annotation's text, tags, the names of
+the resources it names, and its author.
 
 With `type=service`, a service's history includes its tasks' entries. Add `tasks=false` for the service's own
 entries alone, so a crash loop's task churn doesn't fill the pages before you reach the change that started it.
@@ -591,7 +592,8 @@ fields, so an edit changes what it says without moving it. Its `@id` is `/annota
 
 The filters apply to annotations as follows:
 
-- `search` matches the text, the tags, the names of the resources it names, and the author.
+- `search` keeps the annotations holding each of its words in the text, the tags, the names of the resources it
+  names, or the author.
 - `tag` keeps the annotations carrying a tag. Repeat it, `tag=deploy&tag=web`, to keep those carrying every one, and
   add `matchAny=true` to keep those carrying any. Changes are left out.
 - `author` keeps what the actor with that subject did: the annotations they wrote and the changes they made through

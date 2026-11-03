@@ -33,11 +33,11 @@ func TestPresentHistoryNamesOnlyReadableServices(t *testing.T) {
 	c := hiddenServiceCache()
 	entries := []cache.HistoryEntry{{Type: cache.EventTask, ResourceID: "task-hidden"}}
 
-	if got := cluster.PresentHistory(c, entries, nil)[0].Name; got != "payroll-db.1" {
+	if got := cluster.PresentHistory(c, entries, cluster.ReadableTaskNames(c, nil))[0].Name; got != "payroll-db.1" {
 		t.Errorf("name with every grant = %q, want payroll-db.1", got)
 	}
 
-	if got := cluster.PresentHistory(c, entries, tasksOnlyReader)[0].Name; got != "task-hidden" {
+	if got := cluster.PresentHistory(c, entries, cluster.ReadableTaskNames(c, tasksOnlyReader))[0].Name; got != "task-hidden" {
 		t.Errorf("name without the service grant = %q, want the task ID", got)
 	}
 }

@@ -26,11 +26,26 @@ describe("useSearchParam", () => {
     });
 
     act(() => result.current.param[2]("typed"));
-    act(() => void result.current.navigate("/?q=back"));
+    act(() => {
+      result.current.navigate("/?q=back");
+    });
     act(() => vi.advanceTimersByTime(300));
 
     expect(result.current.param[1]).toBe("back");
     expect(result.current.param[0]).toBe("back");
+  });
+
+  it("keeps typing that its own write lands behind", () => {
+    const { result } = renderHook(() => useSearchParam("q"), { wrapper });
+
+    act(() => result.current[2]("ab"));
+    act(() => {
+      vi.advanceTimersByTime(300);
+      result.current[2]("abc");
+    });
+
+    expect(result.current[1]).toBe("ab");
+    expect(result.current[0]).toBe("abc");
   });
 
   it("updates input immediately but debounces URL param", () => {

@@ -5400,8 +5400,8 @@ paths:
         - name: search
           in: query
           description: >-
-            Case-insensitive substring search on the text, the tags, the names of
-            the resources it names and the author
+            Case-insensitive search, each word anywhere in the text, the tags, the
+            names of the resources it names or the author
           schema:
             type: string
           example: load test
@@ -5769,8 +5769,9 @@ paths:
         Annotations are merged in at the ID that created them, with their current
         fields, including ones older than anything the ring still holds. One is
         listed when the caller may read every resource it names. `search` matches
-        its text, tags, resource names and author, the time window matches a range that overlaps it, and a resource
-        filter matches one that names the resource, one on a service's stack, one on
+        its text, tags, resource names and author, the time window matches a range
+        that overlaps it, and a resource filter matches one that names the
+        resource, one on a service's stack, one on
         a stack's services, and a cluster-wide one. A `Link` with `rel="edit"`
         points to `/annotations` when the caller may create an annotation.
       parameters:
@@ -5805,9 +5806,9 @@ paths:
         - name: search
           in: query
           description: >-
-            Case-insensitive substring search on what an entry shows: a change's
-            resource name (also as stack/name, and a task's as service.slot), the
-            start of its ID, its type, action and actor, or an
+            Case-insensitive search, each word anywhere in what an entry shows: a
+            change's resource name (also as stack/name, and a task's as
+            service.slot), the start of its ID, its type, action and actor, or an
             annotation's text, tags, resource names and author
           schema:
             type: string

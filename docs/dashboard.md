@@ -295,8 +295,8 @@ for offline use.
 ## History
 
 The history page at `/history`, linked from the recent activity on the cluster overview, lists the latest 200
-changes Cetacean has seen. Filter it by resource type, or with the search box, which matches what a row shows: a name, an
-action, who made the change, or the start of an ID. A word starting with `#` filters by tag, completed from
+changes Cetacean has seen. Filter it by resource type, or with the search box, which keeps the rows showing each of its words: in
+a name, an action, who made the change, or the start of an ID. A word starting with `#` filters by tag, completed from
 the tags in use. Tab or Enter takes the highlighted tag, and Space keeps the tag as typed. The download button saves
 the whole log Cetacean still holds as CSV. Recent activity elsewhere folds consecutive changes to one resource
 into a single row with a count, but the history page lists every entry.

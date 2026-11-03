@@ -214,9 +214,14 @@ export function filterHistory(
   const tags = params.getAll("tag").filter(Boolean);
   const matchAny = params.get("matchAny") === "true";
   const authors = params.getAll("author").filter(Boolean);
-  const search = params.get("search")?.toLowerCase();
-  const mentions = (...fields: (string | undefined)[]) =>
-    !search || fields.some((field) => field?.toLowerCase().includes(search));
+  const words = (params.get("search") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  // Every word somewhere: in a field, or at the start of an ID.
+  const mentions = (fields: (string | undefined)[], ids: string[] = []) =>
+    words.every(
+      (word) =>
+        fields.some((field) => field?.toLowerCase().includes(word)) ||
+        ids.some((id) => id.startsWith(word)),
+    );
   const actorFields = ({ actor }: HistoryEntry) => [actor?.name, actor?.subject];
   const stackDisplay = (name: string) => {
     const { prefix, name: rest } = splitStackPrefix(name);
@@ -258,12 +263,12 @@ export function filterHistory(
         overlaps &&
         carries(entry) &&
         byAuthor(entry) &&
-        mentions(
+        mentions([
           entry.text,
           ...(entry.tags ?? []),
           ...(entry.resources ?? []).flatMap(({ name }) => [name, stackDisplay(name)]),
           ...actorFields(entry),
-        ) &&
+        ]) &&
         (named.length === 0 ||
           named.some(({ type: namedType, id }) =>
             resourceId
@@ -286,14 +291,10 @@ export function filterHistory(
     return (
       (!type || entry.type === type || member) &&
       (!resourceId || entry.resourceId === resourceId || member) &&
-      (mentions(
-        entry.name,
-        stackDisplay(entry.name),
-        entry.type,
-        entry.action,
-        ...actorFields(entry),
-      ) ||
-        entry.resourceId.startsWith(search ?? "")) &&
+      mentions(
+        [entry.name, stackDisplay(entry.name), entry.type, entry.action, ...actorFields(entry)],
+        [entry.resourceId],
+      ) &&
       start > sinceTime &&
       start <= untilTime
     );

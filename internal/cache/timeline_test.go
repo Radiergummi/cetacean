@@ -519,6 +519,10 @@ func TestTimeline_SearchFindsWhatARowShows(t *testing.T) {
 		"volume":        {byAlice},
 		"perf":          {tagged},
 		"load":          {tagged},
+		"shop checkout": {tagged, stacked},
+		"remove alice":  {byAlice},
+		"load perf":     {tagged},
+		"load alice":    nil,
 	} {
 		got := timelineIDs(c.Timeline(HistoryQuery{
 			Search: search, Kinds: []string{KindChange, KindAnnotation},
@@ -545,5 +549,21 @@ func TestHistoryQuery_MatchersFoldTheirOwnSearch(t *testing.T) {
 
 	if !(HistoryQuery{TitleContains: "LOAD"}).matchesAnnotation(Annotation{Text: "Load test"}, "") {
 		t.Error("an annotation missed a title filter in capitals")
+	}
+}
+
+func TestHistoryQuery_ResolvesNoNameItHides(t *testing.T) {
+	var resolved []string
+
+	q := HistoryQuery{
+		Search:   "web",
+		Visible:  func(e HistoryEntry) bool { return e.ResourceID != "hidden" },
+		TaskName: func(id string) string { resolved = append(resolved, id); return id },
+	}
+
+	q.matches(HistoryEntry{Kind: KindChange, Type: EventTask, ResourceID: "hidden"})
+
+	if len(resolved) > 0 {
+		t.Errorf("resolved %v, a task the caller may not see", resolved)
 	}
 }
