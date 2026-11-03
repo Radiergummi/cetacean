@@ -17,12 +17,14 @@ import {
   layoutMarkers,
   type MarkerLayout,
   markersAt,
+  notesAtFlag,
   timeAtIndex,
   tooltipMarkers,
 } from "./chartMarkers";
 import { useChartSync } from "./ChartSyncProvider";
 import ChartTooltipOverlay, { type TooltipData } from "./ChartTooltipOverlay";
 import { useMetricsPanelContext } from "./MetricsPanelContext";
+import NotePopover, { type NotePin } from "./NotePopover";
 import { useMetricsSeries } from "./useMetricsSeries";
 import { useSeriesIsolation } from "./useSeriesIsolation";
 import { useLatestRef } from "@/hooks/useLatestRef";
@@ -106,6 +108,9 @@ export default function TimeSeriesChart({
   const isMobile = useMatchesBreakpoint("md", "below");
   const chartRef = useRef<ChartJS<"line"> | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+  const [pin, setPin] = useState<NotePin | null>(null);
+  const unpin = useCallback(() => setPin(null), []);
+  const plotRef = useRef<HTMLDivElement>(null);
   const chartId = useId();
   const sync = useChartSync();
   const panel = useMetricsPanelContext();
@@ -312,7 +317,16 @@ export default function TimeSeriesChart({
   const crosshairPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "crosshair",
-      afterEvent(chart, { event: { native, type, x } }) {
+      afterEvent(chart, { event: { native, type, x, y } }) {
+        // A flag under the pointer is found anew; anywhere else the cursor is the default.
+        const onFlag =
+          x != null &&
+          y != null &&
+          chart.chartArea != null &&
+          notesAtFlag(markerLayoutRef.current, x, y, chart.chartArea.top).length > 0;
+
+        chart.canvas.style.cursor = onFlag && type !== "mouseout" ? "pointer" : "";
+
         if (type === "mouseout") {
           tooltipRef.current(null);
           sync.publish(chartId, -1);
@@ -333,7 +347,7 @@ export default function TimeSeriesChart({
 
           const doubleClicked = nearest()[0];
 
-          if (!doubleClicked) {
+          if (!doubleClicked || onFlag) {
             return;
           }
 
@@ -356,6 +370,21 @@ export default function TimeSeriesChart({
           }
 
           if (x == null) {
+            return;
+          }
+
+          // A flag's notes open pinned; isolating a series is for the rest of the plot.
+          if (onFlag && y != null) {
+            const notes = notesAtFlag(markerLayoutRef.current, x, y, chart.chartArea.top);
+
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+            }
+
+            tooltipRef.current(null);
+            setPin({ x, y: chart.chartArea.top, ids: notes.map(({ entry }) => entry.id) });
+
             return;
           }
 
@@ -654,7 +683,10 @@ export default function TimeSeriesChart({
           hidden={state !== "data"}
         >
           {chartData && (
-            <div className="relative h-50">
+            <div
+              ref={plotRef}
+              className="relative h-50"
+            >
               <Line
                 ref={chartRef}
                 data={chartData}
@@ -676,8 +708,15 @@ export default function TimeSeriesChart({
           )}
         </div>
         <ChartTooltipOverlay
-          tooltip={tooltip}
+          tooltip={pin ? null : tooltip}
           visible={state === "data"}
+        />
+
+        <NotePopover
+          pin={pin}
+          container={plotRef}
+          timeline={panel?.timeline ?? []}
+          onClose={unpin}
         />
       </div>
     </div>

@@ -54,4 +54,14 @@ function MenuRadioItem({ className, ...props }: MenuPrimitive.RadioItem.Props) {
   );
 }
 
-export { MenuContent, MenuItem, MenuRadioItem };
+function MenuCheckboxItem({ className, ...props }: MenuPrimitive.CheckboxItem.Props) {
+  return (
+    <MenuPrimitive.CheckboxItem
+      data-slot="menu-checkbox-item"
+      className={cn(itemClass, "justify-between", className)}
+      {...props}
+    />
+  );
+}
+
+export { MenuCheckboxItem, MenuContent, MenuItem, MenuRadioItem };

@@ -2,10 +2,8 @@ import type { HistoryEntry } from "../api/types";
 import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
-import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
-import AnnotationMenu from "./annotations/AnnotationMenu";
-import NoteText from "./annotations/NoteText";
-import ShowOnChart from "./annotations/ShowOnChart";
+import { describeGap } from "../lib/timeline";
+import NoteCard from "./annotations/NoteCard";
 import { isClusterWide } from "./metrics/chartMarkers";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
@@ -211,8 +209,7 @@ function ChangeRun({
 }
 
 /**
- * A note someone wrote, as a card: its text, when it says it happened, what
- * it is about, its tags, and who wrote it.
+ * A note's row on the timeline: its marker, its time, and its card.
  */
 function AnnotationCard({
   entry,
@@ -221,14 +218,12 @@ function AnnotationCard({
   entry: HistoryEntry;
   onActiveChange: (active: boolean) => void;
 }) {
-  const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
-
   const clusterWide = isClusterWide({ entry });
 
   return (
     <TimelineRow
       top
-      date={timestamp}
+      date={entry.timestamp}
       marker={
         <div
           data-cluster-wide={clusterWide || undefined}
@@ -236,83 +231,10 @@ function AnnotationCard({
         />
       }
     >
-      <div
-        data-cluster-wide={clusterWide || undefined}
-        className="min-w-0 flex-1 rounded-r-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
-      >
-        <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">
-            <NoteText text={text ?? ""} />
-          </p>
-          <AnnotationMenu
-            id={id}
-            onActiveChange={onActiveChange}
-          />
-        </div>
-
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <Link
-            to={`/annotations/${id}`}
-            className="hover:text-foreground hover:underline"
-          >
-            {describeAnnotationTime(
-              seconds(timestamp),
-              until === undefined ? undefined : seconds(until),
-            )}
-          </Link>
-
-          {clusterWide ? (
-            <span>Cluster-wide</span>
-          ) : (
-            resources.map(({ type, id, name, removed }) => {
-              const path = removed ? undefined : resourcePath(type, id, name);
-
-              return path ? (
-                <Link
-                  key={`${type}-${id}`}
-                  to={path}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  <ResourceName name={name} />
-                </Link>
-              ) : (
-                <span
-                  key={`${type}-${id}`}
-                  title={removed ? "Removed from the cluster" : undefined}
-                  className={removed ? "line-through" : undefined}
-                >
-                  <ResourceName name={name} />
-                </span>
-              );
-            })
-          )}
-
-          {tags.map((tag, index) => (
-            <Link
-              key={`${index}-${tag}`}
-              to={`/annotations?tag=${encodeURIComponent(tag)}`}
-              className="rounded border px-1 hover:text-foreground"
-            >
-              #{tag}
-            </Link>
-          ))}
-
-          {actor && <span>{attribution(actor)}</span>}
-
-          {updated && (
-            <span
-              title={`Edited ${editor ? `${attribution(editor)} ` : ""}${formatDateTime(updated)}`}
-            >
-              edited
-            </span>
-          )}
-
-          <ShowOnChart
-            note={entry}
-            className="ms-auto inline-flex items-center gap-1 hover:text-foreground hover:underline"
-          />
-        </div>
-      </div>
+      <NoteCard
+        entry={entry}
+        onActiveChange={onActiveChange}
+      />
     </TimelineRow>
   );
 }

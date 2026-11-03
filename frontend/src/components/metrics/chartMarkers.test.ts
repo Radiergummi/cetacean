@@ -6,6 +6,7 @@ import {
   timeAtIndex,
   type MarkerHit,
   markersAt,
+  notesAtFlag,
   tooltipMarkers,
 } from "./chartMarkers";
 import type { HistoryEntry } from "@/api/types";
@@ -160,6 +161,26 @@ describe("layoutMarkers on annotation scopes", () => {
       [false, false],
       [true, true],
     ]);
+  });
+});
+
+describe("notesAtFlag", () => {
+  const top = 10;
+  const ids = (items: TimelineItem[]) => items.map(({ entry: { id } }) => id);
+
+  it("lists every note a flag groups, newest first, only on its pennant", () => {
+    const layout = layoutMarkers([flag(1, 200), flag(2, 202)], timestamps, pixelFor);
+
+    expect(ids(notesAtFlag(layout, 104, top + 3, top))).toEqual([2, 1]);
+    expect(notesAtFlag(layout, 104, top + 60, top)).toEqual([]);
+    expect(notesAtFlag(layout, 130, top + 3, top)).toEqual([]);
+  });
+
+  it("takes a range's start, not a range clipped to the samples", () => {
+    const layout = layoutMarkers([region(1, 250, 350), region(2, 0, 300)], timestamps, pixelFor);
+
+    expect(ids(notesAtFlag(layout, 152, top, top))).toEqual([1]);
+    expect(notesAtFlag(layout, 2, top, top)).toEqual([]);
   });
 });
 
