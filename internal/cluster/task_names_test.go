@@ -100,7 +100,9 @@ func TestPresentHistoryNamesATaskRemovedWithItsService(t *testing.T) {
 
 	for _, e := range cluster.PresentHistory(c, entries, cluster.ReadableTaskNames(c, nil)) {
 		if e.Name != want[e.ResourceID] {
-			t.Errorf("%s of %s named %q, want %q", e.Action, e.ResourceID, e.Name, want[e.ResourceID])
+			t.Errorf(
+				"%s of %s named %q, want %q", e.Action, e.ResourceID, e.Name, want[e.ResourceID],
+			)
 		}
 	}
 
