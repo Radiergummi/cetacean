@@ -20,6 +20,7 @@ const feedResources = new Set([
  */
 const feedRoutes: Record<string, string> = {
   "/history": "History",
+  "/annotations": "Annotations",
   "/recommendations": "Recommendations",
 };
 

@@ -28,6 +28,9 @@ import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "re
 const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
 const ErrorIndex = lazy(() => import("./pages/ErrorIndex"));
 const History = lazy(() => import("./pages/History"));
+const Annotations = lazy(() => import("./pages/Annotations"));
+const AnnotationTags = lazy(() => import("./pages/AnnotationTags"));
+const AnnotationDetail = lazy(() => import("./pages/AnnotationDetail"));
 const ImageSBOMPage = lazy(() => import("./pages/ImageSBOMPage"));
 const ImageDockerfilePage = lazy(() => import("./pages/ImageDockerfilePage"));
 const ErrorCodeDetail = lazy(() => import("./pages/ErrorCodeDetail"));
@@ -451,6 +454,18 @@ export default function App() {
                   <Route
                     path="/history"
                     element={<History />}
+                  />
+                  <Route
+                    path="/annotations"
+                    element={<Annotations />}
+                  />
+                  <Route
+                    path="/annotations/tags"
+                    element={<AnnotationTags />}
+                  />
+                  <Route
+                    path="/annotations/:id"
+                    element={<AnnotationDetail />}
                   />
                   <Route
                     path="/recommendations"

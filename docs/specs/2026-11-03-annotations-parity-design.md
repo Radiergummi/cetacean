@@ -192,7 +192,10 @@ Each step is one PR with its CHANGELOG entry.
 2. **MCP:** the two tools, the resources, the `get_events` arguments, the #592 items, the
    evaluation set.
 3. **Dashboard groundwork:** the #592 items.
-4. **Dashboard features:** the three pages, the History filters, autocomplete, links in text,
+   **1b. The pages,** moved ahead of step 2 so no route of step 1's renders the not-found page:
+   `/annotations`, `/annotations/{id}`, `/annotations/tags`, note cards linking their page and
+   their tags, and the demo. "Show on chart" stays with step 4.
+4. **Dashboard features:** the History filters, autocomplete, links in text, "Show on chart",
    the chart notes control, the marker popover, the stack page section, the demo.
 
 ## Decisions

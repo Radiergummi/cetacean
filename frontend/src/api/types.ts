@@ -426,6 +426,25 @@ export interface Annotation {
 }
 
 /**
+ * A tag in use, with how many annotations the caller may read carry it.
+ */
+export interface AnnotationTag {
+  tag: string;
+  count: number;
+}
+
+/**
+ * The filters `GET /annotations` takes.
+ */
+export interface AnnotationFilters {
+  tags?: string[] | undefined;
+  matchAny?: boolean | undefined;
+  authors?: string[] | undefined;
+  search?: string | undefined;
+  limit?: number | undefined;
+}
+
+/**
  * A resource an annotation names; a stack's ID is its name.
  */
 export interface AnnotationResource {

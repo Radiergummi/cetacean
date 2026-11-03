@@ -247,18 +247,21 @@ function AnnotationCard({
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span>
+          <Link
+            to={`/annotations/${id}`}
+            className="hover:text-foreground hover:underline"
+          >
             {describeAnnotationTime(
               seconds(timestamp),
               until === undefined ? undefined : seconds(until),
             )}
-          </span>
+          </Link>
 
           {clusterWide ? (
             <span>Cluster-wide</span>
           ) : (
-            resources.map(({ type, id, name }) => {
-              const path = resourcePath(type, id, name);
+            resources.map(({ type, id, name, removed }) => {
+              const path = removed ? undefined : resourcePath(type, id, name);
 
               return path ? (
                 <Link
@@ -269,7 +272,11 @@ function AnnotationCard({
                   <ResourceName name={name} />
                 </Link>
               ) : (
-                <span key={`${type}-${id}`}>
+                <span
+                  key={`${type}-${id}`}
+                  title={removed ? "Removed from the cluster" : undefined}
+                  className={removed ? "line-through" : undefined}
+                >
                   <ResourceName name={name} />
                 </span>
               );
@@ -277,12 +284,13 @@ function AnnotationCard({
           )}
 
           {tags.map((tag, index) => (
-            <span
+            <Link
               key={`${index}-${tag}`}
-              className="rounded border px-1"
+              to={`/annotations?tag=${encodeURIComponent(tag)}`}
+              className="rounded border px-1 hover:text-foreground"
             >
               #{tag}
-            </span>
+            </Link>
           ))}
 
           {actor && <span>{attribution(actor)}</span>}

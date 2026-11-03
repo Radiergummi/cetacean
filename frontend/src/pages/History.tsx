@@ -12,8 +12,9 @@ import { useSearchParam } from "../hooks/useSearchParam";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, StickyNote } from "lucide-react";
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 
 /** The most entries `GET /history` returns in one page. */
 const historyLimit = 200;
@@ -76,6 +77,13 @@ export default function History() {
         actions={
           <div className="flex items-center gap-2">
             {create && <AddAnnotationButton />}
+            <Link
+              to="/annotations"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <StickyNote className="size-3.5" />
+              Annotations
+            </Link>
             <a
               href={csvHref}
               download

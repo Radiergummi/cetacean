@@ -1,6 +1,8 @@
 import * as schema from "./schemas";
 import type {
   Annotation,
+  AnnotationFilters,
+  AnnotationTag,
   PublishedPort,
   ClusterCapacity,
   CollectionResponse,
@@ -755,11 +757,42 @@ async function fetchAll<T>(
   }
 }
 
-export interface HistoryPage {
-  items: HistoryEntry[];
+export interface Page<T> {
+  items: T[];
 
-  /** The path of the next, older page, while the server says one exists. */
+  /** The path of the next page, while the server says one exists. */
   next?: string | undefined;
+}
+
+export type HistoryPage = Page<HistoryEntry>;
+
+/** The path of the first `/annotations` page for these filters. */
+function annotationsPath(filters: AnnotationFilters): string {
+  const queryParams = new URLSearchParams();
+
+  for (const tag of filters.tags ?? []) {
+    queryParams.append("tag", tag);
+  }
+
+  if (filters.matchAny && (filters.tags?.length ?? 0) > 1) {
+    queryParams.set("matchAny", "true");
+  }
+
+  for (const author of filters.authors ?? []) {
+    queryParams.append("author", author);
+  }
+
+  if (filters.search) {
+    queryParams.set("search", filters.search);
+  }
+
+  if (filters.limit) {
+    queryParams.set("limit", String(filters.limit));
+  }
+
+  const query = queryParams.toString();
+
+  return `/annotations${query ? `?${query}` : ""}`;
 }
 
 /** The path of the first `/history` page for these filters. */
@@ -899,14 +932,20 @@ async function fetchTimeline(
  * Fetches one `/history` page. The `next` link pages by cursor, and it is
  * followed as the server wrote it rather than rebuilt from the last entry.
  */
-async function fetchHistoryPage(
-  path: string,
-  signal?: AbortSignal | undefined,
-): Promise<HistoryPage> {
-  const response = await request(path, headers, signal);
-  const data = (await response.json()) as CollectionResponse<HistoryEntry>;
+function fetchHistoryPage(path: string, signal?: AbortSignal | undefined): Promise<HistoryPage> {
+  return fetchPage<HistoryEntry>(path, schema.historyEntrySchema, signal);
+}
 
-  checkShape(path, schema.collectionOf(schema.historyEntrySchema), data);
+/** One page of a collection, with the path of the next one its `Link` names. */
+async function fetchPage<T>(
+  path: string,
+  itemSchema: z.ZodType,
+  signal?: AbortSignal | undefined,
+): Promise<Page<T>> {
+  const response = await request(path, headers, signal);
+  const data = (await response.json()) as CollectionResponse<T>;
+
+  checkShape(path, schema.collectionOf(itemSchema), data);
 
   const target = linkTarget(response.headers.get("Link"), "next");
 
@@ -1137,6 +1176,11 @@ export const api = {
   timeline: fetchTimeline,
   historyPath,
   historyPage: fetchHistoryPage,
+  annotationsPath,
+  annotationsPage: (path: string, signal?: AbortSignal) =>
+    fetchPage<Annotation>(path, schema.annotationSchema, signal),
+  annotationTagsPage: (path: string, signal?: AbortSignal) =>
+    fetchPage<AnnotationTag>(path, schema.annotationTagSchema, signal),
   topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),
   nodeTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(

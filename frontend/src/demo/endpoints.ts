@@ -85,6 +85,8 @@ export function buildDemoEndpoints(dataset: Dataset): string[] {
 
     // Other
     "/history",
+    "/annotations",
+    "/annotations/tags",
     `/annotations/${seededNoteIds[0]}`,
     "/recommendations",
     "/disk-usage",

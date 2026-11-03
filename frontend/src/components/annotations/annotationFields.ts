@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationScope, NewAnnotation } from "@/api/types";
+import type { Annotation, AnnotationScope, HistoryEntry, NewAnnotation } from "@/api/types";
 import { toLocalInput as isoToLocalInput } from "@/components/log/log-utils";
 
 const tagPattern = /^[a-z0-9._-]{1,40}$/;
@@ -24,6 +24,13 @@ export function toLocalInput(seconds: number): string {
  */
 export function fromLocalInput(value: string): string {
   return new Date(value).toISOString();
+}
+
+/**
+ * An annotation as a timeline entry, which the note cards render.
+ */
+export function annotationEntry(note: Annotation): HistoryEntry {
+  return { ...note, kind: "annotation", type: "", action: "", resourceId: "", name: "" };
 }
 
 /**
