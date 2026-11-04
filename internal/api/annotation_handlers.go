@@ -78,15 +78,8 @@ func (h *Handlers) annotationEdit() tieredChain {
 // annotationValidator is the annotation's as a GET answers it. One the caller
 // may not edit has none: the write is refused whatever its preconditions say.
 func (h *Handlers) annotationValidator(r *http.Request) (string, time.Time, error) {
-	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
-	if err != nil {
-		return "", time.Time{}, errNoRepresentation
-	}
-
-	caller := h.annotationCaller(r)
-
-	a, err := h.annotations.Get(caller, id)
-	if err != nil || !h.annotations.MayEdit(attributedRead(r), caller, a) {
+	a, ok := h.editableAnnotation(r)
+	if !ok {
 		return "", time.Time{}, errNoRepresentation
 	}
 
@@ -95,16 +88,22 @@ func (h *Handlers) annotationValidator(r *http.Request) (string, time.Time, erro
 
 // mayEditAnnotation is whether the caller may edit the annotation the path names.
 func (h *Handlers) mayEditAnnotation(r *http.Request) bool {
+	_, ok := h.editableAnnotation(r)
+	return ok
+}
+
+// editableAnnotation is the annotation the path names, if the caller may edit it.
+func (h *Handlers) editableAnnotation(r *http.Request) (cache.Annotation, bool) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
 	if err != nil || !h.annotations.Enabled() {
-		return false
+		return cache.Annotation{}, false
 	}
 
 	caller := h.annotationCaller(r)
 
 	a, err := h.annotations.Get(caller, id)
 
-	return err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)
+	return a, err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)
 }
 
 // attributedRead is the request's context with its caller as the actor, which
@@ -469,6 +468,11 @@ func annotationModified(a cache.Annotation) time.Time {
 		return time.Time{}
 	}
 
+	return annotationEdited(a)
+}
+
+// annotationEdited is when a write last changed a.
+func annotationEdited(a cache.Annotation) time.Time {
 	if !a.Updated.IsZero() {
 		return a.Updated
 	}

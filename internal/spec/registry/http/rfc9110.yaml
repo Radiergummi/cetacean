@@ -384,8 +384,8 @@ requirements:
         replace: "\t\t\tcase errors.Is(err, errNoRepresentation):"
         with: "\t\t\tcase errors.Is(err, errNoRepresentation) && false:"
       - file: internal/api/annotation_handlers.go
-        replace: "\tif err != nil || !h.annotations.MayEdit(attributedRead(r), caller, a) {\n\t\treturn \"\", time.Time{}, errNoRepresentation"
-        with: "\tif err != nil {\n\t\treturn \"\", time.Time{}, errNoRepresentation"
+        replace: "\treturn a, err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)"
+        with: "\treturn a, err == nil"
 
   - id: preconditions-are-evaluated-in-order
     level: MUST
