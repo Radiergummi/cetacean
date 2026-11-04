@@ -2,8 +2,8 @@ import type { HistoryEntry } from "../api/types";
 import { activityRows, attribution, runSignature } from "../lib/activity";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
-import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
-import AnnotationMenu from "./annotations/AnnotationMenu";
+import { describeGap } from "../lib/timeline";
+import NoteCard from "./annotations/NoteCard";
 import { isClusterWide } from "./metrics/chartMarkers";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
@@ -38,15 +38,18 @@ function TimelineRow({
   return (
     <div
       data-top={top || undefined}
-      className="relative flex min-h-8 items-center gap-3 py-1.5 ps-3 data-top:items-start"
+      className="relative grid min-h-8 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3 py-1.5 ps-3 data-top:items-start"
     >
       {marker}
 
-      <span className="text-xs leading-none whitespace-nowrap text-muted-foreground">
+      <span
+        data-top={top || undefined}
+        className="text-xs leading-none whitespace-nowrap text-muted-foreground data-top:mt-[11px]"
+      >
         <TimeAgo date={date} />
       </span>
 
-      {children}
+      <div className="flex min-w-0 items-center gap-3">{children}</div>
     </div>
   );
 }
@@ -77,6 +80,13 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
 
     range = gap.detail;
     text = total > 0 ? gap.title : "Not watching";
+  }
+
+  const covered = gaps.flatMap(({ recoveredFrom }) => (recoveredFrom ? [recoveredFrom] : []));
+
+  if (covered.length > 0) {
+    text += ", partly covered by Docker's log";
+    range += `. Docker's event log covers ${covered.length === 1 ? "it" : `${covered.length} of them`} from ${covered.map((from) => formatDateTime(from)).join(", ")}: changes to everything but tasks since then are listed below`;
   }
 
   return (
@@ -115,7 +125,7 @@ function ChangeRun({
 }) {
   const [open, setOpen] = useState(false);
   const runId = useId();
-  const [{ action, actor, name, resourceId, timestamp, type }] = entries;
+  const [{ action, actor, name, recovered, resourceId, timestamp, type }] = entries;
   const path = resourcePath(type, resourceId, name);
 
   return (
@@ -172,6 +182,14 @@ function ChangeRun({
               {attribution(actor)}
             </span>
           )}
+          {recovered && (
+            <span
+              className="rounded border border-dashed px-1.5 py-0.5 text-xs text-muted-foreground"
+              title="Recovered from Docker's event log after Cetacean restarted"
+            >
+              recovered
+            </span>
+          )}
         </div>
       </TimelineRow>
 
@@ -209,8 +227,7 @@ function ChangeRun({
 }
 
 /**
- * A note someone wrote, as a card: its text, when it says it happened, what
- * it is about, its tags, and who wrote it.
+ * A note's row on the timeline: its marker, its time, and its card.
  */
 function AnnotationCard({
   entry,
@@ -219,83 +236,23 @@ function AnnotationCard({
   entry: HistoryEntry;
   onActiveChange: (active: boolean) => void;
 }) {
-  const { actor, editor, id, resources = [], tags = [], text, timestamp, until, updated } = entry;
-
   const clusterWide = isClusterWide({ entry });
 
   return (
     <TimelineRow
       top
-      date={timestamp}
+      date={entry.timestamp}
       marker={
         <div
           data-cluster-wide={clusterWide || undefined}
-          className="absolute top-3.5 -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
+          className="absolute top-[18px] -left-3.25 h-2.5 w-2.5 rounded-sm bg-annotation ring-2 ring-background data-cluster-wide:bg-annotation-cluster"
         />
       }
     >
-      <div
-        data-cluster-wide={clusterWide || undefined}
-        className="min-w-0 flex-1 rounded-r-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
-      >
-        <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</p>
-          <AnnotationMenu
-            id={id}
-            onActiveChange={onActiveChange}
-          />
-        </div>
-
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span>
-            {describeAnnotationTime(
-              seconds(timestamp),
-              until === undefined ? undefined : seconds(until),
-            )}
-          </span>
-
-          {clusterWide ? (
-            <span>Cluster-wide</span>
-          ) : (
-            resources.map(({ type, id, name }) => {
-              const path = resourcePath(type, id, name);
-
-              return path ? (
-                <Link
-                  key={`${type}-${id}`}
-                  to={path}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  <ResourceName name={name} />
-                </Link>
-              ) : (
-                <span key={`${type}-${id}`}>
-                  <ResourceName name={name} />
-                </span>
-              );
-            })
-          )}
-
-          {tags.map((tag, index) => (
-            <span
-              key={`${index}-${tag}`}
-              className="rounded border px-1"
-            >
-              #{tag}
-            </span>
-          ))}
-
-          {actor && <span>{attribution(actor)}</span>}
-
-          {updated && (
-            <span
-              title={`Edited ${editor ? `${attribution(editor)} ` : ""}${formatDateTime(updated)}`}
-            >
-              edited
-            </span>
-          )}
-        </div>
-      </div>
+      <NoteCard
+        entry={entry}
+        onActiveChange={onActiveChange}
+      />
     </TimelineRow>
   );
 }
@@ -404,7 +361,7 @@ export default function ActivityFeed({
             className="mt-2 bg-background text-muted-foreground shadow-sm"
           >
             <Pause />
-            Updates paused while a note is open
+            Updates paused
           </Badge>
         )}
       </div>

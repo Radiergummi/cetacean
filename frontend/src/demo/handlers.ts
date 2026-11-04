@@ -283,8 +283,11 @@ function allowFor(url: string) {
   return writes ? `GET, HEAD, ${writes}` : "GET, HEAD";
 }
 
-/** The details whose resource the visitor may annotate, and the cluster for cluster-wide notes. */
-const annotatablePath = /\/((services|nodes|stacks)\/[^/]+|cluster)$/;
+/**
+ * The details whose resource the visitor may annotate, the cluster for
+ * cluster-wide notes, and the lists that say whether any note may be made.
+ */
+const annotatablePath = /\/((services|nodes|stacks)\/[^/]+|cluster|history|annotations)$/;
 
 /** The `rel="edit"` links the server sends on a detail response. */
 function editLinksFor(url: string) {
@@ -2021,6 +2024,65 @@ export function createHandlers(dataset: Dataset, clients: SSEClients) {
         { ...entry, "@id": `/annotations/${entry.id}`, "@type": "Annotation" },
         { status: 201, headers: { Location: `/annotations/${entry.id}` } },
       );
+    }),
+
+    get("*/annotations", ({ request }) => {
+      const url = new URL(request.url);
+      const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 200);
+      const filters = new URLSearchParams(url.searchParams);
+
+      filters.set("kind", "annotation");
+
+      const notes = filterHistory(demoHistory(dataset, Date.now()), filters);
+
+      return jsonResponse<CollectionResponse<Record<string, unknown>>>({
+        items: notes
+          .slice(0, limit)
+          .map(({ id, timestamp, until, text, tags, resources, actor, updated, editor }) => ({
+            "@id": `/annotations/${id}`,
+            "@type": "Annotation",
+            id,
+            timestamp,
+            ...(until ? { until } : {}),
+            text: text ?? "",
+            tags: tags ?? [],
+            resources: resources ?? [],
+            ...(actor ? { actor } : {}),
+            ...(updated ? { updated, editor } : {}),
+          })),
+        total: notes.length,
+        limit,
+        offset: 0,
+      });
+    }),
+
+    // Before `:id`, which would otherwise take "tags" for an ID.
+    get("*/annotations/tags", ({ request }) => {
+      const prefix = new URL(request.url).searchParams.get("q") ?? "";
+      const counts = new Map<string, number>();
+
+      for (const entry of demoHistory(dataset, Date.now())) {
+        for (const tag of entry.kind === "annotation" ? (entry.tags ?? []) : []) {
+          if (tag.startsWith(prefix)) {
+            counts.set(tag, (counts.get(tag) ?? 0) + 1);
+          }
+        }
+      }
+
+      const tags = [...counts]
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+      return jsonResponse<CollectionResponse<Record<string, unknown>>>({
+        items: tags.map((tag) => ({
+          "@id": `/annotations?tag=${encodeURIComponent(tag.tag)}`,
+          "@type": "AnnotationTag",
+          ...tag,
+        })),
+        total: tags.length,
+        limit: 50,
+        offset: 0,
+      });
     }),
 
     get("*/annotations/:id", ({ params }) => {

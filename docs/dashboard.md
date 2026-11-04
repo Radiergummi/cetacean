@@ -295,13 +295,17 @@ for offline use.
 ## History
 
 The history page at `/history`, linked from the recent activity on the cluster overview, lists the latest 200
-changes Cetacean has seen. Filter it by resource type, or by name with the search box. The download button saves
+changes Cetacean has seen. Filter it by resource type, or with the search box, which keeps the rows showing each of its words: in
+a name, an action, who made the change, or the start of an ID. A word starting with `#` filters by tag, completed from
+the tags in use. Tab or Enter takes the highlighted tag, and Space keeps the tag as typed. The download button saves
 the whole log Cetacean still holds as CSV. Recent activity elsewhere folds consecutive changes to one resource
 into a single row with a count, but the history page lists every entry.
 
 A change made through Cetacean names who made it and whether they used the dashboard, the API, or MCP. A change
-with no name came from somewhere else, such as the Docker CLI. The history lives in memory, so it starts empty
-after a restart.
+with no name came from somewhere else, such as the Docker CLI. The history survives a restart while
+`storage.timeline` is on; the time Cetacean wasn't watching shows as a gap, a divider between the rows. Changes
+Docker still remembered from the gap appear below it, marked **recovered**, and the divider says it was partly
+covered by Docker's log. Task changes during a gap are never recovered.
 
 ## Atom feeds
 

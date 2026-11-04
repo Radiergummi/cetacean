@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/swarm"
 )
 
 func TestHistory_Append(t *testing.T) {
@@ -346,13 +348,13 @@ func TestHistoryListBeforeIDWithTypeFilter(t *testing.T) {
 	}
 }
 
-func TestHistoryListNameContains(t *testing.T) {
+func TestHistoryListTitleContains(t *testing.T) {
 	h := NewHistory(10)
 	h.Append(HistoryEntry{Type: EventService, Name: "web-frontend"})
 	h.Append(HistoryEntry{Type: EventService, Name: "api-backend"})
 	h.Append(HistoryEntry{Type: EventService, Name: "WEB-PROXY"})
 
-	result := h.List(HistoryQuery{NameContains: "web", Limit: 10})
+	result := h.List(HistoryQuery{TitleContains: "web", Limit: 10})
 	if len(result) != 2 {
 		t.Fatalf("got %d entries, want 2", len(result))
 	}
@@ -914,6 +916,49 @@ func TestRecordGapGoesThroughNotify(t *testing.T) {
 	}
 }
 
+func TestRecordRecoveredGapPutsItsChangesJustBelowIt(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+
+	from := time.Date(2026, 10, 30, 13, 0, 0, 0, time.UTC)
+	recovered := HistoryEntry{
+		Kind: KindChange, Timestamp: from.Add(time.Minute), Type: EventService,
+		Action: "update", ResourceID: "svc1", Name: "web", Recovered: true,
+	}
+	c.RecordRecoveredGap(from, Recovery{Entries: []HistoryEntry{recovered}, From: from})
+
+	entries := c.History().List(HistoryQuery{})
+	if len(entries) != 2 {
+		t.Fatalf("history holds %+v, want the gap and its recovered change", entries)
+	}
+
+	gap, change := entries[0], entries[1]
+	if gap.Kind != KindGap || !gap.RecoveredFrom.Equal(from) || change.ID != gap.ID-1 ||
+		!change.Recovered || change.ResourceID != "svc1" {
+		t.Errorf("entries = %+v, want the gap recovered from 13:00 over its change", entries)
+	}
+
+	if len(events) != 1 || events[0].Type != EventGap {
+		t.Errorf("listeners got %+v, want the gap alone", events)
+	}
+}
+
+func TestALateTaskRemoveKeepsTheReplicaItsTaskRecorded(t *testing.T) {
+	c := New(nil)
+	svc := swarm.Service{ID: "svc1"}
+	svc.Spec.Name = "web"
+	c.SetService(svc)
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Slot: 3, NodeID: "node1"})
+	c.DeleteTask("t1")
+	c.DeleteTask("t1")
+
+	late := c.History().List(HistoryQuery{Limit: 1})[0]
+	if late.Action != "remove" || late.ServiceID != "svc1" || late.Slot != 3 ||
+		late.NodeID != "node1" || late.ServiceName != "web" {
+		t.Errorf("late remove = %+v, want the replica t1's entries recorded", late)
+	}
+}
+
 func TestAppendDefaultsToAChange(t *testing.T) {
 	h := NewHistory(10)
 	h.Append(HistoryEntry{Type: EventService, ResourceID: "svc1"})
@@ -973,7 +1018,7 @@ func TestGapPassesEveryResourceFilter(t *testing.T) {
 	for _, q := range []HistoryQuery{
 		{Type: EventNode},
 		{ResourceID: "other"},
-		{NameContains: "nothing"},
+		{TitleContains: "nothing"},
 		{Types: []EventType{EventTask}},
 		{Kinds: []string{KindGap}},
 		{Kinds: []string{KindGap}, ResourceID: "svc1"},

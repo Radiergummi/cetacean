@@ -274,3 +274,49 @@ func TestHistoryNextLinkKeepsTheKind(t *testing.T) {
 		t.Errorf("next link = %q, want it to keep kind=change", link)
 	}
 }
+
+func TestARecoveredGapSaysSoInJSONAndItsFeed(t *testing.T) {
+	c := cache.New(nil)
+	c.RecordRecoveredGap(gapFrom, cache.Recovery{
+		From: gapFrom.Add(time.Hour),
+		Entries: []cache.HistoryEntry{{
+			Kind: cache.KindChange, Timestamp: gapFrom.Add(90 * time.Minute),
+			Type: cache.EventService, Action: "update", ResourceID: "s1", Name: "web",
+			Recovered: true,
+		}},
+	})
+	router := newTestRouterWithCache(t, c)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
+
+	var list struct {
+		Items []struct {
+			Kind          string `json:"kind"`
+			Recovered     bool   `json:"recovered"`
+			RecoveredFrom string `json:"recoveredFrom"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || len(list.Items) != 2 {
+		t.Fatalf("history = %s, err=%v; want the gap and its change", rec.Body, err)
+	}
+
+	if gap, change := list.Items[0], list.Items[1]; gap.Kind != cache.KindGap ||
+		gap.RecoveredFrom != "2026-10-30T14:00:00Z" || !change.Recovered {
+		t.Errorf(
+			"items = %+v, want the gap recovered from 14:00 over a recovered change",
+			list.Items,
+		)
+	}
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/history.atom", nil))
+
+	if body := rec.Body.String(); !strings.Contains(
+		body,
+		"covers it from 2026-10-30T14:00:00Z",
+	) ||
+		!strings.Contains(body, "Recovered from Docker") {
+		t.Errorf("feed = %s, want the gap's and the change's recovery told", body)
+	}
+}

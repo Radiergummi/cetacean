@@ -114,11 +114,12 @@ func TestAddAnnotationRefusals(t *testing.T) {
 			true,
 		},
 		{
-			"no timeline",
+			"a range ending before it starts",
 			"alice",
-			`{"text":"x","resources":[{"type":"service","id":"web"}]}`,
-			"storage.timeline",
-			false,
+			`{"text":"x","at":"2026-11-01T14:00:00Z","until":"2026-11-01T13:00:00Z",` +
+				`"resources":[{"type":"service","id":"web"}]}`,
+			"until: must be after the start",
+			true,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

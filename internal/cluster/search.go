@@ -360,7 +360,7 @@ func readable[T any](
 // comparison, or whether the query matches segment prefixes of s.
 // substr must already be lowercased.
 func ContainsFold(s, substrLower string) bool {
-	if ContainsFoldNoAlloc(s, substrLower) {
+	if cache.ContainsLower(s, substrLower) {
 		return true
 	}
 
@@ -372,42 +372,6 @@ func ContainsFold(s, substrLower string) bool {
 	}
 
 	return SegmentPrefixMatch(strings.ToLower(s), substrLower)
-}
-
-// ContainsFoldNoAlloc reports whether s contains substrLower (already
-// lowercased), ASCII-case-insensitively and without allocating. Exported for
-// internal/mcp's log grep, which needs plain containment, not ContainsFold's
-// segment-prefix matching.
-func ContainsFoldNoAlloc(s, substrLower string) bool {
-	if len(substrLower) == 0 {
-		return true
-	}
-
-	if len(substrLower) > len(s) {
-		return false
-	}
-
-	for i := 0; i <= len(s)-len(substrLower); i++ {
-		match := true
-
-		for j := 0; j < len(substrLower); j++ {
-			c := s[i+j]
-			if c >= 'A' && c <= 'Z' {
-				c += 'a' - 'A'
-			}
-
-			if c != substrLower[j] {
-				match = false
-				break
-			}
-		}
-
-		if match {
-			return true
-		}
-	}
-
-	return false
 }
 
 func isSeparator(r rune) bool { return r == '_' || r == '-' }

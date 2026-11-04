@@ -3,6 +3,7 @@ package mcp
 import (
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/mcp/projection"
 )
@@ -312,7 +313,7 @@ func (s *Server) readTools() []toolDef {
 				"get_events",
 				mcplib.WithToolTitle("Read the cluster change timeline"),
 				mcplib.WithDescription(
-					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, whose lines carry timestamps in the same format, to read changes and output on one timeline — merge the two on time, not by field name, since an event is `at`/`kind`/`type`/`name`/`resourceId`/`message` and a log line is `timestamp`/`message`/`stream`/`attrs`. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else. An entry of kind `gap` is a window from `at` to `until` when Cetacean was not watching: changes made then are missing, so read it as unknown, not as quiet. A gap names no resource and passes every filter but the time window. An entry of kind `annotation` is a note a person or agent wrote, with `text` and `tags`, about the moment at `at` or the range to `until` — a load test, a deploy, why something was rolled back; it is listed with its resources' changes and, when it names none, with every resource's. `trackingSince` is the oldest change held; the timeline says nothing about earlier, though an annotation may be older.",
+					"Return what changed in the cluster and when — resource creates, updates and deletes — newest first, narrowed by time, type or a single resource. Use it to answer what happened overnight, whether a fault is new, and what else changed around the moment something broke; pair it with get_logs, whose lines carry timestamps in the same format, to read changes and output on one timeline — merge the two on time, not by field name, since an event is `at`/`kind`/`type`/`name`/`resourceId`/`message` and a log line is `timestamp`/`message`/`stream`/`attrs`. Filtering by `types` is usually necessary: a service restarting in a loop produces a task event every few seconds and buries everything else. An entry of kind `gap` is a window from `at` to `until` when Cetacean was not watching: changes made then are missing, so read it as unknown, not as quiet. A gap with `recoveredFrom` had changes read back from Docker's event log: entries marked `recovered` sit inside it, complete from `recoveredFrom` for every type but tasks, whose changes stay unknown. A gap names no resource and passes every filter but the time window. An entry of kind `annotation` is a note a person or agent wrote, with `text` and `tags`, about the moment at `at` or the range to `until` — a load test, a deploy, why something was rolled back; it is listed with its resources' changes and, when it names none, with every resource's. Its `id` and `version` are what update_annotation and delete_annotation take. `trackingSince` is the oldest change held; the timeline says nothing about earlier, though an annotation may be older.",
 				),
 				mcplib.WithOutputSchema[eventsResult](),
 				mcplib.WithReadOnlyHintAnnotation(true),
@@ -342,6 +343,37 @@ func (s *Server) readTools() []toolDef {
 							"and the annotations on its stack. "+
 							"A name is resolved against `types` when exactly one is given, "+
 							"and otherwise only when no other type claims it.",
+					),
+				),
+				mcplib.WithArray("kinds",
+					mcplib.Description(
+						"Kinds of entry to include: change, gap, annotation. Omit for all.",
+					),
+					mcplib.Items(map[string]any{
+						"type": "string",
+						"enum": []string{cache.KindChange, cache.KindGap, cache.KindAnnotation},
+					}),
+				),
+				mcplib.WithArray("tags",
+					mcplib.Description(
+						"Only annotations carrying every one of these tags, or any of them with `matchAny`. Changes are left out; gaps stay.",
+					),
+					mcplib.Items(map[string]any{"type": "string"}),
+				),
+				mcplib.WithBoolean("matchAny",
+					mcplib.Description(
+						"With `tags`, keep an annotation carrying any of them rather than every one.",
+					),
+				),
+				mcplib.WithArray("authors",
+					mcplib.Description(
+						"Only what an actor with one of these subjects did: the annotations they wrote and the changes they made through Cetacean. Gaps stay.",
+					),
+					mcplib.Items(map[string]any{"type": "string"}),
+				),
+				mcplib.WithString("search",
+					mcplib.Description(
+						"Only entries showing each of these words, ignoring case: a change's resource name (also as stack/name, a task's as service.slot), the start of its ID, its type, action and actor; an annotation's text, tags, resource names and author. Gaps stay.",
 					),
 				),
 				mcplib.WithNumber("limit",

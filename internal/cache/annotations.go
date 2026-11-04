@@ -345,6 +345,10 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 
 	var ring []HistoryEntry
 	if len(q.Kinds) != 1 || q.Kinds[0] != KindAnnotation {
+		if q.Type == EventStack && q.ResourceID != "" {
+			q.Members = c.stackMembers(q.ResourceID)
+		}
+
 		ring = c.history.List(q)
 	}
 
@@ -366,10 +370,25 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 	return merged
 }
 
+// stackMembers lists the services in stack and those the ring saw leave it.
+func (c *Cache) stackMembers(stack string) []string {
+	ids := c.history.removedFromStack(stack)
+
+	c.mu.RLock()
+	if s, ok := c.stacks[stack]; ok {
+		ids = append(ids, s.Services...)
+	}
+	c.mu.RUnlock()
+
+	return ids
+}
+
 // annotationEntries returns the newest q.Limit annotations q admits below
 // q.BeforeID. ReadableAnnotation runs outside the lock, so the walk takes its
 // matches in batches, each resuming below the last annotation it visited.
 func (c *Cache) annotationEntries(q HistoryQuery) []HistoryEntry {
+	q = q.prepared()
+
 	var stack string
 	if t := q.subjectType(); t == "" || t == EventService {
 		stack = c.serviceStack(q.ResourceID)
@@ -450,20 +469,41 @@ func (q HistoryQuery) matchesAnnotation(a Annotation, stack string) bool {
 		return false
 	}
 
-	if q.NameContains != "" && !strings.Contains(
-		strings.ToLower(a.Text), strings.ToLower(q.NameContains),
-	) {
+	if q.ResourceID != "" {
+		if !a.About(q.subjectType(), q.ResourceID, stack) {
+			return false
+		}
+	} else if len(a.Resources) > 0 &&
+		!slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
+			return (q.Type == "" || r.Type == q.Type) &&
+				(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
+		}) {
 		return false
 	}
 
-	if q.ResourceID != "" {
-		return a.About(q.subjectType(), q.ResourceID, stack)
+	return q.annotationMatchesText(a)
+}
+
+// annotationMatchesText applies TitleContains to a's text, and Search to
+// anything a reader sees of it, each word anywhere.
+func (q HistoryQuery) annotationMatchesText(a Annotation) bool {
+	if q.TitleContains == "" && q.Search == "" {
+		return true
 	}
 
-	return len(a.Resources) == 0 ||
-		slices.ContainsFunc(a.Resources, func(r AnnotationResource) bool {
-			return (q.Type == "" || r.Type == q.Type) &&
-				(len(q.Types) == 0 || slices.Contains(q.Types, r.Type))
+	if !q.ready {
+		q = q.prepared()
+	}
+
+	return ContainsLower(a.Text, q.TitleContains) &&
+		!slices.ContainsFunc(q.words, func(word string) bool {
+			has := func(field string) bool { return ContainsLower(field, word) }
+
+			return !has(a.Text) && !slices.ContainsFunc(a.Tags, has) && !actorHas(a.Actor, word) &&
+				!slices.ContainsFunc(
+					a.Resources,
+					func(r AnnotationResource) bool { return nameHas(r.Name, word) },
+				)
 		})
 }
 

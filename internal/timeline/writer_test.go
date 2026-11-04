@@ -105,7 +105,7 @@ func (f *fakeStore) coverages() int {
 	return f.coverage
 }
 
-func noGap(time.Time) {}
+func noGap(context.Context, time.Time, time.Time) {}
 
 func appendN(h *cache.History, n int) {
 	for range n {
@@ -281,7 +281,7 @@ func TestWriter_RecordsTheGapSinceThePreviousHeartbeat(t *testing.T) {
 	store := &fakeStore{err: errors.New("disk full"), previous: previous}
 
 	var gaps []time.Time
-	w := NewWriter(store, cache.NewHistory(10), 10, func(from time.Time) {
+	w := NewWriter(store, cache.NewHistory(10), 10, func(_ context.Context, from, _ time.Time) {
 		gaps = append(gaps, from)
 	})
 
@@ -300,9 +300,14 @@ func TestWriter_RecordsTheGapSinceThePreviousHeartbeat(t *testing.T) {
 }
 
 func TestWriter_RecordsNoGapWithoutAPreviousProcess(t *testing.T) {
-	w := NewWriter(&fakeStore{}, cache.NewHistory(10), 10, func(from time.Time) {
-		t.Fatalf("recorded a gap from %v with no previous coverage", from)
-	})
+	w := NewWriter(
+		&fakeStore{},
+		cache.NewHistory(10),
+		10,
+		func(_ context.Context, from, _ time.Time) {
+			t.Fatalf("recorded a gap from %v with no previous coverage", from)
+		},
+	)
 
 	w.openCoverage(context.Background())
 }
@@ -316,7 +321,12 @@ func TestWriter_RecordsTheGapBeforeCoverageOpens(t *testing.T) {
 	}
 
 	var gaps int
-	w := NewWriter(store, cache.NewHistory(10), 10, func(time.Time) { gaps++ })
+	w := NewWriter(
+		store,
+		cache.NewHistory(10),
+		10,
+		func(context.Context, time.Time, time.Time) { gaps++ },
+	)
 
 	w.openCoverage(context.Background())
 	w.openCoverage(context.Background())
@@ -334,5 +344,51 @@ func TestWriter_RecordsTheGapBeforeCoverageOpens(t *testing.T) {
 
 	if gaps != 1 || !w.covering {
 		t.Fatalf("gaps = %d, covering = %v; want still one gap, now covering", gaps, w.covering)
+	}
+}
+
+// The watcher records the gap before its stream records anything, recovering
+// up to where the stream starts; coverage then opens without a second gap.
+func TestWriter_RecordGapRecoversUpToTheStream(t *testing.T) {
+	previous := time.Now().Add(-time.Hour)
+	streamSince := time.Now().Add(-5 * time.Second)
+
+	var recorded [][2]time.Time
+	w := NewWriter(&fakeStore{previous: previous}, cache.NewHistory(10), 10,
+		func(_ context.Context, from, since time.Time) {
+			recorded = append(recorded, [2]time.Time{from, since})
+		})
+
+	w.RecordGap(context.Background(), streamSince)
+	w.openCoverage(context.Background())
+
+	if len(recorded) != 1 || !recorded[0][0].Equal(previous) || !recorded[0][1].Equal(streamSince) {
+		t.Fatalf(
+			"recorded %v, want one gap from %v recovering up to %v",
+			recorded,
+			previous,
+			streamSince,
+		)
+	}
+}
+
+// A store that fails as the stream starts still gets its gap, once it
+// answers, without recovery: changes watched since would sort below it.
+func TestWriter_RecordsAGapItCouldNotAtTheStreamLater(t *testing.T) {
+	previous := time.Now().Add(-time.Hour)
+	store := &fakeStore{err: errors.New("disk full"), previous: previous}
+
+	var recorded [][2]time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10,
+		func(_ context.Context, from, since time.Time) {
+			recorded = append(recorded, [2]time.Time{from, since})
+		})
+
+	w.RecordGap(context.Background(), time.Now())
+	store.err = nil
+	w.openCoverage(context.Background())
+
+	if len(recorded) != 1 || !recorded[0][1].IsZero() {
+		t.Fatalf("recorded %v, want one gap, recovering nothing", recorded)
 	}
 }

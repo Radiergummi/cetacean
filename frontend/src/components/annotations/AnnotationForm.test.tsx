@@ -2,7 +2,8 @@ import { toLocalInput } from "./annotationFields";
 import AnnotationForm from "./AnnotationForm";
 import { ApiError } from "@/api/client";
 import type { Annotation, AnnotationScope, HistoryEntry, NewAnnotation } from "@/api/types";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,14 +25,18 @@ vi.mock("@/api/client", async (importOriginal) => {
       updateAnnotation: (id: number, patch: Record<string, unknown>, etag?: string) =>
         updateAnnotation(id, patch, etag),
       annotation: (id: number) => readAnnotation(id),
+      annotationTagsPage: () => Promise.resolve({ items: [{ tag: "deploy", count: 3 }] }),
     },
   };
 });
 
 const service = { type: "service", id: "svc1", name: "web" } as const;
+
+let wrapper = createWrapper(createTestQueryClient(), { withRouter: false });
 const start = Date.UTC(2026, 10, 2, 13, 0) / 1000;
 
 beforeEach(() => {
+  wrapper = createWrapper(createTestQueryClient(), { withRouter: false });
   createAnnotation.mockReset();
   createAnnotation.mockResolvedValue({} as HistoryEntry);
   updateAnnotation.mockReset();
@@ -48,6 +53,7 @@ function show(scopes: Parameters<typeof AnnotationForm>[0]["scopes"] = [service]
       initial={{ from: start }}
       onDone={onDone}
     />,
+    { wrapper },
   );
 
   return onDone;
@@ -58,7 +64,7 @@ describe("AnnotationForm", () => {
     const user = userEvent.setup();
     const onDone = show();
 
-    await user.type(screen.getByLabelText("Note"), "Deployed the fix");
+    await user.type(screen.getByLabelText("Text"), "Deployed the fix");
     await user.type(screen.getByLabelText("Tags"), "deploy{Enter}rollback,");
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
@@ -88,7 +94,7 @@ describe("AnnotationForm", () => {
 
     expect(screen.getByRole("button", { name: "Add annotation" })).toBeDisabled();
 
-    await user.type(screen.getByLabelText("Note"), "x");
+    await user.type(screen.getByLabelText("Text"), "x");
     fireEvent.change(screen.getByLabelText("Until"), { target: { value: "2000-01-01T00:00" } });
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
@@ -105,11 +111,11 @@ describe("AnnotationForm", () => {
 
     const onDone = show();
 
-    await user.type(screen.getByLabelText("Note"), "Deployed the fix");
+    await user.type(screen.getByLabelText("Text"), "Deployed the fix");
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("You may not annotate service web");
-    expect(screen.getByLabelText("Note")).toHaveValue("Deployed the fix");
+    expect(screen.getByLabelText("Text")).toHaveValue("Deployed the fix");
     expect(onDone).not.toHaveBeenCalled();
   });
 
@@ -119,7 +125,7 @@ describe("AnnotationForm", () => {
     createAnnotation.mockReturnValue(new Promise(() => {}));
     show();
 
-    await user.type(screen.getByLabelText("Note"), "x");
+    await user.type(screen.getByLabelText("Text"), "x");
 
     const form = screen.getByRole("button", { name: "Add annotation" }).closest("form")!;
 
@@ -137,7 +143,7 @@ describe("AnnotationForm", () => {
     expect(screen.getByRole("radio", { name: "web" })).toBeChecked();
 
     await user.click(screen.getByRole("radio", { name: "Cluster-wide" }));
-    await user.type(screen.getByLabelText("Note"), "x");
+    await user.type(screen.getByLabelText("Text"), "x");
     await user.click(screen.getByRole("button", { name: "Add annotation" }));
 
     await waitFor(() => expect(createAnnotation).toHaveBeenCalled());
@@ -152,7 +158,7 @@ describe("AnnotationForm", () => {
 
   it("keeps the chosen scope when the choices around it change", async () => {
     const user = userEvent.setup();
-    const client = new QueryClient();
+    const client = createTestQueryClient();
     const form = (scopes: AnnotationScope[]) => (
       <QueryClientProvider client={client}>
         <AnnotationForm
@@ -176,10 +182,28 @@ describe("AnnotationForm", () => {
 
     show();
     await user.type(screen.getByLabelText("Tags"), "deploy");
-    await user.click(screen.getByLabelText("Note"));
+    await user.click(screen.getByLabelText("Text"));
 
     expect(screen.getByText("#deploy")).toBeInTheDocument();
     expect(screen.getByLabelText("Tags")).toHaveValue("");
+  });
+
+  it("suggests the tags in use and adds one when it is picked", async () => {
+    show();
+
+    const input = screen.getByLabelText("Tags");
+
+    await waitFor(() =>
+      expect(document.getElementById(input.getAttribute("list") ?? "")).toContainHTML(
+        'value="deploy"',
+      ),
+    );
+
+    // A pick from the list arrives as a change that inserted no text.
+    fireEvent.change(input, { target: { value: "deploy" } });
+
+    expect(screen.getByText("#deploy")).toBeInTheDocument();
+    expect(input).toHaveValue("");
   });
 });
 
@@ -201,6 +225,7 @@ describe("AnnotationForm, editing", () => {
         editing={{ note, etag: '"3"' }}
         onDone={onDone}
       />,
+      { wrapper },
     );
 
     return onDone;
@@ -209,7 +234,7 @@ describe("AnnotationForm, editing", () => {
   it("is filled from the note and shows its scope without offering to change it", () => {
     edit();
 
-    expect(screen.getByLabelText("Note")).toHaveValue("Load test");
+    expect(screen.getByLabelText("Text")).toHaveValue("Load test");
     expect(screen.getByText("#load")).toBeInTheDocument();
     expect(screen.getByLabelText("Until")).not.toHaveValue("");
     expect(screen.getByText("About").nextElementSibling).toHaveTextContent("webshop/api");
@@ -220,8 +245,8 @@ describe("AnnotationForm, editing", () => {
     const user = userEvent.setup();
     const onDone = edit();
 
-    await user.clear(screen.getByLabelText("Note"));
-    await user.type(screen.getByLabelText("Note"), "Soak test");
+    await user.clear(screen.getByLabelText("Text"));
+    await user.type(screen.getByLabelText("Text"), "Soak test");
     fireEvent.change(screen.getByLabelText("Until"), { target: { value: "" } });
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -252,15 +277,15 @@ describe("AnnotationForm, editing", () => {
 
     const onDone = edit();
 
-    await user.clear(screen.getByLabelText("Note"));
-    await user.type(screen.getByLabelText("Note"), "Soak test");
+    await user.clear(screen.getByLabelText("Text"));
+    await user.type(screen.getByLabelText("Text"), "Soak test");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This note changed since you opened it",
+      "This annotation changed since you opened it",
     );
     expect(readAnnotation).toHaveBeenCalledWith(7);
-    expect(screen.getByLabelText("Note")).toHaveValue("Soak test");
+    expect(screen.getByLabelText("Text")).toHaveValue("Soak test");
     expect(screen.getByText("#soak")).toBeInTheDocument();
     expect(onDone).not.toHaveBeenCalled();
 
@@ -283,7 +308,7 @@ describe("AnnotationForm, editing", () => {
 
     const onDone = edit();
 
-    await user.type(screen.getByLabelText("Note"), "!");
+    await user.type(screen.getByLabelText("Text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
@@ -302,9 +327,10 @@ describe("AnnotationForm, editing", () => {
         }}
         onDone={vi.fn<() => void>()}
       />,
+      { wrapper },
     );
 
-    await user.type(screen.getByLabelText("Note"), "!");
+    await user.type(screen.getByLabelText("Text"), "!");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -337,6 +363,7 @@ describe("AnnotationForm, editing", () => {
         editing={{ note: ranged, etag: '"3"' }}
         onDone={vi.fn<() => void>()}
       />,
+      { wrapper },
     );
 
     const moved = toLocalInput(Date.UTC(2026, 10, 2, 12, 5) / 1000);

@@ -19,6 +19,11 @@ export interface PaletteAction {
   requiredMethod?: string | undefined;
   /** Sub-resource the action writes, which the resource must link as editable. */
   requiredEdit?: string | undefined;
+  /**
+   * The resource whose capabilities the two above are checked on, from the
+   * steps' values; by default the first step's resource.
+   */
+  capabilityPath?: ((...args: any[]) => string) | undefined;
 }
 
 export interface PaletteStep {
@@ -26,7 +31,13 @@ export interface PaletteStep {
   resourceType?: string | undefined;
   label: string;
   placeholder?: string | undefined;
-  choices?: { label: string; value: string }[] | undefined;
+  /**
+   * A choice step's options, or how to load them when the step opens.
+   */
+  choices?:
+    | { label: string; value: string }[]
+    | (() => Promise<{ label: string; value: string }[]>)
+    | undefined;
 }
 
 const removeTargets = [
@@ -68,6 +79,136 @@ const removeActions: PaletteAction[] = removeTargets.map(({ type, remove }) => {
     },
   };
 });
+
+const swarmPath = () => "/swarm";
+
+const pluginPath = (name: string) => `/plugins/${encodeURIComponent(name)}`;
+
+/**
+ * The installed plugins `enabled` selects, as a choice step's options.
+ */
+function pluginChoices(enabled?: boolean) {
+  return async () =>
+    (await api.plugins()).data
+      .filter(({ Enabled }) => enabled === undefined || Enabled === enabled)
+      .map(({ Name }) => ({ label: Name, value: Name }));
+}
+
+const swarmActions: PaletteAction[] = [
+  {
+    id: "rotate-worker-token",
+    label: "Rotate Worker Join Token",
+    keywords: ["rotate worker token", "worker token", "join token"],
+    requiredEdit: "rotate-token",
+    capabilityPath: swarmPath,
+    steps: [],
+    destructive: true,
+    note: "Nodes not yet joined with the current token need the new one.",
+    execute: async () => {
+      await api.rotateToken("worker");
+    },
+  },
+  {
+    id: "rotate-manager-token",
+    label: "Rotate Manager Join Token",
+    keywords: ["rotate manager token", "manager token"],
+    requiredEdit: "rotate-token",
+    capabilityPath: swarmPath,
+    steps: [],
+    destructive: true,
+    note: "Nodes not yet joined with the current token need the new one.",
+    execute: async () => {
+      await api.rotateToken("manager");
+    },
+  },
+  {
+    id: "rotate-unlock-key",
+    label: "Rotate Unlock Key",
+    keywords: ["rotate unlock key", "unlock key"],
+    requiredEdit: "rotate-unlock-key",
+    capabilityPath: swarmPath,
+    steps: [],
+    destructive: true,
+    note: "The current key stops working; read the new one on the Swarm page and save it.",
+    execute: async () => {
+      const { data } = await api.swarm();
+
+      // Without autolock the managers hold no key, as the Swarm page shows by offering none.
+      if (!data.swarm.Spec.EncryptionConfig.AutoLockManagers) {
+        throw new Error("Autolock is off, so there is no unlock key to rotate.");
+      }
+
+      await api.rotateUnlockKey();
+    },
+  },
+  {
+    id: "force-rotate-ca",
+    label: "Force CA Rotation",
+    keywords: ["rotate ca", "force rotate ca", "ca rotation", "certificates"],
+    requiredEdit: "force-rotate-ca",
+    capabilityPath: swarmPath,
+    steps: [],
+    destructive: true,
+    note: "Every node re-issues its TLS certificate.",
+    execute: async () => {
+      await api.forceRotateCA();
+    },
+  },
+];
+
+const pluginActions: PaletteAction[] = [
+  {
+    id: "enable-plugin",
+    label: "Enable Plugin",
+    keywords: ["enable plugin"],
+    requiredEdit: "enable",
+    capabilityPath: pluginPath,
+    steps: [{ type: "choice", label: "Plugin", choices: pluginChoices(false) }],
+    execute: async (name: string) => {
+      await api.enablePlugin(name);
+    },
+  },
+  {
+    id: "disable-plugin",
+    label: "Disable Plugin",
+    keywords: ["disable plugin"],
+    requiredEdit: "disable",
+    capabilityPath: pluginPath,
+    steps: [{ type: "choice", label: "Plugin", choices: pluginChoices(true) }],
+    destructive: true,
+    execute: async (name: string) => {
+      await api.disablePlugin(name);
+    },
+  },
+  {
+    id: "remove-plugin",
+    label: "Remove Plugin",
+    keywords: ["remove plugin", "delete plugin"],
+    requiredMethod: "DELETE",
+    capabilityPath: pluginPath,
+    steps: [{ type: "choice", label: "Plugin", choices: pluginChoices() }],
+    destructive: true,
+    execute: async (name: string) => {
+      await api.removePlugin(name, true);
+    },
+  },
+];
+
+const addAnnotation: PaletteAction = {
+  id: "add-annotation",
+  label: "Add Annotation",
+  keywords: ["add annotation", "annotate", "annotation"],
+  steps: [],
+  execute: async () => {
+    const { annotatable } = await api.annotationsPage("/annotations?limit=1");
+
+    if (!annotatable) {
+      throw new Error("You may not add annotations.");
+    }
+
+    window.dispatchEvent(new CustomEvent("cetacean:add-annotation"));
+  },
+};
 
 export function getActions(): PaletteAction[] {
   return [
@@ -184,6 +325,9 @@ export function getActions(): PaletteAction[] {
       },
     },
     ...removeActions,
+    addAnnotation,
+    ...swarmActions,
+    ...pluginActions,
     {
       id: "shortcuts",
       label: "Keyboard Shortcuts",

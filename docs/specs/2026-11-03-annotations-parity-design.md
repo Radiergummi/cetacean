@@ -106,7 +106,8 @@ Annotation rows in `/history.csv` and `/annotations.csv` fill `id` with the note
   `add_annotation`. The named exceptions in the tool-catalog tests grow by these two.
 - **Resource template `cetacean://annotations/{id}`:** the note, as REST's detail. It can be
   subscribed to, and an edit or delete sends `notifications/resources/updated`.
-- **`get_events`** gains `kinds`, `tags`, `matchAny` and `author`, with REST's meanings. A
+- **`get_events`** gains `kinds`, `tags`, `matchAny` and `authors`, with REST's meanings, and
+  returns each annotation's `id` and `version`. A
   `cetacean://annotations/tags` resource lists the tags, as the REST route does.
 - **#592:** all three annotation tools are hidden from `tools/list` when `storage.timeline` is
   off. Validation errors name the MCP argument (`at`, not `timestamp`).
@@ -145,7 +146,7 @@ Every annotation route renders a page:
 ### Charts
 
 - **A notes control** in the metrics panel header: show or hide notes, and narrow them by tag.
-  Its state is a URL parameter (`?notes=off`, `?noteTag=deploy`), following the widget
+  Its state is a URL parameter (`?annotations=off`, `?annotationTag=deploy`), following the widget
   customization plan: view state that belongs in a link is never stored.
 - **Clicking a marker's flag** pins a popover with the note card, its menu and "Open". Hovering
   stays a read-only tooltip. This reverses step 6's "chart tooltips stay read-only" for a click
@@ -192,7 +193,10 @@ Each step is one PR with its CHANGELOG entry.
 2. **MCP:** the two tools, the resources, the `get_events` arguments, the #592 items, the
    evaluation set.
 3. **Dashboard groundwork:** the #592 items.
-4. **Dashboard features:** the three pages, the History filters, autocomplete, links in text,
+   **1b. The pages,** moved ahead of step 2 so no route of step 1's renders the not-found page:
+   `/annotations`, `/annotations/{id}`, `/annotations/tags`, note cards linking their page and
+   their tags, and the demo. "Show on chart" stays with step 4.
+4. **Dashboard features:** the History filters, autocomplete, links in text, "Show on chart",
    the chart notes control, the marker popover, the stack page section, the demo.
 
 ## Decisions

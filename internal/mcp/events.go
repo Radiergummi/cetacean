@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -68,8 +70,10 @@ func (s *Server) toolGetEvents(
 		resourceType = string(types[0])
 	}
 
+	canRead := s.readPredicate(ctx)
+
 	resource, err := cluster.ResolveIdentifier(
-		s.cache, resourceType, req.GetString("resource", ""), s.readPredicate(ctx),
+		s.cache, resourceType, req.GetString("resource", ""), canRead,
 	)
 	if err = s.visibleAmbiguity(ctx, resourceType, err); err != nil {
 		return "", err
@@ -78,20 +82,36 @@ func (s *Server) toolGetEvents(
 	// Every filter is pushed into the walk, so the ring copies what matched
 	// rather than everything it holds. The limit stays the whole ring on
 	// purpose: `total` counts everything the caller may read.
-	matched := s.cache.Timeline(cache.HistoryQuery{
+	kinds := req.GetStringSlice("kinds", nil)
+	for _, kind := range kinds {
+		if !slices.Contains(cache.Kinds, kind) {
+			return "", fmt.Errorf(
+				"kinds: %q is not one of %s",
+				kind,
+				strings.Join(cache.Kinds, ", "),
+			)
+		}
+	}
+
+	matched, present := cluster.ReadTimeline(s.cache, cache.HistoryQuery{
 		ResourceID: resource,
+		Search:     req.GetString("search", ""),
 		Types:      types,
+		Kinds:      kinds,
+		Tags:       req.GetStringSlice("tags", nil),
+		MatchAny:   req.GetBool("matchAny", false),
+		Authors:    req.GetStringSlice("authors", nil),
 		Limit:      history.Size() + cache.MaxAnnotations,
 		After:      window.Since,
 		Before:     window.Until,
-		Visible:    cluster.HistoryReadable(s.readPredicate(ctx)),
+		Visible:    cluster.HistoryReadable(canRead),
 
 		ReadableAnnotation: s.annotationCaller(ctx).MayRead,
-	})
+	}, canRead)
 
 	// Cut by time, as the result is ordered: an annotation's ID follows its
-	// creation, not its time. Task naming runs after the cut, because a name
-	// only matters for an entry that is returned.
+	// creation, not its time. Presenting runs after the cut, so it names only
+	// what is returned; a search has already named the candidates it matched.
 	slices.SortStableFunc(matched, func(a, b cache.HistoryEntry) int {
 		return b.Timestamp.Compare(a.Timestamp)
 	})
@@ -102,28 +122,41 @@ func (s *Server) toolGetEvents(
 		matched = matched[:limit]
 	}
 
-	matched = cluster.PresentHistory(s.cache, matched, s.readPredicate(ctx))
+	matched = present(matched)
 
 	timeline := make([]projection.TimelineEntry, 0, len(matched))
 
 	for _, e := range matched {
-		var until string
+		var until, recoveredFrom string
 		if !e.Until.IsZero() {
 			until = projection.TimelineTime(e.Until)
 		}
 
+		if !e.RecoveredFrom.IsZero() {
+			recoveredFrom = projection.TimelineTime(e.RecoveredFrom)
+		}
+
+		var id, version uint64
+		if e.Annotation != nil {
+			id, version = e.Annotation.ID, e.Annotation.Version
+		}
+
 		timeline = append(timeline, projection.TimelineEntry{
-			At:         projection.TimelineTime(e.Timestamp),
-			Until:      until,
-			Kind:       e.Kind,
-			Type:       string(e.Type),
-			Name:       e.Name,
-			ResourceID: e.ResourceID,
-			Message:    e.Action,
-			Actor:      e.Actor,
-			Text:       e.Text,
-			Tags:       e.Tags,
-			Resources:  e.Resources,
+			At:            projection.TimelineTime(e.Timestamp),
+			Until:         until,
+			RecoveredFrom: recoveredFrom,
+			Recovered:     e.Recovered,
+			Kind:          e.Kind,
+			Type:          string(e.Type),
+			Name:          e.Name,
+			ResourceID:    e.ResourceID,
+			Message:       e.Action,
+			Actor:         e.Actor,
+			Text:          e.Text,
+			Tags:          e.Tags,
+			Resources:     e.Resources,
+			ID:            id,
+			Version:       version,
 		})
 	}
 

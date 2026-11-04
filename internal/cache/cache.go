@@ -60,6 +60,17 @@ type Event struct {
 	// Timestamp and Until are a gap's start and end; zero on any other event.
 	Timestamp time.Time `json:"-"`
 	Until     time.Time `json:"-"`
+
+	// Recovery is what a gap's recording recovered of it.
+	Recovery Recovery `json:"-"`
+}
+
+// Recovery is what Docker's event buffer still held of a gap: the changes
+// it recorded, oldest first, and from when they are complete; zero when the
+// buffer reached nothing.
+type Recovery struct {
+	Entries []HistoryEntry
+	From    time.Time
 }
 
 type Stack struct {
@@ -402,12 +413,19 @@ func (c *Cache) notify(e Event) {
 	case EventSync:
 		e.HistoryID = c.history.Count()
 	case EventGap:
+		// The recovered changes take the IDs just below their gap's, and are not
+		// dispatched: they describe the past, and the gap's event refetches it.
+		for _, entry := range e.Recovery.Entries {
+			c.history.Append(entry)
+		}
+
 		// Stamped under notifyMu, so no change with a lower ID ends later.
 		e.Until = time.Now()
 		e.HistoryID = c.history.Append(HistoryEntry{
-			Kind:      KindGap,
-			Timestamp: e.Timestamp,
-			Until:     e.Until,
+			Kind:          KindGap,
+			Timestamp:     e.Timestamp,
+			Until:         e.Until,
+			RecoveredFrom: e.Recovery.From,
 		})
 	default:
 		entry := HistoryEntry{
@@ -418,8 +436,8 @@ func (c *Cache) notify(e Event) {
 			Service:    e.Service,
 			Stack:      e.Stack,
 		}
-		if task, ok := e.Resource.(swarm.Task); ok {
-			entry.ServiceID = task.ServiceID
+		if e.Type == EventTask {
+			c.recordReplica(&entry, e)
 		}
 		if actor, ok := c.attributions.match(e); ok {
 			entry.Actor = &actor
@@ -453,11 +471,41 @@ func (c *Cache) dispatch(e Event) {
 	}
 }
 
+// recordReplica gives a task entry its replica and its service's name. A
+// task removed after the cache forgot it carries none, so it keeps what its
+// last entry recorded.
+func (c *Cache) recordReplica(entry *HistoryEntry, e Event) {
+	task, ok := e.Resource.(swarm.Task)
+	if !ok {
+		last := c.history.List(HistoryQuery{
+			ResourceID: e.ID, Types: []EventType{EventTask}, Kinds: []string{KindChange}, Limit: 1,
+		})
+		if len(last) > 0 {
+			entry.ServiceID, entry.Slot = last[0].ServiceID, last[0].Slot
+			entry.NodeID, entry.ServiceName = last[0].NodeID, last[0].ServiceName
+		}
+
+		return
+	}
+
+	entry.ServiceID, entry.Slot, entry.NodeID = task.ServiceID, task.Slot, task.NodeID
+	entry.ServiceName = e.Service
+
+	if svc, ok := c.GetService(task.ServiceID); ok {
+		entry.ServiceName = svc.Spec.Name
+	}
+}
+
 // RecordGap records that nobody watched the cluster from from until now. It
 // goes through notify, so it reaches the history and every listener the way a
 // change does; it must not be called from a listener.
 func (c *Cache) RecordGap(from time.Time) {
-	c.notify(Event{Type: EventGap, Timestamp: from})
+	c.RecordRecoveredGap(from, Recovery{})
+}
+
+// RecordRecoveredGap is RecordGap with what was recovered of the gap.
+func (c *Cache) RecordRecoveredGap(from time.Time, recovered Recovery) {
+	c.notify(Event{Type: EventGap, Timestamp: from, Recovery: recovered})
 }
 
 func ExtractName(e Event) string {

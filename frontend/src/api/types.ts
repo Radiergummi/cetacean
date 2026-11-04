@@ -377,6 +377,15 @@ export interface HistoryEntry {
   kind: string;
   timestamp: string;
   until?: string | undefined;
+
+  /**
+   * On a gap, when the changes recovered from Docker's event log become
+   * complete for everything but tasks; absent when none were.
+   */
+  recoveredFrom?: string | undefined;
+
+  /** A change read back from Docker's event log after a gap, not watched. */
+  recovered?: boolean | undefined;
   type: string;
   action: string;
   resourceId: string;
@@ -423,6 +432,25 @@ export interface Annotation {
   actor?: HistoryActor | undefined;
   updated?: string | undefined;
   editor?: HistoryActor | undefined;
+}
+
+/**
+ * A tag in use, with how many annotations the caller may read carry it.
+ */
+export interface AnnotationTag {
+  tag: string;
+  count: number;
+}
+
+/**
+ * The filters `GET /annotations` takes.
+ */
+export interface AnnotationFilters {
+  tags?: string[] | undefined;
+  matchAny?: boolean | undefined;
+  authors?: string[] | undefined;
+  search?: string | undefined;
+  limit?: number | undefined;
 }
 
 /**

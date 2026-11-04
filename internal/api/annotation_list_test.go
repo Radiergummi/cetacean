@@ -66,7 +66,10 @@ func TestHistoryCSVCarriesAnAnnotationsTextAndTags(t *testing.T) {
 	}
 
 	records := csvRecords(t, w.Body.String())
-	if got := records[1][12:]; !slices.Equal(got, []string{"'=1+1", "deploy,rollback", "cluster"}) {
+	if got := records[1][12:15]; !slices.Equal(
+		got,
+		[]string{"'=1+1", "deploy,rollback", "cluster"},
+	) {
 		t.Fatalf(
 			"text, tags and resources = %q, want the formula neutralised and the tags joined",
 			got,

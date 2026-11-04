@@ -17,10 +17,8 @@ vi.mock("../api/client", async (importOriginal) => {
   };
 });
 
-const capabilities = vi.hoisted(() => ({ create: false, clusterWide: false }));
-
-vi.mock("../hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => capabilities,
+vi.mock("../hooks/useClusterAnnotatable", () => ({
+  useClusterAnnotatable: () => false,
 }));
 
 import { api } from "../api/client";
@@ -93,7 +91,9 @@ describe("History", () => {
     renderPage();
 
     await screen.findByText("web");
-    fireEvent.change(screen.getByPlaceholderText("Filter by name…"), { target: { value: "db" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /Search everything shown/ }), {
+      target: { value: "db" },
+    });
 
     await waitFor(() =>
       expect(mockHistoryPage).toHaveBeenCalledWith(
@@ -109,7 +109,9 @@ describe("History", () => {
 
     await screen.findByText("web");
     fireEvent.click(screen.getByRole("button", { name: "Services" }));
-    fireEvent.change(screen.getByPlaceholderText("Filter by name…"), { target: { value: "db" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /Search everything shown/ }), {
+      target: { value: "db" },
+    });
 
     await waitFor(() =>
       expect(screen.getByText("Download CSV").closest("a")).toHaveAttribute(
@@ -137,16 +139,14 @@ describe("History", () => {
   });
 
   it("offers Add annotation when the caller may create one", async () => {
-    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")] });
-    capabilities.create = true;
+    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")], annotatable: true });
     renderPage();
 
     expect(await screen.findByRole("button", { name: "Add annotation" })).toBeInTheDocument();
   });
 
   it("offers no Add annotation to a caller who may not create one", async () => {
-    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")] });
-    capabilities.create = false;
+    mockHistoryPage.mockResolvedValue({ items: [entry(1, "service", "web")], annotatable: false });
     renderPage();
 
     expect(await screen.findByText("web")).toBeInTheDocument();

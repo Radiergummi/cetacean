@@ -9,7 +9,7 @@ import McpTool from "@/components/McpTool.astro";
 
 # MCP tools and resources
 
-This page is the catalog an agent sees over Cetacean's MCP server: 20 resources, 29 tools, 6 prompts, and 5
+This page is the catalog an agent sees over Cetacean's MCP server: 22 resources, 31 tools, 6 prompts, and 5
 widgets. For enabling the server, authorization, and configuration, see [MCP server][mcp].
 
 Everything here is filtered per identity. A tool above the configured [operations level][operations-level] isn't
@@ -118,16 +118,25 @@ What the cluster is doing now, and what it did recently.
 </McpTool>
 
 <McpTool name="get_events" level={0}>
-    <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `limit`</Fragment>
+    <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `kinds`, `tags`, `matchAny`, `authors`, `search`, `limit`</Fragment>
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
     tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
     made it, as the [history][api.history-actor] does.
 
-    [Annotations][api.annotations] appear as entries of kind `annotation`, with their `text`, `tags` and the
-    `resources` they name, at the time they describe. One is listed with the changes of the resources it names, a service's with those on its stack,
-    and a cluster-wide one with every resource's. Only the annotations the caller may read are returned.
+    [Annotations][api.annotations] appear as entries of kind `annotation`, with their `text`, `tags`, the
+    `resources` they name, and the `id` and `version` the annotation tools take, at the time they describe. One is
+    listed with the changes of the resources it names, a service's with those on its stack, a stack's with those on
+    its services, and a cluster-wide one with every resource's. Only the annotations the caller may read are returned.
+
+    A gap with `recoveredFrom` had [changes recovered][api.recovered] from Docker's event log: entries marked
+    `recovered` sit inside it, complete from `recoveredFrom` for every type but tasks.
+
+    `kinds` keeps entries of the kinds given: `change`, `gap`, or `annotation`. `tags` keeps the annotations carrying
+    every tag given, or any of them with `matchAny`. `authors` keeps what an actor with one of the subjects given did:
+    the annotations they wrote and the changes they made through Cetacean. `search` keeps the entries showing each
+    of its words, as the [history's `search`][api.history-search] does. Gaps pass `tags`, `authors` and `search`.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
@@ -396,26 +405,44 @@ Notes on the timeline that people and agents read back later.
     with a `type` and an `id`, which takes a name as readily as an ID; without any it's cluster-wide. It needs
     write on every resource it names, or on everything for a cluster-wide one, and `storage.timeline`.
 
-    An annotation changes nothing in the cluster, so the tool is registered at every level. It's attributed to the
-    caller via MCP, and editing or deleting one is left to the [API][api.annotations].
+    An annotation changes nothing in the cluster, so the annotation tools are registered at every level, and none is
+    registered with `storage.timeline` off. It's attributed to the caller via MCP. The result carries the `id` and
+    `version` the next two tools take.
+</McpTool>
+
+<McpTool name="update_annotation" level={0}>
+    <Fragment slot="arguments">`id` (required), `text`, `at`, `until`, `tags`, `resources`, `version`</Fragment>
+
+    Changes the arguments given and leaves the rest. An empty `until` makes the note a moment, and `tags` and
+    `resources` replace the current ones, so an empty list clears them; no resources makes the note cluster-wide. The
+    author may edit a note while they can still read it, and anyone else needs what creating it would; a new
+    `resources` needs that for the new set too. With `version`, the edit applies only if nobody has written the note
+    since, and is otherwise refused with the current version. The editor is recorded beside the author.
+</McpTool>
+
+<McpTool name="delete_annotation" level={0}>
+    <Fragment slot="arguments">`id` (required), `version`</Fragment>
+
+    Removes the note for everyone, under the same rule as an edit, and as conditionally with `version`.
 </McpTool>
 
 ## Resources
 
-Resources are read-only views returned as `application/json`. Three are static, seventeen are URI templates.
+Resources are read-only views returned as `application/json`. Four are static, eighteen are URI templates.
 
 | URI                          | Contents                                                                                                                                                                                                                  |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `cetacean://cluster`         | Node, service, task, and stack counts, node readiness, task counts by state, total and reserved CPU and memory, the largest node's capacity, converged and degraded service counts, manager quorum, last sync time        |
 | `cetacean://recommendations` | Current [recommendation][recommendations] engine findings, each with severity, category, target resource, and rationale                                                                                                   |
 | `cetacean://history`         | The most recent create, update, and delete events across every resource type, newest first, up to 100. A task event is named after its service (`demo_flaky.3`) rather than by task ID; `resourceId` still carries the ID |
+| `cetacean://annotations/tags` | The tags on the annotations the caller may read, each with how many carry it, most used first |
 
 Every numeric field in `cetacean://cluster` names its unit: `totalCPUCores`, `reservedCPUCores`,
 `maxNodeCPUCores`, `totalMemoryBytes`, `reservedMemoryBytes`, `maxNodeMemoryBytes`. Both CPU figures are in
 cores.
 
 Templated resources return the same compact digest the `describe` tool builds. The exceptions are
-`services/{id}/logs`, the recent log lines; the two `compose` documents, which are YAML rather than JSON; and the six image attestation views, read from the image's registry when asked.
+`services/{id}/logs`, the recent log lines; the two `compose` documents, which are YAML rather than JSON; the six image attestation views, read from the image's registry when asked; and `annotations/{id}`, the annotation as the annotation tools return it.
 
 | URI template                       | Contents                                                                        |
 |------------------------------------|---------------------------------------------------------------------------------|
@@ -436,6 +463,7 @@ Templated resources return the same compact digest the `describe` tool builds. T
 | `cetacean://secrets/{id}`          | Secret digest; the payload is never read, not even its length                   |
 | `cetacean://networks/{id}`         | Network digest, with the attached services and how many addresses are in use    |
 | `cetacean://volumes/{name}`        | Volume digest, keyed by name                                                    |
+| `cetacean://annotations/{id}`      | One annotation with its `version`; a removed resource is marked, subscribable   |
 
 ### Subscriptions
 
@@ -449,8 +477,9 @@ a task attached to it, any service, or for `ingress` a node changes for a networ
 client re-reads. A name keeps following whatever holds it: a service removed and created again under the same name, a
 node that rejoins with the same hostname, the replica that takes over a `<service>.<slot>`, and a resource created
 after the stream opened. A service's logs URI is notified on the same changes as the service, not on every new line;
-read new lines with `get_logs` and the previous cursor. The cluster overview, `cetacean://history`,
-`cetacean://recommendations`, and the listing URIs are never notified. `notifications/resources/list_changed` fires
+read new lines with `get_logs` and the previous cursor. An annotation's URI is notified when the annotation is edited
+or deleted, to a subscriber who may read it. The cluster overview, `cetacean://history`,
+`cetacean://recommendations`, `cetacean://annotations/tags`, and the listing URIs are never notified. `notifications/resources/list_changed` fires
 when resources are created or removed. Both are filtered by grants per notification: a client is only notified about
 resources its identity can read, and through a service, node, or stack only when it can read that too. A network is
 the exception: what moves its address count is notified to anyone who can read the network, since the notification
@@ -597,6 +626,8 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 [api.compatibility]:  api#compatibility
 [api.annotations]:  api#annotations
 [api.history-actor]:  api#who-made-a-change
+[api.history-search]:  api#history-pagination
+[api.recovered]:  api#changes-recovered-from-a-gap
 [authentication]:  authentication
 [custom-links]:  integrations#custom-links
 [dashboard]:  dashboard

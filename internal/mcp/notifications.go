@@ -390,8 +390,8 @@ func (s *Server) startNotifications() func() {
 // resources/list_changed, which carries no URI. Deliveries are ACL-checked, so
 // a policy tightened after a subscription still applies.
 func (s *Server) dispatchCacheEvent(event cache.Event) {
-	// No MCP resource is an annotation, nor lists them.
 	if event.Type == cache.EventAnnotation {
+		s.dispatchAnnotationEvent(event)
 		return
 	}
 
@@ -438,6 +438,24 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 
 			s.notify(d.session, "notifications/resources/list_changed", nil)
 		}
+	}
+}
+
+// dispatchAnnotationEvent tells the subscribers of cetacean://annotations/{id}
+// of an edit or a deletion, each checked against the annotation the event
+// carries: on a deletion the index no longer holds it.
+func (s *Server) dispatchAnnotationEvent(event cache.Event) {
+	a, ok := event.Resource.(cache.Annotation)
+	if !ok {
+		return
+	}
+
+	for _, d := range s.notifications.matchingDeliveries(event) {
+		if !s.annotationCallerFor(d.identity).MayRead(a) {
+			continue
+		}
+
+		s.notify(d.session, "notifications/resources/updated", map[string]any{"uri": d.uri})
 	}
 }
 

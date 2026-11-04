@@ -1,4 +1,4 @@
-import { api, currentETag } from "./client";
+import { api, currentETag, setTagParams } from "./client";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockFetch = vi.fn<(...args: unknown[]) => unknown>();
@@ -234,8 +234,8 @@ describe("api client", () => {
   it("fetches cluster snapshot", async () => {
     const snapshot = { nodeCount: 3, serviceCount: 5 };
     mockFetch.mockReturnValue(jsonResponse(snapshot));
-    const result = await api.cluster();
-    expect(result).toEqual(snapshot);
+    const { data } = await api.cluster();
+    expect(data).toEqual(snapshot);
   });
 
   it("throws on non-ok response with problem detail", async () => {
@@ -628,18 +628,23 @@ describe("annotation capabilities", () => {
     expect((await api.service("x")).annotatable).toBe(false);
   });
 
-  it("asks what annotations the caller may create", async () => {
-    mockFetch.mockImplementation((url) =>
-      String(url).endsWith("/annotations")
-        ? headed({ Allow: "GET, HEAD, POST" }, "http://localhost/annotations")
-        : headed({}, "http://localhost/cluster"),
-    );
+  it("reads from a list page whether the caller may create an annotation", async () => {
+    const page = (link: string) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        url: "http://localhost/history",
+        json: () => Promise.resolve({ items: [], total: 0, limit: 50, offset: 0 }),
+        headers: new Headers({ Link: link }),
+      });
 
-    expect(await api.annotationCapabilities()).toEqual({ create: true, clusterWide: false });
-    expect(mockFetch.mock.calls.map(([, init]) => (init as RequestInit).method)).toEqual([
-      "HEAD",
-      "HEAD",
-    ]);
+    mockFetch.mockReturnValueOnce(page('</annotations>; rel="edit"'));
+
+    expect((await api.historyPage("/history")).annotatable).toBe(true);
+
+    mockFetch.mockReturnValueOnce(page(""));
+
+    expect((await api.historyPage("/history")).annotatable).toBe(false);
   });
 
   it("creates an annotation", async () => {
@@ -708,5 +713,17 @@ describe("annotation capabilities", () => {
     expect(url).toBe("/annotations/7");
     expect(init.method).toBe("DELETE");
     expect(new Headers(init.headers).get("If-Match")).toBe('"12"');
+  });
+});
+
+describe("setTagParams", () => {
+  it("repeats tag and sets matchAny only for two or more", () => {
+    const params = new URLSearchParams("q=x&tag=old&matchAny=true");
+
+    setTagParams(params, ["deploy"], true);
+    expect(params.toString()).toBe("q=x&tag=deploy");
+
+    setTagParams(params, ["deploy", "db"], true);
+    expect(params.toString()).toBe("q=x&tag=deploy&tag=db&matchAny=true");
   });
 });

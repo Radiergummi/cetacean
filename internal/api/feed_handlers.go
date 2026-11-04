@@ -169,7 +169,7 @@ func (h *Handlers) handleFeedSearch(
 		return
 	}
 
-	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{NameContains: q})
+	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{TitleContains: q})
 	if !ok {
 		return
 	}
@@ -267,17 +267,8 @@ func (h *Handlers) feedTimeline(
 	params []string,
 	kinds []string,
 ) {
-	q := r.URL.Query()
-
-	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
-	if err != nil {
-		problem.Write(w, r, "API016", err.Error())
-		return
-	}
-
-	query := cache.HistoryQuery{After: window.Since, Before: window.Until}
-	if err := timelineFilters(q, &query); err != nil {
-		problem.Write(w, r, "API016", err.Error())
+	query, ok := h.timelineScope(w, r)
+	if !ok {
 		return
 	}
 
@@ -385,14 +376,25 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 // resource, and it was last updated when it was recorded, at its end.
 func gapFeedEntry(e cache.HistoryEntry) feedEntry {
 	from, until := e.Timestamp.UTC().Format(time.RFC3339), e.Until.UTC().Format(time.RFC3339)
+	title := fmt.Sprintf("Nothing recorded from %s to %s", from, until)
+	content := "<p>Cetacean was not watching the cluster from " + from + " to " + until
+
+	if e.RecoveredFrom.IsZero() {
+		content += ", so changes made then are missing from this record.</p>"
+	} else {
+		recovered := e.RecoveredFrom.UTC().Format(time.RFC3339)
+		title = fmt.Sprintf("Not watching from %s to %s; Docker's log covers it from %s",
+			from, until, recovered)
+		content += ". Docker's event log covers it from " + recovered +
+			": changes to every resource but tasks since then are recorded; task changes are missing.</p>"
+	}
 
 	return feedEntry{
-		ID:    fmt.Sprintf("urn:cetacean:history:%d", e.ID),
-		Title: fmt.Sprintf("Nothing recorded from %s to %s", from, until),
-		ContentHTML: "<p>Cetacean was not watching the cluster from " + from + " to " + until +
-			", so changes made then are missing from this record.</p>",
-		Updated: e.Until,
-		Tags:    []string{cache.KindGap},
+		ID:          fmt.Sprintf("urn:cetacean:history:%d", e.ID),
+		Title:       title,
+		ContentHTML: content,
+		Updated:     e.Until,
+		Tags:        []string{cache.KindGap},
 	}
 }
 
@@ -493,6 +495,9 @@ func historyEntryHTML(e cache.HistoryEntry, href string) string {
 		b.WriteString(html.EscapeString(transportLabel[e.Actor.Transport]))
 	}
 	b.WriteString("</p>")
+	if e.Recovered {
+		b.WriteString("<p>Recovered from Docker's event log after Cetacean restarted.</p>")
+	}
 
 	if href != "" {
 		b.WriteString(`<p><a href="`)
@@ -612,15 +617,15 @@ var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset
 
 // historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyFeedParams = []string{"kind", "tag", "matchAny", "author", "since", "until"}
+var historyFeedParams = []string{
+	"type", "resourceId", "tasks", "search", "kind", "tag", "matchAny", "author", "since", "until",
+}
 
 // annotationFeedParams names what /annotations' feeds read, which take no kind.
-var annotationFeedParams = withoutParams(historyFeedParams, "kind")
+var annotationFeedParams = withoutParams(historyFeedParams, "kind", "tasks")
 
 // historyCSVParams names what HandleHistory reads.
-var historyCSVParams = slices.Concat(
-	[]string{"type", "resourceId", "tasks", "search", "before", "limit"}, historyFeedParams,
-)
+var historyCSVParams = slices.Concat([]string{"before", "limit"}, historyFeedParams)
 
 // annotationCSVParams names what HandleAnnotations reads.
 var annotationCSVParams = withoutParams(historyCSVParams, "kind", "tasks")

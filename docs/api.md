@@ -399,14 +399,34 @@ was before gaps were recorded. Later versions add kinds, so **ignore a kind you 
 a change. CSV carries a gap as a row, and Atom and JSON Feed as an entry of its own. Every feed
 built from the history carries gaps, the search feed and a type's or a resource's feed included.
 
+### Changes recovered from a gap
+
+When it records a gap, before it records anything else, Cetacean reads back what the Docker daemon still holds of
+it: the engine keeps its last 256 events in memory, of every kind. Each service, node, config, secret, network, or
+volume event from the gap becomes a change with `"recovered": true`, at the time it happened, without an `actor` or a
+`summary`. Recovered changes sit just below their gap in the list. The gap gains `recoveredFrom`: from then on,
+changes to every resource but tasks are complete. Swarm records no events for tasks, so their changes during a gap
+stay unknown.
+
+The buffer is shared with container events and is lost when the daemon restarts, so on a busy manager it may reach
+back minutes rather than hours. A gap without `recoveredFrom` couldn't be checked against Docker, and one with it may
+have recovered nothing, because nothing changed. CSV carries both fields as the `recovered` and `recoveredFrom`
+columns.
+
 ### History pagination
 
 `/history` pages by cursor rather than offset, because new entries arrive at the front while you read. A full page
-carries a `Link` with `rel="next"`, whose `before` names the oldest entry on it. `search` matches names across the
-whole log, not only the page you have, and stays on the `next` link along with `type` and `resourceId`.
+carries a `Link` with `rel="next"`, whose `before` names the oldest entry on it. `search` matches across the whole
+log, not only the page you have, and stays on the `next` link along with `type` and `resourceId`. Each of its words
+must appear somewhere an entry shows it: a change's resource name (also written `stack/name`, and a task's as
+`service.slot`), the start of its ID, its type and action, and who made it; an annotation's text, tags, the names of
+the resources it names, and its author.
 
 With `type=service`, a service's history includes its tasks' entries. Add `tasks=false` for the service's own
 entries alone, so a crash loop's task churn doesn't fill the pages before you reach the change that started it.
+
+With `type=stack`, a stack's history includes the changes to its services, and to those removed from it while the
+history still holds their removal.
 
 ```http tab
 GET /history?search=web&limit=50 HTTP/1.1
@@ -423,8 +443,8 @@ curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 
 `since` and `until` narrow `/history` to a window, as RFC 3339 timestamps: `since` is exclusive and `until`
 inclusive, the same boundaries as the MCP tool `get_events`. Either can be left out. They combine with the other
-filters in JSON and CSV, apply to the Atom and JSON Feed representations too, which read no other filter, and stay
-on the `next` link, so paging never leaves the window. A gap is in every window it overlaps, so a window inside an
+filters, in JSON and CSV as in the Atom and JSON Feed representations, which read every filter but the cursor's, and
+stay on the `next` link, so paging never leaves the window. A gap is in every window it overlaps, so a window inside an
 outage returns the gap rather than an empty list. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
 
 ```http tab
@@ -586,7 +606,8 @@ fields, so an edit changes what it says without moving it. Its `@id` is `/annota
 
 The filters apply to annotations as follows:
 
-- `search` matches the text.
+- `search` keeps the annotations holding each of its words in the text, the tags, the names of the resources it
+  names, or the author.
 - `tag` keeps the annotations carrying a tag. Repeat it, `tag=deploy&tag=web`, to keep those carrying every one, and
   add `matchAny=true` to keep those carrying any. Changes are left out.
 - `author` keeps what the actor with that subject did: the annotations they wrote and the changes they made through

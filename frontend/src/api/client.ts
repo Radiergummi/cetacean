@@ -1,6 +1,8 @@
 import * as schema from "./schemas";
 import type {
   Annotation,
+  AnnotationFilters,
+  AnnotationTag,
   PublishedPort,
   ClusterCapacity,
   CollectionResponse,
@@ -497,9 +499,6 @@ export interface Capabilities {
 
   /** The sub-resources the caller may write, from `rel="edit"` links. */
   editable: Set<string>;
-
-  /** Whether the caller may annotate the resource. */
-  annotatable?: boolean | undefined;
 }
 
 export async function headCapabilities(path: string): Promise<Capabilities> {
@@ -512,21 +511,7 @@ export async function headCapabilities(path: string): Promise<Capabilities> {
   return {
     methods: parseAllowHeader(response),
     editable: editableOf(response),
-    annotatable: annotatableOf(response),
   };
-}
-
-/**
- * What annotations the caller may create: any, as `/annotations` allows a
- * `POST`, and cluster-wide ones, as `/cluster` links `/annotations`.
- */
-async function fetchAnnotationCapabilities(): Promise<{ create: boolean; clusterWide: boolean }> {
-  const [annotations, cluster] = await Promise.all([
-    headCapabilities("/annotations"),
-    headCapabilities("/cluster"),
-  ]);
-
-  return { create: annotations.methods.has("POST"), clusterWide: cluster.annotatable ?? false };
 }
 
 export interface LogLine {
@@ -755,11 +740,63 @@ async function fetchAll<T>(
   }
 }
 
-export interface HistoryPage {
-  items: HistoryEntry[];
+export interface Page<T> {
+  items: T[];
 
-  /** The path of the next, older page, while the server says one exists. */
+  /** The path of the next page, while the server says one exists. */
   next?: string | undefined;
+
+  /** Whether the caller may create an annotation: the list links `/annotations` for editing. */
+  annotatable?: boolean | undefined;
+}
+
+export type HistoryPage = Page<HistoryEntry>;
+
+/**
+ * Writes a tag filter into a query: `tag` once for each, and `matchAny` only
+ * while it widens two or more.
+ */
+export function setTagParams(params: URLSearchParams, tags: string[], matchAny: boolean) {
+  params.delete("tag");
+  params.delete("matchAny");
+
+  for (const tag of tags) {
+    params.append("tag", tag);
+  }
+
+  if (matchAny && tags.length > 1) {
+    params.set("matchAny", "true");
+  }
+}
+
+/** The path of the first `/annotations` page for these filters. */
+function annotationsPath(filters: AnnotationFilters): string {
+  const queryParams = new URLSearchParams();
+
+  setTagParams(queryParams, filters.tags ?? [], filters.matchAny ?? false);
+
+  for (const author of filters.authors ?? []) {
+    queryParams.append("author", author);
+  }
+
+  if (filters.search) {
+    queryParams.set("search", filters.search);
+  }
+
+  if (filters.limit) {
+    queryParams.set("limit", String(filters.limit));
+  }
+
+  const query = queryParams.toString();
+
+  return `/annotations${query ? `?${query}` : ""}`;
+}
+
+/**
+ * The path of the first `/annotations/tags` page matching `q`.
+ */
+function annotationTagsPath(q: string, limit: number): string {
+  return `/annotations/tags?${new URLSearchParams({ limit: String(limit), ...(q ? { q } : {}) }).toString()}`;
 }
 
 /** The path of the first `/history` page for these filters. */
@@ -770,6 +807,8 @@ function historyPath(
         resourceId?: string | undefined;
         search?: string | undefined;
         kind?: string | undefined;
+        tags?: string[] | undefined;
+        matchAny?: boolean | undefined;
         since?: string | undefined;
         until?: string | undefined;
         tasks?: boolean | undefined;
@@ -794,6 +833,8 @@ function historyPath(
   if (params?.kind) {
     queryParams.set("kind", params.kind);
   }
+
+  setTagParams(queryParams, params?.tags ?? [], params?.matchAny ?? false);
 
   if (params?.since) {
     queryParams.set("since", params.since);
@@ -899,24 +940,31 @@ async function fetchTimeline(
  * Fetches one `/history` page. The `next` link pages by cursor, and it is
  * followed as the server wrote it rather than rebuilt from the last entry.
  */
-async function fetchHistoryPage(
-  path: string,
-  signal?: AbortSignal | undefined,
-): Promise<HistoryPage> {
-  const response = await request(path, headers, signal);
-  const data = (await response.json()) as CollectionResponse<HistoryEntry>;
+function fetchHistoryPage(path: string, signal?: AbortSignal | undefined): Promise<HistoryPage> {
+  return fetchPage<HistoryEntry>(path, schema.historyEntrySchema, signal);
+}
 
-  checkShape(path, schema.collectionOf(schema.historyEntrySchema), data);
+/** One page of a collection, with the path of the next one its `Link` names. */
+async function fetchPage<T>(
+  path: string,
+  itemSchema: z.ZodType,
+  signal?: AbortSignal | undefined,
+): Promise<Page<T>> {
+  const response = await request(path, headers, signal);
+  const data = (await response.json()) as CollectionResponse<T>;
+
+  checkShape(path, schema.collectionOf(itemSchema), data);
 
   const target = linkTarget(response.headers.get("Link"), "next");
+  const annotatable = annotatableOf(response);
 
   if (target === undefined) {
-    return { items: data.items };
+    return { items: data.items, annotatable };
   }
 
   const next = new URL(target, response.url || window.location.href);
 
-  return { items: data.items, next: stripBasePath(next.pathname) + next.search };
+  return { items: data.items, next: stripBasePath(next.pathname) + next.search, annotatable };
 }
 
 /** Reads the total out of an unsatisfied range response's Content-Range header. */
@@ -943,10 +991,7 @@ export const api = {
     ).then(({ data }) => data),
   whoami: () =>
     fetchJSON<Identity>("/profile", undefined, schema.identitySchema).then(({ data }) => data),
-  cluster: () =>
-    fetchJSON<ClusterSnapshot>("/cluster", undefined, schema.clusterSchema).then(
-      ({ data }) => data,
-    ),
+  cluster: () => fetchJSON<ClusterSnapshot>("/cluster", undefined, schema.clusterSchema),
   resync: () =>
     mutationFetch<{ status: string; durationMs?: number }>(
       "/-/resync",
@@ -1137,6 +1182,12 @@ export const api = {
   timeline: fetchTimeline,
   historyPath,
   historyPage: fetchHistoryPage,
+  annotationsPath,
+  annotationsPage: (path: string, signal?: AbortSignal) =>
+    fetchPage<Annotation>(path, schema.annotationSchema, signal),
+  annotationTagsPath,
+  annotationTagsPage: (path: string, signal?: AbortSignal) =>
+    fetchPage<AnnotationTag>(path, schema.annotationTagSchema, signal),
   topology: () => fetchJGF<JGFDocument>("/topology", schema.jgfDocumentSchema),
   nodeTasks: (id: string, signal?: AbortSignal) =>
     fetchJSON<CollectionResponse<Task>>(
@@ -1216,7 +1267,6 @@ export const api = {
       signal,
       schema.searchSchema,
     ).then(({ data }) => data),
-  annotationCapabilities: fetchAnnotationCapabilities,
   createAnnotation: (body: NewAnnotation) =>
     mutationFetch<HistoryEntry>("/annotations", "POST", body, "application/json"),
   annotation: (id: number, signal?: AbortSignal) =>

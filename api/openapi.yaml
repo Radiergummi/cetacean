@@ -5399,7 +5399,9 @@ paths:
           example: r8m2x5nk3p7q
         - name: search
           in: query
-          description: Case-insensitive substring search on the text
+          description: >-
+            Case-insensitive search, each word anywhere in the text, the tags, the
+            names of the resources it names or the author
           schema:
             type: string
           example: load test
@@ -5760,15 +5762,16 @@ paths:
         first. An item of kind `change` is a change Docker reported; one of kind `gap`
         is a window nobody watched, from `timestamp` to `until`, whose changes are
         missing. Clients must ignore kinds they don't know. Can be filtered by kind,
-        resource type, a specific resource, a name and a time window. A gap names no
+        resource type, a specific resource, a search and a time window. A gap names no
         resource, so only `kind` and the time window narrow it. A full page carries a
         `Link` with `rel="next"`, which pages by cursor and keeps every filter.
 
         Annotations are merged in at the ID that created them, with their current
         fields, including ones older than anything the ring still holds. One is
         listed when the caller may read every resource it names. `search` matches
-        its text, the time window matches a range that overlaps it, and a resource
-        filter matches one that names the resource, one on a service's stack, one on
+        its text, tags, resource names and author, the time window matches a range
+        that overlaps it, and a resource filter matches one that names the
+        resource, one on a service's stack, one on
         a stack's services, and a cluster-wide one. A `Link` with `rel="edit"`
         points to `/annotations` when the caller may create an annotation.
       parameters:
@@ -5786,7 +5789,8 @@ paths:
             other type claims it. An identifier matching nothing is used as it
             stands, so entries for a resource the cluster has since dropped stay
             reachable by the ID they were recorded under. A service's timeline
-            includes its tasks' entries, with `type=service` as well.
+            includes its tasks' entries, with `type=service` as well, and a
+            stack's includes its services' changes.
           schema:
             type: string
           example: r8m2x5nk3p7q
@@ -5799,7 +5803,16 @@ paths:
             type: boolean
             default: true
           example: false
-        - $ref: "#/components/parameters/search"
+        - name: search
+          in: query
+          description: >-
+            Case-insensitive search, each word anywhere in what an entry shows: a
+            change's resource name (also as stack/name, and a task's as
+            service.slot), the start of its ID, its type, action and actor, or an
+            annotation's text, tags, resource names and author
+          schema:
+            type: string
+          example: web
         - name: kind
           in: query
           description: |
@@ -10252,6 +10265,19 @@ components:
           type: string
           format: date-time
           description: When a gap or a range annotation ended. Absent on a change.
+        recoveredFrom:
+          type: string
+          format: date-time
+          description: >-
+            On a gap, when the changes recovered from Docker's event buffer
+            become complete for every resource type but tasks, which Docker
+            keeps no events for. Absent when nothing was recovered.
+        recovered:
+          type: boolean
+          description: >-
+            True on a change read back from Docker's event buffer after a gap
+            rather than watched. It sits just below its gap, at the time the
+            event happened, with no actor or summary.
         type:
           type: string
           description: Resource type (node, service, task, etc.); empty on a gap

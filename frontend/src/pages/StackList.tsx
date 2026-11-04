@@ -26,7 +26,7 @@ export default function StackList() {
   });
   const [viewMode, setViewMode] = useViewMode("stacks");
 
-  useDebouncedInvalidation("/stacks", [["stacks-summary"]]);
+  useDebouncedInvalidation("/stacks", { resourceKeys: [["stacks-summary"]] });
 
   const filtered = search
     ? summaries.filter(({ name }) => name.toLowerCase().includes(search.toLowerCase()))

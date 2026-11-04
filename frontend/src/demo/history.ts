@@ -1,5 +1,6 @@
 import type { Dataset } from "./dataset";
 import type { HistoryEntry, NewAnnotation } from "@/api/types";
+import { splitStackPrefix } from "@/lib/searchConstants";
 
 const minute = 60_000;
 
@@ -200,8 +201,8 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 /**
  * Applies `/history`'s filters: a gap matches every resource filter and tag,
  * and every window it overlaps. An annotation overlaps windows the same way
- * and matches what it names, or the stack of the service named by
- * `resourceId`; a cluster-wide one matches every resource filter.
+ * and matches what it names, the stack of the service named by `resourceId`,
+ * or a service of the stack it names; a cluster-wide one matches every filter.
  */
 export function filterHistory(
   entries: HistoryEntry[],
@@ -210,16 +211,39 @@ export function filterHistory(
 ): HistoryEntry[] {
   const type = params.get("type");
   const resourceId = params.get("resourceId");
-  const tag = params.get("tag");
+  const tags = params.getAll("tag").filter(Boolean);
+  const matchAny = params.get("matchAny") === "true";
+  const authors = params.getAll("author").filter(Boolean);
+  const words = (params.get("search") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  // Every word somewhere: in a field, or at the start of an ID.
+  const mentions = (fields: (string | undefined)[], ids: string[] = []) =>
+    words.every(
+      (word) =>
+        fields.some((field) => field?.toLowerCase().includes(word)) ||
+        ids.some((id) => id.startsWith(word)),
+    );
+  const actorFields = ({ actor }: HistoryEntry) => [actor?.name, actor?.subject];
+  const stackDisplay = (name: string) => {
+    const { prefix, name: rest } = splitStackPrefix(name);
+
+    return prefix === null ? name : `${prefix}/${rest}`;
+  };
   const stack = resourceId ? stackOf(resourceId) : undefined;
-  const kind = params.get("kind");
+  const kinds = params.getAll("kind").filter(Boolean);
+  const carries = (entry: HistoryEntry) => {
+    const carried = (tag: string) => (entry.tags ?? []).includes(tag);
+
+    return tags.length === 0 || (matchAny ? tags.some(carried) : tags.every(carried));
+  };
+  const byAuthor = ({ actor }: HistoryEntry) =>
+    authors.length === 0 || (actor !== undefined && authors.includes(actor.subject));
   const since = params.get("since");
   const until = params.get("until");
   const sinceTime = since ? new Date(since).getTime() : Number.NEGATIVE_INFINITY;
   const untilTime = until ? new Date(until).getTime() : Number.POSITIVE_INFINITY;
 
   return entries.filter((entry) => {
-    if (kind && entry.kind !== kind) {
+    if (kinds.length > 0 && !kinds.includes(entry.kind)) {
       return false;
     }
 
@@ -237,23 +261,40 @@ export function filterHistory(
 
       return (
         overlaps &&
-        (!tag || (entry.tags ?? []).includes(tag)) &&
+        carries(entry) &&
+        byAuthor(entry) &&
+        mentions([
+          entry.text,
+          ...(entry.tags ?? []),
+          ...(entry.resources ?? []).flatMap(({ name }) => [name, stackDisplay(name)]),
+          ...actorFields(entry),
+        ]) &&
         (named.length === 0 ||
           named.some(({ type: namedType, id }) =>
             resourceId
-              ? id === resourceId || (namedType === "stack" && id === stack)
+              ? id === resourceId ||
+                (namedType === "stack" && id === stack) ||
+                (type === "stack" && namedType === "service" && stackOf(id) === resourceId)
               : !type || namedType === type,
           ))
       );
     }
 
-    if (tag) {
+    if (tags.length > 0 || !byAuthor(entry)) {
       return false;
     }
 
+    // A stack's history holds its services' changes too.
+    const member =
+      type === "stack" && entry.type === "service" && stackOf(entry.resourceId) === resourceId;
+
     return (
-      (!type || entry.type === type) &&
-      (!resourceId || entry.resourceId === resourceId) &&
+      (!type || entry.type === type || member) &&
+      (!resourceId || entry.resourceId === resourceId || member) &&
+      mentions(
+        [entry.name, stackDisplay(entry.name), entry.type, entry.action, ...actorFields(entry)],
+        [entry.resourceId],
+      ) &&
       start > sinceTime &&
       start <= untilTime
     );

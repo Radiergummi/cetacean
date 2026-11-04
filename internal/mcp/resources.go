@@ -73,9 +73,21 @@ var (
 			title:       "Recent change history",
 			description: "The most recent create/update/delete events (currently up to 100) across every cluster resource type, newest first. Useful for incident triage and 'what changed' questions.",
 		},
+		{
+			uri:         "cetacean://annotations/tags",
+			name:        "annotation_tags",
+			title:       "Annotation tags",
+			description: "The tags on the annotations the caller may read, each with how many carry it, most used first. Pick a tag here before filtering get_events by `tags`, rather than guessing its spelling. Not subscribable.",
+		},
 	}
 
 	resourceTemplates = []namedResource{
+		{
+			uri:         "cetacean://annotations/{id}",
+			name:        "annotation",
+			title:       "Annotation",
+			description: "One note on the timeline by its id: its text, the moment or range it describes, tags, the resources it is about (one the cluster no longer holds is marked removed), its author and last editor, and the `version` update_annotation and delete_annotation take. Readable when you may read every resource it names. Subscribe to hear of each edit and its deletion.",
+		},
 		{
 			uri:         "cetacean://nodes/{id}",
 			name:        "node",
@@ -361,12 +373,18 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 	case "history":
 		// Named after filtering, never before: the read filter keys a task's ACL
 		// check on its ID, which is what the resolver resolves parentage from.
-		return cluster.PresentHistory(s.cache, s.cache.Timeline(cache.HistoryQuery{
+		canRead := s.readPredicate(ctx)
+		entries, present := cluster.ReadTimeline(s.cache, cache.HistoryQuery{
 			Limit:   100,
-			Visible: cluster.HistoryReadable(s.readPredicate(ctx)),
+			Visible: cluster.HistoryReadable(canRead),
 
 			ReadableAnnotation: s.annotationCaller(ctx).MayRead,
-		}), s.readPredicate(ctx)), nil
+		}, canRead)
+
+		return present(entries), nil
+
+	case "annotations":
+		return s.readAnnotation(ctx, uri, resourceID)
 
 	case "nodes":
 		if resourceID == "" {

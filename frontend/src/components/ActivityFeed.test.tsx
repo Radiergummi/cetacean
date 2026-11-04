@@ -1,6 +1,7 @@
 import type { HistoryEntry } from "../api/types";
 import { formatDateTime } from "../lib/format";
 import { describeAnnotationTime } from "../lib/timeline";
+import { createTestQueryClient, createWrapper } from "../test/mocks";
 import ActivityFeed from "./ActivityFeed";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -20,6 +21,9 @@ vi.mock("@/api/client", async (importOriginal) => {
           allowedMethods: new Set(["GET", "PATCH"]),
           etag: '"1"',
         }),
+      annotationTagsPage: () => Promise.resolve({ items: [] }),
+      monitoringStatus: () =>
+        Promise.resolve({ prometheusConfigured: true, prometheusReachable: true, queryable: true }),
     },
   };
 });
@@ -171,6 +175,76 @@ describe("ActivityFeed", () => {
     expect(divider).toHaveAttribute("title", expect.stringMatching(/^Nothing recorded from /));
     expect(screen.queryByText("d")).not.toBeInTheDocument();
     expect(screen.getByText("updated")).toBeInTheDocument();
+  });
+
+  it("says what a gap recovered, and marks a recovered change", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 2,
+        kind: "gap",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+        recoveredFrom: "2026-10-30T15:00:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+      {
+        id: 1,
+        kind: "change",
+        timestamp: "2026-10-30T15:30:00Z",
+        type: "service",
+        action: "update",
+        resourceId: "svc1",
+        name: "web-app",
+        recovered: true,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed entries={entries} />
+      </MemoryRouter>,
+    );
+
+    const divider = screen.getByText(/^Not watching for 3h, partly covered by Docker's log/);
+
+    expect(divider).toHaveAttribute(
+      "title",
+      expect.stringContaining(
+        `Docker's event log covers it from ${formatDateTime("2026-10-30T15:00:00Z")}`,
+      ),
+    );
+    expect(screen.getByText("recovered")).toHaveAttribute(
+      "title",
+      expect.stringMatching(/^Recovered from Docker's event log/),
+    );
+  });
+
+  it("keeps a recovered change out of a watched change's run", () => {
+    const change = (id: number, recovered: boolean): HistoryEntry => ({
+      id,
+      kind: "change",
+      timestamp: `2026-10-30T1${id}:00:00Z`,
+      type: "service",
+      action: "update",
+      resourceId: "svc1",
+      name: "web-app",
+      recovered,
+    });
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed
+          entries={[change(2, true), change(1, false)]}
+          collapse
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("2 changes")).not.toBeInTheDocument();
+    expect(screen.getAllByText("recovered")).toHaveLength(1);
   });
 
   it("skips kinds it does not know", () => {
@@ -387,12 +461,11 @@ describe("ActivityFeed runs", () => {
     });
     const show = (entry: HistoryEntry, hideType?: boolean) =>
       render(
-        <MemoryRouter>
-          <ActivityFeed
-            entries={[entry]}
-            hideType={hideType}
-          />
-        </MemoryRouter>,
+        <ActivityFeed
+          entries={[entry]}
+          hideType={hideType}
+        />,
+        { wrapper: createWrapper(createTestQueryClient()) },
       );
 
     it("renders an annotation as a note card", () => {
@@ -410,6 +483,27 @@ describe("ActivityFeed runs", () => {
         screen.getByText(describeAnnotationTime(new Date(timestamp).getTime() / 1000)),
       ).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "web" })).toHaveAttribute("href", "/services/svc1");
+    });
+
+    it("links the URLs in a note and opens its resource's chart around it", async () => {
+      show(
+        note({
+          text: "See https://runbooks.example/db.",
+          resources: [{ type: "service", id: "svc1", name: "web" }],
+        }),
+      );
+
+      expect(screen.getByRole("link", { name: "https://runbooks.example/db" })).toHaveAttribute(
+        "target",
+        "_blank",
+      );
+
+      const at = new Date(timestamp).getTime() / 1000;
+
+      expect(await screen.findByRole("link", { name: "Show on chart" })).toHaveAttribute(
+        "href",
+        `/services/svc1?from=${at - 1800}&to=${at + 1800}#metrics`,
+      );
     });
 
     it("names a stacked resource as the change rows do", () => {
@@ -452,14 +546,12 @@ describe("ActivityFeed runs", () => {
 
     it("holds its rows while a note's menu is open", async () => {
       const user = userEvent.setup();
-      const feed = (entries: HistoryEntry[]) => (
-        <MemoryRouter>
-          <ActivityFeed entries={entries} />
-        </MemoryRouter>
-      );
-      const { rerender } = render(feed([note({})]));
+      const feed = (entries: HistoryEntry[]) => <ActivityFeed entries={entries} />;
+      const { rerender } = render(feed([note({})]), {
+        wrapper: createWrapper(createTestQueryClient()),
+      });
 
-      await user.click(screen.getByRole("button", { name: "Note actions" }));
+      await user.click(screen.getByRole("button", { name: "Annotation actions" }));
       await screen.findByRole("menu");
       rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));
 
@@ -474,14 +566,12 @@ describe("ActivityFeed runs", () => {
 
     it("keeps holding when the menu hands over to a dialog", async () => {
       const user = userEvent.setup();
-      const feed = (entries: HistoryEntry[]) => (
-        <MemoryRouter>
-          <ActivityFeed entries={entries} />
-        </MemoryRouter>
-      );
-      const { rerender } = render(feed([note({})]));
+      const feed = (entries: HistoryEntry[]) => <ActivityFeed entries={entries} />;
+      const { rerender } = render(feed([note({})]), {
+        wrapper: createWrapper(createTestQueryClient()),
+      });
 
-      await user.click(screen.getByRole("button", { name: "Note actions" }));
+      await user.click(screen.getByRole("button", { name: "Annotation actions" }));
       await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
       await screen.findByRole("dialog");
       rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));

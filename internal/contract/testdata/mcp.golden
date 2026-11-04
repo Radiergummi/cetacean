@@ -16,6 +16,9 @@ tool create_secret
   create_secret.encoding: string enum(base64,utf8)
   create_secret.labels: object
   create_secret.name: string required
+tool delete_annotation
+  delete_annotation.id: integer required
+  delete_annotation.version: integer
 tool describe
   describe.id: string required
   describe.raw: boolean
@@ -34,9 +37,14 @@ tool find -> ui://cetacean/table
   find.versions: string enum(all,newest)
 tool get_cluster_status
 tool get_events
+  get_events.authors: string[]
+  get_events.kinds: string enum(annotation,change,gap)[]
   get_events.limit: number
+  get_events.matchAny: boolean
   get_events.resource: string
+  get_events.search: string
   get_events.since: string
+  get_events.tags: string[]
   get_events.types: string[]
   get_events.until: string
 tool get_logs -> ui://cetacean/logs
@@ -85,6 +93,16 @@ tool scale_service
   scale_service.id: string required
   scale_service.replicas: number required
   scale_service.version: integer
+tool update_annotation
+  update_annotation.at: string
+  update_annotation.id: integer required
+  update_annotation.resources: object[]
+  update_annotation.resources[].id: string required
+  update_annotation.resources[].type: string enum(node,service,stack) required
+  update_annotation.tags: string[]
+  update_annotation.text: string
+  update_annotation.until: string
+  update_annotation.version: integer
 tool update_node
   update_node.id: string required
   update_node.section: string enum(availability,role) required
@@ -126,6 +144,7 @@ tool update_service_secrets
 tool watch
   watch.service: string required
   watch.timeout: number
+resource-template cetacean://annotations/{id}
 resource-template cetacean://configs/{id}
 resource-template cetacean://networks/{id}
 resource-template cetacean://nodes/{id}
@@ -143,6 +162,7 @@ resource-template cetacean://tasks/{id}/dockerfile{?platform}
 resource-template cetacean://tasks/{id}/provenance
 resource-template cetacean://tasks/{id}/sbom{?platform}
 resource-template cetacean://volumes/{name}
+resource cetacean://annotations/tags
 resource cetacean://cluster
 resource cetacean://history
 resource cetacean://recommendations

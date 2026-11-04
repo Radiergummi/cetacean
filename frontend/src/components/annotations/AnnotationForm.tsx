@@ -7,6 +7,7 @@ import {
   toLocalInput,
 } from "./annotationFields";
 import ResourcePicker from "./ResourcePicker";
+import { useTagSuggestions } from "./useTagSuggestions";
 import { api, ApiError } from "@/api/client";
 import type { Annotation, AnnotationScope } from "@/api/types";
 import ResourceName from "@/components/ResourceName";
@@ -15,7 +16,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/utils";
 import { X } from "lucide-react";
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 
 type ResourceScope = Exclude<AnnotationScope, "cluster">;
 
@@ -92,6 +93,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
   const submittingRef = useRef(false);
   const scopeName = useId();
   const errorId = useId();
+  const suggestions = useTagSuggestions(tagInput, tags);
   const scope =
     choice === pickerKey ? picked : scopes.find((option) => scopeKey(option) === choice);
 
@@ -122,7 +124,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         message:
           tag === null
             ? "A tag takes lowercase letters, digits, dots, dashes and underscores, up to 40."
-            : `A note takes at most ${maximumTags} tags.`,
+            : `An annotation takes at most ${maximumTags} tags.`,
       });
 
       return null;
@@ -139,6 +141,20 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       setTagInput("");
       setError(null);
     }
+  };
+
+  const onTagChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const tag = suggestions.picked(event);
+
+    if (tag !== null && tags.length < maximumTags) {
+      setTags([...tags, tag]);
+      setTagInput("");
+      setError(null);
+
+      return;
+    }
+
+    setTagInput(event.target.value);
   };
 
   const onTagKey = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -171,7 +187,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
           return;
         } catch (retry) {
           if (!(retry instanceof ApiError && retry.status === 412)) {
-            setError({ message: getErrorMessage(retry, "The note could not be saved.") });
+            setError({ message: getErrorMessage(retry, "The annotation could not be saved.") });
 
             return;
           }
@@ -199,10 +215,10 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       setEdited({ note: data, etag });
       setError({
         message:
-          "This note changed since you opened it. Your edits are kept; save again to apply them.",
+          "This annotation changed since you opened it. Your edits are kept; save again to apply them.",
       });
     } catch (failure) {
-      setError({ message: getErrorMessage(failure, "The note could not be reloaded.") });
+      setError({ message: getErrorMessage(failure, "The annotation could not be reloaded.") });
     }
   };
 
@@ -248,7 +264,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       if (edited && patch && failure instanceof ApiError && failure.status === 412) {
         await reload(edited, patch);
       } else {
-        setError({ message: getErrorMessage(failure, "The note could not be saved.") });
+        setError({ message: getErrorMessage(failure, "The annotation could not be saved.") });
       }
     } finally {
       submittingRef.current = false;
@@ -264,7 +280,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         void submit();
       }}
     >
-      <Field label="Note">
+      <Field label="Text">
         {(control) => (
           <textarea
             {...control}
@@ -280,7 +296,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
 
       <Field
         label="Tags"
-        description="Enter, a comma or a space adds one."
+        description="Enter, a comma or a space adds one; pick a tag in use or make a new one."
       >
         {(control) => (
           <div className="flex flex-wrap items-center gap-1 rounded-lg border border-input px-1.5 py-1">
@@ -303,12 +319,16 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
             <input
               id={control.id}
               {...invalidAs("tags", control["aria-describedby"])}
+              list={suggestions.listId}
+              autoComplete="off"
               value={tagInput}
-              onChange={(event) => setTagInput(event.target.value)}
+              onChange={onTagChange}
               onKeyDown={onTagKey}
               onBlur={commitTag}
               className="min-w-24 flex-1 bg-transparent px-1 text-sm outline-none"
             />
+
+            {suggestions.datalist}
           </div>
         )}
       </Field>

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types/network"
@@ -62,6 +63,15 @@ var subscribableTypes = []cache.EventType{
 // parseSubscriptionURI reads the resource a URI names, ignoring any
 // sub-resource: a service's logs and compose change when the service does.
 func parseSubscriptionURI(uri string) (subscriptionTarget, bool) {
+	// An annotation is no resource of the swarm's, but its URI is subscribable.
+	if id, ok := strings.CutPrefix(uri, "cetacean://annotations/"); ok {
+		if _, err := strconv.ParseUint(id, 10, 64); err != nil {
+			return subscriptionTarget{}, false
+		}
+
+		return subscriptionTarget{typ: cache.EventAnnotation, id: id}, true
+	}
+
 	for _, typ := range subscribableTypes {
 		rest, ok := strings.CutPrefix(uri, eventTypeToURIPrefix(typ))
 		if !ok {
@@ -145,8 +155,13 @@ func (s *Server) eventKeys(event cache.Event) []eventKey {
 			keys = append(keys, refKeys(cache.EventSecret, secrets)...)
 		}
 
-	case cache.EventNode, cache.EventStack, cache.EventSync, cache.EventGap,
-		cache.EventAnnotation:
+	case cache.EventAnnotation:
+		keys = append(keys, eventKey{
+			target:    subscriptionTarget{typ: cache.EventAnnotation, id: event.ID},
+			ownTarget: true,
+		})
+
+	case cache.EventNode, cache.EventStack, cache.EventSync, cache.EventGap:
 	}
 
 	return keys

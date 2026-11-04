@@ -1,7 +1,7 @@
 import { readStoredValue, writeStoredValue } from "@/lib/storage";
 import { ChevronRight } from "lucide-react";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 function sectionKey(scope: string, title: string) {
@@ -44,7 +44,10 @@ export function useSectionCollapse(title: string, defaultOpen = true) {
     });
   }, [scope, title]);
 
-  return { open, toggle } as const;
+  // Opening a section a link points at is that visit's, not a stored choice.
+  const reveal = useCallback(() => setOpen(true), []);
+
+  return { open, toggle, reveal } as const;
 }
 
 /**
@@ -86,16 +89,45 @@ export default function CollapsibleSection({
   children,
   controls,
   defaultOpen = true,
+  id,
 }: {
   title: string;
   children: React.ReactNode;
   controls?: React.ReactNode | undefined;
   defaultOpen?: boolean | undefined;
+
+  /**
+   * Makes the section a link target: a URL whose hash names it opens it and scrolls to it.
+   */
+  id?: string | undefined;
 }) {
-  const { open, toggle } = useSectionCollapse(title, defaultOpen);
+  const { open, toggle, reveal } = useSectionCollapse(title, defaultOpen);
+  const { hash, key } = useLocation();
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  // The visit that targets this section, so following the same link again scrolls again.
+  const visit = id !== undefined && hash === `#${id}` ? key : null;
+
+  useEffect(() => {
+    if (visit === null) {
+      return;
+    }
+
+    reveal();
+
+    const frame = requestAnimationFrame(() =>
+      sectionRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
+
+    return () => cancelAnimationFrame(frame);
+  }, [visit, reveal]);
 
   return (
-    <div>
+    <div
+      id={id}
+      ref={sectionRef}
+      className="scroll-mt-20"
+    >
       <div className="mb-3 flex min-h-8 flex-wrap items-center gap-2">
         <h2>
           <SectionToggle

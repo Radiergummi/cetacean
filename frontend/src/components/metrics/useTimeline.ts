@@ -69,13 +69,10 @@ export function useTimeline(
         : undefined,
   });
 
-  useDebouncedInvalidation(
-    type && resourceId ? `/${type}s/${resourceId}` : undefined,
-    [queryKey],
-    500,
-    undefined,
-    (event) => event.type === type || event.type === "annotation",
-  );
+  useDebouncedInvalidation(type && resourceId ? `/${type}s/${resourceId}` : undefined, {
+    timelineKeys: [queryKey],
+    relevant: (event) => event.type === type || event.type === "annotation",
+  });
 
   const items = useMemo(
     () => (data && type ? timelineItems(data.entries, type) : noItems),

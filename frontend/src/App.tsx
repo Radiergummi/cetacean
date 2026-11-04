@@ -1,3 +1,4 @@
+import { AddAnnotationDialog } from "./components/annotations/AddAnnotationButton";
 import AtomFeedLink from "./components/AtomFeedLink";
 import ConnectionStatus from "./components/ConnectionStatus";
 import { ConnectionTracker } from "./components/ConnectionTracker";
@@ -28,6 +29,9 @@ import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate } from "re
 const ClusterOverview = lazy(() => import("./pages/ClusterOverview"));
 const ErrorIndex = lazy(() => import("./pages/ErrorIndex"));
 const History = lazy(() => import("./pages/History"));
+const Annotations = lazy(() => import("./pages/Annotations"));
+const AnnotationTags = lazy(() => import("./pages/AnnotationTags"));
+const AnnotationDetail = lazy(() => import("./pages/AnnotationDetail"));
 const ImageSBOMPage = lazy(() => import("./pages/ImageSBOMPage"));
 const ImageDockerfilePage = lazy(() => import("./pages/ImageDockerfilePage"));
 const ErrorCodeDetail = lazy(() => import("./pages/ErrorCodeDetail"));
@@ -81,6 +85,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const handler = () => setShortcutsOpen(true);
     window.addEventListener("cetacean:show-shortcuts", handler);
     return () => window.removeEventListener("cetacean:show-shortcuts", handler);
+  }, []);
+
+  const [annotating, setAnnotating] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setAnnotating(true);
+    window.addEventListener("cetacean:add-annotation", handler);
+    return () => window.removeEventListener("cetacean:add-annotation", handler);
   }, []);
 
   useSubmitShortcut();
@@ -179,6 +191,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </main>
       <Footer />
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
+      {annotating && (
+        <AddAnnotationDialog
+          open
+          onOpenChange={setAnnotating}
+        />
+      )}
     </div>
   );
 }
@@ -451,6 +469,18 @@ export default function App() {
                   <Route
                     path="/history"
                     element={<History />}
+                  />
+                  <Route
+                    path="/annotations"
+                    element={<Annotations />}
+                  />
+                  <Route
+                    path="/annotations/tags"
+                    element={<AnnotationTags />}
+                  />
+                  <Route
+                    path="/annotations/:id"
+                    element={<AnnotationDetail />}
                   />
                   <Route
                     path="/recommendations"

@@ -6,6 +6,7 @@ import {
   timeAtIndex,
   type MarkerHit,
   markersAt,
+  annotationsAt,
   tooltipMarkers,
 } from "./chartMarkers";
 import type { HistoryEntry } from "@/api/types";
@@ -160,6 +161,27 @@ describe("layoutMarkers on annotation scopes", () => {
       [false, false],
       [true, true],
     ]);
+  });
+});
+
+describe("annotationsAt", () => {
+  const top = 10;
+  const ids = (items: TimelineItem[]) => items.map(({ entry: { id } }) => id);
+
+  it("lists every annotation a flag groups, newest first, only on its pennant", () => {
+    const layout = layoutMarkers([flag(1, 200), flag(2, 202)], timestamps, pixelFor);
+
+    expect(ids(annotationsAt(layout, 104, top + 3, top))).toEqual([2, 1]);
+    expect(annotationsAt(layout, 104, top + 60, top)).toEqual([]);
+    expect(annotationsAt(layout, 130, top + 3, top)).toEqual([]);
+  });
+
+  it("takes every range whose band holds the point, at any height, newest first", () => {
+    const layout = layoutMarkers([region(1, 250, 350), region(2, 0, 300)], timestamps, pixelFor);
+
+    expect(ids(annotationsAt(layout, 152, top + 80, top))).toEqual([1, 2]);
+    expect(ids(annotationsAt(layout, 2, top + 80, top))).toEqual([2]);
+    expect(annotationsAt(layout, 260, top + 80, top)).toEqual([]);
   });
 });
 

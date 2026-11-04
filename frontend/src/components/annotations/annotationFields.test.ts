@@ -3,6 +3,8 @@ import {
   annotationInputs,
   annotationPatch,
   changedOnlyByRemovals,
+  chartPath,
+  noteSegments,
   fromLocalInput,
   parseTag,
   toLocalInput,
@@ -134,5 +136,75 @@ describe("changedOnlyByRemovals", () => {
 
   it("takes an edit as a change", () => {
     expect(changedOnlyByRemovals(opened, { ...opened, text: "Soak test" })).toBe(false);
+  });
+});
+
+describe("noteSegments", () => {
+  it("splits the URLs out of the text", () => {
+    expect(noteSegments("see https://example.com/runbook for the steps")).toEqual([
+      { text: "see " },
+      { text: "https://example.com/runbook", url: "https://example.com/runbook" },
+      { text: " for the steps" },
+    ]);
+  });
+
+  it("leaves a sentence's punctuation after the URL", () => {
+    expect(noteSegments("(see http://a.example/x).")).toEqual([
+      { text: "(see " },
+      { text: "http://a.example/x", url: "http://a.example/x" },
+      { text: ")." },
+    ]);
+  });
+
+  it("keeps a parenthesis the URL opened", () => {
+    const url = "https://en.wikipedia.org/wiki/Swarm_(disambiguation)";
+
+    expect(noteSegments(`${url}, then`)).toEqual([{ text: url, url }, { text: ", then" }]);
+  });
+
+  it("links only http and https", () => {
+    expect(noteSegments("javascript:alert(1) and ftp://host/file")).toEqual([
+      { text: "javascript:alert(1) and ftp://host/file" },
+    ]);
+  });
+});
+
+describe("chartPath", () => {
+  const at = Date.UTC(2026, 10, 2, 13, 0) / 1000;
+  const timestamp = new Date(at * 1000).toISOString();
+  const now = at + 86_400;
+
+  it("opens the first service or node with a metrics panel, skipping stacks and removed ones", () => {
+    expect(
+      chartPath(
+        {
+          timestamp,
+          resources: [
+            { type: "stack", id: "shop", name: "shop" },
+            { type: "service", id: "gone", name: "old", removed: true },
+            { type: "node", id: "n1", name: "worker" },
+          ],
+        },
+        now,
+      ),
+    ).toBe(`/nodes/n1?from=${at - 1800}&to=${at + 1800}#metrics`);
+  });
+
+  it("widens around a long range and stops at now", () => {
+    const until = new Date((at + 8 * 3600) * 1000).toISOString();
+
+    expect(
+      chartPath(
+        { timestamp, until, resources: [{ type: "service", id: "s1", name: "web" }] },
+        at + 9 * 3600,
+      ),
+    ).toBe(`/services/s1?from=${at - 2 * 3600}&to=${at + 9 * 3600}#metrics`);
+  });
+
+  it("has nowhere to go for a cluster-wide note or one yet to come", () => {
+    expect(chartPath({ timestamp, resources: [] }, now)).toBeUndefined();
+    expect(
+      chartPath({ timestamp, resources: [{ type: "node", id: "n1", name: "worker" }] }, at - 60),
+    ).toBeUndefined();
   });
 });

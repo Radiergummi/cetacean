@@ -1,6 +1,8 @@
 import MetricsPanel from "./MetricsPanel";
+import type { TimelineItem } from "@/lib/timeline";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi } from "vitest";
@@ -17,6 +19,10 @@ vi.mock("./TimeSeriesChart", async () => {
         <div
           data-testid={`chart-${title}`}
           data-annotating={String(panel?.annotating ?? false)}
+          data-notes={panel?.timeline
+            ?.filter(({ kind }) => kind === "annotation")
+            .map(({ entry }) => entry.text)
+            .join(",")}
         >
           {title} ({range})
         </div>
@@ -24,6 +30,30 @@ vi.mock("./TimeSeriesChart", async () => {
     },
   };
 });
+
+const timelineNote = (id: number, tags: string[]): TimelineItem => ({
+  shape: "point",
+  kind: "annotation",
+  at: 1_000 + id,
+  entry: {
+    id,
+    kind: "annotation",
+    timestamp: "2026-11-03T12:00:00Z",
+    type: "",
+    action: "",
+    resourceId: "",
+    name: "",
+    text: `note ${id}`,
+    tags,
+  },
+});
+
+vi.mock("./useTimeline", () => ({
+  useTimeline: () => ({
+    items: [timelineNote(1, ["deploy"]), timelineNote(2, ["db"])],
+    truncated: false,
+  }),
+}));
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
@@ -57,6 +87,48 @@ describe("MetricsPanel", () => {
     render(<MetricsPanel charts={charts} />, { wrapper });
     fireEvent.click(screen.getByText("6H"));
     expect(screen.getByText("CPU (6h)")).toBeInTheDocument();
+  });
+
+  it("shows, hides and narrows the notes by the URL and the notes menu", async () => {
+    const user = userEvent.setup();
+    const at = (url: string) =>
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <MemoryRouter initialEntries={[url]}>
+            <MetricsPanel
+              charts={charts}
+              timeline={{ type: "service", resourceId: "svc1" }}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    const notes = () => screen.getByTestId("chart-CPU").getAttribute("data-notes");
+
+    const { unmount } = at("/?annotationTag=db");
+
+    expect(notes()).toBe("note 2");
+    expect(screen.getByRole("button", { name: "Annotations, filtered" })).toBeInTheDocument();
+    unmount();
+
+    at("/");
+    expect(notes()).toBe("note 1,note 2");
+
+    await user.click(screen.getByRole("button", { name: "Annotations" }));
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: "#deploy" }));
+    expect(notes()).toBe("note 1");
+
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Show annotations" }));
+    expect(notes()).toBe("");
+    expect(screen.getByRole("menuitemcheckbox", { name: "#deploy" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+  });
+
+  it("offers the notes menu only where the charts draw a timeline", () => {
+    render(<MetricsPanel charts={charts} />, { wrapper });
+
+    expect(screen.queryByRole("button", { name: "Annotations" })).not.toBeInTheDocument();
   });
 
   it("renders refresh button", () => {
