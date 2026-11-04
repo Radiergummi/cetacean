@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -78,9 +80,24 @@ func (s *Server) toolGetEvents(
 	// Every filter is pushed into the walk, so the ring copies what matched
 	// rather than everything it holds. The limit stays the whole ring on
 	// purpose: `total` counts everything the caller may read.
+	kinds := req.GetStringSlice("kinds", nil)
+	for _, kind := range kinds {
+		if !slices.Contains(cache.Kinds, kind) {
+			return "", fmt.Errorf(
+				"kinds: %q is not one of %s",
+				kind,
+				strings.Join(cache.Kinds, ", "),
+			)
+		}
+	}
+
 	matched := s.cache.Timeline(cache.HistoryQuery{
 		ResourceID: resource,
 		Types:      types,
+		Kinds:      kinds,
+		Tags:       req.GetStringSlice("tags", nil),
+		MatchAny:   req.GetBool("matchAny", false),
+		Authors:    req.GetStringSlice("authors", nil),
 		Limit:      history.Size() + cache.MaxAnnotations,
 		After:      window.Since,
 		Before:     window.Until,
@@ -112,6 +129,11 @@ func (s *Server) toolGetEvents(
 			until = projection.TimelineTime(e.Until)
 		}
 
+		var id, version uint64
+		if e.Annotation != nil {
+			id, version = e.Annotation.ID, e.Annotation.Version
+		}
+
 		timeline = append(timeline, projection.TimelineEntry{
 			At:         projection.TimelineTime(e.Timestamp),
 			Until:      until,
@@ -124,6 +146,8 @@ func (s *Server) toolGetEvents(
 			Text:       e.Text,
 			Tags:       e.Tags,
 			Resources:  e.Resources,
+			ID:         id,
+			Version:    version,
 		})
 	}
 

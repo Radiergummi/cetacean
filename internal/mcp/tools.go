@@ -36,6 +36,10 @@ type toolDef struct {
 	// elicits marks a tool that may ask a person before it acts. Such a tool
 	// must not declare task support: mcp-go cannot pause a task for input.
 	elicits bool
+
+	// available, when set, withholds the tool from registration unless it
+	// answers true, for a tool every call to would fail.
+	available func() bool
 }
 
 // toolGate is the resource type and permission a caller needs a grant on for
@@ -71,7 +75,9 @@ var toolIconCategory = map[string]string{
 	"find":                "search",
 	"describe":            "read",
 
-	"add_annotation": "edit",
+	"add_annotation":    "edit",
+	"update_annotation": "edit",
+	"delete_annotation": "remove",
 
 	"scale_service": "scale",
 
@@ -142,7 +148,7 @@ func (s *Server) registerTools() {
 	for _, td := range tools {
 		s.toolGates[td.tool.Name] = td.gate
 
-		if opsLevel < td.tier() {
+		if opsLevel < td.tier() || td.available != nil && !td.available() {
 			continue
 		}
 

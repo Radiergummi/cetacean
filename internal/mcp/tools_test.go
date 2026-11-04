@@ -553,7 +553,7 @@ func TestEveryWriteToolCarriesAnOperation(t *testing.T) {
 
 	for _, def := range srv.toolCatalog() {
 		hint := def.tool.Annotations.ReadOnlyHint
-		writes := hint != nil && !*hint && def.tool.Name != "add_annotation"
+		writes := hint != nil && !*hint && !strings.HasSuffix(def.tool.Name, "_annotation")
 		if writes != (def.op != "") {
 			t.Errorf("%s: writes = %t, but op = %q", def.tool.Name, writes, def.op)
 		}

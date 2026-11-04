@@ -106,7 +106,8 @@ Annotation rows in `/history.csv` and `/annotations.csv` fill `id` with the note
   `add_annotation`. The named exceptions in the tool-catalog tests grow by these two.
 - **Resource template `cetacean://annotations/{id}`:** the note, as REST's detail. It can be
   subscribed to, and an edit or delete sends `notifications/resources/updated`.
-- **`get_events`** gains `kinds`, `tags`, `matchAny` and `author`, with REST's meanings. A
+- **`get_events`** gains `kinds`, `tags`, `matchAny` and `authors`, with REST's meanings, and
+  returns each annotation's `id` and `version`. A
   `cetacean://annotations/tags` resource lists the tags, as the REST route does.
 - **#592:** all three annotation tools are hidden from `tools/list` when `storage.timeline` is
   off. Validation errors name the MCP argument (`at`, not `timestamp`).
