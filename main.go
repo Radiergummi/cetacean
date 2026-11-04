@@ -879,6 +879,14 @@ func restoreTimeline(path string, stateCache *cache.Cache, keep int) timeline.St
 	}
 
 	stateCache.History().Restore(entries, last, store.Instance())
+
+	// IDs past Count reach readers before the first flush stores any of them;
+	// storing Count now makes the next start skip them even after a crash.
+	if err := store.Commit(ctx, timeline.Batch{Last: stateCache.History().Count()}); err != nil {
+		slog.Warn("could not reserve history IDs; a crash before the first write may reissue them",
+			"error", err, "path", path)
+	}
+
 	stateCache.RestoreAnnotations(store, annotations)
 	slog.Info("restored the change history",
 		"entries", len(entries), "annotations", len(annotations))
