@@ -27,7 +27,7 @@ func restoreCache(t testing.TB, store *timeline.SQLite) *cache.Cache {
 		t.Fatal(err)
 	}
 
-	c.History().Restore(entries, last)
+	c.History().Restore(entries, last, store.Instance())
 	c.RestoreAnnotations(store, annotations)
 
 	return c
@@ -69,6 +69,57 @@ func TestAnnotations_SurviveARestart(t *testing.T) {
 	next, err := c.CreateAnnotation(ctx, cache.Annotation{Timestamp: time.Now(), Text: "z"})
 	if err != nil || next.ID <= edited.Version {
 		t.Fatalf("next ID %d, err=%v; want past version %d", next.ID, err, edited.Version)
+	}
+}
+
+// Each restart skips past every ID handed out before it, a removal's included,
+// though no row holds one once the annotation is gone.
+func TestAnnotations_RemovalIDsAreNotReissued(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+	ctx := context.Background()
+
+	var handedOut uint64
+
+	for range 3 {
+		store := openSQLite(t, path)
+		c := restoreCache(t, store)
+		writer := timeline.NewWriter(store, c.History(), c.History().Size(), nil)
+
+		if c.History().Instance() != store.Instance() {
+			t.Fatalf("history instance %q, want the store's %q",
+				c.History().Instance(), store.Instance())
+		}
+
+		a, err := c.CreateAnnotation(ctx, cache.Annotation{Timestamp: time.Now(), Text: "x"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if a.ID <= handedOut {
+			t.Fatalf(
+				"annotation ID %d, want past %d, handed out before the restart",
+				a.ID,
+				handedOut,
+			)
+		}
+
+		if err := c.DeleteAnnotation(
+			ctx,
+			a.ID,
+			func(cache.Annotation) error { return nil },
+		); err != nil {
+			t.Fatal(err)
+		}
+
+		handedOut = c.History().Count()
+
+		stopped, stop := context.WithCancel(ctx)
+		stop()
+		writer.Run(stopped, nil)
+
+		if err := store.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

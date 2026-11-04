@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"crypto/rand"
 	"math"
 	"slices"
 	"strings"
@@ -151,6 +152,10 @@ type History struct {
 	count   uint64
 	full    bool
 
+	// instance qualifies IDs wherever they must never repeat: random per
+	// process, or the database's own once Restore names it.
+	instance string
+
 	// byResource maps resource IDs to a ring of entry indices, enabling fast
 	// filtered lookups without a scan. Stale indices are skipped; an ID leaves
 	// the map once the ring overwrites its newest entry. Gaps name no resource
@@ -195,7 +200,16 @@ func NewHistory(size int) *History {
 		entries:    make([]HistoryEntry, size),
 		size:       size,
 		byResource: make(map[string]*indexRing),
+		instance:   rand.Text(),
 	}
+}
+
+// Instance names the sequence Count draws from; see the instance field.
+func (h *History) Instance() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	return h.instance
 }
 
 // Size is the ring's capacity — the most entries List can ever return. A
@@ -289,11 +303,13 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 
 // Restore fills an empty ring, oldest first, with the newest entries that fit;
 // it must precede any Append. Count skips a ring's worth past last, the largest
-// ID stored of any kind, since a crashed process handed out IDs it never wrote
-// and a reader has seen them.
-func (h *History) Restore(entries []HistoryEntry, last uint64) {
+// ID ever committed, since a crashed process handed out IDs it never wrote and
+// a reader has seen them; that holds for a database with nothing in it, too.
+func (h *History) Restore(entries []HistoryEntry, last uint64, instance string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	h.instance = instance
 
 	if len(entries) > h.size {
 		entries = entries[len(entries)-h.size:]
@@ -315,10 +331,7 @@ func (h *History) Restore(entries []HistoryEntry, last uint64) {
 		h.count = e.ID
 	}
 
-	h.count = max(h.count, last)
-	if h.count > 0 {
-		h.count += uint64(h.size)
-	}
+	h.count = max(h.count, last) + uint64(h.size)
 }
 
 func (h *History) Append(e HistoryEntry) uint64 {

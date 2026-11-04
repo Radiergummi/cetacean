@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
 - **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
 - **Breaking:** `/history` items carry a `kind`, and gaps appear beside changes; request `?kind=change` to keep the list of changes alone
+- **Breaking:** entry IDs in the Atom and JSON feeds name the deployment's history as well as the change, so feed readers show existing entries once more after the upgrade
 
 ### Fixed
 - History, its feeds, Recent Activity and `get_events` keep naming a task `service.slot` after Swarm prunes it, rather than falling back to its ID

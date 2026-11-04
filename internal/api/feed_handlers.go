@@ -71,7 +71,7 @@ func (h *Handlers) feedListHandler(
 			return
 		}
 
-		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
+		render(w, r, historyFeedData(r, h.instance(), title, entries, beforeID, limit))
 	}
 }
 
@@ -110,7 +110,7 @@ func (h *Handlers) feedDetailHandler(
 			title = resourceID
 		}
 
-		render(w, r, historyFeedData(r, title, entries, beforeID, limit))
+		render(w, r, historyFeedData(r, h.instance(), title, entries, beforeID, limit))
 	}
 }
 
@@ -129,7 +129,7 @@ func (h *Handlers) handleFeedHistory(
 		return
 	}
 
-	render(w, r, historyFeedData(r, "History", entries, beforeID, limit))
+	render(w, r, historyFeedData(r, h.instance(), "History", entries, beforeID, limit))
 }
 
 // queryHistoryFeed runs query for a feed page: the request's pagination, only
@@ -177,7 +177,7 @@ func (h *Handlers) handleFeedSearch(
 	// This feed titles itself with ?q= verbatim beside ACL-filtered entries,
 	// the same BREACH shape HandleSearch opts out of, so it opts out too.
 	render(w, disableCompression(r), searchFeedData(
-		r, fmt.Sprintf("Cetacean — Search: %s", q), entries, beforeID, limit,
+		r, h.instance(), fmt.Sprintf("Cetacean — Search: %s", q), entries, beforeID, limit,
 	))
 }
 
@@ -185,12 +185,13 @@ func (h *Handlers) handleFeedSearch(
 // reads ?q= and so the only one whose links may carry it back.
 func searchFeedData(
 	r *http.Request,
+	instance string,
 	title string,
 	entries []cache.HistoryEntry,
 	beforeID uint64,
 	limit int,
 ) feedData {
-	data := historyFeedData(r, title, entries, beforeID, limit)
+	data := historyFeedData(r, instance, title, entries, beforeID, limit)
 	data.QueryParams = searchFeedParams
 
 	return data
@@ -281,7 +282,7 @@ func (h *Handlers) feedTimeline(
 		return
 	}
 
-	data := historyFeedData(r, title, entries, beforeID, limit)
+	data := historyFeedData(r, h.instance(), title, entries, beforeID, limit)
 	data.QueryParams = params
 
 	render(w, r, data)
@@ -309,10 +310,16 @@ var actionVerb = map[string]string{
 	"ref_changed": "Updated",
 }
 
+// instance qualifies the history's IDs in feed entries; see feedEntryID.
+func (h *Handlers) instance() string {
+	return h.cache.History().Instance()
+}
+
 // historyFeedData builds a feedData from history entries, including the
 // last entry's numeric ID for pagination cursors.
 func historyFeedData(
 	r *http.Request,
+	instance string,
 	title string,
 	entries []cache.HistoryEntry,
 	beforeID uint64,
@@ -325,7 +332,7 @@ func historyFeedData(
 
 	return feedData{
 		Title:      title,
-		Entries:    historyToFeedEntries(r, entries),
+		Entries:    historyToFeedEntries(r, instance, entries),
 		Updated:    historyUpdated(entries),
 		BeforeID:   beforeID,
 		Limit:      limit,
@@ -333,18 +340,23 @@ func historyFeedData(
 	}
 }
 
-// historyToFeedEntries converts cache history entries to format-agnostic feed entries.
-func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedEntry {
+// historyToFeedEntries converts cache history entries to format-agnostic feed
+// entries, their IDs qualified by the history's instance.
+func historyToFeedEntries(
+	r *http.Request,
+	instance string,
+	entries []cache.HistoryEntry,
+) []feedEntry {
 	result := make([]feedEntry, 0, len(entries))
 
 	for _, e := range entries {
 		if e.Kind == cache.KindGap {
-			result = append(result, gapFeedEntry(e))
+			result = append(result, gapFeedEntry(instance, e))
 			continue
 		}
 
 		if e.Kind == cache.KindAnnotation {
-			result = append(result, annotationFeedEntry(r, e))
+			result = append(result, annotationFeedEntry(r, instance, e))
 			continue
 		}
 
@@ -359,7 +371,7 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 		}
 
 		result = append(result, feedEntry{
-			ID:          fmt.Sprintf("urn:cetacean:history:%d", e.ID),
+			ID:          feedEntryID(cache.KindChange, instance, e.ID),
 			Title:       fmt.Sprintf("%s %s: %s", verb, e.Type, e.Name),
 			ContentHTML: historyEntryHTML(e, href),
 			URL:         href,
@@ -374,7 +386,7 @@ func historyToFeedEntries(r *http.Request, entries []cache.HistoryEntry) []feedE
 
 // gapFeedEntry is a gap as a feed entry: it links nowhere, since it names no
 // resource, and it was last updated when it was recorded, at its end.
-func gapFeedEntry(e cache.HistoryEntry) feedEntry {
+func gapFeedEntry(instance string, e cache.HistoryEntry) feedEntry {
 	from, until := e.Timestamp.UTC().Format(time.RFC3339), e.Until.UTC().Format(time.RFC3339)
 	title := fmt.Sprintf("Nothing recorded from %s to %s", from, until)
 	content := "<p>Cetacean was not watching the cluster from " + from + " to " + until
@@ -390,7 +402,7 @@ func gapFeedEntry(e cache.HistoryEntry) feedEntry {
 	}
 
 	return feedEntry{
-		ID:          fmt.Sprintf("urn:cetacean:history:%d", e.ID),
+		ID:          feedEntryID(cache.KindGap, instance, e.ID),
 		Title:       title,
 		ContentHTML: content,
 		Updated:     e.Until,
@@ -398,9 +410,20 @@ func gapFeedEntry(e cache.HistoryEntry) feedEntry {
 	}
 }
 
+// feedEntryID is an entry's Atom ID. Sequence IDs repeat across databases,
+// and across restarts when nothing persists the history; within one instance
+// they never do.
+func feedEntryID(kind, instance string, id uint64) string {
+	if kind != cache.KindAnnotation {
+		kind = "history"
+	}
+
+	return fmt.Sprintf("urn:cetacean:%s:%s:%d", kind, instance, id)
+}
+
 // annotationFeedEntry is an annotation as a feed entry. Its ID stays fixed and
 // it is updated at its last edit, so a reader shows an edit as an update.
-func annotationFeedEntry(r *http.Request, e cache.HistoryEntry) feedEntry {
+func annotationFeedEntry(r *http.Request, instance string, e cache.HistoryEntry) feedEntry {
 	href := absURL(r, annotationPath(e.ID))
 
 	title, _, _ := strings.Cut(strings.TrimSpace(e.Text), "\n")
@@ -423,7 +446,7 @@ func annotationFeedEntry(r *http.Request, e cache.HistoryEntry) feedEntry {
 	b.WriteString(`">View in Cetacean</a></p>`)
 
 	return feedEntry{
-		ID:          fmt.Sprintf("urn:cetacean:annotation:%d", e.ID),
+		ID:          feedEntryID(cache.KindAnnotation, instance, e.ID),
 		Title:       title,
 		ContentHTML: b.String(),
 		URL:         href,

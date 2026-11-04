@@ -114,7 +114,7 @@ func (c *Cache) CreateAnnotation(ctx context.Context, a Annotation) (Annotation,
 
 	a.ID = c.history.Count() + 1
 	a.Version = a.ID
-	a.Created = time.Now()
+	a.Created = time.Now().UTC()
 	a.Tags = slices.Clone(a.Tags)
 	a.Resources = slices.Clone(a.Resources)
 	a.Updated, a.Editor = time.Time{}, nil
@@ -149,7 +149,7 @@ func (c *Cache) UpdateAnnotation(
 
 	a.ID, a.Actor, a.Created = current.ID, current.Actor, current.Created
 	a.Version = c.history.Count() + 1
-	a.Updated = time.Now()
+	a.Updated = time.Now().UTC()
 
 	return a, c.commitAnnotation(ctx, a, "update")
 }

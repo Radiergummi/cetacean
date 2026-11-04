@@ -96,6 +96,9 @@ func TestCreateAnnotationRefusesAnInvalidBody(t *testing.T) {
 		"no text":        {cluster.AnnotationInput{Text: "  "}, "text"},
 		"long text":      {cluster.AnnotationInput{Text: strings.Repeat("é", 1001)}, "text"},
 		"until first":    {cluster.AnnotationInput{Text: "x", Timestamp: now, Until: now}, "until"},
+		"far future":     {cluster.AnnotationInput{Text: "x", Timestamp: year(3000)}, "timestamp"},
+		"before 1970":    {cluster.AnnotationInput{Text: "x", Timestamp: year(1969)}, "timestamp"},
+		"until far":      {cluster.AnnotationInput{Text: "x", Timestamp: now, Until: year(9999)}, "until"},
 		"bad tag":        {cluster.AnnotationInput{Text: "x", Tags: []string{"Deploy"}}, "tags[0]"},
 		"tag twice":      {cluster.AnnotationInput{Text: "x", Tags: []string{"a", "a"}}, "tags[1]"},
 		"too many tags":  {cluster.AnnotationInput{Text: "x", Tags: make([]string, 11)}, "tags"},
@@ -111,6 +114,49 @@ func TestCreateAnnotationRefusesAnInvalidBody(t *testing.T) {
 		if !ok || invalid.Field != tc.field {
 			t.Errorf("%s: err = %v, want one naming %s", name, err, tc.field)
 		}
+	}
+}
+
+func year(y int) time.Time { return time.Date(y, 1, 1, 0, 0, 0, 0, time.UTC) }
+
+// A note restored from the store comes back in UTC, so it is kept in UTC
+// from the start: the same ETag then always carries the same bytes.
+func TestAnnotationTimesAreKeptInUTC(t *testing.T) {
+	s := cluster.NewAnnotations(annotationCache(t))
+	east := time.FixedZone("east", 5*60*60)
+	at := time.Date(2026, 11, 1, 14, 0, 0, 0, east)
+
+	in := onWeb("x")
+	in.Timestamp, in.Until = at, at.Add(time.Hour)
+
+	a, err := s.Create(as("alice"), everyone, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	later := at.Add(2 * time.Hour)
+	edited, err := s.Update(
+		as("alice"),
+		everyone,
+		a.ID,
+		cluster.AnnotationPatch{Until: &later},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, got := range map[string]time.Time{
+		"timestamp": a.Timestamp, "until": a.Until, "created": a.Created,
+		"edited until": edited.Until, "updated": edited.Updated,
+	} {
+		if got.Location() != time.UTC {
+			t.Errorf("%s in %v, want UTC", name, got.Location())
+		}
+	}
+
+	if !a.Timestamp.Equal(at) {
+		t.Errorf("timestamp %v, want the instant %v", a.Timestamp, at)
 	}
 }
 

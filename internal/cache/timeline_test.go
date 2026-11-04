@@ -300,7 +300,7 @@ func TestTimeline_PagesPastNotesTheReaderCannotRead(t *testing.T) {
 func TestAnnotationIndex_StaysOrderedThroughEditsAndRemovals(t *testing.T) {
 	c := New(nil)
 	store := &fakeAnnotationStore{}
-	c.history.Restore(nil, 9)
+	c.history.Restore(nil, 9, "test")
 	c.RestoreAnnotations(store, []Annotation{{ID: 9, Text: "nine"}, {ID: 3, Text: "three"}})
 
 	ten := c.note(t, Annotation{})

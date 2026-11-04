@@ -93,7 +93,7 @@ func (s *Server) annotationTools() []toolDef {
 				),
 				mcplib.WithString("at",
 					mcplib.Description(
-						"RFC 3339 timestamp of the moment, or the start of the range. Defaults to now.",
+						"RFC 3339 timestamp of the moment, or the start of the range, in the years 1970 to 2199. Defaults to now.",
 					),
 				),
 				mcplib.WithString("until",
@@ -132,7 +132,7 @@ func (s *Server) annotationTools() []toolDef {
 				mcplib.WithString(
 					"at",
 					mcplib.Description(
-						"RFC 3339 timestamp of the moment, or the start of the range.",
+						"RFC 3339 timestamp of the moment, or the start of the range, in the years 1970 to 2199.",
 					),
 				),
 				mcplib.WithString("until",

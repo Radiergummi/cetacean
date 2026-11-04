@@ -870,7 +870,7 @@ func restoreTimeline(path string, stateCache *cache.Cache, keep int) timeline.St
 		return nil
 	}
 
-	stateCache.History().Restore(entries, last)
+	stateCache.History().Restore(entries, last, store.Instance())
 	stateCache.RestoreAnnotations(store, annotations)
 	slog.Info("restored the change history",
 		"entries", len(entries), "annotations", len(annotations))
