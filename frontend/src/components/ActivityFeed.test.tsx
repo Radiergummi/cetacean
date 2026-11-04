@@ -177,6 +177,76 @@ describe("ActivityFeed", () => {
     expect(screen.getByText("updated")).toBeInTheDocument();
   });
 
+  it("says what a gap recovered, and marks a recovered change", () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 2,
+        kind: "gap",
+        timestamp: "2026-10-30T13:00:00Z",
+        until: "2026-10-30T16:00:00Z",
+        recoveredFrom: "2026-10-30T15:00:00Z",
+        type: "",
+        action: "",
+        resourceId: "",
+        name: "",
+      },
+      {
+        id: 1,
+        kind: "change",
+        timestamp: "2026-10-30T15:30:00Z",
+        type: "service",
+        action: "update",
+        resourceId: "svc1",
+        name: "web-app",
+        recovered: true,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed entries={entries} />
+      </MemoryRouter>,
+    );
+
+    const divider = screen.getByText(/^Not watching for 3h, partly covered by Docker's log/);
+
+    expect(divider).toHaveAttribute(
+      "title",
+      expect.stringContaining(
+        `Docker's event log covers it from ${formatDateTime("2026-10-30T15:00:00Z")}`,
+      ),
+    );
+    expect(screen.getByText("recovered")).toHaveAttribute(
+      "title",
+      expect.stringMatching(/^Recovered from Docker's event log/),
+    );
+  });
+
+  it("keeps a recovered change out of a watched change's run", () => {
+    const change = (id: number, recovered: boolean): HistoryEntry => ({
+      id,
+      kind: "change",
+      timestamp: `2026-10-30T1${id}:00:00Z`,
+      type: "service",
+      action: "update",
+      resourceId: "svc1",
+      name: "web-app",
+      recovered,
+    });
+
+    render(
+      <MemoryRouter>
+        <ActivityFeed
+          entries={[change(2, true), change(1, false)]}
+          collapse
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("2 changes")).not.toBeInTheDocument();
+    expect(screen.getAllByText("recovered")).toHaveLength(1);
+  });
+
   it("skips kinds it does not know", () => {
     const entries: HistoryEntry[] = [
       {

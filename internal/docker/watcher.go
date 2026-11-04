@@ -91,6 +91,11 @@ type Watcher struct {
 	store    Store
 	syncOnce sync.Once
 
+	// onWatching runs once, between the first successful sync and anything
+	// the stream records; see SetOnWatching.
+	onWatching   func(streamSince time.Time)
+	watchingOnce sync.Once
+
 	// syncMu orders full syncs, so a slower fetch cannot replace the cache
 	// after a newer one has; resyncs shares one manual resync among callers.
 	syncMu  sync.Mutex
@@ -177,6 +182,21 @@ func (w *Watcher) SetTaskPollInterval(interval time.Duration) {
 	w.taskPollInterval = interval
 }
 
+// SetOnWatching sets what runs once a sync has first succeeded, before the
+// stream beside it records anything, given where that stream starts; zero when
+// a stream already running reached the sync. Call before Run.
+func (w *Watcher) SetOnWatching(fn func(streamSince time.Time)) {
+	w.onWatching = fn
+}
+
+func (w *Watcher) startWatching(streamSince time.Time) {
+	w.watchingOnce.Do(func() {
+		if w.onWatching != nil {
+			w.onWatching(streamSince)
+		}
+	})
+}
+
 // waitForSettles blocks until every scheduled re-read has finished.
 func (w *Watcher) waitForSettles() {
 	w.settles.Wait()
@@ -203,6 +223,7 @@ func (w *Watcher) Run(ctx context.Context) {
 	synced := w.fullSync(ctx) == nil
 	if synced {
 		w.writeSnapshot()
+		w.startWatching(since)
 	}
 
 	// Event stream with reconnect and exponential backoff.
@@ -224,6 +245,7 @@ func (w *Watcher) Run(ctx context.Context) {
 		synced = w.fullSync(ctx) == nil
 		if synced {
 			w.writeSnapshot()
+			w.startWatching(since)
 			backoff = 1 * time.Second // Reset on success.
 		} else {
 			backoff = min(backoff*2, maxBackoff)
@@ -501,6 +523,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 
 		w.markTracking()
 		w.writeSnapshot()
+		w.startWatching(time.Time{})
 
 		return true
 	}
@@ -641,11 +664,7 @@ func (w *Watcher) eventKeyFromMsg(msg events.Message) (eventKey, string) {
 
 		return eventKey{resourceType: "task", id: taskID}, "update"
 	case events.NetworkEventType, events.VolumeEventType:
-		action := string(msg.Action)
-		if action == "destroy" {
-			action = "remove"
-		}
-		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, action
+		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, historyAction(msg.Action)
 	default:
 		return eventKey{resourceType: msg.Type, id: msg.Actor.ID}, string(msg.Action)
 	}

@@ -662,6 +662,62 @@ func TestRun_SignalsReady(t *testing.T) {
 	}
 }
 
+// The gap is recorded through this hook, so it must run before the stream
+// records anything and know where that stream starts.
+func TestRun_StartsWatchingOnceBeforeTheStream(t *testing.T) {
+	mc := newMockClient()
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	var (
+		calls      []time.Time
+		subscribed bool
+	)
+	w.SetOnWatching(func(since time.Time) {
+		mc.mu.Lock()
+		subscribed = len(mc.eventsSince) > 0
+		mc.mu.Unlock()
+
+		calls = append(calls, since)
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	mc.errCh <- fmt.Errorf("done")
+
+	done := make(chan struct{})
+	go func() {
+		w.Run(ctx)
+		close(done)
+	}()
+
+	for deadline := time.Now().Add(5 * time.Second); ; {
+		mc.mu.Lock()
+		streams := len(mc.eventsSince)
+		mc.mu.Unlock()
+
+		if streams > 0 || time.Now().After(deadline) {
+			break
+		}
+
+		time.Sleep(time.Millisecond)
+	}
+
+	cancel()
+	<-done
+
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if len(calls) != 1 || subscribed || len(mc.eventsSince) == 0 ||
+		!calls[0].Equal(mc.eventsSince[0]) {
+		t.Errorf(
+			"hook ran %v (after subscribing: %v), stream since %v; want once, first, at the stream's since",
+			calls,
+			subscribed,
+			mc.eventsSince,
+		)
+	}
+}
+
 // A retried sync runs on the event loop beside a cache that already serves
 // reads, so a hung one must give the loop back well before a full sync's own
 // timeout would, or every event and Refresh waits behind it.

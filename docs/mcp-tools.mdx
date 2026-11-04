@@ -130,6 +130,9 @@ What the cluster is doing now, and what it did recently.
     listed with the changes of the resources it names, a service's with those on its stack, a stack's with those on
     its services, and a cluster-wide one with every resource's. Only the annotations the caller may read are returned.
 
+    A gap with `recoveredFrom` had [changes recovered][api.recovered] from Docker's event log: entries marked
+    `recovered` sit inside it, complete from `recoveredFrom` for every type but tasks.
+
     `kinds` keeps entries of the kinds given: `change`, `gap`, or `annotation`. `tags` keeps the annotations carrying
     every tag given, or any of them with `matchAny`. `authors` keeps what an actor with one of the subjects given did:
     the annotations they wrote and the changes they made through Cetacean. `search` keeps the entries showing each
@@ -624,6 +627,7 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 [api.annotations]:  api#annotations
 [api.history-actor]:  api#who-made-a-change
 [api.history-search]:  api#history-pagination
+[api.recovered]:  api#changes-recovered-from-a-gap
 [authentication]:  authentication
 [custom-links]:  integrations#custom-links
 [dashboard]:  dashboard

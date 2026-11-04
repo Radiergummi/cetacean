@@ -106,3 +106,16 @@ func (c *Cache) removedTaskFromLocked(t swarm.Task) (service, stack string) {
 
 	return "", ""
 }
+
+// ServiceStacks maps each service's ID to its stack, "" for one in none.
+func (c *Cache) ServiceStacks() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	stacks := make(map[string]string, len(c.services))
+	for id, svc := range c.services {
+		stacks[id] = svc.Spec.Labels[StackLabel]
+	}
+
+	return stacks
+}

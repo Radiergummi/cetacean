@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- After a restart, changes Docker still remembers from the gap are recovered into the history, marked `recovered`; the gap's `recoveredFrom` says from when they're complete, tasks aside
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
 - Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline includes its services' changes and annotations

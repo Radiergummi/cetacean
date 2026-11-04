@@ -60,6 +60,17 @@ type Event struct {
 	// Timestamp and Until are a gap's start and end; zero on any other event.
 	Timestamp time.Time `json:"-"`
 	Until     time.Time `json:"-"`
+
+	// Recovery is what a gap's recording recovered of it.
+	Recovery Recovery `json:"-"`
+}
+
+// Recovery is what Docker's event buffer still held of a gap: the changes
+// it recorded, oldest first, and from when they are complete; zero when the
+// buffer reached nothing.
+type Recovery struct {
+	Entries []HistoryEntry
+	From    time.Time
 }
 
 type Stack struct {
@@ -402,12 +413,19 @@ func (c *Cache) notify(e Event) {
 	case EventSync:
 		e.HistoryID = c.history.Count()
 	case EventGap:
+		// The recovered changes take the IDs just below their gap's, and are not
+		// dispatched: they describe the past, and the gap's event refetches it.
+		for _, entry := range e.Recovery.Entries {
+			c.history.Append(entry)
+		}
+
 		// Stamped under notifyMu, so no change with a lower ID ends later.
 		e.Until = time.Now()
 		e.HistoryID = c.history.Append(HistoryEntry{
-			Kind:      KindGap,
-			Timestamp: e.Timestamp,
-			Until:     e.Until,
+			Kind:          KindGap,
+			Timestamp:     e.Timestamp,
+			Until:         e.Until,
+			RecoveredFrom: e.Recovery.From,
 		})
 	default:
 		entry := HistoryEntry{
@@ -482,7 +500,12 @@ func (c *Cache) recordReplica(entry *HistoryEntry, e Event) {
 // goes through notify, so it reaches the history and every listener the way a
 // change does; it must not be called from a listener.
 func (c *Cache) RecordGap(from time.Time) {
-	c.notify(Event{Type: EventGap, Timestamp: from})
+	c.RecordRecoveredGap(from, Recovery{})
+}
+
+// RecordRecoveredGap is RecordGap with what was recovered of the gap.
+func (c *Cache) RecordRecoveredGap(from time.Time, recovered Recovery) {
+	c.notify(Event{Type: EventGap, Timestamp: from, Recovery: recovered})
 }
 
 func ExtractName(e Event) string {

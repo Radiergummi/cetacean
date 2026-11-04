@@ -82,6 +82,13 @@ function GapDivider({ gaps }: { gaps: HistoryEntry[] }) {
     text = total > 0 ? gap.title : "Not watching";
   }
 
+  const covered = gaps.flatMap(({ recoveredFrom }) => (recoveredFrom ? [recoveredFrom] : []));
+
+  if (covered.length > 0) {
+    text += ", partly covered by Docker's log";
+    range += `. Docker's event log covers ${covered.length === 1 ? "it" : `${covered.length} of them`} from ${covered.map((from) => formatDateTime(from)).join(", ")}: changes to everything but tasks since then are listed below`;
+  }
+
   return (
     <TimelineRow
       date={end}
@@ -118,7 +125,7 @@ function ChangeRun({
 }) {
   const [open, setOpen] = useState(false);
   const runId = useId();
-  const [{ action, actor, name, resourceId, timestamp, type }] = entries;
+  const [{ action, actor, name, recovered, resourceId, timestamp, type }] = entries;
   const path = resourcePath(type, resourceId, name);
 
   return (
@@ -173,6 +180,14 @@ function ChangeRun({
               title={`${actor.subject} (${actor.provider}${actor.client ? `, client ${actor.client}` : ""})`}
             >
               {attribution(actor)}
+            </span>
+          )}
+          {recovered && (
+            <span
+              className="rounded border border-dashed px-1.5 py-0.5 text-xs text-muted-foreground"
+              title="Recovered from Docker's event log after Cetacean restarted"
+            >
+              recovered
             </span>
           )}
         </div>

@@ -354,4 +354,5 @@ fed from `notify`.
    - it is per daemon
    - tasks have no swarm events
 
-   A gap would narrow, never close. A candidate follow-up.
+   A gap would narrow, never close. Designed in
+   [Recovering what changed during a gap](2026-11-03-gap-recovery-design.md).

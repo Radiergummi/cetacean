@@ -377,6 +377,15 @@ export interface HistoryEntry {
   kind: string;
   timestamp: string;
   until?: string | undefined;
+
+  /**
+   * On a gap, when the changes recovered from Docker's event log become
+   * complete for everything but tasks; absent when none were.
+   */
+  recoveredFrom?: string | undefined;
+
+  /** A change read back from Docker's event log after a gap, not watched. */
+  recovered?: boolean | undefined;
   type: string;
   action: string;
   resourceId: string;
