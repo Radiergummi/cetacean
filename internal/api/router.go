@@ -942,8 +942,11 @@ func (rt routes) exec() {
 		}
 	}
 	// Opening checks the level in execDecision instead, which audits the refusal.
-	openExec := execOp(cluster.OpOpenExec, h.mayOpenExec)
-	openExec.gates = NewChain(attributeWrite)
+	openExec := tieredChain{
+		gates:   NewChain(attributeWrite),
+		level:   cluster.OpOpenExec.Tier(),
+		permits: h.mayOpenExec,
+	}
 
 	mux.HandleFunc(
 		"GET /tasks/{id}/exec",

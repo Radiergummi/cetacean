@@ -255,9 +255,10 @@ func (m *Manager) Connected(sid string) error {
 	m.mu.Unlock()
 
 	if err := m.write(rec); err != nil {
-		m.Abort(sid, "audit_unavailable")
 		if abandoned, ok := errors.AsType[*audit.AbandonedError](err); ok {
-			m.pairLate(sid, abandoned.Landed)
+			m.abortLate(sid, abandoned.Landed)
+		} else {
+			m.Abort(sid, "audit_unavailable")
 		}
 
 		return audit.ErrUnavailable
@@ -383,12 +384,18 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 	return snapshot
 }
 
-// pairLate writes the end record of an aborted session whose start record
-// lands after its write was given up, once it has.
-func (m *Manager) pairLate(sid string, landed <-chan error) {
+// abortLate aborts a session whose start record was given up but may still
+// land, and writes its end record once it has. The write is counted before the
+// abort, so Shutdown never sees the session ended with nothing left to write.
+func (m *Manager) abortLate(sid string, landed <-chan error) {
+	m.mu.Lock()
+	m.endWrites++
+	m.mu.Unlock()
+
+	m.Abort(sid, "audit_unavailable")
+
 	m.mu.Lock()
 	end := m.record("exec.end", m.sessions[sid])
-	m.endWrites++
 	m.mu.Unlock()
 
 	go func() {

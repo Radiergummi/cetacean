@@ -478,7 +478,11 @@ func TestExecTokenCeilingNarrowsTheTier(t *testing.T) {
 		strings.Contains(w.Header().Get("Allow"), "POST") {
 		t.Errorf("GET = %d, Allow = %q", w.Code, w.Header().Get("Allow"))
 	}
-	assertACLErrorCode(t, send(http.MethodPost), "OPS001")
+	w := send(http.MethodPost)
+	if !strings.Contains(w.Body.String(), "but the caller is at level 2") {
+		t.Errorf("OPS001 body = %s, want the caller's level", w.Body.String())
+	}
+	assertACLErrorCode(t, w, "OPS001")
 }
 
 // recordingAudit keeps every record it is handed.
