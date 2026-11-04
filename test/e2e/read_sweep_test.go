@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -751,6 +752,195 @@ func driveStacksSummary(t *testing.T, proc *sut.Process, _ baselineIDs) {
 	}
 }
 
+// driveAttestationGate checks an SBOM or Dockerfile view: gated on the
+// resource's read ACL like driveDetail, but the fixture image is unpinned, so
+// a persona the ACL lets through gets ATT007 rather than a document.
+func driveAttestationGate(pathFn func(baselineIDs) string) readDriveFunc {
+	return func(t *testing.T, proc *sut.Process, ids baselineIDs) {
+		path := pathFn(ids)
+
+		for _, p := range readPersonas {
+			t.Run(p.name, func(t *testing.T) {
+				resp := readAs(t, proc, p, path, "")
+
+				if p.name == "anonymous" {
+					assertForbiddenWithCode(t, resp, path, p.name, "ACL001")
+					return
+				}
+
+				if resp.StatusCode != http.StatusNotFound {
+					body, _ := io.ReadAll(resp.Body)
+					resp.Body.Close()
+					t.Fatalf("status = %d, want 404 ATT007: %s", resp.StatusCode, body)
+				}
+
+				if pType := problemType(t, resp); !strings.Contains(pType, "ATT007") {
+					t.Errorf("problem type = %q, want it to name ATT007", pType)
+				}
+			})
+		}
+	}
+}
+
+// readSweepNote is an annotation on shop_web and its stack, with a tag no
+// other run shares. Naming the stack is what hides it from oncall, which
+// holds no stack grant: a note is readable only with every resource it names.
+type readSweepNote struct {
+	id  uint64
+	tag string
+}
+
+func createReadSweepNote(t *testing.T, proc *sut.Process, ids baselineIDs) readSweepNote {
+	t.Helper()
+
+	note := readSweepNote{tag: sweepName("read-sweep")}
+
+	payload, err := json.Marshal(map[string]any{
+		"text": "read sweep",
+		"tags": []string{note.tag},
+		"resources": []map[string]string{
+			{"type": "service", "id": ids.serviceID},
+			{"type": "stack", "id": ids.stackName},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal annotation: %v", err)
+	}
+
+	created := annotationRequestAs(
+		t, proc, opsPersona, http.MethodPost, "/annotations", "application/json", payload,
+	)
+	if created.status != http.StatusCreated {
+		t.Fatalf(
+			"POST /annotations as ops: status = %d, want 201: %s",
+			created.status,
+			created.body,
+		)
+	}
+
+	var body struct {
+		Annotation struct {
+			ID uint64 `json:"id"`
+		} `json:"annotation"`
+	}
+	if err := json.Unmarshal([]byte(created.body), &body); err != nil {
+		t.Fatalf("decode created annotation: %v", err)
+	}
+	note.id = body.Annotation.ID
+
+	t.Cleanup(func() {
+		removed := annotationRequestAs(
+			t, proc, opsPersona, http.MethodDelete, note.path(), "", nil,
+		)
+		if removed.status != http.StatusNoContent {
+			t.Errorf(
+				"cleanup: DELETE %s: status = %d: %s",
+				note.path(),
+				removed.status,
+				removed.body,
+			)
+		}
+	})
+
+	return note
+}
+
+func (n readSweepNote) path() string { return "/annotations/" + strconv.FormatUint(n.id, 10) }
+
+// annotationRequestAs issues one request as persona and reads its answer.
+func annotationRequestAs(
+	t *testing.T,
+	proc *sut.Process,
+	persona readPersona,
+	method, path, contentType string,
+	body []byte,
+) httpOutcome {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), method, proc.BaseURL+path, bytes.NewReader(body),
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	applyPersona(req, persona)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	return send(t, proc, req)
+}
+
+// noteHiddenFrom names the personas that may not read a readSweepNote.
+var noteHiddenFrom = map[string]bool{"anonymous": true, "oncall": true}
+
+// driveAnnotationCollection checks a collection narrowed to the note's tag,
+// the list or the tag counts: anonymous is refused by requireAnyGrant, oncall
+// is served it without the note, and every persona reading both its resources
+// is served the note.
+func driveAnnotationCollection(pathFn func(tag string) string) readDriveFunc {
+	return func(t *testing.T, proc *sut.Process, ids baselineIDs) {
+		note := createReadSweepNote(t, proc, ids)
+		path := pathFn(note.tag)
+
+		for _, p := range readPersonas {
+			t.Run(p.name, func(t *testing.T) {
+				resp := readAs(t, proc, p, path, "")
+
+				if p.name == "anonymous" {
+					assertForbiddenWithCode(t, resp, path, p.name, "ACL001")
+					return
+				}
+
+				if resp.StatusCode != http.StatusOK {
+					body, _ := io.ReadAll(resp.Body)
+					resp.Body.Close()
+					t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+				}
+
+				want := 1
+				if noteHiddenFrom[p.name] {
+					want = 0
+				}
+
+				if got := decodeCollection(t, resp, path, p.name).Total; got != want {
+					t.Errorf("GET %s as %s: %d items, want %d", path, p.name, got, want)
+				}
+			})
+		}
+	}
+}
+
+// driveAnnotationDetail checks GET /annotations/{id}: a persona that may not
+// read the note is answered ANN004, as for one that does not exist.
+func driveAnnotationDetail(t *testing.T, proc *sut.Process, ids baselineIDs) {
+	note := createReadSweepNote(t, proc, ids)
+	path := note.path()
+
+	for _, p := range readPersonas {
+		t.Run(p.name, func(t *testing.T) {
+			resp := readAs(t, proc, p, path, "")
+
+			if !noteHiddenFrom[p.name] {
+				assertStatus(t, resp, path, p.name, http.StatusOK)
+				return
+			}
+
+			if resp.StatusCode != http.StatusNotFound {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("status = %d, want 404 ANN004: %s", resp.StatusCode, body)
+			}
+
+			if pType := problemType(t, resp); !strings.Contains(pType, "ANN004") {
+				t.Errorf("problem type = %q, want it to name ANN004", pType)
+			}
+		})
+	}
+}
+
 // ─── the sweep itself ───────────────────────────────────────────────────
 
 // drivenReadRoutes is the single source of truth for what this file
@@ -874,6 +1064,36 @@ var drivenReadRoutes = map[string]readDriveFunc{
 		func(ids baselineIDs) string { return "/tasks/" + ids.taskID + "/logs" },
 	),
 
+	// Image attestations: the fixture image is unpinned, so provenance reads a
+	// status and the documents built from it are ATT007.
+	"GET /services/{id}/provenance": driveSubresource(
+		func(ids baselineIDs) string { return "/services/" + ids.serviceID + "/provenance" },
+	),
+	"GET /services/{id}/sbom": driveAttestationGate(
+		func(ids baselineIDs) string { return "/services/" + ids.serviceID + "/sbom" },
+	),
+	"GET /services/{id}/dockerfile": driveAttestationGate(
+		func(ids baselineIDs) string { return "/services/" + ids.serviceID + "/dockerfile" },
+	),
+	"GET /tasks/{id}/provenance": driveSubresource(
+		func(ids baselineIDs) string { return "/tasks/" + ids.taskID + "/provenance" },
+	),
+	"GET /tasks/{id}/sbom": driveAttestationGate(
+		func(ids baselineIDs) string { return "/tasks/" + ids.taskID + "/sbom" },
+	),
+	"GET /tasks/{id}/dockerfile": driveAttestationGate(
+		func(ids baselineIDs) string { return "/tasks/" + ids.taskID + "/dockerfile" },
+	),
+
+	// Annotations, against a note this lane writes as ops.
+	"GET /annotations": driveAnnotationCollection(
+		func(tag string) string { return "/annotations?tag=" + tag },
+	),
+	"GET /annotations/tags": driveAnnotationCollection(
+		func(tag string) string { return "/annotations/tags?q=" + tag },
+	),
+	"GET /annotations/{id}": driveAnnotationDetail,
+
 	// Cluster-wide endpoints gated by requireAnyGrant.
 	"GET /cluster":               driveGrantGate("/cluster", ""),
 	"GET /cluster/capacity":      driveGrantGate("/cluster/capacity", ""),
@@ -948,6 +1168,19 @@ var excusedReadRoutes = map[string]string{
 	"GET /secret-entries/{id}": "an entry is opened by MCP create_secret's URL elicitation and " +
 		"answers only the subject that opened it, whatever the policy; internal/api's " +
 		"secret_entry_test.go drives that ownership check",
+
+	// Exec routes are registered only with exec.enabled, which this lane leaves off.
+	"GET /exec": "registered only with exec.enabled, which this lane's SUT leaves off; " +
+		"driven as the owner by TestExecSessionsAreListedAndEnded in exec_test.go, and for " +
+		"other identities by TestOthersSeeSessionsOnlyWithExecOnTheTarget in internal/api",
+	"GET /exec/{sid}": "registered only with exec.enabled, which this lane's SUT leaves off; " +
+		"driven as the owner by every case in exec_test.go, which polls the session it " +
+		"opened, and for other identities by TestOthersSeeSessionsOnlyWithExecOnTheTarget " +
+		"in internal/api",
+	"GET /tasks/{id}/exec": "registered only with exec.enabled, which this lane's SUT leaves " +
+		"off; driven as the owner by TestExecSessionsAreListedAndEnded in exec_test.go; " +
+		"other identities only through GET /exec's TestOthersSeeSessionsOnlyWithExecOnTheTarget " +
+		"in internal/api, which shares its visibility rule",
 
 	// Genuinely out of scope for a request/response sweep.
 	"GET /events": "SSE-only ACL filtering (aclMatchWrap) needs a streaming client to observe, not a " +

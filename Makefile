@@ -1,4 +1,4 @@
-.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-frontend test-e2e test-stack test-multinode test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
+.PHONY: lint lint-docs vuln typecheck fmt fmt-check build test test-frontend test-e2e test-inventory test-stack test-multinode test-stack-race e2e-up e2e-down check bench bench-baseline bench-diff sbom sbom-check sbom-verify hooks cover spec spec-extract spec-extract-check spec-genmcp spec-report spec-report-full spec-transcript spec-mutants spec-mutants-generate
 
 # Where test-stack puts its instrumented binary and the profiles it writes.
 # Both are gitignored, and neither replaces ./cetacean.
@@ -112,6 +112,13 @@ test:
 ## Run the frontend unit tests (vitest), as CI's test-frontend job does
 test-frontend:
 	pnpm --filter frontend test --run
+
+## Run the e2e suite's inventory gates, which read the router and need no Docker
+#
+# -short makes harness.Up skip, so a gate that needs the environment skips
+# here and runs in test-stack.
+test-inventory:
+	go test -tags e2e -short -count=1 -run '^TestEvery' ./test/e2e/
 
 ## Run end-to-end tests
 test-e2e:
@@ -306,11 +313,11 @@ spec-genmcp:
 	go run ./scripts/spec-genmcp
 	git diff --exit-code internal/spec/registry/mcp/
 
-## Run all checks (lint + type check + format check + Go and frontend tests + spec)
+## Run all checks (lint + type check + format check + Go, e2e-inventory and frontend tests + spec)
 #
 # vuln is not here: govulncheck fetches its database on every run, so it
 # needs the network, and CI runs it on its own.
-check: lint typecheck fmt-check test test-frontend spec
+check: lint typecheck fmt-check test test-inventory test-frontend spec
 
 ## Run the Go benchmark suite, writing results to bench.txt
 #

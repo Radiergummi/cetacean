@@ -435,6 +435,25 @@ var excusedWriteRoutes = map[string]string{
 	"POST /services/{id}/restart": "driven by " +
 		"TestRestartServiceRecreatesTasksOnTheCluster in write_test.go",
 
+	// Annotations change nothing in Docker, so there is no engine state to
+	// verify against, and they skip the tier the level-0 replay asserts.
+	"POST /annotations": "untiered and engine-free; driven by " +
+		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below without auth, and per " +
+		"identity by TestCreateAnnotationRefusals in internal/api",
+	"PATCH /annotations/{id}": "untiered and engine-free; driven by " +
+		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below without auth, and per " +
+		"identity by TestPatchAnnotationMergesAndHonoursIfMatch in internal/api",
+	"DELETE /annotations/{id}": "untiered and engine-free; driven by " +
+		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below without auth, and per " +
+		"identity by TestDeleteAnnotation in internal/api",
+
+	// Exec routes are registered only with exec.enabled, which this lane's
+	// SUT leaves off.
+	"POST /tasks/{id}/exec": "registered only with exec.enabled; driven by every case in " +
+		"exec_test.go, which opens a shell through the real binary",
+	"DELETE /exec/{sid}": "registered only with exec.enabled; driven by " +
+		"TestExecSessionsAreListedAndEnded in exec_test.go",
+
 	"POST /-/resync": "mutates the cache rather than the cluster, so there is no engine " +
 		"state to read back the way every other driven entry is verified, and it is " +
 		"deliberately not tiered — the operations level says what a deployment may do to " +
@@ -899,6 +918,74 @@ func TestWriteSweepRefusedAtReadOnlyLevel(t *testing.T) {
 				t.Errorf("problem type = %q, want it to name OPS001", pType)
 			}
 		})
+	}
+}
+
+// TestAnnotationWritesSkipTheTierAndHonourIfMatch writes a cluster-wide note
+// at operations level 0, where every Docker write is refused, and edits and
+// removes it under the validator each answer carried.
+func TestAnnotationWritesSkipTheTierAndHonourIfMatch(t *testing.T) {
+	env := harness.Up(t)
+	env.SwarmInit(t)
+
+	proc := startWriteSweep(t, env, "0")
+
+	created := precondRequest(t, proc, http.MethodPost, "/annotations", nil,
+		"application/json", `{"text":"write sweep","tags":["`+sweepName("write-sweep")+`"]}`)
+	if created.status != http.StatusCreated {
+		t.Fatalf("POST /annotations: status = %d, want 201: %s", created.status, created.body)
+	}
+
+	path := created.header.Get("Location")
+	if path == "" {
+		t.Fatal("POST /annotations: no Location")
+	}
+	t.Cleanup(func() { precondRequest(t, proc, http.MethodDelete, path, nil, "", "") })
+
+	stale := created.header.Get("ETag")
+
+	edited := precondRequest(t, proc, http.MethodPatch, path, map[string]string{"If-Match": stale},
+		"application/merge-patch+json", `{"text":"write sweep, edited"}`)
+	if edited.status != http.StatusOK || !strings.Contains(edited.body, "write sweep, edited") {
+		t.Fatalf(
+			"PATCH %s: status = %d, want 200 with the edit: %s",
+			path,
+			edited.status,
+			edited.body,
+		)
+	}
+
+	current := edited.header.Get("ETag")
+	if current == "" || current == stale {
+		t.Fatalf("PATCH %s: ETag %q, want a new one after %q", path, current, stale)
+	}
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		refused := precondRequest(t, proc, method, path, map[string]string{"If-Match": stale},
+			"application/merge-patch+json", `{"text":"lost update"}`)
+		if refused.status != http.StatusPreconditionFailed ||
+			!strings.Contains(refused.body, "API013") {
+			t.Errorf("%s %s with a stale If-Match: status = %d, want 412 API013: %s",
+				method, path, refused.status, refused.body)
+		}
+	}
+
+	removed := precondRequest(t, proc, http.MethodDelete, path,
+		map[string]string{"If-Match": current}, "", "")
+	if removed.status != http.StatusNoContent {
+		t.Fatalf("DELETE %s: status = %d, want 204: %s", path, removed.status, removed.body)
+	}
+
+	if gone := precondRequest(
+		t,
+		proc,
+		http.MethodGet,
+		path,
+		nil,
+		"",
+		"",
+	); gone.status != http.StatusNotFound {
+		t.Errorf("GET %s after DELETE: status = %d, want 404", path, gone.status)
 	}
 }
 

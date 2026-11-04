@@ -50,6 +50,10 @@ var (
 func Up(t *testing.T) *Env {
 	t.Helper()
 
+	if testing.Short() {
+		t.Skip("needs the Docker-in-Docker environment, which -short leaves down")
+	}
+
 	once.Do(func() { shared, upErr = UpCLI() })
 
 	if upErr != nil {
