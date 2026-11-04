@@ -8,23 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Changes Docker still remembers from a gap are recovered into the history, marked `recovered`; the gap's `recoveredFrom` says from when they're complete, tasks aside
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
-- Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline there and in `get_events` includes its services' changes and annotations
-- `GET /annotations` lists annotations in their detail shape, with Atom and JSON feeds; `GET /annotations/tags` counts the tags in use, and a removed resource is marked `removed`
-- The dashboard has pages for `/annotations`, filtered by tag, author and text, each annotation at `/annotations/{id}` with its actions, and the tags in use at `/annotations/tags`; an annotation's tags link to its list, and History filters by kind and tag
+- Annotations appear on `/history` and `GET /annotations`, each with CSV and feeds, filtered by `tag` (with `matchAny`), `author` and `kind`; `GET /annotations/tags` counts the tags in use
+- A stack's timeline on `/history` and in `get_events` includes its services' changes and the annotations naming them
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
-- The MCP tool `add_annotation` records an annotation at any operations level, and `get_events` returns annotations with their `text`, `tags` and `resources`
-- The MCP tools `update_annotation` and `delete_annotation` edit and remove annotations, `cetacean://annotations/{id}` reads one and can be subscribed to, and `get_events` filters by `kinds`, `tags` and `authors`
-- The dashboard shows annotations on the metric charts, in Recent Activity and on the History page; annotate mode on service and node charts, Add annotation, and an annotation's "…" menu write, edit, and delete them
-- Annotations link the URLs in their text and offer Show on chart, opening their service's or node's metrics around them; the form suggests tags in use, and stack pages show Recent Activity
-- Clicking an annotation's flag or range on a metric chart pins it with its menu; an Annotations menu on the panel hides them or narrows them by tag, kept in the URL (`annotations`, `annotationTag`)
+- The MCP tools `add_annotation`, `update_annotation` and `delete_annotation` write annotations at any operations level, `cetacean://annotations/{id}` reads one and can be subscribed to, and `get_events` returns them, filtered by `kinds`, `tags` and `authors`
+- The dashboard lists annotations at `/annotations` by tag, author and text, shows each at `/annotations/{id}` and the tags in use at `/annotations/tags`; History filters by kind and tag, and stack pages show Recent Activity
+- Annotations are added from History, the annotations list, Recent Activity or annotate mode on service and node charts, and edited or deleted from their "…" menu; the form suggests tags in use
+- Annotations link the URLs in their text, and Show on chart opens their service's or node's metrics around them
 - The command palette adds an annotation, rotates the swarm's join tokens, unlock key and CA, and enables, disables or removes a plugin, each behind the same permission check and confirmation as the page's button
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
-- After a restart or a lost connection to Docker, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
-- The metric charts on service, node and task pages mark each change, naming who made it, and shade the stretches Cetacean wasn't watching
+- After a restart or a lost connection to Docker, the history marks the time Cetacean wasn't watching as a gap, in the dashboard, `/history`, `/events` and `get_events`; changes Docker still remembers from it are recovered, marked `recovered`
+- The metric charts on service, node and task pages mark changes, naming who made them, gaps and annotations; clicking an annotation pins it with its menu, and the panel's Annotations menu hides or narrows them by tag
 - `GET /history?tasks=false` leaves a service's task entries out of its timeline
 - The **Tasks** section on service and node pages has its own time range and switches to a timeline: each replica's tasks as bars showing their ID, in their state's color; drag across it to zoom
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
@@ -36,9 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
 - Service pages show a GitHub Deployment panel for Docker Swarm Deployment Action, with the commit and workflow run that deployed a service; configs and secrets it rotates group as versions by `com.matchory.deployment.name`
 - Each entry in a service's `integrations` lists the `labels` it was read from
-- The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
-- The level-3 MCP tools ask the person to confirm through the client when it supports elicitation; `mcp.require_confirmation` refuses them to clients that can't ask
-- An MCP tool given a hostname several nodes share asks the person which node they mean, when the client supports elicitation
+- When the client supports elicitation, the level-3 MCP tools ask the person to confirm, and a tool given a hostname several nodes share asks which node; `mcp.require_confirmation` refuses level-3 tools to clients that can't ask
 - `create_secret` sends the person to the dashboard's `/secrets/new` page to enter the value when the client supports URL elicitation; `mcp.inline_secret_values` refuses values passed as arguments
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
 - `GET /services` items carry `DesiredTasks`, and a job's `CompletedTasks` and `FailedTasks` for its current run
@@ -50,28 +45,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Every log line written while serving a request carries its `req_id`, so the `requestId` in an error response finds the lines that explain it
 
 ### Changed
+- **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
+- **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
+- **Breaking:** `/history` items carry a `kind`, and gaps and annotations appear beside changes; request `?kind=change` to keep the list of changes alone
+- **Breaking:** entry IDs in the Atom and JSON feeds name the deployment's history as well as the change, so feed readers show existing entries once more after the upgrade
+- **Breaking:** a write to a resource the caller can't read answers that resource's `404` instead of `403` (`ACL002`)
+- **Breaking:** `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use; pass `versions=all` to list every one
+- **Breaking:** a service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- **Breaking:** `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
+- **Breaking:** a malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400` (`API016`) instead of the default page
+- **Breaking:** the startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`
+- **Breaking:** a failure that stops Cetacean logs `cetacean stopped`, with the cause in `error`, after closing what it opened. Update log queries that matched the failure's own message, such as `server error`
 - `search` on `/history`, `/annotations`, their feeds and `get_events` matches each word anywhere a row shows it: `stack/name`, task names, ID prefixes, actions, actors, an annotation's text and tags; in the dashboard, `#` words filter by tag
 - Recent Activity folds consecutive changes to one resource, such as a replica restarting in place, into a single row with a count that expands to each change
 - Compose files and config contents are syntax-highlighted more accurately, with alternating line backgrounds
-- A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`
 - MCP's `scale_service` refuses a global service as REST does, and its write tools answer a service, node, task, config, secret, network or volume Cetacean doesn't hold as not found rather than passing it to Docker
 - Service edits are checked against the service as Docker holds it, so a host-access refusal no longer depends on Cetacean having caught up; resending a service's placement unchanged needs no level 3
 - The build date `cetacean -version` shows is when its commit was made, not when the binary was built
-- `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use by default; `versions=all` lists every one
 - A config's or secret's `services` and `usedBy` include services whose previous spec alone uses it, marked `rollback`
-- A service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
 - The `GET /services` event stream also carries task and node events, which change the counts its items report
-- `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - A task path ending in `.json`, `.csv` or another format suffix names a task by that whole identifier, as service and node paths do: `DELETE /tasks/abc.json` no longer removes task `abc`
 - List pages take the RFC 9110 `Range: items=0-49`; `items 0-49` still works but is deprecated. Every page shares the list's `ETag`, so `If-Range` carries across pages, and a multi-range `Range` is ignored
-- A malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400 API016` instead of the default page
 - MCP write tools no longer repeat the Docker engine's text for not-found, failed-precondition or out-of-sequence refusals, nor API conflict codes such as `SVC001` for the latter two; Cetacean's log keeps it
-- The startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`.
-- A failure that stops Cetacean logs `cetacean stopped`, with the cause in `error`, after closing what it opened. Update log queries that matched the failure's own message, such as `server error`.
-- **Breaking:** a request whose `Host` names none of `server.public_url`'s host, `server.allowed_hosts`, an IP address, `localhost` or the listen host is refused with `421` (`CSR002`). List every name you reach Cetacean by in those settings
-- **Breaking:** `server.cors.origins = "*"` refuses startup under `auth.mode` `none` or `tailscale`; list the origins instead
-- **Breaking:** `/history` items carry a `kind`, and gaps appear beside changes; request `?kind=change` to keep the list of changes alone
-- **Breaking:** entry IDs in the Atom and JSON feeds name the deployment's history as well as the change, so feed readers show existing entries once more after the upgrade
 
 ### Fixed
 - `get_events` and `cetacean://history` refuse an identity holding no grant at all, as `/history` does
@@ -98,13 +93,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Placement constraints match as Swarm does in drain impact and the desired task count of global services: regardless of case, `node.ip` by address or CIDR, and `node.role` by the role a node holds
 - MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
 - A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
-- `If-None-Match` on a write matches an `ETag` read under compression, such as `"…-gzip"`, as `If-Match` already did
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 - Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out
 - When reading the cluster fails at startup or after reconnecting, such as during a manager election, the dashboard and `/-/ready` recover within seconds instead of minutes
 - A browser tab whose event stream reconnects after Cetacean re-read the whole cluster now refetches, instead of keeping data that re-read replaced
-- Writes honor `If-None-Match` and `If-Unmodified-Since`, and reads `If-Match` and `If-Unmodified-Since`, evaluated in RFC 9110 order and refused with `412`
+- Writes honor `If-None-Match` and `If-Unmodified-Since`, and reads `If-Match` and `If-Unmodified-Since`, evaluated in RFC 9110 order and refused with `412`; an `ETag` read under compression, such as `"…-gzip"`, matches
 - A write whose `Accept` rules out JSON is refused with `406` before it changes anything, unless it sends `Prefer: return=minimal`
 - `OPTIONS` answers with `Allow` and `Accept-Patch`, and a `GET` on a write-only path such as `/services/{id}/scale` answers `405` to clients not asking for HTML
 - `HEAD` on an event stream, log tail or metrics stream returns at once instead of holding the connection open
