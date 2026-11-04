@@ -515,6 +515,10 @@ func run(s settings) error {
 			"operations_level", cfg.OperationsLevel,
 		)
 	}
+	if authCfg.Mode == "none" && stateCache.AnnotationsOn() {
+		slog.Warn("auth.mode is none: anyone who can reach the server may write annotations, " +
+			"at every operations level including 0")
+	}
 	if cfg.Exec.Enabled && cfg.OperationsLevel < cluster.OpOpenExec.Tier() {
 		slog.Warn("exec.enabled has no effect below server.operations_level 3")
 	}

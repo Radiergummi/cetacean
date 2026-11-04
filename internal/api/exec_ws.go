@@ -110,31 +110,38 @@ func (h *Handlers) execOriginAllowed(r *http.Request) bool {
 }
 
 func (h *Handlers) attachExecSession(w http.ResponseWriter, r *http.Request) {
+	m, sid := h.exec.Manager, r.PathValue("sid")
+	id := auth.IdentityFromContext(r.Context())
+	refuse := func(code, detail string) {
+		m.DeniedAttach(sid, id, clientIP(r), code)
+		problem.Write(w, r, code, detail)
+	}
+
 	if !h.execOriginAllowed(r) {
-		problem.Write(w, r, "CSR001", "this origin may not open a terminal")
+		refuse("CSR001", "this origin may not open a terminal")
 		return
 	}
 
-	s, ok := h.sessionFor(w, r)
-	if !ok {
+	s, ok := m.Get(sid)
+	if !ok || !h.canSeeSession(r, s) {
+		refuse("EXE006", "exec session not found")
 		return
 	}
 
-	m := h.exec.Manager
-	ctx, err := m.Attach(s.ID, auth.IdentityFromContext(r.Context()))
+	ctx, err := m.Attach(s.ID, id)
 	switch {
 	case errors.Is(err, exec.ErrNotOwner):
-		problem.Write(w, r, "EXE004", err.Error())
+		refuse("EXE004", err.Error())
 		return
 	case err != nil:
-		problem.Write(w, r, "EXE005", err.Error())
+		refuse("EXE005", err.Error())
 		return
 	}
 
 	transport, ok := exec.Select(h.exec.Transports, s.Target.Node)
 	if !ok {
 		m.Abort(s.ID, "relay_unavailable")
-		problem.Write(w, r, "EXE002", "no shell transport reaches node "+s.Target.Node)
+		refuse("EXE002", "no shell transport reaches node "+s.Target.Node)
 		return
 	}
 
@@ -285,7 +292,7 @@ func (h *Handlers) runExecSession(
 				werr := conn.Write(writeCtx, websocket.MessageBinary, buf[:n])
 				cancel()
 				if werr != nil {
-					m.End(s.ID, "disconnected", "")
+					m.End(s.ID, "disconnected", nil)
 					return
 				}
 			}
@@ -300,7 +307,7 @@ func (h *Handlers) runExecSession(
 		for {
 			typ, data, err := conn.Read(connCtx)
 			if err != nil {
-				m.End(s.ID, "disconnected", "")
+				m.End(s.ID, "disconnected", nil)
 				return
 			}
 			switch typ {
@@ -326,7 +333,7 @@ func (h *Handlers) runExecSession(
 	exit := closeStream(stream)
 	<-outputDone
 	if exit.Outcome != exec.OutcomeExited {
-		m.End(s.ID, "connection_lost", "")
+		m.End(s.ID, "connection_lost", nil)
 	}
 
 	send(execExit(m.Finish(s.ID, exit)))

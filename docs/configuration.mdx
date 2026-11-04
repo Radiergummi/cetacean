@@ -402,6 +402,11 @@ on the node whose Docker daemon Cetacean talks to.
 Cetacean never opens a shell in its own containers, nor in any other task of its own service. When
 it can't tell which container it runs in, as when it runs outside a container, it also refuses every
 task without an overlay address, such as one on the `host` network.
+A running shell is checked against the policy again only when [`acl.policy_file`][acl.policy_file]
+changes, and then with the groups and grants its owner had when it opened. Removing someone from a
+group, or revoking the grants their provider sends, leaves their shell running until
+[`exec.idle_timeout`][exec.idle_timeout] or [`exec.max_duration`][exec.max_duration] ends it;
+`DELETE /exec/{sid}` ends it sooner.
 
 <ConfigParam name="exec.enabled" env="CETACEAN_EXEC" default="false">
   Allow interactive shells in containers.
@@ -426,7 +431,8 @@ task without an overlay address, such as one on the `host` network.
 ## Audit
 
 <ConfigParam name="audit.enabled" env="CETACEAN_AUDIT" default="false">
-  Write a record for every shell opened, ended or refused: who, which container, how it ended.
+  Write a record for every shell opened or ended, and every one refused once its task or session is
+  known: who, which container, how it ended.
 </ConfigParam>
 
 <ConfigParam name="audit.output" env="CETACEAN_AUDIT_OUTPUT" default="stdout">
@@ -602,6 +608,8 @@ go tool pprof http://localhost:9000/debug/pprof/heap      # heap snapshot
 [docker.tls.cert]: #docker.tls.cert
 [docker.tls.key]: #docker.tls.key
 [exec.enabled]: #exec.enabled
+[exec.idle_timeout]: #exec.idle_timeout
+[exec.max_duration]: #exec.max_duration
 [interaction-with-operations-level]: authorization#interaction-with-operations-level
 [mcp]: mcp
 [mcp.auth_bypass]: #mcp.auth_bypass

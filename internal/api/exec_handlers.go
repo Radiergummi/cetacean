@@ -257,11 +257,7 @@ func (h *Handlers) HandleDeleteExecSession(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	by := ""
-	if id := auth.IdentityFromContext(r.Context()); id != nil {
-		by = id.Subject
-	}
-	h.exec.Manager.End(s.ID, "terminated_by", by)
+	h.exec.Manager.End(s.ID, "terminated_by", auth.IdentityFromContext(r.Context()))
 	w.WriteHeader(http.StatusNoContent)
 }
 
