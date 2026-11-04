@@ -88,9 +88,9 @@ by REST and MCP: validate, authorize, record.
   read. A cluster-wide annotation is visible to every caller with any grant, the way a gap is.
 - **Create:** `write` on every named resource. A cluster-wide annotation needs `write` on `*`,
   through a new `acl.CanWriteEverything` beside `CanReadEverything`.
-- **Edit and delete:** the author (same subject and provider), as long as they can still read
-  it, or anyone who could create it. An edit that changes `resources` must also pass the create
-  rule for the new set.
+- **Edit and delete:** the author (same subject and provider, a token Cetacean issued counting
+  as its upstream provider), as long as they can still read it, or anyone who could create it.
+  An edit that changes `resources` must also pass the create rule for the new set.
 - **No operations tier.** An annotation doesn't touch Docker, so it isn't a `cluster.Operation`
   and works at `server.operations_level` 0, the default. `docs/configuration.mdx` says so beside
   the tier table.

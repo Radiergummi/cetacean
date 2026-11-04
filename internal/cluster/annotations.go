@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -439,9 +440,13 @@ func allAdmit(resources []cache.AnnotationResource, can func(string) bool) bool 
 	return true
 }
 
+// authored compares subject and provider, but a deployment's OAuth server
+// issues tokens only to whom its one upstream provider signed in, so a token's
+// provider stands for that provider: one person is one author on both.
 func authored(ctx context.Context, a cache.Annotation) bool {
 	actor, ok := cache.ActorFromContext(ctx)
 
-	return ok && a.Actor != nil &&
-		a.Actor.Subject == actor.Subject && a.Actor.Provider == actor.Provider
+	return ok && a.Actor != nil && a.Actor.Subject == actor.Subject &&
+		(a.Actor.Provider == actor.Provider ||
+			a.Actor.Provider == auth.ProviderToken || actor.Provider == auth.ProviderToken)
 }

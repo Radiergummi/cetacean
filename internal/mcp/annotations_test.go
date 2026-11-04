@@ -106,6 +106,7 @@ func TestAddAnnotationRefusals(t *testing.T) {
 			true,
 		},
 		{"a malformed time", "alice", `{"text":"x","at":"yesterday"}`, "at: must be an RFC 3339", true},
+		{"a time that is not a string", "alice", `{"text":"x","at":1762264800}`, "at: must be", true},
 		{
 			"tags that are not a list of strings",
 			"alice",

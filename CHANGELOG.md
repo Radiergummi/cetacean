@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - After a restart, changes Docker still remembers from the gap are recovered into the history, marked `recovered`; the gap's `recoveredFrom` says from when they're complete, tasks aside
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
-- Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline includes its services' changes and annotations
+- Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline there and in `get_events` includes its services' changes and annotations
 - `GET /annotations` lists annotations in their detail shape, with Atom and JSON feeds; `GET /annotations/tags` counts the tags in use, and a removed resource is marked `removed`
 - The dashboard has pages for `/annotations`, filtered by tag, author and text, each annotation at `/annotations/{id}` with its actions, and the tags in use at `/annotations/tags`; an annotation's tags link to its list, and History filters by kind and tag
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `/history` items carry a `kind`, and gaps appear beside changes; request `?kind=change` to keep the list of changes alone
 
 ### Fixed
+- `get_events` and `cetacean://history` refuse an identity holding no grant at all, as `/history` does
 - History, its feeds, Recent Activity and `get_events` keep naming a task `service.slot` after Swarm prunes it, rather than falling back to its ID
 - The licenses page and `/-/sbom.cdx.json` no longer list build tools, such as TypeScript and its platform binaries, that the frontend doesn't bundle
 - A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50; on `/history.csv` it returns 200 rows instead of the whole history, which leaving `limit` out still does

@@ -139,7 +139,8 @@ type HistoryQuery struct {
 	ReadableAnnotation func(Annotation) bool
 
 	// Members, on a stack's query, are its services' IDs, whose changes its
-	// timeline holds as a service's holds its tasks'. Cache.Timeline sets it.
+	// timeline holds as a service's holds its tasks', whatever Types says.
+	// Cache.Timeline sets it for a Type or one of Types that is a stack.
 	Members []string
 }
 
@@ -522,7 +523,7 @@ func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 		return false
 	}
 
-	return len(q.Types) == 0 || slices.Contains(q.Types, e.Type)
+	return len(q.Types) == 0 || slices.Contains(q.Types, e.Type) || member
 }
 
 // matchesText applies TitleContains and Search to a change.

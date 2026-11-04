@@ -146,6 +146,8 @@ func TestCreateAnnotationRefusals(t *testing.T) {
 		"reader":         {true, "bob", `{"text":"x","resources":[{"type":"service","id":"web"}]}`, 403, "ACL002"},
 		"cluster-wide":   {true, "alice", `{"text":"x"}`, 403, "ACL002"},
 		"timeline off":   {false, "carol", `{"text":"x"}`, 409, "ANN003"},
+		"numeric time":   {true, "carol", `{"text":"x","timestamp":1762264800}`, 400, "ANN001"},
+		"malformed time": {true, "carol", `{"text":"x","until":"tomorrow"}`, 400, "ANN001"},
 	} {
 		h := annotationHandlers(t, tc.timeline)
 
@@ -155,6 +157,36 @@ func TestCreateAnnotationRefusals(t *testing.T) {
 			t.Errorf("%s: %d %s, want %d %s", name, w.Code, w.Body, tc.status, tc.code)
 		}
 	}
+}
+
+// RFC 3339 §5.6 lets "T" and "Z" be lower case, in a body as in a query.
+func TestAnnotationBodiesTakeLowerCaseTimes(t *testing.T) {
+	h := annotationHandlers(t, true)
+	id, _ := createAnnotation(t, h, "carol",
+		`{"text":"x","timestamp":"2026-09-05t14:02:00z","until":"2026-09-05t15:02:00z"}`)
+
+	r := newAnnotationRequest("PATCH", "/annotations/"+id, "carol",
+		`{"timestamp":"2026-09-05t13:02:00z"}`)
+	r.Header.Set("Content-Type", "application/merge-patch+json")
+	if w := serveAnnotation(h.HandlePatchAnnotation, r); w.Code != http.StatusOK {
+		t.Fatalf("patch = %d %s, want 200", w.Code, w.Body)
+	}
+
+	a, _ := h.cache.Annotation(mustParseUint(t, id))
+	if want := time.Date(2026, 9, 5, 13, 2, 0, 0, time.UTC); !a.Timestamp.Equal(want) {
+		t.Errorf("timestamp = %s, want %s", a.Timestamp, want)
+	}
+}
+
+func mustParseUint(t *testing.T, s string) uint64 {
+	t.Helper()
+
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return n
 }
 
 func TestGetAnnotationAllowsWritesToWhoMayMakeThem(t *testing.T) {
@@ -220,6 +252,11 @@ func TestPatchAnnotationMergesAndHonoursIfMatch(t *testing.T) {
 	}
 	if w := patch("alice", `{"text":null}`, "", "application/merge-patch+json"); w.Code != 400 {
 		t.Errorf("null text: %d, want 400", w.Code)
+	}
+	for _, body := range []string{`{"timestamp":""}`, `{"timestamp":0}`, `{"until":1}`} {
+		if w := patch("alice", body, "", "application/merge-patch+json"); w.Code != 400 {
+			t.Errorf("%s: %d, want 400", body, w.Code)
+		}
 	}
 	if w := patch("bob", `{"text":"y"}`, "", "application/merge-patch+json"); w.Code != 403 {
 		t.Errorf("a reader: %d, want 403", w.Code)

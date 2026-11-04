@@ -345,7 +345,7 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 
 	var ring []HistoryEntry
 	if len(q.Kinds) != 1 || q.Kinds[0] != KindAnnotation {
-		if q.Type == EventStack && q.ResourceID != "" {
+		if q.ResourceID != "" && (q.Type == EventStack || slices.Contains(q.Types, EventStack)) {
 			q.Members = c.stackMembers(q.ResourceID)
 		}
 
