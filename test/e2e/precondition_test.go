@@ -260,8 +260,8 @@ func preconditionTargets(f preconditionFixture) map[string]precondTarget {
 	return targets
 }
 
-// handlerPreconditionedRoutes evaluate their precondition in the handler, out
-// of contract.PreconditionedRoutes' sight, so preconditionedRoutes adds them.
+// handlerPreconditionedRoutes evaluate their precondition in a chain of their
+// own, out of contract.PreconditionedRoutes' sight, so preconditionedRoutes adds them.
 var handlerPreconditionedRoutes = []string{
 	"PATCH /annotations/{id}",
 	"DELETE /annotations/{id}",
@@ -272,11 +272,11 @@ var handlerPreconditionedRoutes = []string{
 // before the handler runs, so even a route too destructive to complete can be
 // driven for the contract that matters.
 var excusedPreconditionRoutes = map[string]string{
-	"PATCH /annotations/{id}": "evaluated in the handler after the body is decoded, so this " +
-		"lane's probes answer before it; driven by TestAnnotationWritesSkipTheTierAndHonourIfMatch " +
+	"PATCH /annotations/{id}": "this lane's fixture holds no note, and a missing one answers 404 " +
+		"before any precondition; driven by TestAnnotationWritesSkipTheTierAndHonourIfMatch " +
 		"in write_sweep_test.go, and by TestAnnotationWritesHonourIfMatch in internal/api",
-	"DELETE /annotations/{id}": "evaluated in the handler against a note this lane's fixture does " +
-		"not hold; driven by TestAnnotationWritesSkipTheTierAndHonourIfMatch in " +
+	"DELETE /annotations/{id}": "this lane's fixture holds no note, and a missing one answers 404 " +
+		"before any precondition; driven by TestAnnotationWritesSkipTheTierAndHonourIfMatch in " +
 		"write_sweep_test.go, and by TestAnnotationWritesHonourIfMatch in internal/api",
 }
 
