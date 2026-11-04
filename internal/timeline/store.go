@@ -34,8 +34,9 @@ type Store interface {
 	// Commit applies a batch in one transaction, or none of it.
 	Commit(ctx context.Context, batch Batch) error
 
-	// Instance names this database for good: two databases, or one
-	// recreated, never share it, so IDs qualified by it never repeat.
+	// Instance names this database for good: a new or recreated one never
+	// shares it. A copy keeps it, so restoring an older copy can repeat the
+	// IDs qualified by it that the newer one handed out.
 	Instance() string
 
 	Close() error
