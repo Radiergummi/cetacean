@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Placement constraints match as Swarm does in drain impact and the desired task count of global services: regardless of case, `node.ip` by address or CIDR, and `node.role` by the role a node holds
 - MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
 - A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
+- `If-None-Match` on a write matches an `ETag` read under compression, such as `"…-gzip"`, as `If-Match` already did
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 - Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out

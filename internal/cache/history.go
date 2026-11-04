@@ -71,6 +71,9 @@ type HistoryEntry struct {
 	// Annotation is the one an annotation entry stands for: on a ring item,
 	// as its write left it or, on a remove, as it was.
 	Annotation *Annotation `json:"-"`
+
+	// Previous is, on an annotation update's ring item, what the update replaced.
+	Previous *Annotation `json:"-"`
 }
 
 type HistoryQuery struct {

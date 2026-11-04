@@ -48,8 +48,9 @@ type Event struct {
 	Resource  any       `json:"resource,omitempty"`
 	HistoryID uint64    `json:"-"`
 
-	// Previous is the config or secret an update replaced, for a reader that
-	// must know what changed: one relabelled out of its version group.
+	// Previous is the config, secret or annotation an update replaced, for a
+	// reader that must know what changed: one relabelled out of its version
+	// group, or an annotation that moved off a stream's resource.
 	Previous any `json:"-"`
 
 	// Service and Stack name what a removed resource belonged to, which the

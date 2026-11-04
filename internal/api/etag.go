@@ -375,6 +375,28 @@ func stripCodingSuffix(opaqueTag string) string {
 	return opaqueTag
 }
 
+// etagMatchState is etagMatch for a write's If-None-Match, which asserts
+// resource state as If-Match does, so a coded tag names the uncoded one.
+func etagMatchState(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	if strings.TrimSpace(header) == "*" {
+		return true
+	}
+
+	want := stripCodingSuffix(strings.Trim(etag, `"`))
+
+	for candidate := range strings.SplitSeq(header, ",") {
+		candidate = strings.TrimPrefix(strings.TrimSpace(candidate), "W/")
+		if stripCodingSuffix(strings.Trim(candidate, `"`)) == want {
+			return true
+		}
+	}
+
+	return false
+}
+
 // etagMatchStrong reports whether an If-Match header matches etag using strong
 // comparison, per RFC 9110 §13.1.1. Unlike etagMatch — which serves
 // If-None-Match and therefore compares weakly per §13.1.2 — a weak validator

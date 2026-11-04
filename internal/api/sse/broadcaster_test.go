@@ -1223,3 +1223,113 @@ func TestAnnotationsOn(t *testing.T) {
 		})
 	}
 }
+
+// An edit that takes an annotation off what a stream shows is a removal there,
+// carrying none of the edit; a stream it never reached hears nothing of it.
+func TestAnAnnotationEditTakenOffAStreamIsARemovalThere(t *testing.T) {
+	c := cache.New(nil)
+	for _, id := range []string{"svc1", "svc2"} {
+		c.SetService(swarm.Service{ID: id, Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{Name: id},
+		}})
+	}
+
+	b := NewBroadcaster(time.Hour, nil)
+	defer b.Close()
+
+	stream := func(id string) *sseClient {
+		return &sseClient{
+			events: make(chan frameEvent, 2),
+			done:   make(chan struct{}),
+			match: AnnotationsOn(
+				c,
+				cache.EventService,
+				id,
+				ResourceMatcher(cache.EventService, id),
+			),
+		}
+	}
+	left, untouched := stream("svc1"), stream("svc2")
+	b.mu.Lock()
+	b.clients[left] = struct{}{}
+	b.clients[untouched] = struct{}{}
+	b.mu.Unlock()
+
+	on := func(typ cache.EventType, id string) []cache.AnnotationResource {
+		return []cache.AnnotationResource{{Type: typ, ID: id}}
+	}
+	b.Broadcast(cache.Event{
+		Type:      cache.EventAnnotation,
+		Action:    "update",
+		ID:        "3",
+		HistoryID: 3,
+		Resource:  cache.Annotation{ID: 3, Text: "moved", Resources: on(cache.EventNode, "n1")},
+		Previous: cache.Annotation{
+			ID:        3,
+			Text:      "was here",
+			Resources: on(cache.EventService, "svc1"),
+		},
+	})
+	b.Broadcast(cache.Event{Type: cache.EventService, Action: "update", ID: "svc2", HistoryID: 4})
+
+	// Events fan out in order, so the second's arrival means the first's did.
+	if got := <-untouched.events; got.Type != cache.EventService {
+		t.Errorf("a stream it never reached heard %s", got.data)
+	}
+
+	select {
+	case got := <-left.events:
+		if got.Action != "remove" || bytes.Contains(got.data, []byte("moved")) ||
+			bytes.Contains(got.data, []byte(`"resource"`)) {
+			t.Errorf("the stream it left heard %s, want a bare removal", got.data)
+		}
+	default:
+		t.Error("the stream it left heard nothing")
+	}
+}
+
+// Replay tells a reconnecting client of the same removal the live stream sends.
+func TestSSE_ReplaysAnAnnotationEditTakenOffAStreamAsARemoval(t *testing.T) {
+	h := cache.NewHistory(100)
+	h.Append(cache.HistoryEntry{Type: cache.EventService, Action: "update", ResourceID: "s0"})
+	h.Append(cache.HistoryEntry{
+		Kind:       cache.KindAnnotation,
+		Action:     "update",
+		ResourceID: "2",
+		Annotation: &cache.Annotation{ID: 2, Text: "now hidden", Tags: []string{"secret"}},
+		Previous:   &cache.Annotation{ID: 2, Text: "was readable"},
+	})
+	h.Append(cache.HistoryEntry{Type: cache.EventNode, Action: "update", ResourceID: "n1"})
+
+	b := NewBroadcaster(10*time.Millisecond, h)
+	defer b.Close()
+
+	readable := func(e cache.Event) bool {
+		a, ok := e.Resource.(cache.Annotation)
+		return !ok || len(a.Tags) == 0
+	}
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	req.Header.Set("Last-Event-ID", b.EventID(1))
+	w := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		b.ServeSSE(w, req, readable, ReplayAll)
+		close(done)
+	}()
+
+	waitForClients(t, b, 1)
+	waitForBody(t, w, `"n1"`)
+
+	b.Close()
+	<-done
+
+	body := w.bodyString()
+	removal := `"@id":"/annotations/2","@type":"Annotation","type":"annotation","action":"remove"`
+	if !strings.Contains(body, removal) ||
+		strings.Contains(body, "hidden") ||
+		strings.Contains(body, "readable") {
+		t.Errorf("replay = %s, want a bare removal of annotation 2", body)
+	}
+}

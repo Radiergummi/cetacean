@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
@@ -68,18 +69,41 @@ func (h *Handlers) mayAnnotate(r *http.Request) bool {
 		access.Can("write", "node")
 }
 
+// annotationEdit gates an edit or deletion of the annotation the path names,
+// evaluating its preconditions before the body is read.
+func (h *Handlers) annotationEdit() tieredChain {
+	return annotationWrite(h.mayEditAnnotation).Append(h.conditional(h.annotationValidator, true))
+}
+
+// annotationValidator is the annotation's as a GET answers it. One the caller
+// may not edit has none: the write is refused whatever its preconditions say.
+func (h *Handlers) annotationValidator(r *http.Request) (string, time.Time, error) {
+	a, ok := h.editableAnnotation(r)
+	if !ok {
+		return "", time.Time{}, errNoRepresentation
+	}
+
+	return annotationETag(a), annotationModified(a), nil
+}
+
 // mayEditAnnotation is whether the caller may edit the annotation the path names.
 func (h *Handlers) mayEditAnnotation(r *http.Request) bool {
+	_, ok := h.editableAnnotation(r)
+	return ok
+}
+
+// editableAnnotation is the annotation the path names, if the caller may edit it.
+func (h *Handlers) editableAnnotation(r *http.Request) (cache.Annotation, bool) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
 	if err != nil || !h.annotations.Enabled() {
-		return false
+		return cache.Annotation{}, false
 	}
 
 	caller := h.annotationCaller(r)
 
 	a, err := h.annotations.Get(caller, id)
 
-	return err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)
+	return a, err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)
 }
 
 // attributedRead is the request's context with its caller as the actor, which
@@ -144,13 +168,16 @@ func (h *Handlers) HandleAnnotationTags(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tags := h.cache.AnnotationTags(r.URL.Query().Get("q"), h.annotationCaller(r).MayRead)
+	tagID := func(t cache.AnnotationTag) string { return "/annotations?tag=" + url.QueryEscape(t.Tag) }
+	validator := wholeListETag(r.Context(), tags, "AnnotationTag", tagID)
+	r = ifRange(r, validator)
+
 	p, err := parsePagination(r)
 	if err != nil {
 		problem.Write(w, r, "API016", err.Error())
 		return
 	}
-
-	tags := h.cache.AnnotationTags(r.URL.Query().Get("q"), h.annotationCaller(r).MayRead)
 
 	if ContentTypeFromContext(r.Context()) == ContentTypeCSV {
 		page := csvPage(tags, p)
@@ -163,8 +190,7 @@ func (h *Handlers) HandleAnnotationTags(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeListPage(w, r, tags, p, "", "AnnotationTag",
-		func(t cache.AnnotationTag) string { return "/annotations?tag=" + url.QueryEscape(t.Tag) },
+	writeListPage(w, r, tags, p, validator, "AnnotationTag", tagID,
 		func(page []cache.AnnotationTag) []cache.AnnotationTag { return page },
 	)
 }
@@ -300,23 +326,17 @@ func annotationID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	return id, true
 }
 
-// annotationPreconditions evaluates RFC 9110 §13.2.2 against the annotation
-// the write finds, inside the use case, so no other write lands between the
-// check and the commit. Nil when the request names none.
+// annotationPreconditions evaluates them again against the annotation the
+// write finds, inside the use case, so no other write lands between the check
+// and the commit. Nil when the request names none.
 func annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
-	ifNoneMatch := r.Header.Get("If-None-Match")
-	if r.Header.Get("If-Match") == "" && ifNoneMatch == "" &&
+	if r.Header.Get("If-Match") == "" && r.Header.Get("If-None-Match") == "" &&
 		r.Header.Get("If-Unmodified-Since") == "" {
 		return nil
 	}
 
 	return func(a cache.Annotation) bool {
-		etag := annotationETag(a)
-		if preconditionFailed(r, etag, annotationModified(a)) != "" {
-			return false
-		}
-
-		return ifNoneMatch == "" || !etagMatch(ifNoneMatch, etag)
+		return writePreconditionFailed(r, annotationETag(a), annotationModified(a)) == ""
 	}
 }
 
@@ -467,10 +487,23 @@ func annotationETag(a cache.Annotation) string {
 	return `"` + version + `"`
 }
 
+// annotationModified is zero once a removal marks a: that changed it at a
+// time nothing records, so no date describes it.
 func annotationModified(a cache.Annotation) time.Time {
+	if slices.ContainsFunc(a.Resources, removedResource) {
+		return time.Time{}
+	}
+
+	return annotationEdited(a)
+}
+
+// annotationEdited is when a write last changed a.
+func annotationEdited(a cache.Annotation) time.Time {
 	if !a.Updated.IsZero() {
 		return a.Updated
 	}
 
 	return a.Created
 }
+
+func removedResource(r cache.AnnotationResource) bool { return r.Removed }
