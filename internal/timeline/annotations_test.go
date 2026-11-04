@@ -28,6 +28,14 @@ func restoreCache(t testing.TB, store *timeline.SQLite) *cache.Cache {
 	}
 
 	c.History().Restore(entries, last, store.Instance())
+
+	if err := store.Commit(
+		context.Background(),
+		timeline.Batch{Last: c.History().Count()},
+	); err != nil {
+		t.Fatal(err)
+	}
+
 	c.RestoreAnnotations(store, annotations)
 
 	return c
@@ -116,6 +124,43 @@ func TestAnnotations_RemovalIDsAreNotReissued(t *testing.T) {
 		stopped, stop := context.WithCancel(ctx)
 		stop()
 		writer.Run(stopped, nil)
+
+		if err := store.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A process that dies before its first flush still handed out IDs past the
+// restored count, so the next start must skip them as well.
+func TestAnnotations_IDsAreNotReissuedAfterACrashBeforeAnyFlush(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+	ctx := context.Background()
+
+	var handedOut uint64
+
+	for range 2 {
+		store := openSQLite(t, path)
+		c := restoreCache(t, store)
+
+		a, err := c.CreateAnnotation(ctx, cache.Annotation{Timestamp: time.Now(), Text: "x"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if a.ID <= handedOut {
+			t.Fatalf("annotation ID %d, want past %d, handed out before the crash", a.ID, handedOut)
+		}
+
+		if err := c.DeleteAnnotation(
+			ctx,
+			a.ID,
+			func(cache.Annotation) error { return nil },
+		); err != nil {
+			t.Fatal(err)
+		}
+
+		handedOut = a.ID
 
 		if err := store.Close(); err != nil {
 			t.Fatal(err)
