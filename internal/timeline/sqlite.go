@@ -38,6 +38,12 @@ type SQLite struct {
 
 	// coverage is this process's coverage row, zero until OpenCoverage.
 	coverage int64
+
+	// stored counts the rows of the kinds the ring holds; only a committed
+	// insert or delete changes it.
+	stored int64
+
+	instance string
 }
 
 var _ Store = (*SQLite)(nil)
@@ -70,7 +76,21 @@ func OpenSQLite(ctx context.Context, path string) (*SQLite, error) {
 		return nil, fmt.Errorf("timeline %s: %w", path, err)
 	}
 
-	return &SQLite{db: db}, nil
+	store := &SQLite{db: db}
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT instance, (SELECT count(*) FROM timeline WHERE `+ringKinds+`) FROM sequence`,
+	).Scan(&store.instance, &store.stored); err != nil {
+		_ = db.Close()
+
+		return nil, fmt.Errorf("timeline %s: %w", path, err)
+	}
+
+	return store, nil
+}
+
+func (s *SQLite) Instance() string {
+	return s.instance
 }
 
 // migrate applies every embedded migration not yet recorded, each in its own
@@ -231,7 +251,8 @@ func (s *SQLite) Restore(
 
 	err = s.db.QueryRowContext(ctx, `SELECT max(
 			(SELECT coalesce(max(id), 0) FROM timeline),
-			(SELECT coalesce(max(version), 0) FROM annotations)
+			(SELECT coalesce(max(version), 0) FROM annotations),
+			(SELECT last FROM sequence)
 		)`).Scan(&last)
 	if err != nil {
 		return nil, 0, err
@@ -275,9 +296,24 @@ func (s *SQLite) OpenCoverage(ctx context.Context, at time.Time) error {
 }
 
 func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
-	return inTx(ctx, s.db, func(tx *sql.Tx) error {
-		if err := insert(ctx, tx, batch.Entries); err != nil {
+	stored := s.stored
+
+	err := inTx(ctx, s.db, func(tx *sql.Tx) error {
+		inserted, err := insert(ctx, tx, batch.Entries)
+		if err != nil {
 			return err
+		}
+
+		stored += inserted
+
+		if batch.Last > 0 {
+			if _, err := tx.ExecContext(
+				ctx,
+				`UPDATE sequence SET last = max(last, ?)`,
+				batch.Last,
+			); err != nil {
+				return err
+			}
 		}
 
 		if s.coverage != 0 && !batch.SeenAt.IsZero() {
@@ -297,30 +333,45 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 			return nil
 		}
 
-		// With fewer than Keep entries the subquery is NULL and deletes nothing.
-		if _, err := tx.ExecContext(
-			ctx,
-			`DELETE FROM timeline WHERE `+ringKinds+` AND id < (
-				SELECT id FROM timeline WHERE `+ringKinds+` ORDER BY id DESC LIMIT 1 OFFSET ?
-			)`,
-			batch.Keep-1,
-		); err != nil {
-			return err
+		if excess := stored - int64(batch.Keep); excess > 0 {
+			result, err := tx.ExecContext(
+				ctx,
+				`DELETE FROM timeline WHERE id IN (
+					SELECT id FROM timeline WHERE `+ringKinds+` ORDER BY id LIMIT ?
+				)`,
+				excess,
+			)
+			if err != nil {
+				return err
+			}
+
+			deleted, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+
+			stored -= deleted
 		}
 
 		// The rows LastSeen may pick stay: the newest, and the newest heartbeated.
-		_, err := tx.ExecContext(ctx, `DELETE FROM coverage
+		_, err = tx.ExecContext(ctx, `DELETE FROM coverage
 			WHERE seen_at < (SELECT min(at) FROM timeline WHERE `+ringKinds+`)
 				AND id < (SELECT max(id) FROM coverage)
 				AND id IS NOT (SELECT max(id) FROM coverage WHERE seen_at > started_at)`)
 
 		return err
 	})
+	if err == nil {
+		s.stored = stored
+	}
+
+	return err
 }
 
-func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error {
+// insert returns how many rows of the kinds the ring holds it added.
+func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) (int64, error) {
 	if len(entries) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO timeline (
@@ -330,10 +381,11 @@ func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO NOTHING`)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer stmt.Close() //nolint:errcheck // closed with the transaction regardless
 
+	var inserted int64
 	for _, e := range entries {
 		var subject, name, provider, client, transport sql.NullString
 		if e.Actor != nil {
@@ -353,19 +405,31 @@ func insert(ctx context.Context, tx *sql.Tx, entries []cache.HistoryEntry) error
 			recoveredFrom = sql.NullInt64{Int64: e.RecoveredFrom.UnixNano(), Valid: true}
 		}
 
-		if _, err := stmt.ExecContext(
+		result, err := stmt.ExecContext(
 			ctx,
 			e.ID, e.Kind, e.Timestamp.UnixNano(), until,
 			string(e.Type), e.Action, e.ResourceID, e.Name, e.Summary,
 			e.Service, e.Stack, e.ServiceID, e.Slot, e.NodeID, e.ServiceName,
 			e.Recovered, recoveredFrom,
 			subject, name, provider, client, transport,
-		); err != nil {
-			return err
+		)
+		if err != nil {
+			return 0, err
 		}
+
+		if e.Kind != cache.KindChange && e.Kind != cache.KindGap {
+			continue
+		}
+
+		n, err := result.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+
+		inserted += n
 	}
 
-	return nil
+	return inserted, nil
 }
 
 const ownerOnlyVFS = "cetacean-owner-only"
@@ -398,7 +462,12 @@ func (s *SQLite) Close() error {
 	return s.db.Close()
 }
 
-func inTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
+// beginner is a *sql.DB, or a *sql.Conn already taken from one.
+type beginner interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
+func inTx(ctx context.Context, db beginner, fn func(*sql.Tx) error) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"crypto/rand"
 	"math"
 	"slices"
 	"strings"
@@ -71,6 +72,9 @@ type HistoryEntry struct {
 	// Annotation is the one an annotation entry stands for: on a ring item,
 	// as its write left it or, on a remove, as it was.
 	Annotation *Annotation `json:"-"`
+
+	// Previous is, on an annotation update's ring item, what the update replaced.
+	Previous *Annotation `json:"-"`
 }
 
 type HistoryQuery struct {
@@ -139,7 +143,8 @@ type HistoryQuery struct {
 	ReadableAnnotation func(Annotation) bool
 
 	// Members, on a stack's query, are its services' IDs, whose changes its
-	// timeline holds as a service's holds its tasks'. Cache.Timeline sets it.
+	// timeline holds as a service's holds its tasks', whatever Types says.
+	// Cache.Timeline sets it for a Type or one of Types that is a stack.
 	Members []string
 }
 
@@ -150,6 +155,10 @@ type History struct {
 	cursor  int
 	count   uint64
 	full    bool
+
+	// instance qualifies IDs wherever they must never repeat: random per
+	// process, or the database's own once Restore names it.
+	instance string
 
 	// byResource maps resource IDs to a ring of entry indices, enabling fast
 	// filtered lookups without a scan. Stale indices are skipped; an ID leaves
@@ -195,7 +204,16 @@ func NewHistory(size int) *History {
 		entries:    make([]HistoryEntry, size),
 		size:       size,
 		byResource: make(map[string]*indexRing),
+		instance:   rand.Text(),
 	}
+}
+
+// Instance names the sequence Count draws from; see the instance field.
+func (h *History) Instance() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	return h.instance
 }
 
 // Size is the ring's capacity — the most entries List can ever return. A
@@ -289,11 +307,13 @@ func (h *History) Since(afterID uint64) ([]HistoryEntry, bool) {
 
 // Restore fills an empty ring, oldest first, with the newest entries that fit;
 // it must precede any Append. Count skips a ring's worth past last, the largest
-// ID stored of any kind, since a crashed process handed out IDs it never wrote
-// and a reader has seen them.
-func (h *History) Restore(entries []HistoryEntry, last uint64) {
+// ID ever committed, since a crashed process handed out IDs it never wrote and
+// a reader has seen them; that holds for a database with nothing in it, too.
+func (h *History) Restore(entries []HistoryEntry, last uint64, instance string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	h.instance = instance
 
 	if len(entries) > h.size {
 		entries = entries[len(entries)-h.size:]
@@ -315,10 +335,7 @@ func (h *History) Restore(entries []HistoryEntry, last uint64) {
 		h.count = e.ID
 	}
 
-	h.count = max(h.count, last)
-	if h.count > 0 {
-		h.count += uint64(h.size)
-	}
+	h.count = max(h.count, last) + uint64(h.size)
 }
 
 func (h *History) Append(e HistoryEntry) uint64 {
@@ -522,7 +539,7 @@ func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 		return false
 	}
 
-	return len(q.Types) == 0 || slices.Contains(q.Types, e.Type)
+	return len(q.Types) == 0 || slices.Contains(q.Types, e.Type) || member
 }
 
 // matchesText applies TitleContains and Search to a change.

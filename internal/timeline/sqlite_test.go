@@ -204,8 +204,80 @@ func TestSQLite_MigratesOnce(t *testing.T) {
 		versions = append(versions, v)
 	}
 
-	if !slices.Equal(versions, []int64{1, 2, 3, 4}) {
-		t.Fatalf("schema_migrations = %v, want [1 2 3 4]", versions)
+	if !slices.Equal(versions, []int64{1, 2, 3, 4, 5}) {
+		t.Fatalf("schema_migrations = %v, want [1 2 3 4 5]", versions)
+	}
+}
+
+// A database from before the sequence was stored starts it from what its rows hold.
+func TestSQLite_SeedsTheSequenceFromAnOlderDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+	ctx := context.Background()
+
+	store := openSQLite(t, path)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	older := timeline.OpenRaw(t, path)
+	for _, stmt := range []string{
+		`DROP TABLE sequence`,
+		`DELETE FROM schema_migrations WHERE version = 5`,
+		`INSERT INTO timeline (id, kind, at) VALUES (5, 'change', 0)`,
+		`INSERT INTO annotations (id, version, at, text, created_at) VALUES (6, 8, 0, 'x', 0)`,
+	} {
+		if _, err := older.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+
+	if err := older.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store = openSQLite(t, path)
+	defer store.Close() //nolint:errcheck // test cleanup
+
+	if _, err := store.Annotations(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	write, err := store.BeginAnnotation(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = write.Delete(ctx, 6)
+	write.Release()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, last, err := store.Restore(ctx, 10); err != nil || last != 8 {
+		t.Fatalf("Restore last = %d, err=%v; want 8, the deleted annotation's version", last, err)
+	}
+
+	if store.Instance() == "" {
+		t.Fatal("no instance after the migration")
+	}
+}
+
+func TestSQLite_AnnotationWaitEndsWithItsContext(t *testing.T) {
+	store := openSQLite(t, filepath.Join(t.TempDir(), "cetacean.db"))
+	defer store.Close() //nolint:errcheck // test cleanup
+
+	held, err := store.BeginAnnotation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	if _, err := store.BeginAnnotation(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("BeginAnnotation while held = %v, want the deadline", err)
 	}
 }
 

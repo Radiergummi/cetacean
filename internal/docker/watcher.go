@@ -91,10 +91,12 @@ type Watcher struct {
 	store    Store
 	syncOnce sync.Once
 
-	// onWatching runs once, between the first successful sync and anything
-	// the stream records; see SetOnWatching.
-	onWatching   func(streamSince time.Time)
-	watchingOnce sync.Once
+	// onWatching runs between a sync that starts a stretch of watching and
+	// anything the stream records; see SetOnWatching. watchingMu is held while
+	// it runs, so a write applied beside the loop cannot sort among what it records.
+	onWatching func(streamSince time.Time)
+	watching   atomic.Bool
+	watchingMu sync.RWMutex
 
 	// syncMu orders full syncs, so a slower fetch cannot replace the cache
 	// after a newer one has; resyncs shares one manual resync among callers.
@@ -182,19 +184,49 @@ func (w *Watcher) SetTaskPollInterval(interval time.Duration) {
 	w.taskPollInterval = interval
 }
 
-// SetOnWatching sets what runs once a sync has first succeeded, before the
-// stream beside it records anything, given where that stream starts; zero when
-// a stream already running reached the sync. Call before Run.
+// SetOnWatching sets what runs when a sync first succeeds beside a stream —
+// at startup and after every lost stream — before that stream records anything,
+// given where it starts; zero when a stream already running reached the sync.
+// Call before Run.
 func (w *Watcher) SetOnWatching(fn func(streamSince time.Time)) {
 	w.onWatching = fn
 }
 
+// Watching reports whether a stream is live beside a synced cache, from the
+// return of the hook that started it until the stream ends.
+func (w *Watcher) Watching() bool {
+	return w.watching.Load()
+}
+
 func (w *Watcher) startWatching(streamSince time.Time) {
-	w.watchingOnce.Do(func() {
-		if w.onWatching != nil {
-			w.onWatching(streamSince)
-		}
-	})
+	if w.watching.Load() {
+		return
+	}
+
+	w.watchingMu.Lock()
+	defer w.watchingMu.Unlock()
+
+	if w.onWatching != nil {
+		w.onWatching(streamSince)
+	}
+
+	w.watching.Store(true)
+}
+
+// applyBesideLoop runs a write the loop is not there to order, after any
+// startWatching in progress, and reports whether it did: a loop started
+// meanwhile must take the write instead.
+func (w *Watcher) applyBesideLoop(apply func()) bool {
+	w.watchingMu.RLock()
+	defer w.watchingMu.RUnlock()
+
+	if w.loopRunning.Load() {
+		return false
+	}
+
+	apply()
+
+	return true
 }
 
 // waitForSettles blocks until every scheduled re-read has finished.
@@ -553,6 +585,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 			}
 			return
 		case err := <-errCh:
+			w.watching.Store(false)
 			if err != nil {
 				slog.WarnContext(ctx, "event stream error", "error", err)
 			}
@@ -868,9 +901,8 @@ func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) b
 	}
 
 	// With no loop there is nothing to order against, as for Refresh.
-	if !w.loopRunning.Load() {
-		w.applySettledRead(key.id, read)
-	} else {
+	if w.loopRunning.Load() ||
+		!w.applyBesideLoop(func() { w.applySettledRead(key.id, read) }) {
 		w.queueSettled(key.id, read)
 	}
 
@@ -1061,7 +1093,10 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 	// Nothing to serialize against with no loop running, and waiting for one
 	// would stall the write this refresh precedes.
 	if !w.loopRunning.Load() {
-		return refresh(ctx)
+		var err error
+		if w.applyBesideLoop(func() { err = refresh(ctx) }) {
+			return err
+		}
 	}
 
 	done := make(chan error, 1)

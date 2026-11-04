@@ -12,7 +12,9 @@ import (
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/api/reqctx"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/exec"
 	"github.com/radiergummi/cetacean/internal/spec"
 )
 
@@ -732,23 +734,59 @@ func TestParsePagination_RangeOverflowIsIgnored(t *testing.T) {
 // RFC 9110 §13.1.5: If-Range holds only for the exact, strong ETag the ranged
 // answer carries; otherwise the Range is ignored and the whole list is sent.
 func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
-	spec.Satisfies(t,
-		"http/rfc9110/if-range-is-evaluated",
-		"http/rfc9110/a-false-if-range-ignores-the-range",
-		"http/rfc9110/a-true-if-range-processes-the-range",
-	)
-
-	c := cache.New(nil)
+	services := cache.New(nil)
 	for _, id := range []string{"s1", "s2"} {
-		c.SetService(swarm.Service{
+		services.SetService(swarm.Service{
 			ID:   id,
 			Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: id}},
 		})
 	}
-	router := newTestRouterWithCache(t, c)
+
+	tagged := cache.New(nil)
+	tagged.RestoreAnnotations(nopAnnotationStore{}, nil)
+	for _, tags := range [][]string{{"deploy", "web"}, {"deploy"}} {
+		if _, err := tagged.CreateAnnotation(
+			t.Context(), cache.Annotation{Text: "x", Tags: tags},
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	deps := newExecDeps(&fakeTransport{node: "n1"})
+	for _, subject := range []string{"alice", "bob"} {
+		if _, err := deps.Manager.Create(&auth.Identity{Subject: subject, Provider: "none"}, "",
+			exec.Target{Task: "t1", Service: "s1", ServiceName: "web", Node: "n1"}, "local",
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tt := range []struct {
+		path, itemType string
+		router         http.Handler
+	}{
+		{"/services", "Service", newTestRouterWithCache(t, services)},
+		{"/annotations/tags", "AnnotationTag", newTestRouterWithCache(t, tagged)},
+		{"/exec", "ExecSession", execRouter(t, deps)},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			spec.Satisfies(t,
+				"http/rfc9110/if-range-is-evaluated",
+				"http/rfc9110/a-false-if-range-ignores-the-range",
+				"http/rfc9110/a-true-if-range-processes-the-range",
+			)
+
+			assertIfRange(t, tt.router, tt.path, tt.itemType)
+		})
+	}
+}
+
+// assertIfRange checks If-Range on a list at path holding two items of itemType.
+func assertIfRange(t *testing.T, router http.Handler, path, itemType string) {
+	t.Helper()
 
 	get := func(ifRange, rangeHeader string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, "/services", nil)
+		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Range", rangeHeader)
 		if ifRange != "" {
 			req.Header.Set("If-Range", ifRange)
@@ -787,7 +825,7 @@ func TestIfRangeIsEvaluatedOnARangeRequest(t *testing.T) {
 				stale, w.Code, w.Header().Get("Content-Range"))
 		}
 		if !strings.Contains(w.Body.String(), `"total":2`) ||
-			strings.Count(w.Body.String(), `"@type":"Service"`) != 2 {
+			strings.Count(w.Body.String(), `"@type":"`+itemType+`"`) != 2 {
 			t.Errorf("If-Range: %s did not send the whole list: %s", stale, w.Body.String())
 		}
 		if w.Header().Get("ETag") != etag {

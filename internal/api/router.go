@@ -1202,11 +1202,9 @@ func (rt routes) annotations() {
 		"GET /annotations/{id}",
 		contentNegotiated(h.HandleGetAnnotation, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /annotations/{id}",
-		annotationWrite(h.mayEditAnnotation).ThenFunc(h.HandlePatchAnnotation))
+	mux.Handle("PATCH /annotations/{id}", h.annotationEdit().ThenFunc(h.HandlePatchAnnotation))
 	mux.Handle("DELETE /annotations/{id}",
-		annotationWrite(h.mayEditAnnotation).AnswersNoContent().
-			ThenFunc(h.HandleDeleteAnnotation))
+		h.annotationEdit().AnswersNoContent().ThenFunc(h.HandleDeleteAnnotation))
 }
 
 // views registers the views across resources: ports, recommendations, history,

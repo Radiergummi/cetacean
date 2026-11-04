@@ -14,27 +14,29 @@ type TimeWindow struct {
 	Until time.Time
 }
 
-// ParseTimeWindow reads the since and until parameters both transports take.
-// An empty value is an open bound; anything else must be RFC 3339, whose "T"
-// and "Z" may be lower case (§5.6), which time.RFC3339 alone refuses.
+// ParseTimeWindow reads the since and until parameters both transports take;
+// an empty value is an open bound.
 func ParseTimeWindow(since, until string) (TimeWindow, error) {
 	var (
 		window TimeWindow
 		err    error
 	)
 
-	if window.Since, err = parseWindowBound("since", since); err != nil {
+	if window.Since, err = ParseTimestamp("since", since); err != nil {
 		return TimeWindow{}, err
 	}
 
-	if window.Until, err = parseWindowBound("until", until); err != nil {
+	if window.Until, err = ParseTimestamp("until", until); err != nil {
 		return TimeWindow{}, err
 	}
 
 	return window, nil
 }
 
-func parseWindowBound(name, raw string) (time.Time, error) {
+// ParseTimestamp reads the RFC 3339 time a transport was given as name, or
+// the zero time for an empty one. Its "T" and "Z" may be lower case (§5.6),
+// which time.RFC3339 alone refuses.
+func ParseTimestamp(name, raw string) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, nil
 	}
@@ -42,8 +44,7 @@ func parseWindowBound(name, raw string) (time.Time, error) {
 	parsed, err := time.Parse(time.RFC3339, strings.ToUpper(raw))
 	if err != nil {
 		return time.Time{}, fmt.Errorf(
-			"invalid %q parameter: must be an RFC 3339 timestamp, such as 2026-09-05T14:02:00Z",
-			name,
+			"%s: must be an RFC 3339 timestamp, such as 2026-09-05T14:02:00Z", name,
 		)
 	}
 

@@ -22,7 +22,7 @@ import (
 // stacks and plugins a precondition at all. The subject is made current from
 // the engine first, or the header could only refuse what the cache already saw.
 func (h *Handlers) precond(rep representationFunc) Constructor {
-	return h.conditional(rep, true, nil)
+	return h.conditional(hashed(rep, nil), true)
 }
 
 // precondTimed is precond for a representation that also sends Last-Modified,
@@ -31,31 +31,56 @@ func (h *Handlers) precondTimed(
 	rep representationFunc,
 	modified func(*http.Request) time.Time,
 ) Constructor {
-	return h.conditional(rep, true, modified)
+	return h.conditional(hashed(rep, modified), true)
 }
 
 // unrepresented evaluates If-Match on a write whose path serves no GET. There is
 // no representation to match, so §13.1.1 makes every If-Match false, "*" too;
 // exists only says whether the subject is there, so a missing one still 404s.
 func (h *Handlers) unrepresented(exists representationFunc) Constructor {
-	return h.conditional(exists, false, nil)
+	return h.conditional(func(r *http.Request) (string, time.Time, error) {
+		_, err := exists(r)
+		return "", time.Time{}, err
+	}, false)
 }
 
 // subjectExists is an exists for a write whose subject is the cluster itself.
 func subjectExists(*http.Request) (any, error) { return struct{}{}, nil }
 
+// validatorFunc is the strong ETag and Last-Modified (zero for none) a GET at
+// this URI would answer with, or errNoRepresentation when it would not answer.
+type validatorFunc func(*http.Request) (etag string, modified time.Time, err error)
+
+// hashed validates rep as a GET hashes it, dated by lastModified if given.
+func hashed(rep representationFunc, lastModified func(*http.Request) time.Time) validatorFunc {
+	return func(r *http.Request) (string, time.Time, error) {
+		value, err := rep(r)
+		if err != nil {
+			return "", time.Time{}, err
+		}
+
+		body, err := json.Marshal(value)
+		if err != nil {
+			return "", time.Time{}, err
+		}
+
+		var modified time.Time
+		if lastModified != nil {
+			modified = lastModified(r)
+		}
+
+		return computeETag(body), modified, nil
+	}
+}
+
 // conditional evaluates a write's preconditions in RFC 9110 §13.2.2 order;
 // If-Modified-Since binds only a GET or HEAD, so it is not read here.
-func (h *Handlers) conditional(
-	rep representationFunc,
-	represented bool,
-	lastModified func(*http.Request) time.Time,
-) Constructor {
+func (h *Handlers) conditional(validate validatorFunc, represented bool) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ifMatch := r.Header.Get("If-Match")
-			ifNoneMatch := r.Header.Get("If-None-Match")
-			if ifMatch == "" && ifNoneMatch == "" && r.Header.Get("If-Unmodified-Since") == "" {
+			if ifMatch == "" && r.Header.Get("If-None-Match") == "" &&
+				r.Header.Get("If-Unmodified-Since") == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -81,13 +106,13 @@ func (h *Handlers) conditional(
 			// the write is refused rather than let through.
 			pinned := h.pinSubjectVersion(r)
 
-			value, err := rep(r)
+			etag, modified, err := validate(r)
 			switch {
 			case errors.Is(err, errNoRepresentation):
 				// RFC 9110 §13.2.1: a precondition is ignored when the answer
-				// without it would be neither 2xx nor 412, and for a resource
-				// that is gone that answer is 404. Only the handler can say
-				// so, so the request goes through to it unconditioned.
+				// without it would be neither 2xx nor 412, as for a resource
+				// that is gone. Only the handler can say what it is, so the
+				// request goes through to it unconditioned.
 				next.ServeHTTP(w, r.WithContext(
 					context.WithValue(r.Context(), absentSubjectKey{}, true),
 				))
@@ -127,32 +152,28 @@ func (h *Handlers) conditional(
 				return
 			}
 
-			body, err := json.Marshal(value)
-			if err != nil {
-				problem.Write(w, r, "API009", "failed to serialize response")
-				return
-			}
-			etag := computeETag(body)
-
-			var modified time.Time
-			if lastModified != nil {
-				modified = lastModified(r)
-			}
-
-			if reason := preconditionFailed(r, etag, modified); reason != "" {
+			if reason := writePreconditionFailed(r, etag, modified); reason != "" {
 				problem.Write(w, r, "API013", reason)
-				return
-			}
-
-			if ifNoneMatch != "" && etagMatch(ifNoneMatch, etag) {
-				problem.Write(w, r, "API013",
-					"If-None-Match matched the current state of the resource")
 				return
 			}
 
 			next.ServeHTTP(w, r.WithContext(pinned(r.Context())))
 		})
 	}
+}
+
+// writePreconditionFailed is preconditionFailed for a write, which If-None-Match
+// also stops: it says why the write must be refused, or "" when it may go on.
+func writePreconditionFailed(r *http.Request, etag string, modified time.Time) string {
+	if reason := preconditionFailed(r, etag, modified); reason != "" {
+		return reason
+	}
+
+	if etagMatchState(r.Header.Get("If-None-Match"), etag) {
+		return "If-None-Match matched the current state of the resource"
+	}
+
+	return ""
 }
 
 // preconditionedKey marks a request whose subject's version is pinned, so the

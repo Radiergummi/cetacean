@@ -192,6 +192,35 @@ func Run(t *testing.T, newStore Factory) {
 		}
 	})
 
+	t.Run("retention counts what was stored before a restart", func(t *testing.T) {
+		open := newStore(t)
+
+		store := open()
+		commit(t, store, timeline.Batch{Entries: entries(1, 2, 3, 4)})
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		commit(t, store, timeline.Batch{Entries: entries(5), Keep: 3})
+
+		if got := ids(restore(t, store, 10)); !slices.Equal(got, []uint64{3, 4, 5}) {
+			t.Fatalf("Restore = %v, want [3 4 5]", got)
+		}
+	})
+
+	t.Run("retention counts an entry committed again once", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		commit(t, store, timeline.Batch{Entries: entries(1, 2, 3), Keep: 3})
+		commit(t, store, timeline.Batch{Entries: entries(2, 3, 4), Keep: 3})
+
+		if got := ids(restore(t, store, 10)); !slices.Equal(got, []uint64{2, 3, 4}) {
+			t.Fatalf("Restore = %v, want [2 3 4]", got)
+		}
+	})
+
 	t.Run("retention counts gaps with changes", func(t *testing.T) {
 		store := newStore(t)()
 		defer closeStore(t, store)
@@ -401,15 +430,40 @@ func Run(t *testing.T, newStore Factory) {
 		a := fullAnnotation()
 		putAnnotation(t, store, a)
 
-		if err := store.DeleteAnnotation(context.Background(), a.ID); err != nil {
-			t.Fatalf("DeleteAnnotation: %v", err)
-		}
+		deleteAnnotation(t, store, a.ID)
 		closeStore(t, store)
 
 		store = open()
 		defer closeStore(t, store)
 
 		assertAnnotations(t, annotations(t, store), nil)
+	})
+
+	t.Run("an annotation write commits whatever its context does", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		write := beginAnnotation(t, store)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		a := fullAnnotation()
+		if err := write.Put(ctx, a); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		b := a
+		b.ID = a.ID + 1
+		if err := write.Put(ctx, b); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		if err := write.Delete(ctx, a.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		write.Release()
+
+		assertAnnotations(t, annotations(t, store), []cache.Annotation{b})
 	})
 
 	// An annotation's writes take sequence IDs the timeline table never holds.
@@ -425,6 +479,50 @@ func Run(t *testing.T, newStore Factory) {
 
 		if _, last, err := store.Restore(context.Background(), 10); err != nil || last != 9 {
 			t.Fatalf("Restore last = %d, err=%v; want 9", last, err)
+		}
+	})
+
+	// A removal's ID is stored nowhere else, so only Last keeps it from coming back.
+	t.Run("restore reports the last ID handed out, never less", func(t *testing.T) {
+		open := newStore(t)
+		store := open()
+
+		a := fullAnnotation()
+		a.ID, a.Version = 3, 3
+		putAnnotation(t, store, a)
+
+		deleteAnnotation(t, store, a.ID)
+
+		commit(t, store, timeline.Batch{Last: 4})
+		commit(t, store, timeline.Batch{Last: 2})
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		if _, last, err := store.Restore(context.Background(), 10); err != nil || last != 4 {
+			t.Fatalf("Restore last = %d, err=%v; want 4", last, err)
+		}
+	})
+
+	t.Run("the instance survives a restart and differs between stores", func(t *testing.T) {
+		open := newStore(t)
+		store := open()
+		instance := store.Instance()
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		if instance == "" || store.Instance() != instance {
+			t.Fatalf("Instance = %q after a restart, want %q", store.Instance(), instance)
+		}
+
+		other := newStore(t)()
+		defer closeStore(t, other)
+
+		if other.Instance() == instance {
+			t.Fatalf("two stores share the instance %q", instance)
 		}
 	})
 
@@ -543,9 +641,34 @@ func fullAnnotation() cache.Annotation {
 func putAnnotation(t *testing.T, store timeline.Store, a cache.Annotation) {
 	t.Helper()
 
-	if err := store.PutAnnotation(context.Background(), a); err != nil {
-		t.Fatalf("PutAnnotation: %v", err)
+	write := beginAnnotation(t, store)
+	defer write.Release()
+
+	if err := write.Put(context.Background(), a); err != nil {
+		t.Fatalf("Put: %v", err)
 	}
+}
+
+func deleteAnnotation(t *testing.T, store timeline.Store, id uint64) {
+	t.Helper()
+
+	write := beginAnnotation(t, store)
+	defer write.Release()
+
+	if err := write.Delete(context.Background(), id); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+}
+
+func beginAnnotation(t *testing.T, store timeline.Store) cache.AnnotationWrite {
+	t.Helper()
+
+	write, err := store.BeginAnnotation(context.Background())
+	if err != nil {
+		t.Fatalf("BeginAnnotation: %v", err)
+	}
+
+	return write
 }
 
 func annotations(t *testing.T, store timeline.Store) []cache.Annotation {

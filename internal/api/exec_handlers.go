@@ -168,6 +168,10 @@ func (h *Handlers) writeSessionCollection(
 	r *http.Request,
 	sessions []exec.Session,
 ) {
+	id := func(s exec.Session) string { return sessionPath(s.ID) }
+	validator := wholeListETag(r.Context(), sessions, "ExecSession", id)
+	r = ifRange(r, validator)
+
 	p, err := parsePagination(r)
 	if err != nil {
 		problem.Write(w, r, "API016", err.Error())
@@ -176,11 +180,9 @@ func (h *Handlers) writeSessionCollection(
 
 	total := len(sessions)
 	page := sessions[min(p.Offset, total):min(p.Offset+p.Limit, total)]
-	items := wrapItems(r.Context(), page, "ExecSession", func(s exec.Session) string {
-		return sessionPath(s.ID)
-	})
+	items := wrapItems(r.Context(), page, "ExecSession", id)
 	writeCollectionResponse(
-		w, r, NewCollectionResponse(r.Context(), items, total, p.Limit, p.Offset), p, "",
+		w, r, NewCollectionResponse(r.Context(), items, total, p.Limit, p.Offset), p, validator,
 	)
 }
 
