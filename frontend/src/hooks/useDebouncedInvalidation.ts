@@ -21,6 +21,9 @@ interface Options {
 
   /** Narrows which events invalidate; a sync always does. */
   relevant?: ((event: SSEEvent) => boolean) | undefined;
+
+  /** Narrows further which of those invalidate `timelineKeys`; a sync always does. */
+  timelineRelevant?: ((event: SSEEvent) => boolean) | undefined;
 }
 
 /**
@@ -30,16 +33,25 @@ interface Options {
  */
 export function useDebouncedInvalidation(
   ssePath: string | undefined,
-  { resourceKeys = [], timelineKeys = [], delay = 500, onEvent, relevant }: Options,
+  {
+    resourceKeys = [],
+    timelineKeys = [],
+    delay = 500,
+    onEvent,
+    relevant,
+    timelineRelevant,
+  }: Options,
 ) {
   const queryClient = useQueryClient();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const burstStartRef = useRef<number | null>(null);
   const movedResourceRef = useRef(false);
+  const movedTimelineRef = useRef(false);
   const resourceKeysRef = useLatestRef(resourceKeys);
   const timelineKeysRef = useLatestRef(timelineKeys);
   const onEventRef = useLatestRef(onEvent);
   const relevantRef = useLatestRef(relevant);
+  const timelineRelevantRef = useLatestRef(timelineRelevant);
 
   useResourceStream(
     ssePath,
@@ -54,12 +66,18 @@ export function useDebouncedInvalidation(
         }
 
         const movesResource = movesResources(event);
+        const movesTimeline =
+          timelineKeysRef.current.length > 0 &&
+          (event.type === "sync" ||
+            !timelineRelevantRef.current ||
+            timelineRelevantRef.current(event));
 
-        if (!movesResource && timelineKeysRef.current.length === 0) {
+        if (!movesResource && !movesTimeline) {
           return;
         }
 
         movedResourceRef.current ||= movesResource;
+        movedTimelineRef.current ||= movesTimeline;
 
         if (debounceRef.current) {
           clearTimeout(debounceRef.current);
@@ -72,20 +90,30 @@ export function useDebouncedInvalidation(
         const wait = Math.min(delay, burstStartRef.current + maximumWait - now);
 
         debounceRef.current = setTimeout(() => {
-          const keys = movedResourceRef.current
-            ? [...resourceKeysRef.current, ...timelineKeysRef.current]
-            : timelineKeysRef.current;
+          const keys = [
+            ...(movedResourceRef.current ? resourceKeysRef.current : []),
+            ...(movedTimelineRef.current ? timelineKeysRef.current : []),
+          ];
 
           debounceRef.current = null;
           burstStartRef.current = null;
           movedResourceRef.current = false;
+          movedTimelineRef.current = false;
 
           for (const key of keys) {
             void queryClient.invalidateQueries({ queryKey: [...key] });
           }
         }, wait);
       },
-      [queryClient, delay, resourceKeysRef, timelineKeysRef, onEventRef, relevantRef],
+      [
+        queryClient,
+        delay,
+        resourceKeysRef,
+        timelineKeysRef,
+        onEventRef,
+        relevantRef,
+        timelineRelevantRef,
+      ],
     ),
   );
 

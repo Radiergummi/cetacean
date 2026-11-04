@@ -9,20 +9,65 @@ vi.mock("@/hooks/useClusterAnnotatable", () => ({
 
 const service = { type: "service", id: "svc1", name: "web" } as const;
 
-function show(timeFor: (x: number) => number = (x) => 1_000_000 + x * 60, capturing = true) {
+interface Chart {
+  timeFor?: ((x: number) => number) | undefined;
+  locate?: ((time: number) => number | null) | undefined;
+  snap?: ((x: number) => number) | undefined;
+  capturing?: boolean | undefined;
+}
+
+/**
+ * The overlay over a chart stand-in whose axis `shift` slides left, as a
+ * stream does, saying the markers moved.
+ */
+function show({
+  timeFor = (x) => 1_000_000 + x * 60,
+  locate = (time) => (time - 1_000_000) / 60,
+  snap,
+  capturing = true,
+}: Chart = {}) {
   const onDone = vi.fn<() => void>();
-  const view = render(
+  const listeners = new Set<() => void>();
+  let shifted = 0;
+  const overlay = (capture: boolean) => (
     <QueryClientProvider client={new QueryClient()}>
       <AnnotateOverlay
-        timeFor={timeFor}
+        timeFor={(x) => timeFor(x + shifted)}
+        locate={(time) => {
+          const x = locate(time);
+
+          return x === null ? null : x - shifted;
+        }}
+        subscribe={(listener) => {
+          listeners.add(listener);
+
+          return () => {
+            listeners.delete(listener);
+          };
+        }}
+        snap={snap}
         scope={service}
-        capturing={capturing}
+        capturing={capture}
         onDone={onDone}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(overlay(capturing));
 
-  return { ...view, overlay: screen.getByTestId("annotate-overlay"), onDone };
+  return {
+    ...view,
+    overlay: screen.getByTestId("annotate-overlay"),
+    onDone,
+    release: () => view.rerender(overlay(false)),
+    shift: (pixels: number) => {
+      shifted += pixels;
+      act(() => {
+        for (const listener of listeners) {
+          listener();
+        }
+      });
+    },
+  };
 }
 
 function click(overlay: HTMLElement, x: number) {
@@ -67,21 +112,7 @@ describe("AnnotateOverlay", () => {
   });
 
   it("draws the mark where its time will be saved", async () => {
-    const onDone = vi.fn<() => void>();
-
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <AnnotateOverlay
-          timeFor={(x) => 1_000_000 + x * 60}
-          snap={(x) => x - 7}
-          scope={service}
-          capturing
-          onDone={onDone}
-        />
-      </QueryClientProvider>,
-    );
-
-    const overlay = screen.getByTestId("annotate-overlay");
+    const { overlay } = show({ timeFor: (x) => 1_000_000 + x * 60, snap: (x) => x - 7 });
 
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
     fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
@@ -91,19 +122,7 @@ describe("AnnotateOverlay", () => {
   });
 
   it("draws the drag under way where its mark will land", () => {
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <AnnotateOverlay
-          timeFor={(x) => 1_000_000 + x * 60}
-          snap={(x) => x - 7}
-          scope={service}
-          capturing
-          onDone={vi.fn<() => void>()}
-        />
-      </QueryClientProvider>,
-    );
-
-    const overlay = screen.getByTestId("annotate-overlay");
+    const { overlay } = show({ timeFor: (x) => 1_000_000 + x * 60, snap: (x) => x - 7 });
 
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 0 });
     fireEvent.pointerMove(overlay, { clientX: 200, pointerType: "mouse" });
@@ -112,19 +131,7 @@ describe("AnnotateOverlay", () => {
   });
 
   it("draws a drag that snaps to one minute as a point", async () => {
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <AnnotateOverlay
-          timeFor={(x) => 1_000_000 + x}
-          snap={() => 50}
-          scope={service}
-          capturing
-          onDone={vi.fn<() => void>()}
-        />
-      </QueryClientProvider>,
-    );
-
-    const overlay = screen.getByTestId("annotate-overlay");
+    const { overlay } = show({ timeFor: (x) => 1_000_000 + x, snap: () => 50 });
 
     fireEvent.pointerDown(overlay, { clientX: 40, pointerType: "mouse" });
     fireEvent.pointerUp(overlay, { clientX: 60, pointerType: "mouse" });
@@ -134,19 +141,10 @@ describe("AnnotateOverlay", () => {
   });
 
   it("finishes a drag whose mode ended before the button came up", async () => {
-    const { overlay, rerender } = show();
+    const { overlay, release } = show();
 
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse", button: 0 });
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <AnnotateOverlay
-          timeFor={(x) => 1_000_000 + x * 60}
-          scope={service}
-          capturing={false}
-          onDone={vi.fn<() => void>()}
-        />
-      </QueryClientProvider>,
-    );
+    release();
     fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse", button: 0 });
 
     expect(await screen.findByLabelText("Text")).toBeInTheDocument();
@@ -162,7 +160,7 @@ describe("AnnotateOverlay", () => {
   });
 
   it("makes a point of a drag shorter than the form's minute", async () => {
-    const { overlay } = show((x) => 1_000_020 + Math.round(x / 10) * 15);
+    const { overlay } = show({ timeFor: (x) => 1_000_020 + Math.round(x / 10) * 15 });
 
     fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
     fireEvent.pointerUp(overlay, { clientX: 110, pointerType: "mouse" });
@@ -204,8 +202,19 @@ describe("AnnotateOverlay", () => {
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "100px" });
   });
 
+  it("keeps the mark at its time while the chart streams under it", async () => {
+    const { overlay, shift } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
+    await screen.findByLabelText("Text");
+    shift(30);
+
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "70px", width: "200px" });
+  });
+
   it("takes no mark while it does not capture the pointer", () => {
-    const { overlay } = show(undefined, false);
+    const { overlay } = show({ capturing: false });
 
     click(overlay, 100);
 

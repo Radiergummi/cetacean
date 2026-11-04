@@ -1,14 +1,17 @@
 import { useDetailResource } from "./useDetailResource";
+import type { SSEListener } from "./useResourceStream";
 import { api } from "@/api/client";
 import { createTestQueryClient, createWrapper } from "@/test/mocks";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const streamPaths: (string | undefined)[] = [];
+let listener: SSEListener | undefined;
 
 vi.mock("./useResourceStream", () => ({
-  useResourceStream: (path: string | undefined) => {
+  useResourceStream: (path: string | undefined, onEvent: SSEListener) => {
     streamPaths.push(path);
+    listener = onEvent;
   },
 }));
 
@@ -30,6 +33,7 @@ const node: Node = { ID: "n0d3id", Description: { Hostname: "worker-2" } };
 beforeEach(() => {
   vi.clearAllMocks();
   streamPaths.length = 0;
+  listener = undefined;
   vi.mocked(api.node).mockResolvedValue({
     data: node,
     allowedMethods: new Set<string>(),
@@ -119,5 +123,30 @@ describe("useDetailResource", () => {
     settle();
 
     await waitFor(() => expect(streamPaths.at(-1)).toBe("/nodes/n0d3id"));
+  });
+
+  it("leaves a node's Recent Activity alone on a task event, which it holds none of", async () => {
+    const { result } = renderForKey("worker-2");
+
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    await waitFor(() => expect(api.recentActivity).toHaveBeenCalledTimes(1));
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        listener?.({ type: "task", action: "update", id: "t1" });
+        vi.advanceTimersByTime(500);
+      });
+      expect(api.node).toHaveBeenCalledTimes(2);
+      expect(api.recentActivity).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        listener?.({ type: "node", action: "update", id: "n0d3id" });
+        vi.advanceTimersByTime(500);
+      });
+      expect(api.recentActivity).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

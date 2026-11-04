@@ -282,6 +282,12 @@ export default function TimeSeriesChart({
   const markerPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "timelineMarkers",
+      // A pinned popover and an open mark follow their time as samples move the axis.
+      afterUpdate() {
+        for (const listener of markerListenersRef.current) {
+          listener();
+        }
+      },
       beforeDatasetsDraw({ ctx, chartArea, scales }) {
         const items = timelineRef.current;
         const xScale = scales["x"];
@@ -310,11 +316,6 @@ export default function TimeSeriesChart({
           );
           markerLayoutRef.current = layout;
           markerInputsRef.current = inputs;
-
-          // A pinned popover follows its time as samples move the axis.
-          for (const listener of markerListenersRef.current) {
-            listener();
-          }
         }
 
         drawMarkers(ctx, chartArea, layout, {
@@ -726,6 +727,8 @@ export default function TimeSeriesChart({
               {panel?.annotate && (panel.annotating || panel.markOpen) && (
                 <AnnotateOverlay
                   timeFor={timeFor}
+                  locate={pixelFor}
+                  subscribe={subscribeMarkers}
                   snap={snapToMinute}
                   scope={panel.annotate}
                   capturing={panel.annotating ?? false}

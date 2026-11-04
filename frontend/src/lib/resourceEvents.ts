@@ -15,6 +15,16 @@ export const resourceEventTypes = [
 
 const resourceTypes: ReadonlySet<string> = new Set(resourceEventTypes);
 
+const annotatableTypes: ReadonlySet<string> = new Set(["node", "service", "stack"]);
+
+/**
+ * Whether an event may change what a note shows: its own, or the removal of
+ * a resource it can name, which marks that resource removed.
+ */
+export function changesAnnotations({ type, action }: { type: string; action: string }): boolean {
+  return type === "annotation" || (action === "remove" && annotatableTypes.has(type));
+}
+
 /**
  * Whether an event may have moved resources: one of theirs, or a sync, after
  * which any of them may have changed.

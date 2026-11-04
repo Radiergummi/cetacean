@@ -5,6 +5,24 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/api/client", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/api/client")>();
+
+  return {
+    ...original,
+    api: {
+      ...original.api,
+      annotation: (id: number) =>
+        Promise.resolve({
+          data: { id, timestamp: "2026-11-03T12:00:00Z", text: "Draft", tags: [], resources: [] },
+          allowedMethods: new Set(["GET", "PATCH", "DELETE"]),
+          etag: '"1"',
+        }),
+      annotationTagsPage: () => Promise.resolve({ items: [] }),
+    },
+  };
+});
+
 const note = (id: number, text: string): TimelineItem => ({
   shape: "point",
   kind: "annotation",
@@ -135,5 +153,23 @@ describe("NotePopover", () => {
     plot.move(null);
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("stays pinned while a note's dialog is open, and unpins once it closes", async () => {
+    const user = userEvent.setup();
+    const { plot, rerenderWith, onClose } = show([1], [note(1, "Editing")]);
+
+    await user.click(await screen.findByRole("button", { name: "Annotation actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    await user.type(await screen.findByLabelText("Text"), " typed");
+    plot.move(null);
+    rerenderWith([]);
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Text")).toHaveValue("Draft typed");
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
