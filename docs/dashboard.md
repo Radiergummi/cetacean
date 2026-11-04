@@ -1,8 +1,8 @@
 ---
 title: Dashboard
-description: Navigation, keyboard shortcuts, the command palette, list and detail pages, charts, logs, and topology.
+description: Navigation, keyboard shortcuts, the command palette, list and detail pages, charts, annotations, logs, and topology.
 category: guide
-tags: [dashboard, ui, keyboard-shortcuts, search, charts, logs]
+tags: [dashboard, ui, keyboard-shortcuts, search, charts, annotations, logs]
 ---
 
 # Dashboard
@@ -29,7 +29,7 @@ the running version and commit, the licenses page, and a link to the API playgro
 
 ## Keyboard shortcuts
 
-Press `?` for the full list. Shortcuts are ignored while focus is in a text input.
+Press `?` for the full list. Shortcuts are ignored while focus is in a text input, apart from `⌘ Enter`.
 
 | Shortcut         | Action                        |
 |------------------|-------------------------------|
@@ -55,9 +55,11 @@ Press `?` for the full list. Shortcuts are ignored while focus is in a text inpu
 | `j` / `↓`        | Next row in a table           |
 | `k` / `↑`        | Previous row                  |
 | `Enter`          | Open the selected row         |
+| `⌘ Enter`        | Submit the form or editor     |
 
 The `g` shortcuts are chords: press `g`, release, then the second key within one second. Hovering a nav link shows
-its chord.
+its chord. `⌘ Enter` (`Ctrl Enter` on Linux and Windows) submits the form you're in, or saves the inline editor;
+the button it presses shows the shortcut.
 
 ## Command palette
 
@@ -69,21 +71,30 @@ seconds while the palette is open so a converging service updates in place. Move
 Typing an action name instead runs that action as a guided sequence, one prompt per argument, with a breadcrumb of
 what you have chosen so far:
 
-| Action            | Type                                                            |
-|-------------------|-----------------------------------------------------------------|
-| Scale Service     | Pick a service, then a replica count                            |
-| Update Image      | Pick a service, then an image reference                         |
-| Rollback Service  | Pick a service                                                  |
-| Restart Service   | Pick a service                                                  |
-| Drain Node        | Pick a node                                                     |
-| Pause Node        | Pick a node                                                     |
-| Activate Node     | Pick a node                                                     |
-| Promote Node      | Pick a node                                                     |
-| Demote Node       | Pick a node                                                     |
-| Force Remove Task | Pick a task                                                     |
-| Remove …          | Pick a service, node, stack, config, secret, network, or volume |
+| Action                    | Type                                                            |
+|---------------------------|-----------------------------------------------------------------|
+| Scale Service             | Pick a service, then a replica count                            |
+| Update Image              | Pick a service, then an image reference                         |
+| Rollback Service          | Pick a service                                                  |
+| Restart Service           | Pick a service                                                  |
+| Drain Node                | Pick a node                                                     |
+| Pause Node                | Pick a node                                                     |
+| Activate Node             | Pick a node                                                     |
+| Promote Node              | Pick a node                                                     |
+| Demote Node               | Pick a node                                                     |
+| Force Remove Task         | Pick a task                                                     |
+| Remove …                  | Pick a service, node, stack, config, secret, network, or volume |
+| Add Annotation            | Fill in the [annotation](#annotations) form                     |
+| Rotate Worker Join Token  | Confirm                                                         |
+| Rotate Manager Join Token | Confirm                                                         |
+| Rotate Unlock Key         | Confirm; only with **Auto-Lock Managers** on                    |
+| Force CA Rotation         | Confirm                                                         |
+| Enable Plugin             | Pick a disabled plugin                                          |
+| Disable Plugin            | Pick an enabled plugin                                          |
+| Remove Plugin             | Pick a plugin                                                   |
 
-Actions that remove or disrupt something ask for confirmation before they run. An action your [operations level][operations-level]
+Actions that remove or disrupt something ask for confirmation before they run. When Docker refuses to remove a node,
+the palette offers **Force Remove Node** behind a confirmation of its own. An action your [operations level][operations-level]
 or your [grants][authorization] don't allow is refused with a permission message, not a server error.
 
 ## List pages
@@ -239,6 +250,12 @@ one as `?from=` and `?to=`.
 The preset ranges update live as new points arrive. A custom range is a snapshot; use the refresh button to
 bring it up to date.
 
+On service, node, and task pages the charts mark the resource's history. Each change is a line, and hovering it
+names what changed and who made it; changes too close to tell apart share a thicker line. A stretch Cetacean wasn't
+watching, a [gap](#history), is hatched. [Annotations](#annotations) are drawn as flags, or as shaded bands for a
+range, in a color of their own, and a different one for cluster-wide annotations. Over a long range the charts mark
+only the newest changes and say so; narrow the range to see the rest.
+
 ## Metrics console
 
 The metrics page runs PromQL directly against the configured Prometheus, with completion for metric names. A query
@@ -294,18 +311,48 @@ for offline use.
 
 ## History
 
-The history page at `/history`, linked from the recent activity on the cluster overview, lists the latest 200
-changes Cetacean has seen. Filter it by resource type, or with the search box, which keeps the rows showing each of its words: in
-a name, an action, who made the change, or the start of an ID. A word starting with `#` filters by tag, completed from
-the tags in use. Tab or Enter takes the highlighted tag, and Space keeps the tag as typed. The download button saves
-the whole log Cetacean still holds as CSV. Recent activity elsewhere folds consecutive changes to one resource
-into a single row with a count, but the history page lists every entry.
+The history page at `/history`, linked from the recent activity on the cluster overview, lists the changes Cetacean
+has seen and the [annotations](#annotations), newest first, with older entries a button away. Filter it by resource
+type, by kind (changes or annotations), or with the search box, which keeps the rows showing each of its words: in a
+name, an action, who made the change, an annotation's text, or the start of an ID. A word starting with `#` filters
+by tag, completed from the tags in use. Tab or Enter takes the highlighted tag, and Space keeps the tag as typed. The
+filters are held in the URL. **Download CSV** saves what the filters match as CSV. Recent activity elsewhere folds
+consecutive changes to one resource into a single row with a count, but the history page lists every entry.
 
 A change made through Cetacean names who made it and whether they used the dashboard, the API, or MCP. A change
 with no name came from somewhere else, such as the Docker CLI. The history survives a restart while
 `storage.timeline` is on; the time Cetacean wasn't watching shows as a gap, a divider between the rows. Changes
 Docker still remembered from the gap appear below it, marked **recovered**, and the divider says it was partly
 covered by Docker's log. Task changes during a gap are never recovered.
+
+## Annotations
+
+An annotation is a note about a moment or a range: that a load test started, or why a deploy was rolled back. It
+names services, stacks, or nodes, or none to be about the whole cluster. Annotations need
+[`storage.timeline`][configuration] but no [operations level][operations-level]; who may write one follows your
+[grants][authorization], as the [API guide][annotations-api] describes.
+
+Annotations appear on the history page, in the recent activity of the resources they name, and on those resources'
+[charts](#charts). Each shows its text, with any URLs in it as links, when it happened, what it's about, its tags,
+and who wrote it. Its time opens its own page at `/annotations/{id}`. A tag opens `/annotations`, which lists every
+annotation you may read, yours or anyone's, filtered by tag and text in the same search box as the history page and
+downloadable as CSV. Its **Tags** button opens `/annotations/tags`, the tags in use with how many annotations carry
+each. **Show on chart** opens the metrics of the first service or node an annotation names, zoomed to the time
+around it.
+
+To add one, use **Add annotation** on the history page, on `/annotations`, or in the recent activity of a service,
+stack, or node, or the palette's **Add Annotation**. The form takes the text, up to 1,000 characters; tags, completed
+from the tags in use; a start; an optional end, which makes it a range; and what it's about. An annotation's **…**
+menu, and the buttons on its page, edit or delete it; what it's about can't be changed from the dashboard. The menu
+offers only what you may do.
+
+On service and node charts, the annotate button in the panel header turns on annotate mode, as does holding `Ctrl`
+or `⌘` for as long as it's held: click a chart to mark a moment, or drag across it to mark a range, and the form opens there. On a touch screen,
+tap twice to mark a range. `Esc` leaves the mode.
+
+Clicking a flag or a band pins its annotations below it. Each carries its menu and a link to its page. The panel's
+**Annotations** menu hides them, or shows only those with the tags you pick from the ones in view. Both are held in
+the URL, as `annotations=off` and one `annotationTag` per tag, so a link to the page keeps them.
 
 ## Atom feeds
 
@@ -320,6 +367,7 @@ modules and frontend packages. Search by name, or filter by ecosystem and licens
 the full text for that dependency, with its NOTICE file if it ships one. The header links to the complete
 attribution document.
 
+[annotations-api]: api#annotations
 [api]: api
 [authentication]: authentication
 [authorization]: authorization
