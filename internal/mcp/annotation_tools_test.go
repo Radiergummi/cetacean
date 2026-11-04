@@ -78,6 +78,7 @@ func TestUpdateAnnotationRefusals(t *testing.T) {
 		{"a reader who did not write it", "bob", `{"id":` + id + `,"text":"x"}`, "write access denied"},
 		{"no such note", "alice", `{"id":999999,"text":"x"}`, "annotation 999999 not found"},
 		{"an empty start", "alice", `{"id":` + id + `,"at":""}`, "at: cannot be removed"},
+		{"an end that is not a string", "alice", `{"id":` + id + `,"until":0}`, "until: must be"},
 		{
 			"a range ending before it starts",
 			"alice",
@@ -261,4 +262,23 @@ func TestGetEventsFiltersAnnotations(t *testing.T) {
 	); err == nil || !strings.Contains(err.Error(), `"changes"`) {
 		t.Errorf("an unknown kind = %v, want it refused by name", err)
 	}
+}
+
+func TestAnAnnotationSubscriberHearsOfTheEditThatHidesIt(t *testing.T) {
+	srv, c := annotationServer(t, true)
+	note := alicesNote(t, c)
+
+	name := t.Name()
+	uri := "cetacean://annotations/" + strconv.FormatUint(note.ID, 10)
+	srv.notifications.Subscribe(session(name), uri, &auth.Identity{Subject: "bob"})
+
+	if _, err := c.UpdateAnnotation(context.Background(), note.ID, func(a *cache.Annotation) error {
+		a.Resources = []cache.AnnotationResource{
+			{Type: cache.EventNode, ID: "node1", Name: "worker"},
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assertUpdated(t, drainUpdated(t, name), uri)
 }

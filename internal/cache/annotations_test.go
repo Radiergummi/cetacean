@@ -319,3 +319,33 @@ func TestDeleteAnnotation(t *testing.T) {
 		t.Fatalf("second delete: %v, want ErrAnnotationNotFound", err)
 	}
 }
+
+func TestUpdateAnnotation_CarriesWhatItReplaced(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+	c.RestoreAnnotations(&fakeAnnotationStore{}, nil)
+
+	a, err := c.CreateAnnotation(context.Background(), Annotation{Text: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.UpdateAnnotation(context.Background(), a.ID, func(a *Annotation) error {
+		a.Text = "y"
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	last := events[len(events)-1]
+	previous, ok := last.Previous.(Annotation)
+	if last.Action != "update" || !ok || previous.Text != "x" || previous.Version != a.Version {
+		t.Fatalf("update event %+v, want the version it replaced as Previous", last)
+	}
+
+	items, _ := c.history.Since(1)
+	if len(items) != 1 || items[0].Previous == nil || items[0].Previous.Text != "x" {
+		t.Fatalf("ring items %+v, want the update to keep what it replaced", items)
+	}
+}

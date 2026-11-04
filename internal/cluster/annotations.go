@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -185,6 +186,11 @@ func (s *Annotations) Update(
 			return cache.Annotation{}, ErrAnnotationDenied
 		}
 
+		// RFC 7396: a patch that changes nothing leaves the target as it is.
+		if sameAnnotation(current, next) {
+			return s.cache.WithRemovals(current), nil
+		}
+
 		updated, err := s.cache.UpdateAnnotation(ctx, id, func(a *cache.Annotation) error {
 			if a.Version != current.Version {
 				return errAnnotationMoved
@@ -205,6 +211,12 @@ func (s *Annotations) Update(
 
 		return s.cache.WithRemovals(updated), err
 	}
+}
+
+// sameAnnotation reports whether b says what a does, in every field an edit sets.
+func sameAnnotation(a, b cache.Annotation) bool {
+	return a.Timestamp.Equal(b.Timestamp) && a.Until.Equal(b.Until) && a.Text == b.Text &&
+		slices.Equal(a.Tags, b.Tags) && slices.Equal(a.Resources, b.Resources)
 }
 
 // Delete removes an annotation the caller may edit.
@@ -454,9 +466,13 @@ func allAdmit(resources []cache.AnnotationResource, can func(string) bool) bool 
 	return true
 }
 
+// authored compares subject and provider, but a deployment's OAuth server
+// issues tokens only to whom its one upstream provider signed in, so a token's
+// provider stands for that provider: one person is one author on both.
 func authored(ctx context.Context, a cache.Annotation) bool {
 	actor, ok := cache.ActorFromContext(ctx)
 
-	return ok && a.Actor != nil &&
-		a.Actor.Subject == actor.Subject && a.Actor.Provider == actor.Provider
+	return ok && a.Actor != nil && a.Actor.Subject == actor.Subject &&
+		(a.Actor.Provider == actor.Provider ||
+			a.Actor.Provider == auth.ProviderToken || actor.Provider == auth.ProviderToken)
 }

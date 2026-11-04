@@ -134,7 +134,7 @@ func (c *Cache) CreateAnnotation(ctx context.Context, a Annotation) (Annotation,
 	a.Resources = slices.Clone(a.Resources)
 	a.Updated, a.Editor = time.Time{}, nil
 
-	return a, c.commitAnnotation(ctx, write, a, "create")
+	return a, c.commitAnnotation(ctx, write, a, nil, "create")
 }
 
 // UpdateAnnotation applies edit to a copy of the annotation and records the
@@ -172,7 +172,7 @@ func (c *Cache) UpdateAnnotation(
 	a.Version = c.history.Count() + 1
 	a.Updated = time.Now().UTC()
 
-	return a, c.commitAnnotation(ctx, write, a, "update")
+	return a, c.commitAnnotation(ctx, write, a, &current, "update")
 }
 
 // DeleteAnnotation removes an annotation once check accepts it; check runs
@@ -200,7 +200,7 @@ func (c *Cache) DeleteAnnotation(
 		return err
 	}
 
-	return c.commitAnnotation(ctx, write, current, "remove")
+	return c.commitAnnotation(ctx, write, current, nil, "remove")
 }
 
 // AnnotationCount is how many annotations the cache holds.
@@ -233,6 +233,7 @@ func (c *Cache) commitAnnotation(
 	ctx context.Context,
 	write AnnotationWrite,
 	a Annotation,
+	previous *Annotation,
 	action string,
 ) error {
 	var err error
@@ -262,21 +263,22 @@ func (c *Cache) commitAnnotation(
 
 	// The event shows the note as a read would, removal marks and all.
 	marked := c.WithRemovals(a)
-	id := strconv.FormatUint(a.ID, 10)
-	historyID := c.history.Append(HistoryEntry{
+	entry := HistoryEntry{
 		Kind:       KindAnnotation,
 		Action:     action,
-		ResourceID: id,
+		ResourceID: strconv.FormatUint(a.ID, 10),
 		Annotation: &marked,
-	})
+	}
+	event := Event{Type: EventAnnotation, Action: action, ID: entry.ResourceID, Resource: marked}
 
-	c.dispatch(Event{
-		Type:      EventAnnotation,
-		Action:    action,
-		ID:        id,
-		Resource:  marked,
-		HistoryID: historyID,
-	})
+	// What an update replaced, so a reader it no longer reaches hears it left.
+	if previous != nil {
+		replaced := c.WithRemovals(*previous)
+		entry.Previous, event.Previous = &replaced, replaced
+	}
+
+	event.HistoryID = c.history.Append(entry)
+	c.dispatch(event)
 
 	return nil
 }
@@ -380,7 +382,7 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 
 	var ring []HistoryEntry
 	if len(q.Kinds) != 1 || q.Kinds[0] != KindAnnotation {
-		if q.Type == EventStack && q.ResourceID != "" {
+		if q.ResourceID != "" && (q.Type == EventStack || slices.Contains(q.Types, EventStack)) {
 			q.Members = c.stackMembers(q.ResourceID)
 		}
 

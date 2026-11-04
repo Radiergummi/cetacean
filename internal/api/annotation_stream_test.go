@@ -77,6 +77,24 @@ func TestHistoryFeedShowsAnEditAsAnUpdate(t *testing.T) {
 	}
 }
 
+func TestHistoryFeedDatesAnAnnotationOnARemovedResourceByItsEdit(t *testing.T) {
+	h := annotationHandlers(t, true)
+	id, _ := createAnnotation(t, h, "carol",
+		`{"text":"a","resources":[{"type":"service","id":"web"}]}`)
+	h.cache.DeleteService("svc1")
+
+	a, _ := h.cache.Annotation(mustParseID(t, id))
+
+	req := withContentType(newAnnotationRequest("GET", "/history", "carol", ""), ContentTypeAtom)
+	w := httptest.NewRecorder()
+	h.feedHistoryHandler(renderAtom)(w, req)
+
+	if want := "<updated>" + a.Created.Format(time.RFC3339Nano) + "</updated>"; !strings.Contains(
+		w.Body.String(), want) {
+		t.Errorf("feed lacks %s:\n%s", want, w.Body)
+	}
+}
+
 func TestHistoryFeedEscapesAnAnnotationsText(t *testing.T) {
 	h := annotationHandlers(t, true)
 	createAnnotation(t, h, "carol", `{"text":"<script>alert(1)</script>"}`)

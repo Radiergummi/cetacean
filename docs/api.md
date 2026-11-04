@@ -580,8 +580,10 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
 
 A resource the cluster no longer holds is marked `"removed": true` in an annotation's `resources`.
 
-The `ETag` is the annotation's version, which every edit advances; a resource's removal changes it too. `PATCH` and
-`DELETE` honor `If-Match` against the `ETag` as it stands, and refuse a stale one with `412`.
+The `ETag` is the annotation's version, which every edit advances; a resource's removal changes it too. A patch that
+changes nothing, such as `{}`, keeps the version. `Last-Modified` is the last edit, and is absent once a removal marks
+a resource, since nothing records when that happened. `PATCH` and `DELETE` honor `If-Match`, `If-None-Match` and
+`If-Unmodified-Since` against the annotation as it stands, before reading the body, and refuse a failed one with `412`.
 
 Who may do what follows the resources an annotation names:
 
@@ -589,7 +591,8 @@ Who may do what follows the resources an annotation names:
   One the caller can't read answers `404` (`ANN004`).
 - **Create:** write on every resource it names; write on `*` for a cluster-wide one.
 - **Edit and delete:** the author, while they can still read it, or anyone who could create it. Changing `resources`
-  also needs what creating it with the new set needs.
+  also needs what creating it with the new set needs. A token Cetacean issued writes as the person who signed in for
+  it, so their notes are theirs from the dashboard and over MCP alike.
 
 An annotation doesn't change anything in Docker, so it needs no [operations level][operations-level]: annotations work
 on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may
@@ -629,7 +632,9 @@ an update to the entry rather than as a new one.
 
 An `annotation` event reports each create, edit, and delete as it happens. It is sent on `/events`, and on the
 [stream](#per-resource-streams) of each resource the annotation belongs on, by the same rule as `resourceId` above: a
-cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`:
+cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`. An edit that
+moves an annotation off a stream's resource, or makes it unreadable to the caller, arrives on that stream as a
+`remove`:
 
 ```sse
 id: 4182

@@ -5,10 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/auth"
@@ -116,7 +113,7 @@ func (h *Handlers) timelineQuery(
 }
 
 // timelineScope reads what every representation of the timeline shares: the
-// window, the resource, `tasks` and the filters, with the caller's read checks.
+// window, the resource, `tasks` and the filters, resolved for the caller.
 func (h *Handlers) timelineScope(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -131,80 +128,44 @@ func (h *Handlers) timelineScope(
 
 	// `resourceId` is a query parameter, so the canonical redirect never
 	// reaches it and a caller holding a name would read an empty timeline.
-	resourceType := q.Get("type")
-
-	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
-
-	resourceID, err := cluster.ResolveIdentifier(
-		h.cache, resourceType, q.Get("resourceId"), canRead,
-	)
-	if h.reportAmbiguousName(w, r, resourceType, err) {
-		return cache.HistoryQuery{}, false
+	scope := cluster.TimelineScope{
+		Window:   window,
+		Type:     cache.EventType(q.Get("type")),
+		Resource: q.Get("resourceId"),
+		Tasks:    true,
+		Search:   q.Get("search"),
+		Kinds:    q["kind"],
+		Tags:     q["tag"],
+		Authors:  q["author"],
 	}
 
-	query := cache.HistoryQuery{
-		Type:       cache.EventType(resourceType),
-		ResourceID: resourceID,
-		After:      window.Since,
-		Before:     window.Until,
-		Visible:    h.readableHistory(r),
-
-		ReadableAnnotation: h.annotationCaller(r).MayRead,
-	}
-
-	if err := timelineFilters(q, &query); err != nil {
-		problem.Write(w, r, "API016", err.Error())
-		return cache.HistoryQuery{}, false
-	}
-
-	includeTasks := true
 	if value := q.Get("tasks"); value != "" {
-		if includeTasks, err = strconv.ParseBool(value); err != nil {
+		if scope.Tasks, err = strconv.ParseBool(value); err != nil {
 			problem.Write(w, r, "API016", "tasks must be true or false")
 			return cache.HistoryQuery{}, false
 		}
 	}
 
-	// The type names what resourceId is, and a service's timeline holds its
-	// tasks' entries too, unless the caller turns that off.
-	if includeTasks && query.Type == cache.EventService && query.ResourceID != "" {
-		query.Type = ""
-		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
+	if value := q.Get("matchAny"); value != "" {
+		if scope.MatchAny, err = strconv.ParseBool(value); err != nil {
+			problem.Write(w, r, "API016", "matchAny must be true or false")
+			return cache.HistoryQuery{}, false
+		}
+	}
+
+	query, err := scope.Query(h.cache, h.annotationCaller(r))
+	switch {
+	case h.reportAmbiguousName(w, r, q.Get("type"), err):
+		return cache.HistoryQuery{}, false
+	case errors.Is(err, cluster.ErrNoGrant):
+		problem.Write(w, r, "ACL001", err.Error())
+		return cache.HistoryQuery{}, false
+	case err != nil:
+		problem.Write(w, r, "API016", err.Error())
+		return cache.HistoryQuery{}, false
 	}
 
 	return query, true
-}
-
-// timelineFilters reads the filters the timeline's JSON, CSV and feeds share:
-// `search`; `kind`, `tag` and `author`, which repeat; and `matchAny`, which
-// widens the tags to any of them. An empty value is no filter.
-func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
-	present := func(name string) []string {
-		return slices.DeleteFunc(slices.Clone(q[name]), func(v string) bool { return v == "" })
-	}
-
-	query.Search = q.Get("search")
-
-	query.Kinds = present("kind")
-	query.Tags = present("tag")
-	query.Authors = present("author")
-
-	for _, kind := range query.Kinds {
-		if !slices.Contains(cache.Kinds, kind) {
-			return fmt.Errorf("kind %q is not one of %s", kind, strings.Join(cache.Kinds, ", "))
-		}
-	}
-
-	if value := q.Get("matchAny"); value != "" {
-		matchAny, err := strconv.ParseBool(value)
-		if err != nil {
-			return errors.New("matchAny must be true or false")
-		}
-
-		query.MatchAny = matchAny
-	}
-
-	return nil
 }
 
 // timeline lists query as the caller sees it, through cluster.ReadTimeline.
