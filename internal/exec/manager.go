@@ -56,6 +56,10 @@ func OwnerOf(id *auth.Identity) Owner {
 	}
 }
 
+func (o Owner) auditIdentity() audit.Identity {
+	return audit.Identity{Subject: o.Subject, Provider: o.Provider, Groups: o.Groups}
+}
+
 func (o Owner) Is(id *auth.Identity) bool {
 	return id != nil && o.Subject == id.Subject && o.Provider == id.Provider
 }
@@ -80,7 +84,7 @@ type Session struct {
 	ConnectedAt *time.Time `json:"connectedAt,omitempty"`
 	EndedAt     *time.Time `json:"endedAt,omitempty"`
 	Reason      string     `json:"reason,omitempty"`
-	EndedBy     string     `json:"endedBy,omitempty"`
+	EndedBy     *Owner     `json:"endedBy,omitempty"`
 	Exit        *Exit      `json:"exit,omitempty"`
 	BytesIn     int64      `json:"bytesIn"`
 	BytesOut    int64      `json:"bytesOut"`
@@ -251,7 +255,11 @@ func (m *Manager) Connected(sid string) error {
 	m.mu.Unlock()
 
 	if err := m.write(rec); err != nil {
-		m.Abort(sid, "audit_unavailable")
+		if abandoned, ok := errors.AsType[*audit.AbandonedError](err); ok {
+			m.abortLate(sid, abandoned.Landed)
+		} else {
+			m.Abort(sid, "audit_unavailable")
+		}
 
 		return audit.ErrUnavailable
 	}
@@ -296,14 +304,17 @@ func (m *Manager) Output(sid string, n int) {
 
 // End asks a session to stop; the first reason given is the one recorded. An
 // attached session finishes through its pump, an unattached one right here.
-func (m *Manager) End(sid, reason, by string) {
+func (m *Manager) End(sid, reason string, by *auth.Identity) {
 	m.mu.Lock()
 	e, ok := m.sessions[sid]
 	if !ok || e.State == StateEnded || e.Reason != "" {
 		m.mu.Unlock()
 		return
 	}
-	e.Reason, e.EndedBy = reason, by
+	e.Reason = reason
+	if by != nil {
+		e.EndedBy = new(OwnerOf(by))
+	}
 	cancel, attached := e.cancel, e.attached
 	m.mu.Unlock()
 
@@ -348,7 +359,7 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 	// A shell that exited on its own did, whatever asked it to stop meanwhile.
 	switch {
 	case exit.Outcome == OutcomeExited:
-		e.Reason, e.EndedBy = "exited", ""
+		e.Reason, e.EndedBy = "exited", nil
 	case e.Reason == "":
 		e.Reason = "exited"
 	}
@@ -373,11 +384,54 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 	return snapshot
 }
 
+// abortLate aborts a session whose start record was given up but may still
+// land, and writes its end record once it has. The write is counted before the
+// abort, so Shutdown never sees the session ended with nothing left to write.
+func (m *Manager) abortLate(sid string, landed <-chan error) {
+	m.mu.Lock()
+	m.endWrites++
+	m.mu.Unlock()
+
+	m.Abort(sid, "audit_unavailable")
+
+	m.mu.Lock()
+	end := m.record("exec.end", m.sessions[sid])
+	m.mu.Unlock()
+
+	go func() {
+		if <-landed == nil {
+			_ = m.write(end)
+		}
+
+		m.mu.Lock()
+		m.endWrites--
+		m.mu.Unlock()
+	}()
+}
+
 // Denied records a refusal that never became a session.
 func (m *Manager) Denied(id *auth.Identity, client string, target Target, reason string) {
 	rec := m.record("exec.denied", &entry{
 		Owner: OwnerOf(id), Target: target, Client: client, Reason: reason, identity: id,
 	})
+	_ = m.write(rec)
+}
+
+// DeniedAttach records a refused attach to the session sid, if it exists, as
+// the caller's refusal.
+func (m *Manager) DeniedAttach(sid string, id *auth.Identity, client, reason string) {
+	m.mu.Lock()
+	e, ok := m.sessions[sid]
+	if !ok {
+		m.mu.Unlock()
+		return
+	}
+	rec := m.record("exec.denied", &entry{
+		ID: sid, Owner: OwnerOf(id), Target: e.Target, Transport: e.Transport,
+		Client: client, Reason: reason,
+	})
+	m.mu.Unlock()
+
 	_ = m.write(rec)
 }
 
@@ -402,7 +456,7 @@ func (m *Manager) write(rec audit.Record) error {
 	m.mu.Unlock()
 
 	for _, id := range running {
-		m.End(id, "audit_unavailable", "")
+		m.End(id, "audit_unavailable", nil)
 	}
 
 	return err
@@ -411,16 +465,16 @@ func (m *Manager) write(rec audit.Record) error {
 // record must be called with m.mu held or on an entry nobody else holds.
 func (m *Manager) record(event string, e *entry) audit.Record {
 	rec := audit.Record{
-		Time: m.cfg.Now(), Event: event, Session: e.ID,
-		Identity: audit.Identity{
-			Subject: e.Owner.Subject, Provider: e.Owner.Provider, Groups: e.Owner.Groups,
-		},
+		Time: m.cfg.Now(), Event: event, Session: e.ID, Identity: e.Owner.auditIdentity(),
 		Client: e.Client, Transport: e.Transport,
 		Target: &audit.Target{
 			Task: e.Target.Task, Service: e.Target.ServiceName, Stack: e.Target.Stack,
 			Node: e.Target.Node, Container: e.Target.Container,
 		},
-		Reason: e.Reason, EndedBy: e.EndedBy,
+		Reason: e.Reason,
+	}
+	if e.EndedBy != nil {
+		rec.EndedBy = new(e.EndedBy.auditIdentity())
 	}
 	if event == "exec.end" {
 		rec.BytesIn, rec.BytesOut = e.BytesIn, e.BytesOut
@@ -482,7 +536,7 @@ func (m *Manager) Sweep() {
 		}
 	}
 	for _, end := range endings {
-		m.End(end.id, end.reason, "")
+		m.End(end.id, end.reason, nil)
 	}
 }
 
@@ -491,7 +545,7 @@ func (m *Manager) Sweep() {
 // their end records to be written.
 func (m *Manager) Shutdown(ctx context.Context) {
 	for _, s := range m.List() {
-		m.End(s.ID, "shutdown", "")
+		m.End(s.ID, "shutdown", nil)
 	}
 
 	ticker := time.NewTicker(10 * time.Millisecond)

@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/radiergummi/cetacean/internal/audit"
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/exec"
 	"github.com/radiergummi/cetacean/internal/spec"
@@ -225,7 +226,7 @@ func TestExecWebSocketEndedSessionSendsReasonWithoutCode(t *testing.T) {
 	expectFrame(t, conn, connecting)
 	expectFrame(t, conn, connected)
 
-	h.deps.Manager.End(sid, "terminated_by", "bob")
+	h.deps.Manager.End(sid, "terminated_by", &auth.Identity{Subject: "bob", Provider: "oidc"})
 	expectFrame(t, conn, map[string]any{
 		"type": "exit", "reason": "terminated_by", "outcome": "terminated",
 	})
@@ -314,7 +315,7 @@ func TestExecWebSocketChecksOriginBeforeAttaching(t *testing.T) {
 	for _, origin := range []string{
 		"", h.server.URL, "https://A.example", "https://cetacean.example",
 	} {
-		h.deps.Manager.End(strings.TrimPrefix(loc, "/exec/"), "test", "")
+		h.deps.Manager.End(strings.TrimPrefix(loc, "/exec/"), "test", nil)
 		loc = h.create(t)
 		conn, _, err := h.dial(loc, origin)
 		if err != nil {
@@ -396,7 +397,7 @@ func TestExecWebSocketEndedWhileStartingSendsExit(t *testing.T) {
 	conn, sid := h.open(t)
 	expectFrame(t, conn, connecting)
 
-	h.deps.Manager.End(sid, "terminated_by", "bob")
+	h.deps.Manager.End(sid, "terminated_by", &auth.Identity{Subject: "bob", Provider: "oidc"})
 	close(gate.release)
 	expectFrame(t, conn, map[string]any{
 		"type": "exit", "reason": "terminated_by", "outcome": "detached",

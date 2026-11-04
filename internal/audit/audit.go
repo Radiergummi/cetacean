@@ -37,7 +37,7 @@ type Record struct {
 	Transport string    `json:"transport,omitempty"`
 	Target    *Target   `json:"target,omitempty"`
 	Reason    string    `json:"reason,omitempty"`
-	EndedBy   string    `json:"endedBy,omitempty"`
+	EndedBy   *Identity `json:"endedBy,omitempty"`
 	Outcome   string    `json:"outcome,omitempty"`
 	ExitCode  *int      `json:"exitCode,omitempty"`
 	Duration  string    `json:"duration,omitempty"`

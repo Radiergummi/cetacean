@@ -258,3 +258,27 @@ func TestCloseWaitsForTheWriteInFlight(t *testing.T) {
 		t.Errorf("close = %v", err)
 	}
 }
+
+func TestFileAbandonedWriteReportsWhetherItLanded(t *testing.T) {
+	w := blockingWriter{release: make(chan struct{})}
+	f := newFile(func() (io.WriteCloser, error) { return w, nil }, 20*time.Millisecond)
+	if err := f.reopen(); err != nil {
+		t.Fatal(err)
+	}
+
+	err := f.Write(Record{Event: "exec.start"})
+	var abandoned *AbandonedError
+	if !errors.As(err, &abandoned) || !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("stuck write = %v, want an AbandonedError wrapping ErrUnavailable", err)
+	}
+
+	close(w.release)
+	select {
+	case landed := <-abandoned.Landed:
+		if landed != nil {
+			t.Errorf("landed = %v, want nil", landed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Landed never reported the late write")
+	}
+}

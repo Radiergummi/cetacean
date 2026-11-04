@@ -65,8 +65,8 @@ func (h *Handlers) execResource(t exec.Target) string {
 // execDecision runs every check a new session must pass, in the order their
 // refusals should be reported. Allow on /tasks/{id}/exec is its answer.
 func (h *Handlers) execDecision(r *http.Request, task swarm.Task) (exec.Transport, *execRefusal) {
-	if h.levelFor(r) < cluster.OpOpenExec.Tier() {
-		return nil, &execRefusal{"OPS001", "exec requires operations level 3"}
+	if level := h.levelFor(r); level < cluster.OpOpenExec.Tier() {
+		return nil, &execRefusal{"OPS001", levelRefusal(cluster.OpOpenExec.Tier(), level)}
 	}
 
 	id := auth.IdentityFromContext(r.Context())
@@ -259,11 +259,7 @@ func (h *Handlers) HandleDeleteExecSession(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	by := ""
-	if id := auth.IdentityFromContext(r.Context()); id != nil {
-		by = id.Subject
-	}
-	h.exec.Manager.End(s.ID, "terminated_by", by)
+	h.exec.Manager.End(s.ID, "terminated_by", auth.IdentityFromContext(r.Context()))
 	w.WriteHeader(http.StatusNoContent)
 }
 

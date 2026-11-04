@@ -9383,8 +9383,16 @@ components:
           type: string
           description: Why the session ended, e.g. `exited`, `idle_timeout`, `terminated_by`
         endedBy:
-          type: string
-          description: The subject that ended the session, when someone did
+          type: object
+          description: Who ended the session, when someone did
+          required: [subject, provider]
+          properties:
+            subject:
+              type: string
+            provider:
+              type: string
+            displayName:
+              type: string
         exit:
           type: object
           required: [code, outcome]

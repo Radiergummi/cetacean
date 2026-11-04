@@ -176,9 +176,11 @@ func do(t *testing.T, h http.Handler, method, path, accept string) *httptest.Res
 	return w
 }
 
+var aliceIdentity = &auth.Identity{Subject: "alice", Provider: "oidc"}
+
 func aliceSession(t *testing.T, deps ExecDeps) exec.Session {
 	t.Helper()
-	s, err := deps.Manager.Create(&auth.Identity{Subject: "alice", Provider: "oidc"}, "",
+	s, err := deps.Manager.Create(aliceIdentity, "",
 		exec.Target{Task: "t1", Service: "s1", ServiceName: "web", Node: "n1", Container: "c1"},
 		"local")
 	if err != nil {
@@ -328,6 +330,8 @@ func TestCreateExecSessionRefusals(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			recorder := &recordingAudit{}
+			tc.deps.Manager = auditedManager(recorder)
 			w := do(
 				t,
 				execRouter(t, tc.deps, tc.opts...),
@@ -339,7 +343,116 @@ func TestCreateExecSessionRefusals(t *testing.T) {
 			if live := tc.deps.Manager.List(); len(live) != 0 {
 				t.Errorf("a refused request left %d sessions", len(live))
 			}
+			assertOneDenial(t, recorder, tc.code, "", strings.TrimPrefix(
+				strings.TrimSuffix(tc.path, "/exec"), "/tasks/"))
 		})
+	}
+}
+
+func auditedManager(recorder *recordingAudit) *exec.Manager {
+	return exec.NewManager(exec.ManagerConfig{Audit: recorder, Limits: exec.Limits{
+		MaxSessions: 4, MaxPerIdentity: 2, IdleTimeout: time.Hour, MaxDuration: time.Hour,
+	}})
+}
+
+// assertOneDenial requires exactly one record: the anonymous caller refused
+// with code, on the session sid (none for a create) and the task.
+func assertOneDenial(t *testing.T, recorder *recordingAudit, code, sid, task string) {
+	t.Helper()
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	if len(recorder.records) != 1 {
+		t.Fatalf("audit records = %+v, want one exec.denied", recorder.records)
+	}
+	rec := recorder.records[0]
+	if rec.Event != "exec.denied" || rec.Reason != code || rec.Session != sid ||
+		rec.Identity.Subject != "anonymous" || rec.Identity.Provider != "none" ||
+		rec.Client == "" || rec.Target == nil || rec.Target.Task != task {
+		t.Errorf("record = %+v target %+v, want %s denied to anonymous on %s",
+			rec, rec.Target, code, task)
+	}
+}
+
+// attachRequest is a WebSocket upgrade of /exec/{sid}, which a refusal answers
+// before any handshake.
+func attachRequest(
+	t *testing.T,
+	h http.Handler,
+	sid string,
+	header http.Header,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/exec/"+sid, nil)
+	if header != nil {
+		req.Header = header.Clone()
+	}
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	return w
+}
+
+func TestExecAttachRefusalsAreAudited(t *testing.T) {
+	anonymous := &auth.Identity{Subject: "anonymous", Provider: "none"}
+	target := exec.Target{Task: "t1", Service: "s1", ServiceName: "web", Node: "n1"}
+	cases := map[string]struct {
+		owner     *auth.Identity
+		ended     bool
+		policy    *acl.Evaluator
+		transport string
+		header    http.Header
+		code      string
+	}{
+		"foreign origin": {
+			owner: anonymous,
+			header: http.Header{
+				"Origin": {"https://evil.example"}, "Sec-Fetch-Site": {"cross-site"},
+			},
+			code: "CSR001",
+		},
+		"invisible":    {owner: aliceIdentity, policy: execPolicy("read"), code: "EXE006"},
+		"not owner":    {owner: aliceIdentity, code: "EXE004"},
+		"ended":        {owner: anonymous, ended: true, code: "EXE005"},
+		"no transport": {owner: anonymous, transport: "elsewhere", code: "EXE002"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			node := "n1"
+			if tc.transport != "" {
+				node = tc.transport
+			}
+			deps := newExecDeps(&fakeTransport{node: node})
+			recorder := &recordingAudit{}
+			deps.Manager = auditedManager(recorder)
+			s, err := deps.Manager.Create(tc.owner, "", target, "local")
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			if tc.ended {
+				deps.Manager.End(s.ID, "terminated_by", tc.owner)
+			}
+			var opts []testHandlersOption
+			if tc.policy != nil {
+				opts = append(opts, withACL(tc.policy))
+			}
+
+			w := attachRequest(t, execRouter(t, deps, opts...), s.ID, tc.header)
+			assertACLErrorCode(t, w, tc.code)
+			assertOneDenial(t, recorder, tc.code, s.ID, "t1")
+		})
+	}
+}
+
+func TestExecAttachToNoSessionIsNotAudited(t *testing.T) {
+	deps := newExecDeps(&fakeTransport{node: "n1"})
+	recorder := &recordingAudit{}
+	deps.Manager = auditedManager(recorder)
+
+	w := attachRequest(t, execRouter(t, deps), "nope", nil)
+	assertACLErrorCode(t, w, "EXE006")
+	if len(recorder.records) != 0 {
+		t.Errorf("audit records = %+v, want none", recorder.records)
 	}
 }
 
@@ -365,7 +478,11 @@ func TestExecTokenCeilingNarrowsTheTier(t *testing.T) {
 		strings.Contains(w.Header().Get("Allow"), "POST") {
 		t.Errorf("GET = %d, Allow = %q", w.Code, w.Header().Get("Allow"))
 	}
-	assertACLErrorCode(t, send(http.MethodPost), "OPS001")
+	w := send(http.MethodPost)
+	if !strings.Contains(w.Body.String(), "but the caller is at level 2") {
+		t.Errorf("OPS001 body = %s, want the caller's level", w.Body.String())
+	}
+	assertACLErrorCode(t, w, "OPS001")
 }
 
 // recordingAudit keeps every record it is handed.
@@ -486,7 +603,8 @@ func TestDeleteExecSessionEndsIt(t *testing.T) {
 		t.Fatalf("DELETE = %d: %s", w.Code, w.Body)
 	}
 	s, _ := deps.Manager.Get(strings.TrimPrefix(loc, "/exec/"))
-	if s.State != exec.StateEnded || s.Reason != "terminated_by" || s.EndedBy != "anonymous" {
+	if s.State != exec.StateEnded || s.Reason != "terminated_by" ||
+		s.EndedBy == nil || s.EndedBy.Subject != "anonymous" || s.EndedBy.Provider != "none" {
 		t.Errorf("session = %+v", s)
 	}
 	ended := do(t, h, http.MethodGet, loc, "application/json")
