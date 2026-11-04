@@ -182,6 +182,11 @@ func (s *Annotations) Update(
 			return cache.Annotation{}, ErrAnnotationDenied
 		}
 
+		// RFC 7396: a patch that changes nothing leaves the target as it is.
+		if sameAnnotation(current, next) {
+			return s.cache.WithRemovals(current), nil
+		}
+
 		updated, err := s.cache.UpdateAnnotation(ctx, id, func(a *cache.Annotation) error {
 			if a.Version != current.Version {
 				return errAnnotationMoved
@@ -202,6 +207,12 @@ func (s *Annotations) Update(
 
 		return s.cache.WithRemovals(updated), err
 	}
+}
+
+// sameAnnotation reports whether b says what a does, in every field an edit sets.
+func sameAnnotation(a, b cache.Annotation) bool {
+	return a.Timestamp.Equal(b.Timestamp) && a.Until.Equal(b.Until) && a.Text == b.Text &&
+		slices.Equal(a.Tags, b.Tags) && slices.Equal(a.Resources, b.Resources)
 }
 
 // Delete removes an annotation the caller may edit.
