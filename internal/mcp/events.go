@@ -70,8 +70,10 @@ func (s *Server) toolGetEvents(
 		resourceType = string(types[0])
 	}
 
+	canRead := s.readPredicate(ctx)
+
 	resource, err := cluster.ResolveIdentifier(
-		s.cache, resourceType, req.GetString("resource", ""), s.readPredicate(ctx),
+		s.cache, resourceType, req.GetString("resource", ""), canRead,
 	)
 	if err = s.visibleAmbiguity(ctx, resourceType, err); err != nil {
 		return "", err
@@ -91,8 +93,9 @@ func (s *Server) toolGetEvents(
 		}
 	}
 
-	matched := s.cache.Timeline(cache.HistoryQuery{
+	matched, present := cluster.ReadTimeline(s.cache, cache.HistoryQuery{
 		ResourceID: resource,
+		Search:     req.GetString("search", ""),
 		Types:      types,
 		Kinds:      kinds,
 		Tags:       req.GetStringSlice("tags", nil),
@@ -101,14 +104,14 @@ func (s *Server) toolGetEvents(
 		Limit:      history.Size() + cache.MaxAnnotations,
 		After:      window.Since,
 		Before:     window.Until,
-		Visible:    cluster.HistoryReadable(s.readPredicate(ctx)),
+		Visible:    cluster.HistoryReadable(canRead),
 
 		ReadableAnnotation: s.annotationCaller(ctx).MayRead,
-	})
+	}, canRead)
 
 	// Cut by time, as the result is ordered: an annotation's ID follows its
-	// creation, not its time. Task naming runs after the cut, because a name
-	// only matters for an entry that is returned.
+	// creation, not its time. Presenting runs after the cut, so it names only
+	// what is returned; a search has already named the candidates it matched.
 	slices.SortStableFunc(matched, func(a, b cache.HistoryEntry) int {
 		return b.Timestamp.Compare(a.Timestamp)
 	})
@@ -119,9 +122,7 @@ func (s *Server) toolGetEvents(
 		matched = matched[:limit]
 	}
 
-	matched = cluster.PresentHistory(
-		s.cache, matched, cluster.ReadableTaskNames(s.cache, s.readPredicate(ctx)),
-	)
+	matched = present(matched)
 
 	timeline := make([]projection.TimelineEntry, 0, len(matched))
 

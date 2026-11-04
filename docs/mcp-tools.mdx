@@ -118,7 +118,7 @@ What the cluster is doing now, and what it did recently.
 </McpTool>
 
 <McpTool name="get_events" level={0}>
-    <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `kinds`, `tags`, `matchAny`, `authors`, `limit`</Fragment>
+    <Fragment slot="arguments">`since`, `until`, `types`, `resource`, `kinds`, `tags`, `matchAny`, `authors`, `search`, `limit`</Fragment>
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
@@ -132,7 +132,8 @@ What the cluster is doing now, and what it did recently.
 
     `kinds` keeps entries of the kinds given: `change`, `gap`, or `annotation`. `tags` keeps the annotations carrying
     every tag given, or any of them with `matchAny`. `authors` keeps what an actor with one of the subjects given did:
-    the annotations they wrote and the changes they made through Cetacean. Gaps pass `tags` and `authors`.
+    the annotations they wrote and the changes they made through Cetacean. `search` keeps the entries showing each
+    of its words, as the [history's `search`][api.history-search] does. Gaps pass `tags`, `authors` and `search`.
 </McpTool>
 
 <McpTool name="get_metrics" level={0}>
@@ -622,6 +623,7 @@ including how a deprecation is announced, are under [Compatibility][api.compatib
 [api.compatibility]:  api#compatibility
 [api.annotations]:  api#annotations
 [api.history-actor]:  api#who-made-a-change
+[api.history-search]:  api#history-pagination
 [authentication]:  authentication
 [custom-links]:  integrations#custom-links
 [dashboard]:  dashboard

@@ -30,6 +30,21 @@ func PresentHistory(
 	return named
 }
 
+// ReadTimeline lists q for one caller: its text filters find a task by the
+// name its row shows, and present names the entries returned from the same
+// lookups. Present only what is returned; each name takes the cache's lock.
+func ReadTimeline(
+	c *cache.Cache,
+	q cache.HistoryQuery,
+	canRead func(resource string) bool,
+) ([]cache.HistoryEntry, func([]cache.HistoryEntry) []cache.HistoryEntry) {
+	q.TaskName = ReadableTaskNames(c, canRead)
+
+	return c.Timeline(q), func(entries []cache.HistoryEntry) []cache.HistoryEntry {
+		return PresentHistory(c, entries, q.TaskName)
+	}
+}
+
 // ReadableTaskNames is ReadableTaskName for one caller, remembering each name:
 // a restarting service produces runs of events for the same few tasks, and
 // each lookup takes the cache's read lock. It is not safe for concurrent use.

@@ -371,6 +371,11 @@ func (s *Server) readTools() []toolDef {
 					),
 					mcplib.Items(map[string]any{"type": "string"}),
 				),
+				mcplib.WithString("search",
+					mcplib.Description(
+						"Only entries showing each of these words, ignoring case: a change's resource name (also as stack/name, a task's as service.slot), the start of its ID, its type, action and actor; an annotation's text, tags, resource names and author. Gaps stay.",
+					),
+				),
 				mcplib.WithNumber("limit",
 					mcplib.Description(
 						"Maximum entries to return (default 100, maximum 500).",

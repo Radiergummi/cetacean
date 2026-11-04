@@ -429,8 +429,8 @@ curl "http://localhost:9000/history?search=web&before=<entry-id>&limit=50"
 
 `since` and `until` narrow `/history` to a window, as RFC 3339 timestamps: `since` is exclusive and `until`
 inclusive, the same boundaries as the MCP tool `get_events`. Either can be left out. They combine with the other
-filters in JSON and CSV, apply to the Atom and JSON Feed representations too, which read no other filter, and stay
-on the `next` link, so paging never leaves the window. A gap is in every window it overlaps, so a window inside an
+filters, in JSON and CSV as in the Atom and JSON Feed representations, which read every filter but the cursor's, and
+stay on the `next` link, so paging never leaves the window. A gap is in every window it overlaps, so a window inside an
 outage returns the gap rather than an empty list. Encode the `+` of a UTC offset as `%2B`; a bare `+` in a query string reads as a space.
 
 ```http tab

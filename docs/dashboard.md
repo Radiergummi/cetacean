@@ -302,8 +302,8 @@ the whole log Cetacean still holds as CSV. Recent activity elsewhere folds conse
 into a single row with a count, but the history page lists every entry.
 
 A change made through Cetacean names who made it and whether they used the dashboard, the API, or MCP. A change
-with no name came from somewhere else, such as the Docker CLI. The history lives in memory, so it starts empty
-after a restart.
+with no name came from somewhere else, such as the Docker CLI. The history survives a restart while
+`storage.timeline` is on; the time Cetacean wasn't watching shows as a gap, a divider between the rows.
 
 ## Atom feeds
 

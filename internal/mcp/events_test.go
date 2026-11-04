@@ -75,6 +75,22 @@ func TestGetEventsNamesTasksAfterTheirService(t *testing.T) {
 	}
 }
 
+func TestGetEventsSearchFindsATaskByTheNameItsRowShows(t *testing.T) {
+	c := cache.New(nil)
+	c.SetService(swarm.Service{
+		ID:   "svc1",
+		Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{Name: "demo_flaky"}},
+	})
+	c.SetTask(swarm.Task{ID: "t1", ServiceID: "svc1", Slot: 3})
+
+	srv := newResourceTestServer(t, c)
+
+	got := eventsCall(t, srv, map[string]any{"types": []any{"task"}, "search": "demo/flaky.3"})
+	if len(got.Entries) != 1 || got.Entries[0].ResourceID != "t1" {
+		t.Errorf("entries = %+v, want the task found by its service.slot", got.Entries)
+	}
+}
+
 // "What broke overnight" is a time question, and answering it was structurally
 // impossible while the window was a fixed count of newest entries.
 func TestGetEventsFiltersBySince(t *testing.T) {

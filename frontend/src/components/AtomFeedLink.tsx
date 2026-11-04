@@ -25,6 +25,42 @@ const feedRoutes: Record<string, string> = {
 };
 
 /**
+ * The page's filters as its timeline feed reads them: the search box's `q` is
+ * the API's `search`, and an "all" segment is no filter.
+ */
+function timelineFeedQuery(search: string): string {
+  const page = new URLSearchParams(search);
+  const feed = new URLSearchParams();
+  const text = page.get("q");
+
+  if (text) {
+    feed.set("search", text);
+  }
+
+  for (const name of ["type", "kind"]) {
+    const value = page.get(name);
+
+    if (value && value !== "all") {
+      feed.set(name, value);
+    }
+  }
+
+  for (const name of ["tag", "author"]) {
+    for (const value of page.getAll(name).filter(Boolean)) {
+      feed.append(name, value);
+    }
+  }
+
+  if (page.get("matchAny") === "true") {
+    feed.set("matchAny", "true");
+  }
+
+  const query = feed.toString();
+
+  return query === "" ? "" : `?${query}`;
+}
+
+/**
  * Determines the Atom feed href and title for a given path and search string.
  * The href carries the `.atom` suffix ahead of any query, and only a list or a
  * detail route has a feed: the server answers a sub-resource's with 406.
@@ -36,7 +72,9 @@ export function feedForPath(
   // Check standalone routes first.
   for (const [route, title] of Object.entries(feedRoutes)) {
     if (pathname === route) {
-      return { href: apiPath(`${route}.atom`), title };
+      const query = route === "/recommendations" ? "" : timelineFeedQuery(search);
+
+      return { href: apiPath(`${route}.atom`) + query, title };
     }
   }
 

@@ -28,22 +28,6 @@ func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	includeTasks := true
-	if value := r.URL.Query().Get("tasks"); value != "" {
-		var err error
-		if includeTasks, err = strconv.ParseBool(value); err != nil {
-			problem.Write(w, r, "API016", "tasks must be true or false")
-			return
-		}
-	}
-
-	// The type names what resourceId is, and a service's timeline holds its
-	// tasks' entries too, unless the caller turns that off.
-	if includeTasks && query.Type == cache.EventService && query.ResourceID != "" {
-		query.Type = ""
-		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
-	}
-
 	entries := h.timeline(r, query)
 	h.linkAnnotationsWhen(w, r, h.mayAnnotate(r))
 
@@ -107,14 +91,12 @@ func (h *Handlers) HandleAnnotations(w http.ResponseWriter, r *http.Request) {
 	))
 }
 
-// timelineQuery reads what /history and /annotations share: the cursor, the
-// window, the resource and the filters, with the caller's read checks.
+// timelineQuery reads what /history's and /annotations' JSON and CSV share:
+// the cursor, and the scope their feeds read too.
 func (h *Handlers) timelineQuery(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (cache.HistoryQuery, bool) {
-	q := r.URL.Query()
-
 	// Paged by cursor, as the feeds are: the ring moves under an offset.
 	beforeID, limit, err := parseFeedPagination(r)
 	if err != nil {
@@ -123,9 +105,23 @@ func (h *Handlers) timelineQuery(
 	}
 
 	// A download nobody paginated is everything the ring and the annotations hold.
-	if ContentTypeFromContext(r.Context()) == ContentTypeCSV && q.Get("limit") == "" {
+	if ContentTypeFromContext(r.Context()) == ContentTypeCSV && r.URL.Query().Get("limit") == "" {
 		limit = h.cache.History().Size() + h.cache.AnnotationCount()
 	}
+
+	query, ok := h.timelineScope(w, r)
+	query.BeforeID, query.Limit = beforeID, limit
+
+	return query, ok
+}
+
+// timelineScope reads what every representation of the timeline shares: the
+// window, the resource, `tasks` and the filters, with the caller's read checks.
+func (h *Handlers) timelineScope(
+	w http.ResponseWriter,
+	r *http.Request,
+) (cache.HistoryQuery, bool) {
+	q := r.URL.Query()
 
 	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
 	if err != nil {
@@ -149,9 +145,6 @@ func (h *Handlers) timelineQuery(
 	query := cache.HistoryQuery{
 		Type:       cache.EventType(resourceType),
 		ResourceID: resourceID,
-		BeforeID:   beforeID,
-		Search:     q.Get("search"),
-		Limit:      limit,
 		After:      window.Since,
 		Before:     window.Until,
 		Visible:    h.readableHistory(r),
@@ -164,16 +157,33 @@ func (h *Handlers) timelineQuery(
 		return cache.HistoryQuery{}, false
 	}
 
+	includeTasks := true
+	if value := q.Get("tasks"); value != "" {
+		if includeTasks, err = strconv.ParseBool(value); err != nil {
+			problem.Write(w, r, "API016", "tasks must be true or false")
+			return cache.HistoryQuery{}, false
+		}
+	}
+
+	// The type names what resourceId is, and a service's timeline holds its
+	// tasks' entries too, unless the caller turns that off.
+	if includeTasks && query.Type == cache.EventService && query.ResourceID != "" {
+		query.Type = ""
+		query.Types = []cache.EventType{cache.EventService, cache.EventTask}
+	}
+
 	return query, true
 }
 
 // timelineFilters reads the filters the timeline's JSON, CSV and feeds share:
-// `kind`, `tag` and `author` repeat, and `matchAny` widens the tags to any of
-// them. An empty value is no filter.
+// `search`; `kind`, `tag` and `author`, which repeat; and `matchAny`, which
+// widens the tags to any of them. An empty value is no filter.
 func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 	present := func(name string) []string {
 		return slices.DeleteFunc(slices.Clone(q[name]), func(v string) bool { return v == "" })
 	}
+
+	query.Search = q.Get("search")
 
 	query.Kinds = present("kind")
 	query.Tags = present("tag")
@@ -197,12 +207,12 @@ func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 	return nil
 }
 
-// timeline lists query as the caller sees it, through cluster.PresentHistory.
+// timeline lists query as the caller sees it, through cluster.ReadTimeline.
 func (h *Handlers) timeline(r *http.Request, query cache.HistoryQuery) []cache.HistoryEntry {
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
-	query.TaskName = cluster.ReadableTaskNames(h.cache, canRead)
+	entries, present := cluster.ReadTimeline(h.cache, query, canRead)
 
-	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), query.TaskName)
+	return present(entries)
 }
 
 // linkNextTimelinePage links the page below the last entry when this one is full.

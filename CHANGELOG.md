@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Every log line written while serving a request carries its `req_id`, so the `requestId` in an error response finds the lines that explain it
 
 ### Changed
-- `search` on `/history` and `/annotations` matches each word anywhere a row shows it, not only in names: `stack/name`, task names, ID prefixes, actions and actors, an annotation's text and tags; in the dashboard, a `#` word filters by tag
+- `search` on `/history`, `/annotations`, their feeds and `get_events` matches each word anywhere a row shows it: `stack/name`, task names, ID prefixes, actions, actors, an annotation's text and tags; in the dashboard, `#` words filter by tag
 - Recent Activity folds consecutive changes to one resource, such as a replica restarting in place, into a single row with a count that expands to each change
 - Compose files and config contents are syntax-highlighted more accurately, with alternating line backgrounds
 - A write to a resource the caller can't read answers that resource's `404` instead of `403 ACL002`
