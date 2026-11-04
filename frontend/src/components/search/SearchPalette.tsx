@@ -125,6 +125,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const [actionArgs, setActionArgs] = useState<unknown[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // A step's choices load as it opens; a later step's answer wins over an earlier one's.
+  const choicesRequest = useRef(0);
+  const [choices, setChoices] = useState<{ label: string; value: string }[] | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<{
     action: PaletteAction;
     args: unknown[];
@@ -155,7 +159,17 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   // Total items: action suggestion (if any) + flat results
   const actionSuggestionOffset = actionMatch && !activeAction ? 1 : 0;
-  const totalItems = flat.length + actionSuggestionOffset;
+  const choosing = currentStep?.type === "choice";
+  const shownChoices = useMemo(
+    () =>
+      choosing
+        ? (choices ?? []).filter(({ label }) =>
+            label.toLowerCase().includes(query.trim().toLowerCase()),
+          )
+        : [],
+    [choosing, choices, query],
+  );
+  const totalItems = choosing ? shownChoices.length : flat.length + actionSuggestionOffset;
 
   const doSearch = useCallback((query: string) => {
     if (abortRef.current) {
@@ -200,9 +214,16 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         clearTimeout(timerRef.current);
       }
 
+      // Only a resource step, or no action, searches; any other step filters or takes the text.
+      if (activeAction && currentStep?.type !== "resource") {
+        setHighlightIndex(0);
+
+        return;
+      }
+
       timerRef.current = setTimeout(() => doSearch(value), 200);
     },
-    [doSearch],
+    [doSearch, activeAction, currentStep],
   );
 
   useEffect(() => {
@@ -342,25 +363,6 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     [navigate, onClose],
   );
 
-  const activateAction = useCallback(
-    (action: PaletteAction) => {
-      if (action.steps.length === 0) {
-        void action.execute();
-        onClose();
-        return;
-      }
-
-      setActiveAction(action);
-      setActionStep(0);
-      setActionArgs([]);
-      setActionError(null);
-      setQuery("");
-      setResponse(null);
-      setHighlightIndex(0);
-    },
-    [onClose],
-  );
-
   const doExecute = useCallback(
     async (action: PaletteAction, args: unknown[]) => {
       setActionLoading(true);
@@ -391,10 +393,15 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const executeAction = useCallback(
     async (action: PaletteAction, args: unknown[]) => {
       // Check permission via HEAD before executing
-      if ((action.requiredMethod || action.requiredEdit) && action.steps[0]?.type === "resource") {
-        const resource = args[0] as SearchResult;
-        const path = resourcePath(action.steps[0].resourceType!, resource.id, resource.name);
+      const [first] = action.steps;
+      const resource = args[0] as SearchResult;
+      const path = action.capabilityPath
+        ? action.capabilityPath(...args)
+        : first?.type === "resource" && first.resourceType
+          ? resourcePath(first.resourceType, resource.id, resource.name)
+          : null;
 
+      if (action.requiredMethod || action.requiredEdit) {
         if (path) {
           let capabilities: Capabilities;
 
@@ -427,13 +434,55 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     [doExecute],
   );
 
+  const openStep = useCallback((step: PaletteStep | undefined) => {
+    const request = ++choicesRequest.current;
+
+    setChoices(null);
+
+    if (step?.type !== "choice" || !step.choices) {
+      return;
+    }
+
+    const source = step.choices;
+
+    Promise.resolve(typeof source === "function" ? source() : source).then(
+      (loaded) => request === choicesRequest.current && setChoices(loaded),
+      (failure: unknown) =>
+        request === choicesRequest.current &&
+        setActionError(getErrorMessage(failure, "The choices could not be loaded.")),
+    );
+  }, []);
+
+  const activateAction = useCallback(
+    (action: PaletteAction) => {
+      setActionError(null);
+      setQuery("");
+      setResponse(null);
+      setHighlightIndex(0);
+
+      // Nothing to ask: it still checks permission and confirms, from search.
+      if (action.steps.length === 0) {
+        void executeAction(action, []);
+
+        return;
+      }
+
+      setActiveAction(action);
+      setActionStep(0);
+      setActionArgs([]);
+      openStep(action.steps[0]);
+    },
+    [executeAction, openStep],
+  );
+
   const advanceStep = useCallback(
     (value: unknown) => {
       if (!activeAction) {
         return;
       }
 
-      const newArgs = [...actionArgs, value];
+      // A pick after a refusal or a cancelled confirmation replaces this step's earlier one.
+      const newArgs = [...actionArgs.slice(0, actionStep), value];
 
       setActionArgs(newArgs);
 
@@ -445,9 +494,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
         setQuery("");
         setResponse(null);
         setHighlightIndex(0);
+        openStep(activeAction.steps[actionStep + 1]);
       }
     },
-    [activeAction, actionArgs, actionStep, executeAction],
+    [activeAction, actionArgs, actionStep, executeAction, openStep],
   );
 
   const goBackStep = useCallback(() => {
@@ -469,9 +519,10 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       setQuery("");
       setResponse(null);
       setHighlightIndex(0);
+      openStep(activeAction.steps[actionStep - 1]);
     }
     setActionError(null);
-  }, [activeAction, actionStep, actionArgs]);
+  }, [activeAction, actionStep, actionArgs, openStep]);
 
   const selectItem = useCallback(
     (item: FlatSearchItem) => {
@@ -520,6 +571,16 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
           return;
         }
 
+        if (choosing) {
+          const chosen = shownChoices[highlightIndex];
+
+          if (chosen) {
+            advanceStep(chosen.value);
+          }
+
+          return;
+        }
+
         // Action suggestion at index 0
         if (actionMatch && highlightIndex === 0) {
           activateAction(actionMatch.action);
@@ -546,6 +607,8 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
       actionSuggestionOffset,
       flat,
       query,
+      choosing,
+      shownChoices,
       advanceStep,
       activateAction,
       selectItem,
@@ -558,7 +621,9 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
     activeAction && currentStep
       ? currentStep.type === "resource"
         ? `Search for a ${currentStep.label}…`
-        : (currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}…`)
+        : currentStep.type === "choice"
+          ? `Choose a ${currentStep.label.toLowerCase()}…`
+          : (currentStep.placeholder ?? `Enter ${currentStep.label.toLowerCase()}…`)
       : "Search resources…";
 
   // Group items by type for rendering with section headers
@@ -585,7 +650,9 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
   const hasResults = flat.length > 0;
   const showSearchResults = currentStep?.type === "resource" || !activeAction;
 
-  const listboxOpen = showSearchResults && (totalItems > 0 || (hasQuery && hasResponse));
+  const listboxOpen =
+    (showSearchResults && (totalItems > 0 || (hasQuery && hasResponse))) ||
+    (choosing && totalItems > 0);
 
   return (
     <Dialog
@@ -777,7 +844,30 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
                   ))}
                 </li>
               ))}
+
+            {shownChoices.map(({ label, value }, index) => (
+              // Pointed at through aria-activedescendant rather than focused.
+              // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus
+              <li
+                key={value}
+                id={optionId(index)}
+                role="option"
+                aria-selected={index === highlightIndex}
+                data-active={index === highlightIndex || undefined}
+                className="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-sm font-medium text-foreground hover:bg-accent/50 data-active:bg-accent data-active:text-accent-foreground"
+                onClick={() => advanceStep(value)}
+                onMouseEnter={() => setHighlightIndex(index)}
+              >
+                {label}
+              </li>
+            ))}
           </ul>
+
+          {choosing && choices !== null && shownChoices.length === 0 && (
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              {hasQuery ? <>Nothing matches &ldquo;{query}&rdquo;</> : "Nothing to choose from"}
+            </div>
+          )}
 
           {activeAction &&
             currentStep &&

@@ -1,3 +1,4 @@
+import { AddAnnotationDialog } from "./components/annotations/AddAnnotationButton";
 import AtomFeedLink from "./components/AtomFeedLink";
 import ConnectionStatus from "./components/ConnectionStatus";
 import { ConnectionTracker } from "./components/ConnectionTracker";
@@ -84,6 +85,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const handler = () => setShortcutsOpen(true);
     window.addEventListener("cetacean:show-shortcuts", handler);
     return () => window.removeEventListener("cetacean:show-shortcuts", handler);
+  }, []);
+
+  const [annotating, setAnnotating] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setAnnotating(true);
+    window.addEventListener("cetacean:add-annotation", handler);
+    return () => window.removeEventListener("cetacean:add-annotation", handler);
   }, []);
 
   useSubmitShortcut();
@@ -182,6 +191,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </main>
       <Footer />
       {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
+      {annotating && (
+        <AddAnnotationDialog
+          open
+          onOpenChange={setAnnotating}
+        />
+      )}
     </div>
   );
 }

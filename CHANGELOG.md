@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The dashboard shows annotations on the metric charts, in Recent Activity and on the History page; annotate mode on service and node charts, Add annotation, and an annotation's "…" menu write, edit, and delete them
 - Annotations link the URLs in their text and offer Show on chart, opening their service's or node's metrics around them; the form suggests tags in use, and stack pages show Recent Activity
 - Clicking an annotation's flag or range on a metric chart pins it with its menu; an Annotations menu on the panel hides them or narrows them by tag, kept in the URL (`annotations`, `annotationTag`)
+- The command palette adds an annotation, rotates the swarm's join tokens, unlock key and CA, and enables, disables or removes a plugin, each behind the same permission check and confirmation as the page's button
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
 - After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
