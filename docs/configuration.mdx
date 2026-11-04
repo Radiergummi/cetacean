@@ -399,6 +399,8 @@ Interactive shells in running containers, opened through the API. Off by default
 [operations level][operations-level] 3 and an explicit `exec` grant—see [Authorization][authorization].
 Cetacean refuses to start with exec enabled and `auth.mode = none`. This release reaches containers
 on the node whose Docker daemon Cetacean talks to.
+Cetacean never opens a shell in its own container. When it can't tell which container that is, it
+also refuses every task on the `host` network.
 
 <ConfigParam name="exec.enabled" env="CETACEAN_EXEC" default="false">
   Allow interactive shells in containers.
