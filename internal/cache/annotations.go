@@ -119,7 +119,7 @@ func (c *Cache) CreateAnnotation(ctx context.Context, a Annotation) (Annotation,
 	a.Resources = slices.Clone(a.Resources)
 	a.Updated, a.Editor = time.Time{}, nil
 
-	return a, c.commitAnnotation(ctx, a, "create")
+	return a, c.commitAnnotation(ctx, a, nil, "create")
 }
 
 // UpdateAnnotation applies edit to a copy of the annotation and records the
@@ -151,7 +151,7 @@ func (c *Cache) UpdateAnnotation(
 	a.Version = c.history.Count() + 1
 	a.Updated = time.Now()
 
-	return a, c.commitAnnotation(ctx, a, "update")
+	return a, c.commitAnnotation(ctx, a, &current, "update")
 }
 
 // DeleteAnnotation removes an annotation once check accepts it; check runs
@@ -173,7 +173,7 @@ func (c *Cache) DeleteAnnotation(
 		return err
 	}
 
-	return c.commitAnnotation(ctx, current, "remove")
+	return c.commitAnnotation(ctx, current, nil, "remove")
 }
 
 // AnnotationCount is how many annotations the cache holds.
@@ -188,7 +188,12 @@ func (c *Cache) AnnotationCount() int {
 // under notifyMu: every Append runs under it, so the ID taken from Count is
 // the one the item gets. The index changes first, so a validator read from
 // Count never names content the index does not hold yet.
-func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action string) error {
+func (c *Cache) commitAnnotation(
+	ctx context.Context,
+	a Annotation,
+	previous *Annotation,
+	action string,
+) error {
 	c.annotations.mu.RLock()
 	store := c.annotations.store
 	c.annotations.mu.RUnlock()
@@ -227,21 +232,22 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 
 	// The event shows the note as a read would, removal marks and all.
 	marked := c.WithRemovals(a)
-	id := strconv.FormatUint(a.ID, 10)
-	historyID := c.history.Append(HistoryEntry{
+	entry := HistoryEntry{
 		Kind:       KindAnnotation,
 		Action:     action,
-		ResourceID: id,
+		ResourceID: strconv.FormatUint(a.ID, 10),
 		Annotation: &marked,
-	})
+	}
+	event := Event{Type: EventAnnotation, Action: action, ID: entry.ResourceID, Resource: marked}
 
-	c.dispatch(Event{
-		Type:      EventAnnotation,
-		Action:    action,
-		ID:        id,
-		Resource:  marked,
-		HistoryID: historyID,
-	})
+	// What an update replaced, so a reader it no longer reaches hears it left.
+	if previous != nil {
+		replaced := c.WithRemovals(*previous)
+		entry.Previous, event.Previous = &replaced, replaced
+	}
+
+	event.HistoryID = c.history.Append(entry)
+	c.dispatch(event)
 
 	return nil
 }

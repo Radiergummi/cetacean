@@ -628,7 +628,9 @@ an update to the entry rather than as a new one.
 
 An `annotation` event reports each create, edit, and delete as it happens. It is sent on `/events`, and on the
 [stream](#per-resource-streams) of each resource the annotation belongs on, by the same rule as `resourceId` above: a
-cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`:
+cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`. An edit that
+moves an annotation off a stream's resource, or makes it unreadable to the caller, arrives on that stream as a
+`remove`:
 
 ```sse
 id: 4182
