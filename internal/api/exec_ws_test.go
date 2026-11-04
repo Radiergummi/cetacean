@@ -488,6 +488,8 @@ func TestExecWebSocketLostShellSendsReasonWithoutCode(t *testing.T) {
 }
 
 func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
+	spec.Satisfies(t, "http/rfc6455/servers-verify-the-origin")
+
 	h := &Handlers{execOrigins: []string{"https://a.example"}}
 
 	cases := []struct {

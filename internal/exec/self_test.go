@@ -2,6 +2,7 @@ package exec
 
 import (
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
@@ -9,6 +10,7 @@ import (
 
 func TestSelfRecognisesItsOwnTaskByAddress(t *testing.T) {
 	s := newSelf([]netip.Addr{netip.MustParseAddr("10.0.1.7")})
+	s.containerID = "own"
 
 	own := swarm.Task{
 		NetworksAttachments: []swarm.NetworkAttachment{{Addresses: []string{"10.0.1.7/24"}}},
@@ -32,6 +34,11 @@ func TestOwnContainerIDReadsTheHostnameMount(t *testing.T) {
 
 	if got := ownContainerID([]byte(mountinfo)); got != id {
 		t.Errorf("ownContainerID = %q, want %q", got, id)
+	}
+	decoy := "1920 1917 0:37 /docker/containers/" + strings.Repeat("a", 64) +
+		"/hostname /mnt/other rw - btrfs /dev/vdb1 rw\n"
+	if got := ownContainerID([]byte(decoy + mountinfo)); got != id {
+		t.Errorf("ownContainerID with a decoy mount = %q, want %q", got, id)
 	}
 	if got := ownContainerID([]byte("1917 1 0:40 / / rw - overlay overlay rw\n")); got != "" {
 		t.Errorf("ownContainerID outside a container = %q, want empty", got)
@@ -59,6 +66,24 @@ func TestSelfFailsClosedOnTheHostNetworkWithoutItsContainerID(t *testing.T) {
 	}
 	if s.Is(overlay) {
 		t.Error("an overlay task is refused")
+	}
+	if !s.Is(swarm.Task{}) {
+		t.Error("a task with no network attachments is not refused")
+	}
+}
+
+func TestSelfRecognisesEveryTaskOfItsOwnService(t *testing.T) {
+	s := newSelf(nil)
+	s.containerID = "own"
+	s.serviceID = "cetacean"
+
+	replica := hostNetworkTask("replica")
+	replica.ServiceID = "cetacean"
+	other := hostNetworkTask("other")
+	other.ServiceID = "web"
+
+	if !s.Is(replica) || s.Is(other) {
+		t.Error("Is is wrong")
 	}
 }
 

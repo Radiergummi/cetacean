@@ -1350,10 +1350,10 @@ func startExec(
 		return nil, fmt.Errorf("audit log %s not opened: %w", cfg.Audit.Output, err)
 	}
 
-	self, err := exec.NewSelf()
+	self, err := exec.NewSelf(ctx, dockerClient)
 	if err != nil {
 		closeAudit()
-		return nil, fmt.Errorf("own addresses not readable; refusing exec: %w", err)
+		return nil, fmt.Errorf("own container not identifiable; refusing exec: %w", err)
 	}
 
 	manager := exec.NewManager(exec.ManagerConfig{
