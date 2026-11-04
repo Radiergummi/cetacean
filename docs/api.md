@@ -588,7 +588,8 @@ Who may do what follows the resources an annotation names:
   One the caller can't read answers `404` (`ANN004`).
 - **Create:** write on every resource it names; write on `*` for a cluster-wide one.
 - **Edit and delete:** the author, while they can still read it, or anyone who could create it. Changing `resources`
-  also needs what creating it with the new set needs.
+  also needs what creating it with the new set needs. A token Cetacean issued writes as the person who signed in for
+  it, so their notes are theirs from the dashboard and over MCP alike.
 
 An annotation doesn't change anything in Docker, so it needs no [operations level][operations-level]: annotations work
 on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may

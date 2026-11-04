@@ -224,6 +224,39 @@ func TestTheAuthorEditsWithReadAloneAndOthersNeedWrite(t *testing.T) {
 	}
 }
 
+// A token Cetacean's OAuth server issued speaks for the person the upstream
+// provider signed in, so their notes are theirs on either credential.
+func TestAnAuthorIsOneAcrossTheDashboardAndATokenItIssued(t *testing.T) {
+	s := cluster.NewAnnotations(annotationCache(t))
+	via := func(subject, provider string) context.Context {
+		return cache.WithActor(context.Background(), cache.Actor{
+			Subject: subject, Provider: provider, Transport: cache.TransportMCP,
+		})
+	}
+
+	for _, tc := range []struct {
+		name         string
+		wrote, edits context.Context
+		wantAuthor   bool
+	}{
+		{"a note from the dashboard, edited by token", as("alice"), via("alice", "oauth"), true},
+		{"a note by token, edited from the dashboard", via("alice", "oauth"), as("alice"), true},
+		{"another subject by token", as("alice"), via("bob", "oauth"), false},
+		{"another upstream provider", as("alice"), via("alice", "headers"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, err := s.Create(tc.wrote, everyone, onWeb("note"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got := s.MayEdit(tc.edits, reader, a); got != tc.wantAuthor {
+				t.Errorf("MayEdit = %v, want %v", got, tc.wantAuthor)
+			}
+		})
+	}
+}
+
 func TestAnEditNamingNewResourcesNeedsWriteOnThem(t *testing.T) {
 	s := cluster.NewAnnotations(annotationCache(t))
 
