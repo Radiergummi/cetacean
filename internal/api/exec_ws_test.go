@@ -486,3 +486,36 @@ func TestExecWebSocketLostShellSendsReasonWithoutCode(t *testing.T) {
 		"type": "exit", "reason": "connection_lost", "outcome": "terminated",
 	})
 }
+
+func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
+	spec.Satisfies(t, "http/rfc6455/servers-verify-the-origin")
+
+	h := &Handlers{execOrigins: []string{"https://a.example"}}
+
+	cases := []struct {
+		name, origin, fetchSite string
+		want                    bool
+	}{
+		// Behind a proxy that rewrites Host, Origin names the public host.
+		{"same-origin behind a proxy", "https://cetacean.example", "same-origin", true},
+		{"user-initiated", "https://cetacean.example", "none", true},
+		{"cross-site, trusted", "https://a.example", "cross-site", true},
+		{"cross-site, untrusted", "https://evil.example", "cross-site", false},
+		{"cross-site naming the host", "http://backend:9000", "cross-site", false},
+		{"same-site, untrusted", "https://sub.cetacean.example", "same-site", false},
+		{"no fetch metadata, host", "http://backend:9000", "", true},
+		{"no fetch metadata, foreign", "https://cetacean.example", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "http://backend:9000/exec/s1", nil)
+			r.Header.Set("Origin", tc.origin)
+			if tc.fetchSite != "" {
+				r.Header.Set("Sec-Fetch-Site", tc.fetchSite)
+			}
+			if got := h.execOriginAllowed(r); got != tc.want {
+				t.Errorf("execOriginAllowed = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

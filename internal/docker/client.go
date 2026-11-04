@@ -684,6 +684,12 @@ func (c *Client) ContainerStatPath(
 	return c.docker.ContainerStatPath(ctx, containerID, path)
 }
 
+func (c *Client) ContainerInspect(
+	ctx context.Context, containerID string,
+) (container.InspectResponse, error) {
+	return c.docker.ContainerInspect(ctx, containerID)
+}
+
 func (c *Client) ContainerExecCreate(
 	ctx context.Context, containerID string, options container.ExecOptions,
 ) (container.ExecCreateResponse, error) {

@@ -78,12 +78,18 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-// execOriginAllowed admits the request's own host and the trusted origins, the
-// check RFC 6455 §10.2 asks of a server. A request without Origin is not from a
-// browser, so carries no ambient credential a foreign page could be borrowing.
+// execOriginAllowed is RFC 6455 §10.2's origin check, in the order csrf.go's
+// stdlib protection takes: Sec-Fetch-Site, which a page cannot forge, then the
+// request's own host. A request without Origin is not from a browser, so carries
+// no ambient credential a foreign page could be borrowing.
 func (h *Handlers) execOriginAllowed(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
+		return true
+	}
+
+	fetchSite := r.Header.Get("Sec-Fetch-Site")
+	if fetchSite == "same-origin" || fetchSite == "none" {
 		return true
 	}
 
@@ -91,7 +97,7 @@ func (h *Handlers) execOriginAllowed(r *http.Request) bool {
 	if err != nil || u.Host == "" {
 		return false
 	}
-	if strings.EqualFold(u.Host, r.Host) {
+	if fetchSite == "" && strings.EqualFold(u.Host, r.Host) {
 		return true
 	}
 	for _, trusted := range h.execOrigins {
