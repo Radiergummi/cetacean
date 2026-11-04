@@ -25,8 +25,8 @@ type AnnotationResponse struct {
 }
 
 type annotationRequest struct {
-	Timestamp *time.Time              `json:"timestamp"`
-	Until     *time.Time              `json:"until"`
+	Timestamp string                  `json:"timestamp"`
+	Until     string                  `json:"until"`
 	Text      string                  `json:"text"`
 	Tags      []string                `json:"tags"`
 	Resources []cluster.AnnotationRef `json:"resources"`
@@ -205,11 +205,14 @@ func (h *Handlers) HandleCreateAnnotation(w http.ResponseWriter, r *http.Request
 	}
 
 	in := cluster.AnnotationInput{Text: body.Text, Tags: body.Tags, Resources: body.Resources}
-	if body.Timestamp != nil {
-		in.Timestamp = *body.Timestamp
+
+	var err error
+	if in.Timestamp, err = cluster.ParseTimestamp("timestamp", body.Timestamp); err == nil {
+		in.Until, err = cluster.ParseTimestamp("until", body.Until)
 	}
-	if body.Until != nil {
-		in.Until = *body.Until
+	if err != nil {
+		problem.Write(w, r, "ANN001", "invalid annotation: "+err.Error())
+		return
 	}
 
 	a, err := h.annotations.Create(r.Context(), h.annotationCaller(r), in)
@@ -348,35 +351,58 @@ func decodeAnnotationPatch(
 			}
 
 			if name == "timestamp" {
-				patch.Timestamp = new(time.Time)
-				err = json.Unmarshal(raw, patch.Timestamp)
+				patch.Timestamp, err = patchTime(name, raw)
+				if err == nil && patch.Timestamp.IsZero() {
+					err = errors.New("timestamp: cannot be removed")
+				}
 			} else {
 				patch.Text = new(string)
-				err = json.Unmarshal(raw, patch.Text)
+				err = decodeMember(name, raw, patch.Text)
 			}
 		case "until":
 			patch.Until = new(time.Time)
 			if !null {
-				err = json.Unmarshal(raw, patch.Until)
+				patch.Until, err = patchTime(name, raw)
 			}
 		case "tags":
 			patch.Tags = new([]string)
-			err = json.Unmarshal(raw, patch.Tags)
+			err = decodeMember(name, raw, patch.Tags)
 		case "resources":
 			patch.Resources = new([]cluster.AnnotationRef)
-			err = json.Unmarshal(raw, patch.Resources)
+			err = decodeMember(name, raw, patch.Resources)
 		default:
 			problem.Write(w, r, "ANN001", strconv.Quote(name)+": not a member of an annotation")
 			return patch, false
 		}
 
 		if err != nil {
-			problem.Write(w, r, "ANN001", name+": "+err.Error())
+			problem.Write(w, r, "ANN001", err.Error())
 			return patch, false
 		}
 	}
 
 	return patch, true
+}
+
+// decodeMember decodes the merge patch member name into v.
+func decodeMember(name string, raw json.RawMessage, v any) error {
+	if err := json.Unmarshal(raw, v); err != nil {
+		return errors.New(name + ": " + err.Error())
+	}
+
+	return nil
+}
+
+// patchTime decodes a merge patch member holding an RFC 3339 string.
+func patchTime(name string, raw json.RawMessage) (*time.Time, error) {
+	var value string
+	if err := decodeMember(name, raw, &value); err != nil {
+		return nil, err
+	}
+
+	parsed, err := cluster.ParseTimestamp(name, value)
+
+	return &parsed, err
 }
 
 func writeAnnotationError(w http.ResponseWriter, r *http.Request, err error) {

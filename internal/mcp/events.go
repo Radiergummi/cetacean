@@ -2,9 +2,7 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -63,51 +61,27 @@ func (s *Server) toolGetEvents(
 
 	// `resource` is an argument rather than a path, so nothing rewrites a name
 	// the way the REST canonical redirect does — and an agent works from the
-	// name the user said. One requested type scopes the lookup; several leave
-	// it to answer only what is unambiguous across all of them.
-	resourceType := ""
-	if len(types) == 1 {
-		resourceType = string(types[0])
-	}
-
-	canRead := s.readPredicate(ctx)
-
-	resource, err := cluster.ResolveIdentifier(
-		s.cache, resourceType, req.GetString("resource", ""), canRead,
-	)
-	if err = s.visibleAmbiguity(ctx, resourceType, err); err != nil {
+	// name the user said. `types` filters entries too, so a service's tasks
+	// come with it only while `types` admits them.
+	query, err := cluster.TimelineScope{
+		Window:   window,
+		Types:    types,
+		Resource: req.GetString("resource", ""),
+		Search:   req.GetString("search", ""),
+		Kinds:    req.GetStringSlice("kinds", nil),
+		Tags:     req.GetStringSlice("tags", nil),
+		Authors:  req.GetStringSlice("authors", nil),
+		MatchAny: req.GetBool("matchAny", false),
+	}.Query(s.cache, s.annotationCaller(ctx))
+	if err != nil {
 		return "", err
 	}
 
 	// Every filter is pushed into the walk, so the ring copies what matched
 	// rather than everything it holds. The limit stays the whole ring on
 	// purpose: `total` counts everything the caller may read.
-	kinds := req.GetStringSlice("kinds", nil)
-	for _, kind := range kinds {
-		if !slices.Contains(cache.Kinds, kind) {
-			return "", fmt.Errorf(
-				"kinds: %q is not one of %s",
-				kind,
-				strings.Join(cache.Kinds, ", "),
-			)
-		}
-	}
-
-	matched, present := cluster.ReadTimeline(s.cache, cache.HistoryQuery{
-		ResourceID: resource,
-		Search:     req.GetString("search", ""),
-		Types:      types,
-		Kinds:      kinds,
-		Tags:       req.GetStringSlice("tags", nil),
-		MatchAny:   req.GetBool("matchAny", false),
-		Authors:    req.GetStringSlice("authors", nil),
-		Limit:      history.Size() + cache.MaxAnnotations,
-		After:      window.Since,
-		Before:     window.Until,
-		Visible:    cluster.HistoryReadable(canRead),
-
-		ReadableAnnotation: s.annotationCaller(ctx).MayRead,
-	}, canRead)
+	query.Limit = history.Size() + cache.MaxAnnotations
+	matched, present := cluster.ReadTimeline(s.cache, query, s.readPredicate(ctx))
 
 	// Cut by time, as the result is ordered: an annotation's ID follows its
 	// creation, not its time. Presenting runs after the cut, so it names only

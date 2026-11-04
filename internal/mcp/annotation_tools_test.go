@@ -78,6 +78,7 @@ func TestUpdateAnnotationRefusals(t *testing.T) {
 		{"a reader who did not write it", "bob", `{"id":` + id + `,"text":"x"}`, "write access denied"},
 		{"no such note", "alice", `{"id":999999,"text":"x"}`, "annotation 999999 not found"},
 		{"an empty start", "alice", `{"id":` + id + `,"at":""}`, "at: cannot be removed"},
+		{"an end that is not a string", "alice", `{"id":` + id + `,"until":0}`, "until: must be"},
 		{
 			"a range ending before it starts",
 			"alice",
