@@ -46,6 +46,13 @@ type HistoryEntry struct {
 	// returns it too, since a crash loop changes nothing on the service itself.
 	ServiceID string `json:"-"`
 
+	// Slot, NodeID and ServiceName are a task entry's replica and its service's
+	// name, which name it once Swarm has pruned the task or its service; all are
+	// zero on an entry recorded before they were kept.
+	Slot        int    `json:"-"`
+	NodeID      string `json:"-"`
+	ServiceName string `json:"-"`
+
 	// The annotation's own fields, set on the entry a list makes of one.
 	Text      string               `json:"text,omitempty"`
 	Tags      []string             `json:"tags,omitempty"`
@@ -73,9 +80,9 @@ type HistoryQuery struct {
 	Search string
 	Limit  int
 
-	// TaskName, when set, names a task as its row does, for the text filters
-	// above: a task records its ID as its name. It may take the cache's lock.
-	TaskName func(taskID string) string
+	// TaskName, when set, names a task entry as its row does, for the text
+	// filters above: a task records its ID as its name. It may take the cache's lock.
+	TaskName func(e HistoryEntry) string
 
 	// words is Search folded and split, and ready says the text filters are
 	// folded; a walk prepares them once, and a matcher called alone does.
@@ -522,7 +529,7 @@ func (q HistoryQuery) matchesText(e HistoryEntry) bool {
 
 	name := e.Name
 	if e.Type == EventTask && q.TaskName != nil {
-		name = q.TaskName(e.ResourceID)
+		name = q.TaskName(e)
 	}
 
 	return ContainsLower(name, q.TitleContains) &&

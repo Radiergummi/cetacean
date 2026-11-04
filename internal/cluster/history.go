@@ -1,6 +1,10 @@
 package cluster
 
-import "github.com/radiergummi/cetacean/internal/cache"
+import (
+	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cache"
+)
 
 // PresentHistory names task entries as Swarm shows them and marks the
 // resources an annotation names that are gone. cache.ExtractName must keep a
@@ -9,7 +13,7 @@ import "github.com/radiergummi/cetacean/internal/cache"
 func PresentHistory(
 	c *cache.Cache,
 	entries []cache.HistoryEntry,
-	taskName func(taskID string) string,
+	taskName func(e cache.HistoryEntry) string,
 ) []cache.HistoryEntry {
 	named := make([]cache.HistoryEntry, len(entries))
 	copy(named, entries)
@@ -24,7 +28,7 @@ func PresentHistory(
 			continue
 		}
 
-		named[i].Name = taskName(e.ResourceID)
+		named[i].Name = taskName(e)
 	}
 
 	return named
@@ -45,38 +49,98 @@ func ReadTimeline(
 	}
 }
 
-// ReadableTaskNames is ReadableTaskName for one caller, remembering each name:
-// a restarting service produces runs of events for the same few tasks, and
-// each lookup takes the cache's read lock. It is not safe for concurrent use.
+// ReadableTaskNames names a task entry for one caller as ReadableTaskName
+// does, from the replica the entry recorded once Swarm has pruned the task. It
+// remembers each name, since every lookup takes the cache's read lock and a
+// restarting service repeats a few tasks. It is not safe for concurrent use.
 func ReadableTaskNames(
 	c *cache.Cache,
 	canRead func(resource string) bool,
-) func(taskID string) string {
-	names := make(map[string]string)
+) func(e cache.HistoryEntry) string {
+	names := make(map[taskReplica]string)
 
-	return func(taskID string) string {
-		name, ok := names[taskID]
-		if !ok {
-			name = ReadableTaskName(c, taskID, canRead)
-			names[taskID] = name
+	return func(e cache.HistoryEntry) string {
+		// Entries of one task may have recorded different replicas, or none.
+		key := taskReplica{e.ResourceID, e.ServiceID, e.ServiceName, e.NodeID, e.Slot}
+		if name, ok := names[key]; ok {
+			return name
 		}
+
+		name := readableEntryTaskName(c, e, canRead)
+		names[key] = name
 
 		return name
 	}
 }
 
+// taskReplica is what a task entry recorded of the replica it names.
+type taskReplica struct {
+	id, serviceID, serviceName, nodeID string
+	slot                               int
+}
+
 // ReadableTaskName resolves one task ID to "<service>.<slot>", naming the
-// service only where canRead admits it, since the name is the service's; it
-// falls back to the ID otherwise or when either record has gone.
+// service only where canRead admits it, since the name is the service's. Once
+// the task is gone, it names it from the replica its newest entry recorded,
+// and falls back to the ID when there is none.
 func ReadableTaskName(c *cache.Cache, taskID string, canRead func(resource string) bool) string {
-	task, ok := c.GetTask(taskID)
-	if !ok {
+	if task, ok := c.GetTask(taskID); ok {
+		return readableTaskName(c, task, canRead)
+	}
+
+	newest := c.History().List(cache.HistoryQuery{
+		ResourceID: taskID,
+		Types:      []cache.EventType{cache.EventTask},
+		Kinds:      []string{cache.KindChange},
+		Limit:      1,
+	})
+	if len(newest) == 0 {
 		return taskID
 	}
 
+	return readableEntryTaskName(c, newest[0], canRead)
+}
+
+// readableEntryTaskName names a task entry from the live task, or from the
+// replica and service name it recorded once either is gone.
+func readableEntryTaskName(
+	c *cache.Cache,
+	e cache.HistoryEntry,
+	canRead func(resource string) bool,
+) string {
+	if task, ok := c.GetTask(e.ResourceID); ok {
+		return readableTaskName(c, task, canRead)
+	}
+
+	if e.Slot == 0 && e.NodeID == "" {
+		return e.ResourceID
+	}
+
+	task := swarm.Task{ID: e.ResourceID, ServiceID: e.ServiceID, Slot: e.Slot, NodeID: e.NodeID}
+
+	if _, ok := c.GetService(e.ServiceID); ok || e.ServiceName == "" {
+		return readableTaskName(c, task, canRead)
+	}
+
+	if !admits(canRead, "service:"+e.ServiceName) {
+		return e.ResourceID
+	}
+
+	// A replicated task has a slot from 1, a global one a node and no slot.
+	var svc swarm.Service
+	svc.Spec.Name = e.ServiceName
+	if e.Slot == 0 {
+		svc.Spec.Mode.Global = &swarm.GlobalService{}
+	}
+
+	return TaskName(task, &svc)
+}
+
+// readableTaskName is ReadableTaskName for a task in hand.
+func readableTaskName(c *cache.Cache, task swarm.Task, canRead func(resource string) bool) string {
 	svc, ok := c.GetService(task.ServiceID)
 	if !ok || !admits(canRead, "service:"+svc.Spec.Name) {
-		return taskID
+		return task.ID
 	}
 
 	return TaskName(task, &svc)

@@ -134,6 +134,47 @@ func TestSQLite_OpensANewerDatabase(t *testing.T) {
 	}
 }
 
+func TestSQLite_RestoresATaskRecordedBeforeItsReplicaWas(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cetacean.db")
+	ctx := context.Background()
+
+	store := openSQLite(t, path)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Back to the schema before migration 3, as an older release left it.
+	raw := timeline.OpenRaw(t, path)
+	for _, stmt := range []string{
+		`ALTER TABLE timeline DROP COLUMN slot`,
+		`ALTER TABLE timeline DROP COLUMN node_id`,
+		`ALTER TABLE timeline DROP COLUMN service_name`,
+		`DELETE FROM schema_migrations WHERE version = 3`,
+		`INSERT INTO timeline (id, kind, at, type, action, resource_id, name, service_id)
+			VALUES (1, 'change', 0, 'task', 'update', 'task1', 'task1', 'svc1')`,
+	} {
+		if _, err := raw.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store = openSQLite(t, path)
+	defer store.Close() //nolint:errcheck // test cleanup
+
+	entries, _, err := store.Restore(ctx, 10)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("Restore = %+v, err=%v; want the one task entry", entries, err)
+	}
+
+	if e := entries[0]; e.Slot != 0 || e.NodeID != "" || e.ServiceID != "svc1" {
+		t.Errorf("entry = %+v, want no replica and its service kept", e)
+	}
+}
+
 func TestSQLite_MigratesOnce(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cetacean.db")
 
@@ -163,8 +204,8 @@ func TestSQLite_MigratesOnce(t *testing.T) {
 		versions = append(versions, v)
 	}
 
-	if !slices.Equal(versions, []int64{1, 2}) {
-		t.Fatalf("schema_migrations = %v, want [1 2]", versions)
+	if !slices.Equal(versions, []int64{1, 2, 3}) {
+		t.Fatalf("schema_migrations = %v, want [1 2 3]", versions)
 	}
 }
 
