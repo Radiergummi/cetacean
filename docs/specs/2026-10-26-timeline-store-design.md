@@ -168,15 +168,16 @@ channel there would either block the cache on the disk or drop entries when full
 follows the ring. Every second it:
 
 1. calls `History.Since(lastWritten)`
-2. inserts what comes back, updates this process's `coverage.seen_at`, and, when it inserted
-   anything, applies retention, all in one transaction
+2. inserts what comes back, updates this process's `coverage.seen_at` (on a tick that inserted
+   nothing, at most every 15 seconds), and, when it inserted anything, applies retention, all
+   in one transaction
 3. advances `lastWritten`
 
-`notify` is untouched, and the cost is one read lock and one commit per second.
+`notify` is untouched, and the cost is one read lock and at most one commit per second.
 
 - **Crash window.** A crash loses what was recorded since the last commit, a second while writes
-  succeed, and the next gap starts at the last `seen_at`. So the record is honest about what it
-  lost, even when the cluster was quiet. The IDs the lost entries took were seen by clients, so
+  succeed, and the next gap starts at the last `seen_at`, up to 15 seconds early when the cluster
+  was quiet. So the record is honest about what it lost. The IDs the lost entries took were seen by clients, so
   a restore continues the sequence a ring's worth past the last stored ID.
 - **Overrun.** More than a ring's worth of changes between two ticks makes `Since` answer
   `ok=false`. The writer then inserts what the ring still holds. The entries it missed were also
@@ -196,7 +197,8 @@ oldest kept item. SQLite reuses the freed pages, so the file settles at a steady
 
 ### Shutdown
 
-Main closes the writer after the watcher has stopped, inside the same shutdown grace. The entries
+Main closes the writer after the watcher has stopped and the HTTP server has drained, so a
+handler's last change or annotation is written too. The entries
 the final events produced are committed with a last `seen_at`.
 
 ## Reading
