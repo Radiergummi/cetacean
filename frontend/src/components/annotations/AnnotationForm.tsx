@@ -124,7 +124,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         message:
           tag === null
             ? "A tag takes lowercase letters, digits, dots, dashes and underscores, up to 40."
-            : `A note takes at most ${maximumTags} tags.`,
+            : `An annotation takes at most ${maximumTags} tags.`,
       });
 
       return null;
@@ -187,7 +187,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
           return;
         } catch (retry) {
           if (!(retry instanceof ApiError && retry.status === 412)) {
-            setError({ message: getErrorMessage(retry, "The note could not be saved.") });
+            setError({ message: getErrorMessage(retry, "The annotation could not be saved.") });
 
             return;
           }
@@ -215,10 +215,10 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       setEdited({ note: data, etag });
       setError({
         message:
-          "This note changed since you opened it. Your edits are kept; save again to apply them.",
+          "This annotation changed since you opened it. Your edits are kept; save again to apply them.",
       });
     } catch (failure) {
-      setError({ message: getErrorMessage(failure, "The note could not be reloaded.") });
+      setError({ message: getErrorMessage(failure, "The annotation could not be reloaded.") });
     }
   };
 
@@ -264,7 +264,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
       if (edited && patch && failure instanceof ApiError && failure.status === 412) {
         await reload(edited, patch);
       } else {
-        setError({ message: getErrorMessage(failure, "The note could not be saved.") });
+        setError({ message: getErrorMessage(failure, "The annotation could not be saved.") });
       }
     } finally {
       submittingRef.current = false;
@@ -280,7 +280,7 @@ export default function AnnotationForm({ onDone, ...target }: Target & { onDone:
         void submit();
       }}
     >
-      <Field label="Note">
+      <Field label="Text">
         {(control) => (
           <textarea
             {...control}

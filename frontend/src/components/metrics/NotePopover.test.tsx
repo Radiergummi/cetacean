@@ -45,7 +45,7 @@ describe("NotePopover", () => {
     const cards = await screen.findAllByText(/Older|Newer/);
 
     expect(cards.map(({ textContent }) => textContent)).toEqual(["Newer", "Older"]);
-    expect(screen.getAllByRole("button", { name: "Note actions" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Annotation actions" })).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "Open" })[0]).toHaveAttribute(
       "href",
       "/annotations/2",

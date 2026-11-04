@@ -203,5 +203,5 @@ export function chartPath(
   const start = Math.floor(from - margin);
   const end = Math.max(start + 60, Math.ceil(Math.min(to + margin, now)));
 
-  return `${resourcePath(target.type, target.id)}?from=${start}&to=${end}`;
+  return `${resourcePath(target.type, target.id)}?from=${start}&to=${end}#metrics`;
 }

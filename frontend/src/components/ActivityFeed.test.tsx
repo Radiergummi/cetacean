@@ -432,7 +432,7 @@ describe("ActivityFeed runs", () => {
 
       expect(await screen.findByRole("link", { name: "Show on chart" })).toHaveAttribute(
         "href",
-        `/services/svc1?from=${at - 1800}&to=${at + 1800}`,
+        `/services/svc1?from=${at - 1800}&to=${at + 1800}#metrics`,
       );
     });
 
@@ -481,7 +481,7 @@ describe("ActivityFeed runs", () => {
         wrapper: createWrapper(createTestQueryClient()),
       });
 
-      await user.click(screen.getByRole("button", { name: "Note actions" }));
+      await user.click(screen.getByRole("button", { name: "Annotation actions" }));
       await screen.findByRole("menu");
       rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));
 
@@ -501,7 +501,7 @@ describe("ActivityFeed runs", () => {
         wrapper: createWrapper(createTestQueryClient()),
       });
 
-      await user.click(screen.getByRole("button", { name: "Note actions" }));
+      await user.click(screen.getByRole("button", { name: "Annotation actions" }));
       await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
       await screen.findByRole("dialog");
       rerender(feed([note({ id: 8, text: "Newer note" }), note({})]));

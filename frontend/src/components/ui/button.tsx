@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
-const buttonVariants = cva(
+const variantClasses = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent " +
     "bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none " +
     "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px " +
@@ -55,6 +55,14 @@ const buttonVariants = cva(
     },
   },
 );
+
+/**
+ * A button's classes, merged so a variant's border or background wins over
+ * the base's, as it does on `Button`; a link styled as a button needs that too.
+ */
+function buttonVariants(props?: Parameters<typeof variantClasses>[0]) {
+  return cn(variantClasses(props));
+}
 
 /**
  * `submitShortcut` shows Ctrl/Cmd+Enter in front of the label and lets the

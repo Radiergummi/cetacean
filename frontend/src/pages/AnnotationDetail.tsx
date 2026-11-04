@@ -1,24 +1,36 @@
 import { api, ApiError } from "../api/client";
-import ActivityFeed from "../components/ActivityFeed";
-import { annotationEntry } from "../components/annotations/annotationFields";
+import {
+  DeleteAnnotationDialog,
+  EditAnnotationDialog,
+} from "../components/annotations/AnnotationDialogs";
+import type { EditedNote } from "../components/annotations/AnnotationForm";
+import NoteText from "../components/annotations/NoteText";
+import ShowOnChart from "../components/annotations/ShowOnChart";
 import DetailError from "../components/DetailError";
 import PageHeader from "../components/PageHeader";
 import ResourceName from "../components/ResourceName";
+import { Button, buttonVariants } from "../components/ui/button";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { attribution } from "../lib/activity";
 import { formatDateTime } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 /**
- * One note on its own page, which every list links its `@id` to: the card
- * with its actions, and the times, people and resources in full.
+ * One annotation on its own page, which every list links its `@id` to: its
+ * text and tags, its actions in the header, and the times, people and
+ * resources in full.
  */
 export default function AnnotationDetail() {
   const { id = "" } = useParams();
   const noteId = Number(id);
 
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState<EditedNote | null>(null);
+  const [deleting, setDeleting] = useState<EditedNote | null>(null);
   const { data, error, isLoading, refetch } = useQuery({
     queryKey: ["annotations", "detail", noteId],
     queryFn: ({ signal }) => api.annotation(noteId, signal),
@@ -48,7 +60,7 @@ export default function AnnotationDetail() {
         />
         {gone ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            This note doesn't exist, or you may not read it.{" "}
+            This annotation doesn't exist, or you may not read it.{" "}
             <Link
               to="/annotations"
               className="underline"
@@ -59,7 +71,7 @@ export default function AnnotationDetail() {
         ) : (
           <DetailError
             error={error}
-            fallback="The note could not be read."
+            fallback="The annotation could not be read."
             onRetry={() => refetch()}
           />
         )}
@@ -80,19 +92,77 @@ export default function AnnotationDetail() {
   }
 
   const note = data.data;
+  const edited = { note, etag: data.etag };
 
   return (
     <div>
       <PageHeader
         title="Annotation"
         breadcrumbs={breadcrumbs}
+        actions={
+          <div className="flex items-center gap-2">
+            <ShowOnChart
+              note={note}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            />
+
+            {data.allowedMethods.has("PATCH") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditing(edited)}
+              >
+                <Pencil className="size-3.5" />
+                Edit
+              </Button>
+            )}
+
+            {data.allowedMethods.has("DELETE") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleting(edited)}
+              >
+                <Trash2 className="size-3.5" />
+                Delete
+              </Button>
+            )}
+          </div>
+        }
       />
 
-      <div className="mb-4 rounded-lg border bg-card p-4">
-        <ActivityFeed
-          entries={[annotationEntry(note)]}
-          collapse={false}
-        />
+      <EditAnnotationDialog
+        editing={editing}
+        onClose={() => setEditing(null)}
+      />
+
+      <DeleteAnnotationDialog
+        deleting={deleting}
+        onClose={() => setDeleting(null)}
+        onDeleted={() => navigate("/annotations")}
+      />
+
+      <div
+        data-cluster-wide={note.resources.length === 0 || undefined}
+        className="mb-4 rounded-r-lg border border-l-2 border-l-annotation bg-card p-4 data-cluster-wide:border-l-annotation-cluster"
+      >
+        <p className="break-words whitespace-pre-wrap">
+          <NoteText text={note.text} />
+        </p>
+
+        {note.tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+            {note.tags.map((tag) => (
+              <Link
+                key={tag}
+                to={`/annotations?tag=${encodeURIComponent(tag)}`}
+                className="rounded border px-1 hover:text-foreground"
+              >
+                #{tag}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <dl className="grid gap-x-6 gap-y-2 rounded-lg border bg-card p-4 text-sm sm:grid-cols-[max-content_1fr]">

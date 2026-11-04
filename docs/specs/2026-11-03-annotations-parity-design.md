@@ -146,7 +146,7 @@ Every annotation route renders a page:
 ### Charts
 
 - **A notes control** in the metrics panel header: show or hide notes, and narrow them by tag.
-  Its state is a URL parameter (`?notes=off`, `?noteTag=deploy`), following the widget
+  Its state is a URL parameter (`?annotations=off`, `?annotationTag=deploy`), following the widget
   customization plan: view state that belongs in a link is never stored.
 - **Clicking a marker's flag** pins a popover with the note card, its menu and "Open". Hovering
   stays a read-only tooltip. This reverses step 6's "chart tooltips stay read-only" for a click

@@ -124,7 +124,7 @@ export default function Annotations() {
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
-        placeholder="Search the notes…"
+        placeholder="Search the annotations…"
       />
 
       {error ? (

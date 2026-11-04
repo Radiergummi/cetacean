@@ -156,11 +156,11 @@ describe("AnnotationTags", () => {
     });
     renderAt("/annotations/tags", <AnnotationTags />);
 
-    expect(await screen.findByRole("link", { name: /#deploy\s*3 notes/ })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: /#deploy\s*3 annotations/ })).toHaveAttribute(
       "href",
       "/annotations?tag=deploy",
     );
-    expect(screen.getByText("1 note")).toBeInTheDocument();
+    expect(screen.getByText("1 annotation")).toBeInTheDocument();
   });
 });
 
@@ -178,6 +178,19 @@ describe("AnnotationDetail", () => {
     expect(screen.getAllByRole("link", { name: "web" })[0]).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "worker" })).not.toBeInTheDocument();
     expect(screen.getByText("(removed)")).toBeInTheDocument();
+  });
+
+  it("offers Edit and Delete in the header only as its Allow permits", async () => {
+    readAnnotation.mockResolvedValue({
+      data: note,
+      allowedMethods: new Set(["GET", "HEAD", "PATCH"]),
+      etag: '"7-2"',
+    });
+    renderAt("/annotations/7", <AnnotationDetail />);
+
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Annotation actions" })).not.toBeInTheDocument();
   });
 
   it("says when the note is not there", async () => {
