@@ -17,8 +17,8 @@ type Writer struct {
 	history *cache.History
 	keep    int
 
-	// recordGap records the window from the previous process's last heartbeat,
-	// recovering what it can up to streamSince, or nothing when that is zero; it
+	// recordGap records the window from the last heartbeat before watching
+	// stopped, recovering what it can up to streamSince, or nothing when that is zero; it
 	// reaches the store through the ring.
 	recordGap func(ctx context.Context, from, streamSince time.Time)
 
@@ -31,7 +31,8 @@ type Writer struct {
 	// live reports whether the cluster is being watched; nil always is.
 	live func() bool
 
-	// Each logs its first failure and its recovery once.
+	// writeFailing, like coverageFailing, logs its first failure and its
+	// recovery once.
 	writeFailing bool
 
 	ready bool
@@ -39,7 +40,7 @@ type Writer struct {
 	// mu holds what RecordGap, called beside Run, shares with it. gapChecked
 	// and covering are set once the gap is recorded and coverage opened; until
 	// then a ready writer retries at every tick. seenAt is this process's last
-	// committed heartbeat, or the opening of its coverage.
+	// committed heartbeat, the opening of its coverage, or the end of its last gap.
 	mu                                    sync.Mutex
 	coverageFailing, gapChecked, covering bool
 	seenAt                                time.Time
@@ -130,6 +131,8 @@ func (w *Writer) recordGapLocked(ctx context.Context, streamSince time.Time) {
 	if ok && previous.Before(time.Now()) {
 		w.recordGap(ctx, previous, streamSince)
 	}
+
+	w.seenAt = time.Now()
 }
 
 // openCoverage records the gap since the previous stretch of watching, if

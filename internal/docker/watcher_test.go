@@ -775,6 +775,41 @@ func TestRun_StartsWatchingAgainAfterAReconnect(t *testing.T) {
 	})
 }
 
+// The stream is gone once it errors, so flushing what it left pending is not
+// watching: a heartbeat there would start the gap late.
+func TestRun_StopsWatchingBeforeFlushingALostStream(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		var watchingDuringFlush atomic.Bool
+		mc.inspectFn = func(context.Context, events.Type, string) (any, error) {
+			watchingDuringFlush.Store(w.Watching())
+			return swarm.Node{ID: "n1"}, nil
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.Run(ctx)
+		}()
+
+		synctest.Wait()
+		mc.eventsCh <- events.Message{Type: events.NodeEventType, Actor: events.Actor{ID: "n1"}}
+		synctest.Wait()
+		mc.errCh <- errors.New("stream ended")
+		synctest.Wait()
+
+		if watchingDuringFlush.Load() {
+			t.Error("watching while flushing a lost stream's pending events")
+		}
+
+		cancel()
+		<-done
+	})
+}
+
 // Recovered changes take the IDs after the first sync with times from the gap,
 // so a refresh applied beside the hook would sort between them.
 func TestRefreshWaitsForTheWatchingHook(t *testing.T) {
@@ -814,6 +849,17 @@ func TestRefreshWaitsForTheWatchingHook(t *testing.T) {
 
 	cancel()
 	<-done
+}
+
+// A write that waited out the hook finds the loop it started, which must order it.
+func TestApplyBesideLoop_HandsOffToALoopStartedMeanwhile(t *testing.T) {
+	w := NewWatcher(newMockClient(), cache.New(nil), "")
+	w.loopRunning.Store(true)
+
+	applied := false
+	if w.applyBesideLoop(func() { applied = true }) || applied {
+		t.Fatal("applied beside a running loop")
+	}
 }
 
 // A retried sync runs on the event loop beside a cache that already serves

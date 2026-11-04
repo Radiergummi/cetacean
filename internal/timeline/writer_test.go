@@ -462,3 +462,25 @@ func TestWriter_RecordsTheGapOfAReconnect(t *testing.T) {
 		t.Fatalf("coverage opened %d times, %d gaps; want 2 and still 2", n, len(recorded))
 	}
 }
+
+// With coverage failing to reopen, a later gap starts where the last one ended,
+// rather than recording and recovering the same stretch again.
+func TestWriter_ADoubleGapDoesNotOverlap(t *testing.T) {
+	previous := time.Now().Add(-time.Hour)
+	store := &fakeStore{previous: previous, coverageErr: errors.New("disk full")}
+
+	var recorded [][2]time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10,
+		func(_ context.Context, from, since time.Time) {
+			recorded = append(recorded, [2]time.Time{from, since})
+		})
+
+	w.RecordGap(context.Background(), time.Now())
+	w.openCoverage(context.Background())
+	end := time.Now()
+	w.RecordGap(context.Background(), time.Now())
+
+	if len(recorded) != 2 || recorded[1][0].Equal(previous) || recorded[1][0].After(end) {
+		t.Fatalf("recorded %v, want the second gap to start after the first, by %v", recorded, end)
+	}
+}

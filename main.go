@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -344,7 +343,7 @@ func run(s settings) error {
 	}
 	if timelineStore != nil {
 		// Taken before the first sync, which forgets the services removed in the
-		// gap, and extended at each gap for the next.
+		// gap, and retaken at each gap for the next.
 		serviceStacks := stateCache.ServiceStacks()
 
 		timelineWriter = timeline.NewWriter(
@@ -364,7 +363,7 @@ func run(s settings) error {
 				}
 
 				stateCache.RecordRecoveredGap(from, recovered)
-				maps.Copy(serviceStacks, stateCache.ServiceStacks())
+				serviceStacks = stateCache.ServiceStacks()
 			},
 		)
 	}

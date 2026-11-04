@@ -214,12 +214,19 @@ func (w *Watcher) startWatching(streamSince time.Time) {
 }
 
 // applyBesideLoop runs a write the loop is not there to order, after any
-// startWatching in progress.
-func (w *Watcher) applyBesideLoop(apply func()) {
+// startWatching in progress, and reports whether it did: a loop started
+// meanwhile must take the write instead.
+func (w *Watcher) applyBesideLoop(apply func()) bool {
 	w.watchingMu.RLock()
 	defer w.watchingMu.RUnlock()
 
+	if w.loopRunning.Load() {
+		return false
+	}
+
 	apply()
+
+	return true
 }
 
 // waitForSettles blocks until every scheduled re-read has finished.
@@ -259,7 +266,6 @@ func (w *Watcher) Run(ctx context.Context) {
 			return
 		}
 		w.watchEvents(ctx, since, synced)
-		w.watching.Store(false)
 		slog.WarnContext(ctx, "event stream disconnected", "retry_in", backoff)
 		select {
 		case <-ctx.Done():
@@ -579,6 +585,7 @@ func (w *Watcher) watchEvents(ctx context.Context, since time.Time, synced bool)
 			}
 			return
 		case err := <-errCh:
+			w.watching.Store(false)
 			if err != nil {
 				slog.WarnContext(ctx, "event stream error", "error", err)
 			}
@@ -894,9 +901,8 @@ func (w *Watcher) settleRead(ctx context.Context, key eventKey, action string) b
 	}
 
 	// With no loop there is nothing to order against, as for Refresh.
-	if !w.loopRunning.Load() {
-		w.applyBesideLoop(func() { w.applySettledRead(key.id, read) })
-	} else {
+	if w.loopRunning.Load() ||
+		!w.applyBesideLoop(func() { w.applySettledRead(key.id, read) }) {
 		w.queueSettled(key.id, read)
 	}
 
@@ -1088,9 +1094,9 @@ func (w *Watcher) Refresh(ctx context.Context, kind, id string) error {
 	// would stall the write this refresh precedes.
 	if !w.loopRunning.Load() {
 		var err error
-		w.applyBesideLoop(func() { err = refresh(ctx) })
-
-		return err
+		if w.applyBesideLoop(func() { err = refresh(ctx) }) {
+			return err
+		}
 	}
 
 	done := make(chan error, 1)
