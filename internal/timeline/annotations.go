@@ -40,9 +40,9 @@ func (s *SQLite) Annotations(ctx context.Context) ([]cache.Annotation, error) {
 			return nil, err
 		}
 
-		a.Timestamp = time.Unix(0, at)
+		a.Timestamp = time.Unix(0, at).UTC()
 		a.Until = unixTime(until)
-		a.Created = time.Unix(0, created)
+		a.Created = time.Unix(0, created).UTC()
 		a.Updated = unixTime(updated)
 		a.Actor = actor.actor()
 		a.Editor = editor.actor()
@@ -234,7 +234,7 @@ func unixTime(n sql.NullInt64) time.Time {
 		return time.Time{}
 	}
 
-	return time.Unix(0, n.Int64)
+	return time.Unix(0, n.Int64).UTC()
 }
 
 func eachRow(ctx context.Context, db *sql.DB, query string, fn func(*sql.Rows) error) error {

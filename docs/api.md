@@ -562,7 +562,8 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
 ```
 
 - `POST /annotations` creates one and answers `201` with its `Location` and `ETag`. `timestamp` defaults to now and
-  takes any time, the future included. `until` makes it a range and must be after `timestamp`.
+  takes any time from 1970 to 2199, the future included. `until` makes it a range and must be after `timestamp`.
+  Both come back in UTC.
 - `text` is plain text, up to 1,000 characters. Up to 10 `tags`, each `[a-z0-9._-]`, up to 40 long.
 - `resources` names up to 20 services, stacks, or nodes. Name each one by its ID or its name. The answer records each by ID, with its name.
   An annotation with no resources is cluster-wide.

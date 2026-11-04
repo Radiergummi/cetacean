@@ -67,7 +67,7 @@ func TestHistoryFeedShowsAnEditAsAnUpdate(t *testing.T) {
 	body := w.Body.String()
 
 	for _, want := range []string{
-		"<id>urn:cetacean:annotation:" + id + "</id>",
+		"<id>urn:cetacean:annotation:" + h.cache.History().Instance() + ":" + id + "</id>",
 		"<title>maintenance, extended</title>",
 		"<updated>" + a.Updated.Format(time.RFC3339Nano) + "</updated>",
 	} {

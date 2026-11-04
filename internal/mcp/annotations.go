@@ -92,12 +92,12 @@ func (s *Server) annotationTools() []toolDef {
 				),
 				mcplib.WithString("at",
 					mcplib.Description(
-						"RFC 3339 timestamp of the moment, or the start of the range. Defaults to now.",
+						"RFC 3339 timestamp of the moment, or the start of the range, in the years 1970 to 2199. Defaults to now.",
 					),
 				),
 				mcplib.WithString("until",
 					mcplib.Description(
-						"RFC 3339 timestamp ending a range, after `at`. Omit for a moment.",
+						"RFC 3339 timestamp ending a range, after `at`, in the years 1970 to 2199. Omit for a moment.",
 					),
 				),
 				annotationTagsArg("At most 10 tags"),
@@ -131,12 +131,12 @@ func (s *Server) annotationTools() []toolDef {
 				mcplib.WithString(
 					"at",
 					mcplib.Description(
-						"RFC 3339 timestamp of the moment, or the start of the range.",
+						"RFC 3339 timestamp of the moment, or the start of the range, in the years 1970 to 2199.",
 					),
 				),
 				mcplib.WithString("until",
 					mcplib.Description(
-						"RFC 3339 timestamp ending the range, after `at`. An empty string makes the annotation a moment.",
+						"RFC 3339 timestamp ending the range, after `at`, in the years 1970 to 2199. An empty string makes the annotation a moment.",
 					),
 				),
 				annotationTagsArg(

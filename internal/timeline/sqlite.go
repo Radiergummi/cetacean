@@ -38,6 +38,8 @@ type SQLite struct {
 
 	// coverage is this process's coverage row, zero until OpenCoverage.
 	coverage int64
+
+	instance string
 }
 
 var _ Store = (*SQLite)(nil)
@@ -70,7 +72,19 @@ func OpenSQLite(ctx context.Context, path string) (*SQLite, error) {
 		return nil, fmt.Errorf("timeline %s: %w", path, err)
 	}
 
-	return &SQLite{db: db}, nil
+	store := &SQLite{db: db}
+	if err := db.QueryRowContext(ctx, `SELECT instance FROM sequence`).
+		Scan(&store.instance); err != nil {
+		_ = db.Close()
+
+		return nil, fmt.Errorf("timeline %s: %w", path, err)
+	}
+
+	return store, nil
+}
+
+func (s *SQLite) Instance() string {
+	return s.instance
 }
 
 // migrate applies every embedded migration not yet recorded, each in its own
@@ -231,7 +245,8 @@ func (s *SQLite) Restore(
 
 	err = s.db.QueryRowContext(ctx, `SELECT max(
 			(SELECT coalesce(max(id), 0) FROM timeline),
-			(SELECT coalesce(max(version), 0) FROM annotations)
+			(SELECT coalesce(max(version), 0) FROM annotations),
+			(SELECT last FROM sequence)
 		)`).Scan(&last)
 	if err != nil {
 		return nil, 0, err
@@ -278,6 +293,16 @@ func (s *SQLite) Commit(ctx context.Context, batch Batch) error {
 	return inTx(ctx, s.db, func(tx *sql.Tx) error {
 		if err := insert(ctx, tx, batch.Entries); err != nil {
 			return err
+		}
+
+		if batch.Last > 0 {
+			if _, err := tx.ExecContext(
+				ctx,
+				`UPDATE sequence SET last = max(last, ?)`,
+				batch.Last,
+			); err != nil {
+				return err
+			}
 		}
 
 		if s.coverage != 0 && !batch.SeenAt.IsZero() {

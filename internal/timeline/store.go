@@ -12,8 +12,8 @@ import (
 // can implement it; storetest is the suite every implementation passes.
 type Store interface {
 	// Restore returns the newest limit entries of the kinds the ring holds,
-	// oldest first, and the largest ID stored of any kind, annotation
-	// versions included.
+	// oldest first, and the largest ID ever committed, annotation versions
+	// and removals included.
 	Restore(ctx context.Context, limit int) (entries []cache.HistoryEntry, last uint64, err error)
 
 	// Annotations returns every annotation, by ID. Retention never removes one.
@@ -34,6 +34,11 @@ type Store interface {
 	// Commit applies a batch in one transaction, or none of it.
 	Commit(ctx context.Context, batch Batch) error
 
+	// Instance names this database for good: a new or recreated one never
+	// shares it. A copy keeps it, so restoring an older copy can repeat the
+	// IDs qualified by it that the newer one handed out.
+	Instance() string
+
 	Close() error
 }
 
@@ -45,6 +50,10 @@ type Batch struct {
 
 	// SeenAt extends the open coverage; it is ignored when none is open.
 	SeenAt time.Time
+
+	// Last, when positive, is the newest ID the ring handed out; Restore
+	// never reports less, even once nothing stored carries it.
+	Last uint64
 
 	// Keep, when positive, deletes all but the newest Keep entries, and the
 	// coverage that ended before the oldest of them.

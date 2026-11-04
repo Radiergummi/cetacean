@@ -146,6 +146,10 @@ func (w *Writer) flush(ctx context.Context) {
 	})
 
 	batch := Batch{Entries: entries}
+	if last > w.lastWritten {
+		batch.Last = last
+	}
+
 	if w.covering {
 		batch.SeenAt = time.Now()
 	}
@@ -157,7 +161,7 @@ func (w *Writer) flush(ctx context.Context) {
 	}
 
 	// Before coverage opens a quiet tick has nothing to write.
-	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 {
+	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 && batch.Last == 0 {
 		w.lastWritten = last
 		return
 	}

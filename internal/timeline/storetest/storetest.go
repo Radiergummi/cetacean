@@ -428,6 +428,52 @@ func Run(t *testing.T, newStore Factory) {
 		}
 	})
 
+	// A removal's ID is stored nowhere else, so only Last keeps it from coming back.
+	t.Run("restore reports the last ID handed out, never less", func(t *testing.T) {
+		open := newStore(t)
+		store := open()
+
+		a := fullAnnotation()
+		a.ID, a.Version = 3, 3
+		putAnnotation(t, store, a)
+
+		if err := store.DeleteAnnotation(context.Background(), a.ID); err != nil {
+			t.Fatalf("DeleteAnnotation: %v", err)
+		}
+
+		commit(t, store, timeline.Batch{Last: 4})
+		commit(t, store, timeline.Batch{Last: 2})
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		if _, last, err := store.Restore(context.Background(), 10); err != nil || last != 4 {
+			t.Fatalf("Restore last = %d, err=%v; want 4", last, err)
+		}
+	})
+
+	t.Run("the instance survives a restart and differs between stores", func(t *testing.T) {
+		open := newStore(t)
+		store := open()
+		instance := store.Instance()
+		closeStore(t, store)
+
+		store = open()
+		defer closeStore(t, store)
+
+		if instance == "" || store.Instance() != instance {
+			t.Fatalf("Instance = %q after a restart, want %q", store.Instance(), instance)
+		}
+
+		other := newStore(t)()
+		defer closeStore(t, other)
+
+		if other.Instance() == instance {
+			t.Fatalf("two stores share the instance %q", instance)
+		}
+	})
+
 	t.Run("retention leaves annotations alone", func(t *testing.T) {
 		store := newStore(t)()
 		defer closeStore(t, store)

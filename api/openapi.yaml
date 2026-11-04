@@ -8739,11 +8739,11 @@ components:
         timestamp:
           type: string
           format: date-time
-          description: Defaults to now. Any time, including the future
+          description: Defaults to now. Any time in the years 1970 to 2199, including the future; returned in UTC
         until:
           type: string
           format: date-time
-          description: After `timestamp`; omit for a point
+          description: After `timestamp`, in the years 1970 to 2199; omit for a point
         text:
           type: string
           minLength: 1
