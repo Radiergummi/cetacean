@@ -283,8 +283,11 @@ function allowFor(url: string) {
   return writes ? `GET, HEAD, ${writes}` : "GET, HEAD";
 }
 
-/** The details whose resource the visitor may annotate, and the cluster for cluster-wide notes. */
-const annotatablePath = /\/((services|nodes|stacks)\/[^/]+|cluster)$/;
+/**
+ * The details whose resource the visitor may annotate, the cluster for
+ * cluster-wide notes, and the lists that say whether any note may be made.
+ */
+const annotatablePath = /\/((services|nodes|stacks)\/[^/]+|cluster|history|annotations)$/;
 
 /** The `rel="edit"` links the server sends on a detail response. */
 function editLinksFor(url: string) {

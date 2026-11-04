@@ -1,6 +1,7 @@
 import { useLatestRef } from "./useLatestRef";
 import { apiPath } from "@/lib/basePath";
 import { openEventStream } from "@/lib/eventStream";
+import { resourceEventTypes } from "@/lib/resourceEvents";
 import { createContext, useContext, useEffect } from "react";
 
 export interface SSEEvent {
@@ -12,19 +13,7 @@ export interface SSEEvent {
 
 export type SSEListener = (event: SSEEvent) => void;
 
-const sseEventTypes = [
-  "node",
-  "service",
-  "task",
-  "config",
-  "secret",
-  "network",
-  "volume",
-  "stack",
-  "sync",
-  "gap",
-  "annotation",
-] as const;
+const sseEventTypes = [...resourceEventTypes, "sync", "gap", "annotation"] as const;
 
 /**
  * The SSE listeners that parse each named event, and each batch, into `dispatch`.

@@ -21,11 +21,8 @@ vi.mock("@/api/client", () => ({
 vi.mock("@/hooks/useDebouncedInvalidation", () => ({
   useDebouncedInvalidation: (
     path: string | undefined,
-    _keys: unknown,
-    _delay: unknown,
-    _onEvent: unknown,
-    filter?: (event: { type: string }) => boolean,
-  ) => invalidation(path, filter),
+    { relevant }: { relevant?: (event: { type: string }) => boolean },
+  ) => invalidation(path, relevant),
 }));
 
 function wrapper({ children }: { children: ReactNode }) {

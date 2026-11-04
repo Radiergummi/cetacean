@@ -4,10 +4,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-const capabilities = vi.hoisted(() => ({ create: true, clusterWide: false }));
+const capabilities = vi.hoisted(() => ({ clusterWide: false }));
 
-vi.mock("@/hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => capabilities,
+vi.mock("@/hooks/useClusterAnnotatable", () => ({
+  useClusterAnnotatable: () => capabilities.clusterWide,
 }));
 
 const service = { type: "service", id: "svc1", name: "web" } as const;

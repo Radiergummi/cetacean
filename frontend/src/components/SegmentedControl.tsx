@@ -1,3 +1,4 @@
+import { MenuContent, MenuRadioItem } from "@/components/ui/menu";
 // oxlint-disable react/refs -- `close` only dereferences the menu actions ref
 // when invoked as an event handler. The rule flags it because the callback is
 // handed to an `overflowContent` render prop, but the ref is never read during
@@ -135,43 +136,35 @@ export default function SegmentedControl<T extends string>({
             {overflowIcon ?? <ChevronDown className="size-3" />}
           </Menu.Trigger>
 
-          <Menu.Portal>
-            <Menu.Positioner
-              align="end"
-              sideOffset={4}
-              className="z-50"
-            >
-              <Menu.Popup className="min-w-36 rounded-md border bg-popover p-1 shadow-md outline-hidden">
-                {overflowContent
-                  ? overflowContent(close)
-                  : overflow.length > 0 && (
-                      <Menu.RadioGroup
-                        value={value}
-                        onValueChange={(nextValue) => {
-                          onChange(nextValue as T);
-                        }}
+          <MenuContent>
+            {overflowContent
+              ? overflowContent(close)
+              : overflow.length > 0 && (
+                  <Menu.RadioGroup
+                    value={value}
+                    onValueChange={(nextValue) => {
+                      onChange(nextValue as T);
+                    }}
+                  >
+                    {overflow.map(({ badge, disabled, label, value: segmentValue }) => (
+                      <MenuRadioItem
+                        key={segmentValue}
+                        value={segmentValue}
+                        disabled={disabled}
+                        closeOnClick
+                        className="data-disabled:text-muted-foreground/40"
                       >
-                        {overflow.map(({ badge, disabled, label, value: segmentValue }) => (
-                          <Menu.RadioItem
-                            key={segmentValue}
-                            value={segmentValue}
-                            disabled={disabled}
-                            closeOnClick
-                            className="flex w-full cursor-default items-center justify-between gap-3 rounded-sm px-2 py-1.5 text-sm text-popover-foreground outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-checked:bg-accent data-checked:text-accent-foreground data-disabled:pointer-events-none data-disabled:text-muted-foreground/40"
-                          >
-                            <span>{label}</span>
-                            {badge != null && (
-                              <span className="text-xs text-muted-foreground tabular-nums">
-                                {badge}
-                              </span>
-                            )}
-                          </Menu.RadioItem>
-                        ))}
-                      </Menu.RadioGroup>
-                    )}
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
+                        <span>{label}</span>
+                        {badge != null && (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {badge}
+                          </span>
+                        )}
+                      </MenuRadioItem>
+                    ))}
+                  </Menu.RadioGroup>
+                )}
+          </MenuContent>
         </Menu.Root>
       )}
     </div>

@@ -8,7 +8,6 @@ import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import { Button, buttonVariants } from "../components/ui/button";
-import { useAnnotationCapabilities } from "../hooks/useAnnotationCapabilities";
 import { useAuth } from "../hooks/useAuth";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
@@ -34,7 +33,6 @@ export default function Annotations() {
   const [params, setParams] = useSearchParams();
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { identity } = useAuth();
-  const { create } = useAnnotationCapabilities();
 
   const tags = params.getAll("tag");
   const authors = params.getAll("author");
@@ -57,12 +55,13 @@ export default function Annotations() {
       placeholderData: keepPreviousData,
     });
 
-  useDebouncedInvalidation("/events", [["annotations"]], 2_000);
+  useDebouncedInvalidation("/events", { timelineKeys: [["annotations"]], delay: 2_000 });
 
   const entries = useMemo(
     () => data?.pages.flatMap(({ items }) => items.map(annotationEntry)) ?? [],
     [data],
   );
+  const create = data?.pages[0]?.annotatable ?? false;
 
   const update = (change: (next: URLSearchParams) => void) => {
     const next = new URLSearchParams(params);

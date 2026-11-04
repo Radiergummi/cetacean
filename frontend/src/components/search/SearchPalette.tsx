@@ -1,8 +1,9 @@
 import { ApiError, api, type Capabilities, headCapabilities } from "../../api/client";
 import type { SearchResourceType, SearchResponse, SearchResult } from "../../api/types";
-import { useResourceStream } from "../../hooks/useResourceStream";
+import { type SSEEvent, useResourceStream } from "../../hooks/useResourceStream";
 import { getActions, matchAction, type PaletteAction, type PaletteStep } from "../../lib/actions";
 import { getErrorInfo } from "../../lib/errors";
+import { movesResources } from "../../lib/resourceEvents";
 import {
   flattenSearchResults,
   resourcePath,
@@ -305,15 +306,23 @@ export default function SearchPalette({ onClose }: { onClose: () => void }) {
 
   useResourceStream(
     watching ? "/events" : undefined,
-    useCallback(() => {
-      if (refreshTimerRef.current) {
-        return;
-      }
+    useCallback(
+      (event: SSEEvent) => {
+        // Search finds resources, so only a resource's event changes its results.
+        if (!movesResources(event)) {
+          return;
+        }
 
-      const sinceLast = Date.now() - lastRefreshRef.current;
-      const delay = Math.max(refreshSettle, refreshMaxWait - sinceLast);
-      refreshTimerRef.current = setTimeout(refresh, delay);
-    }, [refresh]),
+        if (refreshTimerRef.current) {
+          return;
+        }
+
+        const sinceLast = Date.now() - lastRefreshRef.current;
+        const delay = Math.max(refreshSettle, refreshMaxWait - sinceLast);
+        refreshTimerRef.current = setTimeout(refresh, delay);
+      },
+      [refresh],
+    ),
   );
 
   // A refresh queued for results no longer shown would search for nothing.

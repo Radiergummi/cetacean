@@ -6,7 +6,6 @@ import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
 import SegmentedControl from "../components/SegmentedControl";
 import { Button, buttonVariants } from "../components/ui/button";
-import { useAnnotationCapabilities } from "../hooks/useAnnotationCapabilities";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { useUrlParam } from "../hooks/useUrlParam";
@@ -39,7 +38,6 @@ function isTypeFilter(value: string | null): value is TypeFilter {
 
 export default function History() {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
-  const { create } = useAnnotationCapabilities();
   const [requestedType, setType] = useUrlParam("type", "all");
   const type: TypeFilter = isTypeFilter(requestedType) ? requestedType : "all";
   const resourceType = type === "all" ? undefined : type;
@@ -60,9 +58,10 @@ export default function History() {
       placeholderData: keepPreviousData,
     });
 
-  useDebouncedInvalidation("/events", [["history"]], 2_000);
+  useDebouncedInvalidation("/events", { timelineKeys: [["history"]], delay: 2_000 });
 
   const entries = useMemo(() => data?.pages.flatMap(({ items }) => items) ?? [], [data]);
+  const create = data?.pages[0]?.annotatable ?? false;
 
   const csvQuery = new URLSearchParams({
     ...(resourceType ? { type: resourceType } : {}),

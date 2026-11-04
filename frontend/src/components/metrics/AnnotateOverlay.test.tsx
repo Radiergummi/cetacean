@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/hooks/useAnnotationCapabilities", () => ({
-  useAnnotationCapabilities: () => ({ create: true, clusterWide: false }),
+vi.mock("@/hooks/useClusterAnnotatable", () => ({
+  useClusterAnnotatable: () => false,
 }));
 
 const service = { type: "service", id: "svc1", name: "web" } as const;
