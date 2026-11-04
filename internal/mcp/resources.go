@@ -13,7 +13,6 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/radiergummi/cetacean/internal/auth"
-	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/compose"
 	"github.com/radiergummi/cetacean/internal/docker"
@@ -373,13 +372,13 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 	case "history":
 		// Named after filtering, never before: the read filter keys a task's ACL
 		// check on its ID, which is what the resolver resolves parentage from.
-		canRead := s.readPredicate(ctx)
-		entries, present := cluster.ReadTimeline(s.cache, cache.HistoryQuery{
-			Limit:   100,
-			Visible: cluster.HistoryReadable(canRead),
+		query, err := cluster.TimelineScope{}.Query(s.cache, s.annotationCaller(ctx))
+		if err != nil {
+			return nil, err
+		}
 
-			ReadableAnnotation: s.annotationCaller(ctx).MayRead,
-		}, canRead)
+		query.Limit = 100
+		entries, present := cluster.ReadTimeline(s.cache, query, s.readPredicate(ctx))
 
 		return present(entries), nil
 

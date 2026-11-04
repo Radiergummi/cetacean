@@ -17,8 +17,13 @@ import (
 
 type discardedAnnotations struct{}
 
-func (discardedAnnotations) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-func (discardedAnnotations) DeleteAnnotation(context.Context, uint64) error        { return nil }
+func (s discardedAnnotations) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return s, nil
+}
+
+func (discardedAnnotations) Put(context.Context, cache.Annotation) error { return nil }
+func (discardedAnnotations) Delete(context.Context, uint64) error        { return nil }
+func (discardedAnnotations) Release()                                    {}
 
 // annotationServer serves service "web" and node "worker": alice writes the
 // service, bob only reads it, and neither may read the node.
@@ -106,6 +111,7 @@ func TestAddAnnotationRefusals(t *testing.T) {
 			true,
 		},
 		{"a malformed time", "alice", `{"text":"x","at":"yesterday"}`, "at: must be an RFC 3339", true},
+		{"a time that is not a string", "alice", `{"text":"x","at":1762264800}`, "at: must be", true},
 		{
 			"tags that are not a list of strings",
 			"alice",

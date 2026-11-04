@@ -2,6 +2,7 @@ package api
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -10,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	json "github.com/goccy/go-json"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
 )
@@ -143,6 +146,20 @@ func ifRange(r *http.Request, validator string) *http.Request {
 	r.Header.Del("If-Range")
 
 	return r
+}
+
+// wholeListETag is the validator every page of items shares, hashed from the
+// whole list, for a list not a pure function of the cache: a 206 must carry the
+// tag of the representation If-Range names, not of its page.
+func wholeListETag[T any](
+	ctx context.Context,
+	items []T,
+	itemType string,
+	id func(T) string,
+) string {
+	body, _ := json.Marshal(wrapItems(ctx, items, itemType, id))
+
+	return computeETag(body)
 }
 
 // ifRangeHolds is the strong comparison against the tag this answer would

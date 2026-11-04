@@ -816,7 +816,7 @@ func TestHistory_Restore(t *testing.T) {
 	h.Restore([]HistoryEntry{
 		{ID: 4, Timestamp: at, Type: EventService, ResourceID: "s1", Name: "web"},
 		{ID: 9, Timestamp: at, Type: EventTask, ResourceID: "t1", ServiceID: "s1"},
-	}, 0)
+	}, 0, "test")
 
 	// A ring's worth past the last ID, which a crash may have handed out.
 	if h.Count() != 19 {
@@ -841,6 +841,21 @@ func TestHistory_Restore(t *testing.T) {
 	}
 }
 
+// A database with nothing committed may still follow a process that handed
+// out IDs before it crashed.
+func TestHistory_RestoreOfNothingStillSkipsARing(t *testing.T) {
+	h := NewHistory(10)
+	h.Restore(nil, 0, "db")
+
+	if h.Count() != 10 || h.Instance() != "db" {
+		t.Fatalf(
+			"Count() = %d, Instance() = %q; want 10 and the database's",
+			h.Count(),
+			h.Instance(),
+		)
+	}
+}
+
 func TestHistory_RestoreKeepsTheNewestThatFit(t *testing.T) {
 	h := NewHistory(3)
 
@@ -849,7 +864,7 @@ func TestHistory_RestoreKeepsTheNewestThatFit(t *testing.T) {
 		restored = append(restored, HistoryEntry{ID: id + 1, Type: EventService})
 	}
 
-	h.Restore(restored, 0)
+	h.Restore(restored, 0, "test")
 
 	if got := entryIDs(h.List(HistoryQuery{})); !slices.Equal(got, []uint64{5, 4, 3}) {
 		t.Fatalf("List() = %v, want the newest three", got)
@@ -869,7 +884,7 @@ func TestHistory_SinceAcrossRestoredJump(t *testing.T) {
 		{ID: 2, Type: EventService},
 		{ID: 3, Type: EventService},
 		{ID: 50, Type: EventService},
-	}, 0)
+	}, 0, "test")
 	h.Append(HistoryEntry{Type: EventService})
 
 	entries, ok := h.Since(1)
@@ -1092,7 +1107,7 @@ func TestRestoreIndexesGaps(t *testing.T) {
 	h.Restore([]HistoryEntry{
 		{ID: 4, Kind: KindChange, Type: EventService, ResourceID: "svc1"},
 		{ID: 5, Kind: KindGap},
-	}, 0)
+	}, 0, "test")
 
 	got := historyIDs(h.List(HistoryQuery{ResourceID: "svc1"}))
 	if !slices.Equal(got, []uint64{5, 4}) {
@@ -1124,7 +1139,11 @@ func TestGapEndsNoEarlierThanTheChangesBeforeIt(t *testing.T) {
 
 func TestRestoreContinuesPastIDsTheRingDoesNotHold(t *testing.T) {
 	h := NewHistory(10)
-	h.Restore([]HistoryEntry{{ID: 5, Kind: KindChange, Type: EventService, ResourceID: "svc1"}}, 9)
+	h.Restore(
+		[]HistoryEntry{{ID: 5, Kind: KindChange, Type: EventService, ResourceID: "svc1"}},
+		9,
+		"test",
+	)
 
 	if entries, complete := h.Since(9); len(entries) != 0 || !complete {
 		t.Fatalf("Since(9) = %v, %t; want caught up", entries, complete)
@@ -1136,7 +1155,7 @@ func TestRestoreContinuesPastIDsTheRingDoesNotHold(t *testing.T) {
 	}
 
 	empty := NewHistory(10)
-	empty.Restore(nil, 9)
+	empty.Restore(nil, 9, "test")
 
 	if _, ok := empty.Oldest(); ok {
 		t.Error("an empty ring reports an oldest entry")

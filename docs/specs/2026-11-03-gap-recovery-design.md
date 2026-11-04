@@ -26,6 +26,11 @@ every type) with a short timeout. Coverage opens only after the hook. A stream a
 when a sync first succeeds, or a store that fails at that moment, records the gap later, with no
 recovery: anything past-dated would then sort above changes already watched.
 
+**A lost stream is a gap too.** The hook runs again at the sync that follows a reconnect, and the
+gap starts at this process's own last heartbeat; heartbeats stop as soon as the stream ends. The
+service stacks are retaken at each gap, after its sync, for the next one, so a service created and
+then removed between two gaps is recovered without its stack.
+
 **The bounds.** Recovery takes the events after `from` plus the watcher's replay margin, which the
 previous process may already have recorded by the daemon's clock, and before the stream's start,
 which the stream replays itself. Both bounds compare the daemon's own timestamps, so neither side

@@ -120,8 +120,13 @@ grants:
 // index the World reads them back from is the cache's own.
 type discardedAnnotations struct{}
 
-func (discardedAnnotations) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-func (discardedAnnotations) DeleteAnnotation(context.Context, uint64) error        { return nil }
+func (s discardedAnnotations) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return s, nil
+}
+
+func (discardedAnnotations) Put(context.Context, cache.Annotation) error { return nil }
+func (discardedAnnotations) Delete(context.Context, uint64) error        { return nil }
+func (discardedAnnotations) Release()                                    {}
 
 // World is one seeded cluster served over every transport Cetacean speaks.
 type World struct {

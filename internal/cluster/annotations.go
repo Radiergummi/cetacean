@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
@@ -129,6 +130,9 @@ func (s *Annotations) Create(
 		in.Timestamp = time.Now()
 	}
 
+	// One zone, so the bytes a read returns survive a restart under one ETag.
+	in.Timestamp, in.Until = in.Timestamp.UTC(), in.Until.UTC()
+
 	resources, err := s.resolve(in.Resources, nil, c.CanRead)
 	if err != nil {
 		return cache.Annotation{}, err
@@ -182,6 +186,11 @@ func (s *Annotations) Update(
 			return cache.Annotation{}, ErrAnnotationDenied
 		}
 
+		// RFC 7396: a patch that changes nothing leaves the target as it is.
+		if sameAnnotation(current, next) {
+			return s.cache.WithRemovals(current), nil
+		}
+
 		updated, err := s.cache.UpdateAnnotation(ctx, id, func(a *cache.Annotation) error {
 			if a.Version != current.Version {
 				return errAnnotationMoved
@@ -202,6 +211,12 @@ func (s *Annotations) Update(
 
 		return s.cache.WithRemovals(updated), err
 	}
+}
+
+// sameAnnotation reports whether b says what a does, in every field an edit sets.
+func sameAnnotation(a, b cache.Annotation) bool {
+	return a.Timestamp.Equal(b.Timestamp) && a.Until.Equal(b.Until) && a.Text == b.Text &&
+		slices.Equal(a.Tags, b.Tags) && slices.Equal(a.Resources, b.Resources)
 }
 
 // Delete removes an annotation the caller may edit.
@@ -271,10 +286,10 @@ func (s *Annotations) patched(
 	next := current
 
 	if patch.Timestamp != nil {
-		next.Timestamp = *patch.Timestamp
+		next.Timestamp = patch.Timestamp.UTC()
 	}
 	if patch.Until != nil {
-		next.Until = *patch.Until
+		next.Until = patch.Until.UTC()
 	}
 	if patch.Text != nil {
 		next.Text = *patch.Text
@@ -387,6 +402,12 @@ func validateAnnotation(a cache.Annotation) error {
 		return invalidAnnotation("text", "at most %d characters", MaxAnnotationText)
 	}
 
+	if !annotationTimeInRange(a.Timestamp) {
+		return invalidAnnotation("timestamp", "must fall in the years 1970 to 2199")
+	}
+	if !a.Until.IsZero() && !annotationTimeInRange(a.Until) {
+		return invalidAnnotation("until", "must fall in the years 1970 to 2199")
+	}
 	if !a.Until.IsZero() && !a.Until.After(a.Timestamp) {
 		return invalidAnnotation("until", "must be after the start")
 	}
@@ -405,6 +426,12 @@ func validateAnnotation(a cache.Annotation) error {
 	}
 
 	return nil
+}
+
+// annotationTimeInRange bounds a time well inside what the store's Unix
+// nanoseconds represent, which wrap outside the years 1678 to 2262.
+func annotationTimeInRange(t time.Time) bool {
+	return !t.Before(time.Unix(0, 0)) && t.Year() < 2200
 }
 
 // MayRead needs every named resource readable: with any, one readable name
@@ -439,9 +466,13 @@ func allAdmit(resources []cache.AnnotationResource, can func(string) bool) bool 
 	return true
 }
 
+// authored compares subject and provider, but a deployment's OAuth server
+// issues tokens only to whom its one upstream provider signed in, so a token's
+// provider stands for that provider: one person is one author on both.
 func authored(ctx context.Context, a cache.Annotation) bool {
 	actor, ok := cache.ActorFromContext(ctx)
 
-	return ok && a.Actor != nil &&
-		a.Actor.Subject == actor.Subject && a.Actor.Provider == actor.Provider
+	return ok && a.Actor != nil && a.Actor.Subject == actor.Subject &&
+		(a.Actor.Provider == actor.Provider ||
+			a.Actor.Provider == auth.ProviderToken || actor.Provider == auth.ProviderToken)
 }

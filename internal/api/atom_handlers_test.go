@@ -200,7 +200,7 @@ func TestHistoryToEntries(t *testing.T) {
 			Summary:    "scaled from 3 to 5 replicas",
 		}}
 
-		result := historyToFeedEntries(req, entries)
+		result := historyToFeedEntries(req, "i", entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
@@ -237,7 +237,7 @@ func TestHistoryToEntries(t *testing.T) {
 			Name:       "worker-1",
 		}}
 
-		result := historyToFeedEntries(req, entries)
+		result := historyToFeedEntries(req, "i", entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
@@ -262,7 +262,7 @@ func TestHistoryToEntries(t *testing.T) {
 			Name:       "worker-1",
 		}}
 
-		result := historyToFeedEntries(req, entries)
+		result := historyToFeedEntries(req, "i", entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
@@ -284,7 +284,7 @@ func TestHistoryToEntries(t *testing.T) {
 			Summary:    "removed network",
 		}}
 
-		result := historyToFeedEntries(req, entries)
+		result := historyToFeedEntries(req, "i", entries)
 
 		if len(result) != 1 {
 			t.Fatalf("got %d entries, want 1", len(result))
@@ -340,7 +340,7 @@ func testFeedData(
 	beforeID uint64,
 	limit int,
 ) feedData {
-	return historyFeedData(r, "test", entries, beforeID, limit)
+	return historyFeedData(r, "i", "test", entries, beforeID, limit)
 }
 
 // testSearchFeedData is the search feed's own shape, which differs from every
@@ -351,7 +351,7 @@ func testSearchFeedData(
 	beforeID uint64,
 	limit int,
 ) feedData {
-	return searchFeedData(r, "test", entries, beforeID, limit)
+	return searchFeedData(r, "i", "test", entries, beforeID, limit)
 }
 
 func TestPaginationLinks(t *testing.T) {
@@ -707,12 +707,12 @@ func TestFeedEntryIDsIdentifyTheEvent(t *testing.T) {
 		{ID: 8, Type: "service", Name: "api", Action: "updated"},
 	}
 
-	got := historyToFeedEntries(req, entries)
+	got := historyToFeedEntries(req, "i", entries)
 	if len(got) != 2 {
 		t.Fatalf("got %d entries, want 2", len(got))
 	}
 
-	if got[0].ID != "urn:cetacean:history:7" || got[1].ID != "urn:cetacean:history:8" {
+	if got[0].ID != "urn:cetacean:history:i:7" || got[1].ID != "urn:cetacean:history:i:8" {
 		t.Errorf("ids = %q, %q; want them to name the event", got[0].ID, got[1].ID)
 	}
 
@@ -720,6 +720,12 @@ func TestFeedEntryIDsIdentifyTheEvent(t *testing.T) {
 	// is what stops a reader collapsing them into one.
 	if got[0].ID == got[1].ID {
 		t.Error("two events share an id")
+	}
+
+	// The same sequence ID from another database, or from a restart that kept
+	// nothing, is another event.
+	if other := historyToFeedEntries(req, "j", entries[:1]); other[0].ID == got[0].ID {
+		t.Errorf("two instances share the id %q", got[0].ID)
 	}
 }
 
@@ -774,7 +780,7 @@ func TestTheFeedIDChangesWithTheHost(t *testing.T) {
 	}
 
 	entries := []cache.HistoryEntry{{ID: 1}}
-	if historyToFeedEntries(first, entries)[0].ID != historyToFeedEntries(second, entries)[0].ID {
+	if historyToFeedEntries(first, "i", entries)[0].ID != historyToFeedEntries(second, "i", entries)[0].ID {
 		t.Error("an entry id changed with the host too")
 	}
 }

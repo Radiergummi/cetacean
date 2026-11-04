@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -93,12 +92,12 @@ func (s *Server) annotationTools() []toolDef {
 				),
 				mcplib.WithString("at",
 					mcplib.Description(
-						"RFC 3339 timestamp of the moment, or the start of the range. Defaults to now.",
+						"RFC 3339 timestamp of the moment, or the start of the range, in the years 1970 to 2199. Defaults to now.",
 					),
 				),
 				mcplib.WithString("until",
 					mcplib.Description(
-						"RFC 3339 timestamp ending a range, after `at`. Omit for a moment.",
+						"RFC 3339 timestamp ending a range, after `at`, in the years 1970 to 2199. Omit for a moment.",
 					),
 				),
 				annotationTagsArg("At most 10 tags"),
@@ -132,12 +131,12 @@ func (s *Server) annotationTools() []toolDef {
 				mcplib.WithString(
 					"at",
 					mcplib.Description(
-						"RFC 3339 timestamp of the moment, or the start of the range.",
+						"RFC 3339 timestamp of the moment, or the start of the range, in the years 1970 to 2199.",
 					),
 				),
 				mcplib.WithString("until",
 					mcplib.Description(
-						"RFC 3339 timestamp ending the range, after `at`. An empty string makes the annotation a moment.",
+						"RFC 3339 timestamp ending the range, after `at`, in the years 1970 to 2199. An empty string makes the annotation a moment.",
 					),
 				),
 				annotationTagsArg(
@@ -218,12 +217,12 @@ func (s *Server) toolAddAnnotation(
 		return "", err
 	}
 
-	at, err := annotationTime("at", req.GetString("at", ""))
+	at, err := annotationTime(req.GetArguments(), "at")
 	if err != nil {
 		return "", err
 	}
 
-	until, err := annotationTime("until", req.GetString("until", ""))
+	until, err := annotationTime(req.GetArguments(), "until")
 	if err != nil {
 		return "", err
 	}
@@ -318,24 +317,20 @@ func annotationPatchOf(arguments map[string]any) (cluster.AnnotationPatch, error
 		patch.Text = &text
 	}
 
-	if raw, ok := arguments["at"]; ok {
-		value, _ := raw.(string)
-		if value == "" {
-			return patch, errors.New("at: cannot be removed; give the new start")
-		}
-
-		at, err := annotationTime("at", value)
+	if _, ok := arguments["at"]; ok {
+		at, err := annotationTime(arguments, "at")
 		if err != nil {
 			return patch, err
+		}
+		if at.IsZero() {
+			return patch, errors.New("at: cannot be removed; give the new start")
 		}
 
 		patch.Timestamp = &at
 	}
 
-	if raw, ok := arguments["until"]; ok {
-		value, _ := raw.(string)
-
-		until, err := annotationTime("until", value)
+	if _, ok := arguments["until"]; ok {
+		until, err := annotationTime(arguments, "until")
 		if err != nil {
 			return patch, err
 		}
@@ -502,22 +497,6 @@ func annotationTags(raw any) ([]string, error) {
 	return tags, nil
 }
 
-func annotationTime(name, raw string) (time.Time, error) {
-	if raw == "" {
-		return time.Time{}, nil
-	}
-
-	parsed, err := time.Parse(time.RFC3339, strings.ToUpper(raw))
-	if err != nil {
-		return time.Time{}, fmt.Errorf(
-			"%s: must be an RFC 3339 timestamp, such as 2026-09-05T14:02:00Z",
-			name,
-		)
-	}
-
-	return parsed, nil
-}
-
 // annotationCallerFor is who reads an annotation for a subscriber, who has
 // an identity but no request.
 func (s *Server) annotationCallerFor(identity *auth.Identity) cluster.AnnotationCaller {
@@ -538,4 +517,20 @@ func (s *Server) annotationCaller(ctx context.Context) cluster.AnnotationCaller 
 		AnyGrant:         identity == nil || s.acl.HasAnyGrant(identity),
 		WritesEverything: identity == nil || s.acl.CanWriteEverything(identity),
 	}
+}
+
+// annotationTime reads an optional time argument, the zero time when it is
+// absent, null or empty. One of another type is refused rather than dropped.
+func annotationTime(arguments map[string]any, name string) (time.Time, error) {
+	raw := arguments[name]
+	if raw == nil {
+		return time.Time{}, nil
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return time.Time{}, fmt.Errorf("%s: must be an RFC 3339 timestamp string", name)
+	}
+
+	return cluster.ParseTimestamp(name, value)
 }

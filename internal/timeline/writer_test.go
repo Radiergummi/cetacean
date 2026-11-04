@@ -33,6 +33,8 @@ func (f *fakeStore) Restore(context.Context, int) ([]cache.HistoryEntry, uint64,
 	return nil, 0, nil
 }
 
+func (f *fakeStore) Instance() string { return "fake" }
+
 func (f *fakeStore) LastSeen(context.Context) (time.Time, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -80,9 +82,9 @@ func (f *fakeStore) Close() error { return nil }
 
 func (f *fakeStore) Annotations(context.Context) ([]cache.Annotation, error) { return nil, nil }
 
-func (f *fakeStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-
-func (f *fakeStore) DeleteAnnotation(context.Context, uint64) error { return nil }
+func (f *fakeStore) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return nil, errors.New("not stored")
+}
 
 func (f *fakeStore) committed() []uint64 {
 	f.mu.Lock()
@@ -155,7 +157,7 @@ func TestWriter_WritesEachEntryOnce(t *testing.T) {
 func TestWriter_StartsAfterTheRestoredEntries(t *testing.T) {
 	store := &fakeStore{}
 	history := cache.NewHistory(10)
-	history.Restore([]cache.HistoryEntry{{ID: 41, Type: cache.EventService}}, 41)
+	history.Restore([]cache.HistoryEntry{{ID: 41, Type: cache.EventService}}, 41, "test")
 
 	w := NewWriter(store, history, 10, noGap)
 	appendN(history, 1)
@@ -229,6 +231,63 @@ func TestWriter_HeartbeatsOnlyOnceCovering(t *testing.T) {
 	if !store.batches[0].SeenAt.IsZero() || store.batches[1].SeenAt.IsZero() {
 		t.Fatalf("SeenAt = %v, %v; want zero before coverage and set after",
 			store.batches[0].SeenAt, store.batches[1].SeenAt)
+	}
+}
+
+func TestWriter_QuietTicksHeartbeatSparsely(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &fakeStore{}
+		history := cache.NewHistory(10)
+		w := NewWriter(store, history, 10, noGap)
+
+		ready := make(chan struct{})
+		close(ready)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		stopped := make(chan struct{})
+
+		go func() {
+			defer close(stopped)
+			w.Run(ctx, ready)
+		}()
+
+		start := time.Now()
+		time.Sleep(25*time.Second + time.Second/2)
+		appendN(history, 1)
+		time.Sleep(time.Second)
+		synctest.Wait()
+		cancel()
+		<-stopped
+
+		var beats []time.Duration
+		for _, b := range store.batches {
+			if b.SeenAt.IsZero() {
+				t.Fatalf("a batch without a heartbeat: %+v", b)
+			}
+
+			beats = append(beats, b.SeenAt.Sub(start).Round(time.Second))
+		}
+
+		// Quiet at 1s and 16s, a change at 26s, and the stop.
+		want := []time.Duration{time.Second, 16 * time.Second, 26 * time.Second, 27 * time.Second}
+		if !slices.Equal(beats, want) {
+			t.Fatalf("heartbeats at %v, want %v", beats, want)
+		}
+	})
+}
+
+func TestWriter_HeartbeatsWithAnAnnotation(t *testing.T) {
+	store := &fakeStore{}
+	history := cache.NewHistory(10)
+	w := NewWriter(store, history, 10, noGap)
+	w.covering = true
+
+	w.flush(context.Background())
+	history.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create"})
+	w.flush(context.Background())
+
+	if len(store.batches) != 2 || store.batches[1].SeenAt.IsZero() {
+		t.Fatalf("batches = %+v, want the annotation's tick to heartbeat", store.batches)
 	}
 }
 
@@ -390,5 +449,95 @@ func TestWriter_RecordsAGapItCouldNotAtTheStreamLater(t *testing.T) {
 
 	if len(recorded) != 1 || !recorded[0][1].IsZero() {
 		t.Fatalf("recorded %v, want one gap, recovering nothing", recorded)
+	}
+}
+
+func TestWriter_HeartbeatsOnlyWhileLive(t *testing.T) {
+	store := &fakeStore{}
+	w := NewWriter(store, cache.NewHistory(10), 10, noGap)
+
+	live := false
+	w.SetLive(func() bool { return live })
+
+	w.openCoverage(context.Background())
+	w.flush(context.Background())
+	live = true
+	w.flush(context.Background())
+
+	if !store.batches[0].SeenAt.IsZero() || store.batches[1].SeenAt.IsZero() {
+		t.Fatalf("SeenAt = %v, %v; want zero while not live and set after",
+			store.batches[0].SeenAt, store.batches[1].SeenAt)
+	}
+}
+
+// A reconnect's gap runs from this process's own last heartbeat, recovering up
+// to the new stream, and the watching after it opens a coverage row of its own.
+func TestWriter_RecordsTheGapOfAReconnect(t *testing.T) {
+	store := &fakeStore{previous: time.Now().Add(-time.Hour)}
+
+	var recorded [][2]time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10,
+		func(_ context.Context, from, since time.Time) {
+			recorded = append(recorded, [2]time.Time{from, since})
+		})
+
+	live := true
+	w.SetLive(func() bool { return live })
+
+	w.RecordGap(context.Background(), time.Now())
+	w.openCoverage(context.Background())
+	w.flush(context.Background())
+	heartbeat := store.batches[0].SeenAt
+
+	live = false
+	w.flush(context.Background())
+
+	streamSince := time.Now()
+	w.RecordGap(context.Background(), streamSince)
+	live = true
+	w.flush(context.Background())
+
+	if len(recorded) != 2 || !recorded[1][0].Equal(heartbeat) ||
+		!recorded[1][1].Equal(streamSince) {
+		t.Fatalf("recorded %v, want a second gap from %v up to %v",
+			recorded, heartbeat, streamSince)
+	}
+
+	heartbeats := 0
+	for _, batch := range store.batches {
+		if !batch.SeenAt.IsZero() {
+			heartbeats++
+		}
+	}
+
+	if heartbeats != 1 {
+		t.Fatalf("%d heartbeats, want none after the first until coverage reopens", heartbeats)
+	}
+
+	w.openCoverage(context.Background())
+	if n := store.coverages(); n != 2 || len(recorded) != 2 {
+		t.Fatalf("coverage opened %d times, %d gaps; want 2 and still 2", n, len(recorded))
+	}
+}
+
+// With coverage failing to reopen, a later gap starts where the last one ended,
+// rather than recording and recovering the same stretch again.
+func TestWriter_ADoubleGapDoesNotOverlap(t *testing.T) {
+	previous := time.Now().Add(-time.Hour)
+	store := &fakeStore{previous: previous, coverageErr: errors.New("disk full")}
+
+	var recorded [][2]time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10,
+		func(_ context.Context, from, since time.Time) {
+			recorded = append(recorded, [2]time.Time{from, since})
+		})
+
+	w.RecordGap(context.Background(), time.Now())
+	w.openCoverage(context.Background())
+	end := time.Now()
+	w.RecordGap(context.Background(), time.Now())
+
+	if len(recorded) != 2 || recorded[1][0].Equal(previous) || recorded[1][0].After(end) {
+		t.Fatalf("recorded %v, want the second gap to start after the first, by %v", recorded, end)
 	}
 }

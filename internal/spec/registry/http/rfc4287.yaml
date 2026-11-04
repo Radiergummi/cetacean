@@ -249,8 +249,11 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc4287#section-4.2.6
     mutants:
       - file: internal/api/feed_handlers.go
-        replace: "\t\t\tID:          fmt.Sprintf(\"urn:cetacean:history:%d\", e.ID),"
+        replace: "\t\t\tID:          feedEntryID(cache.KindChange, instance, e.ID),"
         with: "\t\t\tID:          \"urn:cetacean:history\","
+      - file: internal/api/feed_handlers.go
+        replace: "\treturn fmt.Sprintf(\"urn:cetacean:%s:%s:%d\", kind, instance, id)"
+        with: "\treturn fmt.Sprintf(\"urn:cetacean:%s:%d\", kind, id)"
 
   - id: a-link-has-an-href
     level: MUST
