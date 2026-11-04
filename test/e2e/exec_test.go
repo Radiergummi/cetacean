@@ -197,9 +197,10 @@ func (term *terminal) send(t *testing.T, input string) {
 }
 
 type execSession struct {
-	State  string `json:"state"`
-	Reason string `json:"reason"`
-	Exit   *struct {
+	State   string `json:"state"`
+	Reason  string `json:"reason"`
+	EndedBy string `json:"endedBy"`
+	Exit    *struct {
 		Code    int    `json:"code"`
 		Outcome string `json:"outcome"`
 	} `json:"exit"`
@@ -356,7 +357,22 @@ func TestExecSessionsAreListedAndEnded(t *testing.T) {
 		t.Fatalf("DELETE %s: status = %d, want 204", term.session, resp.StatusCode)
 	}
 
-	if s := awaitSessionEnded(t, proc, term.session); s.Reason != "terminated_by" {
-		t.Errorf("session reason = %q, want terminated_by", s.Reason)
+	s := awaitSessionEnded(t, proc, term.session)
+	if s.Reason != "terminated_by" || s.EndedBy != opsPersona.user {
+		t.Errorf("session ended with reason %q by %q, want terminated_by by %q",
+			s.Reason, s.EndedBy, opsPersona.user)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+
+	for {
+		if _, _, err := term.conn.Read(ctx); err != nil {
+			if ctx.Err() != nil {
+				t.Errorf("the terminal stayed open after DELETE %s", term.session)
+			}
+
+			break
+		}
 	}
 }

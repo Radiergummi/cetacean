@@ -829,9 +829,17 @@ func createReadSweepNote(t *testing.T, proc *sut.Process, ids baselineIDs) readS
 	note.id = body.Annotation.ID
 
 	t.Cleanup(func() {
-		annotationRequestAs(
+		removed := annotationRequestAs(
 			t, proc, opsPersona, http.MethodDelete, note.path(), "", nil,
 		)
+		if removed.status != http.StatusNoContent {
+			t.Errorf(
+				"cleanup: DELETE %s: status = %d: %s",
+				note.path(),
+				removed.status,
+				removed.body,
+			)
+		}
 	})
 
 	return note
@@ -857,10 +865,7 @@ func annotationRequestAs(
 	}
 
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Auth-User", persona.user)
-	if persona.groups != "" {
-		req.Header.Set("X-Auth-Groups", persona.groups)
-	}
+	applyPersona(req, persona)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -871,70 +876,40 @@ func annotationRequestAs(
 // noteHiddenFrom names the personas that may not read a readSweepNote.
 var noteHiddenFrom = map[string]bool{"anonymous": true, "oncall": true}
 
-// driveAnnotationList checks GET /annotations narrowed to the note's tag:
-// anonymous is refused by requireAnyGrant, oncall is served without the note,
-// and every persona reading both its resources is served it.
-func driveAnnotationList(t *testing.T, proc *sut.Process, ids baselineIDs) {
-	note := createReadSweepNote(t, proc, ids)
-	path := "/annotations?tag=" + note.tag
+// driveAnnotationCollection checks a collection narrowed to the note's tag,
+// the list or the tag counts: anonymous is refused by requireAnyGrant, oncall
+// is served it without the note, and every persona reading both its resources
+// is served the note.
+func driveAnnotationCollection(pathFn func(tag string) string) readDriveFunc {
+	return func(t *testing.T, proc *sut.Process, ids baselineIDs) {
+		note := createReadSweepNote(t, proc, ids)
+		path := pathFn(note.tag)
 
-	for _, p := range readPersonas {
-		t.Run(p.name, func(t *testing.T) {
-			resp := readAs(t, proc, p, path, "")
+		for _, p := range readPersonas {
+			t.Run(p.name, func(t *testing.T) {
+				resp := readAs(t, proc, p, path, "")
 
-			if p.name == "anonymous" {
-				assertForbiddenWithCode(t, resp, path, p.name, "ACL001")
-				return
-			}
+				if p.name == "anonymous" {
+					assertForbiddenWithCode(t, resp, path, p.name, "ACL001")
+					return
+				}
 
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
-			}
+				if resp.StatusCode != http.StatusOK {
+					body, _ := io.ReadAll(resp.Body)
+					resp.Body.Close()
+					t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+				}
 
-			want := 1
-			if noteHiddenFrom[p.name] {
-				want = 0
-			}
+				want := 1
+				if noteHiddenFrom[p.name] {
+					want = 0
+				}
 
-			if got := decodeCollection(t, resp, path, p.name).Total; got != want {
-				t.Errorf("%s sees %d annotations tagged %s, want %d", p.name, got, note.tag, want)
-			}
-		})
-	}
-}
-
-// driveAnnotationTags checks GET /annotations/tags: the same boundary as the
-// list, as a count, which must not reveal a note its reader cannot see.
-func driveAnnotationTags(t *testing.T, proc *sut.Process, ids baselineIDs) {
-	note := createReadSweepNote(t, proc, ids)
-	path := "/annotations/tags?q=" + note.tag
-
-	for _, p := range readPersonas {
-		t.Run(p.name, func(t *testing.T) {
-			resp := readAs(t, proc, p, path, "")
-
-			if p.name == "anonymous" {
-				assertForbiddenWithCode(t, resp, path, p.name, "ACL001")
-				return
-			}
-
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
-			}
-
-			want := 1
-			if noteHiddenFrom[p.name] {
-				want = 0
-			}
-
-			if got := decodeCollection(t, resp, path, p.name).Total; got != want {
-				t.Errorf("%s sees %d tags matching %s, want %d", p.name, got, note.tag, want)
-			}
-		})
+				if got := decodeCollection(t, resp, path, p.name).Total; got != want {
+					t.Errorf("GET %s as %s: %d items, want %d", path, p.name, got, want)
+				}
+			})
+		}
 	}
 }
 
@@ -1111,8 +1086,12 @@ var drivenReadRoutes = map[string]readDriveFunc{
 	),
 
 	// Annotations, against a note this lane writes as ops.
-	"GET /annotations":      driveAnnotationList,
-	"GET /annotations/tags": driveAnnotationTags,
+	"GET /annotations": driveAnnotationCollection(
+		func(tag string) string { return "/annotations?tag=" + tag },
+	),
+	"GET /annotations/tags": driveAnnotationCollection(
+		func(tag string) string { return "/annotations/tags?q=" + tag },
+	),
 	"GET /annotations/{id}": driveAnnotationDetail,
 
 	// Cluster-wide endpoints gated by requireAnyGrant.
@@ -1190,14 +1169,18 @@ var excusedReadRoutes = map[string]string{
 		"answers only the subject that opened it, whatever the policy; internal/api's " +
 		"secret_entry_test.go drives that ownership check",
 
-	// Exec routes are registered only with exec.enabled, which this lane leaves
-	// off: compose.dev-auth.yaml's policy grants no exec permission.
+	// Exec routes are registered only with exec.enabled, which this lane leaves off.
 	"GET /exec": "registered only with exec.enabled, which this lane's SUT leaves off; " +
-		"driven by TestExecSessionsAreListedAndEnded in exec_test.go",
+		"driven as the owner by TestExecSessionsAreListedAndEnded in exec_test.go, and for " +
+		"other identities by TestOthersSeeSessionsOnlyWithExecOnTheTarget in internal/api",
 	"GET /exec/{sid}": "registered only with exec.enabled, which this lane's SUT leaves off; " +
-		"driven by every case in exec_test.go, which polls the session it opened",
+		"driven as the owner by every case in exec_test.go, which polls the session it " +
+		"opened, and for other identities by TestOthersSeeSessionsOnlyWithExecOnTheTarget " +
+		"in internal/api",
 	"GET /tasks/{id}/exec": "registered only with exec.enabled, which this lane's SUT leaves " +
-		"off; driven by TestExecSessionsAreListedAndEnded in exec_test.go",
+		"off; driven as the owner by TestExecSessionsAreListedAndEnded in exec_test.go; " +
+		"other identities only through GET /exec's TestOthersSeeSessionsOnlyWithExecOnTheTarget " +
+		"in internal/api, which shares its visibility rule",
 
 	// Genuinely out of scope for a request/response sweep.
 	"GET /events": "SSE-only ACL filtering (aclMatchWrap) needs a streaming client to observe, not a " +

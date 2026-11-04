@@ -1352,24 +1352,37 @@ func driveAnnotationTools(t *testing.T, _ *harness.Env, proc *sut.Process, ids b
 
 	t.Run("oncall", func(t *testing.T) {
 		oncall := readPersonaByName("oncall")
-		visible := listToolNames(t, proc, oncall)
 
 		own := addAnnotationAs(t, proc, oncall, resources)
-		assertVisibleAndCallable(t, proc, oncall, visible, "delete_annotation", map[string]any{
-			"id": own,
+		assertToolSucceeds(t, proc, oncall, "update_annotation", map[string]any{
+			"id": own, "text": "mcp sweep, edited",
 		})
+		assertToolSucceeds(t, proc, oncall, "delete_annotation", map[string]any{"id": own})
 	})
 
 	t.Run("ops", func(t *testing.T) {
-		visible := listToolNames(t, proc, opsPersona)
-
-		assertVisibleAndCallable(t, proc, opsPersona, visible, "update_annotation", map[string]any{
+		assertToolSucceeds(t, proc, opsPersona, "update_annotation", map[string]any{
 			"id": opsNote, "text": "mcp sweep, edited",
 		})
-		assertVisibleAndCallable(t, proc, opsPersona, visible, "delete_annotation", map[string]any{
-			"id": opsNote,
-		})
+		assertToolSucceeds(t, proc, opsPersona, "delete_annotation", map[string]any{"id": opsNote})
 	})
+}
+
+// assertToolSucceeds calls name as persona and fails on any error, in-band or not.
+func assertToolSucceeds(
+	t *testing.T,
+	proc *sut.Process,
+	persona readPersona,
+	name string,
+	args map[string]any,
+) {
+	t.Helper()
+
+	outcome := callToolRaw(t, proc, persona, name, args)
+	if outcome.rpcError != "" || outcome.result.IsError {
+		t.Errorf("%s: %q failed: rpcError=%q content=%v",
+			persona.name, name, outcome.rpcError, outcome.result.Content)
+	}
 }
 
 // addAnnotationAs creates a note as persona, which must succeed, and returns
@@ -1409,7 +1422,15 @@ func addAnnotationAs(
 
 	id := result.StructuredContent.ID
 	t.Cleanup(func() {
-		callToolRaw(t, proc, opsPersona, "delete_annotation", map[string]any{"id": id})
+		outcome := callToolRaw(t, proc, opsPersona, "delete_annotation", map[string]any{"id": id})
+		failed := outcome.rpcError != "" || outcome.result.IsError
+		for _, c := range outcome.result.Content {
+			failed = failed && !strings.Contains(c.Text, fmt.Sprintf("annotation %d not found", id))
+		}
+		if failed {
+			t.Errorf("cleanup: delete_annotation %d: rpcError=%q content=%v",
+				id, outcome.rpcError, outcome.result.Content)
+		}
 	})
 
 	return id

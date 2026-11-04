@@ -438,11 +438,14 @@ var excusedWriteRoutes = map[string]string{
 	// Annotations change nothing in Docker, so there is no engine state to
 	// verify against, and they skip the tier the level-0 replay asserts.
 	"POST /annotations": "untiered and engine-free; driven by " +
-		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below, and per persona by the MCP sweep",
+		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below without auth, and per " +
+		"identity by TestCreateAnnotationRefusals in internal/api",
 	"PATCH /annotations/{id}": "untiered and engine-free; driven by " +
-		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below, and per persona by the MCP sweep",
+		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below without auth, and per " +
+		"identity by TestPatchAnnotationMergesAndHonoursIfMatch in internal/api",
 	"DELETE /annotations/{id}": "untiered and engine-free; driven by " +
-		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below, and per persona by the MCP sweep",
+		"TestAnnotationWritesSkipTheTierAndHonourIfMatch below without auth, and per " +
+		"identity by TestDeleteAnnotation in internal/api",
 
 	// Exec routes are registered only with exec.enabled, which this lane's
 	// SUT leaves off.
