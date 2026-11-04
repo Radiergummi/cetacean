@@ -2,7 +2,8 @@ import { toLocalInput } from "./annotationFields";
 import AnnotationForm from "./AnnotationForm";
 import { ApiError } from "@/api/client";
 import type { Annotation, AnnotationScope, HistoryEntry, NewAnnotation } from "@/api/types";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createTestQueryClient, createWrapper } from "@/test/mocks";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,14 +25,18 @@ vi.mock("@/api/client", async (importOriginal) => {
       updateAnnotation: (id: number, patch: Record<string, unknown>, etag?: string) =>
         updateAnnotation(id, patch, etag),
       annotation: (id: number) => readAnnotation(id),
+      annotationTagsPage: () => Promise.resolve({ items: [{ tag: "deploy", count: 3 }] }),
     },
   };
 });
 
 const service = { type: "service", id: "svc1", name: "web" } as const;
+
+let wrapper = createWrapper(createTestQueryClient(), { withRouter: false });
 const start = Date.UTC(2026, 10, 2, 13, 0) / 1000;
 
 beforeEach(() => {
+  wrapper = createWrapper(createTestQueryClient(), { withRouter: false });
   createAnnotation.mockReset();
   createAnnotation.mockResolvedValue({} as HistoryEntry);
   updateAnnotation.mockReset();
@@ -48,6 +53,7 @@ function show(scopes: Parameters<typeof AnnotationForm>[0]["scopes"] = [service]
       initial={{ from: start }}
       onDone={onDone}
     />,
+    { wrapper },
   );
 
   return onDone;
@@ -152,7 +158,7 @@ describe("AnnotationForm", () => {
 
   it("keeps the chosen scope when the choices around it change", async () => {
     const user = userEvent.setup();
-    const client = new QueryClient();
+    const client = createTestQueryClient();
     const form = (scopes: AnnotationScope[]) => (
       <QueryClientProvider client={client}>
         <AnnotationForm
@@ -181,6 +187,24 @@ describe("AnnotationForm", () => {
     expect(screen.getByText("#deploy")).toBeInTheDocument();
     expect(screen.getByLabelText("Tags")).toHaveValue("");
   });
+
+  it("suggests the tags in use and adds one when it is picked", async () => {
+    show();
+
+    const input = screen.getByLabelText("Tags");
+
+    await waitFor(() =>
+      expect(document.getElementById(input.getAttribute("list") ?? "")).toContainHTML(
+        'value="deploy"',
+      ),
+    );
+
+    // A pick from the list arrives as a change that inserted no text.
+    fireEvent.change(input, { target: { value: "deploy" } });
+
+    expect(screen.getByText("#deploy")).toBeInTheDocument();
+    expect(input).toHaveValue("");
+  });
 });
 
 describe("AnnotationForm, editing", () => {
@@ -201,6 +225,7 @@ describe("AnnotationForm, editing", () => {
         editing={{ note, etag: '"3"' }}
         onDone={onDone}
       />,
+      { wrapper },
     );
 
     return onDone;
@@ -302,6 +327,7 @@ describe("AnnotationForm, editing", () => {
         }}
         onDone={vi.fn<() => void>()}
       />,
+      { wrapper },
     );
 
     await user.type(screen.getByLabelText("Note"), "!");
@@ -337,6 +363,7 @@ describe("AnnotationForm, editing", () => {
         editing={{ note: ranged, etag: '"3"' }}
         onDone={vi.fn<() => void>()}
       />,
+      { wrapper },
     );
 
     const moved = toLocalInput(Date.UTC(2026, 10, 2, 12, 5) / 1000);

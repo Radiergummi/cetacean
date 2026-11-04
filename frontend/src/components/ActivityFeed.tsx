@@ -4,6 +4,8 @@ import { formatDateTime, formatDuration } from "../lib/format";
 import { resourcePath } from "../lib/searchConstants";
 import { describeAnnotationTime, describeGap, seconds } from "../lib/timeline";
 import AnnotationMenu from "./annotations/AnnotationMenu";
+import NoteText from "./annotations/NoteText";
+import ShowOnChart from "./annotations/ShowOnChart";
 import { isClusterWide } from "./metrics/chartMarkers";
 import ResourceName from "./ResourceName";
 import TimeAgo from "./TimeAgo";
@@ -239,7 +241,9 @@ function AnnotationCard({
         className="min-w-0 flex-1 rounded-r-md border border-l-2 border-l-annotation px-2.5 py-1.5 text-sm data-cluster-wide:border-l-annotation-cluster"
       >
         <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</p>
+          <p className="min-w-0 flex-1 break-words whitespace-pre-wrap">
+            <NoteText text={text ?? ""} />
+          </p>
           <AnnotationMenu
             id={id}
             onActiveChange={onActiveChange}
@@ -302,6 +306,11 @@ function AnnotationCard({
               edited
             </span>
           )}
+
+          <ShowOnChart
+            note={entry}
+            className="ms-auto inline-flex items-center gap-1 hover:text-foreground hover:underline"
+          />
         </div>
       </div>
     </TimelineRow>

@@ -345,6 +345,10 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 
 	var ring []HistoryEntry
 	if len(q.Kinds) != 1 || q.Kinds[0] != KindAnnotation {
+		if q.Type == EventStack && q.ResourceID != "" {
+			q.Members = c.stackMembers(q.ResourceID)
+		}
+
 		ring = c.history.List(q)
 	}
 
@@ -364,6 +368,19 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 	}
 
 	return merged
+}
+
+// stackMembers lists the services in stack and those the ring saw leave it.
+func (c *Cache) stackMembers(stack string) []string {
+	ids := c.history.removedFromStack(stack)
+
+	c.mu.RLock()
+	if s, ok := c.stacks[stack]; ok {
+		ids = append(ids, s.Services...)
+	}
+	c.mu.RUnlock()
+
+	return ids
 }
 
 // annotationEntries returns the newest q.Limit annotations q admits below

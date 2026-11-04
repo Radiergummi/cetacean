@@ -3,6 +3,8 @@ import type { AnnotationFilters } from "../api/types";
 import ActivityFeed from "../components/ActivityFeed";
 import AddAnnotationButton from "../components/annotations/AddAnnotationButton";
 import { annotationEntry } from "../components/annotations/annotationFields";
+import TagFilter from "../components/annotations/TagFilter";
+import { useTagFilterParams } from "../components/annotations/useTagFilterParams";
 import FetchError from "../components/FetchError";
 import ListToolbar from "../components/ListToolbar";
 import PageHeader from "../components/PageHeader";
@@ -13,7 +15,7 @@ import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useSearchParam } from "../hooks/useSearchParam";
 import { apiPath } from "../lib/basePath";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { Download, Tags, X } from "lucide-react";
+import { Download, Tags } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -34,9 +36,8 @@ export default function Annotations() {
   const [search, debouncedSearch, setSearch] = useSearchParam("q");
   const { identity } = useAuth();
 
-  const tags = params.getAll("tag");
+  const { tags, matchAny } = useTagFilterParams();
   const authors = params.getAll("author");
-  const matchAny = params.get("matchAny") === "true";
   const mine = identity !== null && authors.length === 1 && authors[0] === identity.subject;
 
   const filters: AnnotationFilters = {
@@ -69,15 +70,6 @@ export default function Annotations() {
     change(next);
     setParams(next, { replace: true });
   };
-
-  const removeTag = (tag: string) =>
-    update((next) => {
-      next.delete("tag", tag);
-
-      if (next.getAll("tag").length < 2) {
-        next.delete("matchAny");
-      }
-    });
 
   const filtered = tags.length > 0 || authors.length > 0 || debouncedSearch !== "";
   const csvHref = apiPath(api.annotationsPath(filters).replace("/annotations", "/annotations.csv"));
@@ -126,41 +118,7 @@ export default function Annotations() {
           />
         )}
 
-        {tags.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-sm"
-          >
-            #{tag}
-            <button
-              type="button"
-              aria-label={`Remove the ${tag} filter`}
-              onClick={() => removeTag(tag)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          </span>
-        ))}
-
-        {tags.length > 1 && (
-          <SegmentedControl
-            segments={[
-              { value: "all", label: "Every tag" },
-              { value: "any", label: "Any tag" },
-            ]}
-            value={matchAny ? "any" : "all"}
-            onChange={(value) =>
-              update((next) => {
-                next.delete("matchAny");
-
-                if (value === "any") {
-                  next.set("matchAny", "true");
-                }
-              })
-            }
-          />
-        )}
+        <TagFilter />
       </div>
 
       <ListToolbar

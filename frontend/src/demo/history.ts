@@ -200,8 +200,8 @@ export function demoHistory(dataset: Dataset, now: number): HistoryEntry[] {
 /**
  * Applies `/history`'s filters: a gap matches every resource filter and tag,
  * and every window it overlaps. An annotation overlaps windows the same way
- * and matches what it names, or the stack of the service named by
- * `resourceId`; a cluster-wide one matches every resource filter.
+ * and matches what it names, the stack of the service named by `resourceId`,
+ * or a service of the stack it names; a cluster-wide one matches every filter.
  */
 export function filterHistory(
   entries: HistoryEntry[],
@@ -253,7 +253,9 @@ export function filterHistory(
         (named.length === 0 ||
           named.some(({ type: namedType, id }) =>
             resourceId
-              ? id === resourceId || (namedType === "stack" && id === stack)
+              ? id === resourceId ||
+                (namedType === "stack" && id === stack) ||
+                (type === "stack" && namedType === "service" && stackOf(id) === resourceId)
               : !type || namedType === type,
           ))
       );
@@ -263,9 +265,13 @@ export function filterHistory(
       return false;
     }
 
+    // A stack's history holds its services' changes too.
+    const member =
+      type === "stack" && entry.type === "service" && stackOf(entry.resourceId) === resourceId;
+
     return (
-      (!type || entry.type === type) &&
-      (!resourceId || entry.resourceId === resourceId) &&
+      (!type || entry.type === type || member) &&
+      (!resourceId || entry.resourceId === resourceId || member) &&
       start > sinceTime &&
       start <= untilTime
     );

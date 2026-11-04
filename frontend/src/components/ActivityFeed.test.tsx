@@ -1,6 +1,7 @@
 import type { HistoryEntry } from "../api/types";
 import { formatDateTime } from "../lib/format";
 import { describeAnnotationTime } from "../lib/timeline";
+import { createTestQueryClient, createWrapper } from "../test/mocks";
 import ActivityFeed from "./ActivityFeed";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -20,6 +21,9 @@ vi.mock("@/api/client", async (importOriginal) => {
           allowedMethods: new Set(["GET", "PATCH"]),
           etag: '"1"',
         }),
+      annotationTagsPage: () => Promise.resolve({ items: [] }),
+      monitoringStatus: () =>
+        Promise.resolve({ prometheusConfigured: true, prometheusReachable: true, queryable: true }),
     },
   };
 });
@@ -387,12 +391,11 @@ describe("ActivityFeed runs", () => {
     });
     const show = (entry: HistoryEntry, hideType?: boolean) =>
       render(
-        <MemoryRouter>
-          <ActivityFeed
-            entries={[entry]}
-            hideType={hideType}
-          />
-        </MemoryRouter>,
+        <ActivityFeed
+          entries={[entry]}
+          hideType={hideType}
+        />,
+        { wrapper: createWrapper(createTestQueryClient()) },
       );
 
     it("renders an annotation as a note card", () => {
@@ -410,6 +413,27 @@ describe("ActivityFeed runs", () => {
         screen.getByText(describeAnnotationTime(new Date(timestamp).getTime() / 1000)),
       ).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "web" })).toHaveAttribute("href", "/services/svc1");
+    });
+
+    it("links the URLs in a note and opens its resource's chart around it", async () => {
+      show(
+        note({
+          text: "See https://runbooks.example/db.",
+          resources: [{ type: "service", id: "svc1", name: "web" }],
+        }),
+      );
+
+      expect(screen.getByRole("link", { name: "https://runbooks.example/db" })).toHaveAttribute(
+        "target",
+        "_blank",
+      );
+
+      const at = new Date(timestamp).getTime() / 1000;
+
+      expect(await screen.findByRole("link", { name: "Show on chart" })).toHaveAttribute(
+        "href",
+        `/services/svc1?from=${at - 1800}&to=${at + 1800}`,
+      );
     });
 
     it("names a stacked resource as the change rows do", () => {
@@ -452,12 +476,10 @@ describe("ActivityFeed runs", () => {
 
     it("holds its rows while a note's menu is open", async () => {
       const user = userEvent.setup();
-      const feed = (entries: HistoryEntry[]) => (
-        <MemoryRouter>
-          <ActivityFeed entries={entries} />
-        </MemoryRouter>
-      );
-      const { rerender } = render(feed([note({})]));
+      const feed = (entries: HistoryEntry[]) => <ActivityFeed entries={entries} />;
+      const { rerender } = render(feed([note({})]), {
+        wrapper: createWrapper(createTestQueryClient()),
+      });
 
       await user.click(screen.getByRole("button", { name: "Note actions" }));
       await screen.findByRole("menu");
@@ -474,12 +496,10 @@ describe("ActivityFeed runs", () => {
 
     it("keeps holding when the menu hands over to a dialog", async () => {
       const user = userEvent.setup();
-      const feed = (entries: HistoryEntry[]) => (
-        <MemoryRouter>
-          <ActivityFeed entries={entries} />
-        </MemoryRouter>
-      );
-      const { rerender } = render(feed([note({})]));
+      const feed = (entries: HistoryEntry[]) => <ActivityFeed entries={entries} />;
+      const { rerender } = render(feed([note({})]), {
+        wrapper: createWrapper(createTestQueryClient()),
+      });
 
       await user.click(screen.getByRole("button", { name: "Note actions" }));
       await user.click(await screen.findByRole("menuitem", { name: "Edit" }));

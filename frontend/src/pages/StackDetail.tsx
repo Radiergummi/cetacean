@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { StackResponse } from "../api/types";
+import ActivitySection from "../components/ActivitySection";
 import CollapsibleSection from "../components/CollapsibleSection";
 import ComposeSection, { composeQueryKey } from "../components/ComposeSection";
 import DetailError from "../components/DetailError";
@@ -33,13 +34,12 @@ export default function StackDetail() {
 
   const {
     data: response,
+    history,
     error,
     retry,
     allowedMethods,
-  } = useDetailResource<StackResponse>(name, api.stack, "/stacks", {
-    history: false,
-    extraQueryKeys,
-  });
+    annotatable,
+  } = useDetailResource<StackResponse>(name, api.stack, "/stacks", { extraQueryKeys });
   const stack = response?.stack;
   const links = response?.links;
 
@@ -253,6 +253,12 @@ export default function StackDetail() {
           />
         </CollapsibleSection>
       )}
+
+      <ActivitySection
+        entries={history}
+        hideType
+        annotate={annotatable ? { type: "stack", id: stack.name, name: stack.name } : undefined}
+      />
 
       <ComposeSection
         name={stack.name}

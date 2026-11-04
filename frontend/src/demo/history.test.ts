@@ -94,6 +94,32 @@ describe("filterHistory on annotations", () => {
     expect(texts({ type: "service", resourceId: webshop?.ID ?? "" })).toContain("Webshop freeze");
   });
 
+  it("keeps a note on a service for that service's stack", () => {
+    writeAnnotation(
+      {
+        text: "Checkout hotfix",
+        tags: [],
+        timestamp: "2026-10-31T12:00:00Z",
+        resources: [{ type: "service", id: webshop?.ID ?? "" }],
+      },
+      (_, id) => id,
+    );
+
+    expect(texts({ type: "stack", resourceId: "webshop" })).toContain("Checkout hotfix");
+    expect(texts({ type: "stack", resourceId: "monitoring" })).not.toContain("Checkout hotfix");
+  });
+
+  it("keeps the changes to a stack's services for the stack", () => {
+    const changes = filterHistory(
+      demoHistory(dataset, now),
+      new URLSearchParams({ type: "stack", resourceId: "webshop", kind: "change" }),
+      stackOf,
+    );
+
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every(({ resourceId }) => stackOf(resourceId) === "webshop")).toBe(true);
+  });
+
   it("keeps the notes carrying a tag, the gaps, and no change", () => {
     const kept = filterHistory(
       demoHistory(dataset, now),
