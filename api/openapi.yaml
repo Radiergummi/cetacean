@@ -5761,10 +5761,12 @@ paths:
       tags: [History]
       summary: Resource change history
       description: |
-        Returns the timeline from the in-memory ring buffer (10,000 entries), newest
-        first. An item of kind `change` is a change Docker reported; one of kind `gap`
-        is a window nobody watched, from `timestamp` to `until`, whose changes are
-        missing. Clients must ignore kinds they don't know. Can be filtered by kind,
+        Returns the timeline, newest first, from a history that keeps the newest
+        `storage.history_entries` entries. An item of kind `change` is a change Docker
+        reported; one of kind `gap` is a window nobody watched, from `timestamp` to
+        `until`, whose changes are missing unless recovered: changes Docker still
+        buffered follow the gap marked `recovered`, and its `recoveredFrom` says from
+        when they are complete, tasks aside. Clients must ignore kinds they don't know. Can be filtered by kind,
         resource type, a specific resource, a search and a time window. A gap names no
         resource, so only `kind` and the time window narrow it. A full page carries a
         `Link` with `rel="next"`, which pages by cursor and keeps every filter.

@@ -19,7 +19,8 @@ info:
 
     - The sixteen resource channels and `/events` write an opaque history
       cursor, valid only against the process that wrote it. Reconnecting with
-      one replays the events in between from a 10,000-entry ring. A cursor the
+      one replays the events in between from the history, which keeps the
+      newest `storage.history_entries` entries. A cursor the
       ring no longer holds, one from before a restart, or one from before a
       `sync` the client did not receive gets a `sync` message instead, and so
       does every detail channel, always — they are ineligible
@@ -743,8 +744,10 @@ components:
         Recorded when Cetacean starts watching again, after a restart or a lost
         connection to Docker, from the last heartbeat before it stopped watching
         to the moment it was watching again, and only with `storage.timeline`
-        on. Changes made during a gap produced no event and are in no history
-        entry. A gap names no resource, so it is
+        on. Changes made during a gap produced no event. Those Docker still
+        buffered are recorded as history entries marked `recovered`, just below
+        the gap, and are not sent as events either: read them, and the gap's
+        `recoveredFrom`, from `/history`. A gap names no resource, so it is
         sent only on `/events`, where it passes every `?types=` filter, and is
         replayed there like any change. Its `@id` is its history entry.
       payload:
