@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -716,6 +717,103 @@ func TestRun_StartsWatchingOnceBeforeTheStream(t *testing.T) {
 			mc.eventsSince,
 		)
 	}
+}
+
+// A lost stream is a gap like a restart: nothing counts as watched until the
+// reconnect's sync, and the hook runs again there, before the new stream.
+func TestRun_StartsWatchingAgainAfterAReconnect(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		mc := newMockClient()
+		w := NewWatcher(mc, cache.New(nil), "")
+
+		var calls []time.Time
+		w.SetOnWatching(func(since time.Time) {
+			if w.Watching() {
+				t.Error("watching before the hook returned")
+			}
+
+			calls = append(calls, since)
+		})
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			w.Run(ctx)
+		}()
+
+		synctest.Wait()
+		if len(calls) != 1 || !w.Watching() {
+			t.Fatalf("hook ran %d times, watching = %v; want once, watching",
+				len(calls), w.Watching())
+		}
+
+		mc.errCh <- errors.New("stream ended")
+		synctest.Wait()
+		if w.Watching() {
+			t.Fatal("still watching after the stream ended")
+		}
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		mc.mu.Lock()
+		streams := slices.Clone(mc.eventsSince)
+		mc.mu.Unlock()
+
+		if len(calls) != 2 || len(streams) != 2 || !calls[1].Equal(streams[1]) || !w.Watching() {
+			t.Fatalf(
+				"hook ran at %v, streams since %v, watching = %v; want again at the new stream's since",
+				calls,
+				streams,
+				w.Watching(),
+			)
+		}
+
+		cancel()
+		<-done
+	})
+}
+
+// Recovered changes take the IDs after the first sync with times from the gap,
+// so a refresh applied beside the hook would sort between them.
+func TestRefreshWaitsForTheWatchingHook(t *testing.T) {
+	mc := newMockClient()
+	w := NewWatcher(mc, cache.New(nil), "")
+
+	entered, release := make(chan struct{}), make(chan struct{})
+	w.SetOnWatching(func(time.Time) {
+		close(entered)
+		<-release
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		w.Run(ctx)
+	}()
+
+	<-entered
+
+	refreshed := make(chan error, 1)
+	go func() {
+		refreshed <- w.Refresh(ctx, string(events.ServiceEventType), "s1")
+	}()
+
+	select {
+	case <-refreshed:
+		t.Fatal("a refresh applied while the hook ran")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+	if err := <-refreshed; err != nil {
+		t.Fatalf("Refresh = %v", err)
+	}
+
+	cancel()
+	<-done
 }
 
 // A retried sync runs on the event loop beside a cache that already serves

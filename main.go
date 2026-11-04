@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -19,6 +20,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -341,7 +343,8 @@ func run(s settings) error {
 		)
 	}
 	if timelineStore != nil {
-		// Taken before the first sync, which forgets the services removed in the gap.
+		// Taken before the first sync, which forgets the services removed in the
+		// gap, and extended at each gap for the next.
 		serviceStacks := stateCache.ServiceStacks()
 
 		timelineWriter = timeline.NewWriter(
@@ -361,6 +364,7 @@ func run(s settings) error {
 				}
 
 				stateCache.RecordRecoveredGap(from, recovered)
+				maps.Copy(serviceStacks, stateCache.ServiceStacks())
 			},
 		)
 	}
@@ -376,15 +380,20 @@ func run(s settings) error {
 	// watcher's last snapshot lands before the Docker client closes.
 	watcherStopped := make(chan struct{})
 	// The gap is recorded before the stream records anything, and coverage
-	// opens only after it.
+	// opens only after it; a lost stream, or a shutdown, ends the heartbeats.
 	watching := make(chan struct{})
+	var watchingOnce sync.Once
 	watcher.SetOnWatching(func(streamSince time.Time) {
-		defer close(watching)
+		defer watchingOnce.Do(func() { close(watching) })
 
 		if timelineWriter != nil {
 			timelineWriter.RecordGap(ctx, streamSince)
 		}
 	})
+
+	if timelineWriter != nil {
+		timelineWriter.SetLive(func() bool { return ctx.Err() == nil && watcher.Watching() })
+	}
 
 	go func() {
 		defer close(watcherStopped)

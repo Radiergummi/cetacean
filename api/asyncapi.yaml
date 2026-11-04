@@ -740,9 +740,9 @@ components:
       title: Gap
       summary: Nobody watched the cluster from `timestamp` to `until`.
       description: |
-        Recorded when Cetacean starts watching again after a restart, from the
-        previous process's last heartbeat to the moment this one was ready, and
-        only with `storage.timeline` on. Changes made during a gap produced no
+        Recorded when Cetacean starts watching again, after a restart or a lost
+        connection to Docker, from the last heartbeat before it stopped watching
+        to the moment it was watching again, and only with `storage.timeline` on. Changes made during a gap produced no
         event and are in no history entry. A gap names no resource, so it is
         sent only on `/events`, where it passes every `?types=` filter, and is
         replayed there like any change. Its `@id` is its history entry.

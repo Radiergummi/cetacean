@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
@@ -27,12 +28,21 @@ type Writer struct {
 
 	retained bool
 
-	// Each logs its first failure and its recovery once.
-	writeFailing, coverageFailing bool
+	// live reports whether the cluster is being watched; nil always is.
+	live func() bool
 
-	// gapChecked and covering are set once the gap is recorded and coverage
-	// opened; until then a ready writer retries at every tick.
-	ready, gapChecked, covering bool
+	// Each logs its first failure and its recovery once.
+	writeFailing bool
+
+	ready bool
+
+	// mu holds what RecordGap, called beside Run, shares with it. gapChecked
+	// and covering are set once the gap is recorded and coverage opened; until
+	// then a ready writer retries at every tick. seenAt is this process's last
+	// committed heartbeat, or the opening of its coverage.
+	mu                                    sync.Mutex
+	coverageFailing, gapChecked, covering bool
+	seenAt                                time.Time
 }
 
 // NewWriter starts from the ring's count, which Restore set.
@@ -49,6 +59,13 @@ func NewWriter(
 		recordGap:   recordGap,
 		lastWritten: history.Count(),
 	}
+}
+
+// SetLive sets what reports whether the cluster is being watched: heartbeats
+// stop while it is false, so the gap RecordGap records next starts there.
+// Call before Run.
+func (w *Writer) SetLive(live func() bool) {
+	w.live = live
 }
 
 // Run writes until ctx ends, then commits what remains. Coverage opens once
@@ -70,7 +87,11 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 			w.ready = true
 			w.openCoverage(ctx)
 		case <-ticker.C:
-			if w.ready && !w.covering {
+			w.mu.Lock()
+			reopen := w.ready && !w.covering
+			w.mu.Unlock()
+
+			if reopen {
 				w.openCoverage(ctx)
 			}
 
@@ -82,15 +103,26 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 	}
 }
 
-// RecordGap records the gap since the previous stretch of watching, before
-// the stream starting at streamSince records anything, so what it recovers sits
-// below every change watched. Run's ready must close after it; when the store
-// fails here, openCoverage records the gap then, recovering nothing.
+// RecordGap records the gap since the last stretch of watching, before the
+// stream starting at streamSince records anything, so what it recovers sits below
+// every change watched. Coverage opens after it: Run's ready, then a tick. When
+// the store fails here, openCoverage records the gap then, recovering nothing.
 func (w *Writer) RecordGap(ctx context.Context, streamSince time.Time) {
-	previous, ok, err := w.store.LastSeen(ctx)
-	if err != nil {
-		w.coverageFailed(ctx, err)
-		return
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.covering = false
+	w.recordGapLocked(ctx, streamSince)
+}
+
+func (w *Writer) recordGapLocked(ctx context.Context, streamSince time.Time) {
+	previous, ok := w.seenAt, !w.seenAt.IsZero()
+	if !ok {
+		var err error
+		if previous, ok, err = w.store.LastSeen(ctx); err != nil {
+			w.coverageFailed(ctx, err)
+			return
+		}
 	}
 
 	w.gapChecked = true
@@ -104,21 +136,26 @@ func (w *Writer) RecordGap(ctx context.Context, streamSince time.Time) {
 // RecordGap could not, then opens this one. The gap is recorded as soon as it
 // is known, so a coverage row slow to write does not stretch it over watched time.
 func (w *Writer) openCoverage(ctx context.Context) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if !w.gapChecked {
-		w.RecordGap(ctx, time.Time{})
+		w.recordGapLocked(ctx, time.Time{})
 
 		if !w.gapChecked {
 			return
 		}
 	}
 
-	if err := w.store.OpenCoverage(ctx, time.Now()); err != nil {
+	now := time.Now()
+	if err := w.store.OpenCoverage(ctx, now); err != nil {
 		w.coverageFailed(ctx, err)
 		return
 	}
 
 	w.coverageFailing = false
 	w.covering = true
+	w.seenAt = now
 }
 
 func (w *Writer) coverageFailed(ctx context.Context, err error) {
@@ -150,9 +187,11 @@ func (w *Writer) flush(ctx context.Context) {
 		batch.Last = last
 	}
 
-	if w.covering {
+	w.mu.Lock()
+	if w.covering && (w.live == nil || w.live()) {
 		batch.SeenAt = time.Now()
 	}
+	w.mu.Unlock()
 
 	// A tick that inserted nothing cannot have pushed anything out; the first
 	// retains regardless, since the configured size may have shrunk.
@@ -183,4 +222,10 @@ func (w *Writer) flush(ctx context.Context) {
 	w.writeFailing = false
 	w.retained = true
 	w.lastWritten = last
+
+	w.mu.Lock()
+	if w.covering && batch.SeenAt.After(w.seenAt) {
+		w.seenAt = batch.SeenAt
+	}
+	w.mu.Unlock()
 }

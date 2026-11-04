@@ -394,3 +394,71 @@ func TestWriter_RecordsAGapItCouldNotAtTheStreamLater(t *testing.T) {
 		t.Fatalf("recorded %v, want one gap, recovering nothing", recorded)
 	}
 }
+
+func TestWriter_HeartbeatsOnlyWhileLive(t *testing.T) {
+	store := &fakeStore{}
+	w := NewWriter(store, cache.NewHistory(10), 10, noGap)
+
+	live := false
+	w.SetLive(func() bool { return live })
+
+	w.openCoverage(context.Background())
+	w.flush(context.Background())
+	live = true
+	w.flush(context.Background())
+
+	if !store.batches[0].SeenAt.IsZero() || store.batches[1].SeenAt.IsZero() {
+		t.Fatalf("SeenAt = %v, %v; want zero while not live and set after",
+			store.batches[0].SeenAt, store.batches[1].SeenAt)
+	}
+}
+
+// A reconnect's gap runs from this process's own last heartbeat, recovering up
+// to the new stream, and the watching after it opens a coverage row of its own.
+func TestWriter_RecordsTheGapOfAReconnect(t *testing.T) {
+	store := &fakeStore{previous: time.Now().Add(-time.Hour)}
+
+	var recorded [][2]time.Time
+	w := NewWriter(store, cache.NewHistory(10), 10,
+		func(_ context.Context, from, since time.Time) {
+			recorded = append(recorded, [2]time.Time{from, since})
+		})
+
+	live := true
+	w.SetLive(func() bool { return live })
+
+	w.RecordGap(context.Background(), time.Now())
+	w.openCoverage(context.Background())
+	w.flush(context.Background())
+	heartbeat := store.batches[0].SeenAt
+
+	live = false
+	w.flush(context.Background())
+
+	streamSince := time.Now()
+	w.RecordGap(context.Background(), streamSince)
+	live = true
+	w.flush(context.Background())
+
+	if len(recorded) != 2 || !recorded[1][0].Equal(heartbeat) ||
+		!recorded[1][1].Equal(streamSince) {
+		t.Fatalf("recorded %v, want a second gap from %v up to %v",
+			recorded, heartbeat, streamSince)
+	}
+
+	heartbeats := 0
+	for _, batch := range store.batches {
+		if !batch.SeenAt.IsZero() {
+			heartbeats++
+		}
+	}
+
+	if heartbeats != 1 {
+		t.Fatalf("%d heartbeats, want none after the first until coverage reopens", heartbeats)
+	}
+
+	w.openCoverage(context.Background())
+	if n := store.coverages(); n != 2 || len(recorded) != 2 {
+		t.Fatalf("coverage opened %d times, %d gaps; want 2 and still 2", n, len(recorded))
+	}
+}
