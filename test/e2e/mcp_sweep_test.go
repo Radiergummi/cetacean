@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/volume"
 
+	"github.com/radiergummi/cetacean/internal/mcp"
 	"github.com/radiergummi/cetacean/test/e2e/fixtures"
 	"github.com/radiergummi/cetacean/test/e2e/harness"
 	"github.com/radiergummi/cetacean/test/e2e/sut"
@@ -1316,6 +1317,104 @@ func driveFrontendStackOwnership(t *testing.T, env *harness.Env, proc *sut.Proce
 	})
 }
 
+// ─── annotation tools (untiered, authorized per resource named) ────────
+
+// driveAnnotationTools checks the annotation tools on a note naming shop_web.
+// The tools carry no grant gate, so the boundary is the call alone: ops and
+// oncall hold write on the service and may annotate it and edit what they
+// wrote; viewers, frontend and anonymous are refused all three.
+func driveAnnotationTools(t *testing.T, _ *harness.Env, proc *sut.Process, ids baselineIDs) {
+	resources := []any{map[string]any{"type": "service", "id": ids.serviceID}}
+
+	opsNote := addAnnotationAs(t, proc, opsPersona, resources)
+
+	for _, p := range readPersonas {
+		if p.name == "ops" || p.name == "oncall" {
+			continue
+		}
+
+		t.Run(p.name, func(t *testing.T) {
+			for name, args := range map[string]map[string]any{
+				"add_annotation":    {"text": "mcp sweep", "resources": resources},
+				"update_annotation": {"id": opsNote, "text": "mcp sweep, edited"},
+				"delete_annotation": {"id": opsNote},
+			} {
+				if outcome := callToolRaw(t, proc, p, name, args); !outcome.denied() {
+					t.Errorf(
+						"%s: %q was not refused: httpStatus=%d rpcError=%q isError=%v content=%v",
+						p.name, name, outcome.httpStatus, outcome.rpcError,
+						outcome.result.IsError, outcome.result.Content,
+					)
+				}
+			}
+		})
+	}
+
+	t.Run("oncall", func(t *testing.T) {
+		oncall := readPersonaByName("oncall")
+		visible := listToolNames(t, proc, oncall)
+
+		own := addAnnotationAs(t, proc, oncall, resources)
+		assertVisibleAndCallable(t, proc, oncall, visible, "delete_annotation", map[string]any{
+			"id": own,
+		})
+	})
+
+	t.Run("ops", func(t *testing.T) {
+		visible := listToolNames(t, proc, opsPersona)
+
+		assertVisibleAndCallable(t, proc, opsPersona, visible, "update_annotation", map[string]any{
+			"id": opsNote, "text": "mcp sweep, edited",
+		})
+		assertVisibleAndCallable(t, proc, opsPersona, visible, "delete_annotation", map[string]any{
+			"id": opsNote,
+		})
+	})
+}
+
+// addAnnotationAs creates a note as persona, which must succeed, and returns
+// its id. Cleanup removes it as ops, so a failed case leaves nothing behind.
+func addAnnotationAs(
+	t *testing.T,
+	proc *sut.Process,
+	persona readPersona,
+	resources []any,
+) uint64 {
+	t.Helper()
+
+	if !listToolNames(t, proc, persona)["add_annotation"] {
+		t.Fatalf("%s: add_annotation not in tools/list", persona.name)
+	}
+
+	env, status := mcpAs(t, proc, persona, "tools/call", map[string]any{
+		"name":      "add_annotation",
+		"arguments": map[string]any{"text": "mcp sweep", "resources": resources},
+	})
+	if status != http.StatusOK || env.Error != nil {
+		t.Fatalf("add_annotation as %s: status=%d err=%v", persona.name, status, env.Error)
+	}
+
+	var result struct {
+		IsError           bool `json:"isError"`
+		StructuredContent struct {
+			ID uint64 `json:"id"`
+		} `json:"structuredContent"`
+	}
+	if err := json.Unmarshal(env.Result, &result); err != nil {
+		t.Fatalf("decode add_annotation as %s: %v", persona.name, err)
+	}
+	if result.IsError || result.StructuredContent.ID == 0 {
+		t.Fatalf("add_annotation as %s was refused: %s", persona.name, env.Result)
+	}
+
+	id := result.StructuredContent.ID
+	t.Cleanup(func() {
+		callToolRaw(t, proc, opsPersona, "delete_annotation", map[string]any{"id": id})
+	})
+
+	return id
+}
+
 // readPersonaByName is a small lookup over readPersonas, used where a
 // generic loop is less readable than naming the persona a check is actually
 // about (oncall's and frontend's genuine positive cases).
@@ -1390,6 +1489,7 @@ var drivenMCPTools = map[string]bool{
 	"get_recommendations": true,
 	"get_events":          true,
 	"get_cluster_status":  true,
+	"get_published_ports": true,
 	"watch":               true,
 
 	// tier 1/2/3 -- driven via driveServiceTools, driveUpdateNode(Labels),
@@ -1412,6 +1512,11 @@ var drivenMCPTools = map[string]bool{
 	"remove_secret":          true,
 	"remove_network":         true,
 	"remove_volume":          true,
+
+	// Untiered: an annotation changes nothing in Docker. driveAnnotationTools.
+	"add_annotation":    true,
+	"update_annotation": true,
+	"delete_annotation": true,
 }
 
 // TestMCPSweepEnforcesTheACLBoundary runs the whole sweep against a real
@@ -1443,6 +1548,7 @@ func TestMCPSweepEnforcesTheACLBoundary(t *testing.T) {
 		{"get_recommendations", func(baselineIDs) map[string]any { return map[string]any{} }, false},
 		{"get_events", func(baselineIDs) map[string]any { return map[string]any{"limit": 10} }, false},
 		{"get_cluster_status", func(baselineIDs) map[string]any { return map[string]any{} }, false},
+		{"get_published_ports", func(baselineIDs) map[string]any { return map[string]any{} }, false},
 	} {
 		t.Run(spec.name, spec.testFunc(env, proc, ids))
 	}
@@ -1460,6 +1566,7 @@ func TestMCPSweepEnforcesTheACLBoundary(t *testing.T) {
 	t.Run("remove_network", func(t *testing.T) { driveRemoveNetwork(t, env, proc, ids) })
 	t.Run("remove_volume", func(t *testing.T) { driveRemoveVolume(t, env, proc, ids) })
 	t.Run("service_and_task_tools", func(t *testing.T) { driveServiceTools(t, env, proc, ids) })
+	t.Run("annotation_tools", func(t *testing.T) { driveAnnotationTools(t, env, proc, ids) })
 	t.Run(
 		"frontend_stack_ownership",
 		func(t *testing.T) { driveFrontendStackOwnership(t, env, proc, ids) },
@@ -1478,22 +1585,24 @@ func (spec readToolSpec) testFunc(
 	}
 }
 
-// TestEveryMCPToolIsDrivenOrExcused requires every tool in the catalog to
-// appear in drivenMCPTools. The list is hand-enumerated, so this also fails
-// if the count drifts -- the signal that a tool was added or removed.
+// TestEveryMCPToolIsDrivenOrExcused requires every tool in internal/mcp's
+// catalog to appear in drivenMCPTools, and every entry to name one of them.
 func TestEveryMCPToolIsDrivenOrExcused(t *testing.T) {
-	const wantTotal = 27
+	catalog := mcp.ToolNames()
 
-	if len(drivenMCPTools) != wantTotal {
-		t.Errorf(
-			"drivenMCPTools has %d entries, want %d -- internal/mcp's tool catalog "+
-				"(tools_reads.go + tools_operational.go + tools_configuration.go + "+
-				"tools_impactful.go) changed size; update this file's coverage",
-			len(drivenMCPTools), wantTotal,
-		)
+	for _, name := range catalog {
+		if !drivenMCPTools[name] {
+			t.Errorf("%s is in the MCP catalog but not driven in drivenMCPTools", name)
+		}
 	}
 
-	t.Logf("mcp sweep: %d of %d tools driven, 0 excused", len(drivenMCPTools), wantTotal)
+	for name := range drivenMCPTools {
+		if !slices.Contains(catalog, name) {
+			t.Errorf("drivenMCPTools has a stale entry %q: no such tool in the catalog", name)
+		}
+	}
+
+	t.Logf("mcp sweep: %d of %d tools driven, 0 excused", len(drivenMCPTools), len(catalog))
 }
 
 // runningTaskOf waits for one of the service's tasks to be running and returns

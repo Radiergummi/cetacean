@@ -5,11 +5,25 @@ Docker-in-Docker) and asserts over HTTP, SSE and MCP. It also gives the existing
 [Playwright suite][the-browser-suite] a reproducible cluster to run against. See
 [the design doc][design] for why this exists and how it is put together.
 
-## Not for CI
+## What runs where
 
-This suite never runs in CI. It needs a privileged container, takes minutes, and depends on a
-locally built binary and fixture image — none of which fit a CI budget. Run it locally before
+The lanes never run in CI. They need a privileged container, take minutes, and depend on a
+locally built binary and fixture image — none of which fit a CI budget. Run them locally before
 opening a PR that touches wiring: config loading, auth, TLS, or anything in `main.go`.
+
+The inventory gates are the exception. Each `TestEvery…` test holds a lane's table of driven and
+excused routes, tools or fields against what the router, the MCP catalog or the filter builder
+actually registers, and most need no cluster to do it. `make test-inventory` runs them, and
+`make check` and CI run that target:
+
+```bash
+go test -tags e2e -short -count=1 -run '^TestEvery' ./test/e2e/
+```
+
+`-short` makes `harness.Up` skip, so the two gates that ask a running SUT what it advertises (the
+OAuth endpoints and the MCP notification types) skip there and run in `make test-stack`. A new
+route or tool therefore fails `make check` until a lane drives it or names why it does not; the
+driving itself still only happens locally.
 
 ## Prerequisites
 
@@ -307,7 +321,7 @@ than on every change.
   `golangci-lint fmt --diff ./... | diff /dev/null -`, which fails on any output. Run
   `golangci-lint fmt ./...` before committing.
 - Every file here — and `test/e2e/cmd/e2eenv/main.go` — carries `//go:build e2e`, so `go test ./...`
-  and `make check` never touch it.
+  never touches it. `make check` reaches it only through `make test-inventory`, under `-short`.
 
 ## Seeded Prometheus
 

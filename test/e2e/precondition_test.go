@@ -260,11 +260,25 @@ func preconditionTargets(f preconditionFixture) map[string]precondTarget {
 	return targets
 }
 
+// handlerPreconditionedRoutes evaluate their precondition in the handler, out
+// of contract.PreconditionedRoutes' sight, so preconditionedRoutes adds them.
+var handlerPreconditionedRoutes = []string{
+	"PATCH /annotations/{id}",
+	"DELETE /annotations/{id}",
+}
+
 // excusedPreconditionRoutes carries a reason for every preconditioned route
-// this file does not address at all. It is empty: a stale If-Match is refused
+// this file does not address at all. A stale If-Match on the others is refused
 // before the handler runs, so even a route too destructive to complete can be
 // driven for the contract that matters.
-var excusedPreconditionRoutes = map[string]string{}
+var excusedPreconditionRoutes = map[string]string{
+	"PATCH /annotations/{id}": "evaluated in the handler after the body is decoded, so this " +
+		"lane's probes answer before it; driven by TestAnnotationWritesSkipTheTierAndHonourIfMatch " +
+		"in write_sweep_test.go, and by TestAnnotationWritesHonourIfMatch in internal/api",
+	"DELETE /annotations/{id}": "evaluated in the handler against a note this lane's fixture does " +
+		"not hold; driven by TestAnnotationWritesSkipTheTierAndHonourIfMatch in " +
+		"write_sweep_test.go, and by TestAnnotationWritesHonourIfMatch in internal/api",
+}
 
 // ─── request helpers ────────────────────────────────────────────────────
 
@@ -901,6 +915,25 @@ func preconditionedRoutes(t *testing.T) []contract.Route {
 
 	if len(found) == 0 {
 		t.Fatal("contract.PreconditionedRoutes returned nothing")
+	}
+
+	registered := map[string]contract.Route{}
+	for _, route := range contractRoutes(t) {
+		registered[route.String()] = route
+	}
+
+	for _, key := range handlerPreconditionedRoutes {
+		route, ok := registered[key]
+		if !ok {
+			t.Fatalf(
+				"handlerPreconditionedRoutes names %q, which the router does not register",
+				key,
+			)
+		}
+
+		if !slices.ContainsFunc(found, func(r contract.Route) bool { return r.String() == key }) {
+			found = append(found, route)
+		}
 	}
 
 	return found

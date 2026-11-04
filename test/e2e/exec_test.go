@@ -304,3 +304,59 @@ func TestExecDisconnectTerminatesTheForegroundProcess(t *testing.T) {
 		time.Sleep(250 * time.Millisecond)
 	}
 }
+
+// An attached session is listed cluster-wide and under its task, and ending it
+// over HTTP closes the shell with the caller named as who ended it.
+func TestExecSessionsAreListedAndEnded(t *testing.T) {
+	env := harness.Up(t)
+	env.SwarmInit(t)
+	proc := startExecLane(t, env)
+	taskID, _ := deployShellTarget(t, env, proc, "execend")
+
+	term := openTerminal(t, proc, taskID)
+	term.await(t, `"connected"`)
+
+	for _, path := range []string{"/exec", "/tasks/" + taskID + "/exec"} {
+		var body struct {
+			Items []struct {
+				ID string `json:"id"`
+			} `json:"items"`
+		}
+
+		resp := readAs(t, proc, opsPersona, path, "")
+		err := json.NewDecoder(resp.Body).Decode(&body)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: status %d, decode %v", path, resp.StatusCode, err)
+		}
+
+		listed := false
+		for _, item := range body.Items {
+			listed = listed || "/exec/"+item.ID == term.session
+		}
+		if !listed {
+			t.Errorf("GET %s does not list %s: %+v", path, term.session, body.Items)
+		}
+	}
+
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodDelete, proc.BaseURL+term.session, nil,
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header = execHeaders()
+
+	resp, err := proc.Client().Do(req)
+	if err != nil {
+		t.Fatalf("DELETE %s: %v", term.session, err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE %s: status = %d, want 204", term.session, resp.StatusCode)
+	}
+
+	if s := awaitSessionEnded(t, proc, term.session); s.Reason != "terminated_by" {
+		t.Errorf("session reason = %q, want terminated_by", s.Reason)
+	}
+}

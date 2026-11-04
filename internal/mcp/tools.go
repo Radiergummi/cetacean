@@ -224,6 +224,18 @@ func (s *Server) toolCatalog() []toolDef {
 	)
 }
 
+// ToolNames lists every tool in the catalog, whatever the tier or grant.
+func ToolNames() []string {
+	catalog := (&Server{}).toolCatalog()
+
+	names := make([]string, len(catalog))
+	for i, td := range catalog {
+		names[i] = td.tool.Name
+	}
+
+	return names
+}
+
 // requireWriteClient returns the write client or an error explaining that
 // tools cannot run without one. Wired into every tier 1+ handler so unit
 // tests can omit a write client when exercising read tools.

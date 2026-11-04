@@ -27,7 +27,7 @@ Open `http://localhost:5173`. Vite proxies resource paths to the Go backend, so 
 ## Running checks
 
 ```bash
-make check       # Full suite: lint + type check + format check + Go and frontend tests + spec registry
+make check       # Full suite: lint + type check + format check + Go, e2e-inventory and frontend tests + spec registry
 make test        # Go tests only
 make lint        # golangci-lint + comment cap + actionlint + zizmor + oxlint + Vale
 make fmt         # Auto-format Go + frontend code
@@ -42,7 +42,9 @@ pinned in `.github/workflows/ci.yml`; a newer local release may report findings 
 ### End-to-end tests
 
 `make test-stack` and `make e2e-up` run a local Docker Swarm against the real `./cetacean` binary. Neither
-runs in CI—both need Docker and take minutes—so they aren't part of `make check`. See
+runs in CI—both need Docker and take minutes—so they aren't part of `make check`. The suite's inventory
+gates, which hold each lane's coverage table against the router, need no Docker: `make test-inventory` runs
+them, and `make check` and CI include it. See
 [`test/e2e/README.md`](test/e2e/README.md) for prerequisites, running a single lane, and pointing the
 Playwright suite (`make test-e2e`) at the environment.
 
