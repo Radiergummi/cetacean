@@ -16,8 +16,13 @@ import (
 
 type memoryAnnotationStore struct{}
 
-func (memoryAnnotationStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-func (memoryAnnotationStore) DeleteAnnotation(context.Context, uint64) error        { return nil }
+func (s memoryAnnotationStore) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return s, nil
+}
+
+func (memoryAnnotationStore) Put(context.Context, cache.Annotation) error { return nil }
+func (memoryAnnotationStore) Delete(context.Context, uint64) error        { return nil }
+func (memoryAnnotationStore) Release()                                    {}
 
 // annotationCache holds service "web" in stack "shop" and node "node1".
 func annotationCache(t *testing.T) *cache.Cache {

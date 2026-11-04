@@ -242,7 +242,15 @@ func TestSQLite_SeedsTheSequenceFromAnOlderDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.DeleteAnnotation(ctx, 6); err != nil {
+	write, err := store.BeginAnnotation(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = write.Delete(ctx, 6)
+	write.Release()
+
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -252,6 +260,24 @@ func TestSQLite_SeedsTheSequenceFromAnOlderDatabase(t *testing.T) {
 
 	if store.Instance() == "" {
 		t.Fatal("no instance after the migration")
+	}
+}
+
+func TestSQLite_AnnotationWaitEndsWithItsContext(t *testing.T) {
+	store := openSQLite(t, filepath.Join(t.TempDir(), "cetacean.db"))
+	defer store.Close() //nolint:errcheck // test cleanup
+
+	held, err := store.BeginAnnotation(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	if _, err := store.BeginAnnotation(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("BeginAnnotation while held = %v, want the deadline", err)
 	}
 }
 

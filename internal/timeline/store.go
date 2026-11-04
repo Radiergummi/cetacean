@@ -19,8 +19,8 @@ type Store interface {
 	// Annotations returns every annotation, by ID. Retention never removes one.
 	Annotations(ctx context.Context) ([]cache.Annotation, error)
 
-	// PutAnnotation stores an annotation, replacing the one under its ID, and
-	// DeleteAnnotation removes one; each commits before it returns.
+	// BeginAnnotation holds the store for a write that puts an annotation,
+	// replacing the one under its ID, or deletes one.
 	cache.AnnotationStore
 
 	// LastSeen is when an earlier stretch of watching was last seen; ok=false

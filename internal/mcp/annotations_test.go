@@ -17,8 +17,13 @@ import (
 
 type discardedAnnotations struct{}
 
-func (discardedAnnotations) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-func (discardedAnnotations) DeleteAnnotation(context.Context, uint64) error        { return nil }
+func (s discardedAnnotations) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return s, nil
+}
+
+func (discardedAnnotations) Put(context.Context, cache.Annotation) error { return nil }
+func (discardedAnnotations) Delete(context.Context, uint64) error        { return nil }
+func (discardedAnnotations) Release()                                    {}
 
 // annotationServer serves service "web" and node "worker": alice writes the
 // service, bob only reads it, and neither may read the node.
