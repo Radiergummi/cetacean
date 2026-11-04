@@ -373,10 +373,10 @@ page is served as long as the list is unchanged; otherwise you get the first pag
 ### Changes and gaps
 
 Every item in `/history` has a `kind`. A `change` is a change Docker reported. A `gap` is a window in which nobody
-was watching the cluster, from its `timestamp` to its `until`: Cetacean wasn't running, so whatever changed then is
-missing from the record. Read a gap as unknown, not as quiet. Cetacean records one when it's watching again after a
-restart, starting at the previous process's last heartbeat. Without [`storage.timeline`][storage.timeline] there's
-no such heartbeat, so there are no gaps either.
+was watching the cluster, from its `timestamp` to its `until`: Cetacean wasn't running, or had lost its connection to
+Docker, so whatever changed then is missing from the record. Read a gap as unknown, not as quiet. Cetacean records one
+when it's watching again, after a restart or once it has reconnected, starting at the last heartbeat before it stopped
+watching. Without [`storage.timeline`][storage.timeline] there's no such heartbeat, so there are no gaps either.
 
 ```json
 {

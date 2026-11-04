@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- After a restart, changes Docker still remembers from the gap are recovered into the history, marked `recovered`; the gap's `recoveredFrom` says from when they're complete, tasks aside
+- Changes Docker still remembers from a gap are recovered into the history, marked `recovered`; the gap's `recoveredFrom` says from when they're complete, tasks aside
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
 - Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline there and in `get_events` includes its services' changes and annotations
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The command palette adds an annotation, rotates the swarm's join tokens, unlock key and CA, and enables, disables or removes a plugin, each behind the same permission check and confirmation as the page's button
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
-- After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
+- After a restart or a lost connection to Docker, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
 - The metric charts on service, node and task pages mark each change, naming who made it, and shade the stretches Cetacean wasn't watching
 - `GET /history?tasks=false` leaves a service's task entries out of its timeline
 - The **Tasks** section on service and node pages has its own time range and switches to a timeline: each replica's tasks as bars showing their ID, in their state's color; drag across it to zoom
