@@ -941,13 +941,19 @@ func (rt routes) exec() {
 			permits: permits,
 		}
 	}
+	// Opening checks the level in execDecision instead, which audits the refusal.
+	openExec := tieredChain{
+		gates:   NewChain(attributeWrite),
+		level:   cluster.OpOpenExec.Tier(),
+		permits: h.mayOpenExec,
+	}
 
 	mux.HandleFunc(
 		"GET /tasks/{id}/exec",
 		contentNegotiated(h.HandleTaskExec, feedHandlers{}, spa),
 	)
 	mux.Handle("POST /tasks/{id}/exec",
-		execOp(cluster.OpOpenExec, h.mayOpenExec).ThenFunc(h.HandleCreateExecSession))
+		openExec.ThenFunc(h.HandleCreateExecSession))
 	mux.HandleFunc(
 		"GET /exec",
 		contentNegotiated(h.HandleListExecSessions, feedHandlers{}, spa),

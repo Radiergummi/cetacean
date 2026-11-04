@@ -110,9 +110,22 @@ func (f *File) Write(r Record) error {
 
 		return nil
 	case <-timer.C:
-		return fmt.Errorf("%w: write exceeded %s", ErrUnavailable, f.deadline)
+		return &AbandonedError{Landed: done, deadline: f.deadline}
 	}
 }
+
+// AbandonedError is a write given up at its deadline, which goes on aside and
+// may still land; Landed yields its result once it ends.
+type AbandonedError struct {
+	Landed   <-chan error
+	deadline time.Duration
+}
+
+func (e *AbandonedError) Error() string {
+	return fmt.Sprintf("%s: write exceeded %s", ErrUnavailable, e.deadline)
+}
+
+func (e *AbandonedError) Unwrap() error { return ErrUnavailable }
 
 func (f *File) Close() error {
 	f.mu.Lock()

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,7 @@ type recorder struct {
 	records []audit.Record
 	fail    bool
 	onWrite func(audit.Record)
+	refuse  func(audit.Record) error
 }
 
 func (r *recorder) Write(rec audit.Record) error {
@@ -27,6 +29,11 @@ func (r *recorder) Write(rec audit.Record) error {
 	defer r.mu.Unlock()
 	if r.fail {
 		return audit.ErrUnavailable
+	}
+	if r.refuse != nil {
+		if err := r.refuse(rec); err != nil {
+			return err
+		}
 	}
 	if r.onWrite != nil {
 		r.onWrite(rec)
@@ -153,6 +160,53 @@ func TestManagerFailsClosedOnStartRecord(t *testing.T) {
 	}
 }
 
+func TestManagerPairsAnAbandonedStartThatLands(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		landed error
+		want   []string
+	}{
+		{"landed", nil, []string{"exec.end"}},
+		{"never landed", errors.New("disk full"), nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, rec, _ := newTestManager(t, Limits{})
+			landed := make(chan error, 1)
+			rec.refuse = func(r audit.Record) error {
+				if r.Event == "exec.start" {
+					return &audit.AbandonedError{Landed: landed}
+				}
+				return nil
+			}
+			s, _ := m.Create(alice, "", target, "local")
+			_, _ = m.Attach(s.ID, alice)
+			if err := m.Connected(s.ID); !errors.Is(err, audit.ErrUnavailable) {
+				t.Fatalf("connected = %v, want audit.ErrUnavailable", err)
+			}
+			if events := rec.events(); len(events) != 0 {
+				t.Fatalf("wrote %v before the start landed", events)
+			}
+
+			landed <- tc.landed
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			m.Shutdown(ctx)
+
+			got := rec.events()
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("events after the start ended = %v, want %v", got, tc.want)
+			}
+			if len(got) == 1 {
+				end := rec.records[0]
+				if end.Session != s.ID || end.Reason != "audit_unavailable" ||
+					end.Outcome != string(OutcomeDetached) {
+					t.Errorf("end record = %+v", end)
+				}
+			}
+		})
+	}
+}
+
 func TestManagerStartRecordFailureEndsRunningSessions(t *testing.T) {
 	m, rec, _ := newTestManager(t, Limits{})
 	a, b := connect(t, m, alice), connect(t, m, bob)
@@ -187,7 +241,7 @@ func TestManagerEndRecordFailureEndsRunningSessions(t *testing.T) {
 	_ = m.Connected(b.ID)
 
 	rec.fail = true
-	m.End(a.ID, "disconnected", "")
+	m.End(a.ID, "disconnected", nil)
 	m.Finish(a.ID, Exit{Code: 129, Outcome: OutcomeTerminated})
 
 	if got, _ := m.Get(b.ID); got.Reason != "audit_unavailable" || ctxB.Err() == nil {
@@ -235,10 +289,10 @@ func TestManagerEndUnattachedIsDetached(t *testing.T) {
 	m, _, _ := newTestManager(t, Limits{})
 	s, _ := m.Create(alice, "", target, "local")
 
-	m.End(s.ID, "terminated_by", "bob")
+	m.End(s.ID, "terminated_by", bob)
 
 	got, _ := m.Get(s.ID)
-	if got.State != StateEnded || got.EndedBy != "bob" ||
+	if got.State != StateEnded || got.EndedBy == nil || !got.EndedBy.Is(bob) ||
 		got.Exit == nil || got.Exit.Outcome != OutcomeDetached || got.Exit.Code != -1 {
 		t.Errorf("session = %+v", got)
 	}
@@ -256,8 +310,8 @@ func TestManagerEndCancelsAndFinishRecordsOnce(t *testing.T) {
 	m.Output(s.ID, 7)
 	clk.advance(time.Minute)
 
-	m.End(s.ID, "terminated_by", "bob")
-	m.End(s.ID, "disconnected", "")
+	m.End(s.ID, "terminated_by", bob)
+	m.End(s.ID, "disconnected", nil)
 	if ctx.Err() == nil {
 		t.Fatal("End did not cancel the attach context")
 	}
@@ -265,7 +319,7 @@ func TestManagerEndCancelsAndFinishRecordsOnce(t *testing.T) {
 	got := m.Finish(s.ID, Exit{Code: 129, Outcome: OutcomeTerminated})
 	m.Finish(s.ID, Exit{Code: 0, Outcome: OutcomeExited})
 
-	if got.Reason != "terminated_by" || got.EndedBy != "bob" ||
+	if got.Reason != "terminated_by" || got.EndedBy == nil || !got.EndedBy.Is(bob) ||
 		got.Exit.Outcome != OutcomeTerminated {
 		t.Errorf("first End or first Finish did not win: %+v", got)
 	}
@@ -277,20 +331,23 @@ func TestManagerEndCancelsAndFinishRecordsOnce(t *testing.T) {
 	if end.BytesIn != 5 || end.BytesOut != 7 || end.Duration != "1m0s" || *end.ExitCode != 129 {
 		t.Errorf("end record = %+v", end)
 	}
+	if end.EndedBy == nil || end.EndedBy.Subject != "bob" || end.EndedBy.Provider != "oidc" {
+		t.Errorf("end record endedBy = %+v, want bob from oidc", end.EndedBy)
+	}
 }
 
 func TestManagerFinishRecordsAnExitOverAnEarlierReason(t *testing.T) {
 	m, rec, _ := newTestManager(t, Limits{})
 	s := connect(t, m, alice)
 
-	m.End(s.ID, "terminated_by", "bob")
+	m.End(s.ID, "terminated_by", bob)
 	got := m.Finish(s.ID, Exit{Code: 7, Outcome: OutcomeExited})
 
-	if got.Reason != "exited" || got.EndedBy != "" || got.Exit.Code != 7 {
+	if got.Reason != "exited" || got.EndedBy != nil || got.Exit.Code != 7 {
 		t.Errorf("session = %+v exit %+v, want reason exited and no endedBy", got, got.Exit)
 	}
 	end := rec.records[len(rec.records)-1]
-	if end.Event != "exec.end" || end.Reason != "exited" || end.EndedBy != "" ||
+	if end.Event != "exec.end" || end.Reason != "exited" || end.EndedBy != nil ||
 		end.Outcome != "exited" {
 		t.Errorf("end record = %+v", end)
 	}
@@ -384,7 +441,7 @@ func TestManagerConnectedRefusesWhatCannotStart(t *testing.T) {
 
 	ending, _ := m.Create(alice, "", target, "local")
 	_, _ = m.Attach(ending.ID, alice)
-	m.End(ending.ID, "terminated_by", "bob")
+	m.End(ending.ID, "terminated_by", bob)
 	if err := m.Connected(ending.ID); !errors.Is(err, ErrNotPending) {
 		t.Errorf("ending = %v, want ErrNotPending", err)
 	}
@@ -395,7 +452,7 @@ func TestManagerConnectedRefusesWhatCannotStart(t *testing.T) {
 
 func TestManagerConnectedPairsAStartThatLostARace(t *testing.T) {
 	for name, interrupt := range map[string]func(*Manager, string){
-		"ended":    func(m *Manager, sid string) { m.End(sid, "terminated_by", "bob") },
+		"ended":    func(m *Manager, sid string) { m.End(sid, "terminated_by", bob) },
 		"finished": func(m *Manager, sid string) { m.Abort(sid, "transport_unavailable") },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -461,7 +518,7 @@ func TestManagerConcurrentFinishesKeepTheirReasons(t *testing.T) {
 	for _, s := range sessions {
 		wg.Go(func() {
 			<-start
-			m.End(s.ID, "disconnected", "")
+			m.End(s.ID, "disconnected", nil)
 			m.Finish(s.ID, Exit{Code: 129, Outcome: OutcomeTerminated})
 		})
 	}

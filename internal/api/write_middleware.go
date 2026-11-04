@@ -40,11 +40,14 @@ func (h *Handlers) requireLevel(required config.OperationsLevel) Constructor {
 				return
 			}
 
-			problem.Write(w, r, "OPS001",
-				"this operation requires operations level "+strconv.Itoa(int(required))+
-					", but the caller is at level "+strconv.Itoa(int(h.levelFor(r))))
+			problem.Write(w, r, "OPS001", levelRefusal(required, h.levelFor(r)))
 		})
 	}
+}
+
+func levelRefusal(required, level config.OperationsLevel) string {
+	return "this operation requires operations level " + strconv.Itoa(int(required)) +
+		", but the caller is at level " + strconv.Itoa(int(level))
 }
 
 // attributeWrite records the caller as the author of the write. The transport

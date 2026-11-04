@@ -13,6 +13,7 @@ import { Button, buttonVariants } from "../components/ui/button";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { attribution } from "../lib/activity";
 import { formatDateTime } from "../lib/format";
+import { changesAnnotations } from "../lib/resourceEvents";
 import { resourcePath } from "../lib/searchConstants";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Trash2 } from "lucide-react";
@@ -41,6 +42,7 @@ export default function AnnotationDetail() {
   useDebouncedInvalidation("/events", {
     timelineKeys: [["annotations", "detail", noteId]],
     delay: 1_000,
+    relevant: changesAnnotations,
   });
 
   const breadcrumbs = [
