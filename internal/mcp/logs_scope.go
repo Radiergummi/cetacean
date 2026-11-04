@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/docker/api/types/swarm"
 
+	"github.com/radiergummi/cetacean/internal/cache"
 	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/docker"
 	"github.com/radiergummi/cetacean/internal/logs"
@@ -33,7 +34,7 @@ const (
 )
 
 // filterLogContains narrows lines to those holding sub, case-insensitively; an
-// empty sub keeps everything. ContainsFoldNoAlloc rather than a lowered copy,
+// empty sub keeps everything. ContainsLower rather than a lowered copy,
 // since a cluster-wide grep would copy the whole read. Not ContainsFold, whose
 // segment-prefix matching is what a *name* search means, not a log grep.
 func filterLogContains(lines []logs.LogLine, sub string) []logs.LogLine {
@@ -45,7 +46,7 @@ func filterLogContains(lines []logs.LogLine, sub string) []logs.LogLine {
 	kept := make([]logs.LogLine, 0, len(lines))
 
 	for _, line := range lines {
-		if cluster.ContainsFoldNoAlloc(line.Message, needle) {
+		if cache.ContainsLower(line.Message, needle) {
 			kept = append(kept, line)
 		}
 	}

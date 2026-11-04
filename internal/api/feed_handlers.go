@@ -169,7 +169,7 @@ func (h *Handlers) handleFeedSearch(
 		return
 	}
 
-	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{NameContains: q})
+	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{TitleContains: q})
 	if !ok {
 		return
 	}

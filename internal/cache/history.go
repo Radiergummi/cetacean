@@ -59,11 +59,28 @@ type HistoryEntry struct {
 }
 
 type HistoryQuery struct {
-	Type         EventType
-	ResourceID   string
-	BeforeID     uint64 // keeps the entries below it; zero means unbounded
-	NameContains string // case-insensitive substring match on Name
-	Limit        int
+	Type       EventType
+	ResourceID string
+	BeforeID   uint64 // keeps the entries below it; zero means unbounded
+
+	// TitleContains narrows, ignoring case, to a change whose name holds it or
+	// an annotation whose text does: what heads the row.
+	TitleContains string
+
+	// Search narrows to the entries that mention each of its words, ignoring
+	// case, anywhere a row shows: a change's name, ID prefix, type, action and
+	// actor, or an annotation's text, tags, resources and author. A gap passes.
+	Search string
+	Limit  int
+
+	// TaskName, when set, names a task as its row does, for the text filters
+	// above: a task records its ID as its name. It may take the cache's lock.
+	TaskName func(taskID string) string
+
+	// words is Search folded and split, and ready says the text filters are
+	// folded; a walk prepares them once, and a matcher called alone does.
+	words []string
+	ready bool
 
 	// Types narrows to entries of any of these types, where Type narrows to
 	// exactly one; empty means every type, and both set means the intersection.
@@ -372,6 +389,8 @@ func (e HistoryEntry) end() time.Time {
 }
 
 func (h *History) List(q HistoryQuery) []HistoryEntry {
+	q = q.prepared()
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -448,7 +467,8 @@ func (q HistoryQuery) matches(e HistoryEntry) bool {
 		return false
 	}
 
-	return q.Visible == nil || q.Visible(e)
+	// Visible goes first: the text filters may resolve a task's name.
+	return (q.Visible == nil || q.Visible(e)) && (e.Kind == KindGap || q.matchesText(e))
 }
 
 // wantsKind reports whether q admits entries of kind.
@@ -487,13 +507,92 @@ func (q HistoryQuery) matchesResource(e HistoryEntry) bool {
 		return false
 	}
 
-	if len(q.Types) > 0 && !slices.Contains(q.Types, e.Type) {
-		return false
+	return len(q.Types) == 0 || slices.Contains(q.Types, e.Type)
+}
+
+// matchesText applies TitleContains and Search to a change.
+func (q HistoryQuery) matchesText(e HistoryEntry) bool {
+	if q.TitleContains == "" && q.Search == "" {
+		return true
 	}
 
-	return q.NameContains == "" || strings.Contains(
-		strings.ToLower(e.Name), strings.ToLower(q.NameContains),
-	)
+	if !q.ready {
+		q = q.prepared()
+	}
+
+	name := e.Name
+	if e.Type == EventTask && q.TaskName != nil {
+		name = q.TaskName(e.ResourceID)
+	}
+
+	return ContainsLower(name, q.TitleContains) &&
+		!slices.ContainsFunc(q.words, func(word string) bool {
+			return !nameHas(name, word) && !hasPrefixLower(e.ResourceID, word) &&
+				!ContainsLower(string(e.Type), word) && !ContainsLower(e.Action, word) &&
+				!actorHas(e.Actor, word)
+		})
+}
+
+// prepared folds q's text filters and splits Search into its words.
+func (q HistoryQuery) prepared() HistoryQuery {
+	q.TitleContains = strings.ToLower(q.TitleContains)
+	q.words = strings.Fields(strings.ToLower(q.Search))
+	q.ready = true
+
+	return q
+}
+
+// nameHas reports whether word is in name as stored or as the timeline shows it.
+func nameHas(name, word string) bool {
+	return ContainsLower(name, word) ||
+		strings.Contains(word, "/") && ContainsLower(stackDisplay(name), word)
+}
+
+// actorHas reports whether word is in actor's name or subject.
+func actorHas(actor *Actor, word string) bool {
+	return actor != nil && (ContainsLower(actor.Name, word) || ContainsLower(actor.Subject, word))
+}
+
+// hasPrefixLower reports whether s starts with prefixLower, ignoring ASCII case.
+func hasPrefixLower(s, prefixLower string) bool {
+	return len(prefixLower) <= len(s) && ContainsLower(s[:len(prefixLower)], prefixLower)
+}
+
+// ContainsLower reports whether s contains substrLower (already lowercased),
+// ignoring ASCII case and without allocating.
+func ContainsLower(s, substrLower string) bool {
+	for i := 0; i <= len(s)-len(substrLower); i++ {
+		j := 0
+
+		for j < len(substrLower) {
+			c := s[i+j]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+
+			if c != substrLower[j] {
+				break
+			}
+
+			j++
+		}
+
+		if j == len(substrLower) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// stackDisplay is a name as the dashboard's timeline shows it: split at its
+// first underscore, past the first character, into a stack and the rest.
+func stackDisplay(name string) string {
+	if i := strings.IndexByte(name, '_'); i > 0 {
+		return name[:i] + "/" + name[i+1:]
+	}
+
+	return name
 }
 
 // listByResource answers a query already known to name a resource, taking the

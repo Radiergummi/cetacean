@@ -1,5 +1,6 @@
 import type { Dataset } from "./dataset";
 import type { HistoryEntry, NewAnnotation } from "@/api/types";
+import { splitStackPrefix } from "@/lib/searchConstants";
 
 const minute = 60_000;
 
@@ -213,7 +214,20 @@ export function filterHistory(
   const tags = params.getAll("tag").filter(Boolean);
   const matchAny = params.get("matchAny") === "true";
   const authors = params.getAll("author").filter(Boolean);
-  const search = params.get("search")?.toLowerCase();
+  const words = (params.get("search") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  // Every word somewhere: in a field, or at the start of an ID.
+  const mentions = (fields: (string | undefined)[], ids: string[] = []) =>
+    words.every(
+      (word) =>
+        fields.some((field) => field?.toLowerCase().includes(word)) ||
+        ids.some((id) => id.startsWith(word)),
+    );
+  const actorFields = ({ actor }: HistoryEntry) => [actor?.name, actor?.subject];
+  const stackDisplay = (name: string) => {
+    const { prefix, name: rest } = splitStackPrefix(name);
+
+    return prefix === null ? name : `${prefix}/${rest}`;
+  };
   const stack = resourceId ? stackOf(resourceId) : undefined;
   const kinds = params.getAll("kind").filter(Boolean);
   const carries = (entry: HistoryEntry) => {
@@ -249,7 +263,12 @@ export function filterHistory(
         overlaps &&
         carries(entry) &&
         byAuthor(entry) &&
-        (!search || (entry.text ?? "").toLowerCase().includes(search)) &&
+        mentions([
+          entry.text,
+          ...(entry.tags ?? []),
+          ...(entry.resources ?? []).flatMap(({ name }) => [name, stackDisplay(name)]),
+          ...actorFields(entry),
+        ]) &&
         (named.length === 0 ||
           named.some(({ type: namedType, id }) =>
             resourceId
@@ -272,6 +291,10 @@ export function filterHistory(
     return (
       (!type || entry.type === type || member) &&
       (!resourceId || entry.resourceId === resourceId || member) &&
+      mentions(
+        [entry.name, stackDisplay(entry.name), entry.type, entry.action, ...actorFields(entry)],
+        [entry.resourceId],
+      ) &&
       start > sinceTime &&
       start <= untilTime
     );

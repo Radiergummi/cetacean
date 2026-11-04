@@ -378,7 +378,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 			Visible: cluster.HistoryReadable(s.readPredicate(ctx)),
 
 			ReadableAnnotation: s.annotationCaller(ctx).MayRead,
-		}), s.readPredicate(ctx)), nil
+		}), cluster.ReadableTaskNames(s.cache, s.readPredicate(ctx))), nil
 
 	case "annotations":
 		return s.readAnnotation(ctx, uri, resourceID)

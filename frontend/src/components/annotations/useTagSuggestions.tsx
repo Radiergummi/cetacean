@@ -12,9 +12,9 @@ const suggestionLimit = 20;
 const normalize = (typed: string) => typed.trim().toLowerCase();
 
 /**
- * The tags in use matching what is typed, most used first, as a datalist for
- * a tag input, leaving out those already `chosen`. `picked` is the tag a
- * change took from the list, or null for typing: a pick inserts no text.
+ * The tags in use matching what is typed, most used first, without those
+ * already `chosen`: as a list, and as a datalist for a tag input. `picked` is
+ * the tag a change took from the datalist, or null for typing.
  */
 export function useTagSuggestions(typed: string, chosen: string[]) {
   const listId = useId();
@@ -34,9 +34,10 @@ export function useTagSuggestions(typed: string, chosen: string[]) {
     staleTime: 30_000,
   });
 
+  // The fetched list trails the typing, so it is narrowed to what is typed now.
   const suggestions = (data?.items ?? [])
     .map(({ tag }) => tag)
-    .filter((tag) => !chosen.includes(tag));
+    .filter((tag) => tag.startsWith(normalize(typed)) && !chosen.includes(tag));
 
   const picked = ({ nativeEvent, target: { value } }: ChangeEvent<HTMLInputElement>) =>
     (!(nativeEvent instanceof InputEvent) || nativeEvent.inputType === "insertReplacementText") &&
@@ -55,5 +56,5 @@ export function useTagSuggestions(typed: string, chosen: string[]) {
     </datalist>
   );
 
-  return { listId, datalist, picked };
+  return { listId, datalist, picked, suggestions };
 }

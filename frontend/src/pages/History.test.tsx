@@ -91,7 +91,9 @@ describe("History", () => {
     renderPage();
 
     await screen.findByText("web");
-    fireEvent.change(screen.getByPlaceholderText("Filter by name…"), { target: { value: "db" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /Search everything shown/ }), {
+      target: { value: "db" },
+    });
 
     await waitFor(() =>
       expect(mockHistoryPage).toHaveBeenCalledWith(
@@ -107,7 +109,9 @@ describe("History", () => {
 
     await screen.findByText("web");
     fireEvent.click(screen.getByRole("button", { name: "Services" }));
-    fireEvent.change(screen.getByPlaceholderText("Filter by name…"), { target: { value: "db" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /Search everything shown/ }), {
+      target: { value: "db" },
+    });
 
     await waitFor(() =>
       expect(screen.getByText("Download CSV").closest("a")).toHaveAttribute(

@@ -147,14 +147,14 @@ func (h *Handlers) timelineQuery(
 	}
 
 	query := cache.HistoryQuery{
-		Type:         cache.EventType(resourceType),
-		ResourceID:   resourceID,
-		BeforeID:     beforeID,
-		NameContains: q.Get("search"),
-		Limit:        limit,
-		After:        window.Since,
-		Before:       window.Until,
-		Visible:      h.readableHistory(r),
+		Type:       cache.EventType(resourceType),
+		ResourceID: resourceID,
+		BeforeID:   beforeID,
+		Search:     q.Get("search"),
+		Limit:      limit,
+		After:      window.Since,
+		Before:     window.Until,
+		Visible:    h.readableHistory(r),
 
 		ReadableAnnotation: h.annotationCaller(r).MayRead,
 	}
@@ -200,8 +200,9 @@ func timelineFilters(q url.Values, query *cache.HistoryQuery) error {
 // timeline lists query as the caller sees it, through cluster.PresentHistory.
 func (h *Handlers) timeline(r *http.Request, query cache.HistoryQuery) []cache.HistoryEntry {
 	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
+	query.TaskName = cluster.ReadableTaskNames(h.cache, canRead)
 
-	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), canRead)
+	return cluster.PresentHistory(h.cache, h.cache.Timeline(query), query.TaskName)
 }
 
 // linkNextTimelinePage links the page below the last entry when this one is full.
