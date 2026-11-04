@@ -399,8 +399,8 @@ func run(s settings) error {
 		watcher.Run(ctx)
 	}()
 
-	// Stopped only after the watcher, so the changes it recorded last are
-	// written; a nil store has nothing to write and stops at once.
+	// Stopped only after the watcher and the HTTP server, so the changes and
+	// annotations they recorded last are written; a nil store stops at once.
 	timelineCtx, stopTimeline := context.WithCancel(context.Background())
 	timelineStopped := make(chan struct{})
 	go func() {
@@ -426,6 +426,12 @@ func run(s settings) error {
 				"the watcher did not stop within the shutdown grace; its snapshot may be stale",
 			)
 		}
+	}()
+
+	// stopRecording runs once the HTTP server has stopped, or never started.
+	stopRecording := sync.OnceFunc(func() {
+		stop()
+		<-watcherDone
 
 		// A window of its own: a watcher that used up the grace would otherwise
 		// leave no time to write what it recorded last.
@@ -440,14 +446,11 @@ func run(s settings) error {
 		case <-time.After(timelineGrace):
 			slog.Warn("the change history was not written within its shutdown grace")
 		}
-	}()
+	})
 
 	// Every return from here on, an early error included, stops the watcher
 	// and waits for the history's last write.
-	defer func() {
-		stop()
-		<-watcherDone
-	}()
+	defer stopRecording()
 
 	// API — pass ready channel so /-/ready reports sync status
 	var promClient *promapi.Client
@@ -764,7 +767,8 @@ func run(s settings) error {
 			return err
 		}
 
-		<-watcherDone
+		stopRecording()
+		slog.Info("shutdown complete")
 
 		return nil
 	}
@@ -824,7 +828,7 @@ func run(s settings) error {
 	}
 
 	<-drained
-	<-watcherDone
+	stopRecording()
 	slog.Info("shutdown complete")
 
 	return nil
@@ -1104,8 +1108,6 @@ func serveDualListeners(
 		return fmt.Errorf("meta server error: %w", err)
 	case <-drained:
 	}
-
-	slog.InfoContext(ctx, "shutdown complete")
 
 	return nil
 }

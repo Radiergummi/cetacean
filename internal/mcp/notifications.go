@@ -443,15 +443,19 @@ func (s *Server) dispatchCacheEvent(event cache.Event) {
 
 // dispatchAnnotationEvent tells the subscribers of cetacean://annotations/{id}
 // of an edit or a deletion, each checked against the annotation the event
-// carries: on a deletion the index no longer holds it.
+// carries: on a deletion the index no longer holds it. One who could read what
+// an edit replaced hears of it too, or a note it hides from them stays shown.
 func (s *Server) dispatchAnnotationEvent(event cache.Event) {
 	a, ok := event.Resource.(cache.Annotation)
 	if !ok {
 		return
 	}
 
+	previous, replaced := event.Previous.(cache.Annotation)
+
 	for _, d := range s.notifications.matchingDeliveries(event) {
-		if !s.annotationCallerFor(d.identity).MayRead(a) {
+		caller := s.annotationCallerFor(d.identity)
+		if !caller.MayRead(a) && (!replaced || !caller.MayRead(previous)) {
 			continue
 		}
 

@@ -760,7 +760,9 @@ components:
         lists it there: one that names the resource, one on a service's stack,
         or a cluster-wide one. Sent only to a caller who may read every
         resource it names. `resource` is the annotation as the write left it,
-        absent on `remove`; a replay carries it too.
+        absent on `remove`; a replay carries it too. An edit that takes the
+        annotation off a stream, by moving it to other resources or making it
+        unreadable to the caller, arrives there as a `remove`.
       payload:
         $ref: "#/components/schemas/AnnotationEvent"
 

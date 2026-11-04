@@ -59,7 +59,33 @@ type sseClient struct {
 
 // accepts reports whether the client's filter admits e.
 func (c *sseClient) accepts(e cache.Event) bool {
-	return c.match == nil || c.match(e)
+	_, ok := admitted(c.match, e)
+	return ok
+}
+
+// admitted is e as a client filtered by match hears it, and whether it does.
+// An annotation update match admits only as it was before is a removal there:
+// the note left what the stream shows, or the reader lost it.
+func admitted(match func(cache.Event) bool, e cache.Event) (cache.Event, bool) {
+	if match == nil || match(e) {
+		return e, true
+	}
+
+	removal, ok := asRemoval(e)
+
+	return removal, ok && match(removal)
+}
+
+// asRemoval is an annotation update as the removal of what it replaced.
+func asRemoval(e cache.Event) (cache.Event, bool) {
+	previous, ok := e.Previous.(cache.Annotation)
+	if !ok || e.Type != cache.EventAnnotation || e.Action != "update" {
+		return e, false
+	}
+
+	e.Action, e.Resource, e.Previous = "remove", previous, nil
+
+	return e, true
 }
 
 const (
@@ -190,11 +216,17 @@ func (b *Broadcaster) needsSync(afterID, seen uint64) (need bool, covered uint64
 	}
 }
 
+// recipient is a client an event reaches, and whether as a removal.
+type recipient struct {
+	client  *sseClient
+	removal bool
+}
+
 // fanOut is the dedicated goroutine that delivers events to SSE clients.
 // A client's events channel is never closed, so a send to one that has
 // just left, outside the lock, lands in a buffer nobody reads.
 func (b *Broadcaster) fanOut() {
-	var recipients []*sseClient
+	var recipients []recipient
 
 	for {
 		select {
@@ -202,8 +234,8 @@ func (b *Broadcaster) fanOut() {
 			recipients = recipients[:0]
 			b.mu.RLock()
 			for c := range b.clients {
-				if c.accepts(e.Event) {
-					recipients = append(recipients, c)
+				if heard, ok := admitted(c.match, e.Event); ok {
+					recipients = append(recipients, recipient{c, heard.Action != e.Action})
 				}
 			}
 			b.mu.RUnlock()
@@ -212,10 +244,22 @@ func (b *Broadcaster) fanOut() {
 				continue
 			}
 
+			// Each form is encoded once, however many clients hear it.
 			e.data = encodeEvent(e.Event, b.basePath)
-			for _, c := range recipients {
+			removal := e
+			if slices.ContainsFunc(recipients, func(r recipient) bool { return r.removal }) {
+				removal.Event, _ = asRemoval(e.Event)
+				removal.data = encodeEvent(removal.Event, b.basePath)
+			}
+
+			for _, r := range recipients {
+				c, frame := r.client, e
+				if r.removal {
+					frame = removal
+				}
+
 				select {
-				case c.events <- e:
+				case c.events <- frame:
 				default:
 					// Slow client: drop the event rather than block the
 					// broadcaster goroutine, and resync the client instead.
@@ -486,7 +530,8 @@ func (b *Broadcaster) replayEvents(
 			continue
 		}
 
-		if match != nil && !match(ev) {
+		ev, ok := admitted(match, ev)
+		if !ok {
 			continue
 		}
 
@@ -504,13 +549,18 @@ func (b *Broadcaster) replayEvents(
 // resource payload the history does not keep, but for an annotation's.
 func replayEvent(e cache.HistoryEntry) cache.Event {
 	if e.Kind == cache.KindAnnotation && e.Annotation != nil {
-		return cache.Event{
+		ev := cache.Event{
 			Type:      cache.EventAnnotation,
 			Action:    e.Action,
 			ID:        e.ResourceID,
 			Resource:  *e.Annotation,
 			HistoryID: e.ID,
 		}
+		if e.Previous != nil {
+			ev.Previous = *e.Previous
+		}
+
+		return ev
 	}
 
 	if e.Kind == cache.KindGap {

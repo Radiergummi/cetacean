@@ -10,6 +10,11 @@ import (
 	"github.com/radiergummi/cetacean/internal/cache"
 )
 
+// quietHeartbeat is how often a tick that inserts nothing heartbeats. A crash
+// widens the next gap's start by at most this much; nothing is lost in it, as
+// every tick that advances the ring heartbeats.
+const quietHeartbeat = 15 * time.Second
+
 // Writer copies the ring into a Store once a second, following the ring
 // rather than fed from notify.
 type Writer struct {
@@ -30,6 +35,9 @@ type Writer struct {
 
 	// live reports whether the cluster is being watched; nil always is.
 	live func() bool
+
+	// heartbeat is when SeenAt last committed.
+	heartbeat time.Time
 
 	// writeFailing, like coverageFailing, logs its first failure and its
 	// recovery once.
@@ -98,7 +106,10 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 
 			w.flush(ctx)
 		case <-stop:
+			// A clean stop's gap starts where it stopped.
+			w.heartbeat = time.Time{}
 			w.flush(ctx)
+
 			return
 		}
 	}
@@ -190,9 +201,11 @@ func (w *Writer) flush(ctx context.Context) {
 		batch.Last = last
 	}
 
+	now := time.Now()
 	w.mu.Lock()
-	if w.covering && (w.live == nil || w.live()) {
-		batch.SeenAt = time.Now()
+	if w.covering && (w.live == nil || w.live()) &&
+		(batch.Last > 0 || now.Sub(w.heartbeat) >= quietHeartbeat) {
+		batch.SeenAt = now
 	}
 	w.mu.Unlock()
 
@@ -202,7 +215,7 @@ func (w *Writer) flush(ctx context.Context) {
 		batch.Keep = w.keep
 	}
 
-	// Before coverage opens a quiet tick has nothing to write.
+	// A quiet tick between heartbeats, or before coverage opens, has nothing to write.
 	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 && batch.Last == 0 {
 		w.lastWritten = last
 		return
@@ -225,6 +238,10 @@ func (w *Writer) flush(ctx context.Context) {
 	w.writeFailing = false
 	w.retained = true
 	w.lastWritten = last
+
+	if !batch.SeenAt.IsZero() {
+		w.heartbeat = batch.SeenAt
+	}
 
 	w.mu.Lock()
 	if w.covering && batch.SeenAt.After(w.seenAt) {

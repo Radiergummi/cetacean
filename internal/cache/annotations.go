@@ -52,10 +52,19 @@ type AnnotationResource struct {
 	Removed bool `json:"removed,omitempty"`
 }
 
-// AnnotationStore persists annotations; a write is committed before it returns.
+// AnnotationStore persists annotations.
 type AnnotationStore interface {
-	PutAnnotation(ctx context.Context, a Annotation) error
-	DeleteAnnotation(ctx context.Context, id uint64) error
+	// BeginAnnotation waits, as long as ctx allows, until the store can take a
+	// write, and holds it for one, so that write never waits behind another.
+	BeginAnnotation(ctx context.Context) (AnnotationWrite, error)
+}
+
+// AnnotationWrite is a store held for one write. Put and Delete commit before
+// they return, whatever ctx does; Release frees the store, written or not.
+type AnnotationWrite interface {
+	Put(ctx context.Context, a Annotation) error
+	Delete(ctx context.Context, id uint64) error
+	Release()
 }
 
 // annotationIndex holds the annotations ordered by ID. IDs only grow, so a
@@ -105,6 +114,12 @@ func (c *Cache) Annotation(id uint64) (Annotation, bool) {
 // CreateAnnotation records a new annotation, assigning its ID, version and
 // creation time.
 func (c *Cache) CreateAnnotation(ctx context.Context, a Annotation) (Annotation, error) {
+	write, err := c.beginAnnotation(ctx)
+	if err != nil {
+		return Annotation{}, err
+	}
+	defer write.Release()
+
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 
@@ -119,7 +134,7 @@ func (c *Cache) CreateAnnotation(ctx context.Context, a Annotation) (Annotation,
 	a.Resources = slices.Clone(a.Resources)
 	a.Updated, a.Editor = time.Time{}, nil
 
-	return a, c.commitAnnotation(ctx, a, "create")
+	return a, c.commitAnnotation(ctx, write, a, nil, "create")
 }
 
 // UpdateAnnotation applies edit to a copy of the annotation and records the
@@ -131,6 +146,12 @@ func (c *Cache) UpdateAnnotation(
 	id uint64,
 	edit func(*Annotation) error,
 ) (Annotation, error) {
+	write, err := c.beginAnnotation(ctx)
+	if err != nil {
+		return Annotation{}, err
+	}
+	defer write.Release()
+
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 
@@ -151,7 +172,7 @@ func (c *Cache) UpdateAnnotation(
 	a.Version = c.history.Count() + 1
 	a.Updated = time.Now().UTC()
 
-	return a, c.commitAnnotation(ctx, a, "update")
+	return a, c.commitAnnotation(ctx, write, a, &current, "update")
 }
 
 // DeleteAnnotation removes an annotation once check accepts it; check runs
@@ -161,6 +182,12 @@ func (c *Cache) DeleteAnnotation(
 	id uint64,
 	check func(Annotation) error,
 ) error {
+	write, err := c.beginAnnotation(ctx)
+	if err != nil {
+		return err
+	}
+	defer write.Release()
+
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 
@@ -173,7 +200,7 @@ func (c *Cache) DeleteAnnotation(
 		return err
 	}
 
-	return c.commitAnnotation(ctx, current, "remove")
+	return c.commitAnnotation(ctx, write, current, nil, "remove")
 }
 
 // AnnotationCount is how many annotations the cache holds.
@@ -184,27 +211,36 @@ func (c *Cache) AnnotationCount() int {
 	return len(c.annotations.ordered)
 }
 
-// commitAnnotation commits a write, then indexes it and appends its item, all
-// under notifyMu: every Append runs under it, so the ID taken from Count is
-// the one the item gets. The index changes first, so a validator read from
-// Count never names content the index does not hold yet.
-func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action string) error {
+// beginAnnotation takes the store before notifyMu, so waiting for it never
+// holds up notify.
+func (c *Cache) beginAnnotation(ctx context.Context) (AnnotationWrite, error) {
 	c.annotations.mu.RLock()
 	store := c.annotations.store
 	c.annotations.mu.RUnlock()
 
 	if store == nil {
-		return ErrAnnotationsOff
+		return nil, ErrAnnotationsOff
 	}
 
-	// A cancelled transaction discards the store's one connection, its lock with it.
-	ctx = context.WithoutCancel(ctx)
+	return store.BeginAnnotation(ctx)
+}
 
+// commitAnnotation commits a write, then indexes it and appends its item, all
+// under notifyMu: every Append runs under it, so the ID taken from Count is
+// the one the item gets. The index changes first, so a validator read from
+// Count never names content the index does not hold yet.
+func (c *Cache) commitAnnotation(
+	ctx context.Context,
+	write AnnotationWrite,
+	a Annotation,
+	previous *Annotation,
+	action string,
+) error {
 	var err error
 	if action == "remove" {
-		err = store.DeleteAnnotation(ctx, a.ID)
+		err = write.Delete(ctx, a.ID)
 	} else {
-		err = store.PutAnnotation(ctx, a)
+		err = write.Put(ctx, a)
 	}
 
 	if err != nil {
@@ -227,21 +263,22 @@ func (c *Cache) commitAnnotation(ctx context.Context, a Annotation, action strin
 
 	// The event shows the note as a read would, removal marks and all.
 	marked := c.WithRemovals(a)
-	id := strconv.FormatUint(a.ID, 10)
-	historyID := c.history.Append(HistoryEntry{
+	entry := HistoryEntry{
 		Kind:       KindAnnotation,
 		Action:     action,
-		ResourceID: id,
+		ResourceID: strconv.FormatUint(a.ID, 10),
 		Annotation: &marked,
-	})
+	}
+	event := Event{Type: EventAnnotation, Action: action, ID: entry.ResourceID, Resource: marked}
 
-	c.dispatch(Event{
-		Type:      EventAnnotation,
-		Action:    action,
-		ID:        id,
-		Resource:  marked,
-		HistoryID: historyID,
-	})
+	// What an update replaced, so a reader it no longer reaches hears it left.
+	if previous != nil {
+		replaced := c.WithRemovals(*previous)
+		entry.Previous, event.Previous = &replaced, replaced
+	}
+
+	event.HistoryID = c.history.Append(entry)
+	c.dispatch(event)
 
 	return nil
 }
@@ -345,7 +382,7 @@ func (c *Cache) Timeline(q HistoryQuery) []HistoryEntry {
 
 	var ring []HistoryEntry
 	if len(q.Kinds) != 1 || q.Kinds[0] != KindAnnotation {
-		if q.Type == EventStack && q.ResourceID != "" {
+		if q.ResourceID != "" && (q.Type == EventStack || slices.Contains(q.Types, EventStack)) {
 			q.Members = c.stackMembers(q.ResourceID)
 		}
 

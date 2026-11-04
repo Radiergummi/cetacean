@@ -107,7 +107,7 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tif ifMatch == \"\" && ifNoneMatch == \"\" && r.Header.Get(\"If-Unmodified-Since\") == \"\" {"
+        replace: "\t\t\tif ifMatch == \"\" && r.Header.Get(\"If-None-Match\") == \"\" &&\n\t\t\t\tr.Header.Get(\"If-Unmodified-Since\") == \"\" {"
         with: "\t\t\tif true {"
       - file: internal/api/list.go
         replace: "\tif r.Header.Get(\"If-Match\") != \"\" {\n\t\treturn false\n\t}"
@@ -132,6 +132,9 @@ requirements:
       - file: internal/api/precondition.go
         replace: "\t\t\tif !represented {"
         with: "\t\t\tif false {"
+      - file: internal/api/annotation_handlers.go
+        replace: "\treturn func(a cache.Annotation) bool {\n\t\treturn writePreconditionFailed("
+        with: "\treturn func(a cache.Annotation) bool {\n\t\treturn true || writePreconditionFailed("
 
   - id: a-failed-precondition-may-answer-412
     level: MAY
@@ -165,6 +168,9 @@ requirements:
       - file: internal/api/etag.go
         replace: "\tif etagMatch(r.Header.Get(\"If-None-Match\"), etag) {\n\t\tw.WriteHeader(http.StatusNotModified)\n\t\treturn\n\t}\n\n\tw.WriteHeader(http.StatusOK)"
         with: "\tw.WriteHeader(http.StatusOK)"
+      - file: internal/api/etag.go
+        replace: "\t\tif stripCodingSuffix(strings.Trim(candidate, `\"`)) == want {\n\t\t\treturn true\n\t\t}\n\t}\n\n\treturn false\n}\n\n// etagMatchStrong"
+        with: "\t\tif strings.Trim(candidate, `\"`) == want {\n\t\t\treturn true\n\t\t}\n\t}\n\n\treturn false\n}\n\n// etagMatchStrong"
 
   - id: a-false-if-none-match-answers-304
     level: MUST
@@ -215,6 +221,9 @@ requirements:
       - file: internal/api/etag.go
         replace: "\tif inm != \"\" || lastModified.IsZero() {"
         with: "\tif inm != \"\" {"
+      - file: internal/api/annotation_handlers.go
+        replace: "\tif slices.ContainsFunc(a.Resources, removedResource) {"
+        with: "\tif false && slices.ContainsFunc(a.Resources, removedResource) {"
 
   - id: if-modified-since-is-evaluated
     level: SHOULD
@@ -269,8 +278,11 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.4
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tvar modified time.Time\n"
-        with: "\t\t\tmodified := time.Now()\n"
+        replace: "\t\tvar modified time.Time\n"
+        with: "\t\tmodified := time.Now()\n"
+      - file: internal/api/annotation_handlers.go
+        replace: "\treturn writePreconditionFailed(r, annotationETag(a), annotationModified(a)) == \"\"\n\t}\n}"
+        with: "\treturn writePreconditionFailed(r, annotationETag(a), time.Now()) == \"\"\n\t}\n}"
 
   - id: if-unmodified-since-is-evaluated
     level: MUST
@@ -313,6 +325,12 @@ requirements:
       - file: internal/api/pagination.go
         replace: "if cond == \"\" || r.Header.Get(\"Range\") == \"\" || ifRangeHolds(r, cond, validator) {"
         with: "if cond == \"\" || r.Header.Get(\"Range\") == \"\" || true {"
+      - file: internal/api/annotation_handlers.go
+        replace: "\tr = ifRange(r, validator)\n"
+        with: "\n"
+      - file: internal/api/exec_handlers.go
+        replace: "\tr = ifRange(r, validator)\n"
+        with: "\n"
 
   - id: a-false-if-range-ignores-the-range
     level: MUST
@@ -347,8 +365,11 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tif ifMatch == \"\" && ifNoneMatch == \"\" && r.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
-        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif ifMatch == \"\" && ifNoneMatch == \"\" && r.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\treturn\n\t\t\t}"
+        replace: "\t\t\tif ifMatch == \"\" && r.Header.Get(\"If-None-Match\") == \"\" &&\n\t\t\t\tr.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
+        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif ifMatch == \"\" && r.Header.Get(\"If-None-Match\") == \"\" &&\n\t\t\t\tr.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\treturn\n\t\t\t}"
+      - file: internal/api/annotation_handlers.go
+        replace: "\treturn annotationWrite(h.mayEditAnnotation).Append(h.conditional(h.annotationValidator, true))"
+        with: "\treturn annotationWrite(h.mayEditAnnotation)"
 
   - id: preconditions-are-ignored-when-the-answer-is-not-2xx
     level: MUST
@@ -362,6 +383,9 @@ requirements:
       - file: internal/api/precondition.go
         replace: "\t\t\tcase errors.Is(err, errNoRepresentation):"
         with: "\t\t\tcase errors.Is(err, errNoRepresentation) && false:"
+      - file: internal/api/annotation_handlers.go
+        replace: "\treturn a, err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)"
+        with: "\treturn a, err == nil"
 
   - id: preconditions-are-evaluated-in-order
     level: MUST
@@ -377,8 +401,8 @@ requirements:
         replace: "\tif r.Header.Get(\"If-Match\") != \"\" {\n\t\treturn false\n\t}"
         with: "\tif false {\n\t\treturn false\n\t}"
       - file: internal/api/precondition.go
-        replace: "\t\t\tif ifNoneMatch != \"\" && etagMatch(ifNoneMatch, etag) {"
-        with: "\t\t\tif false && etagMatch(ifNoneMatch, etag) {"
+        replace: "\tif etagMatchState(r.Header.Get(\"If-None-Match\"), etag) {"
+        with: "\tif false && etagMatchState(r.Header.Get(\"If-None-Match\"), etag) {"
 
   - id: range-is-an-optional-feature
     level: MAY

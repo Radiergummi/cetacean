@@ -732,7 +732,7 @@ func historyEntryUpdated(e cache.HistoryEntry) time.Time {
 	case e.Kind == cache.KindGap:
 		return e.Until
 	case e.Kind == cache.KindAnnotation && e.Annotation != nil:
-		return annotationModified(*e.Annotation)
+		return annotationEdited(*e.Annotation)
 	case e.Kind == cache.KindAnnotation && !e.Updated.IsZero():
 		return e.Updated
 	default:

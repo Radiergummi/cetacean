@@ -82,9 +82,9 @@ func (f *fakeStore) Close() error { return nil }
 
 func (f *fakeStore) Annotations(context.Context) ([]cache.Annotation, error) { return nil, nil }
 
-func (f *fakeStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-
-func (f *fakeStore) DeleteAnnotation(context.Context, uint64) error { return nil }
+func (f *fakeStore) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return nil, errors.New("not stored")
+}
 
 func (f *fakeStore) committed() []uint64 {
 	f.mu.Lock()
@@ -231,6 +231,63 @@ func TestWriter_HeartbeatsOnlyOnceCovering(t *testing.T) {
 	if !store.batches[0].SeenAt.IsZero() || store.batches[1].SeenAt.IsZero() {
 		t.Fatalf("SeenAt = %v, %v; want zero before coverage and set after",
 			store.batches[0].SeenAt, store.batches[1].SeenAt)
+	}
+}
+
+func TestWriter_QuietTicksHeartbeatSparsely(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &fakeStore{}
+		history := cache.NewHistory(10)
+		w := NewWriter(store, history, 10, noGap)
+
+		ready := make(chan struct{})
+		close(ready)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		stopped := make(chan struct{})
+
+		go func() {
+			defer close(stopped)
+			w.Run(ctx, ready)
+		}()
+
+		start := time.Now()
+		time.Sleep(25*time.Second + time.Second/2)
+		appendN(history, 1)
+		time.Sleep(time.Second)
+		synctest.Wait()
+		cancel()
+		<-stopped
+
+		var beats []time.Duration
+		for _, b := range store.batches {
+			if b.SeenAt.IsZero() {
+				t.Fatalf("a batch without a heartbeat: %+v", b)
+			}
+
+			beats = append(beats, b.SeenAt.Sub(start).Round(time.Second))
+		}
+
+		// Quiet at 1s and 16s, a change at 26s, and the stop.
+		want := []time.Duration{time.Second, 16 * time.Second, 26 * time.Second, 27 * time.Second}
+		if !slices.Equal(beats, want) {
+			t.Fatalf("heartbeats at %v, want %v", beats, want)
+		}
+	})
+}
+
+func TestWriter_HeartbeatsWithAnAnnotation(t *testing.T) {
+	store := &fakeStore{}
+	history := cache.NewHistory(10)
+	w := NewWriter(store, history, 10, noGap)
+	w.covering = true
+
+	w.flush(context.Background())
+	history.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create"})
+	w.flush(context.Background())
+
+	if len(store.batches) != 2 || store.batches[1].SeenAt.IsZero() {
+		t.Fatalf("batches = %+v, want the annotation's tick to heartbeat", store.batches)
 	}
 }
 

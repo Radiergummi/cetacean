@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Changes Docker still remembers from a gap are recovered into the history, marked `recovered`; the gap's `recoveredFrom` says from when they're complete, tasks aside
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
-- Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline includes its services' changes and annotations
+- Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline there and in `get_events` includes its services' changes and annotations
 - `GET /annotations` lists annotations in their detail shape, with Atom and JSON feeds; `GET /annotations/tags` counts the tags in use, and a removed resource is marked `removed`
 - The dashboard has pages for `/annotations`, filtered by tag, author and text, each annotation at `/annotations/{id}` with its actions, and the tags in use at `/annotations/tags`; an annotation's tags link to its list, and History filters by kind and tag
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** entry IDs in the Atom and JSON feeds name the deployment's history as well as the change, so feed readers show existing entries once more after the upgrade
 
 ### Fixed
+- `get_events` and `cetacean://history` refuse an identity holding no grant at all, as `/history` does
 - History, its feeds, Recent Activity and `get_events` keep naming a task `service.slot` after Swarm prunes it, rather than falling back to its ID
 - The licenses page and `/-/sbom.cdx.json` no longer list build tools, such as TypeScript and its platform binaries, that the frontend doesn't bundle
 - A `limit` over 200 on `/history` returns 200 entries, as documented, instead of the default 50; on `/history.csv` it returns 200 rows instead of the whole history, which leaving `limit` out still does
@@ -97,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Placement constraints match as Swarm does in drain impact and the desired task count of global services: regardless of case, `node.ip` by address or CIDR, and `node.role` by the role a node holds
 - MCP log reads (`get_logs` and the log resources) no longer drop lines from nodes slower to answer than the first
 - A conditional `GET` on a list, such as `/services`, no longer answers `304 Not Modified` after a service starts or stops flapping
+- `If-None-Match` on a write matches an `ETag` read under compression, such as `"…-gzip"`, as `If-Match` already did
 - `/mcp` behind a reverse proxy on the same host, such as `tailscale serve`, no longer answers every request with `403 invalid Host header`, as long as `server.public_url` names the host the proxy serves
 - The grid view of every list page draws each card as one box again, instead of breaking its border across lines
 - Live updates, and edits that check a resource's version first, no longer stall while a stack is removed or a service rolls out

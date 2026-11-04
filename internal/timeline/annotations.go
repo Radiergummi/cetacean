@@ -108,10 +108,29 @@ func (s *SQLite) Annotations(ctx context.Context) ([]cache.Annotation, error) {
 	return result, nil
 }
 
-func (s *SQLite) PutAnnotation(ctx context.Context, a cache.Annotation) error {
+// BeginAnnotation takes the store's one connection; ctx bounds only that wait.
+func (s *SQLite) BeginAnnotation(ctx context.Context) (cache.AnnotationWrite, error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return annotationWrite{conn}, nil
+}
+
+type annotationWrite struct{ conn *sql.Conn }
+
+func (w annotationWrite) Release() {
+	_ = w.conn.Close()
+}
+
+func (w annotationWrite) Put(ctx context.Context, a cache.Annotation) error {
 	actor, editor := columnsOf(a.Actor), columnsOf(a.Editor)
 
-	return inTx(ctx, s.db, func(tx *sql.Tx) error {
+	// A cancelled transaction discards the store's one connection, its lock with it.
+	ctx = context.WithoutCancel(ctx)
+
+	return inTx(ctx, w.conn, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO annotations (
 				id, version, at, until, text, created_at, updated_at,
 				actor_subject, actor_name, actor_provider, actor_client, actor_transport,
@@ -165,8 +184,10 @@ func (s *SQLite) PutAnnotation(ctx context.Context, a cache.Annotation) error {
 	})
 }
 
-func (s *SQLite) DeleteAnnotation(ctx context.Context, id uint64) error {
-	return inTx(ctx, s.db, func(tx *sql.Tx) error {
+func (w annotationWrite) Delete(ctx context.Context, id uint64) error {
+	ctx = context.WithoutCancel(ctx)
+
+	return inTx(ctx, w.conn, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM annotations WHERE id = ?`, id); err != nil {
 			return err
 		}

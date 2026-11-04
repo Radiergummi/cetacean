@@ -16,8 +16,13 @@ import (
 
 type memoryAnnotationStore struct{}
 
-func (memoryAnnotationStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-func (memoryAnnotationStore) DeleteAnnotation(context.Context, uint64) error        { return nil }
+func (s memoryAnnotationStore) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return s, nil
+}
+
+func (memoryAnnotationStore) Put(context.Context, cache.Annotation) error { return nil }
+func (memoryAnnotationStore) Delete(context.Context, uint64) error        { return nil }
+func (memoryAnnotationStore) Release()                                    {}
 
 // annotationCache holds service "web" in stack "shop" and node "node1".
 func annotationCache(t *testing.T) *cache.Cache {
@@ -267,6 +272,39 @@ func TestTheAuthorEditsWithReadAloneAndOthersNeedWrite(t *testing.T) {
 	}
 	if err := s.Delete(as("bob"), everyone, a.ID, nil); err != nil {
 		t.Errorf("a writer deleting: err = %v", err)
+	}
+}
+
+// A token Cetacean's OAuth server issued speaks for the person the upstream
+// provider signed in, so their notes are theirs on either credential.
+func TestAnAuthorIsOneAcrossTheDashboardAndATokenItIssued(t *testing.T) {
+	s := cluster.NewAnnotations(annotationCache(t))
+	via := func(subject, provider string) context.Context {
+		return cache.WithActor(context.Background(), cache.Actor{
+			Subject: subject, Provider: provider, Transport: cache.TransportMCP,
+		})
+	}
+
+	for _, tc := range []struct {
+		name         string
+		wrote, edits context.Context
+		wantAuthor   bool
+	}{
+		{"a note from the dashboard, edited by token", as("alice"), via("alice", "oauth"), true},
+		{"a note by token, edited from the dashboard", via("alice", "oauth"), as("alice"), true},
+		{"another subject by token", as("alice"), via("bob", "oauth"), false},
+		{"another upstream provider", as("alice"), via("alice", "headers"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, err := s.Create(tc.wrote, everyone, onWeb("note"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got := s.MayEdit(tc.edits, reader, a); got != tc.wantAuthor {
+				t.Errorf("MayEdit = %v, want %v", got, tc.wantAuthor)
+			}
+		})
 	}
 }
 
