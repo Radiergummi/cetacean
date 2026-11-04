@@ -122,8 +122,8 @@ What the cluster is doing now, and what it did recently.
 
     The change timeline, newest first. `resource` takes a name as readily as an ID, resolved against `types` when
     exactly one is given and otherwise only where no other type claims the name. A service's timeline includes its
-    tasks' entries unless `types` leaves out `task`. A change made through Cetacean carries an `actor` naming who
-    made it, as the [history][api.history-actor] does.
+    tasks' entries unless `types` leaves out `task`, and a stack's the changes to its services. A change made through
+    Cetacean carries an `actor` naming who made it, as the [history][api.history-actor] does.
 
     [Annotations][api.annotations] appear as entries of kind `annotation`, with their `text`, `tags`, the
     `resources` they name, and the `id` and `version` the annotation tools take, at the time they describe. One is

@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -341,7 +342,8 @@ func run(s settings) error {
 		)
 	}
 	if timelineStore != nil {
-		// Taken before the first sync, which forgets the services removed in the gap.
+		// Taken before the first sync, which forgets the services removed in the
+		// gap, and retaken at each gap for the next.
 		serviceStacks := stateCache.ServiceStacks()
 
 		timelineWriter = timeline.NewWriter(
@@ -361,6 +363,7 @@ func run(s settings) error {
 				}
 
 				stateCache.RecordRecoveredGap(from, recovered)
+				serviceStacks = stateCache.ServiceStacks()
 			},
 		)
 	}
@@ -376,23 +379,28 @@ func run(s settings) error {
 	// watcher's last snapshot lands before the Docker client closes.
 	watcherStopped := make(chan struct{})
 	// The gap is recorded before the stream records anything, and coverage
-	// opens only after it.
+	// opens only after it; a lost stream, or a shutdown, ends the heartbeats.
 	watching := make(chan struct{})
+	var watchingOnce sync.Once
 	watcher.SetOnWatching(func(streamSince time.Time) {
-		defer close(watching)
+		defer watchingOnce.Do(func() { close(watching) })
 
 		if timelineWriter != nil {
 			timelineWriter.RecordGap(ctx, streamSince)
 		}
 	})
 
+	if timelineWriter != nil {
+		timelineWriter.SetLive(func() bool { return ctx.Err() == nil && watcher.Watching() })
+	}
+
 	go func() {
 		defer close(watcherStopped)
 		watcher.Run(ctx)
 	}()
 
-	// Stopped only after the watcher, so the changes it recorded last are
-	// written; a nil store has nothing to write and stops at once.
+	// Stopped only after the watcher and the HTTP server, so the changes and
+	// annotations they recorded last are written; a nil store stops at once.
 	timelineCtx, stopTimeline := context.WithCancel(context.Background())
 	timelineStopped := make(chan struct{})
 	go func() {
@@ -418,6 +426,12 @@ func run(s settings) error {
 				"the watcher did not stop within the shutdown grace; its snapshot may be stale",
 			)
 		}
+	}()
+
+	// stopRecording runs once the HTTP server has stopped, or never started.
+	stopRecording := sync.OnceFunc(func() {
+		stop()
+		<-watcherDone
 
 		// A window of its own: a watcher that used up the grace would otherwise
 		// leave no time to write what it recorded last.
@@ -432,14 +446,11 @@ func run(s settings) error {
 		case <-time.After(timelineGrace):
 			slog.Warn("the change history was not written within its shutdown grace")
 		}
-	}()
+	})
 
 	// Every return from here on, an early error included, stops the watcher
 	// and waits for the history's last write.
-	defer func() {
-		stop()
-		<-watcherDone
-	}()
+	defer stopRecording()
 
 	// API — pass ready channel so /-/ready reports sync status
 	var promClient *promapi.Client
@@ -756,7 +767,8 @@ func run(s settings) error {
 			return err
 		}
 
-		<-watcherDone
+		stopRecording()
+		slog.Info("shutdown complete")
 
 		return nil
 	}
@@ -816,7 +828,7 @@ func run(s settings) error {
 	}
 
 	<-drained
-	<-watcherDone
+	stopRecording()
 	slog.Info("shutdown complete")
 
 	return nil
@@ -870,7 +882,15 @@ func restoreTimeline(path string, stateCache *cache.Cache, keep int) timeline.St
 		return nil
 	}
 
-	stateCache.History().Restore(entries, last)
+	stateCache.History().Restore(entries, last, store.Instance())
+
+	// IDs past Count reach readers before the first flush stores any of them;
+	// storing Count now makes the next start skip them even after a crash.
+	if err := store.Commit(ctx, timeline.Batch{Last: stateCache.History().Count()}); err != nil {
+		slog.Warn("could not reserve history IDs; a crash before the first write may reissue them",
+			"error", err, "path", path)
+	}
+
 	stateCache.RestoreAnnotations(store, annotations)
 	slog.Info("restored the change history",
 		"entries", len(entries), "annotations", len(annotations))
@@ -1088,8 +1108,6 @@ func serveDualListeners(
 		return fmt.Errorf("meta server error: %w", err)
 	case <-drained:
 	}
-
-	slog.InfoContext(ctx, "shutdown complete")
 
 	return nil
 }

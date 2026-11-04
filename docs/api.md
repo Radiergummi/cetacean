@@ -373,10 +373,10 @@ page is served as long as the list is unchanged; otherwise you get the first pag
 ### Changes and gaps
 
 Every item in `/history` has a `kind`. A `change` is a change Docker reported. A `gap` is a window in which nobody
-was watching the cluster, from its `timestamp` to its `until`: Cetacean wasn't running, so whatever changed then is
-missing from the record. Read a gap as unknown, not as quiet. Cetacean records one when it's watching again after a
-restart, starting at the previous process's last heartbeat. Without [`storage.timeline`][storage.timeline] there's
-no such heartbeat, so there are no gaps either.
+was watching the cluster, from its `timestamp` to its `until`: Cetacean wasn't running, or had lost its connection to
+Docker, so whatever changed then is missing from the record. Read a gap as unknown, not as quiet. Cetacean records one
+when it's watching again, after a restart or once it has reconnected, starting at the last heartbeat before it stopped
+watching. Without [`storage.timeline`][storage.timeline] there's no such heartbeat, so there are no gaps either.
 
 ```json
 {
@@ -562,7 +562,8 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
 ```
 
 - `POST /annotations` creates one and answers `201` with its `Location` and `ETag`. `timestamp` defaults to now and
-  takes any time, the future included. `until` makes it a range and must be after `timestamp`.
+  takes any time from 1970 to 2199, the future included. `until` makes it a range and must be after `timestamp`.
+  Both come back in UTC.
 - `text` is plain text, up to 1,000 characters. Up to 10 `tags`, each `[a-z0-9._-]`, up to 40 long.
 - `resources` names up to 20 services, stacks, or nodes. Name each one by its ID or its name. The answer records each by ID, with its name.
   An annotation with no resources is cluster-wide.
@@ -579,8 +580,10 @@ or why a deploy was rolled back. Annotations are stored in the timeline database
 
 A resource the cluster no longer holds is marked `"removed": true` in an annotation's `resources`.
 
-The `ETag` is the annotation's version, which every edit advances; a resource's removal changes it too. `PATCH` and
-`DELETE` honor `If-Match` against the `ETag` as it stands, and refuse a stale one with `412`.
+The `ETag` is the annotation's version, which every edit advances; a resource's removal changes it too. A patch that
+changes nothing, such as `{}`, keeps the version. `Last-Modified` is the last edit, and is absent once a removal marks
+a resource, since nothing records when that happened. `PATCH` and `DELETE` honor `If-Match`, `If-None-Match` and
+`If-Unmodified-Since` against the annotation as it stands, before reading the body, and refuse a failed one with `412`.
 
 Who may do what follows the resources an annotation names:
 
@@ -588,7 +591,8 @@ Who may do what follows the resources an annotation names:
   One the caller can't read answers `404` (`ANN004`).
 - **Create:** write on every resource it names; write on `*` for a cluster-wide one.
 - **Edit and delete:** the author, while they can still read it, or anyone who could create it. Changing `resources`
-  also needs what creating it with the new set needs.
+  also needs what creating it with the new set needs. A token Cetacean issued writes as the person who signed in for
+  it, so their notes are theirs from the dashboard and over MCP alike.
 
 An annotation doesn't change anything in Docker, so it needs no [operations level][operations-level]: annotations work
 on a read-only deployment. A service, stack or node detail links `/annotations` with `rel="edit"` when the caller may
@@ -628,7 +632,9 @@ an update to the entry rather than as a new one.
 
 An `annotation` event reports each create, edit, and delete as it happens. It is sent on `/events`, and on the
 [stream](#per-resource-streams) of each resource the annotation belongs on, by the same rule as `resourceId` above: a
-cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`:
+cluster-wide one on every resource's. `resource` carries the annotation, and is absent on `remove`. An edit that
+moves an annotation off a stream's resource, or makes it unreadable to the caller, arrives on that stream as a
+`remove`:
 
 ```sse
 id: 4182

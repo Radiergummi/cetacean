@@ -154,8 +154,13 @@ const seededAnnotationID = "4242"
 
 type nopAnnotationStore struct{}
 
-func (nopAnnotationStore) PutAnnotation(context.Context, cache.Annotation) error { return nil }
-func (nopAnnotationStore) DeleteAnnotation(context.Context, uint64) error        { return nil }
+func (s nopAnnotationStore) BeginAnnotation(context.Context) (cache.AnnotationWrite, error) {
+	return s, nil
+}
+
+func (nopAnnotationStore) Put(context.Context, cache.Annotation) error { return nil }
+func (nopAnnotationStore) Delete(context.Context, uint64) error        { return nil }
+func (nopAnnotationStore) Release()                                    {}
 
 // seedAnnotation turns annotations on over a store that keeps nothing, and adds
 // one on service svc1, so every annotation route reaches its handler.

@@ -30,6 +30,8 @@ The stack review also left a list of small issues (#592). This design takes ever
 | `author` | The author's actor subject. Matches the author, not the last editor |
 | `kind` | Repeatable on `/history`: `change`, `gap`, `annotation`. Omitted means all |
 
+- Authorship counts a token Cetacean's OAuth server issued as its upstream provider, so the
+  author `author` lists is the one who may edit as author, on the dashboard and over MCP.
 - A gap still passes `tag` and `author`, as it passes `search`, so a filtered timeline still
   shows where Cetacean wasn't watching.
 - `matchAny` without `tag` is ignored, not refused. A `matchAny` that isn't a boolean is `API016`.

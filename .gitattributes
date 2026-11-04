@@ -2,3 +2,6 @@
 # harvester's line-ending normalization (see harvest_test.go). core.autocrlf
 # would otherwise silently rewrite it to LF on commit, defeating the test.
 scripts/licensetexts/testdata/node_modules/@scope/pkg/LICENSE -text
+
+# A shipped migration is pinned by its hash, which a CRLF checkout would change.
+internal/timeline/migrations/*.sql -text

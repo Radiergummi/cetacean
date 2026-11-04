@@ -5635,8 +5635,9 @@ paths:
         One annotation. It is found only by a caller who may read every resource it
         names; a cluster-wide one by any caller with a grant. `Allow` lists `PATCH`
         and `DELETE` when the caller may change it. A resource the cluster no
-        longer holds is marked `removed`, which changes the `ETag` without a write;
-        a precondition is checked against the `ETag` as it stands.
+        longer holds is marked `removed`, which changes the `ETag` without a write
+        and drops `Last-Modified`, since nothing records when that happened; a
+        precondition is checked against the `ETag` as it stands.
       parameters:
         - $ref: "#/components/parameters/annotationId"
       responses:
@@ -5682,7 +5683,9 @@ paths:
         Applies an RFC 7396 merge patch. The author may edit an annotation while they
         can read it; anyone else needs what creating it needs. Changing `resources`
         also needs what creating the annotation with the new set needs. `null` clears
-        `until`, `tags` or `resources`.
+        `until`, `tags` or `resources`. A patch that changes nothing, such as `{}`,
+        keeps the version and records no edit. Preconditions are evaluated before
+        the body is read.
       parameters:
         - $ref: "#/components/parameters/annotationId"
         - $ref: "#/components/parameters/IfMatch"
@@ -8736,11 +8739,11 @@ components:
         timestamp:
           type: string
           format: date-time
-          description: Defaults to now. Any time, including the future
+          description: Defaults to now. Any time in the years 1970 to 2199, including the future; returned in UTC
         until:
           type: string
           format: date-time
-          description: After `timestamp`; omit for a point
+          description: After `timestamp`, in the years 1970 to 2199; omit for a point
         text:
           type: string
           minLength: 1

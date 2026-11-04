@@ -67,13 +67,31 @@ func TestHistoryFeedShowsAnEditAsAnUpdate(t *testing.T) {
 	body := w.Body.String()
 
 	for _, want := range []string{
-		"<id>urn:cetacean:annotation:" + id + "</id>",
+		"<id>urn:cetacean:annotation:" + h.cache.History().Instance() + ":" + id + "</id>",
 		"<title>maintenance, extended</title>",
 		"<updated>" + a.Updated.Format(time.RFC3339Nano) + "</updated>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("feed lacks %s:\n%s", want, body)
 		}
+	}
+}
+
+func TestHistoryFeedDatesAnAnnotationOnARemovedResourceByItsEdit(t *testing.T) {
+	h := annotationHandlers(t, true)
+	id, _ := createAnnotation(t, h, "carol",
+		`{"text":"a","resources":[{"type":"service","id":"web"}]}`)
+	h.cache.DeleteService("svc1")
+
+	a, _ := h.cache.Annotation(mustParseID(t, id))
+
+	req := withContentType(newAnnotationRequest("GET", "/history", "carol", ""), ContentTypeAtom)
+	w := httptest.NewRecorder()
+	h.feedHistoryHandler(renderAtom)(w, req)
+
+	if want := "<updated>" + a.Created.Format(time.RFC3339Nano) + "</updated>"; !strings.Contains(
+		w.Body.String(), want) {
+		t.Errorf("feed lacks %s:\n%s", want, w.Body)
 	}
 }
 

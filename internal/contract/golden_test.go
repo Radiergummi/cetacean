@@ -1,12 +1,15 @@
 package contract
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -39,6 +42,7 @@ func assertGolden(t *testing.T, name string, lines []string) {
 	path := filepath.Join("testdata", name+".golden")
 
 	if *update {
+		//nolint:gosec // G703: testdata/ and a constant surface name, written under -update only.
 		if err := os.WriteFile(path, []byte(got), 0o600); err != nil {
 			t.Fatalf("write golden: %v", err)
 		}
@@ -311,6 +315,49 @@ func TestGoldenErrorCodes(t *testing.T) {
 	}
 
 	assertGolden(t, "errors", lines)
+}
+
+// formatVersion reads a file format's version constant from its source.
+var formatVersion = regexp.MustCompile(`(?m)^const (\w+Version) = (\d+)$`)
+
+// TestGoldenFormats pins what is on users' disks: a shipped migration is
+// never edited, only followed by a new one, and a format's version changes
+// only with a reader for the old one.
+func TestGoldenFormats(t *testing.T) {
+	migrations := os.DirFS("../timeline/migrations")
+
+	files, err := fs.Glob(migrations, "*.sql")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("migrations: %v, %d files", err, len(files))
+	}
+
+	var lines []string
+
+	for _, file := range files {
+		body, err := fs.ReadFile(migrations, file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sum := sha256.Sum256(body)
+		lines = append(lines, "migration "+file+" "+hex.EncodeToString(sum[:]))
+	}
+
+	for _, file := range []string{"../cache/snapshot.go", "../oauth/persist.go"} {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		match := formatVersion.FindSubmatch(body)
+		if match == nil {
+			t.Fatalf("%s: no version constant", file)
+		}
+
+		lines = append(lines, string(match[1])+" "+string(match[2]))
+	}
+
+	assertGolden(t, "formats", lines)
 }
 
 var descPattern = regexp.MustCompile(`^Desc\{fqName: "([^"]+)", .*variableLabels: \{([^}]*)\}\}$`)

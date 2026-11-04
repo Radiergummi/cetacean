@@ -4,10 +4,16 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/radiergummi/cetacean/internal/cache"
 )
+
+// quietHeartbeat is how often a tick that inserts nothing heartbeats. A crash
+// widens the next gap's start by at most this much; nothing is lost in it, as
+// every tick that advances the ring heartbeats.
+const quietHeartbeat = 15 * time.Second
 
 // Writer copies the ring into a Store once a second, following the ring
 // rather than fed from notify.
@@ -16,8 +22,8 @@ type Writer struct {
 	history *cache.History
 	keep    int
 
-	// recordGap records the window from the previous process's last heartbeat,
-	// recovering what it can up to streamSince, or nothing when that is zero; it
+	// recordGap records the window from the last heartbeat before watching
+	// stopped, recovering what it can up to streamSince, or nothing when that is zero; it
 	// reaches the store through the ring.
 	recordGap func(ctx context.Context, from, streamSince time.Time)
 
@@ -27,12 +33,25 @@ type Writer struct {
 
 	retained bool
 
-	// Each logs its first failure and its recovery once.
-	writeFailing, coverageFailing bool
+	// live reports whether the cluster is being watched; nil always is.
+	live func() bool
 
-	// gapChecked and covering are set once the gap is recorded and coverage
-	// opened; until then a ready writer retries at every tick.
-	ready, gapChecked, covering bool
+	// heartbeat is when SeenAt last committed.
+	heartbeat time.Time
+
+	// writeFailing, like coverageFailing, logs its first failure and its
+	// recovery once.
+	writeFailing bool
+
+	ready bool
+
+	// mu holds what RecordGap, called beside Run, shares with it. gapChecked
+	// and covering are set once the gap is recorded and coverage opened; until
+	// then a ready writer retries at every tick. seenAt is this process's last
+	// committed heartbeat, the opening of its coverage, or the end of its last gap.
+	mu                                    sync.Mutex
+	coverageFailing, gapChecked, covering bool
+	seenAt                                time.Time
 }
 
 // NewWriter starts from the ring's count, which Restore set.
@@ -49,6 +68,13 @@ func NewWriter(
 		recordGap:   recordGap,
 		lastWritten: history.Count(),
 	}
+}
+
+// SetLive sets what reports whether the cluster is being watched: heartbeats
+// stop while it is false, so the gap RecordGap records next starts there.
+// Call before Run.
+func (w *Writer) SetLive(live func() bool) {
+	w.live = live
 }
 
 // Run writes until ctx ends, then commits what remains. Coverage opens once
@@ -70,27 +96,45 @@ func (w *Writer) Run(ctx context.Context, ready <-chan struct{}) {
 			w.ready = true
 			w.openCoverage(ctx)
 		case <-ticker.C:
-			if w.ready && !w.covering {
+			w.mu.Lock()
+			reopen := w.ready && !w.covering
+			w.mu.Unlock()
+
+			if reopen {
 				w.openCoverage(ctx)
 			}
 
 			w.flush(ctx)
 		case <-stop:
+			// A clean stop's gap starts where it stopped.
+			w.heartbeat = time.Time{}
 			w.flush(ctx)
+
 			return
 		}
 	}
 }
 
-// RecordGap records the gap since the previous stretch of watching, before
-// the stream starting at streamSince records anything, so what it recovers sits
-// below every change watched. Run's ready must close after it; when the store
-// fails here, openCoverage records the gap then, recovering nothing.
+// RecordGap records the gap since the last stretch of watching, before the
+// stream starting at streamSince records anything, so what it recovers sits below
+// every change watched. Coverage opens after it: Run's ready, then a tick. When
+// the store fails here, openCoverage records the gap then, recovering nothing.
 func (w *Writer) RecordGap(ctx context.Context, streamSince time.Time) {
-	previous, ok, err := w.store.LastSeen(ctx)
-	if err != nil {
-		w.coverageFailed(ctx, err)
-		return
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.covering = false
+	w.recordGapLocked(ctx, streamSince)
+}
+
+func (w *Writer) recordGapLocked(ctx context.Context, streamSince time.Time) {
+	previous, ok := w.seenAt, !w.seenAt.IsZero()
+	if !ok {
+		var err error
+		if previous, ok, err = w.store.LastSeen(ctx); err != nil {
+			w.coverageFailed(ctx, err)
+			return
+		}
 	}
 
 	w.gapChecked = true
@@ -98,27 +142,34 @@ func (w *Writer) RecordGap(ctx context.Context, streamSince time.Time) {
 	if ok && previous.Before(time.Now()) {
 		w.recordGap(ctx, previous, streamSince)
 	}
+
+	w.seenAt = time.Now()
 }
 
 // openCoverage records the gap since the previous stretch of watching, if
 // RecordGap could not, then opens this one. The gap is recorded as soon as it
 // is known, so a coverage row slow to write does not stretch it over watched time.
 func (w *Writer) openCoverage(ctx context.Context) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if !w.gapChecked {
-		w.RecordGap(ctx, time.Time{})
+		w.recordGapLocked(ctx, time.Time{})
 
 		if !w.gapChecked {
 			return
 		}
 	}
 
-	if err := w.store.OpenCoverage(ctx, time.Now()); err != nil {
+	now := time.Now()
+	if err := w.store.OpenCoverage(ctx, now); err != nil {
 		w.coverageFailed(ctx, err)
 		return
 	}
 
 	w.coverageFailing = false
 	w.covering = true
+	w.seenAt = now
 }
 
 func (w *Writer) coverageFailed(ctx context.Context, err error) {
@@ -146,9 +197,17 @@ func (w *Writer) flush(ctx context.Context) {
 	})
 
 	batch := Batch{Entries: entries}
-	if w.covering {
-		batch.SeenAt = time.Now()
+	if last > w.lastWritten {
+		batch.Last = last
 	}
+
+	now := time.Now()
+	w.mu.Lock()
+	if w.covering && (w.live == nil || w.live()) &&
+		(batch.Last > 0 || now.Sub(w.heartbeat) >= quietHeartbeat) {
+		batch.SeenAt = now
+	}
+	w.mu.Unlock()
 
 	// A tick that inserted nothing cannot have pushed anything out; the first
 	// retains regardless, since the configured size may have shrunk.
@@ -156,8 +215,8 @@ func (w *Writer) flush(ctx context.Context) {
 		batch.Keep = w.keep
 	}
 
-	// Before coverage opens a quiet tick has nothing to write.
-	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 {
+	// A quiet tick between heartbeats, or before coverage opens, has nothing to write.
+	if len(entries) == 0 && batch.SeenAt.IsZero() && batch.Keep == 0 && batch.Last == 0 {
 		w.lastWritten = last
 		return
 	}
@@ -179,4 +238,14 @@ func (w *Writer) flush(ctx context.Context) {
 	w.writeFailing = false
 	w.retained = true
 	w.lastWritten = last
+
+	if !batch.SeenAt.IsZero() {
+		w.heartbeat = batch.SeenAt
+	}
+
+	w.mu.Lock()
+	if w.covering && batch.SeenAt.After(w.seenAt) {
+		w.seenAt = batch.SeenAt
+	}
+	w.mu.Unlock()
 }

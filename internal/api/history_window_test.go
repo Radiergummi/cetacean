@@ -77,7 +77,7 @@ func TestHandleHistory_RejectsAMalformedBound(t *testing.T) {
 			}
 
 			param, _, _ := strings.Cut(query, "=")
-			if !strings.HasSuffix(p.Type, "API016") || !strings.Contains(p.Detail, `"`+param+`"`) {
+			if !strings.HasSuffix(p.Type, "API016") || !strings.HasPrefix(p.Detail, param+": ") {
 				t.Errorf("problem = %+v, want API016 naming %s", p, param)
 			}
 		})

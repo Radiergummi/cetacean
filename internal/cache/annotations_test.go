@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/swarm"
 )
 
 // fakeAnnotationStore records what was committed and fails while err is set.
@@ -14,7 +16,13 @@ type fakeAnnotationStore struct {
 	deleted []uint64
 }
 
-func (f *fakeAnnotationStore) PutAnnotation(_ context.Context, a Annotation) error {
+func (f *fakeAnnotationStore) BeginAnnotation(context.Context) (AnnotationWrite, error) {
+	return f, nil
+}
+
+func (f *fakeAnnotationStore) Release() {}
+
+func (f *fakeAnnotationStore) Put(_ context.Context, a Annotation) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -24,7 +32,7 @@ func (f *fakeAnnotationStore) PutAnnotation(_ context.Context, a Annotation) err
 	return nil
 }
 
-func (f *fakeAnnotationStore) DeleteAnnotation(_ context.Context, id uint64) error {
+func (f *fakeAnnotationStore) Delete(_ context.Context, id uint64) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -32,6 +40,83 @@ func (f *fakeAnnotationStore) DeleteAnnotation(_ context.Context, id uint64) err
 	f.deleted = append(f.deleted, id)
 
 	return nil
+}
+
+// heldAnnotationStore makes BeginAnnotation wait for free, as a store busy
+// with another commit does.
+type heldAnnotationStore struct {
+	fakeAnnotationStore
+
+	waiting, free chan struct{}
+}
+
+func (h *heldAnnotationStore) BeginAnnotation(ctx context.Context) (AnnotationWrite, error) {
+	h.waiting <- struct{}{}
+
+	select {
+	case <-h.free:
+		return &h.fakeAnnotationStore, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func TestCreateAnnotation_WaitsForTheStoreWithoutHoldingNotify(t *testing.T) {
+	c := New(nil)
+	store := &heldAnnotationStore{waiting: make(chan struct{}), free: make(chan struct{})}
+	c.RestoreAnnotations(store, nil)
+
+	created := make(chan Annotation)
+	go func() {
+		a, err := c.CreateAnnotation(context.Background(), Annotation{Text: "deploy"})
+		if err != nil {
+			t.Error(err)
+		}
+
+		created <- a
+	}()
+
+	<-store.waiting
+
+	notified := make(chan struct{})
+	go func() {
+		defer close(notified)
+		c.SetService(swarm.Service{ID: "svc1"})
+	}()
+
+	select {
+	case <-notified:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a change waited for the annotation's store")
+	}
+
+	close(store.free)
+
+	if a := <-created; a.ID != 2 || c.history.Count() != 2 {
+		t.Fatalf(
+			"annotation ID = %d with %d items, want 2 after the change",
+			a.ID,
+			c.history.Count(),
+		)
+	}
+}
+
+func TestCreateAnnotation_GivesUpWaitingWithItsContext(t *testing.T) {
+	c := New(nil)
+	store := &heldAnnotationStore{waiting: make(chan struct{}, 1), free: make(chan struct{})}
+	c.RestoreAnnotations(store, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := c.CreateAnnotation(ctx, Annotation{Text: "deploy"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+
+	if len(store.put) != 0 || c.history.Count() != 0 || c.AnnotationCount() != 0 {
+		t.Fatal("an annotation that never got the store was recorded")
+	}
 }
 
 func annotatedCache(t *testing.T) (*Cache, *fakeAnnotationStore) {
@@ -232,5 +317,35 @@ func TestDeleteAnnotation(t *testing.T) {
 		func(Annotation) error { return nil },
 	); !errors.Is(err, ErrAnnotationNotFound) {
 		t.Fatalf("second delete: %v, want ErrAnnotationNotFound", err)
+	}
+}
+
+func TestUpdateAnnotation_CarriesWhatItReplaced(t *testing.T) {
+	var events []Event
+	c := New(func(e Event) { events = append(events, e) })
+	c.RestoreAnnotations(&fakeAnnotationStore{}, nil)
+
+	a, err := c.CreateAnnotation(context.Background(), Annotation{Text: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.UpdateAnnotation(context.Background(), a.ID, func(a *Annotation) error {
+		a.Text = "y"
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	last := events[len(events)-1]
+	previous, ok := last.Previous.(Annotation)
+	if last.Action != "update" || !ok || previous.Text != "x" || previous.Version != a.Version {
+		t.Fatalf("update event %+v, want the version it replaced as Previous", last)
+	}
+
+	items, _ := c.history.Since(1)
+	if len(items) != 1 || items[0].Previous == nil || items[0].Previous.Text != "x" {
+		t.Fatalf("ring items %+v, want the update to keep what it replaced", items)
 	}
 }
