@@ -439,6 +439,33 @@ func Run(t *testing.T, newStore Factory) {
 		assertAnnotations(t, annotations(t, store), nil)
 	})
 
+	t.Run("an annotation write commits whatever its context does", func(t *testing.T) {
+		store := newStore(t)()
+		defer closeStore(t, store)
+
+		write := beginAnnotation(t, store)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		a := fullAnnotation()
+		if err := write.Put(ctx, a); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		b := a
+		b.ID = a.ID + 1
+		if err := write.Put(ctx, b); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+
+		if err := write.Delete(ctx, a.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		write.Release()
+
+		assertAnnotations(t, annotations(t, store), []cache.Annotation{b})
+	})
+
 	// An annotation's writes take sequence IDs the timeline table never holds.
 	t.Run("restore reports the largest annotation version", func(t *testing.T) {
 		store := newStore(t)()

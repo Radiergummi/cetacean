@@ -276,6 +276,21 @@ func TestWriter_QuietTicksHeartbeatSparsely(t *testing.T) {
 	})
 }
 
+func TestWriter_HeartbeatsWithAnAnnotation(t *testing.T) {
+	store := &fakeStore{}
+	history := cache.NewHistory(10)
+	w := NewWriter(store, history, 10, noGap)
+	w.covering = true
+
+	w.flush(context.Background())
+	history.Append(cache.HistoryEntry{Kind: cache.KindAnnotation, Action: "create"})
+	w.flush(context.Background())
+
+	if len(store.batches) != 2 || store.batches[1].SeenAt.IsZero() {
+		t.Fatalf("batches = %+v, want the annotation's tick to heartbeat", store.batches)
+	}
+}
+
 func TestWriter_Run(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := &fakeStore{}

@@ -39,8 +39,8 @@ type SQLite struct {
 	// coverage is this process's coverage row, zero until OpenCoverage.
 	coverage int64
 
-	// stored counts the rows of the kinds the ring holds, so retention
-	// deletes the excess from the oldest end instead of counting to Keep.
+	// stored counts the rows of the kinds the ring holds; only a committed
+	// insert or delete changes it.
 	stored int64
 
 	instance string

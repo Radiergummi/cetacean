@@ -421,7 +421,7 @@ func run(s settings) error {
 		}
 	}()
 
-	// stopRecording runs once the HTTP server has drained, or never started.
+	// stopRecording runs once the HTTP server has stopped, or never started.
 	stopRecording := sync.OnceFunc(func() {
 		stop()
 		<-watcherDone
@@ -761,6 +761,7 @@ func run(s settings) error {
 		}
 
 		stopRecording()
+		slog.Info("shutdown complete")
 
 		return nil
 	}
@@ -1092,8 +1093,6 @@ func serveDualListeners(
 		return fmt.Errorf("meta server error: %w", err)
 	case <-drained:
 	}
-
-	slog.InfoContext(ctx, "shutdown complete")
 
 	return nil
 }

@@ -11,7 +11,7 @@ import (
 
 // quietHeartbeat is how often a tick that inserts nothing heartbeats. A crash
 // widens the next gap's start by at most this much; nothing is lost in it, as
-// every insert heartbeats.
+// every tick that advances the ring heartbeats.
 const quietHeartbeat = 15 * time.Second
 
 // Writer copies the ring into a Store once a second, following the ring
@@ -162,7 +162,7 @@ func (w *Writer) flush(ctx context.Context) {
 	}
 
 	now := time.Now()
-	if w.covering && (len(entries) > 0 || now.Sub(w.heartbeat) >= quietHeartbeat) {
+	if w.covering && (batch.Last > 0 || now.Sub(w.heartbeat) >= quietHeartbeat) {
 		batch.SeenAt = now
 	}
 

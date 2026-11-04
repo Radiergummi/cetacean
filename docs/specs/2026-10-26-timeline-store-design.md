@@ -198,7 +198,7 @@ oldest kept item. SQLite reuses the freed pages, so the file settles at a steady
 ### Shutdown
 
 Main closes the writer after the watcher has stopped and the HTTP server has drained, so a
-handler's last change or annotation is written too. The entries
+handler's last annotation is written too. The entries
 the final events produced are committed with a last `seen_at`.
 
 ## Reading
