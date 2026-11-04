@@ -5167,8 +5167,8 @@ packages:
     peerDependencies:
       vue: '>=3.2.26 < 4'
 
-  systeminformation@5.33.10:
-    resolution: {integrity: sha512-/NXbMVASt2UbSVgmWto4aBTIAeuYY7zOELpZybmNxqpsrbo5uYHpuEPf5nkyrPng0uG5YOb+Yv6s0FyKY4mDQg==}
+  systeminformation@5.33.19:
+    resolution: {integrity: sha512-Zm7wGeCG7PqfvzegMJIzrxICopWqYCeLATVmvxOOci1isLcNVKgY4Fr0hhYQzvc7cgtK3377jQVChTFAnznOiA==}
     engines: {node: '>=10.0.0'}
     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
@@ -6533,7 +6533,7 @@ snapshots:
       object-treeify: 1.1.33
       open: 8.4.2
       picomatch: 4.0.7
-      systeminformation: 5.33.10
+      systeminformation: 5.33.19
       undici: 8.12.3
       which: 4.0.0
       yocto-spinner: 1.2.2
@@ -11694,7 +11694,7 @@ snapshots:
     dependencies:
       vue: 3.5.44(typescript@7.0.2)
 
-  systeminformation@5.33.10: {}
+  systeminformation@5.33.19: {}
 
   tabbable@6.5.0: {}
 
