@@ -27,9 +27,11 @@ func TestListAnnotationsKeepsWhatTheCallerMayRead(t *testing.T) {
 
 	var body struct {
 		Items []struct {
-			ID   string `json:"@id"`
-			Type string `json:"@type"`
-			Kind string `json:"kind"`
+			ID        string            `json:"@id"`
+			Type      string            `json:"@type"`
+			Kind      *string           `json:"kind"`
+			Tags      []string          `json:"tags"`
+			Resources []json.RawMessage `json:"resources"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -38,8 +40,9 @@ func TestListAnnotationsKeepsWhatTheCallerMayRead(t *testing.T) {
 
 	var ids []string
 	for _, item := range body.Items {
-		if item.Type != "Annotation" || item.Kind != "annotation" {
-			t.Errorf("item %+v, want an Annotation", item)
+		if item.Type != "Annotation" || item.Kind != nil || item.Tags == nil ||
+			item.Resources == nil {
+			t.Errorf("item %+v, want an Annotation in its detail shape", item)
 		}
 		ids = append(ids, item.ID)
 	}
@@ -63,8 +66,14 @@ func TestHistoryCSVCarriesAnAnnotationsTextAndTags(t *testing.T) {
 	}
 
 	records := csvRecords(t, w.Body.String())
-	if got := records[1][12:]; !slices.Equal(got, []string{"'=1+1", "deploy,rollback"}) {
-		t.Fatalf("text and tags = %q, want the formula neutralised and the tags joined", got)
+	if got := records[1][12:]; !slices.Equal(got, []string{"'=1+1", "deploy,rollback", "cluster"}) {
+		t.Fatalf(
+			"text, tags and resources = %q, want the formula neutralised and the tags joined",
+			got,
+		)
+	}
+	if records[1][4] == "" {
+		t.Fatalf("id = %q, want the annotation's", records[1][4])
 	}
 }
 

@@ -2,6 +2,7 @@ import {
   annotationBody,
   annotationInputs,
   annotationPatch,
+  changedOnlyByRemovals,
   fromLocalInput,
   parseTag,
   toLocalInput,
@@ -113,5 +114,25 @@ describe("annotationPatch", () => {
     expect(annotationPatch(point, { ...annotationInputs(point), to })).toEqual({
       until: "2026-11-02T15:00:00.000Z",
     });
+  });
+});
+
+describe("changedOnlyByRemovals", () => {
+  const opened: Annotation = {
+    id: 7,
+    timestamp: "2026-11-02T13:00:00Z",
+    text: "Load test",
+    tags: [],
+    resources: [{ type: "service", id: "svc1", name: "web" }],
+  };
+
+  it("takes a resource marked removed as no change", () => {
+    const current = { ...opened, resources: [{ ...opened.resources[0]!, removed: true }] };
+
+    expect(changedOnlyByRemovals(opened, current)).toBe(true);
+  });
+
+  it("takes an edit as a change", () => {
+    expect(changedOnlyByRemovals(opened, { ...opened, text: "Soak test" })).toBe(false);
   });
 });

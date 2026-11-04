@@ -1,3 +1,4 @@
+import { changedOnlyByRemovals } from "./annotationFields";
 import AnnotationForm, { type EditedNote } from "./AnnotationForm";
 import { api, ApiError } from "@/api/client";
 import {
@@ -96,6 +97,22 @@ export default function AnnotationMenu({
       } else if (failure instanceof ApiError && failure.status === 412) {
         try {
           const { data, etag } = await api.annotation(target.note.id);
+
+          // A removal elsewhere changed the validator, not the note: delete again.
+          if (changedOnlyByRemovals(target.note, data)) {
+            try {
+              await api.deleteAnnotation(data.id, etag);
+              setDeleting(null);
+
+              return;
+            } catch (retry) {
+              if (!(retry instanceof ApiError && retry.status === 412)) {
+                setDeleteError(getErrorMessage(retry, "The note could not be deleted."));
+
+                return;
+              }
+            }
+          }
 
           // Cancelled meanwhile, the confirmation stays closed.
           setDeleting((current) => current && { note: data, etag });

@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record a note about a moment or range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
-- Annotations appear on `/history`, its CSV and feeds, which take a `tag` filter; `GET /annotations` lists them with the same filters
+- Annotations appear on `/history`, its CSV and feeds, which filter by `tag` (with `matchAny`), `author` and several `kind`s; a stack's timeline includes its services' notes
+- `GET /annotations` lists annotations in their detail shape, with Atom and JSON feeds; `GET /annotations/tags` counts the tags in use, and a removed resource is marked `removed`
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
 - The MCP tool `add_annotation` records an annotation at any operations level, and `get_events` returns annotations with their `text`, `tags` and `resources`
 - The dashboard shows annotations on the metric charts and as notes in Recent Activity and on the History page; annotate mode on service and node charts, Add annotation, and a note's "…" menu write, edit, and delete them

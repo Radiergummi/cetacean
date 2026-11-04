@@ -102,7 +102,7 @@ func (s *Server) toolGetEvents(
 		matched = matched[:limit]
 	}
 
-	matched = cluster.NameHistoryTasks(s.cache, matched, s.readPredicate(ctx))
+	matched = cluster.PresentHistory(s.cache, matched, s.readPredicate(ctx))
 
 	timeline := make([]projection.TimelineEntry, 0, len(matched))
 

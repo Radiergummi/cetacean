@@ -463,7 +463,7 @@ func TestHistoryCSV(t *testing.T) {
 	wantHeader := []string{
 		"timestamp", "type", "action", "name", "id", "summary",
 		"actor", "provider", "client", "transport", "kind", "until",
-		"text", "tags",
+		"text", "tags", "resources",
 	}
 	if !slices.Equal(records[0], wantHeader) {
 		t.Errorf("header = %v, want %v", records[0], wantHeader)

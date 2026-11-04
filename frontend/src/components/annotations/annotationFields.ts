@@ -27,6 +27,20 @@ export function fromLocalInput(value: string): string {
 }
 
 /**
+ * Whether a refetched note says what the opened one did, apart from which of
+ * its resources have since been removed: a 412 for that alone is no conflict.
+ */
+export function changedOnlyByRemovals(opened: Annotation, current: Annotation): boolean {
+  const comparable = (note: Annotation) =>
+    JSON.stringify({
+      ...note,
+      resources: note.resources.map(({ type, id, name }) => ({ type, id, name })),
+    });
+
+  return comparable(opened) === comparable(current);
+}
+
+/**
  * The `POST /annotations` body for the form's fields.
  */
 export function annotationBody({

@@ -972,6 +972,9 @@ components:
         name:
           type: string
           description: Its name when the annotation named it
+        removed:
+          type: boolean
+          description: Present and true when the cluster no longer holds the resource
 
     HistoryActor:
       type: object

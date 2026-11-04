@@ -5376,9 +5376,12 @@ paths:
       tags: [Annotations]
       summary: List annotations
       description: >-
-        The history narrowed to annotations, as `/history?kind=annotation` lists
-        them, with the same filters, cursor paging and CSV rendering. `Allow`
-        lists `POST` when the caller may create an annotation.
+        The annotations the caller may read, newest first by ID, each in the shape
+        `/annotations/{id}` gives it. The filters, cursor paging and CSV columns are
+        `/history`'s; `kind` and `tasks` are refused. Answers `409` (`ANN003`) when
+        `storage.timeline` is off, where `/history` answers an empty list. `Allow`
+        lists `POST`, and a `Link` with `rel="edit"` points here, when the caller
+        may create an annotation.
       parameters:
         - name: type
           in: query
@@ -5390,7 +5393,7 @@ paths:
           in: query
           description: >-
             Only annotations naming this resource, by ID or name, on its stack when
-            it is a service, and cluster-wide ones
+            it is a service, on its services when it is a stack, and cluster-wide ones
           schema:
             type: string
           example: r8m2x5nk3p7q
@@ -5401,6 +5404,8 @@ paths:
             type: string
           example: load test
         - $ref: "#/components/parameters/annotationTag"
+        - $ref: "#/components/parameters/annotationMatchAny"
+        - $ref: "#/components/parameters/timelineAuthor"
         - name: before
           in: query
           description: Return annotations older than this ID, as the `next` link sets it
@@ -5442,7 +5447,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HistoryCollection"
+                $ref: "#/components/schemas/AnnotationCollection"
               example:
                 "@context": /api/context.jsonld
                 "@type": Collection
@@ -5450,13 +5455,8 @@ paths:
                   - "@id": /annotations/4182
                     "@type": Annotation
                     id: 4182
-                    kind: annotation
                     timestamp: "2026-11-01T14:00:00Z"
                     until: "2026-11-01T14:30:00Z"
-                    type: ""
-                    action: ""
-                    resourceId: ""
-                    name: ""
                     text: Load test against the checkout flow
                     tags: [load-test]
                     resources:
@@ -5471,6 +5471,12 @@ paths:
                 total: 1
                 limit: 1
                 offset: 0
+            application/atom+xml:
+              schema:
+                $ref: "#/components/schemas/AtomFeed"
+            application/feed+json:
+              schema:
+                $ref: "#/components/schemas/JSONFeed"
             text/csv:
               schema:
                 $ref: "#/components/schemas/CSVDocument"
@@ -5480,6 +5486,12 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "406":
           $ref: "#/components/responses/NotAcceptable"
+        "409":
+          description: "`storage.timeline` is off (`ANN003`)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
     post:
       operationId: createAnnotation
       tags: [Annotations]
@@ -5531,6 +5543,87 @@ paths:
         "503":
           $ref: "#/components/responses/AnnotationNotStored"
 
+  /annotations/tags:
+    get:
+      operationId: listAnnotationTags
+      tags: [Annotations]
+      summary: List annotation tags
+      description: >-
+        The tags on the annotations the caller may read, with how many carry each,
+        most used first and then by name. Only readable annotations are counted, so
+        a count never reveals a hidden one. Each tag's `@id` is the list of the
+        annotations carrying it. Answers `409` (`ANN003`) when `storage.timeline`
+        is off.
+      parameters:
+        - name: q
+          in: query
+          description: Only tags starting with this
+          schema:
+            type: string
+          example: dep
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/Range"
+      responses:
+        "200":
+          description: Tags
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              $ref: "#/components/headers/Link"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationTagCollection"
+              example:
+                "@context": /api/context.jsonld
+                "@type": Collection
+                items:
+                  - "@id": /annotations?tag=deploy
+                    "@type": AnnotationTag
+                    tag: deploy
+                    count: 42
+                  - "@id": /annotations?tag=load-test
+                    "@type": AnnotationTag
+                    tag: load-test
+                    count: 3
+                total: 2
+                limit: 50
+                offset: 0
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/CSVDocument"
+        "206":
+          description: The page a `Range` request named, when it is less than the whole list
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Range:
+              $ref: "#/components/headers/Content-Range"
+            Accept-Ranges:
+              $ref: "#/components/headers/Accept-Ranges"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationTagCollection"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "406":
+          $ref: "#/components/responses/NotAcceptable"
+        "416":
+          $ref: "#/components/responses/RangeNotSatisfiable"
+        "409":
+          description: "`storage.timeline` is off (`ANN003`)"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
   /annotations/{id}:
     get:
       operationId: getAnnotation
@@ -5539,7 +5632,9 @@ paths:
       description: >-
         One annotation. It is found only by a caller who may read every resource it
         names; a cluster-wide one by any caller with a grant. `Allow` lists `PATCH`
-        and `DELETE` when the caller may change it.
+        and `DELETE` when the caller may change it. A resource the cluster no
+        longer holds is marked `removed`, which changes the `ETag` without a write;
+        a precondition is checked against the `ETag` as it stands.
       parameters:
         - $ref: "#/components/parameters/annotationId"
       responses:
@@ -5673,8 +5768,9 @@ paths:
         fields, including ones older than anything the ring still holds. One is
         listed when the caller may read every resource it names. `search` matches
         its text, the time window matches a range that overlaps it, and a resource
-        filter matches one that names the resource, one on a service's stack, and a
-        cluster-wide one.
+        filter matches one that names the resource, one on a service's stack, one on
+        a stack's services, and a cluster-wide one. A `Link` with `rel="edit"`
+        points to `/annotations` when the caller may create an annotation.
       parameters:
         - name: type
           in: query
@@ -5707,12 +5803,20 @@ paths:
         - name: kind
           in: query
           description: |
-            Return only items of this kind. `change` keeps the list as it was before
-            gaps were recorded. Omit for every kind.
+            Return only items of these kinds; repeat it for several. `change` keeps
+            the list as it was before gaps were recorded. Omit for every kind. A kind
+            not listed here answers `400` (`API016`).
+          style: form
+          explode: true
           schema:
-            type: string
-          example: change
+            type: array
+            items:
+              type: string
+              enum: [change, gap, annotation]
+          example: [change, annotation]
         - $ref: "#/components/parameters/annotationTag"
+        - $ref: "#/components/parameters/annotationMatchAny"
+        - $ref: "#/components/parameters/timelineAuthor"
         - name: before
           in: query
           description: Return entries older than this entry ID, as the `next` link sets it
@@ -7812,11 +7916,42 @@ components:
       name: tag
       in: query
       description: |
-        Return only annotations carrying this tag. Changes are left out; gaps stay,
+        Return only annotations carrying every one of these tags, or any of them
+        with `matchAny`. Repeat it for several. Changes are left out; gaps stay,
         as they do with `search`.
+      style: form
+      explode: true
       schema:
-        type: string
-      example: deploy
+        type: array
+        items:
+          type: string
+      example: [deploy]
+
+    annotationMatchAny:
+      name: matchAny
+      in: query
+      description: |
+        With `true`, an annotation matches when it carries any of the `tag`
+        values rather than every one. Ignored without `tag`.
+      schema:
+        type: boolean
+        default: false
+      example: true
+
+    timelineAuthor:
+      name: author
+      in: query
+      description: |
+        Return only what an actor with one of these subjects did: the annotations
+        they wrote (not ones they only edited) and the changes they made through
+        Cetacean. Repeat it for several. Gaps stay.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+      example: [3f9c2a71-5d0e-4b8a-9c1f-7e2d6a4b8c90]
 
     search:
       name: search
@@ -8515,6 +8650,59 @@ components:
         name:
           type: string
           description: Its name when the annotation named it
+        removed:
+          type: boolean
+          description: Present and true when the cluster no longer holds the resource
+
+    AnnotationListItem:
+      allOf:
+        - type: object
+          required: ["@id", "@type"]
+          properties:
+            "@id":
+              type: string
+              description: The annotation's own URL, /annotations/{id}
+            "@type":
+              type: string
+              enum: [Annotation]
+        - $ref: "#/components/schemas/Annotation"
+
+    AnnotationCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AnnotationListItem"
+
+    AnnotationTag:
+      type: object
+      required: ["@id", "@type", tag, count]
+      properties:
+        "@id":
+          type: string
+          description: The list of the annotations carrying the tag
+        "@type":
+          type: string
+          enum: [AnnotationTag]
+        tag:
+          type: string
+        count:
+          type: integer
+          minimum: 1
+          description: How many annotations the caller may read carry it
+
+    AnnotationTagCollection:
+      allOf:
+        - $ref: "#/components/schemas/CollectionEnvelope"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AnnotationTag"
 
     AnnotationReference:
       type: object

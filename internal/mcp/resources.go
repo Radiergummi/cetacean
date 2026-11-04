@@ -361,7 +361,7 @@ func (s *Server) lookupResource(ctx context.Context, uri string) (any, error) {
 	case "history":
 		// Named after filtering, never before: the read filter keys a task's ACL
 		// check on its ID, which is what the resolver resolves parentage from.
-		return cluster.NameHistoryTasks(s.cache, s.cache.Timeline(cache.HistoryQuery{
+		return cluster.PresentHistory(s.cache, s.cache.Timeline(cache.HistoryQuery{
 			Limit:   100,
 			Visible: cluster.HistoryReadable(s.readPredicate(ctx)),
 

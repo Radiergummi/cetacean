@@ -1189,7 +1189,12 @@ func TestAnnotationsOn(t *testing.T) {
 	c.SetService(swarm.Service{ID: "svc1", Spec: swarm.ServiceSpec{Annotations: swarm.Annotations{
 		Name: "web", Labels: map[string]string{cache.StackLabel: "shop"},
 	}}})
-	match := AnnotationsOn(c, "svc1", ResourceMatcher(cache.EventService, "svc1"))
+	match := AnnotationsOn(
+		c,
+		cache.EventService,
+		"svc1",
+		ResourceMatcher(cache.EventService, "svc1"),
+	)
 
 	annotation := func(resources ...cache.AnnotationResource) cache.Event {
 		return cache.Event{

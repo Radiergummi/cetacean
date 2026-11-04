@@ -432,6 +432,8 @@ export interface AnnotationResource {
   type: "service" | "stack" | "node";
   id: string;
   name: string;
+  /** Set when the cluster no longer holds the resource. */
+  removed?: boolean | undefined;
 }
 
 /**

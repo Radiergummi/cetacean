@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"strconv"
 	"strings"
 	"time"
@@ -106,7 +107,7 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 		header: []string{
 			"timestamp", "type", "action", "name", "id", "summary",
 			"actor", "provider", "client", "transport", "kind", "until",
-			"text", "tags",
+			"text", "tags", "resources",
 		},
 		records: make([][]string, 0, len(entries)),
 	}
@@ -122,12 +123,20 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			until = entry.Until.UTC().Format(time.RFC3339)
 		}
 
+		// An annotation's row names the note and what it is about; a change's
+		// resource is in its own columns.
+		id, resources := entry.ResourceID, ""
+		if entry.Kind == cache.KindAnnotation {
+			id = strconv.FormatUint(entry.ID, 10)
+			resources = csvAnnotationResources(entry.Resources)
+		}
+
 		table.records = append(table.records, []string{
 			entry.Timestamp.UTC().Format(time.RFC3339),
 			string(entry.Type),
 			entry.Action,
 			entry.Name,
-			entry.ResourceID,
+			id,
 			entry.Summary,
 			actor.DisplayName(),
 			actor.Provider,
@@ -137,10 +146,26 @@ func csvTableForHistory(entries []cache.HistoryEntry) csvTable {
 			until,
 			entry.Text,
 			strings.Join(entry.Tags, ","),
+			resources,
 		})
 	}
 
 	return table
+}
+
+// csvAnnotationResources joins an annotation's resources as type:name pairs,
+// or says "cluster" for a cluster-wide one.
+func csvAnnotationResources(resources []cache.AnnotationResource) string {
+	if len(resources) == 0 {
+		return "cluster"
+	}
+
+	pairs := make([]string, len(resources))
+	for i, r := range resources {
+		pairs[i] = string(r.Type) + ":" + cmp.Or(r.Name, r.ID)
+	}
+
+	return strings.Join(pairs, ",")
 }
 
 func csvTableForRecommendations(results []recommendations.Recommendation) csvTable {

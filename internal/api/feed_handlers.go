@@ -148,11 +148,9 @@ func (h *Handlers) queryHistoryFeed(
 	query.BeforeID = beforeID
 	query.Limit = limit
 	query.Visible = h.readableHistory(r)
-	canRead := h.acl.Checker(auth.IdentityFromContext(r.Context()), "read")
 	query.ReadableAnnotation = h.annotationCaller(r).MayRead
-	entries := cluster.NameHistoryTasks(h.cache, h.cache.Timeline(query), canRead)
 
-	return entries, beforeID, limit, true
+	return h.timeline(r, query), beforeID, limit, true
 }
 
 // handleFeedSearch validates the search query, queries matching history entries,
@@ -235,33 +233,67 @@ func (h *Handlers) handleFeedRecommendations(
 // JSON does. /events serves the same feed through handleFeedHistory, unwindowed.
 func (h *Handlers) feedHistoryHandler(render feedRenderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if h.requireAnyGrant(w, r) {
+			h.feedTimeline(w, r, render, "History", historyFeedParams, nil)
+		}
+	}
+}
+
+// feedAnnotationsHandler serves /annotations' feeds: /history's narrowed to
+// annotations, refused as the list is when they are off.
+func (h *Handlers) feedAnnotationsHandler(render feedRenderer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if !h.requireAnyGrant(w, r) {
 			return
 		}
 
-		q := r.URL.Query()
-
-		window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
-		if err != nil {
-			problem.Write(w, r, "API016", err.Error())
+		if !h.requireAnnotations(w, r) || refuseParams(w, r, "kind", "tasks") {
 			return
 		}
 
-		entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, cache.HistoryQuery{
-			Kind:   q.Get("kind"),
-			Tag:    q.Get("tag"),
-			After:  window.Since,
-			Before: window.Until,
-		})
-		if !ok {
-			return
-		}
-
-		data := historyFeedData(r, "History", entries, beforeID, limit)
-		data.QueryParams = historyFeedParams
-
-		render(w, r, data)
+		h.feedTimeline(
+			w, r, render, "Annotations", annotationFeedParams, []string{cache.KindAnnotation},
+		)
 	}
+}
+
+// feedTimeline renders the timeline in the request's window and filters, with
+// kinds, when set, in place of the request's.
+func (h *Handlers) feedTimeline(
+	w http.ResponseWriter,
+	r *http.Request,
+	render feedRenderer,
+	title string,
+	params []string,
+	kinds []string,
+) {
+	q := r.URL.Query()
+
+	window, err := cluster.ParseTimeWindow(q.Get("since"), q.Get("until"))
+	if err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
+	}
+
+	query := cache.HistoryQuery{After: window.Since, Before: window.Until}
+	if err := timelineFilters(q, &query); err != nil {
+		problem.Write(w, r, "API016", err.Error())
+		return
+	}
+
+	if kinds != nil {
+		query.Kinds = kinds
+	}
+
+	entries, beforeID, limit, ok := h.queryHistoryFeed(w, r, query)
+	if !ok {
+		return
+	}
+
+	data := historyFeedData(r, title, entries, beforeID, limit)
+	data.QueryParams = params
+
+	render(w, r, data)
 }
 
 // feedSearchHandler wraps handleFeedSearch as an http.HandlerFunc.
@@ -580,12 +612,24 @@ var listCSVParams = []string{"search", "filter", "sort", "dir", "limit", "offset
 
 // historyFeedParams names what /history's feeds read beyond the pagination
 // pair.
-var historyFeedParams = []string{"kind", "tag", "since", "until"}
+var historyFeedParams = []string{"kind", "tag", "matchAny", "author", "since", "until"}
+
+// annotationFeedParams names what /annotations' feeds read, which take no kind.
+var annotationFeedParams = withoutParams(historyFeedParams, "kind")
 
 // historyCSVParams names what HandleHistory reads.
 var historyCSVParams = slices.Concat(
 	[]string{"type", "resourceId", "tasks", "search", "before", "limit"}, historyFeedParams,
 )
+
+// annotationCSVParams names what HandleAnnotations reads.
+var annotationCSVParams = withoutParams(historyCSVParams, "kind", "tasks")
+
+func withoutParams(params []string, names ...string) []string {
+	return slices.DeleteFunc(slices.Clone(params), func(p string) bool {
+		return slices.Contains(names, p)
+	})
+}
 
 // echoingFeedRequest opts r out of compression when the feed's links will echo
 // a parameter beyond the pagination pair back: reflected input beside
