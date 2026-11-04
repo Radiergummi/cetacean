@@ -8,21 +8,42 @@ import { type PointerEvent, useEffect, useReducer, useRef, useSyncExternalStore 
 interface OverlayState {
   gesture: Gesture;
 
-  /** In epoch seconds, so the mark stays on its time while the chart streams. */
+  /**
+   * Where the gesture under way began, in epoch seconds, so a chart that
+   * streams before it ends does not move its start.
+   */
+  anchor: number | null;
+
+  /**
+   * In epoch seconds, so the mark stays on its time while the chart streams.
+   */
   mark: Mark | null;
 
   /** Counts marks, so each opens a fresh form. */
   marks: number;
 }
 
-const initialState: OverlayState = { gesture: { kind: "idle" }, mark: null, marks: 0 };
+const initialState: OverlayState = {
+  gesture: { kind: "idle" },
+  anchor: null,
+  mark: null,
+  marks: 0,
+};
+
+function began(gesture: Gesture) {
+  return gesture.kind === "dragging"
+    ? gesture.start
+    : gesture.kind === "tapped"
+      ? gesture.at
+      : null;
+}
 
 // A reducer, not state read in the handler: pointer events can outrun a
 // render, and each must build on the gesture the one before it left.
 function overlayReducer(
   state: OverlayState,
   action: { event: GestureEvent; timeFor: (x: number) => number | null } | { type: "clear" },
-) {
+): OverlayState {
   if ("type" in action) {
     return { ...state, mark: null };
   }
@@ -33,18 +54,34 @@ function overlayReducer(
     return state;
   }
 
-  const from = next.mark ? action.timeFor(next.mark.from) : null;
+  if (!next.mark) {
+    const x = began(next.gesture);
+    const anchor =
+      next.gesture.kind === state.gesture.kind
+        ? state.anchor
+        : x === null
+          ? null
+          : action.timeFor(x);
 
-  return next.mark && from !== null
-    ? {
-        gesture: next.gesture,
-        mark: {
-          from,
-          to: next.mark.to === undefined ? undefined : (action.timeFor(next.mark.to) ?? undefined),
-        },
-        marks: state.marks + 1,
-      }
-    : { ...state, gesture: next.gesture };
+    return { ...state, gesture: next.gesture, anchor };
+  }
+
+  const from = state.anchor;
+  const other =
+    next.mark.to !== undefined && action.event.type === "up"
+      ? action.timeFor(action.event.x)
+      : null;
+
+  if (from === null) {
+    return { ...state, gesture: next.gesture, anchor: null, mark: null };
+  }
+
+  return {
+    gesture: next.gesture,
+    anchor: null,
+    mark: other === null ? { from } : { from: Math.min(from, other), to: Math.max(from, other) },
+    marks: state.marks + 1,
+  };
 }
 
 /**

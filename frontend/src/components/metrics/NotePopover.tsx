@@ -44,8 +44,9 @@ export default function NotePopover({
   );
   const x = useSyncExternalStore(subscribe, () => (pin ? locate(pin.time) : null));
 
-  // While a card's menu or dialog is open the pin holds what it showed, so
-  // nothing unmounts the dialog; it unpins once the dialog closes if still gone.
+  // While a card's menu or dialog is open the pin holds the notes it showed, and
+  // its place once its time leaves the chart, so nothing unmounts the dialog;
+  // it unpins once the dialog closes if still gone.
   const [held, setHeld] = useState(false);
   const live = useMemo(() => ({ notes, x }), [notes, x]);
   const [onScreen, setOnScreen] = useState(live);
@@ -54,7 +55,8 @@ export default function NotePopover({
     setOnScreen(live);
   }
 
-  const { notes: shownNotes, x: shownX } = held ? onScreen : live;
+  const shownNotes = held ? onScreen.notes : notes;
+  const shownX = held ? (x ?? onScreen.x) : x;
   const gone = pin !== null && (shownNotes.length === 0 || shownX === null);
 
   // Base UI reads an anchor once per identity, so a move makes a new one.
@@ -90,7 +92,7 @@ export default function NotePopover({
       }}
     >
       <PopoverContent
-        aria-label={notes.length > 1 ? `${notes.length} annotations` : "Annotation"}
+        aria-label={shownNotes.length > 1 ? `${shownNotes.length} annotations` : "Annotation"}
         side="bottom"
         align="start"
         sideOffset={10}

@@ -172,4 +172,50 @@ describe("NotePopover", () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
+  it("keeps following its time while a note's menu is open", async () => {
+    const user = userEvent.setup();
+    const { plot } = show([1], [note(1, "Moving")]);
+
+    const placement = () => screen.getByRole("dialog").parentElement?.style.transform;
+
+    await user.click(await screen.findByRole("button", { name: "Annotation actions" }));
+    await screen.findByRole("menuitem", { name: "Edit" });
+    await waitFor(() => expect(placement()).toMatch(/translate/));
+
+    const before = placement();
+    plot.move(300);
+
+    await waitFor(() => expect(placement()).not.toBe(before));
+  });
+
+  it("stays pinned when a note's dialog closes while the note is still there", async () => {
+    const user = userEvent.setup();
+    const { onClose } = show([1], [note(1, "Editing")]);
+
+    await user.click(await screen.findByRole("button", { name: "Annotation actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    await screen.findByLabelText("Text");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByLabelText("Text")).not.toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("names itself by the notes it shows while a dialog holds them", async () => {
+    const user = userEvent.setup();
+    const { rerenderWith } = show([1, 2], [note(1, "One"), note(2, "Two")]);
+
+    const [actions] = await screen.findAllByRole("button", { name: "Annotation actions" });
+
+    if (!actions) {
+      throw new Error("no card menu");
+    }
+
+    await user.click(actions);
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    await screen.findByLabelText("Text");
+    rerenderWith([]);
+
+    expect(screen.getByRole("dialog", { name: "2 annotations", hidden: true })).toBeInTheDocument();
+  });
 });

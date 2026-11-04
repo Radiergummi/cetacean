@@ -22,17 +22,18 @@ const historyTypes = {
 } as const;
 
 /**
- * The collections whose stream carries their tasks' events, though their
- * history holds no task entry to show for them.
+ * The event types a collection's stream carries that its history holds no
+ * entry for: a node's and a stack's tasks, and a stack's other members.
  */
-const historyWithoutTasks: ReadonlySet<DetailCollection> = new Set(["/nodes", "/stacks"]);
+const notInHistory: Partial<Record<DetailCollection, ReadonlySet<string>>> = {
+  "/nodes": new Set(["task"]),
+  "/stacks": new Set(["task", "config", "secret", "network", "volume"]),
+};
 
 /** How many changes a detail page's Recent Activity shows. */
 const recentChanges = 10;
 
 export type DetailCollection = keyof typeof historyTypes;
-
-const isNotTask = ({ type }: SSEEvent) => type !== "task";
 
 export interface DetailResourceOptions<T> {
   /** Fetch history for this resource (default: true). */
@@ -126,10 +127,12 @@ export function useDetailResource<T>(
     [onEvent, queryClient, detailKey, setData],
   );
 
+  const skipped = notInHistory[collection];
+
   useDebouncedInvalidation(ssePath, {
     resourceKeys: [detailKey, ...(extraQueryKeys ?? [])],
     timelineKeys: fetchHistory ? [historyKey] : [],
-    timelineRelevant: historyWithoutTasks.has(collection) ? isNotTask : undefined,
+    timelineRelevant: skipped ? ({ type }) => !skipped.has(type) : undefined,
     onEvent: onEvent ? handleEvent : undefined,
   });
 

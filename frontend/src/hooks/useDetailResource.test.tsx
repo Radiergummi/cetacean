@@ -149,4 +149,30 @@ describe("useDetailResource", () => {
       vi.useRealTimers();
     }
   });
+  it("leaves a stack's Recent Activity alone on a member its history holds nothing of", async () => {
+    const { result } = renderHook(
+      () => useDetailResource<Node>("web", api.node as never, "/stacks"),
+      { wrapper: createWrapper(createTestQueryClient()) },
+    );
+
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    await waitFor(() => expect(api.recentActivity).toHaveBeenCalledTimes(1));
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        listener?.({ type: "config", action: "update", id: "c1" });
+        vi.advanceTimersByTime(500);
+      });
+      expect(api.recentActivity).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        listener?.({ type: "service", action: "update", id: "s1" });
+        vi.advanceTimersByTime(500);
+      });
+      expect(api.recentActivity).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

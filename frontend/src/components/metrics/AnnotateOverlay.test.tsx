@@ -1,6 +1,6 @@
 import AnnotateOverlay from "./AnnotateOverlay";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/useClusterAnnotatable", () => ({
@@ -10,7 +10,7 @@ vi.mock("@/hooks/useClusterAnnotatable", () => ({
 const service = { type: "service", id: "svc1", name: "web" } as const;
 
 interface Chart {
-  timeFor?: ((x: number) => number) | undefined;
+  timeFor?: ((x: number) => number | null) | undefined;
   locate?: ((time: number) => number | null) | undefined;
   snap?: ((x: number) => number) | undefined;
   capturing?: boolean | undefined;
@@ -211,6 +211,29 @@ describe("AnnotateOverlay", () => {
     shift(30);
 
     expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "70px", width: "200px" });
+  });
+
+  it("starts a drag at the time it was pressed on, though the chart streamed", async () => {
+    const { overlay, shift } = show();
+
+    fireEvent.pointerDown(overlay, { clientX: 100, pointerType: "mouse" });
+    shift(30);
+    fireEvent.pointerUp(overlay, { clientX: 300, pointerType: "mouse" });
+    await screen.findByLabelText("Text");
+
+    expect(screen.getByTestId("annotate-mark")).toHaveStyle({ left: "70px", width: "230px" });
+  });
+
+  it("closes an open mark when the next one has no time", async () => {
+    let empty = false;
+    const { overlay } = show({ timeFor: (x) => (empty ? null : 1_000_000 + x * 60) });
+
+    click(overlay, 100);
+    await screen.findByLabelText("Text");
+    empty = true;
+    click(overlay, 300);
+
+    await waitFor(() => expect(screen.queryByLabelText("Text")).not.toBeInTheDocument());
   });
 
   it("takes no mark while it does not capture the pointer", () => {

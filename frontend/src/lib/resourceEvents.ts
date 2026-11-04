@@ -18,11 +18,15 @@ const resourceTypes: ReadonlySet<string> = new Set(resourceEventTypes);
 const annotatableTypes: ReadonlySet<string> = new Set(["node", "service", "stack"]);
 
 /**
- * Whether an event may change what a note shows: its own, or the removal of
- * a resource it can name, which marks that resource removed.
+ * Whether an event may change what a note shows: its own, or a resource it can
+ * name coming or going, which marks that resource removed or clears the mark.
+ * A stack is keyed by name, so a redeploy brings back the one a note named.
  */
 export function changesAnnotations({ type, action }: { type: string; action: string }): boolean {
-  return type === "annotation" || (action === "remove" && annotatableTypes.has(type));
+  return (
+    type === "annotation" ||
+    ((action === "create" || action === "remove") && annotatableTypes.has(type))
+  );
 }
 
 /**

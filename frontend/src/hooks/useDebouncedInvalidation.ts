@@ -14,7 +14,10 @@ interface Options {
   /** Invalidated on an event that may have moved a resource, and a sync. */
   resourceKeys?: QueryKeys | undefined;
 
-  /** Invalidated on every event, a gap's and an annotation's too: what lists a timeline. */
+  /**
+   * Invalidated on every event `timelineRelevant` lets through, a gap's and an
+   * annotation's too: what lists a timeline.
+   */
   timelineKeys?: QueryKeys | undefined;
   delay?: number | undefined;
   onEvent?: SSEListener | undefined;
@@ -22,7 +25,9 @@ interface Options {
   /** Narrows which events invalidate; a sync always does. */
   relevant?: ((event: SSEEvent) => boolean) | undefined;
 
-  /** Narrows further which of those invalidate `timelineKeys`; a sync always does. */
+  /**
+   * Narrows further which of those invalidate `timelineKeys`; a sync always does.
+   */
   timelineRelevant?: ((event: SSEEvent) => boolean) | undefined;
 }
 
