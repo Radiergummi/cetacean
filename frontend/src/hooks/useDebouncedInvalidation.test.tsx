@@ -119,6 +119,34 @@ describe("useDebouncedInvalidation", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history", "s1"] });
   });
 
+  it("leaves the timeline alone on an event it does not count, but never on a sync", () => {
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    renderHook(
+      () =>
+        useDebouncedInvalidation("/nodes/n1", {
+          resourceKeys: [["node", "n1"]],
+          timelineKeys: [["history", "n1"]],
+          timelineRelevant: ({ type }) => type !== "task",
+        }),
+      { wrapper: createWrapper(client) },
+    );
+
+    listener?.({ type: "task", action: "update", id: "t1" });
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["node", "n1"] });
+
+    invalidate.mockClear();
+    listener?.({ type: "sync", action: "sync", id: "" });
+    vi.advanceTimersByTime(500);
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["node", "n1"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["history", "n1"] });
+  });
+
   it("does nothing for an event of a kind it does not know", () => {
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries");

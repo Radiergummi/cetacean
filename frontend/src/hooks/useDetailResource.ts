@@ -21,6 +21,15 @@ const historyTypes = {
   "/stacks": "stack",
 } as const;
 
+/**
+ * The event types a collection's stream carries that its history holds no
+ * entry for: a node's and a stack's tasks, and a stack's other members.
+ */
+const notInHistory: Partial<Record<DetailCollection, ReadonlySet<string>>> = {
+  "/nodes": new Set(["task"]),
+  "/stacks": new Set(["task", "config", "secret", "network", "volume"]),
+};
+
 /** How many changes a detail page's Recent Activity shows. */
 const recentChanges = 10;
 
@@ -118,9 +127,12 @@ export function useDetailResource<T>(
     [onEvent, queryClient, detailKey, setData],
   );
 
+  const skipped = notInHistory[collection];
+
   useDebouncedInvalidation(ssePath, {
     resourceKeys: [detailKey, ...(extraQueryKeys ?? [])],
     timelineKeys: fetchHistory ? [historyKey] : [],
+    timelineRelevant: skipped ? ({ type }) => !skipped.has(type) : undefined,
     onEvent: onEvent ? handleEvent : undefined,
   });
 

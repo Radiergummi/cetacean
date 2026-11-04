@@ -13,6 +13,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useDebouncedInvalidation } from "../hooks/useDebouncedInvalidation";
 import { useUrlParam } from "../hooks/useUrlParam";
 import { apiPath } from "../lib/basePath";
+import { changesAnnotations } from "../lib/resourceEvents";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Download, Tags } from "lucide-react";
 import { useMemo } from "react";
@@ -55,7 +56,11 @@ export default function Annotations() {
       placeholderData: keepPreviousData,
     });
 
-  useDebouncedInvalidation("/events", { timelineKeys: [["annotations"]], delay: 2_000 });
+  useDebouncedInvalidation("/events", {
+    timelineKeys: [["annotations"]],
+    delay: 2_000,
+    relevant: changesAnnotations,
+  });
 
   const entries = useMemo(
     () => data?.pages.flatMap(({ items }) => items.map(annotationEntry)) ?? [],

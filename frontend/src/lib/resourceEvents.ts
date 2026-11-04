@@ -15,6 +15,20 @@ export const resourceEventTypes = [
 
 const resourceTypes: ReadonlySet<string> = new Set(resourceEventTypes);
 
+const annotatableTypes: ReadonlySet<string> = new Set(["node", "service", "stack"]);
+
+/**
+ * Whether an event may change what a note shows: its own, or a resource it can
+ * name coming or going, which marks that resource removed or clears the mark.
+ * A stack is keyed by name, so a redeploy brings back the one a note named.
+ */
+export function changesAnnotations({ type, action }: { type: string; action: string }): boolean {
+  return (
+    type === "annotation" ||
+    ((action === "create" || action === "remove") && annotatableTypes.has(type))
+  );
+}
+
 /**
  * Whether an event may have moved resources: one of theirs, or a sync, after
  * which any of them may have changed.

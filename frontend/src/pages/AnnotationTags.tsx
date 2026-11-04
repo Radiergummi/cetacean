@@ -31,6 +31,7 @@ export default function AnnotationTags() {
   useDebouncedInvalidation("/events", {
     timelineKeys: [["annotations", "tags"]],
     delay: 2_000,
+    relevant: ({ type }) => type === "annotation",
   });
 
   const tags = useMemo(() => data?.pages.flatMap(({ items }) => items) ?? [], [data]);

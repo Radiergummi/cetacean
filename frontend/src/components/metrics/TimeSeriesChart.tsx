@@ -30,6 +30,7 @@ import { useSeriesIsolation } from "./useSeriesIsolation";
 import { useLatestRef } from "@/hooks/useLatestRef";
 import { useMatchesBreakpoint } from "@/hooks/useMatchesBreakpoint.ts";
 import { getSemanticChartColor } from "@/lib/chartColors.ts";
+import type { TimelineItem } from "@/lib/timeline";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -85,6 +86,11 @@ interface Props {
 
 /** How long a click waits to see whether it is the first half of a double-click. */
 const clickSettleMilliseconds = 250;
+
+/**
+ * One empty timeline, so a chart without one hands the popover the same each render.
+ */
+const noTimeline: TimelineItem[] = [];
 
 export default function TimeSeriesChart({
   title,
@@ -282,6 +288,12 @@ export default function TimeSeriesChart({
   const markerPlugin = useMemo<Plugin<"line">>(
     () => ({
       id: "timelineMarkers",
+      // A pinned popover and an open mark follow their time as samples move the axis.
+      afterUpdate() {
+        for (const listener of markerListenersRef.current) {
+          listener();
+        }
+      },
       beforeDatasetsDraw({ ctx, chartArea, scales }) {
         const items = timelineRef.current;
         const xScale = scales["x"];
@@ -310,11 +322,6 @@ export default function TimeSeriesChart({
           );
           markerLayoutRef.current = layout;
           markerInputsRef.current = inputs;
-
-          // A pinned popover follows its time as samples move the axis.
-          for (const listener of markerListenersRef.current) {
-            listener();
-          }
         }
 
         drawMarkers(ctx, chartArea, layout, {
@@ -726,6 +733,8 @@ export default function TimeSeriesChart({
               {panel?.annotate && (panel.annotating || panel.markOpen) && (
                 <AnnotateOverlay
                   timeFor={timeFor}
+                  locate={pixelFor}
+                  subscribe={subscribeMarkers}
                   snap={snapToMinute}
                   scope={panel.annotate}
                   capturing={panel.annotating ?? false}
@@ -744,7 +753,7 @@ export default function TimeSeriesChart({
         <NotePopover
           pin={pin}
           container={plotRef}
-          timeline={panel?.timeline ?? []}
+          timeline={panel?.timeline ?? noTimeline}
           locate={pixelFor}
           subscribe={subscribeMarkers}
           onClose={unpin}
