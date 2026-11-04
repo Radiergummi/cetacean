@@ -280,6 +280,36 @@ export function markersAt(layout: MarkerLayout | null, x: number): MarkerHit {
 }
 
 /**
+ * How far outside a flag's pennant a click still hits it, in pixels.
+ */
+const flagSlop = 3;
+
+/**
+ * The notes whose flag the point at `x`, `y` is on, newest first: point notes
+ * and the starts of ranges, whose pennant sits at the plot's `top`. Only the
+ * pennant is a target, so a click anywhere else on the plot is the chart's.
+ */
+export function notesAtFlag(
+  layout: MarkerLayout | null,
+  x: number,
+  y: number,
+  top: number,
+): TimelineItem[] {
+  if (!layout || y < top - flagSlop || y > top + flagSize + flagSlop) {
+    return [];
+  }
+
+  const onPennant = (at: number) => x >= at - flagSlop && x <= at + flagSize + flagSlop;
+  const hit = [
+    ...layout.flags.filter(({ x: at }) => onPennant(at)).flatMap(({ items }) => items),
+    ...layout.regions.filter(({ left, opens }) => opens && onPennant(left)).map(({ item }) => item),
+  ];
+  const start = (item: TimelineItem) => (item.shape === "point" ? item.at : item.from);
+
+  return hit.sort((one, other) => start(other) - start(one) || other.entry.id - one.entry.id);
+}
+
+/**
  * Draws gaps as hatched shading, annotation ranges as plain shading over them,
  * changes as lines with a round cap, and annotation points as lines with a
  * pennant on top. A cluster of several gets a wider line, and of changes a

@@ -2,9 +2,11 @@ import CollapsibleSection from "../CollapsibleSection";
 import { IconButton } from "../IconButton";
 import { ChartSyncProvider } from "./ChartSyncProvider";
 import { MetricsPanelContext, type MetricsPanelContextValue } from "./MetricsPanelContext";
+import NotesControl from "./NotesControl";
 import TimeRangeControl from "./TimeRangeControl";
 import type { Threshold } from "./TimeSeriesChart";
 import TimeSeriesChart from "./TimeSeriesChart";
+import { filterNotes, useNoteFilter } from "./useNoteFilter";
 import { type TimelineSource, useTimeline } from "./useTimeline";
 import { useTimeRange } from "./useTimeRange";
 import type { AnnotationScope } from "@/api/types";
@@ -97,6 +99,11 @@ export default function MetricsPanel({
     to: customTo ?? undefined,
     refreshKey,
   });
+  const noteFilter = useNoteFilter();
+  const drawn = useMemo(
+    () => filterNotes(markers.items, noteFilter.shown, noteFilter.tags),
+    [markers.items, noteFilter.shown, noteFilter.tags],
+  );
 
   useEffect(() => {
     if (!drillStack) {
@@ -127,7 +134,7 @@ export default function MetricsPanel({
       streaming,
       drillStack,
       setDrillStack,
-      timeline: markers.items,
+      timeline: drawn,
       annotate,
       annotating: (annotating || modifierHeld) && annotate !== undefined,
       setAnnotating,
@@ -143,7 +150,7 @@ export default function MetricsPanel({
       stacked,
       streaming,
       drillStack,
-      markers.items,
+      drawn,
       annotate,
       annotating,
       modifierHeld,
@@ -170,6 +177,13 @@ export default function MetricsPanel({
           onClick={() => setStacked((v) => !v)}
           title={stacked ? "Switch to line chart" : "Switch to stacked area"}
           icon={stacked ? <AreaChart className="size-3.5" /> : <LineChart className="size-3.5" />}
+        />
+      )}
+
+      {timeline && (
+        <NotesControl
+          timeline={markers.items}
+          filter={noteFilter}
         />
       )}
 

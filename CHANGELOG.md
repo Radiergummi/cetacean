@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The MCP tools `update_annotation` and `delete_annotation` edit and remove notes, `cetacean://annotations/{id}` reads one and can be subscribed to, and `get_events` filters by `kinds`, `tags` and `authors`
 - The dashboard shows annotations on the metric charts and as notes in Recent Activity and on the History page; annotate mode on service and node charts, Add annotation, and a note's "…" menu write, edit, and delete them
 - Note cards link the URLs in their text and offer Show on chart, opening the note's service or node metrics around it; the note form suggests tags in use, and stack pages show Recent Activity
+- Clicking a note's flag on a metric chart pins its notes with their menus; a Notes menu on the panel hides notes or narrows them by tag, kept in the URL (`notes`, `noteTag`)
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
 - After a restart, the history marks the time Cetacean wasn't watching as a gap: a divider on the History page and in Recent Activity, and an item on `/history`, its CSV and feeds, `/events` and `get_events`
