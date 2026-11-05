@@ -32,35 +32,34 @@ the running version and commit, the licenses page, and a link to the API playgro
 Press `?` for the full list. Shortcuts are ignored while focus is in a text input, apart from `⌘ K` / `Ctrl K` and
 `⌘ Enter` / `Ctrl Enter`.
 
-| Shortcut                 | Action                        |
-|--------------------------|-------------------------------|
-| `⌘ K` / `Ctrl K`         | Toggle the command palette    |
-| `/`                      | Open the command palette      |
-| `?`                      | Toggle the shortcut list      |
-| `Esc`                    | Close the overlay, or go back |
-| `g` `h`                  | Cluster overview              |
-| `g` `n`                  | Nodes                         |
-| `g` `k`                  | Stacks                        |
-| `g` `s`                  | Services                      |
-| `g` `a`                  | Tasks                         |
-| `g` `c`                  | Configs                       |
-| `g` `x`                  | Secrets                       |
-| `g` `w`                  | Networks                      |
-| `g` `o`                  | Published ports               |
-| `g` `v`                  | Volumes                       |
-| `g` `p`                  | Plugins                       |
-| `g` `i`                  | Swarm info                    |
-| `g` `t`                  | Topology                      |
-| `g` `m`                  | Metrics console               |
-| `g` `r`                  | Recommendations               |
-| `j` / `↓`                | Next row in a table           |
-| `k` / `↑`                | Previous row                  |
-| `Enter`                  | Open the selected row         |
-| `⌘ Enter` / `Ctrl Enter` | Submit the form or editor     |
+| Shortcut                 | Action                                     |
+|--------------------------|--------------------------------------------|
+| `⌘ K` / `Ctrl K`         | Toggle the command palette                 |
+| `/`                      | Open the command palette                   |
+| `?`                      | Toggle the shortcut list                   |
+| `Esc`                    | Close the overlay, or go back              |
+| `g` `h`                  | Cluster overview                           |
+| `g` `n`                  | Nodes                                      |
+| `g` `k`                  | Stacks                                     |
+| `g` `s`                  | Services                                   |
+| `g` `a`                  | Tasks                                      |
+| `g` `c`                  | Configs                                    |
+| `g` `x`                  | Secrets                                    |
+| `g` `w`                  | Networks                                   |
+| `g` `o`                  | Published ports                            |
+| `g` `v`                  | Volumes                                    |
+| `g` `p`                  | Plugins                                    |
+| `g` `i`                  | Swarm info                                 |
+| `g` `t`                  | Topology                                   |
+| `g` `m`                  | Metrics console                            |
+| `g` `r`                  | Recommendations                            |
+| `j` / `↓`                | Next row in a table                        |
+| `k` / `↑`                | Previous row                               |
+| `Enter`                  | Open the selected row                      |
+| `⌘ Enter` / `Ctrl Enter` | Submit the form, or save the inline editor |
 
 The `g` shortcuts are chords: press `g`, release, then the second key within one second. Hovering a nav link shows
-its chord. `⌘ Enter` or `Ctrl Enter` submits the form you're in, or saves the inline editor; the button it presses
-shows the shortcut.
+its chord.
 
 ## Command palette
 

@@ -9,15 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
-- Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
-- Annotations appear on `/history`, its CSV and feeds, filtered by `tag` (with `matchAny`), `author` and `kind`
-- `GET /annotations` lists annotations in their detail shape, with CSV and feeds filtered by `tag` and `author`, marking a removed resource `removed`; `GET /annotations/tags` counts the tags in use
+- Annotations note a moment or a range on services, stacks, nodes or the whole cluster through `/annotations`, needing `storage.timeline` and no operations level; its list, CSV and feeds filter by `tag` and `author`, and `GET /annotations/tags` counts tags in use
+- `/history`, its CSV and feeds filter by `tag` (with `matchAny`), `author` and `kind`
 - A stack's timeline on `/history` and in `get_events` includes its services' changes and the annotations naming them
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
 - The MCP tools `add_annotation`, `update_annotation` and `delete_annotation` write annotations at any operations level, `cetacean://annotations/{id}` reads one and can be subscribed to, and `get_events` returns them, filtered by `kinds`, `tags` and `authors`
 - The dashboard lists annotations at `/annotations` by tag, author and text, shows each at `/annotations/{id}` and the tags in use at `/annotations/tags`; tags link to the list, History filters by kind and tag, and stack pages show Recent Activity
-- Annotations are added from History, the annotations list, Recent Activity or annotate mode on service and node charts, and edited or deleted from their "…" menu; the form suggests tags in use
-- Annotations link the URLs in their text, and Show on chart opens their service's or node's metrics around them
+- Annotations are added from History, the annotations list, Recent Activity or annotate mode on service and node charts, edited or deleted from their "…" menu, link URLs in their text, and Show on chart opens their metrics around them
 - The command palette adds an annotation, rotates the swarm's join tokens, unlock key and CA, and enables, disables or removes a plugin, each behind the same permission check and confirmation as the page's button
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
@@ -52,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** entry IDs in the Atom and JSON feeds name the deployment's history as well as the change, so feed readers show existing entries once more after the upgrade
 - **Breaking:** a write to a resource the caller can't read answers that resource's `404` instead of `403` (`ACL002`)
 - **Breaking:** the config and secret lists, `GET /configs`, `GET /secrets`, their MCP resources and `find` show each group's newest version and any older one in use (`versions=all` for every one); `cetacean.version-of` names a group, `unused-version` flags unused old ones
-- **Breaking:** a service with a bind, named-pipe or cluster mount, a volume with driver options, or added capabilities needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- **Breaking:** a service with host access, such as a bind mount or an added capability, needs level 3 to change what runs with it or roll back; the API reference's Writes section lists both
 - **Breaking:** `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - **Breaking:** a malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400` (`API016`) instead of the default page
 - **Breaking:** the startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`

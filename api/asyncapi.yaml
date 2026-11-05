@@ -444,8 +444,16 @@ channels:
       The terminal of one exec session, opened by a WebSocket upgrade of the
       session's own address. Only the session's owner may attach, and only
       once: a dropped connection ends the session, and there is no reattach.
-      The upgrade's `Origin` must be the request's own host,
-      `server.public_url` or an entry of `server.cors.origins`.
+
+      The upgrade passes without an `Origin`, as a CLI client sends it, or
+      with `Sec-Fetch-Site` `same-origin` or `none`; otherwise its `Origin`
+      must be the request's own host, `server.public_url`, or an entry of
+      `server.cors.origins` other than `*`. A refused upgrade answers a
+      problem instead, in this order: `403` (`CSR001`) for an origin not
+      allowed, `404` (`EXE006`) for a session the caller can't see, `403`
+      (`EXE004`) for one they see but don't own, `409` (`EXE005`) for one
+      already attached or ended, and `409` (`EXE002`) when no transport
+      reaches the task's node.
 
       Binary frames are terminal bytes in both directions. Text frames are
       JSON control messages. The server ends every connection with one `exit`
@@ -744,12 +752,11 @@ components:
         Recorded when Cetacean starts watching again, after a restart or a lost
         connection to Docker, from the last heartbeat before it stopped watching
         to the moment it was watching again, and only with `storage.timeline`
-        on. Changes made during a gap produced no event. Those Docker still
-        buffered are recorded as history entries marked `recovered`, just below
-        the gap, and are not sent as events either: read them, and the gap's
-        `recoveredFrom`, from `/history`. A gap names no resource, so it is
-        sent only on `/events`, where it passes every `?types=` filter, and is
-        replayed there like any change. Its `@id` is its history entry.
+        on. Changes made during a gap produced no event, including any later
+        recovered from Docker's buffer: read them from `/history`. A gap names
+        no resource, so it is sent only on `/events`, where it passes every
+        `?types=` filter, and is replayed there like any change. Its `@id` is
+        its history entry.
       payload:
         $ref: "#/components/schemas/Gap"
 

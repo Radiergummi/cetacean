@@ -87,7 +87,7 @@ tags:
   - name: Search
     description: Cross-resource global search
   - name: History
-    description: Resource change history (ring buffer)
+    description: Resource change history
   - name: Annotations
     description: Notes about a moment or a range, written by people and agents
   - name: Topology
@@ -5764,10 +5764,8 @@ paths:
         Returns the timeline, newest first, from a history that keeps the newest
         `storage.history_entries` entries. An item of kind `change` is a change Docker
         reported; one of kind `gap` is a window nobody watched, from `timestamp` to
-        `until`, whose changes are missing unless recovered: changes Docker still
-        buffered follow the gap, each marked `recovered: true`, and the gap's
-        `recoveredFrom` says from when they are complete, tasks aside. Clients must
-        ignore kinds they don't know. Can be filtered by kind, resource type, a
+        `until`, whose changes are missing unless recovered (see `recovered` and
+        `recoveredFrom`). Clients must ignore kinds they don't know. Can be filtered by kind, resource type, a
         specific resource, a search and a time window. A gap names no
         resource, so only `kind` and the time window narrow it. A full page carries a
         `Link` with `rel="next"`, which pages by cursor and keeps every filter.
