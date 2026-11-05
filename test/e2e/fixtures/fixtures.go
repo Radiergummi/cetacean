@@ -72,8 +72,12 @@ type ServiceSpec struct {
 	Labels   map[string]string
 	Configs  []string    // config names to mount
 	Secrets  []string    // secret names to mount
-	Networks []string    // network names to attach
 	Mounts   []MountSpec // volumes to mount
+
+	// Networks are network names to attach. DeployStack scopes each to the
+	// stack as <stack>_<name> and creates it, as `docker stack deploy` does;
+	// the baseline attaches the names as given.
+	Networks []string
 
 	// Constraints are placement constraints, as `docker service create
 	// --constraint` takes them.

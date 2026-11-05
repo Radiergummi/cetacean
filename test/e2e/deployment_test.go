@@ -306,11 +306,14 @@ func parseLinks(values []string) []webLink {
 			_, target, _ := strings.Cut(head, "<")
 			link := webLink{target: target}
 
+			// RFC 8288 §3.3: occurrences of rel after the first are ignored.
 			for _, param := range splitUnquoted(params, ';') {
 				name, rel, _ := strings.Cut(param, "=")
 				if strings.EqualFold(strings.TrimSpace(name), "rel") {
 					rel = strings.Trim(strings.TrimSpace(rel), `"`)
-					link.rels = append(link.rels, strings.Fields(strings.ToLower(rel))...)
+					link.rels = strings.Fields(strings.ToLower(rel))
+
+					break
 				}
 			}
 

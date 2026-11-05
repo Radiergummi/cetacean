@@ -2,6 +2,7 @@ package contract
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -147,9 +148,16 @@ package api
 
 func register(mux *http.ServeMux, h *Handlers) {
 	mux.HandleFunc("GET /things", h.thingEndpoint(spa, ContentTypeJSON, ContentTypeWebP))
+	mux.HandleFunc("GET /others", h.thingEndpoint(spa, api.ContentTypeGIF))
 }
 `)
 	if err == nil {
 		t.Fatal("parseRepresentationsFromSource accepted an unknown ContentType identifier")
+	}
+
+	for _, name := range []string{"ContentTypeWebP", "ContentTypeGIF"} {
+		if n := strings.Count(err.Error(), name); n != 1 {
+			t.Errorf("the error names %s %d times, want once: %v", name, n, err)
+		}
 	}
 }

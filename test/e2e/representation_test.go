@@ -246,7 +246,23 @@ var mediaForms = map[contract.Representation]mediaForm{
 		accept:      "application/spdx+json",
 		suffix:      ".spdx",
 		contentType: "application/spdx+json",
-		verify:      verifyJSONObject,
+		verify: func(t *testing.T, body string) {
+			t.Helper()
+
+			var doc struct {
+				SPDXVersion *string `json:"spdxVersion"`
+			}
+
+			if err := json.Unmarshal([]byte(body), &doc); err != nil {
+				t.Errorf("the SPDX body does not parse: %v (%.120s)", err, body)
+
+				return
+			}
+
+			if doc.SPDXVersion == nil {
+				t.Errorf("the SPDX document has no spdxVersion string: %.120s", body)
+			}
+		},
 	},
 	contract.RepresentationPlain: {
 		accept:      "text/plain",
@@ -257,6 +273,10 @@ var mediaForms = map[contract.Representation]mediaForm{
 
 			if strings.TrimSpace(body) == "" {
 				t.Error("the plain-text body is empty")
+			}
+
+			if json.Valid([]byte(body)) {
+				t.Errorf("the plain-text body is JSON: %.120s", body)
 			}
 		},
 	},
@@ -353,8 +373,13 @@ func newRepresentationFixture(
 		t.Fatal("the fixture service has no task to address")
 	}
 
+	note := createNoteAsOps(t, proc, map[string]any{
+		"text":      "representation fixture",
+		"resources": []map[string]string{{"type": "service", "id": service}},
+	})
+
 	fixture := representationFixture{values: map[string]string{
-		"annotations": representationAnnotation(t, proc, service),
+		"annotations": strconv.FormatUint(note, 10),
 		"services":    service,
 		"nodes":       soleNodeID(t, env),
 		"tasks":       task,
@@ -382,48 +407,6 @@ func newRepresentationFixture(
 	}
 
 	return fixture
-}
-
-// representationAnnotation notes the fixture service and removes the note in cleanup.
-func representationAnnotation(t *testing.T, proc *sut.Process, service string) string {
-	t.Helper()
-
-	payload, err := json.Marshal(map[string]any{
-		"text":      "representation fixture",
-		"resources": []map[string]string{{"type": "service", "id": service}},
-	})
-	if err != nil {
-		t.Fatalf("marshal annotation: %v", err)
-	}
-
-	created := annotationRequestAs(
-		t, proc, opsPersona, http.MethodPost, "/annotations", "application/json", payload,
-	)
-	if created.status != http.StatusCreated {
-		t.Fatalf("POST /annotations: status = %d, want 201: %s", created.status, created.body)
-	}
-
-	var body struct {
-		Annotation struct {
-			ID uint64 `json:"id"`
-		} `json:"annotation"`
-	}
-	if err := json.Unmarshal([]byte(created.body), &body); err != nil {
-		t.Fatalf("decode created annotation: %v", err)
-	}
-
-	id := strconv.FormatUint(body.Annotation.ID, 10)
-	t.Cleanup(func() {
-		removed := annotationRequestAs(
-			t, proc, opsPersona, http.MethodDelete, "/annotations/"+id, "", nil,
-		)
-		if removed.status != http.StatusNoContent {
-			t.Errorf("cleanup: DELETE /annotations/%s: status = %d: %s",
-				id, removed.status, removed.body)
-		}
-	})
-
-	return id
 }
 
 // routeQuery carries the query string a route needs before it will serve
@@ -505,15 +488,29 @@ var excusedRoutePairs = map[string]string{
 		"route's JSON is); the JGF entry beside this one drives that body",
 }
 
-// attestationRoutes excuses every representation but HTML, whatever the inventory
-// declares: the fixture image has no registry digest, so every data type answers
-// 404 ATT007. The read sweep drives the 404; HTML and the undeclared types stay
-// driven here.
-var attestationRoutes = map[string]bool{
-	"GET /services/{id}/sbom":       true,
-	"GET /services/{id}/dockerfile": true,
-	"GET /tasks/{id}/sbom":          true,
-	"GET /tasks/{id}/dockerfile":    true,
+// attestationRoutes excuses every representation but HTML on these routes: the
+// fixture image carries no attestations, so no data type has a document to
+// drive until a fixture with attestations exists. HTML and the undeclared
+// types stay driven here.
+var attestationRoutes = map[string]string{
+	"GET /services/{id}/sbom":       "the fixture image carries no SBOM attestation",
+	"GET /services/{id}/dockerfile": "the fixture image carries no provenance attestation",
+	"GET /tasks/{id}/sbom":          "the fixture image carries no SBOM attestation",
+	"GET /tasks/{id}/dockerfile":    "the fixture image carries no provenance attestation",
+}
+
+// pairExcuse reports why one representation of a driven route is not driven.
+func pairExcuse(route string, representation contract.Representation) (string, bool) {
+	if reason, excused := excusedRoutePairs[pairKey(route, representation)]; excused {
+		return reason, true
+	}
+
+	if reason, excused := attestationRoutes[route]; excused &&
+		representation != contract.RepresentationHTML {
+		return reason, true
+	}
+
+	return "", false
 }
 
 // excusedRepresentations carries a reason for a media form this lane does not
@@ -557,11 +554,7 @@ func representationTargets(
 				continue
 			}
 
-			if _, excused := excusedRoutePairs[pairKey(route, representation)]; excused {
-				continue
-			}
-
-			if attestationRoutes[route] && representation != contract.RepresentationHTML {
+			if _, excused := pairExcuse(route, representation); excused {
 				continue
 			}
 
@@ -826,8 +819,8 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 	inventory := negotiatedRoutes(t)
 
 	var (
-		pairs   int
-		skipped []string
+		pairs, excusedPairs int
+		skipped             []string
 	)
 
 	for route, declared := range inventory {
@@ -846,6 +839,16 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 				if strings.TrimSpace(reason) == "" {
 					t.Errorf("%s has an empty excuse reason", representation)
 				}
+
+				continue
+			}
+
+			if reason, excused := pairExcuse(route, representation); excused {
+				if strings.TrimSpace(reason) == "" {
+					t.Errorf("%s has an empty excuse reason", pairKey(route, representation))
+				}
+
+				excusedPairs++
 
 				continue
 			}
@@ -873,6 +876,25 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 		}
 	}
 
+	for route := range attestationRoutes {
+		if _, ok := inventory[route]; !ok {
+			t.Errorf("attestationRoutes has a stale entry %q: no such negotiated route", route)
+		}
+	}
+
+	declaredPairs := map[string]bool{}
+	for route, declared := range inventory {
+		for _, representation := range declared {
+			declaredPairs[pairKey(route, representation)] = true
+		}
+	}
+
+	for key := range excusedRoutePairs {
+		if !declaredPairs[key] {
+			t.Errorf("excusedRoutePairs has a stale entry %q: no such route/representation", key)
+		}
+	}
+
 	// Every media form this lane knows how to ask for must be reachable
 	// somewhere, or it is dead weight rather than coverage.
 	for representation := range mediaForms {
@@ -893,8 +915,9 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 	slices.Sort(skipped)
 	t.Logf(
 		"representations: %d route/representation pairs driven across %d routes, "+
-			"%d routes excused\nexcused:\n  %s",
-		pairs, len(inventory)-len(skipped), len(skipped), strings.Join(skipped, "\n  "),
+			"%d pairs excused, %d routes excused\nexcused:\n  %s",
+		pairs, len(inventory)-len(skipped), excusedPairs, len(skipped),
+		strings.Join(skipped, "\n  "),
 	)
 }
 

@@ -796,7 +796,7 @@ func createReadSweepNote(t *testing.T, proc *sut.Process, ids baselineIDs) readS
 
 	note := readSweepNote{tag: sweepName("read-sweep")}
 
-	payload, err := json.Marshal(map[string]any{
+	note.id = createNoteAsOps(t, proc, map[string]any{
 		"text": "read sweep",
 		"tags": []string{note.tag},
 		"resources": []map[string]string{
@@ -804,6 +804,17 @@ func createReadSweepNote(t *testing.T, proc *sut.Process, ids baselineIDs) readS
 			{"type": "stack", "id": ids.stackName},
 		},
 	})
+
+	return note
+}
+
+func (n readSweepNote) path() string { return "/annotations/" + strconv.FormatUint(n.id, 10) }
+
+// createNoteAsOps creates an annotation as ops and deletes it in cleanup.
+func createNoteAsOps(t *testing.T, proc *sut.Process, fields map[string]any) uint64 {
+	t.Helper()
+
+	payload, err := json.Marshal(fields)
 	if err != nil {
 		t.Fatalf("marshal annotation: %v", err)
 	}
@@ -827,26 +838,22 @@ func createReadSweepNote(t *testing.T, proc *sut.Process, ids baselineIDs) readS
 	if err := json.Unmarshal([]byte(created.body), &body); err != nil {
 		t.Fatalf("decode created annotation: %v", err)
 	}
-	note.id = body.Annotation.ID
 
+	path := "/annotations/" + strconv.FormatUint(body.Annotation.ID, 10)
 	t.Cleanup(func() {
-		removed := annotationRequestAs(
-			t, proc, opsPersona, http.MethodDelete, note.path(), "", nil,
-		)
+		removed := annotationRequestAs(t, proc, opsPersona, http.MethodDelete, path, "", nil)
 		if removed.status != http.StatusNoContent {
 			t.Errorf(
 				"cleanup: DELETE %s: status = %d: %s",
-				note.path(),
+				path,
 				removed.status,
 				removed.body,
 			)
 		}
 	})
 
-	return note
+	return body.Annotation.ID
 }
-
-func (n readSweepNote) path() string { return "/annotations/" + strconv.FormatUint(n.id, 10) }
 
 // annotationRequestAs issues one request as persona and reads its answer.
 func annotationRequestAs(

@@ -185,12 +185,6 @@ func declaredRepresentations(
 			// which is the only trace it leaves in the registration — and
 			// falls back to the SPA, whose identifier is the trace of the
 			// HTML the dispatch helpers declare structurally.
-			if sel, ok := n.(*ast.SelectorExpr); ok {
-				nameRepresentation(sel.Sel)
-
-				return true
-			}
-
 			if ident, ok := n.(*ast.Ident); ok {
 				nameRepresentation(ident)
 
