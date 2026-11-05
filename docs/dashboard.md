@@ -87,7 +87,7 @@ what you have chosen so far:
 | Add Annotation            | Fill in the [annotation](#annotations) form                     |
 | Rotate Worker Join Token  | Confirm                                                         |
 | Rotate Manager Join Token | Confirm                                                         |
-| Rotate Unlock Key         | Confirm; only with **Auto-Lock Managers** on                    |
+| Rotate Unlock Key         | Confirm; refused after it with **Auto-Lock Managers** off       |
 | Force CA Rotation         | Confirm                                                         |
 | Enable Plugin             | Pick a disabled plugin                                          |
 | Disable Plugin            | Pick an enabled plugin                                          |
@@ -339,8 +339,9 @@ Annotations appear on the history page, in the recent activity of the resources 
 and who wrote it. Its time opens its own page at `/annotations/{id}`. A tag opens `/annotations`, which lists every
 annotation you may read, yours or anyone's, filtered by tag and text in the same search box as the history page and
 downloadable as CSV. Its **Tags** button opens `/annotations/tags`, the tags in use with how many annotations carry
-each. **Show on chart** opens the metrics of the first service or node an annotation names, zoomed to the time
-around it.
+each. **Show on chart** opens the metrics of the first service or node an annotation names that hasn't been removed,
+zoomed to the time around it. It's hidden with metrics off, when every service and node named was removed, and on
+an annotation that starts in the future.
 
 To add one, use **Add annotation** on the history page, on `/annotations`, or in the recent activity of a service,
 stack, or node, or the palette's **Add Annotation**. The form takes the text, up to 1,000 characters; tags, completed
@@ -350,7 +351,7 @@ offers only what you may do.
 
 On service and node charts, the annotate button in the panel header turns on annotate mode, as does holding `Ctrl`
 or `⌘` for as long as it's held: click a chart to mark a moment, or drag across it to mark a range, and the form
-opens there. On a touch screen, tap twice to mark a range. `Esc` leaves the mode.
+opens there. On a touch screen, tap twice: on the same spot to mark a moment, or at two spots to mark a range. `Esc` leaves the mode.
 
 Clicking a flag or a band pins its annotations below it. Each carries its menu and a link to its page. The panel's
 **Annotations** menu hides them, or shows only those with the tags you pick from the ones in view. Both are held in
@@ -359,7 +360,7 @@ the URL, as `annotations=off` and one `annotationTag` per tag, so a link to the 
 ## Atom feeds
 
 Every resource list and detail page shows a feed icon in the page header. Click it to open that page's Atom feed,
-or copy the URL into a feed reader. The history, search and recommendations pages have feeds too. See the
+or copy the URL into a feed reader. The history, annotations, search and recommendations pages have feeds too. See the
 [API guide][feeds] for the supported endpoints and pagination.
 
 ## Licenses
@@ -374,10 +375,10 @@ attribution document.
 [authentication]: authentication
 [authorization]: authorization
 [configuration]: configuration
-[storage.timeline]: configuration#storage.timeline
 [deployment-action]: https://github.com/matchory/docker-swarm-deployment-action
 [feeds]: api#feeds
 [filter-fields-by-resource]: api#filter-fields-by-resource
 [monitoring]: monitoring
 [operations-level]: configuration#operations-level
 [recommendations]: recommendations
+[storage.timeline]: configuration#storage.timeline

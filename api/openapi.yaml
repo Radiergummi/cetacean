@@ -5765,10 +5765,11 @@ paths:
         `storage.history_entries` entries. An item of kind `change` is a change Docker
         reported; one of kind `gap` is a window nobody watched, from `timestamp` to
         `until`, whose changes are missing unless recovered (see `recovered` and
-        `recoveredFrom`). Clients must ignore kinds they don't know. Can be filtered by kind, resource type, a
-        specific resource, a search and a time window. A gap names no
-        resource, so only `kind` and the time window narrow it. A full page carries a
-        `Link` with `rel="next"`, which pages by cursor and keeps every filter.
+        `recoveredFrom`). Clients must ignore kinds they don't know. Can be filtered
+        by kind, resource type, a specific resource, a search and a time window. A
+        gap names no resource, so only `kind` and the time window narrow it. A full
+        page carries a `Link` with `rel="next"`, which pages by cursor and keeps
+        every filter.
 
         Annotations are merged in at the ID that created them, with their current
         fields, including ones older than the oldest change the history still keeps. One is

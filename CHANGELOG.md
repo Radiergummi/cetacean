@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
-- Annotations note a moment or a range on services, stacks, nodes or the whole cluster through `/annotations`, needing `storage.timeline` and no operations level; its list, CSV and feeds filter by `tag` and `author`, and `GET /annotations/tags` counts tags in use
-- `/history`, its CSV and feeds filter by `tag` (with `matchAny`), `author` and `kind`
+- Annotations note a moment or range on services, stacks, nodes or the cluster through `/annotations`, needing `storage.timeline` but no operations level, marking a removed resource `removed`; its list, CSV and feeds filter by `tag` and `author`, and `/annotations/tags` counts tags
+- `/history`, its CSV and feeds filter by `tag` (with `matchAny`) and `author`
 - A stack's timeline on `/history` and in `get_events` includes its services' changes and the annotations naming them
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
 - The MCP tools `add_annotation`, `update_annotation` and `delete_annotation` write annotations at any operations level, `cetacean://annotations/{id}` reads one and can be subscribed to, and `get_events` returns them, filtered by `kinds`, `tags` and `authors`
@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The command palette adds an annotation, rotates the swarm's join tokens, unlock key and CA, and enables, disables or removes a plugin, each behind the same permission check and confirmation as the page's button
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
-- After a restart or a lost connection to Docker, the history marks the time Cetacean wasn't watching as a gap, in the dashboard, `/history`, `/events` and `get_events`; changes Docker still remembers from it are recovered, marked `recovered`
-- Service, node and task charts mark changes, naming who made them, gaps, and annotations, only cluster-wide ones on a task's; clicking one pins it, and the Annotations menu hides or narrows them by tag, kept in the URL (`annotations`, `annotationTag`)
+- After a restart or a lost connection to Docker, the history marks the unwatched time as a gap on `/history`, `/events`, `get_events` and the dashboard; changes Docker remembers are recovered, marked `recovered`, complete from the gap's `recoveredFrom`
+- Service, node and task charts mark changes, naming who made each, and hatch the gaps
+- Annotations show in Recent Activity and on service and node charts, cluster-wide ones on task charts; on a chart, clicking one pins it and its Annotations menu hides or narrows them by tag, kept in the URL (`annotations`, `annotationTag`)
 - `GET /history?tasks=false` leaves a service's task entries out of its timeline
 - The **Tasks** section on service and node pages has its own time range and switches to a timeline: each replica's tasks as bars showing their ID, in their state's color; drag across it to zoom
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`

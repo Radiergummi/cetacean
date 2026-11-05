@@ -241,7 +241,8 @@ Docker object is what the JSON representation is for.
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
 | `/networks` | `name`, `stack`, `driver`, `used`, `usable`, `id` (the addresses, empty without a figure) |
 | `/volumes` | `name`, `stack`, `driver`, `id` |
-| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport`, `kind`, `until` |
+| `/history`, `/annotations` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport`, `kind`, `until`, `text`, `tags`, `resources`, `recovered`, `recoveredFrom` |
+| `/annotations/tags` | `tag`, `count` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
 ### Pagination differs
@@ -670,12 +671,12 @@ none of these routes exist.
 
 1. `POST /tasks/{id}/exec` creates a pending session and answers `201` with the session, and its address
    `/exec/{sid}` in `Location`.
-2. Within 60 seconds, the identity that created it attaches with a WebSocket upgrade of `GET /exec/{sid}`. The
-   upgrade's origin is checked as for [cross-origin writes](#cross-origin-writes), except that one without an
-   `Origin`, as a CLI client sends it, passes. A session attaches once: a dropped connection ends it, and there is no
-   reattaching. A session nobody attaches to ends.
-3. Binary frames carry terminal bytes and JSON text frames carry control messages, as `execSession` in
-   `GET /api/asyncapi` describes.
+2. Within 60 seconds, the identity that created it attaches with a WebSocket upgrade of `GET /exec/{sid}`. A session
+   attaches once: a dropped connection ends it, and there is no reattaching. A session nobody attaches to ends.
+3. Binary frames carry terminal bytes and JSON text frames carry control messages.
+
+`execSession` in `GET /api/asyncapi` describes the attach: which origins may upgrade, the problems a refused upgrade
+answers, and the frames.
 
 `GET /exec/{sid}` without the upgrade returns the session: its owner, target, state (`pending`, `connected`, or
 `ended`), times, and byte counts. An ended session also says why it ended, and who ended it if someone did.
@@ -686,11 +687,13 @@ Opening a session needs [operations level][operations-level] 3 and an [`exec` gr
 service. `GET /tasks/{id}/exec` lists `POST` in `Allow` when a new session would pass every check but the session
 limits. Opening is refused with `403` (`OPS001` or `ACL003`); a task that can't take a shell, or whose node no
 transport reaches, `409` (`EXE001`, `EXE002`); and one past `exec.max_sessions` or `exec.max_sessions_per_identity`,
-`429` (`EXE003`) with `Retry-After`. An attach is refused from an origin not allowed, `403` (`CSR001`); to a session
-you can't see, `404` (`EXE006`), or don't own, `403` (`EXE004`); to one already attached or ended, `409` (`EXE005`);
-and when no transport reaches the node, `409` (`EXE002`). `DELETE /exec/{sid}` ends a session you can see, at
-operations level 3, and records you as who ended it. With [`audit.enabled`][audit.enabled], every session opened or
-ended is recorded, as is every refusal once its task or session is known.
+`429` (`EXE003`) with `Retry-After`. `DELETE /exec/{sid}` ends a session you can see, at operations level 3, and the
+session names you as who ended it.
+
+With [`audit.enabled`][audit.enabled], a session is recorded when its shell starts (`exec.start`) and, if it started,
+when it ends (`exec.end`, naming who ended it). A refused open of a task you can read, and a refused attach to a
+session that exists, are recorded as `exec.denied`. Creating a session, one that ends without its shell starting, and
+a refused `DELETE` leave no record.
 
 ## Response format
 
