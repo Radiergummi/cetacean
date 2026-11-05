@@ -242,6 +242,24 @@ var mediaForms = map[contract.Representation]mediaForm{
 		accept:      "text/event-stream",
 		contentType: "text/event-stream",
 	},
+	contract.RepresentationSPDX: {
+		accept:      "application/spdx+json",
+		suffix:      ".spdx",
+		contentType: "application/spdx+json",
+		verify:      verifyJSONObject,
+	},
+	contract.RepresentationPlain: {
+		accept:      "text/plain",
+		suffix:      ".txt",
+		contentType: "text/plain",
+		verify: func(t *testing.T, body string) {
+			t.Helper()
+
+			if strings.TrimSpace(body) == "" {
+				t.Error("the plain-text body is empty")
+			}
+		},
+	},
 	contract.RepresentationYAML: {
 		accept:      "application/yaml",
 		suffix:      ".yaml",
@@ -486,12 +504,16 @@ var excusedRoutePairs = map[string]string{
 		"the JGF document and labels it application/vnd.jgf+json (router.go's switch " +
 		"pairs ContentTypeJGF with ContentTypeJSON deliberately — a graph is what this " +
 		"route's JSON is); the JGF entry beside this one drives that body",
-	"GET /services/{id}/sbom / JSON":       noAttestations,
-	"GET /services/{id}/sbom / CSV":        noAttestations,
-	"GET /services/{id}/dockerfile / JSON": noAttestations,
-	"GET /tasks/{id}/sbom / JSON":          noAttestations,
-	"GET /tasks/{id}/sbom / CSV":           noAttestations,
-	"GET /tasks/{id}/dockerfile / JSON":    noAttestations,
+	"GET /services/{id}/sbom / JSON":        noAttestations,
+	"GET /services/{id}/sbom / CSV":         noAttestations,
+	"GET /services/{id}/sbom / SPDX":        noAttestations,
+	"GET /services/{id}/dockerfile / JSON":  noAttestations,
+	"GET /services/{id}/dockerfile / Plain": noAttestations,
+	"GET /tasks/{id}/sbom / JSON":           noAttestations,
+	"GET /tasks/{id}/sbom / CSV":            noAttestations,
+	"GET /tasks/{id}/sbom / SPDX":           noAttestations,
+	"GET /tasks/{id}/dockerfile / JSON":     noAttestations,
+	"GET /tasks/{id}/dockerfile / Plain":    noAttestations,
 }
 
 // noAttestations excuses an attestation route's data types; the read sweep drives

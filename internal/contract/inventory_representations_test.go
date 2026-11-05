@@ -138,3 +138,18 @@ func register(mux *http.ServeMux, h *Handlers) {
 		t.Errorf("an atom-only feedHandlers literal yielded JSONFeed: %v", got)
 	}
 }
+
+// TestRepresentationsRejectsAnUnknownContentType keeps a new ContentType from
+// being dropped from a route's coverage instead of added to this inventory.
+func TestRepresentationsRejectsAnUnknownContentType(t *testing.T) {
+	_, err := parseRepresentationsFromSource("unknown.go", `
+package api
+
+func register(mux *http.ServeMux, h *Handlers) {
+	mux.HandleFunc("GET /things", h.thingEndpoint(spa, ContentTypeJSON, ContentTypeWebP))
+}
+`)
+	if err == nil {
+		t.Fatal("parseRepresentationsFromSource accepted an unknown ContentType identifier")
+	}
+}
