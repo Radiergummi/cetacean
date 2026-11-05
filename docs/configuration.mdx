@@ -431,8 +431,8 @@ group, or revoking the grants their provider sends, leaves their shell running u
 ## Audit
 
 <ConfigParam name="audit.enabled" env="CETACEAN_AUDIT" default="false">
-  Write a record for every shell opened or ended, and every one refused once its task or session is
-  known: who, which container, how it ended.
+  Write a record for every shell started or ended, and every open or attach refused once its task
+  or session is known: who, which container, how it ended. See the [API guide](api#container-exec).
 </ConfigParam>
 
 <ConfigParam name="audit.output" env="CETACEAN_AUDIT_OUTPUT" default="stdout">
