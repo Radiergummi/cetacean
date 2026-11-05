@@ -257,6 +257,8 @@ func TestIdentifierResolutionAgainstALiveCluster(t *testing.T) {
 				"types":    []string{"service"},
 				"resource": service,
 				"limit":    200,
+				// Gaps from other SUTs sharing the store pass a resource filter.
+				"kinds": []string{"change"},
 			},
 		})
 

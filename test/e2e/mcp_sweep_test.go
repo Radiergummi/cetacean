@@ -116,8 +116,10 @@ func mcpAs(
 		t.Fatalf("marshal: %v", err)
 	}
 
+	// Cleanups call this too, after t.Context is cancelled; the client's timeout bounds it.
 	req, err := http.NewRequestWithContext(
-		t.Context(), http.MethodPost, proc.BaseURL+"/mcp", bytes.NewReader(payload),
+		context.WithoutCancel(t.Context()), http.MethodPost, proc.BaseURL+"/mcp",
+		bytes.NewReader(payload),
 	)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -1052,6 +1054,8 @@ func driveRemoveVolume(t *testing.T, env *harness.Env, proc *sut.Process, _ base
 			t.Logf("cleanup: VolumeRemove %s: %v", name, err)
 		}
 	})
+
+	awaitCachedAs(t, proc, opsPersona, "/volumes/"+name)
 
 	for _, p := range readPersonas {
 		if p.name == "ops" {

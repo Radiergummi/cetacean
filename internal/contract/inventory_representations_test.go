@@ -2,6 +2,7 @@ package contract
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -136,5 +137,27 @@ func register(mux *http.ServeMux, h *Handlers) {
 
 	if slices.Contains(got, RepresentationJSONFeed) {
 		t.Errorf("an atom-only feedHandlers literal yielded JSONFeed: %v", got)
+	}
+}
+
+// TestRepresentationsRejectsAnUnknownContentType keeps a new ContentType from
+// being dropped from a route's coverage instead of added to this inventory.
+func TestRepresentationsRejectsAnUnknownContentType(t *testing.T) {
+	_, err := parseRepresentationsFromSource("unknown.go", `
+package api
+
+func register(mux *http.ServeMux, h *Handlers) {
+	mux.HandleFunc("GET /things", h.thingEndpoint(spa, ContentTypeJSON, ContentTypeWebP))
+	mux.HandleFunc("GET /others", h.thingEndpoint(spa, api.ContentTypeGIF))
+}
+`)
+	if err == nil {
+		t.Fatal("parseRepresentationsFromSource accepted an unknown ContentType identifier")
+	}
+
+	for _, name := range []string{"ContentTypeWebP", "ContentTypeGIF"} {
+		if n := strings.Count(err.Error(), name); n != 1 {
+			t.Errorf("the error names %s %d times, want once: %v", name, n, err)
+		}
 	}
 }

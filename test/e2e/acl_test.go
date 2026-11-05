@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +57,7 @@ func TestACLPolicyHotReload(t *testing.T) {
 
 	id := viewerServiceID(t, proc, "shop_web")
 
-	if links := viewerLinkHeader(t, proc, "/services/"+id); strings.Contains(links, scaleEdit) {
+	if links := viewerLinkHeader(t, proc, "/services/"+id); hasScaleEdit(links) {
 		t.Fatalf("Link = %q under a read-only policy, want no scale edit link", links)
 	}
 
@@ -68,7 +69,7 @@ func TestACLPolicyHotReload(t *testing.T) {
 
 	waitForLinks(
 		t, proc, "/services/"+id,
-		func(links string) bool { return strings.Contains(links, scaleEdit) },
+		hasScaleEdit,
 		"a write grant written in place did not take effect",
 	)
 
@@ -80,13 +81,17 @@ func TestACLPolicyHotReload(t *testing.T) {
 
 	waitForLinks(
 		t, proc, "/services/"+id,
-		func(links string) bool { return !strings.Contains(links, scaleEdit) },
+		func(links string) bool { return !hasScaleEdit(links) },
 		"a read-only grant renamed over the policy did not take effect",
 	)
 }
 
-// scaleEdit is the tail of the edit link a service carries while it may be scaled.
-const scaleEdit = `/scale>; rel="edit"`
+// hasScaleEdit reports whether links carry the edit link a service has while it may be scaled.
+func hasScaleEdit(links string) bool {
+	return slices.ContainsFunc(parseLinks([]string{links}), func(link webLink) bool {
+		return strings.HasSuffix(link.target, "/scale") && slices.Contains(link.rels, "edit")
+	})
+}
 
 // waitForLinks polls the Link header on path until ok accepts it, failing
 // with msg if that never happens. A policy reload is debounced and applied

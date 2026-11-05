@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -241,6 +242,44 @@ var mediaForms = map[contract.Representation]mediaForm{
 		accept:      "text/event-stream",
 		contentType: "text/event-stream",
 	},
+	contract.RepresentationSPDX: {
+		accept:      "application/spdx+json",
+		suffix:      ".spdx",
+		contentType: "application/spdx+json",
+		verify: func(t *testing.T, body string) {
+			t.Helper()
+
+			var doc struct {
+				SPDXVersion *string `json:"spdxVersion"`
+			}
+
+			if err := json.Unmarshal([]byte(body), &doc); err != nil {
+				t.Errorf("the SPDX body does not parse: %v (%.120s)", err, body)
+
+				return
+			}
+
+			if doc.SPDXVersion == nil {
+				t.Errorf("the SPDX document has no spdxVersion string: %.120s", body)
+			}
+		},
+	},
+	contract.RepresentationPlain: {
+		accept:      "text/plain",
+		suffix:      ".txt",
+		contentType: "text/plain",
+		verify: func(t *testing.T, body string) {
+			t.Helper()
+
+			if strings.TrimSpace(body) == "" {
+				t.Error("the plain-text body is empty")
+			}
+
+			if json.Valid([]byte(body)) {
+				t.Errorf("the plain-text body is JSON: %.120s", body)
+			}
+		},
+	},
 	contract.RepresentationYAML: {
 		accept:      "application/yaml",
 		suffix:      ".yaml",
@@ -334,15 +373,21 @@ func newRepresentationFixture(
 		t.Fatal("the fixture service has no task to address")
 	}
 
+	note := createNoteAsOps(t, proc, map[string]any{
+		"text":      "representation fixture",
+		"resources": []map[string]string{{"type": "service", "id": service}},
+	})
+
 	fixture := representationFixture{values: map[string]string{
-		"services": service,
-		"nodes":    soleNodeID(t, env),
-		"tasks":    task,
-		"stacks":   stack,
-		"configs":  config,
-		"secrets":  secret,
-		"networks": network,
-		"volumes":  volume,
+		"annotations": strconv.FormatUint(note, 10),
+		"services":    service,
+		"nodes":       soleNodeID(t, env),
+		"tasks":       task,
+		"stacks":      stack,
+		"configs":     config,
+		"secrets":     secret,
+		"networks":    network,
+		"volumes":     volume,
 
 		// Not a cluster resource: /api/errors/{code} addresses the error
 		// catalog, and API003 is one this lane asserts on elsewhere.
@@ -420,6 +465,9 @@ var excusedRepresentationRoutes = map[string]string{
 	"GET /cluster/metrics": "same as /metrics: Prometheus is not configured here",
 	"GET /secret-entries/{id}": "an entry exists only while an MCP create_secret URL " +
 		"elicitation is open, which this lane does not drive",
+	"GET /exec":            "registered only with exec.enabled, which this lane leaves off",
+	"GET /exec/{sid}":      "same as /exec: registered only with exec.enabled",
+	"GET /tasks/{id}/exec": "same as /exec: registered only with exec.enabled",
 }
 
 // unnegotiatedRoutes names routes the undeclared-type rule does not reach,
@@ -438,6 +486,31 @@ var excusedRoutePairs = map[string]string{
 		"the JGF document and labels it application/vnd.jgf+json (router.go's switch " +
 		"pairs ContentTypeJGF with ContentTypeJSON deliberately — a graph is what this " +
 		"route's JSON is); the JGF entry beside this one drives that body",
+}
+
+// attestationRoutes excuses every representation but HTML on these routes: the
+// fixture image carries no attestations, so no data type has a document to
+// drive until a fixture with attestations exists. HTML and the undeclared
+// types stay driven here.
+var attestationRoutes = map[string]string{
+	"GET /services/{id}/sbom":       "the fixture image carries no SBOM attestation",
+	"GET /services/{id}/dockerfile": "the fixture image carries no provenance attestation",
+	"GET /tasks/{id}/sbom":          "the fixture image carries no SBOM attestation",
+	"GET /tasks/{id}/dockerfile":    "the fixture image carries no provenance attestation",
+}
+
+// pairExcuse reports why one representation of a driven route is not driven.
+func pairExcuse(route string, representation contract.Representation) (string, bool) {
+	if reason, excused := excusedRoutePairs[pairKey(route, representation)]; excused {
+		return reason, true
+	}
+
+	if reason, excused := attestationRoutes[route]; excused &&
+		representation != contract.RepresentationHTML {
+		return reason, true
+	}
+
+	return "", false
 }
 
 // excusedRepresentations carries a reason for a media form this lane does not
@@ -481,7 +554,7 @@ func representationTargets(
 				continue
 			}
 
-			if _, excused := excusedRoutePairs[pairKey(route, representation)]; excused {
+			if _, excused := pairExcuse(route, representation); excused {
 				continue
 			}
 
@@ -746,8 +819,8 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 	inventory := negotiatedRoutes(t)
 
 	var (
-		pairs   int
-		skipped []string
+		pairs, excusedPairs int
+		skipped             []string
 	)
 
 	for route, declared := range inventory {
@@ -766,6 +839,16 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 				if strings.TrimSpace(reason) == "" {
 					t.Errorf("%s has an empty excuse reason", representation)
 				}
+
+				continue
+			}
+
+			if reason, excused := pairExcuse(route, representation); excused {
+				if strings.TrimSpace(reason) == "" {
+					t.Errorf("%s has an empty excuse reason", pairKey(route, representation))
+				}
+
+				excusedPairs++
 
 				continue
 			}
@@ -793,6 +876,25 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 		}
 	}
 
+	for route := range attestationRoutes {
+		if _, ok := inventory[route]; !ok {
+			t.Errorf("attestationRoutes has a stale entry %q: no such negotiated route", route)
+		}
+	}
+
+	declaredPairs := map[string]bool{}
+	for route, declared := range inventory {
+		for _, representation := range declared {
+			declaredPairs[pairKey(route, representation)] = true
+		}
+	}
+
+	for key := range excusedRoutePairs {
+		if !declaredPairs[key] {
+			t.Errorf("excusedRoutePairs has a stale entry %q: no such route/representation", key)
+		}
+	}
+
 	// Every media form this lane knows how to ask for must be reachable
 	// somewhere, or it is dead weight rather than coverage.
 	for representation := range mediaForms {
@@ -813,8 +915,9 @@ func TestEveryNegotiatedRouteIsDrivenOrExcused(t *testing.T) {
 	slices.Sort(skipped)
 	t.Logf(
 		"representations: %d route/representation pairs driven across %d routes, "+
-			"%d routes excused\nexcused:\n  %s",
-		pairs, len(inventory)-len(skipped), len(skipped), strings.Join(skipped, "\n  "),
+			"%d pairs excused, %d routes excused\nexcused:\n  %s",
+		pairs, len(inventory)-len(skipped), excusedPairs, len(skipped),
+		strings.Join(skipped, "\n  "),
 	)
 }
 

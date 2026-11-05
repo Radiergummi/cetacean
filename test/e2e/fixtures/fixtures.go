@@ -72,8 +72,12 @@ type ServiceSpec struct {
 	Labels   map[string]string
 	Configs  []string    // config names to mount
 	Secrets  []string    // secret names to mount
-	Networks []string    // network names to attach
 	Mounts   []MountSpec // volumes to mount
+
+	// Networks are network names to attach. DeployStack scopes each to the
+	// stack as <stack>_<name> and creates it, as `docker stack deploy` does;
+	// the baseline attaches the names as given.
+	Networks []string
 
 	// Constraints are placement constraints, as `docker service create
 	// --constraint` takes them.
@@ -256,7 +260,9 @@ func DeployBaselineCLI(env *harness.Env) error {
 	return createConfig(ctx, env, BaselineSentinel, []byte("ok\n"), nil)
 }
 
-// DeployStack deploys a throwaway stack and removes it in cleanup.
+// DeployStack deploys a throwaway stack and removes it in cleanup. Like
+// `docker stack deploy`, it creates the networks its services name inside
+// the stack, so the service attaches to "<stack>_<network>".
 func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpec) string {
 	t.Helper()
 
@@ -273,6 +279,9 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 	// through, cleanup still runs rather than leaking what succeeded.
 	t.Cleanup(func() { removeStack(t, env, stack) })
 
+	labels := map[string]string{stackLabel: stack}
+	created := map[string]bool{}
+
 	for _, spec := range specs {
 		spec.Name = stack + "_" + spec.Name
 
@@ -281,6 +290,21 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 		}
 
 		spec.Labels[stackLabel] = stack
+
+		networks := make([]string, len(spec.Networks))
+		for i, net := range spec.Networks {
+			networks[i] = stack + "_" + net
+			if created[networks[i]] {
+				continue
+			}
+
+			if err := createNetwork(ctx, env, networks[i], labels); err != nil {
+				t.Fatalf("%v", err)
+			}
+
+			created[networks[i]] = true
+		}
+		spec.Networks = networks
 
 		if err := createService(ctx, env, spec); err != nil {
 			t.Fatalf("%v", err)

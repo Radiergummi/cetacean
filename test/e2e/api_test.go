@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -279,9 +280,26 @@ func TestEditLinksReflectOperationsLevel(t *testing.T) {
 			t.Fatal("no Allow header on /services/{id}")
 		}
 
-		links := strings.Join(resp.Header.Values("Link"), ", ")
-		if strings.Contains(links, `rel="edit"`) {
-			t.Errorf("Link = %q at ops level 0; want no edit links", links)
+		// Annotating takes no operations tier, so its edit link survives level 0.
+		annotatable := false
+
+		for _, link := range parseLinks(resp.Header.Values("Link")) {
+			if !slices.Contains(link.rels, "edit") {
+				continue
+			}
+
+			if strings.HasSuffix(link.target, "/annotations") {
+				annotatable = true
+
+				continue
+			}
+
+			t.Errorf("edit link to %s at ops level 0; want only annotations", link.target)
+		}
+
+		if !annotatable {
+			t.Errorf("Link = %q at ops level 0; want the annotations edit link",
+				resp.Header.Values("Link"))
 		}
 	})
 
@@ -294,10 +312,18 @@ func TestEditLinksReflectOperationsLevel(t *testing.T) {
 			t.Fatalf("GET /services/%s: status = %d, want 200", id, resp.StatusCode)
 		}
 
-		links := strings.Join(resp.Header.Values("Link"), ", ")
-		if !strings.Contains(links, `/scale>; rel="edit"`) ||
-			!strings.Contains(links, `/restart>; rel="edit"`) {
-			t.Errorf("Link = %q at ops level 1; want scale and restart linked", links)
+		var scale, restart bool
+
+		for _, link := range parseLinks(resp.Header.Values("Link")) {
+			if slices.Contains(link.rels, "edit") {
+				scale = scale || strings.HasSuffix(link.target, "/scale")
+				restart = restart || strings.HasSuffix(link.target, "/restart")
+			}
+		}
+
+		if !scale || !restart {
+			t.Errorf("Link = %q at ops level 1; want scale and restart linked",
+				resp.Header.Values("Link"))
 		}
 	})
 }

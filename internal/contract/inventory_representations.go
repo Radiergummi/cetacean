@@ -25,6 +25,8 @@ const (
 	RepresentationDOT      Representation = "DOT"
 	RepresentationCSV      Representation = "CSV"
 	RepresentationYAML     Representation = "YAML"
+	RepresentationSPDX     Representation = "SPDX"
+	RepresentationPlain    Representation = "Plain"
 )
 
 var (
@@ -146,6 +148,23 @@ func declaredRepresentations(
 		problems []string
 	)
 
+	// A ContentType identifier this inventory does not know is a problem, not a gap.
+	nameRepresentation := func(ident *ast.Ident) {
+		r, known := representationOf(ident.Name)
+		if !known {
+			problems = append(problems, fmt.Sprintf(
+				"%s: %s names no representation this inventory knows",
+				fset.Position(ident.Pos()), ident.Name,
+			))
+
+			return
+		}
+
+		if r != "" {
+			declared = mergeRepresentations(declared, []Representation{r})
+		}
+	}
+
 	for _, arg := range args {
 		ast.Inspect(arg, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
@@ -166,18 +185,8 @@ func declaredRepresentations(
 			// which is the only trace it leaves in the registration — and
 			// falls back to the SPA, whose identifier is the trace of the
 			// HTML the dispatch helpers declare structurally.
-			if sel, ok := n.(*ast.SelectorExpr); ok {
-				if r, named := representationOf(sel.Sel.Name); named {
-					declared = mergeRepresentations(declared, []Representation{r})
-				}
-
-				return true
-			}
-
 			if ident, ok := n.(*ast.Ident); ok {
-				if r, named := representationOf(ident.Name); named {
-					declared = mergeRepresentations(declared, []Representation{r})
-				}
+				nameRepresentation(ident)
 
 				if ident.Name == "spa" {
 					declared = mergeRepresentations(
@@ -396,20 +405,23 @@ func feedVariable(name string, fn *ast.FuncDecl) (fields feedSet, ok bool) {
 }
 
 // representationOf maps a ContentType constant's name to its representation.
-func representationOf(name string) (Representation, bool) {
+// known is false only for a ContentType identifier it cannot place.
+func representationOf(name string) (r Representation, known bool) {
 	trimmed, ok := strings.CutPrefix(name, "ContentType")
 	if !ok {
-		return "", false
+		return "", true
 	}
 
 	switch r := Representation(trimmed); r {
 	case RepresentationJSON, RepresentationHTML, RepresentationSSE,
 		RepresentationAtom, RepresentationJSONFeed, RepresentationJGF,
 		RepresentationGraphML, RepresentationDOT, RepresentationCSV,
-		RepresentationYAML:
+		RepresentationYAML, RepresentationSPDX, RepresentationPlain:
 		return r, true
+	case "", "Unsupported", "FromContext":
+		// The type itself, its refusal, and its context helper.
+		return "", true
 	default:
-		// ContentTypeUnsupported and the context helpers land here.
 		return "", false
 	}
 }

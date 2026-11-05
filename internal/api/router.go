@@ -882,8 +882,16 @@ func (rt routes) services() {
 
 	// Image attestations, read from the image's registry on demand.
 	mux.HandleFunc("GET /services/{id}/provenance", h.HandleServiceProvenance)
-	mux.HandleFunc("GET /services/{id}/sbom", h.HandleServiceSBOM(spa))
-	mux.HandleFunc("GET /services/{id}/dockerfile", h.HandleServiceDockerfile(spa))
+	mux.HandleFunc(
+		"GET /services/{id}/sbom",
+		h.attestationEndpoint(spa, h.serviceImage, h.writeSBOM,
+			ContentTypeJSON, ContentTypeHTML, ContentTypeCSV, ContentTypeSPDX),
+	)
+	mux.HandleFunc(
+		"GET /services/{id}/dockerfile",
+		h.attestationEndpoint(spa, h.serviceImage, h.writeDockerfile,
+			ContentTypeJSON, ContentTypeHTML, ContentTypePlain),
+	)
 }
 
 // tasks registers the task routes.
@@ -922,8 +930,16 @@ func (rt routes) tasks() {
 
 	// Image attestations, read from the image's registry on demand.
 	mux.HandleFunc("GET /tasks/{id}/provenance", h.HandleTaskProvenance)
-	mux.HandleFunc("GET /tasks/{id}/sbom", h.HandleTaskSBOM(spa))
-	mux.HandleFunc("GET /tasks/{id}/dockerfile", h.HandleTaskDockerfile(spa))
+	mux.HandleFunc(
+		"GET /tasks/{id}/sbom",
+		h.attestationEndpoint(spa, h.taskImage, h.writeSBOM,
+			ContentTypeJSON, ContentTypeHTML, ContentTypeCSV, ContentTypeSPDX),
+	)
+	mux.HandleFunc(
+		"GET /tasks/{id}/dockerfile",
+		h.attestationEndpoint(spa, h.taskImage, h.writeDockerfile,
+			ContentTypeJSON, ContentTypeHTML, ContentTypePlain),
+	)
 }
 
 // exec registers the shell routes, only once SetExec has run. The write grant
