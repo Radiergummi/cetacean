@@ -279,9 +279,11 @@ func TestEditLinksReflectOperationsLevel(t *testing.T) {
 			t.Fatal("no Allow header on /services/{id}")
 		}
 
+		// Annotating takes no operations tier, so its edit link survives level 0.
 		links := strings.Join(resp.Header.Values("Link"), ", ")
-		if strings.Contains(links, `rel="edit"`) {
-			t.Errorf("Link = %q at ops level 0; want no edit links", links)
+		rest := strings.ReplaceAll(links, `</annotations>; rel="edit"`, "")
+		if strings.Contains(rest, `rel="edit"`) {
+			t.Errorf("Link = %q at ops level 0; want no edit links but annotations", links)
 		}
 	})
 

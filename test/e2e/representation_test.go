@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -335,14 +336,15 @@ func newRepresentationFixture(
 	}
 
 	fixture := representationFixture{values: map[string]string{
-		"services": service,
-		"nodes":    soleNodeID(t, env),
-		"tasks":    task,
-		"stacks":   stack,
-		"configs":  config,
-		"secrets":  secret,
-		"networks": network,
-		"volumes":  volume,
+		"annotations": representationAnnotation(t, proc, service),
+		"services":    service,
+		"nodes":       soleNodeID(t, env),
+		"tasks":       task,
+		"stacks":      stack,
+		"configs":     config,
+		"secrets":     secret,
+		"networks":    network,
+		"volumes":     volume,
 
 		// Not a cluster resource: /api/errors/{code} addresses the error
 		// catalog, and API003 is one this lane asserts on elsewhere.
@@ -362,6 +364,48 @@ func newRepresentationFixture(
 	}
 
 	return fixture
+}
+
+// representationAnnotation notes the fixture service and removes the note in cleanup.
+func representationAnnotation(t *testing.T, proc *sut.Process, service string) string {
+	t.Helper()
+
+	payload, err := json.Marshal(map[string]any{
+		"text":      "representation fixture",
+		"resources": []map[string]string{{"type": "service", "id": service}},
+	})
+	if err != nil {
+		t.Fatalf("marshal annotation: %v", err)
+	}
+
+	created := annotationRequestAs(
+		t, proc, opsPersona, http.MethodPost, "/annotations", "application/json", payload,
+	)
+	if created.status != http.StatusCreated {
+		t.Fatalf("POST /annotations: status = %d, want 201: %s", created.status, created.body)
+	}
+
+	var body struct {
+		Annotation struct {
+			ID uint64 `json:"id"`
+		} `json:"annotation"`
+	}
+	if err := json.Unmarshal([]byte(created.body), &body); err != nil {
+		t.Fatalf("decode created annotation: %v", err)
+	}
+
+	id := strconv.FormatUint(body.Annotation.ID, 10)
+	t.Cleanup(func() {
+		removed := annotationRequestAs(
+			t, proc, opsPersona, http.MethodDelete, "/annotations/"+id, "", nil,
+		)
+		if removed.status != http.StatusNoContent {
+			t.Errorf("cleanup: DELETE /annotations/%s: status = %d: %s",
+				id, removed.status, removed.body)
+		}
+	})
+
+	return id
 }
 
 // routeQuery carries the query string a route needs before it will serve
@@ -420,6 +464,10 @@ var excusedRepresentationRoutes = map[string]string{
 	"GET /cluster/metrics": "same as /metrics: Prometheus is not configured here",
 	"GET /secret-entries/{id}": "an entry exists only while an MCP create_secret URL " +
 		"elicitation is open, which this lane does not drive",
+	"GET /exec": "registered only with exec.enabled, which this lane leaves off; " +
+		"exec_test.go drives the exec routes against a lane that enables it",
+	"GET /exec/{sid}":      "same as /exec: registered only with exec.enabled",
+	"GET /tasks/{id}/exec": "same as /exec: registered only with exec.enabled",
 }
 
 // unnegotiatedRoutes names routes the undeclared-type rule does not reach,
@@ -438,7 +486,18 @@ var excusedRoutePairs = map[string]string{
 		"the JGF document and labels it application/vnd.jgf+json (router.go's switch " +
 		"pairs ContentTypeJGF with ContentTypeJSON deliberately — a graph is what this " +
 		"route's JSON is); the JGF entry beside this one drives that body",
+	"GET /services/{id}/sbom / JSON":       noAttestations,
+	"GET /services/{id}/sbom / CSV":        noAttestations,
+	"GET /services/{id}/dockerfile / JSON": noAttestations,
+	"GET /tasks/{id}/sbom / JSON":          noAttestations,
+	"GET /tasks/{id}/sbom / CSV":           noAttestations,
+	"GET /tasks/{id}/dockerfile / JSON":    noAttestations,
 }
+
+// noAttestations excuses an attestation route's data types; the read sweep drives
+// the 404, and HTML and the undeclared types stay driven here.
+const noAttestations = "the fixture image has no registry digest, so there are no " +
+	"attestations to render and every data type answers 404 ATT007"
 
 // excusedRepresentations carries a reason for a media form this lane does not
 // drive at all.

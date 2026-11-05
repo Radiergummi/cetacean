@@ -256,7 +256,9 @@ func DeployBaselineCLI(env *harness.Env) error {
 	return createConfig(ctx, env, BaselineSentinel, []byte("ok\n"), nil)
 }
 
-// DeployStack deploys a throwaway stack and removes it in cleanup.
+// DeployStack deploys a throwaway stack and removes it in cleanup. Like
+// `docker stack deploy`, it creates the networks its services name inside
+// the stack, so the service attaches to "<stack>_<network>".
 func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpec) string {
 	t.Helper()
 
@@ -281,6 +283,16 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 		}
 
 		spec.Labels[stackLabel] = stack
+
+		networks := make([]string, len(spec.Networks))
+		for i, net := range spec.Networks {
+			networks[i] = stack + "_" + net
+			labels := map[string]string{stackLabel: stack}
+			if err := createNetwork(ctx, env, networks[i], labels); err != nil {
+				t.Fatalf("%v", err)
+			}
+		}
+		spec.Networks = networks
 
 		if err := createService(ctx, env, spec); err != nil {
 			t.Fatalf("%v", err)

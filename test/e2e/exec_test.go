@@ -75,6 +75,9 @@ func deployShellTarget(
 
 	service := fixtures.DeployStack(t, env, stack, []fixtures.ServiceSpec{{
 		Name: "app", Replicas: 1, Command: []string{"sleep infinity"},
+		// Exec refuses a task with no overlay address when it cannot tell
+		// its own container apart, as with this host-process binary.
+		Networks: []string{"default"},
 	}}) + "_app"
 
 	var body struct {
@@ -199,8 +202,10 @@ func (term *terminal) send(t *testing.T, input string) {
 type execSession struct {
 	State   string `json:"state"`
 	Reason  string `json:"reason"`
-	EndedBy string `json:"endedBy"`
-	Exit    *struct {
+	EndedBy *struct {
+		Subject string `json:"subject"`
+	} `json:"endedBy"`
+	Exit *struct {
 		Code    int    `json:"code"`
 		Outcome string `json:"outcome"`
 	} `json:"exit"`
@@ -358,8 +363,8 @@ func TestExecSessionsAreListedAndEnded(t *testing.T) {
 	}
 
 	s := awaitSessionEnded(t, proc, term.session)
-	if s.Reason != "terminated_by" || s.EndedBy != opsPersona.user {
-		t.Errorf("session ended with reason %q by %q, want terminated_by by %q",
+	if s.Reason != "terminated_by" || s.EndedBy == nil || s.EndedBy.Subject != opsPersona.user {
+		t.Errorf("session ended with reason %q by %+v, want terminated_by by %q",
 			s.Reason, s.EndedBy, opsPersona.user)
 	}
 

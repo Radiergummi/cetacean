@@ -75,28 +75,8 @@ func (h *Handlers) writeProvenance(
 	)
 }
 
-// HandleServiceSBOM and its siblings dispatch to the SPA for HTML, which loads
-// the data itself; every other type is answered after the ACL check.
-func (h *Handlers) HandleServiceSBOM(spa http.Handler) http.HandlerFunc {
-	return h.attestationEndpoint(spa, h.serviceImage, h.writeSBOM,
-		ContentTypeJSON, ContentTypeHTML, ContentTypeCSV, ContentTypeSPDX)
-}
-
-func (h *Handlers) HandleTaskSBOM(spa http.Handler) http.HandlerFunc {
-	return h.attestationEndpoint(spa, h.taskImage, h.writeSBOM,
-		ContentTypeJSON, ContentTypeHTML, ContentTypeCSV, ContentTypeSPDX)
-}
-
-func (h *Handlers) HandleServiceDockerfile(spa http.Handler) http.HandlerFunc {
-	return h.attestationEndpoint(spa, h.serviceImage, h.writeDockerfile,
-		ContentTypeJSON, ContentTypeHTML, ContentTypePlain)
-}
-
-func (h *Handlers) HandleTaskDockerfile(spa http.Handler) http.HandlerFunc {
-	return h.attestationEndpoint(spa, h.taskImage, h.writeDockerfile,
-		ContentTypeJSON, ContentTypeHTML, ContentTypePlain)
-}
-
+// attestationEndpoint dispatches to the SPA for HTML, which loads the data
+// itself; every other type is answered after the ACL check.
 func (h *Handlers) attestationEndpoint(
 	spa http.Handler,
 	resolve func(http.ResponseWriter, *http.Request, string) (imageTarget, bool),

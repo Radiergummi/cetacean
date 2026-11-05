@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -857,8 +858,9 @@ func annotationRequestAs(
 ) httpOutcome {
 	t.Helper()
 
+	// Cleanups call this too, after t.Context is cancelled; the client's timeout bounds it.
 	req, err := http.NewRequestWithContext(
-		t.Context(), method, proc.BaseURL+path, bytes.NewReader(body),
+		context.WithoutCancel(t.Context()), method, proc.BaseURL+path, bytes.NewReader(body),
 	)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
