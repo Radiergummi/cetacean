@@ -148,6 +148,23 @@ func declaredRepresentations(
 		problems []string
 	)
 
+	// A ContentType identifier this inventory does not know is a problem, not a gap.
+	nameRepresentation := func(ident *ast.Ident) {
+		r, known := representationOf(ident.Name)
+		if !known {
+			problems = append(problems, fmt.Sprintf(
+				"%s: %s names no representation this inventory knows",
+				fset.Position(ident.Pos()), ident.Name,
+			))
+
+			return
+		}
+
+		if r != "" {
+			declared = mergeRepresentations(declared, []Representation{r})
+		}
+	}
+
 	for _, arg := range args {
 		ast.Inspect(arg, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
@@ -169,13 +186,13 @@ func declaredRepresentations(
 			// falls back to the SPA, whose identifier is the trace of the
 			// HTML the dispatch helpers declare structurally.
 			if sel, ok := n.(*ast.SelectorExpr); ok {
-				declared, problems = nameRepresentation(fset, sel.Sel, declared, problems)
+				nameRepresentation(sel.Sel)
 
 				return true
 			}
 
 			if ident, ok := n.(*ast.Ident); ok {
-				declared, problems = nameRepresentation(fset, ident, declared, problems)
+				nameRepresentation(ident)
 
 				if ident.Name == "spa" {
 					declared = mergeRepresentations(
@@ -393,35 +410,12 @@ func feedVariable(name string, fn *ast.FuncDecl) (fields feedSet, ok bool) {
 	return fields, ok
 }
 
-// nameRepresentation adds the representation ident names, if it names one. A
-// ContentType identifier this inventory does not know is a problem, not a gap.
-func nameRepresentation(
-	fset *token.FileSet,
-	ident *ast.Ident,
-	declared []Representation,
-	problems []string,
-) ([]Representation, []string) {
-	r, named, known := representationOf(ident.Name)
-	if !known {
-		return declared, append(problems, fmt.Sprintf(
-			"%s: %s names no representation this inventory knows",
-			fset.Position(ident.Pos()), ident.Name,
-		))
-	}
-
-	if named {
-		declared = mergeRepresentations(declared, []Representation{r})
-	}
-
-	return declared, problems
-}
-
 // representationOf maps a ContentType constant's name to its representation.
 // known is false only for a ContentType identifier it cannot place.
-func representationOf(name string) (r Representation, named, known bool) {
+func representationOf(name string) (r Representation, known bool) {
 	trimmed, ok := strings.CutPrefix(name, "ContentType")
 	if !ok {
-		return "", false, true
+		return "", true
 	}
 
 	switch r := Representation(trimmed); r {
@@ -429,12 +423,12 @@ func representationOf(name string) (r Representation, named, known bool) {
 		RepresentationAtom, RepresentationJSONFeed, RepresentationJGF,
 		RepresentationGraphML, RepresentationDOT, RepresentationCSV,
 		RepresentationYAML, RepresentationSPDX, RepresentationPlain:
-		return r, true, true
+		return r, true
 	case "", "Unsupported", "FromContext":
 		// The type itself, its refusal, and its context helper.
-		return "", false, true
+		return "", true
 	default:
-		return "", false, false
+		return "", false
 	}
 }
 

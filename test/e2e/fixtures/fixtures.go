@@ -275,6 +275,9 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 	// through, cleanup still runs rather than leaking what succeeded.
 	t.Cleanup(func() { removeStack(t, env, stack) })
 
+	labels := map[string]string{stackLabel: stack}
+	created := map[string]bool{}
+
 	for _, spec := range specs {
 		spec.Name = stack + "_" + spec.Name
 
@@ -287,10 +290,15 @@ func DeployStack(t *testing.T, env *harness.Env, name string, specs []ServiceSpe
 		networks := make([]string, len(spec.Networks))
 		for i, net := range spec.Networks {
 			networks[i] = stack + "_" + net
-			labels := map[string]string{stackLabel: stack}
+			if created[networks[i]] {
+				continue
+			}
+
 			if err := createNetwork(ctx, env, networks[i], labels); err != nil {
 				t.Fatalf("%v", err)
 			}
+
+			created[networks[i]] = true
 		}
 		spec.Networks = networks
 

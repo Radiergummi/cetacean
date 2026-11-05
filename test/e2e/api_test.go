@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -289,8 +288,7 @@ func TestEditLinksReflectOperationsLevel(t *testing.T) {
 				continue
 			}
 
-			if target, err := url.Parse(link.target); err == nil &&
-				strings.HasSuffix(target.Path, "/annotations") {
+			if strings.HasSuffix(link.target, "/annotations") {
 				annotatable = true
 
 				continue
@@ -314,76 +312,20 @@ func TestEditLinksReflectOperationsLevel(t *testing.T) {
 			t.Fatalf("GET /services/%s: status = %d, want 200", id, resp.StatusCode)
 		}
 
-		links := strings.Join(resp.Header.Values("Link"), ", ")
-		if !strings.Contains(links, `/scale>; rel="edit"`) ||
-			!strings.Contains(links, `/restart>; rel="edit"`) {
-			t.Errorf("Link = %q at ops level 1; want scale and restart linked", links)
+		var scale, restart bool
+
+		for _, link := range parseLinks(resp.Header.Values("Link")) {
+			if slices.Contains(link.rels, "edit") {
+				scale = scale || strings.HasSuffix(link.target, "/scale")
+				restart = restart || strings.HasSuffix(link.target, "/restart")
+			}
+		}
+
+		if !scale || !restart {
+			t.Errorf("Link = %q at ops level 1; want scale and restart linked",
+				resp.Header.Values("Link"))
 		}
 	})
-}
-
-// webLink is one RFC 8288 link: its target and its relation types, lowercased.
-type webLink struct {
-	target string
-	rels   []string
-}
-
-// parseLinks reads the links out of Link field values.
-func parseLinks(values []string) []webLink {
-	var links []webLink
-
-	for _, value := range values {
-		for _, part := range splitUnquoted(value, ',') {
-			_, params, found := strings.Cut(part, ">")
-			if !found {
-				continue
-			}
-
-			link := webLink{target: linkTarget(part)}
-
-			for _, param := range splitUnquoted(params, ';') {
-				name, rel, _ := strings.Cut(param, "=")
-				if strings.EqualFold(strings.TrimSpace(name), "rel") {
-					rel = strings.Trim(strings.TrimSpace(rel), `"`)
-					link.rels = append(link.rels, strings.Fields(strings.ToLower(rel))...)
-				}
-			}
-
-			links = append(links, link)
-		}
-	}
-
-	return links
-}
-
-// splitUnquoted splits s on sep wherever it is outside a <target> and a quoted string.
-func splitUnquoted(s string, sep rune) []string {
-	var (
-		parts            []string
-		start            int
-		inTarget, quoted bool
-		escaped          bool
-	)
-
-	for i, r := range s {
-		switch {
-		case escaped:
-			escaped = false
-		case quoted && r == '\\':
-			escaped = true
-		case r == '"' && !inTarget:
-			quoted = !quoted
-		case r == '<' && !quoted:
-			inTarget = true
-		case r == '>' && !quoted:
-			inTarget = false
-		case r == sep && !inTarget && !quoted:
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
-	}
-
-	return append(parts, s[start:])
 }
 
 // TestMetricsReport503WhenPrometheusIsUnconfigured is the spec's one

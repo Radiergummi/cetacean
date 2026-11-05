@@ -482,8 +482,7 @@ var excusedRepresentationRoutes = map[string]string{
 	"GET /cluster/metrics": "same as /metrics: Prometheus is not configured here",
 	"GET /secret-entries/{id}": "an entry exists only while an MCP create_secret URL " +
 		"elicitation is open, which this lane does not drive",
-	"GET /exec": "registered only with exec.enabled, which this lane leaves off; " +
-		"exec_test.go drives the exec routes against a lane that enables it",
+	"GET /exec":            "registered only with exec.enabled, which this lane leaves off",
 	"GET /exec/{sid}":      "same as /exec: registered only with exec.enabled",
 	"GET /tasks/{id}/exec": "same as /exec: registered only with exec.enabled",
 }
@@ -504,22 +503,18 @@ var excusedRoutePairs = map[string]string{
 		"the JGF document and labels it application/vnd.jgf+json (router.go's switch " +
 		"pairs ContentTypeJGF with ContentTypeJSON deliberately — a graph is what this " +
 		"route's JSON is); the JGF entry beside this one drives that body",
-	"GET /services/{id}/sbom / JSON":        noAttestations,
-	"GET /services/{id}/sbom / CSV":         noAttestations,
-	"GET /services/{id}/sbom / SPDX":        noAttestations,
-	"GET /services/{id}/dockerfile / JSON":  noAttestations,
-	"GET /services/{id}/dockerfile / Plain": noAttestations,
-	"GET /tasks/{id}/sbom / JSON":           noAttestations,
-	"GET /tasks/{id}/sbom / CSV":            noAttestations,
-	"GET /tasks/{id}/sbom / SPDX":           noAttestations,
-	"GET /tasks/{id}/dockerfile / JSON":     noAttestations,
-	"GET /tasks/{id}/dockerfile / Plain":    noAttestations,
 }
 
-// noAttestations excuses an attestation route's data types; the read sweep drives
-// the 404, and HTML and the undeclared types stay driven here.
-const noAttestations = "the fixture image has no registry digest, so there are no " +
-	"attestations to render and every data type answers 404 ATT007"
+// attestationRoutes excuses every representation but HTML, whatever the inventory
+// declares: the fixture image has no registry digest, so every data type answers
+// 404 ATT007. The read sweep drives the 404; HTML and the undeclared types stay
+// driven here.
+var attestationRoutes = map[string]bool{
+	"GET /services/{id}/sbom":       true,
+	"GET /services/{id}/dockerfile": true,
+	"GET /tasks/{id}/sbom":          true,
+	"GET /tasks/{id}/dockerfile":    true,
+}
 
 // excusedRepresentations carries a reason for a media form this lane does not
 // drive at all.
@@ -563,6 +558,10 @@ func representationTargets(
 			}
 
 			if _, excused := excusedRoutePairs[pairKey(route, representation)]; excused {
+				continue
+			}
+
+			if attestationRoutes[route] && representation != contract.RepresentationHTML {
 				continue
 			}
 

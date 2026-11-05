@@ -102,15 +102,12 @@ func TestBasePathMovesTheWholeSurface(t *testing.T) {
 
 		// RFC 8631 self-discovery: the links a client follows to find the
 		// spec and the context document move with everything else.
-		for _, link := range out.header.Values("Link") {
-			for part := range strings.SplitSeq(link, ",") {
-				href := linkTarget(part)
-				if href == "" || !strings.HasPrefix(href, "/") {
-					continue
-				}
-
-				assertPrefixed(t, "Link "+part, href)
+		for _, link := range parseLinks(out.header.Values("Link")) {
+			if !strings.HasPrefix(link.target, "/") {
+				continue
 			}
+
+			assertPrefixed(t, "Link <"+link.target+">", link.target)
 		}
 
 		// Every identifier the server emits has to be reachable as written,
@@ -287,6 +284,71 @@ func linkTarget(value string) string {
 	}
 
 	return value[start+1 : end]
+}
+
+// webLink is one RFC 8288 link: its target and its relation types, lowercased.
+type webLink struct {
+	target string
+	rels   []string
+}
+
+// parseLinks reads the links out of Link field values.
+func parseLinks(values []string) []webLink {
+	var links []webLink
+
+	for _, value := range values {
+		for _, part := range splitUnquoted(value, ',') {
+			head, params, found := strings.Cut(part, ">")
+			if !found {
+				continue
+			}
+
+			_, target, _ := strings.Cut(head, "<")
+			link := webLink{target: target}
+
+			for _, param := range splitUnquoted(params, ';') {
+				name, rel, _ := strings.Cut(param, "=")
+				if strings.EqualFold(strings.TrimSpace(name), "rel") {
+					rel = strings.Trim(strings.TrimSpace(rel), `"`)
+					link.rels = append(link.rels, strings.Fields(strings.ToLower(rel))...)
+				}
+			}
+
+			links = append(links, link)
+		}
+	}
+
+	return links
+}
+
+// splitUnquoted splits s on sep wherever it is outside a <target> and a quoted string.
+func splitUnquoted(s string, sep rune) []string {
+	var (
+		parts            []string
+		start            int
+		inTarget, quoted bool
+		escaped          bool
+	)
+
+	for i, r := range s {
+		switch {
+		case escaped:
+			escaped = false
+		case quoted && r == '\\':
+			escaped = true
+		case r == '"' && !inTarget:
+			quoted = !quoted
+		case r == '<' && !quoted:
+			inTarget = true
+		case r == '>' && !quoted:
+			inTarget = false
+		case r == sep && !inTarget && !quoted:
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+
+	return append(parts, s[start:])
 }
 
 // ─── TLS termination ────────────────────────────────────────────────────
