@@ -671,9 +671,10 @@ none of these routes exist.
 1. `POST /tasks/{id}/exec` creates a pending session and answers `201` with the session, and its address
    `/exec/{sid}` in `Location`.
 2. Within 60 seconds, the identity that created it attaches with a WebSocket upgrade of `GET /exec/{sid}`. The
-   upgrade's `Origin` must be the request's own host, [`server.public_url`][server.public_url], or an entry of
-   [`server.cors.origins`][server.cors.origins]. A session attaches once: a dropped connection ends it, and there is
-   no reattaching. A session nobody attaches to ends.
+   upgrade passes without an `Origin`, as a CLI client sends it, or with `Sec-Fetch-Site` `same-origin` or `none`;
+   otherwise its `Origin` must be the request's own host, [`server.public_url`][server.public_url], or an entry of
+   [`server.cors.origins`][server.cors.origins] other than `*`. A session attaches once: a dropped connection ends
+   it, and there is no reattaching. A session nobody attaches to ends.
 3. Binary frames carry terminal bytes both ways, up to 64 KiB a frame from the client. Text frames are JSON: the
    client sends `resize` with `cols` and `rows`, and the server sends `status` while the shell starts, then ends every
    connection with one `exit` or one `error` frame. `GET /api/asyncapi` describes each frame under `execSession`.
@@ -684,13 +685,14 @@ none of these routes exist.
 task's. You see your own sessions and every one on a service you hold `exec` on; any other answers `404` (`EXE006`).
 
 Opening a session needs [operations level][operations-level] 3 and an [`exec` grant][exec-grant] on the task's
-service, which `write` doesn't imply. `GET /tasks/{id}/exec` lists `POST` in `Allow` only when a new session would
-pass every check. Opening is refused with `403` (`OPS001` or `ACL003`); a task that can't take a shell, or whose node
-no transport reaches, `409` (`EXE001`, `EXE002`); and one past `exec.max_sessions` or
-`exec.max_sessions_per_identity`, `429` (`EXE003`) with `Retry-After`. An attach by anyone but the owner is `403`
-(`EXE004`), and one to a session already attached or ended `409` (`EXE005`). `DELETE /exec/{sid}` ends a session you
-can see, at operations level 3, and records you as who ended it. With [`audit.enabled`][audit.enabled], every session
-opened or ended is recorded, as is every refusal once its task or session is known.
+service, which `write` doesn't imply. `GET /tasks/{id}/exec` lists `POST` in `Allow` when a new session would pass
+every check but the session limits. Opening is refused with `403` (`OPS001` or `ACL003`); a task that can't take a
+shell, or whose node no transport reaches, `409` (`EXE001`, `EXE002`); and one past `exec.max_sessions` or
+`exec.max_sessions_per_identity`, `429` (`EXE003`) with `Retry-After`. An attach from an origin not allowed is `403`
+(`CSR001`), one to a session you can't see `404` (`EXE006`), one to a session you see but don't own `403` (`EXE004`),
+and one to a session already attached or ended `409` (`EXE005`). `DELETE /exec/{sid}` ends a session you can see, at
+operations level 3, and records you as who ended it. With [`audit.enabled`][audit.enabled], every session opened or
+ended is recorded, as is every refusal once its task or session is known.
 
 ## Response format
 

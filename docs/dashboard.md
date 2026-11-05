@@ -29,37 +29,38 @@ the running version and commit, the licenses page, and a link to the API playgro
 
 ## Keyboard shortcuts
 
-Press `?` for the full list. Shortcuts are ignored while focus is in a text input, apart from `⌘ Enter`.
+Press `?` for the full list. Shortcuts are ignored while focus is in a text input, apart from `⌘ K` / `Ctrl K` and
+`⌘ Enter` / `Ctrl Enter`.
 
-| Shortcut         | Action                        |
-|------------------|-------------------------------|
-| `⌘ K` / `Ctrl K` | Toggle the command palette    |
-| `/`              | Open the command palette      |
-| `?`              | Toggle the shortcut list      |
-| `Esc`            | Close the overlay, or go back |
-| `g` `h`          | Cluster overview              |
-| `g` `n`          | Nodes                         |
-| `g` `k`          | Stacks                        |
-| `g` `s`          | Services                      |
-| `g` `a`          | Tasks                         |
-| `g` `c`          | Configs                       |
-| `g` `x`          | Secrets                       |
-| `g` `w`          | Networks                      |
-| `g` `o`          | Published ports               |
-| `g` `v`          | Volumes                       |
-| `g` `p`          | Plugins                       |
-| `g` `i`          | Swarm info                    |
-| `g` `t`          | Topology                      |
-| `g` `m`          | Metrics console               |
-| `g` `r`          | Recommendations               |
-| `j` / `↓`        | Next row in a table           |
-| `k` / `↑`        | Previous row                  |
-| `Enter`          | Open the selected row         |
-| `⌘ Enter`        | Submit the form or editor     |
+| Shortcut                 | Action                        |
+|--------------------------|-------------------------------|
+| `⌘ K` / `Ctrl K`         | Toggle the command palette    |
+| `/`                      | Open the command palette      |
+| `?`                      | Toggle the shortcut list      |
+| `Esc`                    | Close the overlay, or go back |
+| `g` `h`                  | Cluster overview              |
+| `g` `n`                  | Nodes                         |
+| `g` `k`                  | Stacks                        |
+| `g` `s`                  | Services                      |
+| `g` `a`                  | Tasks                         |
+| `g` `c`                  | Configs                       |
+| `g` `x`                  | Secrets                       |
+| `g` `w`                  | Networks                      |
+| `g` `o`                  | Published ports               |
+| `g` `v`                  | Volumes                       |
+| `g` `p`                  | Plugins                       |
+| `g` `i`                  | Swarm info                    |
+| `g` `t`                  | Topology                      |
+| `g` `m`                  | Metrics console               |
+| `g` `r`                  | Recommendations               |
+| `j` / `↓`                | Next row in a table           |
+| `k` / `↑`                | Previous row                  |
+| `Enter`                  | Open the selected row         |
+| `⌘ Enter` / `Ctrl Enter` | Submit the form or editor     |
 
 The `g` shortcuts are chords: press `g`, release, then the second key within one second. Hovering a nav link shows
-its chord. `⌘ Enter` (`Ctrl Enter` on Linux and Windows) submits the form you're in, or saves the inline editor;
-the button it presses shows the shortcut.
+its chord. `⌘ Enter` or `Ctrl Enter` submits the form you're in, or saves the inline editor; the button it presses
+shows the shortcut.
 
 ## Command palette
 
@@ -94,8 +95,9 @@ what you have chosen so far:
 | Remove Plugin             | Pick a plugin                                                   |
 
 Actions that remove or disrupt something ask for confirmation before they run. When Docker refuses to remove a node,
-the palette offers **Force Remove Node** behind a confirmation of its own. An action your [operations level][operations-level]
-or your [grants][authorization] don't allow is refused with a permission message, not a server error.
+the palette offers **Force Remove Node** behind a confirmation of its own. An action your
+[operations level][operations-level] or your [grants][authorization] don't allow is refused with a permission message,
+not a server error.
 
 ## List pages
 
@@ -253,8 +255,9 @@ bring it up to date.
 On service, node, and task pages the charts mark the resource's history. Each change is a line, and hovering it
 names what changed and who made it; changes too close to tell apart share a thicker line. A stretch Cetacean wasn't
 watching, a [gap](#history), is hatched. [Annotations](#annotations) are drawn as flags, or as shaded bands for a
-range, in a color of their own, and a different one for cluster-wide annotations. Over a long range the charts mark
-only the newest changes and say so; narrow the range to see the rest.
+range, in a color of their own, and a different one for cluster-wide annotations; a task's charts show only the
+cluster-wide ones. Over a long range the charts mark only the newest changes and say so; narrow the range to see
+the rest.
 
 ## Metrics console
 
@@ -329,7 +332,7 @@ covered by Docker's log. Task changes during a gap are never recovered.
 
 An annotation is a note about a moment or a range: that a load test started, or why a deploy was rolled back. It
 names services, stacks, or nodes, or none to be about the whole cluster. Annotations need
-[`storage.timeline`][configuration] but no [operations level][operations-level]; who may write one follows your
+[`storage.timeline`][storage.timeline] but no [operations level][operations-level]; who may write one follows your
 [grants][authorization], as the [API guide][annotations-api] describes.
 
 Annotations appear on the history page, in the recent activity of the resources they name, and on those resources'
@@ -347,8 +350,8 @@ menu, and the buttons on its page, edit or delete it; what it's about can't be c
 offers only what you may do.
 
 On service and node charts, the annotate button in the panel header turns on annotate mode, as does holding `Ctrl`
-or `⌘` for as long as it's held: click a chart to mark a moment, or drag across it to mark a range, and the form opens there. On a touch screen,
-tap twice to mark a range. `Esc` leaves the mode.
+or `⌘` for as long as it's held: click a chart to mark a moment, or drag across it to mark a range, and the form
+opens there. On a touch screen, tap twice to mark a range. `Esc` leaves the mode.
 
 Clicking a flag or a band pins its annotations below it. Each carries its menu and a link to its page. The panel's
 **Annotations** menu hides them, or shows only those with the tags you pick from the ones in view. Both are held in
@@ -372,6 +375,7 @@ attribution document.
 [authentication]: authentication
 [authorization]: authorization
 [configuration]: configuration
+[storage.timeline]: configuration#storage.timeline
 [deployment-action]: https://github.com/matchory/docker-swarm-deployment-action
 [feeds]: api#feeds
 [filter-fields-by-resource]: api#filter-fields-by-resource

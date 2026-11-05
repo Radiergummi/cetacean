@@ -10,29 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations record what happened at a moment or over a range on services, stacks, nodes or the whole cluster: `POST`, `GET`, `PATCH` and `DELETE /annotations`, needing `storage.timeline` and no operations level
-- Annotations appear on `/history` and `GET /annotations`, each with CSV and feeds, filtered by `tag` (with `matchAny`), `author` and `kind`; `GET /annotations/tags` counts the tags in use
+- Annotations appear on `/history`, its CSV and feeds, filtered by `tag` (with `matchAny`), `author` and `kind`
+- `GET /annotations` lists annotations in their detail shape, with CSV and feeds filtered by `tag` and `author`, marking a removed resource `removed`; `GET /annotations/tags` counts the tags in use
 - A stack's timeline on `/history` and in `get_events` includes its services' changes and the annotations naming them
 - An `annotation` event on `/events` and on each resource's stream reports each annotation as it's written, edited, or deleted
 - The MCP tools `add_annotation`, `update_annotation` and `delete_annotation` write annotations at any operations level, `cetacean://annotations/{id}` reads one and can be subscribed to, and `get_events` returns them, filtered by `kinds`, `tags` and `authors`
-- The dashboard lists annotations at `/annotations` by tag, author and text, shows each at `/annotations/{id}` and the tags in use at `/annotations/tags`; History filters by kind and tag, and stack pages show Recent Activity
+- The dashboard lists annotations at `/annotations` by tag, author and text, shows each at `/annotations/{id}` and the tags in use at `/annotations/tags`; tags link to the list, History filters by kind and tag, and stack pages show Recent Activity
 - Annotations are added from History, the annotations list, Recent Activity or annotate mode on service and node charts, and edited or deleted from their "…" menu; the form suggests tags in use
 - Annotations link the URLs in their text, and Show on chart opens their service's or node's metrics around them
 - The command palette adds an annotation, rotates the swarm's join tokens, unlock key and CA, and enables, disables or removes a plugin, each behind the same permission check and confirmation as the page's button
 - `exec.enabled` opens interactive shells in containers on Cetacean's own node through `POST /tasks/{id}/exec` and a WebSocket at `/exec/{sid}`, behind operations level 3 and an explicit `exec` grant; `audit.*` records each one
 - The change history survives a restart, kept in `cetacean.db` under `storage.data_dir`; `storage.timeline` turns that off, and `storage.history_entries` sets how many entries are kept
 - After a restart or a lost connection to Docker, the history marks the time Cetacean wasn't watching as a gap, in the dashboard, `/history`, `/events` and `get_events`; changes Docker still remembers from it are recovered, marked `recovered`
-- The metric charts on service, node and task pages mark changes, naming who made them, gaps and annotations; clicking an annotation pins it with its menu, and the panel's Annotations menu hides or narrows them by tag
+- Service, node and task charts mark changes, naming who made them, gaps, and annotations, only cluster-wide ones on a task's; clicking one pins it, and the Annotations menu hides or narrows them by tag, kept in the URL (`annotations`, `annotationTag`)
 - `GET /history?tasks=false` leaves a service's task entries out of its timeline
 - The **Tasks** section on service and node pages has its own time range and switches to a timeline: each replica's tasks as bars showing their ID, in their state's color; drag across it to zoom
 - `cetacean.link.<id>` service labels add links, such as a dashboard or runbook, to the service and stack pages, `links` on `GET /services/{id}` and `GET /stacks/{name}`, and `describe`
 - The physical topology shows each service's CPU and memory per node, each node's usage, and a **Network** selector emphasising one network's services; its `GET /topology` graph adds node `address` and service `networks`
 - A published ports page at `/ports` (`g` `o`, or from the networks list) lists every port the services publish, with the service, stack and publish mode; `GET /ports` and the MCP tool `get_published_ports` serve the same list
-- The config and secret lists show the newest of each set of rotated versions and any older one in use, the rest a click away, with their services counted; `cetacean.version-of` names a set, `unused-version` flags old ones nothing uses
 - The networks list and network pages show how many of an overlay network's addresses are in use, as do `GET /networks` and MCP network reads; `network-addresses-low` flags one running out
 - The cluster overview and `GET /cluster` show the manager quorum, and recommendations flag a single manager, an even number of them, or one unreachable
 - Service pages show panels for caddy-docker-proxy (the Caddyfile its labels build), Gantry (editable update settings) and doco-cd (the repository, ref and commit a service was deployed from)
 - Service pages show a GitHub Deployment panel for Docker Swarm Deployment Action, with the commit and workflow run that deployed a service; configs and secrets it rotates group as versions by `com.matchory.deployment.name`
 - Each entry in a service's `integrations` lists the `labels` it was read from
+- The API and MCP tools references gain a Compatibility section: what stays stable from 1.0, what doesn't, and how a deprecated route, tool or setting is announced
 - When the client supports elicitation, the level-3 MCP tools ask the person to confirm, and a tool given a hostname several nodes share asks which node; `mcp.require_confirmation` refuses level-3 tools to clients that can't ask
 - `create_secret` sends the person to the dashboard's `/secrets/new` page to enter the value when the client supports URL elicitation; `mcp.inline_secret_values` refuses values passed as arguments
 - Services whose image tag now names a newer image in its registry are marked on the service pages, flagged as `newer-image` recommendations, and offered that image when updating; `server.image_check` turns the registry calls off
@@ -50,8 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Breaking:** `/history` items carry a `kind`, and gaps and annotations appear beside changes; request `?kind=change` to keep the list of changes alone
 - **Breaking:** entry IDs in the Atom and JSON feeds name the deployment's history as well as the change, so feed readers show existing entries once more after the upgrade
 - **Breaking:** a write to a resource the caller can't read answers that resource's `404` instead of `403` (`ACL002`)
-- **Breaking:** `GET /configs`, `GET /secrets`, `cetacean://configs`, `cetacean://secrets` and MCP `find` list each group's newest version and any older one still in use; pass `versions=all` to list every one
-- **Breaking:** a service with a bind, named-pipe or cluster mount, a volume with driver options, or an added capability needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
+- **Breaking:** the config and secret lists, `GET /configs`, `GET /secrets`, their MCP resources and `find` show each group's newest version and any older one in use (`versions=all` for every one); `cetacean.version-of` names a group, `unused-version` flags unused old ones
+- **Breaking:** a service with a bind, named-pipe or cluster mount, a volume with driver options, or added capabilities needs level 3 to change its image, command, environment, labels, ports, networks, placement, health check, secrets, configs or mounts, or roll back
 - **Breaking:** `PATCH /plugins/{name}/settings` needs operations level 3 to set a plugin's mount source or device path
 - **Breaking:** a malformed `limit`, `offset`, `sort`, `dir` or `before` on lists, `/history`, feeds and `/search` answers `400` (`API016`) instead of the default page
 - **Breaking:** the startup log lines name the listen address `listen_addr`, and the forced CA rotation logs `force_rotate`. Update log queries that matched `addr` or `forceRotate`

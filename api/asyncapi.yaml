@@ -20,8 +20,8 @@ info:
     - The sixteen resource channels and `/events` write an opaque history
       cursor, valid only against the process that wrote it. Reconnecting with
       one replays the events in between from the history, which keeps the
-      newest `storage.history_entries` entries. A cursor the
-      ring no longer holds, one from before a restart, or one from before a
+      newest `storage.history_entries` entries. A cursor the history no longer
+      holds, one from before a restart, or one from before a
       `sync` the client did not receive gets a `sync` message instead, and so
       does every detail channel, always — they are ineligible
       for replay because a cross-resource matcher cannot be reconstructed from
