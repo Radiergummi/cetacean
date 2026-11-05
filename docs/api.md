@@ -135,7 +135,7 @@ filtered by your grants, and compressed length would leak whether a guessed quer
 
 ## Feeds
 
-Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and
+Resource list and detail endpoints, plus `/events`, `/history`, `/annotations`, `/search`, and
 [`/recommendations`][recommendations], serve [Atom 1.0](https://www.rfc-editor.org/rfc/rfc4287) and [JSON Feed
 1.1](https://www.jsonfeed.org/version/1.1/). A feed carries the resource's change history, not its current state.
 
@@ -149,7 +149,7 @@ Resource list and detail endpoints, plus `/events`, `/history`, `/search`, and
 - `/secrets`, `/secrets/{id}`
 - `/networks`, `/networks/{id}`
 - `/volumes`, `/volumes/{name}`
-- `/events`, `/history`, `/search`, `/recommendations`
+- `/events`, `/history`, `/annotations`, `/search`, `/recommendations`
 
 Endpoints that produce no resource change data (write sub-resources, log streams, metrics, topology) return `406`.
 
@@ -193,8 +193,8 @@ changes with the hostname a reader happened to reach the server by.
 ### Feed autodiscovery
 
 JSON responses on feed-capable endpoints carry a `Link` header with `rel="alternate"` for each feed type. The dashboard
-injects an Atom `<link rel="alternate">` into the HTML `<head>` on resource, history, search, and recommendations
-pages, so feed readers can find the feed from the page.
+injects an Atom `<link rel="alternate">` into the HTML `<head>` on resource, history, annotations, search, and
+recommendations pages, so feed readers can find the feed from the page.
 
 ## Spreadsheets
 
@@ -218,7 +218,7 @@ label someone set to a formula instead of running it. A number such as `-1` is l
 
 - `/nodes`, `/services`, `/tasks`, `/stacks`, `/configs`, `/secrets`, `/networks`, `/volumes`
 - `/nodes/{id}/tasks`, `/services/{id}/tasks`
-- `/history`, `/recommendations`
+- `/history`, `/annotations`, `/annotations/tags`, `/recommendations`
 - `/services/{id}/sbom`, `/tasks/{id}/sbom`, with the columns `name`, `version`, `ecosystem`, `license`, `purl`,
   `found_in`
 
@@ -241,7 +241,8 @@ Docker object is what the JSON representation is for.
 | `/configs`, `/secrets` | `name`, `stack`, `id` |
 | `/networks` | `name`, `stack`, `driver`, `used`, `usable`, `id` (the addresses, empty without a figure) |
 | `/volumes` | `name`, `stack`, `driver`, `id` |
-| `/history` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport`, `kind`, `until` |
+| `/history`, `/annotations` | `timestamp`, `type`, `action`, `name`, `id`, `summary`, `actor`, `provider`, `client`, `transport`, `kind`, `until`, `text`, `tags`, `resources`, `recovered`, `recoveredFrom` |
+| `/annotations/tags` | `tag`, `count` |
 | `/recommendations` | `severity`, `category`, `scope`, `target`, `resource`, `message`, `current`, `configured`, `suggested` |
 
 ### Pagination differs
@@ -374,7 +375,8 @@ page is served as long as the list is unchanged; otherwise you get the first pag
 
 Every item in `/history` has a `kind`. A `change` is a change Docker reported. A `gap` is a window in which nobody
 was watching the cluster, from its `timestamp` to its `until`: Cetacean wasn't running, or had lost its connection to
-Docker, so whatever changed then is missing from the record. Read a gap as unknown, not as quiet. Cetacean records one
+Docker, so what changed then is missing from the record unless it was
+[recovered](#changes-recovered-from-a-gap). Read a gap as unknown, not as quiet. Cetacean records one
 when it's watching again, after a restart or once it has reconnected, starting at the last heartbeat before it stopped
 watching. Without [`storage.timeline`][storage.timeline] there's no such heartbeat, so there are no gaps either.
 
@@ -660,6 +662,38 @@ curl --fail -X POST https://cetacean.example.com/annotations \
 
 To mark the whole rollout as a range, post when it starts and `PATCH` its `until` when it ends, using the `Location`
 the first request answered. The note is attributed to the token's user.
+
+## Container exec
+
+With [`exec.enabled`][exec.enabled] on, the API opens an interactive shell in a running task's container. Which
+containers can take one, and the `exec.*` limits, are in the [configuration reference][container-exec]; with exec off,
+none of these routes exist.
+
+1. `POST /tasks/{id}/exec` creates a pending session and answers `201` with the session, and its address
+   `/exec/{sid}` in `Location`.
+2. Within 60 seconds, the identity that created it attaches with a WebSocket upgrade of `GET /exec/{sid}`. A session
+   attaches once: a dropped connection ends it, and there is no reattaching. A session nobody attaches to ends.
+3. Binary frames carry terminal bytes and JSON text frames carry control messages.
+
+`execSession` in `GET /api/asyncapi` describes the attach: which origins may upgrade, the problems a refused upgrade
+answers, and the frames.
+
+`GET /exec/{sid}` without the upgrade returns the session: its owner, target, state (`pending`, `connected`, or
+`ended`), times, and byte counts. An ended session also says why it ended, and who ended it if someone did.
+`GET /exec` lists the sessions you may see, keeping ended ones for five minutes, and `GET /tasks/{id}/exec` lists one
+task's. You see your own sessions and every one on a service you hold `exec` on; any other answers `404` (`EXE006`).
+
+Opening a session needs [operations level][operations-level] 3 and an [`exec` grant][exec-grant] on the task's
+service. `GET /tasks/{id}/exec` lists `POST` in `Allow` when a new session would pass every check but the session
+limits. Opening is refused with `403` (`OPS001` or `ACL003`); a task that can't take a shell, or whose node no
+transport reaches, `409` (`EXE001`, `EXE002`); and one past `exec.max_sessions` or `exec.max_sessions_per_identity`,
+`429` (`EXE003`) with `Retry-After`. `DELETE /exec/{sid}` ends a session you can see, at operations level 3, and the
+session names you as who ended it.
+
+With [`audit.enabled`][audit.enabled], a session is recorded when its shell starts (`exec.start`) and, if it started,
+when it ends (`exec.end`, naming who ended it). A refused open of a task you can read, and a refused attach to a
+session that exists, are recorded as `exec.denied`. Creating a session, one that ends without its shell starting, and
+a refused `DELETE` leave no record.
 
 ## Response format
 
@@ -1055,6 +1089,8 @@ A caller is the signed-in identity, or the client address under the `none` auth 
 | Plugins | `/plugins`, `/plugins/{name}`, `/swarm/plugins` |
 | Cluster | `/cluster`, `/cluster/metrics`, `/cluster/capacity`, `/swarm`, `/disk-usage` |
 | Cross-resource | `/search?q=`, `/history`, `/events`, `/recommendations`, `/topology`, `/profile` |
+| [Annotations](#annotations) | `/annotations`, `/annotations/{id}`, `/annotations/tags` |
+| [Container exec](#container-exec) | `/exec`, `/exec/{sid}`, `/tasks/{id}/exec` |
 | Metrics | `/metrics`, `/metrics/status`, `/metrics/labels`, `/metrics/labels/{name}` |
 | Documentation | `/api`, `/api/openapi.yaml`, `/api/asyncapi`, `/api/asyncapi.yaml`, `/api/context.jsonld`, `/api/errors`, `/api/errors/{code}` |
 | Discovery | `/.well-known/api-catalog`, `/opensearch.xml` |
@@ -1392,11 +1428,15 @@ it.
 
 [api-explorer]: api/explorer
 [api-tokens]: authentication#api-access-tokens
+[audit.enabled]: configuration#audit.enabled
 [auth.mode]: configuration#auth.mode
 [authentication]: authentication
 [authorization]: authorization
 [configuration]: configuration
+[container-exec]: configuration#container-exec
 [dashboard]: dashboard
+[exec-grant]: authorization#permissions
+[exec.enabled]: configuration#exec.enabled
 [mcp]: mcp
 [mcp-tools]: mcp-tools
 [mcp-tools.compatibility]: mcp-tools#compatibility

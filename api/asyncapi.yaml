@@ -19,8 +19,9 @@ info:
 
     - The sixteen resource channels and `/events` write an opaque history
       cursor, valid only against the process that wrote it. Reconnecting with
-      one replays the events in between from a 10,000-entry ring. A cursor the
-      ring no longer holds, one from before a restart, or one from before a
+      one replays the events in between from the history, which keeps the
+      newest `storage.history_entries` entries. A cursor the history no longer
+      holds, one from before a restart, or one from before a
       `sync` the client did not receive gets a `sync` message instead, and so
       does every detail channel, always — they are ineligible
       for replay because a cross-resource matcher cannot be reconstructed from
@@ -443,8 +444,19 @@ channels:
       The terminal of one exec session, opened by a WebSocket upgrade of the
       session's own address. Only the session's owner may attach, and only
       once: a dropped connection ends the session, and there is no reattach.
-      The upgrade's `Origin` must be the request's own host,
-      `server.public_url` or an entry of `server.cors.origins`.
+
+      The upgrade's origin passes, checked in this order: with no `Origin`,
+      as a CLI client sends it; with `Sec-Fetch-Site` `same-origin` or
+      `none`; with no `Sec-Fetch-Site` and an `Origin` whose host is the
+      request's `Host`; or with an `Origin` whose scheme and host are
+      `server.public_url` or an entry of `server.cors.origins` other than
+      `*`. Any other `Origin`, or one that doesn't parse, is refused. A
+      refused upgrade answers a problem instead, in this order: `403`
+      (`CSR001`) for an origin not
+      allowed, `404` (`EXE006`) for a session the caller can't see, `403`
+      (`EXE004`) for one they see but don't own, `409` (`EXE005`) for one
+      already attached or ended, and `409` (`EXE002`) when no transport
+      reaches the task's node.
 
       Binary frames are terminal bytes in both directions. Text frames are
       JSON control messages. The server ends every connection with one `exit`
@@ -743,10 +755,11 @@ components:
         Recorded when Cetacean starts watching again, after a restart or a lost
         connection to Docker, from the last heartbeat before it stopped watching
         to the moment it was watching again, and only with `storage.timeline`
-        on. Changes made during a gap produced no event and are in no history
-        entry. A gap names no resource, so it is
-        sent only on `/events`, where it passes every `?types=` filter, and is
-        replayed there like any change. Its `@id` is its history entry.
+        on. Changes made during a gap produced no event, including any later
+        recovered from Docker's buffer: read them from `/history`. A gap names
+        no resource, so it is sent only on `/events`, where it passes every
+        `?types=` filter, and is replayed there like any change. Its `@id` is
+        its history entry.
       payload:
         $ref: "#/components/schemas/Gap"
 
