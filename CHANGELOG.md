@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-05
+
 ### Added
 - Ctrl/Cmd+Enter submits the form or saves the editor you're in, and its button shows the shortcut
 - Annotations note a moment or range on services, stacks, nodes or the cluster through `/annotations`, needing `storage.timeline` but no operations level, marking a removed resource `removed`; its list, CSV and feeds filter by `tag` and `author`, and `/annotations/tags` counts tags
