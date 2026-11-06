@@ -296,7 +296,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	h := cfg.Handlers
 	h.refresher = cfg.Refresher
 	h.liveness = cfg.Liveness
-	h.execOrigins = trustedOrigins(cfg.CORS, cfg.PublicURL)
+	h.crossOrigin = newCrossOriginProtection(cfg.CORS, cfg.PublicURL)
 	if cfg.Broadcaster != nil {
 		cfg.Broadcaster.SetBasePath(cfg.BasePath)
 	}
@@ -334,7 +334,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		hostGuard(cfg.Hosts),
 		negotiate,
 		cors(cfg.CORS),
-		crossOriginProtection(cfg.CORS, cfg.PublicURL),
+		crossOriginProtection(h.crossOrigin),
 		auth.Middleware(cfg.AuthProvider, cfg.APITokens),
 		h.suffixedNames,
 		requireReady(h, mux),
@@ -950,18 +950,13 @@ func (rt routes) exec() {
 		return
 	}
 
+	// The handlers check the level themselves, so that they can audit the refusal.
 	execOp := func(op cluster.Operation, permits func(*http.Request) bool) tieredChain {
 		return tieredChain{
-			gates:   NewChain(h.requireLevel(op.Tier()), attributeWrite),
+			gates:   NewChain(attributeWrite),
 			level:   op.Tier(),
 			permits: permits,
 		}
-	}
-	// Opening checks the level in execDecision instead, which audits the refusal.
-	openExec := tieredChain{
-		gates:   NewChain(attributeWrite),
-		level:   cluster.OpOpenExec.Tier(),
-		permits: h.mayOpenExec,
 	}
 
 	mux.HandleFunc(
@@ -969,7 +964,7 @@ func (rt routes) exec() {
 		contentNegotiated(h.HandleTaskExec, feedHandlers{}, spa),
 	)
 	mux.Handle("POST /tasks/{id}/exec",
-		openExec.ThenFunc(h.HandleCreateExecSession))
+		execOp(cluster.OpOpenExec, h.mayOpenExec).ThenFunc(h.HandleCreateExecSession))
 	mux.HandleFunc(
 		"GET /exec",
 		contentNegotiated(h.HandleListExecSessions, feedHandlers{}, spa),

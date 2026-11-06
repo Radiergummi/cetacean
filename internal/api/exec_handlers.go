@@ -20,7 +20,7 @@ import (
 type ExecDeps struct {
 	Manager    *exec.Manager
 	Transports []exec.Transport
-	Self       func(swarm.Task) bool
+	Self       func(swarm.Task) cluster.ExecIneligibility
 
 	// startTimeout bounds opening the shell; zero is exec.AttachWindow.
 	startTimeout time.Duration
@@ -105,9 +105,9 @@ func (h *Handlers) mayOpenExec(r *http.Request) bool {
 
 // mayEndExec reports whether DELETE /exec/{sid} would find the session.
 func (h *Handlers) mayEndExec(r *http.Request) bool {
-	s, ok := h.exec.Manager.Get(r.PathValue("sid"))
+	_, ok := h.visibleSession(r)
 
-	return ok && h.canSeeSession(r, s)
+	return ok
 }
 
 // ExecAuthorizer re-checks a live session's grant after a policy reload.
@@ -225,21 +225,28 @@ func (h *Handlers) HandleCreateExecSession(w http.ResponseWriter, r *http.Reques
 		NewDetailResponse(r.Context(), sessionPath(session.ID), "ExecSession", session))
 }
 
-// sessionFor resolves {sid} to a session the caller may see, or writes the 404:
-// an invisible session is not confirmed to exist.
-func (h *Handlers) sessionFor(w http.ResponseWriter, r *http.Request) (exec.Session, bool) {
+// visibleSession resolves {sid} to a session the caller may see. Refuse any other
+// with EXE006, the 404: an invisible session is not confirmed to exist.
+func (h *Handlers) visibleSession(r *http.Request) (exec.Session, bool) {
 	s, ok := h.exec.Manager.Get(r.PathValue("sid"))
 	if !ok || !h.canSeeSession(r, s) {
-		problem.Write(w, r, "EXE006", "exec session not found")
 		return exec.Session{}, false
 	}
 
 	return s, true
 }
 
+// refuseSession answers a refused attach to or end of {sid}, and audits it.
+func (h *Handlers) refuseSession(w http.ResponseWriter, r *http.Request, code, detail string) {
+	id := auth.IdentityFromContext(r.Context())
+	h.exec.Manager.DeniedSession(r.PathValue("sid"), id, clientIP(r), code)
+	problem.Write(w, r, code, detail)
+}
+
 func (h *Handlers) HandleGetExecSession(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.sessionFor(w, r)
+	s, ok := h.visibleSession(r)
 	if !ok {
+		problem.Write(w, r, "EXE006", "exec session not found")
 		return
 	}
 
@@ -254,8 +261,15 @@ func (h *Handlers) HandleGetExecSession(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handlers) HandleDeleteExecSession(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.sessionFor(w, r)
+	tier := cluster.OpEndExec.Tier()
+	if level := h.levelFor(r); level < tier {
+		h.refuseSession(w, r, "OPS001", levelRefusal(tier, level))
+		return
+	}
+
+	s, ok := h.visibleSession(r)
 	if !ok {
+		h.refuseSession(w, r, "EXE006", "exec session not found")
 		return
 	}
 

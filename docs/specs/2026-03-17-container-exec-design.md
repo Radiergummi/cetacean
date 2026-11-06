@@ -321,7 +321,7 @@ Off unless `audit.enabled = true`. Cetacean emits JSON records on a dedicated st
 (`audit.output`: `stdout`, tagged so a collector can route it, or a file path). Storage, shipping
 and retention are out of scope.
 
-**Records:** `exec.denied`, `exec.start`, `exec.end`, carrying:
+**Records:** `exec.denied`, `exec.open`, `exec.start`, `exec.end`, carrying:
 - time and session ID;
 - identity (subject, auth provider, groups) and client address;
 - the shell transport used;

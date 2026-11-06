@@ -1430,7 +1430,7 @@ func startExec(
 	handlers.SetExec(api.ExecDeps{
 		Manager:    manager,
 		Transports: []exec.Transport{&exec.Local{Docker: dockerClient}},
-		Self:       self.Is,
+		Self:       self.Check,
 	})
 
 	return func() {

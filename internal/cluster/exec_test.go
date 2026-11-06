@@ -24,12 +24,12 @@ func eligibleNode() swarm.Node {
 	return n
 }
 
-func notSelf(swarm.Task) bool { return false }
+func notSelf(swarm.Task) ExecIneligibility { return ExecEligible }
 
 func TestExecEligibility(t *testing.T) {
 	cases := map[string]struct {
 		mutate func(*swarm.Task, *swarm.Node, *bool)
-		self   func(swarm.Task) bool
+		self   func(swarm.Task) ExecIneligibility
 		want   ExecIneligibility
 	}{
 		"eligible": {func(*swarm.Task, *swarm.Node, *bool) {}, notSelf, ExecEligible},
@@ -70,8 +70,18 @@ func TestExecEligibility(t *testing.T) {
 		},
 		"cetacean itself": {
 			func(*swarm.Task, *swarm.Node, *bool) {},
-			func(swarm.Task) bool { return true },
+			func(swarm.Task) ExecIneligibility { return ExecSelf },
 			ExecSelf,
+		},
+		"cannot tell it from cetacean": {
+			func(*swarm.Task, *swarm.Node, *bool) {},
+			func(swarm.Task) ExecIneligibility { return ExecSelfUnknown },
+			ExecSelfUnknown,
+		},
+		"a closed node outranks the self check": {
+			func(_ *swarm.Task, n *swarm.Node, _ *bool) { n.Status.State = swarm.NodeStateDown },
+			func(swarm.Task) ExecIneligibility { return ExecSelf },
+			ExecNodeUnavailable,
 		},
 	}
 

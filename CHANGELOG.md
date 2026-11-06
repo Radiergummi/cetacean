@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- With `audit.enabled`, exec audit logs record `exec.open` for each session created, `exec.end` for sessions whose shell never started, and `exec.denied` for refused `DELETE /exec/{sid}` requests
+
+### Changed
+- The exec terminal refuses a WebSocket upgrade sending `Sec-Fetch-Site: none`, or any cross-site `Sec-Fetch-Site` with no `Origin`
+
+### Fixed
+- `server.cors.origins` entries match whatever their case or default port, and origins compare case-insensitively on writes
+- `EXE001` gives the reason `self_unknown`, not `cetacean`, for a task Cetacean can't tell apart from itself because it can't identify its own container
+
 ## [0.19.0] - 2026-11-05
 
 ### Added

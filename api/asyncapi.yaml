@@ -445,12 +445,14 @@ channels:
       session's own address. Only the session's owner may attach, and only
       once: a dropped connection ends the session, and there is no reattach.
 
-      The upgrade's origin passes, checked in this order: with no `Origin`,
-      as a CLI client sends it; with `Sec-Fetch-Site` `same-origin` or
-      `none`; with no `Sec-Fetch-Site` and an `Origin` whose host is the
-      request's `Host`; or with an `Origin` whose scheme and host are
+      The upgrade's origin is checked in this order. `Sec-Fetch-Site: none`
+      is refused, and `same-origin` passes. Any other `Sec-Fetch-Site` needs
+      an `Origin` that is trusted: one whose scheme and host are
       `server.public_url` or an entry of `server.cors.origins` other than
-      `*`. Any other `Origin`, or one that doesn't parse, is refused. A
+      `*`. With no `Sec-Fetch-Site`, a request with no `Origin` passes, as a
+      CLI client sends it, and so does an `Origin` that is trusted or whose
+      host is the request's `Host`. Hosts and schemes compare without regard
+      to case. Anything else is refused. A
       refused upgrade answers a problem instead, in this order: `403`
       (`CSR001`) for an origin not
       allowed, `404` (`EXE006`) for a session the caller can't see, `403`

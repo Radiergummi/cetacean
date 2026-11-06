@@ -624,7 +624,7 @@ var registry = map[string]Def{
 		Code:        "EXE001",
 		Title:       "Task Not Eligible for Exec",
 		Status:      http.StatusConflict,
-		Description: "The task is not running, its node is not ready and active, or it is Cetacean itself.",
+		Description: "The task is not running, its node is not ready and active, or it is Cetacean itself or can't be told apart from it.",
 		Suggestion:  "Pick a running task on an active node.",
 	},
 	"EXE002": {

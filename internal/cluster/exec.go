@@ -11,13 +11,14 @@ const (
 	ExecNodeUnavailable ExecIneligibility = "node_unavailable"
 	ExecNodeUnsupported ExecIneligibility = "node_unsupported"
 	ExecSelf            ExecIneligibility = "cetacean"
+	ExecSelfUnknown     ExecIneligibility = "self_unknown"
 )
 
 // ExecEligibility is the rule every transport applies before a shell is opened.
 // A paused or drained node is refused even though its containers may still run:
 // Cetacean is not an SSH gateway for nodes taken out of service.
 func ExecEligibility(
-	task swarm.Task, node swarm.Node, nodeFound bool, self func(swarm.Task) bool,
+	task swarm.Task, node swarm.Node, nodeFound bool, self func(swarm.Task) ExecIneligibility,
 ) ExecIneligibility {
 	switch {
 	case task.Status.State != swarm.TaskStateRunning,
@@ -30,9 +31,7 @@ func ExecEligibility(
 		return ExecNodeUnavailable
 	case node.Description.Platform.OS != "linux":
 		return ExecNodeUnsupported
-	case self(task):
-		return ExecSelf
 	}
 
-	return ExecEligible
+	return self(task)
 }

@@ -187,12 +187,35 @@ func TestCrossSiteRefusalIsProblemDetails(t *testing.T) {
 	}
 }
 
+func TestCrossOriginProtectionFoldsCase(t *testing.T) {
+	handler := crossOriginProtection(newCrossOriginProtection(
+		&CORSConfig{AllowedOrigins: []string{"https://A.example:443"}}, "",
+	))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for name, origin := range map[string]string{
+		"its own host":   "https://Cetacean.example",
+		"a trusted host": "https://a.example",
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "http://cetacean.example/x", nil)
+			req.Header.Set("Origin", origin)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			if w.Code != http.StatusNoContent {
+				t.Errorf("status = %d, want 204", w.Code)
+			}
+		})
+	}
+}
+
 // Covers the fallback a pre-2023 browser takes: no Sec-Fetch-Site, so the stdlib
 // compares Origin against r.Host. Behind a proxy that rewrites Host, the
 // dashboard's own writes arrive with the public origin and an internal Host, and
 // only server.public_url tells those from a stranger's.
 func TestPublicURLIsTrusted(t *testing.T) {
-	handler := crossOriginProtection(nil, "https://cetacean.example")(
+	handler := crossOriginProtection(newCrossOriginProtection(nil, "https://cetacean.example"))(
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		}),

@@ -34,5 +34,5 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc6455#section-10.2
     mutants:
       - file: internal/api/exec_ws.go
-        replace: "refuse(\"CSR001\", \"this origin may not open a terminal\")"
-        with: "refuse(\"EXE005\", \"this origin may not open a terminal\")"
+        replace: "\"CSR001\", \"this origin may not open a terminal\""
+        with: "\"EXE005\", \"this origin may not open a terminal\""

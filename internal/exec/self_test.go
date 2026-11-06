@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 func TestSelfRecognisesItsOwnTaskByAddress(t *testing.T) {
@@ -22,8 +24,9 @@ func TestSelfRecognisesItsOwnTaskByAddress(t *testing.T) {
 		NetworksAttachments: []swarm.NetworkAttachment{{Addresses: []string{"not-an-ip"}}},
 	}
 
-	if !s.Is(own) || s.Is(other) || s.Is(garbled) || s.Is(swarm.Task{}) {
-		t.Error("Is is wrong")
+	if s.Check(own) != cluster.ExecSelf || s.Check(other) != cluster.ExecEligible ||
+		s.Check(garbled) != cluster.ExecEligible || s.Check(swarm.Task{}) != cluster.ExecEligible {
+		t.Error("Check is wrong")
 	}
 }
 
@@ -50,25 +53,38 @@ func TestSelfRecognisesItsOwnContainerOnAnyNetwork(t *testing.T) {
 	s.containerID = "own"
 
 	own := hostNetworkTask("own")
-	if !s.Is(own) || s.Is(hostNetworkTask("other")) {
-		t.Error("Is is wrong")
+	if s.Check(own) != cluster.ExecSelf ||
+		s.Check(hostNetworkTask("other")) != cluster.ExecEligible {
+		t.Error("Check is wrong")
 	}
 }
 
 func TestSelfFailsClosedOnTheHostNetworkWithoutItsContainerID(t *testing.T) {
 	s := newSelf(nil)
 
-	if !s.Is(hostNetworkTask("any")) {
-		t.Error("a host-network task is not refused when Cetacean cannot name its container")
+	if got := s.Check(hostNetworkTask("any")); got != cluster.ExecSelfUnknown {
+		t.Errorf("host-network task = %q, want self_unknown", got)
 	}
 	overlay := swarm.Task{
 		NetworksAttachments: []swarm.NetworkAttachment{{Addresses: []string{"10.0.1.8/24"}}},
 	}
-	if s.Is(overlay) {
-		t.Error("an overlay task is refused")
+	if got := s.Check(overlay); got != cluster.ExecEligible {
+		t.Errorf("overlay task = %q, want it eligible", got)
 	}
-	if !s.Is(swarm.Task{}) {
-		t.Error("a task with no network attachments is not refused")
+	if got := s.Check(swarm.Task{}); got != cluster.ExecSelfUnknown {
+		t.Errorf("task with no network attachments = %q, want self_unknown", got)
+	}
+}
+
+func TestSelfPrefersItsOwnAddressOverNotKnowingItsContainer(t *testing.T) {
+	s := newSelf([]netip.Addr{netip.MustParseAddr("10.0.1.7")})
+
+	task := hostNetworkTask("any")
+	task.NetworksAttachments = append(task.NetworksAttachments, swarm.NetworkAttachment{
+		Addresses: []string{"10.0.1.7/24"},
+	})
+	if got := s.Check(task); got != cluster.ExecSelf {
+		t.Errorf("Check = %q, want the rule that identified Cetacean", got)
 	}
 }
 
@@ -82,8 +98,8 @@ func TestSelfRecognisesEveryTaskOfItsOwnService(t *testing.T) {
 	other := hostNetworkTask("other")
 	other.ServiceID = "web"
 
-	if !s.Is(replica) || s.Is(other) {
-		t.Error("Is is wrong")
+	if s.Check(replica) != cluster.ExecSelf || s.Check(other) != cluster.ExecEligible {
+		t.Error("Check is wrong")
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/audit"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/exec"
 )
@@ -139,7 +140,7 @@ func newExecDeps(transport exec.Transport) ExecDeps {
 			MaxSessions: 4, MaxPerIdentity: 2, IdleTimeout: time.Hour, MaxDuration: time.Hour,
 		}}),
 		Transports: []exec.Transport{transport},
-		Self:       func(swarm.Task) bool { return false },
+		Self:       func(swarm.Task) cluster.ExecIneligibility { return cluster.ExecEligible },
 	}
 }
 
@@ -355,16 +356,15 @@ func auditedManager(recorder *recordingAudit) *exec.Manager {
 	}})
 }
 
-// assertOneDenial requires exactly one record: the anonymous caller refused
+// assertOneDenial requires exactly one exec.denied record: the anonymous caller refused
 // with code, on the session sid (none for a create) and the task.
 func assertOneDenial(t *testing.T, recorder *recordingAudit, code, sid, task string) {
 	t.Helper()
-	recorder.mu.Lock()
-	defer recorder.mu.Unlock()
-	if len(recorder.records) != 1 {
-		t.Fatalf("audit records = %+v, want one exec.denied", recorder.records)
+	records := recorder.denied()
+	if len(records) != 1 {
+		t.Fatalf("exec.denied records = %+v, want one", records)
 	}
-	rec := recorder.records[0]
+	rec := records[0]
 	if rec.Event != "exec.denied" || rec.Reason != code || rec.Session != sid ||
 		rec.Identity.Subject != "anonymous" || rec.Identity.Provider != "none" ||
 		rec.Client == "" || rec.Target == nil || rec.Target.Task != task {
@@ -391,6 +391,18 @@ func attachRequest(
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
+}
+
+func TestCreateExecSessionNamesWhyItCannotTellATaskFromItself(t *testing.T) {
+	deps := newExecDeps(&fakeTransport{node: "n1"})
+	deps.Self = func(swarm.Task) cluster.ExecIneligibility { return cluster.ExecSelfUnknown }
+
+	w := do(t, execRouter(t, deps), http.MethodPost, "/tasks/t1/exec", "application/json")
+	body := w.Body.String()
+	assertACLErrorCode(t, w, "EXE001")
+	if !strings.Contains(body, "self_unknown") {
+		t.Errorf("body = %s, want the reason self_unknown", body)
+	}
 }
 
 func TestExecAttachRefusalsAreAudited(t *testing.T) {
@@ -498,14 +510,22 @@ func (a *recordingAudit) Write(rec audit.Record) error {
 	return nil
 }
 
-func (a *recordingAudit) denials() []string {
+func (a *recordingAudit) denied() []audit.Record {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	var reasons []string
+	var records []audit.Record
 	for _, rec := range a.records {
 		if rec.Event == "exec.denied" {
-			reasons = append(reasons, rec.Reason)
+			records = append(records, rec)
 		}
+	}
+	return records
+}
+
+func (a *recordingAudit) denials() []string {
+	var reasons []string
+	for _, rec := range a.denied() {
+		reasons = append(reasons, rec.Reason)
 	}
 	return reasons
 }
@@ -616,6 +636,57 @@ func TestDeleteExecSessionEndsIt(t *testing.T) {
 	}
 }
 
+func TestDeleteExecRefusalsAreAudited(t *testing.T) {
+	anonymous := &auth.Identity{Subject: "anonymous", Provider: "none"}
+	target := exec.Target{Task: "t1", Service: "s1", ServiceName: "web", Node: "n1"}
+	cases := map[string]struct {
+		owner *auth.Identity
+		opts  []testHandlersOption
+		code  string
+	}{
+		"below the level": {
+			owner: anonymous,
+			opts:  []testHandlersOption{withOpsLevel(config.OpsConfiguration)},
+			code:  "OPS001",
+		},
+		"invisible": {
+			owner: aliceIdentity,
+			opts:  []testHandlersOption{withACL(execPolicy("read"))},
+			code:  "EXE006",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			deps := newExecDeps(&fakeTransport{node: "n1"})
+			recorder := &recordingAudit{}
+			deps.Manager = auditedManager(recorder)
+			s, err := deps.Manager.Create(tc.owner, "", target, "local")
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+
+			w := do(t, execRouter(t, deps, tc.opts...), http.MethodDelete, sessionPath(s.ID), "")
+			assertACLErrorCode(t, w, tc.code)
+			assertOneDenial(t, recorder, tc.code, s.ID, "t1")
+			if got, _ := deps.Manager.Get(s.ID); got.State != exec.StatePending {
+				t.Errorf("session = %+v, want it left pending", got)
+			}
+		})
+	}
+}
+
+func TestDeleteOfNoExecSessionIsNotAudited(t *testing.T) {
+	deps := newExecDeps(&fakeTransport{node: "n1"})
+	recorder := &recordingAudit{}
+	deps.Manager = auditedManager(recorder)
+
+	w := do(t, execRouter(t, deps), http.MethodDelete, "/exec/missing", "")
+	assertACLErrorCode(t, w, "EXE006")
+	if len(recorder.records) != 0 {
+		t.Errorf("audit records = %+v", recorder.records)
+	}
+}
+
 func TestExecRoutesAbsentWhenDisabled(t *testing.T) {
 	h := newTestRouterWithConfig(t, nil, withCache(execCache()), withOpsLevel(config.OpsImpactful))
 	if w := do(t, h, http.MethodGet, "/exec", "application/json"); w.Code != http.StatusNotFound {
@@ -678,13 +749,21 @@ func TestOwnersSeeTheirSessionsAfterLosingExec(t *testing.T) {
 }
 
 func TestExecOriginsAreTheTrustedOrigins(t *testing.T) {
-	cfg := testRouterConfig(t, []routerOption{withCORS("https://a.example")})
+	cfg := testRouterConfig(t, []routerOption{withCORS("https://A.example")})
 	cfg.PublicURL = "https://cetacean.example"
 	NewRouter(cfg)
 
-	want := []string{"https://a.example", "https://cetacean.example"}
-	if !slices.Equal(cfg.Handlers.execOrigins, want) {
-		t.Errorf("execOrigins = %v, want %v", cfg.Handlers.execOrigins, want)
+	for origin, want := range map[string]bool{
+		"https://a.example":        true,
+		"https://cetacean.example": true,
+		"https://evil.example":     false,
+	} {
+		r := httptest.NewRequest(http.MethodGet, "http://backend:9000/exec/s1", nil)
+		r.Header.Set("Origin", origin)
+		r.Header.Set("Sec-Fetch-Site", "cross-site")
+		if got := cfg.Handlers.execOriginAllowed(r); got != want {
+			t.Errorf("%s allowed = %v, want %v", origin, got, want)
+		}
 	}
 }
 

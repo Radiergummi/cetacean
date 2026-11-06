@@ -52,6 +52,13 @@ func (r *recorder) events() []string {
 	return out
 }
 
+func assertEvents(t *testing.T, rec *recorder, want ...string) {
+	t.Helper()
+	if got := rec.events(); !slices.Equal(got, want) {
+		t.Errorf("audit events = %v, want %v", got, want)
+	}
+}
+
 type clock struct{ now time.Time }
 
 func (c *clock) Now() time.Time          { return c.now }
@@ -166,8 +173,8 @@ func TestManagerPairsAnAbandonedStartThatLands(t *testing.T) {
 		landed error
 		want   []string
 	}{
-		{"landed", nil, []string{"exec.end"}},
-		{"never landed", errors.New("disk full"), nil},
+		{"landed", nil, []string{"exec.open", "exec.end"}},
+		{"never landed", errors.New("disk full"), []string{"exec.open", "exec.end"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, rec, _ := newTestManager(t, Limits{})
@@ -183,7 +190,7 @@ func TestManagerPairsAnAbandonedStartThatLands(t *testing.T) {
 			if err := m.Connected(s.ID); !errors.Is(err, audit.ErrUnavailable) {
 				t.Fatalf("connected = %v, want audit.ErrUnavailable", err)
 			}
-			if events := rec.events(); len(events) != 0 {
+			if events := rec.events(); !slices.Equal(events, []string{"exec.open"}) {
 				t.Fatalf("wrote %v before the start landed", events)
 			}
 
@@ -196,12 +203,10 @@ func TestManagerPairsAnAbandonedStartThatLands(t *testing.T) {
 			if !slices.Equal(got, tc.want) {
 				t.Fatalf("events after the start ended = %v, want %v", got, tc.want)
 			}
-			if len(got) == 1 {
-				end := rec.records[0]
-				if end.Session != s.ID || end.Reason != "audit_unavailable" ||
-					end.Outcome != string(OutcomeDetached) {
-					t.Errorf("end record = %+v", end)
-				}
+			end := rec.records[len(rec.records)-1]
+			if end.Session != s.ID || end.Reason != "audit_unavailable" ||
+				end.Outcome != string(OutcomeDetached) {
+				t.Errorf("end record = %+v", end)
 			}
 		})
 	}
@@ -280,13 +285,15 @@ func TestManagerAbortIsDetached(t *testing.T) {
 	if ctx.Err() == nil {
 		t.Error("Abort did not cancel the attach context")
 	}
-	if len(rec.events()) != 0 {
-		t.Errorf("a session that never started wrote %v", rec.events())
+	assertEvents(t, rec, "exec.open", "exec.end")
+	if end := rec.records[1]; end.Reason != "transport_unavailable" || end.Duration != "" ||
+		end.Outcome != string(OutcomeDetached) {
+		t.Errorf("end record = %+v", end)
 	}
 }
 
 func TestManagerEndUnattachedIsDetached(t *testing.T) {
-	m, _, _ := newTestManager(t, Limits{})
+	m, rec, _ := newTestManager(t, Limits{})
 	s, _ := m.Create(alice, "", target, "local")
 
 	m.End(s.ID, "terminated_by", bob)
@@ -298,6 +305,123 @@ func TestManagerEndUnattachedIsDetached(t *testing.T) {
 	}
 	if _, err := m.Attach(s.ID, alice); !errors.Is(err, ErrAlreadyAttached) {
 		t.Errorf("attach after end = %v, want ErrAlreadyAttached", err)
+	}
+	assertEvents(t, rec, "exec.open", "exec.end")
+	if end := rec.records[1]; end.EndedBy == nil || end.EndedBy.Subject != "bob" {
+		t.Errorf("end record = %+v", end)
+	}
+}
+
+func TestManagerRecordsTheOpen(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	s, err := m.Create(alice, "192.0.2.1", target, "local")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if len(rec.records) != 1 {
+		t.Fatalf("audit records = %+v", rec.records)
+	}
+	open := rec.records[0]
+	if open.Event != "exec.open" || open.Session != s.ID || open.Identity.Subject != "alice" ||
+		open.Client != "192.0.2.1" || open.Transport != "local" || open.Target.Task != "t1" {
+		t.Errorf("open record = %+v", open)
+	}
+}
+
+func TestManagerShowsNoSessionBeforeItsOpenIsWritten(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	var seen []Session
+	rec.onWrite = func(audit.Record) { seen = m.List() }
+
+	if _, err := m.Create(alice, "", target, "local"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if len(seen) != 0 {
+		t.Errorf("sessions visible while the open was written = %+v", seen)
+	}
+	if got := m.List(); len(got) != 1 {
+		t.Errorf("sessions after the open = %+v", got)
+	}
+}
+
+func TestManagerCreateAfterShutdownIsRefused(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	m.Shutdown(ctx)
+
+	if _, err := m.Create(alice, "", target, "local"); !errors.Is(err, ErrCapacity) {
+		t.Errorf("create = %v, want ErrCapacity", err)
+	}
+	if got := rec.events(); len(got) != 0 {
+		t.Errorf("audit events = %v", got)
+	}
+}
+
+func TestManagerShutdownWaitsForACreateInProgress(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	writing, release := make(chan struct{}), make(chan struct{})
+	rec.refuse = func(r audit.Record) error {
+		if r.Event == "exec.open" {
+			close(writing)
+			<-release
+		}
+		return nil
+	}
+	created := make(chan Session, 1)
+	go func() {
+		s, _ := m.Create(alice, "", target, "local")
+		created <- s
+	}()
+	<-writing
+
+	shut := make(chan struct{})
+	go func() {
+		defer close(shut)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	}()
+	close(release)
+	s := <-created
+	<-shut
+
+	got, ok := m.Get(s.ID)
+	if !ok || got.State != StateEnded || got.Reason != "shutdown" {
+		t.Errorf("session = %+v", got)
+	}
+}
+
+func TestManagerCreateOutlivesAnUnwrittenOpenButNotItsStart(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	rec.fail = true
+	s, err := m.Create(alice, "", target, "local")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := m.Attach(s.ID, alice); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	if err := m.Connected(s.ID); !errors.Is(err, audit.ErrUnavailable) {
+		t.Errorf("connected = %v, want audit.ErrUnavailable", err)
+	}
+}
+
+func TestManagerDeniedSessionRecordsTheCaller(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	s, _ := m.Create(alice, "", target, "local")
+
+	m.DeniedSession(s.ID, bob, "192.0.2.2", "OPS001")
+	m.DeniedSession("missing", bob, "192.0.2.2", "OPS001")
+
+	if got := rec.events(); !slices.Equal(got, []string{"exec.open", "exec.denied"}) {
+		t.Fatalf("audit events = %v", got)
+	}
+	denied := rec.records[1]
+	if denied.Session != s.ID || denied.Identity.Subject != "bob" || denied.Reason != "OPS001" ||
+		denied.Target.Task != "t1" {
+		t.Errorf("denied record = %+v", denied)
 	}
 }
 
@@ -323,11 +447,12 @@ func TestManagerEndCancelsAndFinishRecordsOnce(t *testing.T) {
 		got.Exit.Outcome != OutcomeTerminated {
 		t.Errorf("first End or first Finish did not win: %+v", got)
 	}
-	if events := rec.events(); len(events) != 2 || events[0] != "exec.start" ||
-		events[1] != "exec.end" {
+	if events := rec.events(); !slices.Equal(
+		events, []string{"exec.open", "exec.start", "exec.end"},
+	) {
 		t.Errorf("audit events = %v", events)
 	}
-	end := rec.records[1]
+	end := rec.records[2]
 	if end.BytesIn != 5 || end.BytesOut != 7 || end.Duration != "1m0s" || *end.ExitCode != 129 {
 		t.Errorf("end record = %+v", end)
 	}
@@ -388,9 +513,7 @@ func TestManagerSweepEndsUnattachedAndForgetsOld(t *testing.T) {
 	if got, _ := m.Get(s.ID); got.State != StateEnded || got.Reason != "not_attached" {
 		t.Fatalf("session = %+v", got)
 	}
-	if len(rec.events()) != 0 {
-		t.Errorf("an unattached session wrote %v", rec.events())
-	}
+	assertEvents(t, rec, "exec.open", "exec.end")
 
 	clk.advance(Retention + time.Second)
 	m.Sweep()
@@ -445,7 +568,7 @@ func TestManagerConnectedRefusesWhatCannotStart(t *testing.T) {
 	if err := m.Connected(ending.ID); !errors.Is(err, ErrNotPending) {
 		t.Errorf("ending = %v, want ErrNotPending", err)
 	}
-	if len(rec.events()) != 0 {
+	if slices.Contains(rec.events(), "exec.start") {
 		t.Errorf("a refused start wrote %v", rec.events())
 	}
 }
@@ -468,8 +591,9 @@ func TestManagerConnectedPairsAStartThatLostARace(t *testing.T) {
 			if err := m.Connected(s.ID); !errors.Is(err, ErrNotPending) {
 				t.Fatalf("connected = %v, want ErrNotPending", err)
 			}
-			if events := rec.events(); len(events) != 2 || events[1] != "exec.end" {
-				t.Errorf("audit events = %v", events)
+			want := []string{"exec.open", "exec.start", "exec.end"}
+			if events := rec.events(); !slices.Equal(events, want) {
+				t.Errorf("audit events = %v, want %v", events, want)
 			}
 			got, _ := m.Get(s.ID)
 			if got.State != StateEnded || got.Exit == nil || got.Exit.Outcome != OutcomeDetached {
@@ -560,9 +684,20 @@ func TestManagerShutdownEndsSessionsAndWaitsForTheirPumps(t *testing.T) {
 	if got, _ := m.Get(waiting.ID); got.State != StateEnded || got.Reason != "shutdown" {
 		t.Errorf("unattached session = %+v", got)
 	}
-	if events := rec.events(); len(events) != 2 || events[1] != "exec.end" ||
-		rec.records[1].Reason != "shutdown" {
-		t.Errorf("audit events = %v", events)
+	var ends []string
+	for _, r := range rec.records {
+		if r.Event == "exec.end" {
+			ends = append(ends, r.Session)
+			if r.Reason != "shutdown" {
+				t.Errorf("end record = %+v", r)
+			}
+		}
+	}
+	slices.Sort(ends)
+	want := []string{running.ID, waiting.ID}
+	slices.Sort(want)
+	if !slices.Equal(ends, want) {
+		t.Errorf("sessions ended on record = %v, want %v", ends, want)
 	}
 }
 
