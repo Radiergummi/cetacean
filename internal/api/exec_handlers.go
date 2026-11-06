@@ -20,7 +20,7 @@ import (
 type ExecDeps struct {
 	Manager    *exec.Manager
 	Transports []exec.Transport
-	Self       func(swarm.Task) bool
+	Self       func(swarm.Task) cluster.ExecIneligibility
 
 	// startTimeout bounds opening the shell; zero is exec.AttachWindow.
 	startTimeout time.Duration

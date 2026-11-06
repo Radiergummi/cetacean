@@ -3,15 +3,15 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
 )
 
-// crossOriginProtection refuses non-safe cross-origin browser requests. Not
-// merely defence in depth: Tailscale, mTLS and proxy headers all authenticate
-// a request carrying no cookie, so SameSite covers none of them. The CORS
-// allowlist mirrors in as trusted origins; a wildcard cannot, and main.go warns.
-func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
+// newCrossOriginProtection builds the one rule writes and the terminal upgrade
+// share. The CORS allowlist mirrors in as trusted origins; a wildcard cannot,
+// and main.go warns.
+func newCrossOriginProtection(cfg *CORSConfig, publicURL string) *http.CrossOriginProtection {
 	protection := http.NewCrossOriginProtection()
 
 	trust := func(setting, origin string) {
@@ -26,9 +26,16 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 	}
 
 	for _, origin := range trustedOrigins(cfg, publicURL) {
-		trust("server.cors.origins or server.public_url", origin)
+		trust("server.cors.origins or server.public_url", strings.ToLower(origin))
 	}
 
+	return protection
+}
+
+// crossOriginProtection refuses non-safe cross-origin browser requests. Not
+// merely defence in depth: Tailscale, mTLS and proxy headers all authenticate
+// a request carrying no cookie, so SameSite covers none of them.
+func crossOriginProtection(protection *http.CrossOriginProtection) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if carriesItsOwnProof(r.URL.Path) {
@@ -50,8 +57,7 @@ func crossOriginProtection(cfg *CORSConfig, publicURL string) Constructor {
 }
 
 // trustedOrigins is every origin a browser request may come from besides the
-// request's own host, shared by the CSRF check and the WebSocket upgrade. Our
-// public URL covers a pre-2023 browser, which sends no Sec-Fetch-Site from
+// request's own host. Our public URL covers a pre-2023 browser, which sends no Sec-Fetch-Site from
 // behind a proxy that rewrites Host, without switching on CORS reflection.
 func trustedOrigins(cfg *CORSConfig, publicURL string) []string {
 	var origins []string

@@ -296,7 +296,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 	h := cfg.Handlers
 	h.refresher = cfg.Refresher
 	h.liveness = cfg.Liveness
-	h.execOrigins = trustedOrigins(cfg.CORS, cfg.PublicURL)
+	h.crossOrigin = newCrossOriginProtection(cfg.CORS, cfg.PublicURL)
 	if cfg.Broadcaster != nil {
 		cfg.Broadcaster.SetBasePath(cfg.BasePath)
 	}
@@ -334,7 +334,7 @@ func newRouter(cfg RouterConfig) (http.Handler, *routeRecorder) {
 		hostGuard(cfg.Hosts),
 		negotiate,
 		cors(cfg.CORS),
-		crossOriginProtection(cfg.CORS, cfg.PublicURL),
+		crossOriginProtection(h.crossOrigin),
 		auth.Middleware(cfg.AuthProvider, cfg.APITokens),
 		h.suffixedNames,
 		requireReady(h, mux),

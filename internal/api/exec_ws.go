@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -77,35 +76,22 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-// execOriginAllowed is RFC 6455 §10.2's origin check, in the order csrf.go's
-// stdlib protection takes: Sec-Fetch-Site, which a page cannot forge, then the
-// request's own host. A request without Origin is not from a browser, so carries
-// no ambient credential a foreign page could be borrowing.
+// execOriginAllowed is RFC 6455 §10.2's origin check: the rule writes pass, which
+// Check waives for a GET, without the "none" of a navigation the user started.
+// A browser never sends that on a handshake. Check compares bytes, and an
+// origin's scheme and host are case-insensitive.
 func (h *Handlers) execOriginAllowed(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-
-	fetchSite := r.Header.Get("Sec-Fetch-Site")
-	if fetchSite == "same-origin" || fetchSite == "none" {
-		return true
-	}
-
-	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" {
+	if r.Header.Get("Sec-Fetch-Site") == "none" {
 		return false
 	}
-	if fetchSite == "" && strings.EqualFold(u.Host, r.Host) {
-		return true
-	}
-	for _, trusted := range h.execOrigins {
-		if strings.EqualFold(trusted, u.Scheme+"://"+u.Host) {
-			return true
-		}
-	}
 
-	return false
+	asWrite := r.WithContext(r.Context())
+	asWrite.Method = http.MethodPost
+	asWrite.Host = strings.ToLower(r.Host)
+	asWrite.Header = r.Header.Clone()
+	asWrite.Header.Set("Origin", strings.ToLower(r.Header.Get("Origin")))
+
+	return h.crossOrigin.Check(asWrite) == nil
 }
 
 func (h *Handlers) attachExecSession(w http.ResponseWriter, r *http.Request) {

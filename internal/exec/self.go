@@ -12,6 +12,8 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
+
+	"github.com/radiergummi/cetacean/internal/cluster"
 )
 
 // Self recognises Cetacean's own tasks by its service, its container ID, or the
@@ -91,23 +93,21 @@ func ownContainerID(mountinfo []byte) string {
 	return ""
 }
 
-// Is fails closed when the container ID is unknown: a task with no overlay
+// Check fails closed when the container ID is unknown: a task with no overlay
 // address, on the host network or none, gives nothing to recognise Cetacean by.
-func (s *Self) Is(task swarm.Task) bool {
+func (s *Self) Check(task swarm.Task) cluster.ExecIneligibility {
 	if s.serviceID != "" && task.ServiceID == s.serviceID {
-		return true
+		return cluster.ExecSelf
 	}
 	if s.containerID != "" && task.Status.ContainerStatus != nil &&
 		task.Status.ContainerStatus.ContainerID == s.containerID {
-		return true
-	}
-	if s.containerID == "" && len(task.NetworksAttachments) == 0 {
-		return true
+		return cluster.ExecSelf
 	}
 
+	unknown := s.containerID == "" && len(task.NetworksAttachments) == 0
 	for _, attachment := range task.NetworksAttachments {
 		if s.containerID == "" && attachment.Network.DriverState.Name == "host" {
-			return true
+			unknown = true
 		}
 
 		for _, address := range attachment.Addresses {
@@ -115,10 +115,14 @@ func (s *Self) Is(task swarm.Task) bool {
 				address,
 			); err == nil &&
 				s.addrs[prefix.Addr().Unmap()] {
-				return true
+				return cluster.ExecSelf
 			}
 		}
 	}
 
-	return false
+	if unknown {
+		return cluster.ExecSelfUnknown
+	}
+
+	return cluster.ExecEligible
 }

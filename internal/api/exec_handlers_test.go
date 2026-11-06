@@ -20,6 +20,7 @@ import (
 	"github.com/radiergummi/cetacean/internal/audit"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/cache"
+	"github.com/radiergummi/cetacean/internal/cluster"
 	"github.com/radiergummi/cetacean/internal/config"
 	"github.com/radiergummi/cetacean/internal/exec"
 )
@@ -139,7 +140,7 @@ func newExecDeps(transport exec.Transport) ExecDeps {
 			MaxSessions: 4, MaxPerIdentity: 2, IdleTimeout: time.Hour, MaxDuration: time.Hour,
 		}}),
 		Transports: []exec.Transport{transport},
-		Self:       func(swarm.Task) bool { return false },
+		Self:       func(swarm.Task) cluster.ExecIneligibility { return cluster.ExecEligible },
 	}
 }
 
@@ -394,6 +395,18 @@ func attachRequest(
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
+}
+
+func TestCreateExecSessionNamesWhyItCannotTellATaskFromItself(t *testing.T) {
+	deps := newExecDeps(&fakeTransport{node: "n1"})
+	deps.Self = func(swarm.Task) cluster.ExecIneligibility { return cluster.ExecSelfUnknown }
+
+	w := do(t, execRouter(t, deps), http.MethodPost, "/tasks/t1/exec", "application/json")
+	body := w.Body.String()
+	assertACLErrorCode(t, w, "EXE001")
+	if !strings.Contains(body, "self_unknown") {
+		t.Errorf("body = %s, want the reason self_unknown", body)
+	}
 }
 
 func TestExecAttachRefusalsAreAudited(t *testing.T) {
@@ -732,13 +745,21 @@ func TestOwnersSeeTheirSessionsAfterLosingExec(t *testing.T) {
 }
 
 func TestExecOriginsAreTheTrustedOrigins(t *testing.T) {
-	cfg := testRouterConfig(t, []routerOption{withCORS("https://a.example")})
+	cfg := testRouterConfig(t, []routerOption{withCORS("https://A.example")})
 	cfg.PublicURL = "https://cetacean.example"
 	NewRouter(cfg)
 
-	want := []string{"https://a.example", "https://cetacean.example"}
-	if !slices.Equal(cfg.Handlers.execOrigins, want) {
-		t.Errorf("execOrigins = %v, want %v", cfg.Handlers.execOrigins, want)
+	for origin, want := range map[string]bool{
+		"https://a.example":        true,
+		"https://cetacean.example": true,
+		"https://evil.example":     false,
+	} {
+		r := httptest.NewRequest(http.MethodGet, "http://backend:9000/exec/s1", nil)
+		r.Header.Set("Origin", origin)
+		r.Header.Set("Sec-Fetch-Site", "cross-site")
+		if got := cfg.Handlers.execOriginAllowed(r); got != want {
+			t.Errorf("%s allowed = %v, want %v", origin, got, want)
+		}
 	}
 }
 

@@ -139,10 +139,10 @@ type Handlers struct {
 
 	versions *cluster.VersionIndex
 
-	// exec is nil unless exec.enabled; execOrigins are the origins besides
-	// the request's own host a terminal WebSocket may be opened from.
+	// exec is nil unless exec.enabled; crossOrigin also answers whether a
+	// terminal WebSocket may be opened from the request's origin.
 	exec        *ExecDeps
-	execOrigins []string
+	crossOrigin *http.CrossOriginProtection
 }
 
 func NewHandlers(

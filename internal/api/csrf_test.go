@@ -192,7 +192,7 @@ func TestCrossSiteRefusalIsProblemDetails(t *testing.T) {
 // dashboard's own writes arrive with the public origin and an internal Host, and
 // only server.public_url tells those from a stranger's.
 func TestPublicURLIsTrusted(t *testing.T) {
-	handler := crossOriginProtection(nil, "https://cetacean.example")(
+	handler := crossOriginProtection(newCrossOriginProtection(nil, "https://cetacean.example"))(
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		}),

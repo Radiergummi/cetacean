@@ -502,7 +502,10 @@ func TestExecWebSocketLostShellSendsReasonWithoutCode(t *testing.T) {
 func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
 	spec.Satisfies(t, "http/rfc6455/servers-verify-the-origin")
 
-	h := &Handlers{execOrigins: []string{"https://a.example"}}
+	h := &Handlers{crossOrigin: http.NewCrossOriginProtection()}
+	if err := h.crossOrigin.AddTrustedOrigin("https://a.example"); err != nil {
+		t.Fatal(err)
+	}
 
 	cases := []struct {
 		name, origin, fetchSite string
@@ -510,7 +513,7 @@ func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
 	}{
 		// Behind a proxy that rewrites Host, Origin names the public host.
 		{"same-origin behind a proxy", "https://cetacean.example", "same-origin", true},
-		{"user-initiated", "https://cetacean.example", "none", true},
+		{"user-initiated", "https://cetacean.example", "none", false},
 		{"cross-site, trusted", "https://a.example", "cross-site", true},
 		{"cross-site, untrusted", "https://evil.example", "cross-site", false},
 		{"cross-site naming the host", "http://backend:9000", "cross-site", false},
@@ -529,5 +532,16 @@ func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
 				t.Errorf("execOriginAllowed = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestExecOriginAllowedLeavesTheRequestAlone(t *testing.T) {
+	h := &Handlers{crossOrigin: http.NewCrossOriginProtection()}
+	r := httptest.NewRequest(http.MethodGet, "/exec/s1", nil)
+	if !h.execOriginAllowed(r) {
+		t.Error("a client that is not a browser was refused")
+	}
+	if r.Method != http.MethodGet {
+		t.Errorf("method = %s, want GET", r.Method)
 	}
 }
