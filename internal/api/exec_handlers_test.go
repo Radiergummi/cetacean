@@ -355,16 +355,19 @@ func auditedManager(recorder *recordingAudit) *exec.Manager {
 	}})
 }
 
-// assertOneDenial requires exactly one record: the anonymous caller refused
+// assertOneDenial requires exactly one exec.denied record: the anonymous caller refused
 // with code, on the session sid (none for a create) and the task.
 func assertOneDenial(t *testing.T, recorder *recordingAudit, code, sid, task string) {
 	t.Helper()
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()
-	if len(recorder.records) != 1 {
+	records := slices.DeleteFunc(slices.Clone(recorder.records), func(r audit.Record) bool {
+		return r.Event != "exec.denied"
+	})
+	if len(records) != 1 {
 		t.Fatalf("audit records = %+v, want one exec.denied", recorder.records)
 	}
-	rec := recorder.records[0]
+	rec := records[0]
 	if rec.Event != "exec.denied" || rec.Reason != code || rec.Session != sid ||
 		rec.Identity.Subject != "anonymous" || rec.Identity.Provider != "none" ||
 		rec.Client == "" || rec.Target == nil || rec.Target.Task != task {
@@ -613,6 +616,57 @@ func TestDeleteExecSessionEndsIt(t *testing.T) {
 	}
 	if w := do(t, h, http.MethodDelete, loc, ""); w.Code != http.StatusNoContent {
 		t.Errorf("repeated DELETE = %d", w.Code)
+	}
+}
+
+func TestDeleteExecRefusalsAreAudited(t *testing.T) {
+	anonymous := &auth.Identity{Subject: "anonymous", Provider: "none"}
+	target := exec.Target{Task: "t1", Service: "s1", ServiceName: "web", Node: "n1"}
+	cases := map[string]struct {
+		owner *auth.Identity
+		opts  []testHandlersOption
+		code  string
+	}{
+		"below the level": {
+			owner: anonymous,
+			opts:  []testHandlersOption{withOpsLevel(config.OpsConfiguration)},
+			code:  "OPS001",
+		},
+		"invisible": {
+			owner: aliceIdentity,
+			opts:  []testHandlersOption{withACL(execPolicy("read"))},
+			code:  "EXE006",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			deps := newExecDeps(&fakeTransport{node: "n1"})
+			recorder := &recordingAudit{}
+			deps.Manager = auditedManager(recorder)
+			s, err := deps.Manager.Create(tc.owner, "", target, "local")
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+
+			w := do(t, execRouter(t, deps, tc.opts...), http.MethodDelete, sessionPath(s.ID), "")
+			assertACLErrorCode(t, w, tc.code)
+			assertOneDenial(t, recorder, tc.code, s.ID, "t1")
+			if got, _ := deps.Manager.Get(s.ID); got.State != exec.StatePending {
+				t.Errorf("session = %+v, want it left pending", got)
+			}
+		})
+	}
+}
+
+func TestDeleteOfNoExecSessionIsNotAudited(t *testing.T) {
+	deps := newExecDeps(&fakeTransport{node: "n1"})
+	recorder := &recordingAudit{}
+	deps.Manager = auditedManager(recorder)
+
+	w := do(t, execRouter(t, deps), http.MethodDelete, "/exec/missing", "")
+	assertACLErrorCode(t, w, "EXE006")
+	if len(recorder.records) != 0 {
+		t.Errorf("audit records = %+v", recorder.records)
 	}
 }
 

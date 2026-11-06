@@ -114,6 +114,10 @@ type entry struct {
 	lastInput time.Time
 	attached  bool
 	cancel    context.CancelFunc
+
+	// starting holds the end record back from Finish: Connected writes it, so
+	// that it can never land before the start record.
+	starting bool
 }
 
 type Manager struct {
@@ -151,6 +155,8 @@ func newID() string {
 	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
 }
 
+// Create records the session. Unlike a start, an open that cannot be recorded
+// still happens: nothing runs until Connected, which fails closed.
 func (m *Manager) Create(
 	id *auth.Identity,
 	client string,
@@ -158,7 +164,6 @@ func (m *Manager) Create(
 	transport string,
 ) (Session, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	owner := OwnerOf(id)
 	live, mine := 0, 0
@@ -172,9 +177,11 @@ func (m *Manager) Create(
 		}
 	}
 	if mine >= m.cfg.Limits.MaxPerIdentity {
+		m.mu.Unlock()
 		return Session{}, ErrIdentityCapacity
 	}
 	if live >= m.cfg.Limits.MaxSessions {
+		m.mu.Unlock()
 		return Session{}, ErrCapacity
 	}
 
@@ -184,8 +191,13 @@ func (m *Manager) Create(
 		identity: id,
 	}
 	m.sessions[e.ID] = e
+	rec := m.record("exec.open", e)
+	session := e.Session
+	m.mu.Unlock()
 
-	return e.Session, nil
+	_ = m.write(rec)
+
+	return session, nil
 }
 
 func (m *Manager) Get(sid string) (Session, bool) {
@@ -251,21 +263,23 @@ func (m *Manager) Connected(sid string) error {
 		return ErrNotPending
 	}
 	now := m.cfg.Now()
+	e.starting = true
 	rec := m.record("exec.start", e)
 	m.mu.Unlock()
 
 	if err := m.write(rec); err != nil {
+		var landed <-chan error
 		if abandoned, ok := errors.AsType[*audit.AbandonedError](err); ok {
-			m.abortLate(sid, abandoned.Landed)
-		} else {
-			m.Abort(sid, "audit_unavailable")
+			landed = abandoned.Landed
 		}
+		m.abortLate(sid, landed)
 
 		return audit.ErrUnavailable
 	}
 
 	// A start record that was written must be paired with an end record.
 	m.mu.Lock()
+	e.starting = false
 	switch {
 	case e.State == StatePending && e.Reason == "":
 		e.State, e.ConnectedAt, e.lastInput = StateConnected, &now, now
@@ -338,8 +352,7 @@ func (m *Manager) Abort(sid, reason string) {
 	m.Finish(sid, Exit{Code: -1, Outcome: OutcomeDetached})
 }
 
-// Finish marks the session ended, once, and writes the end record if a start
-// record was written.
+// Finish marks the session ended, once, and writes the end record.
 func (m *Manager) Finish(sid string, exit Exit) Session {
 	m.mu.Lock()
 	e, ok := m.sessions[sid]
@@ -353,7 +366,7 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 		return snapshot
 	}
 
-	wasConnected := e.State == StateConnected
+	writeEnd := !e.starting
 	now := m.cfg.Now()
 	e.State, e.EndedAt, e.Exit = StateEnded, &now, &exit
 	// A shell that exited on its own did, whatever asked it to stop meanwhile.
@@ -368,12 +381,12 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 	}
 	rec := m.record("exec.end", e)
 	snapshot := e.Session
-	if wasConnected {
+	if writeEnd {
 		m.endWrites++
 	}
 	m.mu.Unlock()
 
-	if wasConnected {
+	if writeEnd {
 		_ = m.write(rec)
 
 		m.mu.Lock()
@@ -384,9 +397,9 @@ func (m *Manager) Finish(sid string, exit Exit) Session {
 	return snapshot
 }
 
-// abortLate aborts a session whose start record was given up but may still
-// land, and writes its end record once it has. The write is counted before the
-// abort, so Shutdown never sees the session ended with nothing left to write.
+// abortLate aborts a session whose start record failed or, given up on, may
+// still land, which landed then reports; the end record waits for it. The write
+// is counted before the abort, so Shutdown always sees it.
 func (m *Manager) abortLate(sid string, landed <-chan error) {
 	m.mu.Lock()
 	m.endWrites++
@@ -399,9 +412,10 @@ func (m *Manager) abortLate(sid string, landed <-chan error) {
 	m.mu.Unlock()
 
 	go func() {
-		if <-landed == nil {
-			_ = m.write(end)
+		if landed != nil {
+			<-landed
 		}
+		_ = m.write(end)
 
 		m.mu.Lock()
 		m.endWrites--
@@ -417,9 +431,9 @@ func (m *Manager) Denied(id *auth.Identity, client string, target Target, reason
 	_ = m.write(rec)
 }
 
-// DeniedAttach records a refused attach to the session sid, if it exists, as
-// the caller's refusal.
-func (m *Manager) DeniedAttach(sid string, id *auth.Identity, client, reason string) {
+// DeniedSession records a refused attach to or end of the session sid, if it
+// exists, as the caller's refusal.
+func (m *Manager) DeniedSession(sid string, id *auth.Identity, client, reason string) {
 	m.mu.Lock()
 	e, ok := m.sessions[sid]
 	if !ok {

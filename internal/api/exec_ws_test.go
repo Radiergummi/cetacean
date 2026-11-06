@@ -56,7 +56,7 @@ func newWSHarness(t *testing.T, cfg wsConfig) *wsHarness {
 	if cfg.transport == nil {
 		cfg.transport = &fakeTransport{node: "n1", stream: stream}
 	}
-	rec := auditRecorder{events: make(chan audit.Record, 8), fail: cfg.failEvent}
+	rec := auditRecorder{events: make(chan audit.Record, 64), fail: cfg.failEvent}
 	deps := newExecDeps(cfg.transport)
 	deps.startTimeout = cfg.startTimeout
 	deps.Manager = exec.NewManager(exec.ManagerConfig{
@@ -237,8 +237,11 @@ func TestExecWebSocketDisconnectEndsSessionOnce(t *testing.T) {
 	conn, sid := h.open(t)
 	expectFrame(t, conn, connecting)
 	expectFrame(t, conn, connected)
-	if r := <-h.audit.events; r.Event != "exec.start" {
+	if r := <-h.audit.events; r.Event != "exec.open" {
 		t.Fatalf("first record = %s", r.Event)
+	}
+	if r := <-h.audit.events; r.Event != "exec.start" {
+		t.Fatalf("second record = %s", r.Event)
 	}
 
 	_ = conn.CloseNow()
@@ -352,10 +355,18 @@ func TestExecWebSocketRefusesUnstartableShells(t *testing.T) {
 			if s.Reason != tc.code || s.Exit.Outcome != exec.OutcomeDetached || s.Exit.Code != -1 {
 				t.Errorf("session = %+v exit %+v", s, s.Exit)
 			}
-			select {
-			case r := <-h.audit.events:
-				t.Errorf("a session that never started wrote %+v", r)
-			default:
+			for _, want := range []string{"exec.open", "exec.end"} {
+				select {
+				case r := <-h.audit.events:
+					if r.Event != want {
+						t.Errorf("record = %+v, want %s", r, want)
+					}
+					if want == "exec.end" && r.Reason != tc.code {
+						t.Errorf("end record = %+v, want reason %s", r, tc.code)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatalf("no %s record", want)
+				}
 			}
 		})
 	}

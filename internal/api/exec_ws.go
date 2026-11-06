@@ -12,7 +12,6 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/radiergummi/cetacean/internal/api/problem"
 	"github.com/radiergummi/cetacean/internal/audit"
 	"github.com/radiergummi/cetacean/internal/auth"
 	"github.com/radiergummi/cetacean/internal/exec"
@@ -112,36 +111,32 @@ func (h *Handlers) execOriginAllowed(r *http.Request) bool {
 func (h *Handlers) attachExecSession(w http.ResponseWriter, r *http.Request) {
 	m, sid := h.exec.Manager, r.PathValue("sid")
 	id := auth.IdentityFromContext(r.Context())
-	refuse := func(code, detail string) {
-		m.DeniedAttach(sid, id, clientIP(r), code)
-		problem.Write(w, r, code, detail)
-	}
 
 	if !h.execOriginAllowed(r) {
-		refuse("CSR001", "this origin may not open a terminal")
+		h.refuseSession(w, r, "CSR001", "this origin may not open a terminal")
 		return
 	}
 
 	s, ok := m.Get(sid)
 	if !ok || !h.canSeeSession(r, s) {
-		refuse("EXE006", "exec session not found")
+		h.refuseSession(w, r, "EXE006", "exec session not found")
 		return
 	}
 
 	ctx, err := m.Attach(s.ID, id)
 	switch {
 	case errors.Is(err, exec.ErrNotOwner):
-		refuse("EXE004", err.Error())
+		h.refuseSession(w, r, "EXE004", err.Error())
 		return
 	case err != nil:
-		refuse("EXE005", err.Error())
+		h.refuseSession(w, r, "EXE005", err.Error())
 		return
 	}
 
 	transport, ok := exec.Select(h.exec.Transports, s.Target.Node)
 	if !ok {
 		m.Abort(s.ID, "relay_unavailable")
-		refuse("EXE002", "no shell transport reaches node "+s.Target.Node)
+		h.refuseSession(w, r, "EXE002", "no shell transport reaches node "+s.Target.Node)
 		return
 	}
 

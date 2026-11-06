@@ -237,6 +237,13 @@ func (h *Handlers) sessionFor(w http.ResponseWriter, r *http.Request) (exec.Sess
 	return s, true
 }
 
+// refuseSession answers a refused attach to or end of {sid}, and audits it.
+func (h *Handlers) refuseSession(w http.ResponseWriter, r *http.Request, code, detail string) {
+	id := auth.IdentityFromContext(r.Context())
+	h.exec.Manager.DeniedSession(r.PathValue("sid"), id, clientIP(r), code)
+	problem.Write(w, r, code, detail)
+}
+
 func (h *Handlers) HandleGetExecSession(w http.ResponseWriter, r *http.Request) {
 	s, ok := h.sessionFor(w, r)
 	if !ok {
@@ -254,8 +261,15 @@ func (h *Handlers) HandleGetExecSession(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handlers) HandleDeleteExecSession(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.sessionFor(w, r)
-	if !ok {
+	tier := cluster.OpEndExec.Tier()
+	if level := h.levelFor(r); level < tier {
+		h.refuseSession(w, r, "OPS001", levelRefusal(tier, level))
+		return
+	}
+
+	s, ok := h.exec.Manager.Get(r.PathValue("sid"))
+	if !ok || !h.canSeeSession(r, s) {
+		h.refuseSession(w, r, "EXE006", "exec session not found")
 		return
 	}
 

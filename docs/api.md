@@ -690,10 +690,10 @@ transport reaches, `409` (`EXE001`, `EXE002`); and one past `exec.max_sessions` 
 `429` (`EXE003`) with `Retry-After`. `DELETE /exec/{sid}` ends a session you can see, at operations level 3, and the
 session names you as who ended it.
 
-With [`audit.enabled`][audit.enabled], a session is recorded when its shell starts (`exec.start`) and, if it started,
-when it ends (`exec.end`, naming who ended it). A refused open of a task you can read, and a refused attach to a
-session that exists, are recorded as `exec.denied`. Creating a session, one that ends without its shell starting, and
-a refused `DELETE` leave no record.
+With [`audit.enabled`][audit.enabled], a session is recorded when it's created (`exec.open`), when its shell starts
+(`exec.start`), and when it ends (`exec.end`, naming who ended it and why, even if its shell never started). A refused
+open of a task you can read, and a refused attach to or `DELETE` of a session that exists, are recorded as
+`exec.denied`.
 
 ## Response format
 

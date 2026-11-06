@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- With `audit.enabled`, exec audit logs record `exec.open` for each session created, `exec.end` for sessions whose shell never started, and `exec.denied` for refused `DELETE /exec/{sid}` requests
+
 ## [0.19.0] - 2026-11-05
 
 ### Added
