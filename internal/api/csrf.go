@@ -6,27 +6,33 @@ import (
 	"strings"
 
 	"github.com/radiergummi/cetacean/internal/api/problem"
+	"github.com/radiergummi/cetacean/internal/config"
 )
 
 // newCrossOriginProtection builds the one rule writes and the terminal upgrade
-// share. The CORS allowlist mirrors in as trusted origins; a wildcard cannot,
-// and main.go warns.
+// share. The CORS allowlist mirrors in as trusted origins; a wildcard cannot, and
+// main.go warns. Our public URL covers a pre-2023 browser, which sends no
+// Sec-Fetch-Site from behind a proxy that rewrites Host.
 func newCrossOriginProtection(cfg *CORSConfig, publicURL string) *http.CrossOriginProtection {
 	protection := http.NewCrossOriginProtection()
 
-	trust := func(setting, origin string) {
-		if err := protection.AddTrustedOrigin(origin); err != nil {
+	var origins []string
+	if cfg.Enabled() && !cfg.Wildcard() {
+		origins = append(origins, cfg.AllowedOrigins...)
+	}
+	if publicURL != "" {
+		origins = append(origins, publicURL)
+	}
+
+	for _, origin := range origins {
+		if err := protection.AddTrustedOrigin(config.SerialiseOrigin(origin)); err != nil {
 			slog.Warn(
 				"ignoring an unusable origin",
-				"setting", setting,
+				"setting", "server.cors.origins or server.public_url",
 				"origin", origin,
 				"error", err,
 			)
 		}
-	}
-
-	for _, origin := range trustedOrigins(cfg, publicURL) {
-		trust("server.cors.origins or server.public_url", strings.ToLower(origin))
 	}
 
 	return protection
@@ -46,7 +52,7 @@ func crossOriginProtection(protection *http.CrossOriginProtection) Constructor {
 			// Check rather than Handler: the stdlib's own deny path writes a
 			// plain-text 403, and its error names which branch refused the
 			// request, which is what an operator needs to fix the deployment.
-			if err := protection.Check(r); err != nil {
+			if err := protection.Check(foldOrigin(r)); err != nil {
 				problem.Write(w, r, "CSR001", err.Error())
 				return
 			}
@@ -56,19 +62,21 @@ func crossOriginProtection(protection *http.CrossOriginProtection) Constructor {
 	}
 }
 
-// trustedOrigins is every origin a browser request may come from besides the
-// request's own host. Our public URL covers a pre-2023 browser, which sends no Sec-Fetch-Site from
-// behind a proxy that rewrites Host, without switching on CORS reflection.
-func trustedOrigins(cfg *CORSConfig, publicURL string) []string {
-	var origins []string
-	if cfg.Enabled() && !cfg.Wildcard() {
-		origins = append(origins, cfg.AllowedOrigins...)
-	}
-	if publicURL != "" {
-		origins = append(origins, publicURL)
+// foldOrigin is r as Check should read it: Check compares bytes, and the scheme
+// and host of an origin are case-insensitive.
+func foldOrigin(r *http.Request) *http.Request {
+	origin := r.Header.Get("Origin")
+	lowerOrigin, lowerHost := strings.ToLower(origin), strings.ToLower(r.Host)
+	if origin == "" || (origin == lowerOrigin && r.Host == lowerHost) {
+		return r
 	}
 
-	return origins
+	folded := r.WithContext(r.Context())
+	folded.Host = lowerHost
+	folded.Header = r.Header.Clone()
+	folded.Header.Set("Origin", lowerOrigin)
+
+	return folded
 }
 
 // carriesItsOwnProof names endpoints that authenticate from the request body

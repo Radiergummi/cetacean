@@ -360,13 +360,9 @@ func auditedManager(recorder *recordingAudit) *exec.Manager {
 // with code, on the session sid (none for a create) and the task.
 func assertOneDenial(t *testing.T, recorder *recordingAudit, code, sid, task string) {
 	t.Helper()
-	recorder.mu.Lock()
-	defer recorder.mu.Unlock()
-	records := slices.DeleteFunc(slices.Clone(recorder.records), func(r audit.Record) bool {
-		return r.Event != "exec.denied"
-	})
+	records := recorder.denied()
 	if len(records) != 1 {
-		t.Fatalf("audit records = %+v, want one exec.denied", recorder.records)
+		t.Fatalf("exec.denied records = %+v, want one", records)
 	}
 	rec := records[0]
 	if rec.Event != "exec.denied" || rec.Reason != code || rec.Session != sid ||
@@ -514,14 +510,22 @@ func (a *recordingAudit) Write(rec audit.Record) error {
 	return nil
 }
 
-func (a *recordingAudit) denials() []string {
+func (a *recordingAudit) denied() []audit.Record {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	var reasons []string
+	var records []audit.Record
 	for _, rec := range a.records {
 		if rec.Event == "exec.denied" {
-			reasons = append(reasons, rec.Reason)
+			records = append(records, rec)
 		}
+	}
+	return records
+}
+
+func (a *recordingAudit) denials() []string {
+	var reasons []string
+	for _, rec := range a.denied() {
+		reasons = append(reasons, rec.Reason)
 	}
 	return reasons
 }

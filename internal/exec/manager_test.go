@@ -52,6 +52,13 @@ func (r *recorder) events() []string {
 	return out
 }
 
+func assertEvents(t *testing.T, rec *recorder, want ...string) {
+	t.Helper()
+	if got := rec.events(); !slices.Equal(got, want) {
+		t.Errorf("audit events = %v, want %v", got, want)
+	}
+}
+
 type clock struct{ now time.Time }
 
 func (c *clock) Now() time.Time          { return c.now }
@@ -278,9 +285,7 @@ func TestManagerAbortIsDetached(t *testing.T) {
 	if ctx.Err() == nil {
 		t.Error("Abort did not cancel the attach context")
 	}
-	if got := rec.events(); !slices.Equal(got, []string{"exec.open", "exec.end"}) {
-		t.Errorf("audit events = %v", got)
-	}
+	assertEvents(t, rec, "exec.open", "exec.end")
 	if end := rec.records[1]; end.Reason != "transport_unavailable" || end.Duration != "" ||
 		end.Outcome != string(OutcomeDetached) {
 		t.Errorf("end record = %+v", end)
@@ -301,9 +306,7 @@ func TestManagerEndUnattachedIsDetached(t *testing.T) {
 	if _, err := m.Attach(s.ID, alice); !errors.Is(err, ErrAlreadyAttached) {
 		t.Errorf("attach after end = %v, want ErrAlreadyAttached", err)
 	}
-	if got := rec.events(); !slices.Equal(got, []string{"exec.open", "exec.end"}) {
-		t.Errorf("audit events = %v", got)
-	}
+	assertEvents(t, rec, "exec.open", "exec.end")
 	if end := rec.records[1]; end.EndedBy == nil || end.EndedBy.Subject != "bob" {
 		t.Errorf("end record = %+v", end)
 	}
@@ -323,6 +326,70 @@ func TestManagerRecordsTheOpen(t *testing.T) {
 	if open.Event != "exec.open" || open.Session != s.ID || open.Identity.Subject != "alice" ||
 		open.Client != "192.0.2.1" || open.Transport != "local" || open.Target.Task != "t1" {
 		t.Errorf("open record = %+v", open)
+	}
+}
+
+func TestManagerShowsNoSessionBeforeItsOpenIsWritten(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	var seen []Session
+	rec.onWrite = func(audit.Record) { seen = m.List() }
+
+	if _, err := m.Create(alice, "", target, "local"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if len(seen) != 0 {
+		t.Errorf("sessions visible while the open was written = %+v", seen)
+	}
+	if got := m.List(); len(got) != 1 {
+		t.Errorf("sessions after the open = %+v", got)
+	}
+}
+
+func TestManagerCreateAfterShutdownIsRefused(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	m.Shutdown(ctx)
+
+	if _, err := m.Create(alice, "", target, "local"); !errors.Is(err, ErrCapacity) {
+		t.Errorf("create = %v, want ErrCapacity", err)
+	}
+	if got := rec.events(); len(got) != 0 {
+		t.Errorf("audit events = %v", got)
+	}
+}
+
+func TestManagerShutdownWaitsForACreateInProgress(t *testing.T) {
+	m, rec, _ := newTestManager(t, Limits{})
+	writing, release := make(chan struct{}), make(chan struct{})
+	rec.refuse = func(r audit.Record) error {
+		if r.Event == "exec.open" {
+			close(writing)
+			<-release
+		}
+		return nil
+	}
+	created := make(chan Session, 1)
+	go func() {
+		s, _ := m.Create(alice, "", target, "local")
+		created <- s
+	}()
+	<-writing
+
+	shut := make(chan struct{})
+	go func() {
+		defer close(shut)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		m.Shutdown(ctx)
+	}()
+	close(release)
+	s := <-created
+	<-shut
+
+	got, ok := m.Get(s.ID)
+	if !ok || got.State != StateEnded || got.Reason != "shutdown" {
+		t.Errorf("session = %+v", got)
 	}
 }
 
@@ -446,9 +513,7 @@ func TestManagerSweepEndsUnattachedAndForgetsOld(t *testing.T) {
 	if got, _ := m.Get(s.ID); got.State != StateEnded || got.Reason != "not_attached" {
 		t.Fatalf("session = %+v", got)
 	}
-	if got := rec.events(); !slices.Equal(got, []string{"exec.open", "exec.end"}) {
-		t.Errorf("audit events = %v", got)
-	}
+	assertEvents(t, rec, "exec.open", "exec.end")
 
 	clk.advance(Retention + time.Second)
 	m.Sweep()

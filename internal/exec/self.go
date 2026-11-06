@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"regexp"
+	"slices"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/swarm"
@@ -104,12 +105,7 @@ func (s *Self) Check(task swarm.Task) cluster.ExecIneligibility {
 		return cluster.ExecSelf
 	}
 
-	unknown := s.containerID == "" && len(task.NetworksAttachments) == 0
 	for _, attachment := range task.NetworksAttachments {
-		if s.containerID == "" && attachment.Network.DriverState.Name == "host" {
-			unknown = true
-		}
-
 		for _, address := range attachment.Addresses {
 			if prefix, err := netip.ParsePrefix(
 				address,
@@ -120,7 +116,11 @@ func (s *Self) Check(task swarm.Task) cluster.ExecIneligibility {
 		}
 	}
 
-	if unknown {
+	hostNetwork := slices.ContainsFunc(
+		task.NetworksAttachments,
+		func(a swarm.NetworkAttachment) bool { return a.Network.DriverState.Name == "host" },
+	)
+	if s.containerID == "" && (hostNetwork || len(task.NetworksAttachments) == 0) {
 		return cluster.ExecSelfUnknown
 	}
 

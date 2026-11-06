@@ -78,24 +78,20 @@ func isWebSocketUpgrade(r *http.Request) bool {
 
 // execOriginAllowed is RFC 6455 §10.2's origin check: the rule writes pass, which
 // Check waives for a GET, without the "none" of a navigation the user started.
-// A browser never sends that on a handshake. Check compares bytes, and an
-// origin's scheme and host are case-insensitive.
+// A browser never sends that on a handshake.
 func (h *Handlers) execOriginAllowed(r *http.Request) bool {
 	if r.Header.Get("Sec-Fetch-Site") == "none" {
 		return false
 	}
 
-	asWrite := r.WithContext(r.Context())
+	asWrite := foldOrigin(r.WithContext(r.Context()))
 	asWrite.Method = http.MethodPost
-	asWrite.Host = strings.ToLower(r.Host)
-	asWrite.Header = r.Header.Clone()
-	asWrite.Header.Set("Origin", strings.ToLower(r.Header.Get("Origin")))
 
 	return h.crossOrigin.Check(asWrite) == nil
 }
 
 func (h *Handlers) attachExecSession(w http.ResponseWriter, r *http.Request) {
-	m, sid := h.exec.Manager, r.PathValue("sid")
+	m := h.exec.Manager
 	id := auth.IdentityFromContext(r.Context())
 
 	if !h.execOriginAllowed(r) {
@@ -103,8 +99,8 @@ func (h *Handlers) attachExecSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s, ok := m.Get(sid)
-	if !ok || !h.canSeeSession(r, s) {
+	s, ok := h.visibleSession(r)
+	if !ok {
 		h.refuseSession(w, r, "EXE006", "exec session not found")
 		return
 	}

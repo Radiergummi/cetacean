@@ -502,10 +502,9 @@ func TestExecWebSocketLostShellSendsReasonWithoutCode(t *testing.T) {
 func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
 	spec.Satisfies(t, "http/rfc6455/servers-verify-the-origin")
 
-	h := &Handlers{crossOrigin: http.NewCrossOriginProtection()}
-	if err := h.crossOrigin.AddTrustedOrigin("https://a.example"); err != nil {
-		t.Fatal(err)
-	}
+	h := &Handlers{crossOrigin: newCrossOriginProtection(
+		&CORSConfig{AllowedOrigins: []string{"https://a.example"}}, "",
+	)}
 
 	cases := []struct {
 		name, origin, fetchSite string
@@ -520,11 +519,19 @@ func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
 		{"same-site, untrusted", "https://sub.cetacean.example", "same-site", false},
 		{"no fetch metadata, host", "http://backend:9000", "", true},
 		{"no fetch metadata, foreign", "https://cetacean.example", "", false},
+		{"no fetch metadata, host in another case", "http://BACKEND:9000", "", true},
+		{"trusted in another case", "https://A.example", "cross-site", true},
+		{"user-initiated, no origin", "", "none", false},
+		{"cross-site, no origin", "", "cross-site", false},
+		{"same-site, no origin", "", "same-site", false},
+		{"same-origin, no origin", "", "same-origin", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "http://backend:9000/exec/s1", nil)
-			r.Header.Set("Origin", tc.origin)
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
 			if tc.fetchSite != "" {
 				r.Header.Set("Sec-Fetch-Site", tc.fetchSite)
 			}
@@ -536,12 +543,19 @@ func TestExecOriginAllowedReadsSecFetchSiteFirst(t *testing.T) {
 }
 
 func TestExecOriginAllowedLeavesTheRequestAlone(t *testing.T) {
-	h := &Handlers{crossOrigin: http.NewCrossOriginProtection()}
-	r := httptest.NewRequest(http.MethodGet, "/exec/s1", nil)
+	h := &Handlers{crossOrigin: newCrossOriginProtection(nil, "")}
+	r := httptest.NewRequest(http.MethodGet, "http://Backend:9000/exec/s1", nil)
+	r.Header.Set("Origin", "http://backend:9000")
+
+	if !h.execOriginAllowed(r) {
+		t.Error("an origin naming the Host in another case was refused")
+	}
+	if r.Method != http.MethodGet || r.Host != "Backend:9000" {
+		t.Errorf("request changed: %s %s", r.Method, r.Host)
+	}
+
+	r.Header.Del("Origin")
 	if !h.execOriginAllowed(r) {
 		t.Error("a client that is not a browser was refused")
-	}
-	if r.Method != http.MethodGet {
-		t.Errorf("method = %s, want GET", r.Method)
 	}
 }

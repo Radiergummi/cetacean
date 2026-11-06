@@ -123,6 +123,11 @@ type entry struct {
 type Manager struct {
 	cfg ManagerConfig
 
+	// createMu serialises Create across its open record, which is written
+	// before the session can be seen, and keeps it out once closing is set.
+	createMu sync.Mutex
+	closing  bool
+
 	mu             sync.Mutex
 	sessions       map[string]*entry
 	lastGeneration uint64
@@ -163,9 +168,37 @@ func (m *Manager) Create(
 	target Target,
 	transport string,
 ) (Session, error) {
-	m.mu.Lock()
+	m.createMu.Lock()
+	defer m.createMu.Unlock()
+	if m.closing {
+		return Session{}, ErrCapacity
+	}
 
-	owner := OwnerOf(id)
+	e, err := m.admit(id, client, target, transport)
+	if err != nil {
+		return Session{}, err
+	}
+
+	_ = m.write(m.record("exec.open", e))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessions[e.ID] = e
+
+	return e.Session, nil
+}
+
+// admit builds a session within the limits. Only Create adds to m.sessions, and
+// it holds createMu, so the limits still hold when the session is added.
+func (m *Manager) admit(
+	id *auth.Identity,
+	client string,
+	target Target,
+	transport string,
+) (*entry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	live, mine := 0, 0
 	for _, e := range m.sessions {
 		if e.State == StateEnded {
@@ -177,27 +210,17 @@ func (m *Manager) Create(
 		}
 	}
 	if mine >= m.cfg.Limits.MaxPerIdentity {
-		m.mu.Unlock()
-		return Session{}, ErrIdentityCapacity
+		return nil, ErrIdentityCapacity
 	}
 	if live >= m.cfg.Limits.MaxSessions {
-		m.mu.Unlock()
-		return Session{}, ErrCapacity
+		return nil, ErrCapacity
 	}
 
-	e := &entry{
-		ID: newID(), Owner: owner, Target: target, Transport: transport,
+	return &entry{
+		ID: newID(), Owner: OwnerOf(id), Target: target, Transport: transport,
 		Client: client, State: StatePending, CreatedAt: m.cfg.Now(),
 		identity: id,
-	}
-	m.sessions[e.ID] = e
-	rec := m.record("exec.open", e)
-	session := e.Session
-	m.mu.Unlock()
-
-	_ = m.write(rec)
-
-	return session, nil
+	}, nil
 }
 
 func (m *Manager) Get(sid string) (Session, bool) {
@@ -558,6 +581,10 @@ func (m *Manager) Sweep() {
 // expires, for the pumps of those already attached to finish them and for
 // their end records to be written.
 func (m *Manager) Shutdown(ctx context.Context) {
+	m.createMu.Lock()
+	m.closing = true
+	m.createMu.Unlock()
+
 	for _, s := range m.List() {
 		m.End(s.ID, "shutdown", nil)
 	}

@@ -105,9 +105,9 @@ func (h *Handlers) mayOpenExec(r *http.Request) bool {
 
 // mayEndExec reports whether DELETE /exec/{sid} would find the session.
 func (h *Handlers) mayEndExec(r *http.Request) bool {
-	s, ok := h.exec.Manager.Get(r.PathValue("sid"))
+	_, ok := h.visibleSession(r)
 
-	return ok && h.canSeeSession(r, s)
+	return ok
 }
 
 // ExecAuthorizer re-checks a live session's grant after a policy reload.
@@ -225,12 +225,11 @@ func (h *Handlers) HandleCreateExecSession(w http.ResponseWriter, r *http.Reques
 		NewDetailResponse(r.Context(), sessionPath(session.ID), "ExecSession", session))
 }
 
-// sessionFor resolves {sid} to a session the caller may see, or writes the 404:
-// an invisible session is not confirmed to exist.
-func (h *Handlers) sessionFor(w http.ResponseWriter, r *http.Request) (exec.Session, bool) {
+// visibleSession resolves {sid} to a session the caller may see. Refuse any other
+// with EXE006, the 404: an invisible session is not confirmed to exist.
+func (h *Handlers) visibleSession(r *http.Request) (exec.Session, bool) {
 	s, ok := h.exec.Manager.Get(r.PathValue("sid"))
 	if !ok || !h.canSeeSession(r, s) {
-		problem.Write(w, r, "EXE006", "exec session not found")
 		return exec.Session{}, false
 	}
 
@@ -245,8 +244,9 @@ func (h *Handlers) refuseSession(w http.ResponseWriter, r *http.Request, code, d
 }
 
 func (h *Handlers) HandleGetExecSession(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.sessionFor(w, r)
+	s, ok := h.visibleSession(r)
 	if !ok {
+		problem.Write(w, r, "EXE006", "exec session not found")
 		return
 	}
 
@@ -267,8 +267,8 @@ func (h *Handlers) HandleDeleteExecSession(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	s, ok := h.exec.Manager.Get(r.PathValue("sid"))
-	if !ok || !h.canSeeSession(r, s) {
+	s, ok := h.visibleSession(r)
+	if !ok {
 		h.refuseSession(w, r, "EXE006", "exec session not found")
 		return
 	}

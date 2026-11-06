@@ -97,7 +97,7 @@ func cors(cfg *CORSConfig) func(http.Handler) http.Handler {
 	if !wildcard {
 		allowed = make(map[string]struct{}, len(cfg.AllowedOrigins))
 		for _, o := range cfg.AllowedOrigins {
-			allowed[o] = struct{}{}
+			allowed[config.SerialiseOrigin(o)] = struct{}{}
 		}
 	}
 

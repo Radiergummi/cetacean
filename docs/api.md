@@ -693,7 +693,8 @@ session names you as who ended it.
 With [`audit.enabled`][audit.enabled], a session is recorded when it's created (`exec.open`), when its shell starts
 (`exec.start`), and when it ends (`exec.end`, naming who ended it and why, even if its shell never started). A refused
 open of a task you can read, and a refused attach to or `DELETE` of a session that exists, are recorded as
-`exec.denied`.
+`exec.denied`. A shell never starts unless `exec.start` is written, but a session whose `exec.open` couldn't be written
+still opens, so the log can show a start with no open. A `DELETE` the cross-origin check refuses isn't recorded.
 
 ## Response format
 
