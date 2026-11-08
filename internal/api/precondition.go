@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,14 +74,21 @@ func hashed(rep representationFunc, lastModified func(*http.Request) time.Time) 
 	}
 }
 
+// writeConditionFields are the preconditions a write can carry.
+var writeConditionFields = []string{"If-Match", "If-None-Match", "If-Unmodified-Since"}
+
+func hasWriteConditions(r *http.Request) bool {
+	return slices.ContainsFunc(writeConditionFields, func(field string) bool {
+		return r.Header.Get(field) != ""
+	})
+}
+
 // conditional evaluates a write's preconditions in RFC 9110 §13.2.2 order;
 // If-Modified-Since binds only a GET or HEAD, so it is not read here.
 func (h *Handlers) conditional(validate validatorFunc, represented bool) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ifMatch := r.Header.Get("If-Match")
-			if ifMatch == "" && r.Header.Get("If-None-Match") == "" &&
-				r.Header.Get("If-Unmodified-Since") == "" {
+			if !hasWriteConditions(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -138,7 +146,7 @@ func (h *Handlers) conditional(validate validatorFunc, represented bool) Constru
 			// With no representation, If-None-Match finds none to match and
 			// If-Unmodified-Since has no date, so only If-Match can fail.
 			if !represented {
-				if ifMatch != "" {
+				if r.Header.Get("If-Match") != "" {
 					problem.Write(
 						w,
 						r,

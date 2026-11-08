@@ -24,13 +24,13 @@ const AcceptMergePatch = "application/merge-patch+json"
 // handlers carry that level, so the router records what each write route needs
 // and Allow is read off the routes instead of a list kept beside them.
 type tieredChain struct {
-	gates       Chain // the authorization gates, which run first
-	chain       Chain
-	level       config.OperationsLevel
-	permits     func(*http.Request) bool // whether the caller holds the write grant
-	acceptPatch string
-	noContent   bool
-	bodyAlways  bool
+	gates      Chain // the authorization gates, which run first
+	chain      Chain
+	level      config.OperationsLevel
+	permits    func(*http.Request) bool // whether the caller holds the write grant
+	noContent  bool
+	bodyAlways bool
+	patchTypes []string // what the handler accepts; nil when it refuses nothing
 }
 
 func (h *Handlers) tiered(
@@ -70,7 +70,15 @@ func (c tieredChain) AnswersWithABody() tieredChain {
 // TakesJSONPatch marks a PATCH route whose handler parses JSON Patch as well
 // as a merge patch; any other PATCH route is advertised as merge-only.
 func (c tieredChain) TakesJSONPatch() tieredChain {
-	c.acceptPatch = AcceptPatch
+	c.patchTypes = strings.Split(AcceptPatch, ", ")
+
+	return c
+}
+
+// TakesMergePatch marks a PATCH route whose handler refuses anything but a
+// merge patch.
+func (c tieredChain) TakesMergePatch() tieredChain {
+	c.patchTypes = []string{AcceptMergePatch}
 
 	return c
 }
@@ -90,9 +98,31 @@ func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
 	if !c.noContent {
 		chain = chain.Append(acceptsJSONAnswer(c.bodyAlways))
 	}
+	if c.patchTypes != nil {
+		chain = chain.Append(refusedPatchIgnoresConditions(c.patchTypes))
+	}
 
 	return tieredHandler{
-		chain.Append(c.chain.constructors...).ThenFunc(fn), c.level, c.acceptPatch, c.permits,
+		chain.Append(c.chain.constructors...).ThenFunc(fn), c.level,
+		strings.Join(c.patchTypes, ", "), c.permits,
+	}
+}
+
+// refusedPatchIgnoresConditions is RFC 9110 §13.2.1 for a PATCH of a media type
+// its handler refuses: the 415 is decided before any content, so preconditions
+// are ignored. The handler stays the one refusing, so a 404 it owes comes first.
+// A route that declares no types keeps its preconditions, whatever it's sent.
+func refusedPatchIgnoresConditions(accepted []string) Constructor {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if hasWriteConditions(r) && !slices.Contains(accepted, requestMediaType(r)) {
+				for _, field := range writeConditionFields {
+					r.Header.Del(field)
+				}
+			}
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 

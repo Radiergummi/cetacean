@@ -1258,7 +1258,9 @@ date, and it's ignored whenever `If-Match` is present.
 
 A `412` always means the resource moved. A resource that is gone answers `404`, the same as it
 would without the header—[RFC 9110 §13.2.1](https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1)
-keeps the precondition out of the way of an answer that was never going to be a success. Where the
+keeps the precondition out of the way of an answer that was never going to be a success, and a `PATCH`
+with an unsupported `Content-Type` answers `415` for the same reason, except `PATCH /plugins/{name}/settings`, which
+takes plain JSON and refuses no media type. Where the
 current representation can't be read at all—`DELETE /plugins/{name}` inspects the daemon rather
 than the cache—the write answers `503` (`ENG001`) or `500` (`ENG004`) instead, so an unreachable
 daemon isn't reported as a stale `ETag`.

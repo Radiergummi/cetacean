@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- A `PATCH` with an unsupported `Content-Type` answers `415` even when its precondition fails, where it used to answer `412`
+
 ## [0.19.0] - 2026-11-05
 
 ### Added

@@ -76,7 +76,6 @@ func TestAnnotationPreconditionsComeBeforeTheBody(t *testing.T) {
 
 	for _, tt := range []struct{ name, contentType, body string }{
 		{"an unknown member", AcceptMergePatch, `{"bogus":1}`},
-		{"the wrong media type", "application/json", `{"text":"y"}`},
 		{"an invalid edit", AcceptMergePatch, `{"text":""}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

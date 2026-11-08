@@ -505,23 +505,25 @@ func (rt routes) cluster() {
 	mux.HandleFunc("GET /swarm", contentNegotiated(h.HandleSwarm, feedHandlers{}, spa))
 	mux.Handle(
 		"PATCH /swarm/orchestration",
-		swarmTier2.Append(clusterExists).ThenFunc(h.HandlePatchSwarmOrchestration),
+		swarmTier2.Append(clusterExists).
+			TakesMergePatch().
+			ThenFunc(h.HandlePatchSwarmOrchestration),
 	)
 	mux.Handle(
 		"PATCH /swarm/raft",
-		swarmTier2.Append(clusterExists).ThenFunc(h.HandlePatchSwarmRaft),
+		swarmTier2.Append(clusterExists).TakesMergePatch().ThenFunc(h.HandlePatchSwarmRaft),
 	)
 	mux.Handle(
 		"PATCH /swarm/dispatcher",
-		swarmTier2.Append(clusterExists).ThenFunc(h.HandlePatchSwarmDispatcher),
+		swarmTier2.Append(clusterExists).TakesMergePatch().ThenFunc(h.HandlePatchSwarmDispatcher),
 	)
 	mux.Handle(
 		"PATCH /swarm/ca",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePatchSwarmCAConfig),
+		swarmTier3.Append(clusterExists).TakesMergePatch().ThenFunc(h.HandlePatchSwarmCAConfig),
 	)
 	mux.Handle(
 		"PATCH /swarm/encryption",
-		swarmTier3.Append(clusterExists).ThenFunc(h.HandlePatchSwarmEncryption),
+		swarmTier3.Append(clusterExists).TakesMergePatch().ThenFunc(h.HandlePatchSwarmEncryption),
 	)
 	mux.Handle(
 		"POST /swarm/rotate-token",
@@ -760,7 +762,7 @@ func (rt routes) services() {
 	)
 	mux.Handle("PATCH /services/{id}/resources",
 		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceResourcesRepresentation)).
-			ThenFunc(h.HandlePatchServiceResources))
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceResources))
 	mux.HandleFunc(
 		"GET /services/{id}/healthcheck",
 		contentNegotiated(h.HandleGetServiceHealthcheck, feedHandlers{}, spa),
@@ -775,7 +777,7 @@ func (rt routes) services() {
 	)
 	mux.Handle(
 		"PATCH /services/{id}/healthcheck",
-		svcHealthcheck.ThenFunc(h.HandlePatchServiceHealthcheck),
+		svcHealthcheck.TakesMergePatch().ThenFunc(h.HandlePatchServiceHealthcheck),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/placement",
@@ -790,7 +792,7 @@ func (rt routes) services() {
 	)
 	mux.Handle("PATCH /services/{id}/ports",
 		svcOp(cluster.OpUpdateService).Append(h.precond(h.servicePortsRepresentation)).
-			ThenFunc(h.HandlePatchServicePorts))
+			TakesMergePatch().ThenFunc(h.HandlePatchServicePorts))
 	mux.HandleFunc(
 		"GET /services/{id}/update-policy",
 		contentNegotiated(h.HandleGetServiceUpdatePolicy, feedHandlers{}, spa),
@@ -798,7 +800,7 @@ func (rt routes) services() {
 	mux.Handle(
 		"PATCH /services/{id}/update-policy",
 		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceUpdatePolicyRepresentation)).
-			ThenFunc(h.HandlePatchServiceUpdatePolicy),
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceUpdatePolicy),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/rollback-policy",
@@ -807,7 +809,7 @@ func (rt routes) services() {
 	mux.Handle(
 		"PATCH /services/{id}/rollback-policy",
 		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceRollbackPolicyRepresentation)).
-			ThenFunc(h.HandlePatchServiceRollbackPolicy),
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceRollbackPolicy),
 	)
 	mux.HandleFunc(
 		"GET /services/{id}/log-driver",
@@ -815,35 +817,35 @@ func (rt routes) services() {
 	)
 	mux.Handle("PATCH /services/{id}/log-driver",
 		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceLogDriverRepresentation)).
-			ThenFunc(h.HandlePatchServiceLogDriver))
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceLogDriver))
 	mux.HandleFunc(
 		"GET /services/{id}/configs",
 		contentNegotiated(h.HandleGetServiceConfigs, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/configs",
 		svcOp(cluster.OpUpdateServiceConfigs).Append(h.precond(h.serviceConfigsRepresentation)).
-			ThenFunc(h.HandlePatchServiceConfigs))
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceConfigs))
 	mux.HandleFunc(
 		"GET /services/{id}/secrets",
 		contentNegotiated(h.HandleGetServiceSecrets, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/secrets",
 		svcOp(cluster.OpUpdateServiceSecrets).Append(h.precond(h.serviceSecretsRepresentation)).
-			ThenFunc(h.HandlePatchServiceSecrets))
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceSecrets))
 	mux.HandleFunc(
 		"GET /services/{id}/networks",
 		contentNegotiated(h.HandleGetServiceNetworks, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/networks",
 		svcTier2.Append(h.precond(h.serviceNetworksRepresentation)).
-			ThenFunc(h.HandlePatchServiceNetworks))
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceNetworks))
 	mux.HandleFunc(
 		"GET /services/{id}/mounts",
 		contentNegotiated(h.HandleGetServiceMounts, feedHandlers{}, spa),
 	)
 	mux.Handle("PATCH /services/{id}/mounts",
 		svcOp(cluster.OpUpdateServiceMounts).Append(h.precond(h.serviceMountsRepresentation)).
-			ThenFunc(h.HandlePatchServiceMounts))
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceMounts))
 
 	mux.HandleFunc(
 		"GET /services/{id}/container-config",
@@ -852,7 +854,7 @@ func (rt routes) services() {
 	mux.Handle(
 		"PATCH /services/{id}/container-config",
 		svcOp(cluster.OpUpdateService).Append(h.precond(h.serviceContainerConfigRepresentation)).
-			ThenFunc(h.HandlePatchServiceContainerConfig),
+			TakesMergePatch().ThenFunc(h.HandlePatchServiceContainerConfig),
 	)
 
 	// Service write operations — tier 3 (impactful)
@@ -1218,7 +1220,10 @@ func (rt routes) annotations() {
 		"GET /annotations/{id}",
 		contentNegotiated(h.HandleGetAnnotation, feedHandlers{}, spa),
 	)
-	mux.Handle("PATCH /annotations/{id}", h.annotationEdit().ThenFunc(h.HandlePatchAnnotation))
+	mux.Handle(
+		"PATCH /annotations/{id}",
+		h.annotationEdit().TakesMergePatch().ThenFunc(h.HandlePatchAnnotation),
+	)
 	mux.Handle("DELETE /annotations/{id}",
 		h.annotationEdit().AnswersNoContent().ThenFunc(h.HandleDeleteAnnotation))
 }

@@ -90,6 +90,17 @@ func patchProbe() *precondProbe {
 	return &precondProbe{contentType: "text/plain", body: "{}", problem: "API004"}
 }
 
+// failingWrite is what a request meant to fail its precondition sends. A PATCH
+// must name a type its route takes, or it answers 415 instead, and the truncated
+// body means a route that lets it through still changes nothing.
+func failingWrite(method string) (contentType, body string) {
+	if method == http.MethodPatch {
+		return "application/merge-patch+json", "{"
+	}
+
+	return "", ""
+}
+
 // putProbe refuses on the body: every PUT route decodes JSON into its request
 // type before doing anything else, so a truncated object answers API006.
 func putProbe() *precondProbe {
@@ -397,10 +408,27 @@ func TestPreconditionSweep(t *testing.T) {
 			// not satisfy If-Match. Driven ahead of the baseline because
 			// evaluating a precondition refreshes its subject, so a validator
 			// read beforehand could move without anything being written.
+			contentType, body := failingWrite(target.method)
 			assertPreconditionFailed(t, "stale validator", precondRequest(
 				t, proc, target.method, target.uri,
-				map[string]string{"If-Match": staleValidator}, "", "",
+				map[string]string{"If-Match": staleValidator}, contentType, body,
 			))
+
+			// §13.2.1: an answer decided without the content ignores the
+			// precondition, so the refused media type wins.
+			if target.method == http.MethodPatch && target.probe != nil {
+				refused := precondRequest(
+					t, proc, target.method, target.uri,
+					map[string]string{"If-Match": staleValidator},
+					target.probe.contentType, target.probe.body,
+				)
+				if refused.status != http.StatusUnsupportedMediaType {
+					t.Errorf(
+						"refused type with a stale validator: status = %d, want 415 (body: %s)",
+						refused.status, refused.body,
+					)
+				}
+			}
 
 			current := representationETag(t, proc, target.uri)
 
@@ -437,7 +465,7 @@ func TestPreconditionSweep(t *testing.T) {
 			// validator never matches — not even the resource's own.
 			assertPreconditionFailed(t, "weak validator", precondRequest(
 				t, proc, target.method, target.uri,
-				map[string]string{"If-Match": "W/" + current}, "", "",
+				map[string]string{"If-Match": "W/" + current}, contentType, body,
 			))
 
 			if target.probe != nil {
@@ -789,11 +817,11 @@ func TestConditionalWriteIsEvaluatedAgainstTheEngine(t *testing.T) {
 		t.Fatalf("the first write answered 200 without reaching the engine: %v", applying)
 	}
 
-	probe := patchProbe()
+	contentType, body := failingWrite(http.MethodPatch)
 
 	replayed := precondRequest(
 		t, proc, http.MethodPatch, uri,
-		map[string]string{"If-Match": before}, probe.contentType, probe.body,
+		map[string]string{"If-Match": before}, contentType, body,
 	)
 
 	if replayed.status != http.StatusPreconditionFailed {

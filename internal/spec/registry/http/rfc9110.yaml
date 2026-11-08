@@ -107,7 +107,7 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tif ifMatch == \"\" && r.Header.Get(\"If-None-Match\") == \"\" &&\n\t\t\t\tr.Header.Get(\"If-Unmodified-Since\") == \"\" {"
+        replace: "\t\t\tif !hasWriteConditions(r) {"
         with: "\t\t\tif true {"
       - file: internal/api/list.go
         replace: "\tif r.Header.Get(\"If-Match\") != \"\" {\n\t\treturn false\n\t}"
@@ -365,8 +365,8 @@ requirements:
     url: https://www.rfc-editor.org/rfc/rfc9110#section-13.2.1
     mutants:
       - file: internal/api/precondition.go
-        replace: "\t\t\tif ifMatch == \"\" && r.Header.Get(\"If-None-Match\") == \"\" &&\n\t\t\t\tr.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
-        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif ifMatch == \"\" && r.Header.Get(\"If-None-Match\") == \"\" &&\n\t\t\t\tr.Header.Get(\"If-Unmodified-Since\") == \"\" {\n\t\t\t\treturn\n\t\t\t}"
+        replace: "\t\t\tif !hasWriteConditions(r) {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}"
+        with: "\t\t\tnext.ServeHTTP(w, r)\n\t\t\tif !hasWriteConditions(r) {\n\t\t\t\treturn\n\t\t\t}"
       - file: internal/api/annotation_handlers.go
         replace: "\treturn annotationWrite(h.mayEditAnnotation).Append(h.conditional(h.annotationValidator, true))"
         with: "\treturn annotationWrite(h.mayEditAnnotation)"
@@ -384,8 +384,17 @@ requirements:
         replace: "\t\t\tcase errors.Is(err, errNoRepresentation):"
         with: "\t\t\tcase errors.Is(err, errNoRepresentation) && false:"
       - file: internal/api/annotation_handlers.go
-        replace: "\treturn a, err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)"
-        with: "\treturn a, err == nil"
+        replace: "\tif !h.annotations.MayEdit(attributedRead(r), caller, a) {"
+        with: "\tif false {"
+      - file: internal/api/allow.go
+        replace: "\tif c.patchTypes != nil {"
+        with: "\tif false {"
+      - file: internal/api/write_service_handlers.go
+        replace: "\tif !requireMergePatch(w, r) {\n\t\treturn\n\t}\n\n\tports, present, ok :="
+        with: "\tports, present, ok :="
+      - file: internal/api/router.go
+        replace: "pluginTier2.Append(pluginExists).ThenFunc(h.HandleConfigurePlugin)"
+        with: "pluginTier2.Append(pluginExists).TakesMergePatch().ThenFunc(h.HandleConfigurePlugin)"
 
   - id: preconditions-are-evaluated-in-order
     level: MUST
