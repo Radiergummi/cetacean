@@ -16,10 +16,10 @@ require (
 	github.com/expr-lang/expr v1.17.8
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/getkin/kin-openapi v0.152.0
-	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/goccy/go-json v0.12.0
 	github.com/klauspost/compress v1.20.3
-	github.com/mark3labs/mcp-go v1.4.0
+	github.com/mark3labs/mcp-go v1.5.0
 	github.com/ncruces/go-sqlite3 v0.36.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
@@ -34,7 +34,7 @@ require (
 	golang.org/x/sync v0.24.0
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
-	tailscale.com v1.104.4
+	tailscale.com v1.104.5
 )
 
 require (
