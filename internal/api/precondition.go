@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,14 +74,21 @@ func hashed(rep representationFunc, lastModified func(*http.Request) time.Time) 
 	}
 }
 
+// writeConditionFields are the preconditions a write can carry.
+var writeConditionFields = []string{"If-Match", "If-None-Match", "If-Unmodified-Since"}
+
+func hasWriteConditions(r *http.Request) bool {
+	return slices.ContainsFunc(writeConditionFields, func(field string) bool {
+		return r.Header.Get(field) != ""
+	})
+}
+
 // conditional evaluates a write's preconditions in RFC 9110 §13.2.2 order;
 // If-Modified-Since binds only a GET or HEAD, so it is not read here.
 func (h *Handlers) conditional(validate validatorFunc, represented bool) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ifMatch := r.Header.Get("If-Match")
-			if ifMatch == "" && r.Header.Get("If-None-Match") == "" &&
-				r.Header.Get("If-Unmodified-Since") == "" {
+			if !hasWriteConditions(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -135,10 +143,14 @@ func (h *Handlers) conditional(validate validatorFunc, represented bool) Constru
 				return
 			}
 
+			if refusedPatchType(w, r) {
+				return
+			}
+
 			// With no representation, If-None-Match finds none to match and
 			// If-Unmodified-Since has no date, so only If-Match can fail.
 			if !represented {
-				if ifMatch != "" {
+				if r.Header.Get("If-Match") != "" {
 					problem.Write(
 						w,
 						r,
@@ -160,6 +172,21 @@ func (h *Handlers) conditional(validate validatorFunc, represented bool) Constru
 			next.ServeHTTP(w, r.WithContext(pinned(r.Context())))
 		})
 	}
+}
+
+// refusedPatchType answers 415 for a PATCH of a type its route does not take.
+// RFC 9110 §13.2.1: decided from the headers, it outranks a 412; it comes after
+// the existence check, so a missing subject still answers 404.
+func refusedPatchType(w http.ResponseWriter, r *http.Request) bool {
+	accepted, declared := r.Context().Value(patchTypesKey{}).([]string)
+	if !declared || slices.Contains(accepted, requestMediaType(r)) {
+		return false
+	}
+
+	w.Header().Set("Accept-Patch", strings.Join(accepted, ", "))
+	problem.Write(w, r, "API004", "Content-Type must be "+strings.Join(accepted, " or "))
+
+	return true
 }
 
 // writePreconditionFailed is preconditionFailed for a write, which If-None-Match

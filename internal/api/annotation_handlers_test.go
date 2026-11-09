@@ -159,6 +159,20 @@ func TestCreateAnnotationRefusals(t *testing.T) {
 	}
 }
 
+// With the timeline off, a PATCH hears so whatever media type it sends.
+func TestPatchAnnotationWithTheTimelineOff(t *testing.T) {
+	h := annotationHandlers(t, false)
+
+	for _, contentType := range []string{"application/merge-patch+json", "text/plain"} {
+		r := newAnnotationRequest("PATCH", "/annotations/1", "carol", `{"text":"y"}`)
+		r.Header.Set("Content-Type", contentType)
+		w := serveAnnotation(h.HandlePatchAnnotation, r)
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "ANN003") {
+			t.Errorf("%s: %d %s, want 409 ANN003", contentType, w.Code, w.Body)
+		}
+	}
+}
+
 // RFC 3339 §5.6 lets "T" and "Z" be lower case, in a body as in a query.
 func TestAnnotationBodiesTakeLowerCaseTimes(t *testing.T) {
 	h := annotationHandlers(t, true)

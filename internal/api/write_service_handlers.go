@@ -328,12 +328,12 @@ func (h *Handlers) HandleGetServicePorts(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) HandlePatchServicePorts(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if !requireMergePatch(w, r) {
+	updated, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
-	updated, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -713,12 +713,12 @@ func (h *Handlers) HandleGetServiceConfigs(w http.ResponseWriter, r *http.Reques
 func (h *Handlers) HandlePatchServiceConfigs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if !requireMergePatch(w, r) {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -793,12 +793,12 @@ func (h *Handlers) HandleGetServiceSecrets(w http.ResponseWriter, r *http.Reques
 func (h *Handlers) HandlePatchServiceSecrets(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if !requireMergePatch(w, r) {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -863,12 +863,12 @@ func (h *Handlers) HandleGetServiceNetworks(w http.ResponseWriter, r *http.Reque
 func (h *Handlers) HandlePatchServiceNetworks(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if !requireMergePatch(w, r) {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if !requireMergePatch(w, r) {
 		return
 	}
 
@@ -935,12 +935,12 @@ func (h *Handlers) HandleGetServiceMounts(w http.ResponseWriter, r *http.Request
 func (h *Handlers) HandlePatchServiceMounts(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if !requireMergePatch(w, r) {
+	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
+	if !ok {
 		return
 	}
 
-	svc, ok := lookupOr404(w, r, "service", id, h.cache.GetService)
-	if !ok {
+	if !requireMergePatch(w, r) {
 		return
 	}
 

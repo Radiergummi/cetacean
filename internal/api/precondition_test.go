@@ -639,6 +639,123 @@ func newSeededTestRouterWithConfig(
 	)
 }
 
+// patchRoutes are the PATCH routes that refuse a media type, walked so a new one
+// can't go unchecked. fill names the resource in a route's path.
+func patchRoutes(t *testing.T, fill func(resource string) string) map[string]tieredRoute {
+	t.Helper()
+
+	routes := map[string]tieredRoute{}
+	for _, route := range routeTable().tiered {
+		if route.method != http.MethodPatch || route.path == "/plugins/{name}/settings" {
+			continue
+		}
+		resource, _, _ := strings.Cut(strings.TrimPrefix(route.path, "/"), "/")
+		routes[strings.Replace(route.path, "{id}", fill(resource), 1)] = route
+	}
+
+	return routes
+}
+
+func patchRefusal(router http.Handler, path, contentType string) *httptest.ResponseRecorder {
+	headers := map[string]string{"If-Match": `"bogus-etag"`}
+	if contentType != "" {
+		headers["Content-Type"] = contentType
+	}
+
+	return serve(router, http.MethodPatch, path, `{}`, headers)
+}
+
+// A media type is refused from the headers alone, so the 415 wins over a failed
+// precondition. Every type a route declares must also be one its handler takes.
+func TestAnUnsupportedMediaTypeBeatsAFailedPrecondition(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
+
+	seeded := map[string]string{
+		"annotations": seededAnnotationID, "configs": "cfg1", "nodes": "node1",
+		"secrets": "sec1", "services": "svc1",
+	}
+	router := newSeededTestRouter(t)
+	for path, route := range patchRoutes(t, func(resource string) string { return seeded[resource] }) {
+		t.Run(path, func(t *testing.T) {
+			refused := []string{"text/plain", "application/json", ""}
+			if route.acceptPatch == AcceptMergePatch {
+				refused = append(refused, "application/json-patch+json")
+			}
+			for _, contentType := range refused {
+				rec := patchRefusal(router, path, contentType)
+				if rec.Code != http.StatusUnsupportedMediaType {
+					t.Errorf("Content-Type %q: %d %s, want 415", contentType, rec.Code, rec.Body)
+				}
+			}
+		})
+	}
+}
+
+func TestAMissingResourceBeatsAnUnsupportedMediaType(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
+
+	router := newSeededTestRouter(t)
+	for path := range patchRoutes(t, func(string) string { return "999999" }) {
+		if strings.HasPrefix(path, "/swarm/") {
+			continue
+		}
+		t.Run(path, func(t *testing.T) {
+			if rec := patchRefusal(router, path, "text/plain"); rec.Code != http.StatusNotFound {
+				t.Errorf("%d %s, want 404", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+// Body validation is content processing, which comes after the preconditions.
+// One path for each way a patch body is parsed.
+func TestAFailedPreconditionBeatsAnInvalidBody(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/preconditions-are-evaluated-before-the-action")
+
+	router := newSeededTestRouter(t)
+	for _, path := range []string{
+		"/services/svc1/env", "/services/svc1/resources", "/services/svc1/ports",
+		"/annotations/" + seededAnnotationID, "/swarm/orchestration",
+	} {
+		t.Run(path, func(t *testing.T) {
+			rec := serve(router, http.MethodPatch, path, `{`, map[string]string{
+				"Content-Type": AcceptMergePatch, "If-Match": `"bogus-etag"`,
+			})
+			if rec.Code != http.StatusPreconditionFailed {
+				t.Errorf("status = %d, want 412", rec.Code)
+			}
+		})
+	}
+}
+
+// A PATCH that refuses no media type has nothing to excuse its preconditions.
+func TestAPatchThatRefusesNoMediaTypeKeepsItsPreconditions(t *testing.T) {
+	spec.Satisfies(t, "http/rfc9110/preconditions-are-ignored-when-the-answer-is-not-2xx")
+
+	configured := 0
+	router := newSeededTestRouter(t, withPluginClient(&mockPluginClient{
+		pluginInspectFn: func(context.Context, string) (*types.Plugin, error) {
+			return &types.Plugin{Name: "vieux/sshfs"}, nil
+		},
+		pluginConfigureFn: func(context.Context, string, []string) error {
+			configured++
+			return nil
+		},
+	}))
+
+	req := httptest.NewRequest(
+		http.MethodPatch, "/plugins/vieux%2Fsshfs/settings", strings.NewReader(`{"args":[]}`),
+	)
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("If-Match", `"bogus-etag"`)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPreconditionFailed || configured != 0 {
+		t.Errorf("status = %d after %d writes, want 412 after none", rec.Code, configured)
+	}
+}
+
 // RFC 9110 §13.2.1: a precondition is ignored when the answer without it
 // would be neither 2xx nor 412. A write against a resource that is gone
 // answers 404, and carrying If-Match must not turn that into a 412 — the
@@ -654,7 +771,7 @@ func TestAPreconditionDoesNotMaskAMissingResource(t *testing.T) {
 		req := httptest.NewRequest(
 			http.MethodPatch, "/services/gone/env", strings.NewReader(`{"A":"2"}`),
 		)
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", AcceptMergePatch)
 		if ifMatch != "" {
 			req.Header.Set("If-Match", ifMatch)
 		}

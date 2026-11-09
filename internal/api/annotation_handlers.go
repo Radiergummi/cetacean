@@ -95,15 +95,33 @@ func (h *Handlers) mayEditAnnotation(r *http.Request) bool {
 // editableAnnotation is the annotation the path names, if the caller may edit it.
 func (h *Handlers) editableAnnotation(r *http.Request) (cache.Annotation, bool) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
-	if err != nil || !h.annotations.Enabled() {
+	if err != nil {
 		return cache.Annotation{}, false
+	}
+
+	a, err := h.annotationForEdit(r, id)
+
+	return a, err == nil
+}
+
+// annotationForEdit is the annotation, or what the use case would refuse an
+// edit of it with. Update decides again when it commits.
+func (h *Handlers) annotationForEdit(r *http.Request, id uint64) (cache.Annotation, error) {
+	if !h.annotations.Enabled() {
+		return cache.Annotation{}, cache.ErrAnnotationsOff
 	}
 
 	caller := h.annotationCaller(r)
 
 	a, err := h.annotations.Get(caller, id)
+	if err != nil {
+		return cache.Annotation{}, err
+	}
+	if !h.annotations.MayEdit(attributedRead(r), caller, a) {
+		return cache.Annotation{}, cluster.ErrAnnotationDenied
+	}
 
-	return a, err == nil && h.annotations.MayEdit(attributedRead(r), caller, a)
+	return a, nil
 }
 
 // attributedRead is the request's context with its caller as the actor, which
@@ -260,6 +278,11 @@ func (h *Handlers) HandlePatchAnnotation(w http.ResponseWriter, r *http.Request)
 
 	limitWriteBody(w, r)
 
+	if _, err := h.annotationForEdit(r, id); err != nil {
+		writeAnnotationError(w, r, err)
+		return
+	}
+
 	if !requireMergePatch(w, r) {
 		return
 	}
@@ -330,8 +353,7 @@ func annotationID(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 // write finds, inside the use case, so no other write lands between the check
 // and the commit. Nil when the request names none.
 func annotationPreconditions(r *http.Request) func(cache.Annotation) bool {
-	if r.Header.Get("If-Match") == "" && r.Header.Get("If-None-Match") == "" &&
-		r.Header.Get("If-Unmodified-Since") == "" {
+	if !hasWriteConditions(r) {
 		return nil
 	}
 
