@@ -827,8 +827,8 @@ Link: </services/abc/scale>; rel="edit", </services/abc/labels>; rel="edit"
 ```
 
 `Accept-Patch` lists the patch formats a resource accepts, and appears where its own `Allow` carries `PATCH`. Labels and
-service `env` take `application/json-patch+json, application/merge-patch+json`; every other patchable sub-resource takes
-`application/merge-patch+json` alone.
+service `env` take `application/json-patch+json, application/merge-patch+json`; plugin `settings` takes plain
+`application/json`; every other patchable sub-resource takes `application/merge-patch+json` alone.
 
 A JSON Patch `path` is a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) to one key: write `/` in a key as
 `~1` and `~` as `~0`, so label `app.kubernetes.io/name` is `/app.kubernetes.io~1name`.

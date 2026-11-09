@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
-- A `PATCH` with an unsupported `Content-Type` answers `415` even when its precondition fails, where it used to answer `412`
+- A `PATCH` with an unsupported `Content-Type` answers `415` even when its precondition fails, and `404` first when the resource it names is gone
+- `PATCH /plugins/{name}/settings` advertises `Accept-Patch: application/json`, the type it takes
 
 ## [0.19.0] - 2026-11-05
 

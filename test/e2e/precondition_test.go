@@ -59,7 +59,6 @@ func startPreconditionLane(t *testing.T, env *harness.Env) *sut.Process {
 type precondProbe struct {
 	contentType string
 	body        string
-	problem     string
 }
 
 // precondTarget is one preconditioned route, addressed at a live resource.
@@ -83,11 +82,12 @@ type precondTarget struct {
 	acceptedExcuse string
 }
 
-// patchProbe refuses on Content-Type: every PATCH route reaches
-// parsePatchMutator, requireMergePatch or applyStructMergePatch, all of which
-// answer API004 before touching the resource.
+// patchProbe refuses on the body: a type every PATCH route takes, but a
+// truncated object, which no route parses.
 func patchProbe() *precondProbe {
-	return &precondProbe{contentType: "text/plain", body: "{}", problem: "API004"}
+	contentType, body := failingWrite(http.MethodPatch)
+
+	return &precondProbe{contentType: contentType, body: body}
 }
 
 // failingWrite is what a request meant to fail its precondition sends. A PATCH
@@ -104,7 +104,7 @@ func failingWrite(method string) (contentType, body string) {
 // putProbe refuses on the body: every PUT route decodes JSON into its request
 // type before doing anything else, so a truncated object answers API006.
 func putProbe() *precondProbe {
-	return &precondProbe{contentType: "application/json", body: "{", problem: "API006"}
+	return &precondProbe{contentType: "application/json", body: "{"}
 }
 
 // preconditionFixture holds one live resource of each kind the preconditioned
@@ -416,11 +416,10 @@ func TestPreconditionSweep(t *testing.T) {
 
 			// §13.2.1: an answer decided without the content ignores the
 			// precondition, so the refused media type wins.
-			if target.method == http.MethodPatch && target.probe != nil {
+			if target.method == http.MethodPatch {
 				refused := precondRequest(
 					t, proc, target.method, target.uri,
-					map[string]string{"If-Match": staleValidator},
-					target.probe.contentType, target.probe.body,
+					map[string]string{"If-Match": staleValidator}, "text/plain", "{}",
 				)
 				if refused.status != http.StatusUnsupportedMediaType {
 					t.Errorf(
@@ -483,10 +482,10 @@ func TestPreconditionSweep(t *testing.T) {
 						"the current validator was refused: %s",
 						accepted.body,
 					)
-				} else if !strings.Contains(accepted.body, target.probe.problem) {
+				} else if accepted.status != http.StatusBadRequest {
 					t.Errorf(
-						"probe answered %d without naming %s: %s",
-						accepted.status, target.probe.problem, accepted.body,
+						"probe answered %d, want its body refused with 400: %s",
+						accepted.status, accepted.body,
 					)
 				}
 			} else if target.acceptedExcuse == "" {
@@ -760,7 +759,7 @@ func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 		)
 	}
 
-	// The handler refuses the Content-Type, which is proof enough that the
+	// The handler refuses the body, which is proof enough that the
 	// precondition let the request through.
 	probe := patchProbe()
 
@@ -772,10 +771,8 @@ func TestIfMatchAcceptsAValidatorObtainedUnderContentEncoding(t *testing.T) {
 		t.Fatalf("a validator obtained under gzip was refused as If-Match: %s", out.body)
 	}
 
-	if !strings.Contains(out.body, probe.problem) {
-		t.Errorf(
-			"probe answered %d without naming %s: %s", out.status, probe.problem, out.body,
-		)
+	if out.status != http.StatusBadRequest {
+		t.Errorf("probe answered %d, want its body refused with 400: %s", out.status, out.body)
 	}
 }
 

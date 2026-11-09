@@ -389,9 +389,9 @@ requirements:
       - file: internal/api/allow.go
         replace: "\tif c.patchTypes != nil {"
         with: "\tif false {"
-      - file: internal/api/write_service_handlers.go
-        replace: "\tif !requireMergePatch(w, r) {\n\t\treturn\n\t}\n\n\tports, present, ok :="
-        with: "\tports, present, ok :="
+      - file: internal/api/precondition.go
+        replace: "\t\t\tif refusedPatchType(w, r) {"
+        with: "\t\t\tif false {"
       - file: internal/api/router.go
         replace: "pluginTier2.Append(pluginExists).ThenFunc(h.HandleConfigurePlugin)"
         with: "pluginTier2.Append(pluginExists).TakesMergePatch().ThenFunc(h.HandleConfigurePlugin)"

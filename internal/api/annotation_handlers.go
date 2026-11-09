@@ -95,7 +95,7 @@ func (h *Handlers) mayEditAnnotation(r *http.Request) bool {
 // editableAnnotation is the annotation the path names, if the caller may edit it.
 func (h *Handlers) editableAnnotation(r *http.Request) (cache.Annotation, bool) {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
-	if err != nil || !h.annotations.Enabled() {
+	if err != nil {
 		return cache.Annotation{}, false
 	}
 
@@ -107,6 +107,10 @@ func (h *Handlers) editableAnnotation(r *http.Request) (cache.Annotation, bool) 
 // annotationForEdit is the annotation, or what the use case would refuse an
 // edit of it with. Update decides again when it commits.
 func (h *Handlers) annotationForEdit(r *http.Request, id uint64) (cache.Annotation, error) {
+	if !h.annotations.Enabled() {
+		return cache.Annotation{}, cache.ErrAnnotationsOff
+	}
+
 	caller := h.annotationCaller(r)
 
 	a, err := h.annotations.Get(caller, id)
@@ -274,11 +278,9 @@ func (h *Handlers) HandlePatchAnnotation(w http.ResponseWriter, r *http.Request)
 
 	limitWriteBody(w, r)
 
-	if requestMediaType(r) != AcceptMergePatch {
-		if _, err := h.annotationForEdit(r, id); err != nil {
-			writeAnnotationError(w, r, err)
-			return
-		}
+	if _, err := h.annotationForEdit(r, id); err != nil {
+		writeAnnotationError(w, r, err)
+		return
 	}
 
 	if !requireMergePatch(w, r) {

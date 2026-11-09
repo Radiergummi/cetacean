@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"slices"
@@ -70,7 +71,7 @@ func (c tieredChain) AnswersWithABody() tieredChain {
 // TakesJSONPatch marks a PATCH route whose handler parses JSON Patch as well
 // as a merge patch; any other PATCH route is advertised as merge-only.
 func (c tieredChain) TakesJSONPatch() tieredChain {
-	c.patchTypes = strings.Split(AcceptPatch, ", ")
+	c.patchTypes = []string{"application/json-patch+json", AcceptMergePatch}
 
 	return c
 }
@@ -99,7 +100,7 @@ func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
 		chain = chain.Append(acceptsJSONAnswer(c.bodyAlways))
 	}
 	if c.patchTypes != nil {
-		chain = chain.Append(refusedPatchIgnoresConditions(c.patchTypes))
+		chain = chain.Append(declaresPatchTypes(c.patchTypes))
 	}
 
 	return tieredHandler{
@@ -108,20 +109,14 @@ func (c tieredChain) ThenFunc(fn http.HandlerFunc) http.Handler {
 	}
 }
 
-// refusedPatchIgnoresConditions is RFC 9110 §13.2.1 for a PATCH of a media type
-// its handler refuses: the 415 is decided before any content, so preconditions
-// are ignored. The handler stays the one refusing, so a 404 it owes comes first.
-// A route that declares no types keeps its preconditions, whatever it's sent.
-func refusedPatchIgnoresConditions(accepted []string) Constructor {
+// patchTypesKey carries the media types a PATCH route takes, for conditional.
+type patchTypesKey struct{}
+
+func declaresPatchTypes(accepted []string) Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if hasWriteConditions(r) && !slices.Contains(accepted, requestMediaType(r)) {
-				for _, field := range writeConditionFields {
-					r.Header.Del(field)
-				}
-			}
-
-			next.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), patchTypesKey{}, accepted)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

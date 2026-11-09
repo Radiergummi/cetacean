@@ -143,6 +143,10 @@ func (h *Handlers) conditional(validate validatorFunc, represented bool) Constru
 				return
 			}
 
+			if refusedPatchType(w, r) {
+				return
+			}
+
 			// With no representation, If-None-Match finds none to match and
 			// If-Unmodified-Since has no date, so only If-Match can fail.
 			if !represented {
@@ -168,6 +172,21 @@ func (h *Handlers) conditional(validate validatorFunc, represented bool) Constru
 			next.ServeHTTP(w, r.WithContext(pinned(r.Context())))
 		})
 	}
+}
+
+// refusedPatchType answers 415 for a PATCH of a type its route does not take.
+// RFC 9110 §13.2.1: decided from the headers, it outranks a 412; it comes after
+// the existence check, so a missing subject still answers 404.
+func refusedPatchType(w http.ResponseWriter, r *http.Request) bool {
+	accepted, declared := r.Context().Value(patchTypesKey{}).([]string)
+	if !declared || slices.Contains(accepted, requestMediaType(r)) {
+		return false
+	}
+
+	w.Header().Set("Accept-Patch", strings.Join(accepted, ", "))
+	problem.Write(w, r, "API004", "Content-Type must be "+strings.Join(accepted, " or "))
+
+	return true
 }
 
 // writePreconditionFailed is preconditionFailed for a write, which If-None-Match

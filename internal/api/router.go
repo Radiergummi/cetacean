@@ -172,7 +172,8 @@ func (r *routeRecorder) Handle(pattern string, handler http.Handler) {
 		method, path, _ := strings.Cut(pattern, " ")
 		route := tieredRoute{method, path, gated.level, "", gated.permits}
 		if method == http.MethodPatch {
-			route.acceptPatch = cmp.Or(gated.acceptPatch, AcceptMergePatch)
+			// A route that declares no types decodes the body as plain JSON.
+			route.acceptPatch = cmp.Or(gated.acceptPatch, "application/json")
 		}
 		r.tiered = append(r.tiered, route)
 	}
