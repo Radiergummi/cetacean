@@ -33,7 +33,7 @@
     "@types/fontkit": "^2.0.9",
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
-    "astro": "^7.4.4",
+    "astro": "^7.4.7",
     "fontkit": "^2.0.4",
     "marked": "^18.1.2",
     "pagefind": "^1.5.2",
