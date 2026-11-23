@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           # Cached below instead. setup-go keys every job on the same
@@ -96,7 +96,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -203,7 +203,7 @@ jobs:
       # `astro check` type-checks `src/lib/errors.ts`, which imports the error
       # reference generated from internal/api; see website/package.json's
       # sync-assets script.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
 
@@ -226,7 +226,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/node
       # The error reference is generated from internal/api by sync-assets.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - run: mkdir -p website/public/demo && pnpm --filter frontend build:demo
@@ -292,7 +292,7 @@ jobs:
           # A pull_request checkout is a detached merge commit by default, which
           # has no branch to commit onto. Check out the head itself.
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - uses: ./.github/actions/node
@@ -315,7 +315,7 @@ jobs:
            github.event.pull_request.head.repo.full_name == github.repository &&
            github.event.pull_request.user.login != 'dependabot[bot]') ||
           (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.SBOM_APP_CLIENT_ID }}
           private-key: ${{ secrets.SBOM_APP_PRIVATE_KEY }}
